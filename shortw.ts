@@ -292,16 +292,25 @@ function legendre(num: bigint, fieldPrime: bigint): bigint {
 function _sqrtMod(n: bigint, modulo: bigint): bigint {
   // const { P } = CURVE;
   const P = modulo;
-  if (legendre(n, P) !== _1n) throw new Error('Cannot find square root');
   let q, s, z;
   for (q = P - _1n, s = 0; q % _2n === _0n; q /= _2n, s++);
-  if (s === 1) return powMod(n, (P + _1n) / _4n, P);
-  for (z = _2n; z < P && legendre(z, P) !== P - _1n; z++);
 
+  // Calculate legendre symbol
+  const legendreSymbol = legendre(n, P);
+
+  if (s === 1) {
+    // Check if n has a square root modulo p
+    if (legendreSymbol !== _1n) throw new Error('Cannot find square root');
+
+    // Calculate square root
+    return powMod(n, (P + _1n) / _4n, P);
+  }
+
+  // Tonelli-Shanks algorithm
+  for (z = _2n; z < P && legendre(z, P) !== P - _1n; z++);
   let c = powMod(z, q, P);
   let r = powMod(n, (q + _1n) / _2n, P);
   let t = powMod(n, q, P);
-
   let t2 = _0n;
   while (mod(t - _1n, P) !== _0n) {
     t2 = mod(t * t, P);
