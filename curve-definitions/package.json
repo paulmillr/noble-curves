@@ -1,0 +1,62 @@
+{
+  "name": "micro-curve-definitions",
+  "version": "0.1.0",
+  "description": "Curve definitions for @noble/curves",
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "index.d.ts.map",
+    "index.ts"
+  ],
+  "type": "module",
+  "main": "index.js",
+  "module": "index.js",
+  "types": "index.d.ts",
+  "dependencies": {
+    "@noble/curves": "file:../",
+    "@noble/hashes": "1.1.4"
+  },
+  "devDependencies": {
+    "@scure/base": "~1.1.0",
+    "@scure/bip32": "^1.1.1",
+    "@scure/bip39": "^1.1.0",
+    "@types/node": "^18.11.3",
+    "fast-check": "3.0.0",
+    "micro-should": "0.2.0",
+    "prettier": "2.6.2",
+    "typescript": "4.7.3"
+  },
+  "author": "Paul Miller (https://paulmillr.com)",
+  "license": "MIT",
+  "homepage": "https://github.com/paulmillr/noble-curves",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/paulmillr/noble-curves.git"
+  },
+  "scripts": {
+    "build": "tsc",
+    "lint": "prettier --check index.ts",
+    "test": "node test/index.test.js"
+  },
+  "keywords": [
+    "secp192r1",
+    "secp224r1",
+    "secp256r1",
+    "secp384r1",
+    "secp521r1",
+    "NIST P192",
+    "NIST P224",
+    "NIST P256",
+    "NIST P384",
+    "NIST P521",
+    "NIST curves",
+    "EC",
+    "elliptic curves"
+  ],
+  "funding": [
+    {
+      "type": "individual",
+      "url": "https://paulmillr.com/funding/"
+    }
+  ]
+}

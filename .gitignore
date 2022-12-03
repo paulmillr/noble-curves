@@ -1,0 +1,7 @@
+build/
+node_modules/
+coverage/
+/lib/**/*.js
+/lib/**/*.ts
+/lib/**/*.d.ts.map
+/curve-definitions/lib

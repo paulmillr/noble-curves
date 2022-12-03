@@ -1,0 +1,75 @@
+{
+  "name": "@noble/curves",
+  "version": "0.1.0",
+  "description": "Minimal, zero-dependency JS implementation of elliptic curve cryptography",
+  "files": [
+    "index.js",
+    "lib",
+    "lib/esm"
+  ],
+  "scripts": {
+    "bench": "node test/benchmark/index.js",
+    "build": "tsc && tsc -p tsconfig.esm.json",
+    "build:release": "rollup -c rollup.config.js",
+    "lint": "prettier --check 'src/**/*.{js,ts}' 'curve-definitions/src/**/*.{js,ts}'",
+    "format": "prettier --write 'src/**/*.{js,ts}' 'curve-definitions/src/**/*.{js,ts}'",
+    "test": "cd curve-definitions; node test/index.test.js"
+  },
+  "author": "Paul Miller (https://paulmillr.com)",
+  "homepage": "https://paulmillr.com/noble/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/paulmillr/noble-curves.git"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@rollup/plugin-node-resolve": "13.3.0",
+    "micro-bmark": "0.2.0",
+    "micro-should": "0.2.0",
+    "prettier": "2.6.2",
+    "rollup": "2.75.5",
+    "typescript": "4.7.3"
+  },
+  "main": "index.js",
+  "exports": {
+    "./modular": {
+      "types": "./lib/modular.d.ts",
+      "import": "./lib/esm/modular.js",
+      "default": "./lib/modular.js"
+    },
+    "./shortw": {
+      "types": "./lib/shortw.d.ts",
+      "import": "./lib/esm/shortw.js",
+      "default": "./lib/shortw.js"
+    },
+    "./utils": {
+      "types": "./lib/utils.d.ts",
+      "import": "./lib/esm/utils.js",
+      "default": "./lib/utils.js"
+    }
+  },
+  "keywords": [
+    "elliptic",
+    "curve",
+    "cryptography",
+    "hyperelliptic",
+    "p256",
+    "p384",
+    "p521",
+    "nist",
+    "weierstrass",
+    "edwards",
+    "montgomery",
+    "hashes",
+    "ecc",
+    "ecdsa",
+    "eddsa",
+    "schnorr"
+  ],
+  "funding": [
+    {
+      "type": "individual",
+      "url": "https://paulmillr.com/funding/"
+    }
+  ]
+}

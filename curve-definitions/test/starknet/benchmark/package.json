@@ -1,0 +1,19 @@
+{
+    "name": "benchmark",
+    "private": true,
+    "version": "0.1.0",
+    "description": "benchmarks",
+    "main": "index.js",
+    "type": "module",
+    "scripts": {
+        "bench": "node index.js"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "MIT",
+    "devDependencies": {
+        "@starkware-industries/starkware-crypto-utils": "^0.0.2",
+        "micro-bmark": "0.2.0",
+        "micro-should": "0.2.0"
+    }
+}

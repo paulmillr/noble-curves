@@ -1,0 +1,19 @@
+{
+    "compilerOptions": {
+        "strict": true,
+        "outDir": "lib/esm",
+        "target": "es2020",
+        "module": "es6",
+        "moduleResolution": "node16",
+        "noUnusedLocals": true,
+        "baseUrl": ".",
+        "paths": {
+            "@noble/hashes/crypto": [ "src/crypto" ]
+        },
+    },
+    "include": ["src"],
+    "exclude": [
+        "node_modules",
+        "lib",
+    ],
+}

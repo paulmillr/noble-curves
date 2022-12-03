@@ -1,0 +1,18 @@
+{
+    "compilerOptions": {
+        "strict": true,
+        "declaration": true,
+        "outDir": "lib",
+        "target": "es2020",
+        "lib": ["es2020"], // Set explicitly to remove DOM
+        "module": "commonjs",
+        "moduleResolution": "node",
+        "noUnusedLocals": true,
+        "baseUrl": ".",
+    },
+    "include": ["src"],
+    "exclude": [
+        "node_modules",
+        "*.d.ts"
+    ],
+}
