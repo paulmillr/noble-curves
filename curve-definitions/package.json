@@ -13,7 +13,7 @@
   "module": "index.js",
   "types": "index.d.ts",
   "dependencies": {
-    "@noble/curves": "file:../",
+    "@noble/curves": "~0.1.0",
     "@noble/hashes": "1.1.4"
   },
   "devDependencies": {
