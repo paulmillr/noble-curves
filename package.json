@@ -42,6 +42,11 @@
       "import": "./lib/esm/shortw.js",
       "default": "./lib/shortw.js"
     },
+    "./twisted": {
+      "types": "./lib/twisted.d.ts",
+      "import": "./lib/esm/twisted.js",
+      "default": "./lib/twisted.js"
+    },
     "./utils": {
       "types": "./lib/utils.d.ts",
       "import": "./lib/esm/utils.js",

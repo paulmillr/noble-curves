@@ -1,4 +1,6 @@
 /*! @noble/curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
+
+// Utilities for modular arithmetics
 const _0n = BigInt(0);
 const _1n = BigInt(1);
 const _2n = BigInt(2);
@@ -144,3 +146,14 @@ export function sqrt(number: bigint, modulo: bigint): bigint {
   }
   return r;
 }
+
+// Little-endian check for first LE bit (last BE bit);
+export const isNegativeLE = (num: bigint, modulo: bigint) => (mod(num, modulo) & _1n) === _1n;
+
+// An idea on modular arithmetic for bls12-381:
+// const FIELD = {add, pow, sqrt, mul};
+// Functions will take field elements, no need for an additional class
+// Could be faster. 1 bigint field will just do operations and mod later:
+// instead of 'r = mod(r * b, P)' we will write r = mul(r, b);
+// Could be insecure without shape check, so it needs to be done.
+// Functions could be inlined by JIT.

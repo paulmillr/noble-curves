@@ -1,8 +1,14 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-// Implementation of Short weierstrass curve. The formula is: y² = x³ + ax + b
+// Implementation of Short Weierstrass curve. The formula is: y² = x³ + ax + b
 
 // TODO: sync vs async naming
 // TODO: default randomBytes
+// Differences from noble/secp256k1:
+// 1. Different double() formula (but same addition)
+// 2. Different sqrt() function
+// 3. truncateHash() truncateOnly mode
+// 4. DRBG supports outputLen bigger than outputLen of hmac
+
 import * as mod from './modular.js';
 import {
   bytesToHex,
@@ -12,7 +18,9 @@ import {
   hexToBytes,
   hexToNumber,
   numberToHexUnpadded,
+  nLength,
 } from './utils.js';
+import { wNAF } from './group.js';
 
 export type CHash = {
   (message: Uint8Array | string): Uint8Array;
@@ -91,10 +99,8 @@ function validateOpts(curve: CurveType) {
       throw new Error('Expected endomorphism with beta: bigint and splitScalar: function');
     }
   }
-  const nBitLength = curve.n.toString(2).length; // Bit size of CURVE.n
-  const nByteLength = Math.ceil(nBitLength / 8); // Byte size of CURVE.n
   // Set defaults
-  return Object.freeze({ lowS: true, nBitLength, nByteLength, ...curve } as const);
+  return Object.freeze({ lowS: true, ...nLength(curve.n, curve.nBitLength), ...curve } as const);
 }
 
 // TODO: convert bits to bytes aligned to 32 bits? (224 for example)
@@ -287,8 +293,8 @@ class HmacDrbg {
     if (typeof qByteLen !== 'number' || qByteLen < 2) throw new Error('qByteLen must be a number');
     if (typeof hmacFn !== 'function') throw new Error('hmacFn must be a function');
     // Step B, Step C: set hashLen to 8*ceil(hlen/8)
-    this.v = new Uint8Array(this.hashLen).fill(1);
-    this.k = new Uint8Array(this.hashLen).fill(0);
+    this.v = new Uint8Array(hashLen).fill(1);
+    this.k = new Uint8Array(hashLen).fill(0);
     this.counter = 0;
   }
   private hmacSync(...values: Uint8Array[]) {
@@ -327,8 +333,11 @@ class HmacDrbg {
 // Use only input from curveOpts!
 export function weierstrass(curveDef: CurveType): CurveFn {
   const CURVE = validateOpts(curveDef) as ReturnType<typeof validateOpts>;
+  const CURVE_ORDER = CURVE.n;
   // Lengths
-  const fieldLen = CURVE.nByteLength!; // 32 (length of one field element)
+  // All curves has same field / group length as for now, but it can be different for other curves
+  const groupLen = CURVE.nByteLength;
+  const fieldLen = CURVE.nByteLength; // 32 (length of one field element)
   if (fieldLen > 2048) throw new Error('Field lengths over 2048 are not supported');
 
   const compressedLen = fieldLen + 1; // 33
@@ -378,11 +387,11 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     } else if (typeof key === 'number' && Number.isSafeInteger(key) && key > 0) {
       num = BigInt(key);
     } else if (typeof key === 'string') {
-      key = key.padStart(2 * fieldLen, '0'); // Eth-like hexes
-      if (key.length !== 2 * fieldLen) throw new Error(`Expected ${fieldLen} bytes of private key`);
+      key = key.padStart(2 * groupLen, '0'); // Eth-like hexes
+      if (key.length !== 2 * groupLen) throw new Error(`Expected ${groupLen} bytes of private key`);
       num = hexToNumber(key);
     } else if (key instanceof Uint8Array) {
-      if (key.length !== fieldLen) throw new Error(`Expected ${fieldLen} bytes of private key`);
+      if (key.length !== groupLen) throw new Error(`Expected ${groupLen} bytes of private key`);
       num = bytesToNumber(key);
     } else {
       throw new TypeError('Expected valid private key');
@@ -405,12 +414,12 @@ export function weierstrass(curveDef: CurveType): CurveFn {
   }
 
   function isBiggerThanHalfOrder(number: bigint) {
-    const HALF = CURVE.n >> _1n;
+    const HALF = CURVE_ORDER >> _1n;
     return number > HALF;
   }
 
   function normalizeS(s: bigint) {
-    return isBiggerThanHalfOrder(s) ? mod.mod(-s, CURVE.n) : s;
+    return isBiggerThanHalfOrder(s) ? mod.mod(-s, CURVE_ORDER) : s;
   }
 
   function normalizeScalar(num: number | bigint): bigint {
@@ -499,6 +508,23 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     double(): JacobianPoint {
       const { x: X1, y: Y1, z: Z1 } = this;
       const { a } = CURVE;
+
+      // // Faster algorithm: when a=0
+      // // From: https://hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-0.html#doubling-dbl-2009-l
+      // // Cost: 2M + 5S + 6add + 3*2 + 1*3 + 1*8.
+      if (a === _0n) {
+        const A = modP(X1 * X1);
+        const B = modP(Y1 * Y1);
+        const C = modP(B * B);
+        const x1b = X1 + B;
+        const D = modP(_2n * (modP(x1b * x1b) - A - C));
+        const E = modP(_3n * A);
+        const F = modP(E * E);
+        const X3 = modP(F - _2n * D);
+        const Y3 = modP(E * (D - X3) - _8n * C);
+        const Z3 = modP(_2n * Y1 * Z1);
+        return new JacobianPoint(X3, Y3, Z3);
+      }
       const XX = modP(X1 * X1);
       const YY = modP(Y1 * Y1);
       const YYYY = modP(YY * YY);
@@ -520,8 +546,6 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     // Note: 2007 Bernstein-Lange (11M + 5S + 9add + 4*2) is actually 10% slower.
     add(other: JacobianPoint): JacobianPoint {
       if (!(other instanceof JacobianPoint)) throw new TypeError('JacobianPoint expected');
-      // TODO: remove
-      if (this.equals(JacobianPoint.ZERO)) return other;
       const { x: X1, y: Y1, z: Z1 } = this;
       const { x: X2, y: Y2, z: Z2 } = other;
       if (X2 === _0n || Y2 === _0n) return this;
@@ -562,16 +586,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       let n = normalizeScalar(scalar);
       if (n === _1n) return this;
 
-      if (!CURVE.endo) {
-        let p = P0;
-        let d: JacobianPoint = this;
-        while (n > _0n) {
-          if (n & _1n) p = p.add(d);
-          d = d.double();
-          n >>= _1n;
-        }
-        return p;
-      }
+      if (!CURVE.endo) return wnaf.unsafeLadder(this, n);
 
       // Apply endomorphism
       let { k1neg, k1, k2neg, k2 } = CURVE.endo.splitScalar(n);
@@ -592,105 +607,21 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     }
 
     /**
-     * Creates a wNAF precomputation window. Used for caching.
-     * Default window size is set by `utils.precompute()` and is equal to 8.
-     * Which means we are caching 65536 points: 256 points for every bit from 0 to 256.
-     * @returns 65K precomputed points, depending on W
-     */
-    private precomputeWindow(W: number): JacobianPoint[] {
-      const windows = CURVE.endo
-        ? Math.ceil(CURVE.nBitLength / 2) / W + 1
-        : CURVE.nBitLength / W + 1;
-      const points: JacobianPoint[] = [];
-      let p: JacobianPoint = this;
-      let base = p;
-      for (let window = 0; window < windows; window++) {
-        base = p;
-        points.push(base);
-        for (let i = 1; i < 2 ** (W - 1); i++) {
-          base = base.add(p);
-          points.push(base);
-        }
-        p = base.double();
-      }
-      return points;
-    }
-
-    /**
      * Implements w-ary non-adjacent form for calculating ec multiplication.
-     * @param n
-     * @param affinePoint optional 2d point to save cached precompute windows on it.
-     * @returns real and fake (for const-time) points
      */
     private wNAF(n: bigint, affinePoint?: Point): { p: JacobianPoint; f: JacobianPoint } {
       if (!affinePoint && this.equals(JacobianPoint.BASE)) affinePoint = Point.BASE;
       const W = (affinePoint && affinePoint._WINDOW_SIZE) || 1;
-      if (256 % W) {
-        throw new Error('Point#wNAF: Invalid precomputation window, must be power of 2');
-      }
-
       // Calculate precomputes on a first run, reuse them after
       let precomputes = affinePoint && pointPrecomputes.get(affinePoint);
       if (!precomputes) {
-        precomputes = this.precomputeWindow(W);
+        precomputes = wnaf.precomputeWindow(this, W) as JacobianPoint[];
         if (affinePoint && W !== 1) {
           precomputes = JacobianPoint.normalizeZ(precomputes);
           pointPrecomputes.set(affinePoint, precomputes);
         }
       }
-
-      // Initialize real and fake points for const-time
-      let p = JacobianPoint.ZERO;
-      // Should be G (base) point, since otherwise f can be infinity point in the end
-      let f = JacobianPoint.BASE;
-
-      const nBits = CURVE.endo ? CURVE.nBitLength / 2 : CURVE.nBitLength;
-      const windows = 1 + Math.ceil(nBits / W); // W=8 17
-      const windowSize = 2 ** (W - 1); // W=8 128
-      const mask = BigInt(2 ** W - 1); // Create mask with W ones: 0b11111111 for W=8
-      const maxNumber = 2 ** W; // W=8 256
-      const shiftBy = BigInt(W); // W=8 8
-
-      for (let window = 0; window < windows; window++) {
-        const offset = window * windowSize;
-        // Extract W bits.
-        let wbits = Number(n & mask);
-
-        // Shift number by W bits.
-        n >>= shiftBy;
-
-        // If the bits are bigger than max size, we'll split those.
-        // +224 => 256 - 32
-        if (wbits > windowSize) {
-          wbits -= maxNumber;
-          n += _1n;
-        }
-
-        // This code was first written with assumption that 'f' and 'p' will never be infinity point:
-        // since each addition is multiplied by 2 ** W, it cannot cancel each other. However,
-        // there is negate now: it is possible that negated element from low value
-        // would be the same as high element, which will create carry into next window.
-        // It's not obvious how this can fail, but still worth investigating later.
-
-        // Check if we're onto Zero point.
-        // Add random point inside current window to f.
-        const offset1 = offset;
-        const offset2 = offset + Math.abs(wbits) - 1;
-        const cond1 = window % 2 !== 0;
-        const cond2 = wbits < 0;
-        if (wbits === 0) {
-          // The most important part for const-time getPublicKey
-          f = f.add(constTimeNegate(cond1, precomputes[offset1]));
-        } else {
-          p = p.add(constTimeNegate(cond2, precomputes[offset2]));
-        }
-      }
-      // JIT-compiler should not eliminate f here, since it will later be used in normalizeZ()
-      // Even if the variable is still unused, there are some checks which will
-      // throw an exception, so compiler needs to prove they won't happen, which is hard.
-      // At this point there is a way to F be infinity-point even if p is not,
-      // which makes it less const-time: around 1 bigint multiply.
-      return { p, f };
+      return wnaf.wNAF(W, precomputes, n);
     }
 
     /**
@@ -712,8 +643,8 @@ export function weierstrass(curveDef: CurveType): CurveFn {
         const { k1neg, k1, k2neg, k2 } = CURVE.endo.splitScalar(n);
         let { p: k1p, f: f1p } = this.wNAF(k1, affinePoint);
         let { p: k2p, f: f2p } = this.wNAF(k2, affinePoint);
-        k1p = constTimeNegate(k1neg, k1p);
-        k2p = constTimeNegate(k2neg, k2p);
+        k1p = wnaf.constTimeNegate(k1neg, k1p);
+        k2p = wnaf.constTimeNegate(k2neg, k2p);
         k2p = new JacobianPoint(modP(k2p.x * CURVE.endo.beta), k2p.y, k2p.z);
         point = k1p.add(k2p);
         fake = f1p.add(f2p);
@@ -747,11 +678,8 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       return new Point(ax, ay);
     }
   }
-  // Const-time utility for wNAF
-  function constTimeNegate(condition: boolean, item: JacobianPoint) {
-    const neg = item.negate();
-    return condition ? neg : item;
-  }
+  const wnaf = wNAF(JacobianPoint, CURVE.endo ? CURVE.nBitLength / 2 : CURVE.nBitLength);
+
   // Stores precomputed values for points.
   const pointPrecomputes = new WeakMap<Point, JacobianPoint[]>();
 
@@ -787,8 +715,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     }
 
     /**
-     * Supports compressed ECDSA (33-byte) points
-     * @param bytes 33 bytes
+     * Supports compressed ECDSA points
      * @returns Point instance
      */
     private static fromCompressedHex(bytes: Uint8Array) {
@@ -816,7 +743,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
 
     /**
      * Converts hash string or Uint8Array to Point.
-     * @param hex 33/65-byte (ECDSA) hex
+     * @param hex short/long ECDSA hex
      */
     static fromHex(hex: Hex): Point {
       const bytes = ensureBytes(hex);
@@ -986,7 +913,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
 
     normalizeS() {
       return this.hasHighS()
-        ? new Signature(this.r, mod.mod(-this.s, CURVE.n), this.recovery)
+        ? new Signature(this.r, mod.mod(-this.s, CURVE_ORDER), this.recovery)
         : this;
     }
 
@@ -1041,7 +968,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       if (hash.length < minLen || hash.length > 1024) {
         throw new Error(`Expected ${minLen}-1024 bytes of private key as per FIPS 186`);
       }
-      const num = mod.mod(bytesToNumber(hash), CURVE.n - _1n) + _1n;
+      const num = mod.mod(bytesToNumber(hash), CURVE_ORDER - _1n) + _1n;
       return numToField(num);
     },
 
@@ -1067,8 +994,8 @@ export function weierstrass(curveDef: CurveType): CurveFn {
 
   /**
    * Computes public key for a private key.
-   * @param privateKey 32-byte private key
-   * @param isCompressed whether to return compact (33-byte), or full (65-byte) key
+   * @param privateKey private key
+   * @param isCompressed whether to return compact, or full key
    * @returns Public key, full by default; short when isCompressed=true
    */
   function getPublicKey(privateKey: PrivKey, isCompressed = false): Uint8Array {
@@ -1112,7 +1039,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
   }
   function bits2octets(bytes: Uint8Array): Uint8Array {
     const z1 = bits2int(bytes);
-    const z2 = mod.mod(z1, CURVE.n);
+    const z2 = mod.mod(z1, CURVE_ORDER);
     return int2octets(z2 < _0n ? z1 : z2);
   }
   function int2octets(num: bigint): Uint8Array {
@@ -1253,7 +1180,6 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     getSharedSecret,
     sign,
     verify,
-
     Point,
     JacobianPoint,
     Signature,

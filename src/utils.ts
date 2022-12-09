@@ -48,10 +48,17 @@ export function bytesToNumber(bytes: Uint8Array): bigint {
   return hexToNumber(bytesToHex(bytes));
 }
 
-export function ensureBytes(hex: string | Uint8Array): Uint8Array {
+export const numberToBytesBE = (n: bigint, len: number) =>
+  hexToBytes(n.toString(16).padStart(len * 2, '0'));
+export const numberToBytesLE = (n: bigint, len: number) => numberToBytesBE(n, len).reverse();
+
+export function ensureBytes(hex: string | Uint8Array, expectedLength?: number): Uint8Array {
   // Uint8Array.from() instead of hash.slice() because node.js Buffer
   // is instance of Uint8Array, and its slice() creates **mutable** copy
-  return hex instanceof Uint8Array ? Uint8Array.from(hex) : hexToBytes(hex);
+  const bytes = hex instanceof Uint8Array ? Uint8Array.from(hex) : hexToBytes(hex);
+  if (typeof expectedLength === 'number' && bytes.length !== expectedLength)
+    throw new Error(`Expected ${expectedLength} bytes`);
+  return bytes;
 }
 
 // Copies several Uint8Arrays into one.
@@ -66,4 +73,12 @@ export function concatBytes(...arrays: Uint8Array[]): Uint8Array {
     pad += arr.length;
   }
   return result;
+}
+
+// CURVE.n lengths
+export function nLength(n: bigint, nBitLength?: number) {
+  // Bit size, byte size of CURVE.n
+  const _nBitLength = nBitLength !== undefined ? nBitLength : n.toString(2).length;
+  const nByteLength = Math.ceil(_nBitLength / 8);
+  return { nBitLength: _nBitLength, nByteLength };
 }
