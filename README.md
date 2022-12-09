@@ -4,13 +4,18 @@ Minimal, zero-dependency JS implementation of elliptic curve cryptography.
 
 Implements Short Weierstrass curves with ECDSA signature scheme.
 
-To keep the package minimal, no curve definitions are provided out-of-box.
-Main reason for that is the fact hashing library is usually required for full functionality. Use separate package that defines popular curves: `micro-curve-definitions` for P192, P224, P256, P384, P521, secp256k1, stark curve, bn254, pasta (pallas/vesta) - it depends on `@noble/hashes`.
+To keep the package minimal, no curve definitions are provided out-of-box. Use `micro-curve-definitions` module:
+
+- It provides P192, P224, P256, P384, P521, secp256k1, stark curve, bn254, pasta (pallas/vesta) short weierstrass curves
+- It also provides ed25519 and ed448 twisted edwards curves
+- Main reason for separate package is the fact hashing library (like `@noble/hashes`) is required for full functionality
+- We may reconsider merging packages in future, when a stable version would be ready
 
 Future plans:
 
-- Edwards, Twisted Edwards & Montgomery curves
+- Edwards and Montgomery curves
 - hash-to-curve standard
+- point indistinguishability
 - pairings
 
 ### This library belongs to _noble_ crypto
