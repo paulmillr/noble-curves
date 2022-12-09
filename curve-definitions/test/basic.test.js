@@ -2,8 +2,8 @@ import { deepStrictEqual, throws } from 'assert';
 import { should } from 'micro-should';
 import * as nist from '../lib/nist.js';
 import { hexToBytes } from '@noble/curves/utils';
-import { default as ecdsa } from './fixtures/ecdsa_test.json' assert { type: 'json' };
-import { default as ecdh } from './fixtures/ecdh_test.json' assert { type: 'json' };
+import { default as ecdsa } from './wycheproof/ecdsa_test.json' assert { type: 'json' };
+import { default as ecdh } from './wycheproof/ecdh_test.json' assert { type: 'json' };
 
 // import { hexToBytes } from '@noble/curves';
 

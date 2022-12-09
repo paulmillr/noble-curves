@@ -1,0 +1,21 @@
+{
+    "name": "benchmark",
+    "private": true,
+    "version": "0.1.0",
+    "description": "benchmarks",
+    "main": "index.js",
+    "type": "module",
+    "scripts": {
+        "bench": "node index.js"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "MIT",
+    "devDependencies": {
+        "micro-bmark": "0.2.0"
+    },
+    "dependencies": {
+        "@noble/ed25519": "^1.7.1",
+        "@noble/secp256k1": "^1.7.0"
+    }
+}

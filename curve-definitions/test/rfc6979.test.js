@@ -17,7 +17,6 @@ should('RFC6979', () => {
     for (const c of v.cases) {
       const h = curve.CURVE.hash(c.message);
       const sigObj = curve.sign(h, v.private);
-      // const sigObj = curve.Signature.fromDER(sig);
       deepStrictEqual(sigObj.r, hexToBigint(c.r), 'R');
       deepStrictEqual(sigObj.s, hexToBigint(c.s), 'S');
       deepStrictEqual(curve.verify(sigObj.toDERRawBytes(), h, pubKey), true, 'verify(1)');

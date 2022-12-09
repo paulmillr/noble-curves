@@ -13,14 +13,14 @@
   "module": "index.js",
   "types": "index.d.ts",
   "dependencies": {
-    "@noble/curves": "~0.1.0",
+    "@noble/curves": "file:../",
     "@noble/hashes": "1.1.4"
   },
   "devDependencies": {
     "@scure/base": "~1.1.0",
     "@scure/bip32": "^1.1.1",
     "@scure/bip39": "^1.1.0",
-    "@types/node": "^18.11.3",
+    "@types/node": "18.11.3",
     "fast-check": "3.0.0",
     "micro-should": "0.2.0",
     "prettier": "2.6.2",

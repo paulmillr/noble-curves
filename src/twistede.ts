@@ -211,7 +211,10 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     // invert on all of them. invert is very slow operation,
     // so this improves performance massively.
     static toAffineBatch(points: ExtendedPoint[]): Point[] {
-      const toInv = mod.invertBatch(points.map((p) => p.z), CURVE.P);
+      const toInv = mod.invertBatch(
+        points.map((p) => p.z),
+        CURVE.P
+      );
       return points.map((p, i) => p.toAffine(toInv[i]));
     }
 
