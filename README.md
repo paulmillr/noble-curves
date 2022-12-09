@@ -2,7 +2,7 @@
 
 Minimal, zero-dependency JS implementation of elliptic curve cryptography.
 
-Implements Short Weierstrass curves with ECDSA signature scheme.
+Implements Short Weierstrass curve with ECDSA signatures & Twisted Edwards curve with EdDSA signatures.
 
 To keep the package minimal, no curve definitions are provided out-of-box. Use `micro-curve-definitions` module:
 
