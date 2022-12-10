@@ -2,7 +2,7 @@
 import { hmac } from '@noble/hashes/hmac';
 import { sha256 } from '@noble/hashes/sha256';
 import { concatBytes, randomBytes } from '@noble/hashes/utils';
-import { weierstrass, CHash } from '@noble/curves/shortw';
+import { weierstrass, CHash } from '@noble/curves/weierstrass';
 
 function getHash(hash: CHash) {
   return {

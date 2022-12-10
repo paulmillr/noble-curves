@@ -45,8 +45,8 @@ npm install @noble/curves
 ```
 
 ```ts
-import shortw from '@noble/curves/shortw'; // Short Weierstrass curve
-import twistede from '@noble/curves/twistede'; // Twisted Edwards curve
+import weierstrass from '@noble/curves/weierstrass'; // Short Weierstrass curve
+import twistedEdwards from '@noble/curves/edwards'; // Twisted Edwards curve
 import { sha256 } from '@noble/hashes/sha256';
 import { hmac } from '@noble/hashes/hmac';
 import { concatBytes, randomBytes } from '@noble/hashes/utils';

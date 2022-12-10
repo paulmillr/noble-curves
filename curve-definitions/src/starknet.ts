@@ -3,7 +3,7 @@ import { keccak_256 } from '@noble/hashes/sha3';
 import { sha256 } from '@noble/hashes/sha256';
 import { hmac } from '@noble/hashes/hmac';
 import { concatBytes, randomBytes } from '@noble/hashes/utils';
-import { weierstrass, CHash, JacobianPointType } from '@noble/curves/shortw';
+import { weierstrass, CHash, JacobianPointType } from '@noble/curves/weierstrass';
 import * as cutils from '@noble/curves/utils';
 
 function getHash(hash: CHash) {

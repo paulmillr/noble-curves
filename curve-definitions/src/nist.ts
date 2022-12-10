@@ -3,7 +3,7 @@ import { hmac } from '@noble/hashes/hmac';
 import { sha256 } from '@noble/hashes/sha256';
 import { sha384, sha512 } from '@noble/hashes/sha512';
 import { concatBytes, randomBytes } from '@noble/hashes/utils';
-import { weierstrass, CurveType, CHash } from '@noble/curves/shortw';
+import { weierstrass, CurveType, CHash } from '@noble/curves/weierstrass';
 import { mod, pow2 } from '@noble/curves/modular';
 
 // TODO: ability to provide API for different default hash.

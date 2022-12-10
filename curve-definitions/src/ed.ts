@@ -1,7 +1,7 @@
 import { sha512 } from '@noble/hashes/sha512';
 import { shake256 } from '@noble/hashes/sha3';
 import { concatBytes, randomBytes, utf8ToBytes, wrapConstructor } from '@noble/hashes/utils';
-import { twistedEdwards } from '@noble/curves/twistede';
+import { twistedEdwards } from '@noble/curves/edwards';
 import { mod, pow2, isNegativeLE } from '@noble/curves/modular';
 
 const ed25519P = BigInt(

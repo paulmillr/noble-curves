@@ -37,15 +37,15 @@
       "import": "./lib/esm/modular.js",
       "default": "./lib/modular.js"
     },
-    "./shortw": {
-      "types": "./lib/shortw.d.ts",
-      "import": "./lib/esm/shortw.js",
-      "default": "./lib/shortw.js"
+    "./weierstrass": {
+      "types": "./lib/weierstrass.d.ts",
+      "import": "./lib/esm/weierstrass.js",
+      "default": "./lib/weierstrass.js"
     },
-    "./twistede": {
-      "types": "./lib/twistede.d.ts",
-      "import": "./lib/esm/twistede.js",
-      "default": "./lib/twistede.js"
+    "./edwards": {
+      "types": "./lib/edwards.d.ts",
+      "import": "./lib/esm/edwards.js",
+      "default": "./lib/edwards.js"
     },
     "./utils": {
       "types": "./lib/utils.d.ts",
