@@ -99,7 +99,6 @@ export function legendre(num: bigint, fieldPrime: bigint): bigint {
 
 /**
  * Calculates square root of a number in a finite field.
- * Used to calculate y - the square root of y².
  */
 export function sqrt(number: bigint, modulo: bigint): bigint {
   const n = number;
@@ -109,6 +108,7 @@ export function sqrt(number: bigint, modulo: bigint): bigint {
   // P = 3 (mod 4)
   // sqrt n = n^((P+1)/4)
   if (P % _4n === _3n) return pow(n, p1div4, P);
+
   // P = 5 (mod 8)
   if (P % _8n === _5n) {
     const n2 = mod(n * _2n, P);

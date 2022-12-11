@@ -12,13 +12,14 @@
 import * as mod from './modular.js';
 import {
   bytesToHex,
-  bytesToNumber,
+  bytesToNumberBE,
   concatBytes,
   ensureBytes,
   hexToBytes,
   hexToNumber,
   numberToHexUnpadded,
   nLength,
+  hashToPrivateScalar,
 } from './utils.js';
 import { wNAF } from './group.js';
 
@@ -131,7 +132,7 @@ function parseDERInt(data: Uint8Array) {
   if (res[0] === 0x00 && res[1] <= 0x7f) {
     throw new DERError('Invalid signature integer: trailing length');
   }
-  return { data: bytesToNumber(res), left: data.subarray(len + 2) };
+  return { data: bytesToNumberBE(res), left: data.subarray(len + 2) };
 }
 
 function parseDERSignature(data: Uint8Array) {
@@ -214,8 +215,8 @@ export interface JacobianPointType {
   double(): JacobianPointType;
   add(other: JacobianPointType): JacobianPointType;
   subtract(other: JacobianPointType): JacobianPointType;
-  multiplyUnsafe(scalar: bigint): JacobianPointType;
   multiply(scalar: number | bigint, affinePoint?: PointType): JacobianPointType;
+  multiplyUnsafe(scalar: bigint): JacobianPointType;
   toAffine(invZ?: bigint): PointType;
 }
 // Static methods
@@ -392,7 +393,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       num = hexToNumber(key);
     } else if (key instanceof Uint8Array) {
       if (key.length !== groupLen) throw new Error(`Expected ${groupLen} bytes of private key`);
-      num = bytesToNumber(key);
+      num = bytesToNumberBE(key);
     } else {
       throw new TypeError('Expected valid private key');
     }
@@ -435,7 +436,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     const { n, nBitLength } = CURVE;
     const byteLength = hash.length;
     const delta = byteLength * 8 - nBitLength; // size of curve.n (252 bits)
-    let h = bytesToNumber(hash);
+    let h = bytesToNumberBE(hash);
     if (delta > 0) h = h >> BigInt(delta);
     if (!truncateOnly && h >= n) h -= n;
     return h;
@@ -720,7 +721,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
      */
     private static fromCompressedHex(bytes: Uint8Array) {
       const P = CURVE.P;
-      const x = bytesToNumber(bytes.subarray(1));
+      const x = bytesToNumberBE(bytes.subarray(1));
       if (!isValidFieldElement(x)) throw new Error('Point is not on curve');
       const y2 = weierstrassEquation(x); // y² = x³ + ax + b
       let y = sqrtModCurve(y2, P); // y = y² ^ (p+1)/4
@@ -734,8 +735,8 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     }
 
     private static fromUncompressedHex(bytes: Uint8Array) {
-      const x = bytesToNumber(bytes.subarray(1, fieldLen + 1));
-      const y = bytesToNumber(bytes.subarray(fieldLen + 1, 2 * fieldLen + 1));
+      const x = bytesToNumberBE(bytes.subarray(1, fieldLen + 1));
+      const y = bytesToNumberBE(bytes.subarray(fieldLen + 1, 2 * fieldLen + 1));
       const point = new Point(x, y);
       point.assertValidity();
       return point;
@@ -962,15 +963,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
      * @param hash hash output from sha512, or a similar function
      * @returns valid private key
      */
-    hashToPrivateKey: (hash: Hex): Uint8Array => {
-      hash = ensureBytes(hash);
-      const minLen = fieldLen + 8;
-      if (hash.length < minLen || hash.length > 1024) {
-        throw new Error(`Expected ${minLen}-1024 bytes of private key as per FIPS 186`);
-      }
-      const num = mod.mod(bytesToNumber(hash), CURVE_ORDER - _1n) + _1n;
-      return numToField(num);
-    },
+    hashToPrivateKey: (hash: Hex): Uint8Array => numToField(hashToPrivateScalar(hash, CURVE_ORDER)),
 
     // Takes curve order + 64 bits from CSPRNG
     // so that modulo bias is neglible, matches FIPS 186 B.4.1.
@@ -1035,7 +1028,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
   // RFC6979 methods
   function bits2int(bytes: Uint8Array) {
     const slice = bytes.length > fieldLen ? bytes.slice(0, fieldLen) : bytes;
-    return bytesToNumber(slice);
+    return bytesToNumberBE(slice);
   }
   function bits2octets(bytes: Uint8Array): Uint8Array {
     const z1 = bits2int(bytes);

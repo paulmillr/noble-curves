@@ -2,6 +2,9 @@
 // Convert between types
 // ---------------------
 
+type Hex = string | Uint8Array;
+import * as mod from './modular.js';
+
 const hexes = Array.from({ length: 256 }, (v, i) => i.toString(16).padStart(2, '0'));
 export function bytesToHex(uint8a: Uint8Array): string {
   if (!(uint8a instanceof Uint8Array)) throw new Error('Expected Uint8Array');
@@ -44,15 +47,19 @@ export function hexToBytes(hex: string): Uint8Array {
 }
 
 // Big Endian
-export function bytesToNumber(bytes: Uint8Array): bigint {
+export function bytesToNumberBE(bytes: Uint8Array): bigint {
   return hexToNumber(bytesToHex(bytes));
+}
+export function bytesToNumberLE(uint8a: Uint8Array): bigint {
+  if (!(uint8a instanceof Uint8Array)) throw new Error('Expected Uint8Array');
+  return BigInt('0x' + bytesToHex(Uint8Array.from(uint8a).reverse()));
 }
 
 export const numberToBytesBE = (n: bigint, len: number) =>
   hexToBytes(n.toString(16).padStart(len * 2, '0'));
 export const numberToBytesLE = (n: bigint, len: number) => numberToBytesBE(n, len).reverse();
 
-export function ensureBytes(hex: string | Uint8Array, expectedLength?: number): Uint8Array {
+export function ensureBytes(hex: Hex, expectedLength?: number): Uint8Array {
   // Uint8Array.from() instead of hash.slice() because node.js Buffer
   // is instance of Uint8Array, and its slice() creates **mutable** copy
   const bytes = hex instanceof Uint8Array ? Uint8Array.from(hex) : hexToBytes(hex);
@@ -81,4 +88,20 @@ export function nLength(n: bigint, nBitLength?: number) {
   const _nBitLength = nBitLength !== undefined ? nBitLength : n.toString(2).length;
   const nByteLength = Math.ceil(_nBitLength / 8);
   return { nBitLength: _nBitLength, nByteLength };
+}
+
+/**
+ * Can take (n+8) or more bytes of uniform input e.g. from CSPRNG or KDF
+ * and convert them into private scalar, with the modulo bias being neglible.
+ * As per FIPS 186 B.4.1.
+ * @param hash hash output from sha512, or a similar function
+ * @returns valid private scalar
+ */
+const _1n = BigInt(1);
+export function hashToPrivateScalar(hash: Hex, CURVE_ORDER: bigint, isLE = false): bigint {
+  hash = ensureBytes(hash);
+  if (hash.length < 40 || hash.length > 1024)
+    throw new Error('Expected 40-1024 bytes of private key as per FIPS 186');
+  const num = isLE ? bytesToNumberLE(hash) : bytesToNumberBE(hash);
+  return mod.mod(num, CURVE_ORDER - _1n) + _1n;
 }
