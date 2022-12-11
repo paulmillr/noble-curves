@@ -1,13 +1,12 @@
 import { deepStrictEqual, throws } from 'assert';
 import { should } from 'micro-should';
 import * as fc from 'fast-check';
-import { ed25519, ed25519ctx, ed25519ph } from '../lib/ed25519.js';
+import { ed25519, ed25519ctx, ed25519ph, x25519 } from '../lib/ed25519.js';
 import { readFileSync } from 'fs';
 import { default as zip215 } from './ed25519/zip215.json' assert { type: 'json' };
 import { hexToBytes, bytesToHex, randomBytes } from '@noble/hashes/utils';
 import { default as ed25519vectors } from './wycheproof/eddsa_test.json' assert { type: 'json' };
 import { default as x25519vectors } from './wycheproof/x25519_test.json' assert { type: 'json' };
-import { sha512 } from '@noble/hashes/sha512';
 
 const ed = ed25519;
 const hex = bytesToHex;
@@ -455,7 +454,7 @@ const rfc7748Mul = [
 for (let i = 0; i < rfc7748Mul.length; i++) {
   const v = rfc7748Mul[i];
   should(`RFC7748: scalarMult (${i})`, () => {
-    deepStrictEqual(hex(ed.montgomeryCurve.scalarMult(v.u, v.scalar)), v.outputU);
+    deepStrictEqual(hex(x25519.scalarMult(v.u, v.scalar)), v.outputU);
   });
 }
 
@@ -467,8 +466,8 @@ const rfc7748Iter = [
 for (let i = 0; i < rfc7748Iter.length; i++) {
   const { scalar, iters } = rfc7748Iter[i];
   should(`RFC7748: scalarMult iteration (${i})`, () => {
-    let k = ed.montgomeryCurve.BASE_POINT_U;
-    for (let i = 0, u = k; i < iters; i++) [k, u] = [ed.montgomeryCurve.scalarMult(u, k), k];
+    let k = x25519.Gu;
+    for (let i = 0, u = k; i < iters; i++) [k, u] = [x25519.scalarMult(u, k), k];
     deepStrictEqual(hex(k), scalar);
   });
 }
@@ -479,33 +478,33 @@ should('RFC7748 getSharedKey', () => {
   const bobPrivate = '5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb';
   const bobPublic = 'de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f';
   const shared = '4a5d9d5ba4ce2de1728e3bf480350f25e07e21c947d19e3376f09b3c1e161742';
-  deepStrictEqual(alicePublic, hex(ed.montgomeryCurve.getPublicKey(alicePrivate)));
-  deepStrictEqual(bobPublic, hex(ed.montgomeryCurve.getPublicKey(bobPrivate)));
-  deepStrictEqual(hex(ed.montgomeryCurve.getSharedSecret(alicePrivate, bobPublic)), shared);
-  deepStrictEqual(hex(ed.montgomeryCurve.getSharedSecret(bobPrivate, alicePublic)), shared);
+  deepStrictEqual(alicePublic, hex(x25519.getPublicKey(alicePrivate)));
+  deepStrictEqual(bobPublic, hex(x25519.getPublicKey(bobPrivate)));
+  deepStrictEqual(hex(x25519.scalarMult(bobPublic, alicePrivate)), shared);
+  deepStrictEqual(hex(x25519.scalarMult(alicePublic, bobPrivate)), shared);
 });
 
-should('X25519/getSharedSecret() should be commutative', () => {
-  for (let i = 0; i < 512; i++) {
-    const asec = ed.utils.randomPrivateKey();
-    const apub = ed.getPublicKey(asec);
-    const bsec = ed.utils.randomPrivateKey();
-    const bpub = ed.getPublicKey(bsec);
-    try {
-      deepStrictEqual(ed.getSharedSecret(asec, bpub), ed.getSharedSecret(bsec, apub));
-    } catch (error) {
-      console.error('not commutative', { asec, apub, bsec, bpub });
-      throw error;
-    }
-  }
-});
+// should('X25519/getSharedSecret() should be commutative', () => {
+//   for (let i = 0; i < 512; i++) {
+//     const asec = ed.utils.randomPrivateKey();
+//     const apub = ed.getPublicKey(asec);
+//     const bsec = ed.utils.randomPrivateKey();
+//     const bpub = ed.getPublicKey(bsec);
+//     try {
+//       deepStrictEqual(ed.getSharedSecret(asec, bpub), ed.getSharedSecret(bsec, apub));
+//     } catch (error) {
+//       console.error('not commutative', { asec, apub, bsec, bpub });
+//       throw error;
+//     }
+//   }
+// });
 
-should('X25519: should convert base point to montgomery using fromPoint', () => {
-  deepStrictEqual(
-    hex(ed.montgomeryCurve.UfromPoint(ed.Point.BASE)),
-    ed.montgomeryCurve.BASE_POINT_U
-  );
-});
+// should('X25519: should convert base point to montgomery using fromPoint', () => {
+//   deepStrictEqual(
+//     hex(ed.montgomeryCurve.UfromPoint(ed.Point.BASE)),
+//     ed.montgomeryCurve.BASE_POINT_U
+//   );
+// });
 
 {
   const group = x25519vectors.testGroups[0];
@@ -514,7 +513,7 @@ should('X25519: should convert base point to montgomery using fromPoint', () => 
     should(`Wycheproof/X25519(${i}, ${v.result}) ${v.comment}`, () => {
       if (v.result === 'valid' || v.result === 'acceptable') {
         try {
-          const shared = hex(ed.montgomeryCurve.getSharedSecret(v.private, v.public));
+          const shared = hex(x25519.scalarMult(v.public, v.private));
           deepStrictEqual(shared, v.shared, 'valid');
         } catch (e) {
           // We are more strict
@@ -525,7 +524,7 @@ should('X25519: should convert base point to montgomery using fromPoint', () => 
       } else if (v.result === 'invalid') {
         let failed = false;
         try {
-          ed.montgomeryCurve.getSharedSecret(v.private, v.public);
+          x25519.scalarMult(v.public, v.private);
         } catch (error) {
           failed = true;
         }

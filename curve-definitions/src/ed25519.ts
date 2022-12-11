@@ -1,6 +1,7 @@
 import { sha512 } from '@noble/hashes/sha512';
 import { concatBytes, randomBytes, utf8ToBytes } from '@noble/hashes/utils';
 import { twistedEdwards } from '@noble/curves/edwards';
+import { montgomery } from '@noble/curves/montgomery';
 import { mod, pow2, isNegativeLE } from '@noble/curves/modular';
 
 const ed25519P = BigInt(
@@ -35,6 +36,17 @@ function ed25519_pow_2_252_3(x: bigint) {
   // ^ To pow to (p+3)/8, multiply it by x.
   return { pow_p_5_8, b2 };
 }
+function adjustScalarBytes(bytes: Uint8Array): Uint8Array {
+  // Section 5: For X25519, in order to decode 32 random bytes as an integer scalar,
+  // set the three least significant bits of the first byte
+  bytes[0] &= 248; // 0b1111_1000
+  // and the most significant bit of the last to zero,
+  bytes[31] &= 127; // 0b0111_1111
+  // set the second most significant bit of the last byte to 1
+  bytes[31] |= 64; // 0b0100_0000
+  return bytes;
+}
+
 // Just in case
 export const ED25519_TORSION_SUBGROUP = [
   '0100000000000000000000000000000000000000000000000000000000000000',
@@ -65,16 +77,7 @@ const ED25519_DEF = {
   Gy: BigInt('46316835694926478169428394003475163141307993866256225615783033603165251855960'),
   hash: sha512,
   randomBytes,
-  adjustScalarBytes: (bytes: Uint8Array): Uint8Array => {
-    // Section 5: For X25519, in order to decode 32 random bytes as an integer scalar,
-    // set the three least significant bits of the first byte
-    bytes[0] &= 248; // 0b1111_1000
-    // and the most significant bit of the last to zero,
-    bytes[31] &= 127; // 0b0111_1111
-    // set the second most significant bit of the last byte to 1
-    bytes[31] |= 64; // 0b0100_0000
-    return bytes;
-  },
+  adjustScalarBytes,
   // dom2
   // Ratio of u to v. Allows us to combine inversion and square root. Uses algo from RFC8032 5.1.3.
   // Constant-time, u/√v
@@ -96,16 +99,6 @@ const ED25519_DEF = {
     if (isNegativeLE(x, P)) x = mod(-x, P);
     return { isValid: useRoot1 || useRoot2, value: x };
   },
-  // ECDH
-  // The constant a24 is (486662 - 2) / 4 = 121665 for curve25519/X25519
-  a24: BigInt('121665'),
-  montgomeryBits: 255, // n is 253 bits
-  powPminus2: (x: bigint): bigint => {
-    const P = ed25519P;
-    // x^(p-2) aka x^(2^255-21)
-    const { pow_p_5_8, b2 } = ed25519_pow_2_252_3(x);
-    return mod(pow2(pow_p_5_8, BigInt(3), P) * b2, P);
-  },
 } as const;
 
 export const ed25519 = twistedEdwards(ED25519_DEF);
@@ -123,4 +116,19 @@ export const ed25519ph = twistedEdwards({
   ...ED25519_DEF,
   domain: ed25519_domain,
   preHash: sha512,
+});
+
+export const x25519 = montgomery({
+  P: ed25519P,
+  a24: BigInt('121665'),
+  montgomeryBits: 255, // n is 253 bits
+  nByteLength: 32,
+  Gu: '0900000000000000000000000000000000000000000000000000000000000000',
+  powPminus2: (x: bigint): bigint => {
+    const P = ed25519P;
+    // x^(p-2) aka x^(2^255-21)
+    const { pow_p_5_8, b2 } = ed25519_pow_2_252_3(x);
+    return mod(pow2(pow_p_5_8, BigInt(3), P) * b2, P);
+  },
+  adjustScalarBytes,
 });

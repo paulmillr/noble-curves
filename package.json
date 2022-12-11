@@ -32,20 +32,25 @@
   },
   "main": "index.js",
   "exports": {
+    "./edwards": {
+      "types": "./lib/edwards.d.ts",
+      "import": "./lib/esm/edwards.js",
+      "default": "./lib/edwards.js"
+    },
     "./modular": {
       "types": "./lib/modular.d.ts",
       "import": "./lib/esm/modular.js",
       "default": "./lib/modular.js"
     },
+    "./montgomery": {
+      "types": "./lib/montgomery.d.ts",
+      "import": "./lib/esm/montgomery.js",
+      "default": "./lib/montgomery.js"
+    },
     "./weierstrass": {
       "types": "./lib/weierstrass.d.ts",
       "import": "./lib/esm/weierstrass.js",
       "default": "./lib/weierstrass.js"
-    },
-    "./edwards": {
-      "types": "./lib/edwards.d.ts",
-      "import": "./lib/esm/edwards.js",
-      "default": "./lib/edwards.js"
     },
     "./utils": {
       "types": "./lib/utils.d.ts",

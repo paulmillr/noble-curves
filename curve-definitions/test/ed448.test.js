@@ -1,7 +1,7 @@
 import { deepStrictEqual, throws } from 'assert';
 import { should } from 'micro-should';
 import * as fc from 'fast-check';
-import { ed448, ed448ph } from '../lib/ed448.js';
+import { ed448, ed448ph, x448 } from '../lib/ed448.js';
 import { hexToBytes, bytesToHex, randomBytes } from '@noble/hashes/utils';
 import { default as ed448vectors } from './wycheproof/ed448_test.json' assert { type: 'json' };
 import { default as x448vectors } from './wycheproof/x448_test.json' assert { type: 'json' };
@@ -478,7 +478,7 @@ const rfc7748Mul = [
 for (let i = 0; i < rfc7748Mul.length; i++) {
   const v = rfc7748Mul[i];
   should(`RFC7748: scalarMult (${i})`, () => {
-    deepStrictEqual(hex(ed.montgomeryCurve.scalarMult(v.u, v.scalar)), v.outputU);
+    deepStrictEqual(hex(x448.scalarMult(v.u, v.scalar)), v.outputU);
   });
 }
 
@@ -498,8 +498,8 @@ const rfc7748Iter = [
 for (let i = 0; i < rfc7748Iter.length; i++) {
   const { scalar, iters } = rfc7748Iter[i];
   should(`RFC7748: scalarMult iteration (${i})`, () => {
-    let k = ed.montgomeryCurve.BASE_POINT_U;
-    for (let i = 0, u = k; i < iters; i++) [k, u] = [ed.montgomeryCurve.scalarMult(u, k), k];
+    let k = x448.Gu;
+    for (let i = 0, u = k; i < iters; i++) [k, u] = [x448.scalarMult(u, k), k];
     deepStrictEqual(hex(k), scalar);
   });
 }
@@ -515,10 +515,10 @@ should('RFC7748 getSharedKey', () => {
     '3eb7a829b0cd20f5bcfc0b599b6feccf6da4627107bdb0d4f345b43027d8b972fc3e34fb4232a13ca706dcb57aec3dae07bdc1c67bf33609';
   const shared =
     '07fff4181ac6cc95ec1c16a94a0f74d12da232ce40a77552281d282bb60c0b56fd2464c335543936521c24403085d59a449a5037514a879d';
-  deepStrictEqual(alicePublic, hex(ed.montgomeryCurve.getPublicKey(alicePrivate)));
-  deepStrictEqual(bobPublic, hex(ed.montgomeryCurve.getPublicKey(bobPrivate)));
-  deepStrictEqual(hex(ed.montgomeryCurve.getSharedSecret(alicePrivate, bobPublic)), shared);
-  deepStrictEqual(hex(ed.montgomeryCurve.getSharedSecret(bobPrivate, alicePublic)), shared);
+  deepStrictEqual(alicePublic, hex(x448.getPublicKey(alicePrivate)));
+  deepStrictEqual(bobPublic, hex(x448.getPublicKey(bobPrivate)));
+  deepStrictEqual(hex(x448.scalarMult(bobPublic, alicePrivate)), shared);
+  deepStrictEqual(hex(x448.scalarMult(alicePublic, bobPrivate)), shared);
 });
 
 {
@@ -528,7 +528,7 @@ should('RFC7748 getSharedKey', () => {
     should(`Wycheproof/X448(${i}, ${v.result}) ${v.comment}`, () => {
       if (v.result === 'valid' || v.result === 'acceptable') {
         try {
-          const shared = hex(ed.montgomeryCurve.getSharedSecret(v.private, v.public));
+          const shared = hex(x448.scalarMult(v.public, v.private));
           deepStrictEqual(shared, v.shared, 'valid');
         } catch (e) {
           // We are more strict
@@ -540,7 +540,7 @@ should('RFC7748 getSharedKey', () => {
       } else if (v.result === 'invalid') {
         let failed = false;
         try {
-          ed.montgomeryCurve.getSharedSecret(v.private, v.public);
+          x448.scalarMult(v.public, v.private);
         } catch (error) {
           failed = true;
         }
@@ -550,27 +550,27 @@ should('RFC7748 getSharedKey', () => {
   }
 }
 
-should('X448: should convert base point to montgomery using fromPoint', () => {
-  deepStrictEqual(
-    hex(ed.montgomeryCurve.UfromPoint(ed.Point.BASE)),
-    ed.montgomeryCurve.BASE_POINT_U
-  );
-});
+// should('X448: should convert base point to montgomery using fromPoint', () => {
+//   deepStrictEqual(
+//     hex(ed.montgomeryCurve.UfromPoint(ed.Point.BASE)),
+//     ed.montgomeryCurve.BASE_POINT_U
+//   );
+// });
 
-should('X448/getSharedSecret() should be commutative', async () => {
-  for (let i = 0; i < 512; i++) {
-    const asec = ed.utils.randomPrivateKey();
-    const apub = ed.getPublicKey(asec);
-    const bsec = ed.utils.randomPrivateKey();
-    const bpub = ed.getPublicKey(bsec);
-    try {
-      deepStrictEqual(ed.getSharedSecret(asec, bpub), ed.getSharedSecret(bsec, apub));
-    } catch (error) {
-      console.error('not commutative', { asec, apub, bsec, bpub });
-      throw error;
-    }
-  }
-});
+// should('X448/getSharedSecret() should be commutative', async () => {
+//   for (let i = 0; i < 512; i++) {
+//     const asec = ed.utils.randomPrivateKey();
+//     const apub = ed.getPublicKey(asec);
+//     const bsec = ed.utils.randomPrivateKey();
+//     const bpub = ed.getPublicKey(bsec);
+//     try {
+//       deepStrictEqual(ed.getSharedSecret(asec, bpub), ed.getSharedSecret(bsec, apub));
+//     } catch (error) {
+//       console.error('not commutative', { asec, apub, bsec, bpub });
+//       throw error;
+//     }
+//   }
+// });
 
 const VECTORS_RFC8032_CTX = [
   {

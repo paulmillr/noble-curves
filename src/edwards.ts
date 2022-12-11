@@ -16,6 +16,7 @@ import {
   concatBytes,
   ensureBytes,
   numberToBytesLE,
+  bytesToNumberLE,
   nLength,
   hashToPrivateScalar,
 } from './utils.js';
@@ -56,14 +57,6 @@ export type CurveType = {
   domain?: (data: Uint8Array, ctx: Uint8Array, phflag: boolean) => Uint8Array;
   uvRatio?: (u: bigint, v: bigint) => { isValid: boolean; value: bigint };
   preHash?: CHash;
-  // ECDH related
-  // Other constants
-  a24: bigint; // Related to d, but cannot be derived from it
-  // ECDH bits (can be different from N bits)
-  montgomeryBits?: number;
-  basePointU?: string; // TODO: why not bigint?
-  powPminus2?: (x: bigint) => bigint;
-  UfromPoint?: (p: PointType) => Uint8Array;
 };
 
 // We accept hex strings besides Uint8Array for simplicity
@@ -75,11 +68,11 @@ type PrivKey = Hex | bigint | number;
 function validateOpts(curve: CurveType) {
   if (typeof curve.hash !== 'function' || !Number.isSafeInteger(curve.hash.outputLen))
     throw new Error('Invalid hash function');
-  for (const i of ['a', 'd', 'P', 'n', 'h', 'Gx', 'Gy', 'a24'] as const) {
+  for (const i of ['a', 'd', 'P', 'n', 'h', 'Gx', 'Gy'] as const) {
     if (typeof curve[i] !== 'bigint')
       throw new Error(`Invalid curve param ${i}=${curve[i]} (${typeof curve[i]})`);
   }
-  for (const i of ['nBitLength', 'nByteLength', 'montgomeryBits'] as const) {
+  for (const i of ['nBitLength', 'nByteLength'] as const) {
     if (curve[i] === undefined) continue; // Optional
     if (!Number.isSafeInteger(curve[i]))
       throw new Error(`Invalid curve param ${i}=${curve[i]} (${typeof curve[i]})`);
@@ -87,20 +80,9 @@ function validateOpts(curve: CurveType) {
   for (const fn of ['randomBytes'] as const) {
     if (typeof curve[fn] !== 'function') throw new Error(`Invalid ${fn} function`);
   }
-  for (const fn of [
-    'adjustScalarBytes',
-    'domain',
-    'uvRatio',
-    'powPminus2',
-    'UfromPoint',
-  ] as const) {
+  for (const fn of ['adjustScalarBytes', 'domain', 'uvRatio'] as const) {
     if (curve[fn] === undefined) continue; // Optional
     if (typeof curve[fn] !== 'function') throw new Error(`Invalid ${fn} function`);
-  }
-  for (const i of ['basePointU'] as const) {
-    if (curve[i] === undefined) continue; // Optional
-    if (typeof curve[i] !== 'string')
-      throw new Error(`Invalid curve param ${i}=${curve[i]} (${typeof curve[i]})`);
   }
   // Set defaults
   return Object.freeze({ ...nLength(curve.n, curve.nBitLength), ...curve } as const);
@@ -176,20 +158,11 @@ export type SigType = Hex | SignatureType;
 export type CurveFn = {
   CURVE: ReturnType<typeof validateOpts>;
   getPublicKey: (privateKey: PrivKey, isCompressed?: boolean) => Uint8Array;
-  getSharedSecret: (privateKey: PrivKey, publicKey: Hex) => Uint8Array;
   sign: (message: Hex, privateKey: Hex) => Uint8Array;
   verify: (sig: SigType, message: Hex, publicKey: PubKey) => boolean;
   Point: PointConstructor;
   ExtendedPoint: ExtendedPointConstructor;
   Signature: SignatureConstructor;
-  montgomeryCurve: {
-    BASE_POINT_U: string;
-    UfromPoint: (p: PointType) => Uint8Array;
-    scalarMult: (u: Hex, scalar: Hex) => Uint8Array;
-    scalarMultBase: (scalar: Hex) => Uint8Array;
-    getPublicKey: (privateKey: Hex) => Uint8Array;
-    getSharedSecret: (privateKey: Hex, publicKey: Hex) => Uint8Array;
-  };
   utils: {
     mod: (a: bigint, b?: bigint) => bigint;
     invert: (number: bigint, modulo?: bigint) => bigint;
@@ -229,8 +202,6 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
   }
   const uvRatio = CURVE.uvRatio || _uvRatio;
 
-  const _powPminus2 = (x: bigint) => mod.pow(x, P - _2n, P);
-  const powPminus2 = CURVE.powPminus2 || _powPminus2;
   const _adjustScalarBytes = (bytes: Uint8Array) => bytes; // NOOP
   const adjustScalarBytes = CURVE.adjustScalarBytes || _adjustScalarBytes;
   function _domain(data: Uint8Array, ctx: Uint8Array, phflag: boolean) {
@@ -553,10 +524,10 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
   }
 
   // Little Endian
-  function bytesToNumberLE(uint8a: Uint8Array): bigint {
-    if (!(uint8a instanceof Uint8Array)) throw new Error('Expected Uint8Array');
-    return BigInt('0x' + bytesToHex(Uint8Array.from(uint8a).reverse()));
-  }
+  // function bytesToNumberLE(uint8a: Uint8Array): bigint {
+  //   if (!(uint8a instanceof Uint8Array)) throw new Error('Expected Uint8Array');
+  //   return BigInt('0x' + bytesToHex(Uint8Array.from(uint8a).reverse()));
+  // }
 
   // -------------------------
   // Little-endian SHA512 with modulo n
@@ -684,194 +655,19 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
   // Enable precomputes. Slows down first publicKey computation by 20ms.
   Point.BASE._setWindowSize(8);
 
-  // ECDH (X22519/X448)
-  // https://datatracker.ietf.org/doc/html/rfc7748
-  // Every twisted Edwards curve is birationally equivalent to an elliptic curve in Montgomery form and vice versa.
-  const montgomeryBits = CURVE.montgomeryBits || CURVE.nBitLength;
-  const montgomeryBytes = Math.ceil(montgomeryBits / 8);
-
-  // cswap from RFC7748
-  function cswap(swap: bigint, x_2: bigint, x_3: bigint): [bigint, bigint] {
-    const dummy = modP(swap * (x_2 - x_3));
-    x_2 = modP(x_2 - dummy);
-    x_3 = modP(x_3 + dummy);
-    return [x_2, x_3];
-  }
-
-  // x25519 from 4
-  /**
-   *
-   * @param pointU u coordinate (x) on Montgomery Curve 25519
-   * @param scalar by which the point would be multiplied
-   * @returns new Point on Montgomery curve
-   */
-  function montgomeryLadder(pointU: bigint, scalar: bigint): bigint {
-    const { P } = CURVE;
-    const u = normalizeScalar(pointU, P);
-    // Section 5: Implementations MUST accept non-canonical values and process them as
-    // if they had been reduced modulo the field prime.
-    const k = normalizeScalar(scalar, P);
-    // The constant a24 is (486662 - 2) / 4 = 121665 for curve25519/X25519
-    const a24 = CURVE.a24;
-    const x_1 = u;
-    let x_2 = _1n;
-    let z_2 = _0n;
-    let x_3 = u;
-    let z_3 = _1n;
-    let swap = _0n;
-    let sw: [bigint, bigint];
-    for (let t = BigInt(montgomeryBits - 1); t >= _0n; t--) {
-      const k_t = (k >> t) & _1n;
-      swap ^= k_t;
-      sw = cswap(swap, x_2, x_3);
-      x_2 = sw[0];
-      x_3 = sw[1];
-      sw = cswap(swap, z_2, z_3);
-      z_2 = sw[0];
-      z_3 = sw[1];
-      swap = k_t;
-
-      const A = x_2 + z_2;
-      const AA = modP(A * A);
-      const B = x_2 - z_2;
-      const BB = modP(B * B);
-      const E = AA - BB;
-      const C = x_3 + z_3;
-      const D = x_3 - z_3;
-      const DA = modP(D * A);
-      const CB = modP(C * B);
-      const dacb = DA + CB;
-      const da_cb = DA - CB;
-      x_3 = modP(dacb * dacb);
-      z_3 = modP(x_1 * modP(da_cb * da_cb));
-      x_2 = modP(AA * BB);
-      z_2 = modP(E * (AA + modP(a24 * E)));
-    }
-    // (x_2, x_3) = cswap(swap, x_2, x_3)
-    sw = cswap(swap, x_2, x_3);
-    x_2 = sw[0];
-    x_3 = sw[1];
-    // (z_2, z_3) = cswap(swap, z_2, z_3)
-    sw = cswap(swap, z_2, z_3);
-    z_2 = sw[0];
-    z_3 = sw[1];
-    // z_2^(p - 2)
-    const z2 = powPminus2(z_2);
-    // Return x_2 * (z_2^(p - 2))
-    return modP(x_2 * z2);
-  }
-
-  function encodeUCoordinate(u: bigint): Uint8Array {
-    return numberToBytesLE(modP(u), montgomeryBytes);
-  }
-
-  function decodeUCoordinate(uEnc: Hex): bigint {
-    const u = ensureBytes(uEnc, montgomeryBytes);
-    // Section 5: When receiving such an array, implementations of X25519
-    // MUST mask the most significant bit in the final byte.
-    // This is very ugly way, but it works because fieldLen-1 is outside of bounds for X448, so this becomes NOOP
-    // fieldLen - scalaryBytes = 1 for X448 and = 0 for X25519
-    u[fieldLen - 1] &= 127; // 0b0111_1111
-    return bytesToNumberLE(u);
-  }
-
-  function decodeScalar(n: Hex): bigint {
-    const bytes = ensureBytes(n);
-    if (bytes.length !== montgomeryBytes && bytes.length !== fieldLen)
-      throw new Error(`Expected ${montgomeryBytes} or ${fieldLen} bytes, got ${bytes.length}`);
-    return bytesToNumberLE(adjustScalarBytes(bytes));
-  }
-  /*
-    Converts Point to Montgomery Curve
-    - u, v: curve25519 coordinates
-    - x, y: ed25519 coordinates
-    RFC 7748 (https://www.rfc-editor.org/rfc/rfc7748) says
-    - The birational maps are (25519):
-     (u, v) = ((1+y)/(1-y), sqrt(-486664)*u/x)
-     (x, y) = (sqrt(-486664)*u/v, (u-1)/(u+1))
-    - The birational maps are (448):
-     (u, v) = ((y-1)/(y+1), sqrt(156324)*u/x)
-     (x, y) = (sqrt(156324)*u/v, (1+u)/(1-u))
-
-    But original Twisted Edwards paper (https://eprint.iacr.org/2008/013.pdf) and hyperelliptics (http://hyperelliptic.org/EFD/g1p/data/twisted/coordinates)
-    says that mapping is always:
-    - u = (1+y)/(1-y)
-    - v = 2 (1+y)/(x(1-y))
-    - x = 2 u/v
-    - y = (u-1)/(u+1)
-
-    Which maps correctly, but to completely different curve. There is different mapping for ed448 (which done with replaceble function).
-    Returns 'u' coordinate of curve25519 point.
-
-    NOTE: jubjub will need full mapping, for now only Point -> U is enough
-    */
-  function _UfromPoint(p: Point): Uint8Array {
-    if (!(p instanceof Point)) throw new Error('Wrong point');
-    const { y } = p;
-    const u = modP((y + _1n) * mod.invert(_1n - y, P));
-    return numberToBytesLE(u, montgomeryBytes);
-  }
-  const UfromPoint = CURVE.UfromPoint || _UfromPoint;
-
-  const BASE_POINT_U = CURVE.basePointU || bytesToHex(UfromPoint(Point.BASE));
-  // Multiply point u by scalar
-  function scalarMult(u: Hex, scalar: Hex): Uint8Array {
-    const pointU = decodeUCoordinate(u);
-    const _scalar = decodeScalar(scalar);
-    const pu = montgomeryLadder(pointU, _scalar);
-    // The result was not contributory
-    // https://cr.yp.to/ecdh.html#validate
-    if (pu === _0n) throw new Error('Invalid private or public key received');
-    return encodeUCoordinate(pu);
-  }
-  // Multiply base point by scalar
-  const scalarMultBase = (scalar: Hex): Uint8Array =>
-    montgomeryCurve.scalarMult(montgomeryCurve.BASE_POINT_U, scalar);
-
-  const montgomeryCurve = {
-    BASE_POINT_U,
-    UfromPoint,
-    // NOTE: we can get 'y' coordinate from 'u', but Point.fromHex also wants 'x' coordinate oddity flag, and we cannot get 'x' without knowing 'v'
-    // Need to add generic conversion between twisted edwards and complimentary curve for JubJub
-    scalarMult,
-    scalarMultBase,
-    // NOTE: these function work on complimentary montgomery curve
-    getSharedSecret: (privateKey: Hex, publicKey: Hex) => scalarMult(publicKey, privateKey),
-    getPublicKey: (privateKey: Hex): Uint8Array => scalarMultBase(privateKey),
-  };
-
-  /**
-   * Calculates X25519 DH shared secret from ed25519 private & public keys.
-   * Curve25519 used in X25519 consumes private keys as-is, while ed25519 hashes them with sha512.
-   * Which means we will need to normalize ed25519 seeds to "hashed repr".
-   * @param privateKey ed25519 private key
-   * @param publicKey ed25519 public key
-   * @returns X25519 shared key
-   */
-  function getSharedSecret(privateKey: PrivKey, publicKey: Hex): Uint8Array {
-    const { head } = getExtendedPublicKey(privateKey);
-    const u = montgomeryCurve.UfromPoint(Point.fromHex(publicKey));
-    return montgomeryCurve.getSharedSecret(head, u);
-  }
-
   const utils = {
     getExtendedPublicKey,
     mod: modP,
     invert: (a: bigint, m = CURVE.P) => mod.invert(a, m),
 
     /**
-     * Can take 40 or more bytes of uniform input e.g. from CSPRNG or KDF
-     * and convert them into private scalar, with the modulo bias being neglible.
-     * As per FIPS 186 B.4.1.
      * Not needed for ed25519 private keys. Needed if you use scalars directly (rare).
-     * @param hash hash output from sha512, or a similar function
-     * @returns valid private scalar
      */
     hashToPrivateScalar: (hash: Hex): bigint => hashToPrivateScalar(hash, CURVE_ORDER, true),
 
     /**
      * ed25519 private keys are uniform 32-bit strings. We do not need to check for
-     * modulo bias like we do in noble-secp256k1 randomPrivateKey()
+     * modulo bias like we do in secp256k1 randomPrivateKey()
      */
     randomPrivateKey: (): Uint8Array => randomBytes(fieldLen),
 
@@ -891,14 +687,12 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
 
   return {
     CURVE,
-    montgomeryCurve,
-    getSharedSecret,
+    getPublicKey,
+    sign,
+    verify,
     ExtendedPoint,
     Point,
     Signature,
-    getPublicKey,
     utils,
-    sign,
-    verify,
   };
 }

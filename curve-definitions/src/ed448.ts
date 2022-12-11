@@ -3,6 +3,7 @@ import { concatBytes, randomBytes, utf8ToBytes, wrapConstructor } from '@noble/h
 import { PointType, twistedEdwards } from '@noble/curves/edwards';
 import { mod, pow2, invert } from '@noble/curves/modular';
 import { numberToBytesLE } from '@noble/curves/utils';
+import { montgomery } from '../../lib/montgomery.js';
 
 const _0n = BigInt(0);
 
@@ -32,6 +33,17 @@ function ed448_pow_Pminus3div4(x: bigint): bigint {
   return (pow2(b223, 223n, P) * b222) % P;
 }
 
+function adjustScalarBytes(bytes: Uint8Array): Uint8Array {
+  // Section 5: Likewise, for X448, set the two least significant bits of the first byte to 0, and the most
+  // significant bit of the last byte to 1.
+  bytes[0] &= 252; // 0b11111100
+  // and the most significant bit of the last byte to 1.
+  bytes[55] |= 128; // 0b10000000
+  // NOTE: is is NOOP for 56 bytes scalars (X25519/X448)
+  bytes[56] = 0; // Byte outside of group (456 buts vs 448 bits)
+  return bytes;
+}
+
 const ED448_DEF = {
   // Param: a
   a: BigInt(1),
@@ -59,16 +71,7 @@ const ED448_DEF = {
   // SHAKE256(dom4(phflag,context)||x, 114)
   hash: shake256_114,
   randomBytes,
-  adjustScalarBytes: (bytes: Uint8Array): Uint8Array => {
-    // Section 5: Likewise, for X448, set the two least significant bits of the first byte to 0, and the most
-    // significant bit of the last byte to 1.
-    bytes[0] &= 252; // 0b11111100
-    // and the most significant bit of the last byte to 1.
-    bytes[55] |= 128; // 0b10000000
-    // NOTE: is is NOOP for 56 bytes scalars (X25519/X448)
-    bytes[56] = 0; // Byte outside of group (456 buts vs 448 bits)
-    return bytes;
-  },
+  adjustScalarBytes,
   // dom4
   domain: (data: Uint8Array, ctx: Uint8Array, phflag: boolean) => {
     if (ctx.length > 255) throw new Error(`Context is too big: ${ctx.length}`);
@@ -101,34 +104,37 @@ const ED448_DEF = {
     // square root exists, and the decoding fails.
     return { isValid: mod(x2 * v, P) === u, value: x };
   },
-  // ECDH
-  // basePointU:
-  //   '0500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
-  // The constant a24 is (156326 - 2) / 4 = 39081 for curve448/X448.
+} as const;
+
+export const ed448 = twistedEdwards(ED448_DEF);
+// NOTE: there is no ed448ctx, since ed448 supports ctx by default
+export const ed448ph = twistedEdwards({ ...ED448_DEF, preHash: shake256_64 });
+
+export const x448 = montgomery({
   a24: BigInt('39081'),
   montgomeryBits: 448,
+  nByteLength: 57,
+  P: ed448P,
+  Gu: '0500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
   powPminus2: (x: bigint): bigint => {
     const P = ed448P;
     const Pminus3div4 = ed448_pow_Pminus3div4(x);
     const Pminus3 = pow2(Pminus3div4, BigInt(2), P);
     return mod(Pminus3 * x, P); // Pminus3 * x = Pminus2
   },
+  adjustScalarBytes,
   // The 4-isogeny maps between the Montgomery curve and this Edwards
   // curve are:
   //   (u, v) = (y^2/x^2, (2 - x^2 - y^2)*y/x^3)
   //   (x, y) = (4*v*(u^2 - 1)/(u^4 - 2*u^2 + 4*v^2 + 1),
   //             -(u^5 - 2*u^3 - 4*u*v^2 + u)/
   //             (u^5 - 2*u^2*v^2 - 2*u^3 - 2*v^2 + u))
-  UfromPoint: (p: PointType) => {
-    const P = ed448P;
-    const { x, y } = p;
-    if (x === _0n) throw new Error(`Point with x=0 doesn't have mapping`);
-    const invX = invert(x * x, P); // x^2
-    const u = mod(y * y * invX, P); // (y^2/x^2)
-    return numberToBytesLE(u, 56);
-  },
-} as const;
-
-export const ed448 = twistedEdwards(ED448_DEF);
-// NOTE: there is no ed448ctx, since ed448 supports ctx by default
-export const ed448ph = twistedEdwards({ ...ED448_DEF, preHash: shake256_64 });
+  // xyToU: (p: PointType) => {
+  //   const P = ed448P;
+  //   const { x, y } = p;
+  //   if (x === _0n) throw new Error(`Point with x=0 doesn't have mapping`);
+  //   const invX = invert(x * x, P); // x^2
+  //   const u = mod(y * y * invX, P); // (y^2/x^2)
+  //   return numberToBytesLE(u, 56);
+  // },
+});

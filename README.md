@@ -2,7 +2,9 @@
 
 Minimal, zero-dependency JS implementation of elliptic curve cryptography.
 
-Implements Short Weierstrass curve with ECDSA signatures & Twisted Edwards curve with EdDSA signatures.
+- Short Weierstrass curve with ECDSA signatures
+- Twisted Edwards curve with EdDSA signatures
+- Montgomery curve for ECDH key agreement
 
 To keep the package minimal, no curve definitions are provided out-of-box. Use `micro-curve-definitions` module:
 
@@ -13,8 +15,7 @@ To keep the package minimal, no curve definitions are provided out-of-box. Use `
 
 Future plans:
 
-- Edwards and Montgomery curves
-- hash-to-curve standard
+- hash to curve standard
 - point indistinguishability
 - pairings
 
@@ -45,8 +46,8 @@ npm install @noble/curves
 ```
 
 ```ts
-import weierstrass from '@noble/curves/weierstrass'; // Short Weierstrass curve
-import twistedEdwards from '@noble/curves/edwards'; // Twisted Edwards curve
+import { weierstrass } from '@noble/curves/weierstrass'; // Short Weierstrass curve
+import { twistedEdwards } from '@noble/curves/edwards'; // Twisted Edwards curve
 import { sha256 } from '@noble/hashes/sha256';
 import { hmac } from '@noble/hashes/hmac';
 import { concatBytes, randomBytes } from '@noble/hashes/utils';
