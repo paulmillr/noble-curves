@@ -6,9 +6,6 @@ import { concatBytes, randomBytes } from '@noble/hashes/utils';
 import { weierstrass, CurveType, CHash } from '@noble/curves/weierstrass';
 import { mod, pow2 } from '@noble/curves/modular';
 
-// TODO: ability to provide API for different default hash.
-// Wychenproof can help us here & test multiple hashes.
-
 function getHash(hash: CHash) {
   return {
     hash,

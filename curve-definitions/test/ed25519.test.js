@@ -1,13 +1,12 @@
 import { deepStrictEqual, throws } from 'assert';
 import { should } from 'micro-should';
 import * as fc from 'fast-check';
-import { ed25519 } from '../lib/ed.js';
+import { ed25519, ed25519ctx, ed25519ph } from '../lib/ed25519.js';
 import { readFileSync } from 'fs';
 import { default as zip215 } from './ed25519/zip215.json' assert { type: 'json' };
 import { hexToBytes, bytesToHex, randomBytes } from '@noble/hashes/utils';
 import { default as ed25519vectors } from './wycheproof/eddsa_test.json' assert { type: 'json' };
 import { default as x25519vectors } from './wycheproof/x25519_test.json' assert { type: 'json' };
-
 import { sha512 } from '@noble/hashes/sha512';
 
 const ed = ed25519;
@@ -27,7 +26,7 @@ function utf8ToBytes(str) {
 
 ed.utils.precompute(8);
 
-should('ed25519/should not accept >32byte private keys', async () => {
+should('ed25519/should not accept >32byte private keys', () => {
   const invalidPriv =
     100000000000000000000000000000000000009000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000090000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000800073278156000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000n;
   throws(() => ed.getPublicKey(invalidPriv));
@@ -93,12 +92,12 @@ should('ed25519/sync methods/should sign and verify', () => {
   const signature = ed.sign(msg, privKey);
   deepStrictEqual(ed.verify(signature, msg, publicKey), true);
 });
-should('ed25519/sync methods/should not verify signature with wrong public key', async () => {
+should('ed25519/sync methods/should not verify signature with wrong public key', () => {
   const publicKey = ed.getPublicKey(12);
   const signature = ed.sign(msg, privKey);
   deepStrictEqual(ed.verify(signature, msg, publicKey), false);
 });
-should('ed25519/sync methods/should not verify signature with wrong hash', async () => {
+should('ed25519/sync methods/should not verify signature with wrong hash', () => {
   const publicKey = ed.getPublicKey(privKey);
   const signature = ed.sign(msg, privKey);
   deepStrictEqual(ed.verify(signature, wrongMsg, publicKey), false);
@@ -154,25 +153,6 @@ should('ed25519/BASE_POINT.multiply()/should throw Point#multiply on TEST 5', ()
     throws(() => ed.Point.BASE.multiply(num));
   }
 });
-
-// should('ed25519/getSharedSecret()/should convert base point to montgomery using toX25519()', () => {
-//   deepStrictEqual(hex(ed.Point.BASE.toX25519()), ed.curve25519.BASE_POINT_U);
-// });
-
-// should('ed25519/getSharedSecret()/should be commutative', async () => {
-//   for (let i = 0; i < 512; i++) {
-//     const asec = ed.utils.randomPrivateKey();
-//     const apub = ed.getPublicKey(asec);
-//     const bsec = ed.utils.randomPrivateKey();
-//     const bpub = ed.getPublicKey(bsec);
-//     try {
-//       deepStrictEqual(ed.getSharedSecret(asec, bpub), ed.getSharedSecret(bsec, apub));
-//     } catch (error) {
-//       console.error('not commutative', { asec, apub, bsec, bpub });
-//       throw error;
-//     }
-//   }
-// });
 
 // https://ed25519.cr.yp.to/python/sign.py
 // https://ed25519.cr.yp.to/python/sign.input
@@ -419,55 +399,6 @@ should('rfc8032 vectors/should create right signature for 0xf5 and long msg', ()
 //   }
 // });
 
-// should('curve25519/scalarMult 1', () => {
-//   const X25519_VECTORS = [
-//     {
-//       k: 'a546e36bf0527c9d3b16154b82465edd62144c0ac1fc5a18506a2244ba449ac4',
-//       u: 'e6db6867583030db3594c1a424b15f7c726624ec26b3353b10a903a6d0ab1c4c',
-//       ku: 'c3da55379de9c6908e94ea4df28d084f32eccf03491c71f754b4075577a28552',
-//     },
-//     {
-//       k: '4b66e9d4d1b4673c5ad22691957d6af5c11b6421e0ea01d42ca4169e7918ba0d',
-//       u: 'e5210f12786811d3f4b7959d0538ae2c31dbe7106fc03c3efc4cd549c715a493',
-//       ku: '95cbde9476e8907d7aade45cb4b873f88b595a68799fa152e6f8f7647aac7957',
-//     },
-//   ];
-//   for (const { k, u, ku } of X25519_VECTORS) {
-//     const _k = Uint8Array.from(hexToBytes(k));
-//     const _u = Uint8Array.from(hexToBytes(u));
-//     deepStrictEqual(bytesToHex(ed.curve25519.scalarMult(_k, _u)), ku);
-//   }
-// });
-// should('curve25519/scalarMultBase recursive', () => {
-//   // https://datatracker.ietf.org/doc/html/rfc7748#section-5.2
-//   const VECTORS = [
-//     { iters: 1, res: '422c8e7a6227d7bca1350b3e2bb7279f7897b87bb6854b783c60e80311ae3079' },
-//     { iters: 1000, res: '684cf59ba83309552800ef566f2f4d3c1c3887c49360e3875f2eb94d99532c51' },
-//     // {iters: 1000000, res: '7c3911e0ab2586fd864497297e575e6f3bc601c0883c30df5f4dd2d24f665424'},
-//   ];
-//   for (const { iters, res } of VECTORS) {
-//     let k = hexToBytes('0900000000000000000000000000000000000000000000000000000000000000');
-//     let u = k;
-//     for (let i = 0; i < iters; i++) {
-//       if (i > 0 && i % 100000 === 0) console.log('10k');
-//       [k, u] = [ed.curve25519.scalarMult(k, u), k];
-//     }
-//     deepStrictEqual(bytesToHex(k), res);
-//   }
-// });
-// should('curve25519/scalarMult 2', () => {
-//   const a_priv = hexToBytes('77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a');
-//   const a_pub = hexToBytes('8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a');
-//   const b_priv = hexToBytes('5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb');
-//   const b_pub = hexToBytes('de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f');
-//   const k = '4a5d9d5ba4ce2de1728e3bf480350f25e07e21c947d19e3376f09b3c1e161742';
-
-//   deepStrictEqual(bytesToHex(ed.curve25519.scalarMultBase(a_priv)), bytesToHex(a_pub));
-//   deepStrictEqual(bytesToHex(ed.curve25519.scalarMultBase(b_priv)), bytesToHex(b_pub));
-//   deepStrictEqual(bytesToHex(ed.curve25519.scalarMult(a_priv, b_pub)), k);
-//   deepStrictEqual(bytesToHex(ed.curve25519.scalarMult(b_priv, a_pub)), k);
-// });
-
 should('input immutability: sign/verify are immutable', () => {
   const privateKey = ed.utils.randomPrivateKey();
   const publicKey = ed.getPublicKey(privateKey);
@@ -509,32 +440,100 @@ should('ZIP-215 compliance tests/disallows sig.s >= CURVE.n', () => {
   throws(() => ed.verify(sig, 'deadbeef', ed.Point.BASE));
 });
 
-// {
-//   const group = x25519vectors.testGroups[0];
-//   for (let i = 0; i < group.tests.length; i++) {
-//     const v = group.tests[i];
-//     should(`Wycheproof/X25519(${i}, ${v.result}) ${v.comment}`, () => {
-//       if (v.result === 'valid' || v.result === 'acceptable') {
-//         try {
-//           ed.Point.fromHex(v.public);
-//         } catch (e) {
-//           if (e.message.includes('Point.fromHex: invalid y coordinate')) return;
-//           throw e;
-//         }
-//         const shared = hex(ed.getSharedSecret(v.private, v.public));
-//         deepStrictEqual(shared, v.shared, 'valid');
-//       } else if (v.result === 'invalid') {
-//         let failed = false;
-//         try {
-//           ed.getSharedSecret(v.private, v.public);
-//         } catch (error) {
-//           failed = true;
-//         }
-//         deepStrictEqual(failed, true, 'invalid');
-//       } else throw new Error('unknown test result');
-//     });
-//   }
-// }
+const rfc7748Mul = [
+  {
+    scalar: 'a546e36bf0527c9d3b16154b82465edd62144c0ac1fc5a18506a2244ba449ac4',
+    u: 'e6db6867583030db3594c1a424b15f7c726624ec26b3353b10a903a6d0ab1c4c',
+    outputU: 'c3da55379de9c6908e94ea4df28d084f32eccf03491c71f754b4075577a28552',
+  },
+  {
+    scalar: '4b66e9d4d1b4673c5ad22691957d6af5c11b6421e0ea01d42ca4169e7918ba0d',
+    u: 'e5210f12786811d3f4b7959d0538ae2c31dbe7106fc03c3efc4cd549c715a493',
+    outputU: '95cbde9476e8907d7aade45cb4b873f88b595a68799fa152e6f8f7647aac7957',
+  },
+];
+for (let i = 0; i < rfc7748Mul.length; i++) {
+  const v = rfc7748Mul[i];
+  should(`RFC7748: scalarMult (${i})`, () => {
+    deepStrictEqual(hex(ed.montgomeryCurve.scalarMult(v.u, v.scalar)), v.outputU);
+  });
+}
+
+const rfc7748Iter = [
+  { scalar: '422c8e7a6227d7bca1350b3e2bb7279f7897b87bb6854b783c60e80311ae3079', iters: 1 },
+  { scalar: '684cf59ba83309552800ef566f2f4d3c1c3887c49360e3875f2eb94d99532c51', iters: 1000 },
+  // { scalar: '7c3911e0ab2586fd864497297e575e6f3bc601c0883c30df5f4dd2d24f665424', iters: 1000000 },
+];
+for (let i = 0; i < rfc7748Iter.length; i++) {
+  const { scalar, iters } = rfc7748Iter[i];
+  should(`RFC7748: scalarMult iteration (${i})`, () => {
+    let k = ed.montgomeryCurve.BASE_POINT_U;
+    for (let i = 0, u = k; i < iters; i++) [k, u] = [ed.montgomeryCurve.scalarMult(u, k), k];
+    deepStrictEqual(hex(k), scalar);
+  });
+}
+
+should('RFC7748 getSharedKey', () => {
+  const alicePrivate = '77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a';
+  const alicePublic = '8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a';
+  const bobPrivate = '5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb';
+  const bobPublic = 'de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f';
+  const shared = '4a5d9d5ba4ce2de1728e3bf480350f25e07e21c947d19e3376f09b3c1e161742';
+  deepStrictEqual(alicePublic, hex(ed.montgomeryCurve.getPublicKey(alicePrivate)));
+  deepStrictEqual(bobPublic, hex(ed.montgomeryCurve.getPublicKey(bobPrivate)));
+  deepStrictEqual(hex(ed.montgomeryCurve.getSharedSecret(alicePrivate, bobPublic)), shared);
+  deepStrictEqual(hex(ed.montgomeryCurve.getSharedSecret(bobPrivate, alicePublic)), shared);
+});
+
+should('X25519/getSharedSecret() should be commutative', () => {
+  for (let i = 0; i < 512; i++) {
+    const asec = ed.utils.randomPrivateKey();
+    const apub = ed.getPublicKey(asec);
+    const bsec = ed.utils.randomPrivateKey();
+    const bpub = ed.getPublicKey(bsec);
+    try {
+      deepStrictEqual(ed.getSharedSecret(asec, bpub), ed.getSharedSecret(bsec, apub));
+    } catch (error) {
+      console.error('not commutative', { asec, apub, bsec, bpub });
+      throw error;
+    }
+  }
+});
+
+should('X25519: should convert base point to montgomery using fromPoint', () => {
+  deepStrictEqual(
+    hex(ed.montgomeryCurve.UfromPoint(ed.Point.BASE)),
+    ed.montgomeryCurve.BASE_POINT_U
+  );
+});
+
+{
+  const group = x25519vectors.testGroups[0];
+  for (let i = 0; i < group.tests.length; i++) {
+    const v = group.tests[i];
+    should(`Wycheproof/X25519(${i}, ${v.result}) ${v.comment}`, () => {
+      if (v.result === 'valid' || v.result === 'acceptable') {
+        try {
+          const shared = hex(ed.montgomeryCurve.getSharedSecret(v.private, v.public));
+          deepStrictEqual(shared, v.shared, 'valid');
+        } catch (e) {
+          // We are more strict
+          if (e.message.includes('Expected valid scalar')) return;
+          if (e.message.includes('Invalid private or public key received')) return;
+          throw e;
+        }
+      } else if (v.result === 'invalid') {
+        let failed = false;
+        try {
+          ed.montgomeryCurve.getSharedSecret(v.private, v.public);
+        } catch (error) {
+          failed = true;
+        }
+        deepStrictEqual(failed, true, 'invalid');
+      } else throw new Error('unknown test result');
+    });
+  }
+}
 
 {
   for (let g = 0; g < ed25519vectors.testGroups.length; g++) {
@@ -569,6 +568,84 @@ should('Property test issue #1', () => {
   const publicKey = ed.getPublicKey(to32Bytes(1n)); // <- was 1n
   deepStrictEqual(ed.verify(signature, message, publicKey), true);
 });
+
+const VECTORS_RFC8032_CTX = [
+  {
+    secretKey: '0305334e381af78f141cb666f6199f57bc3495335a256a95bd2a55bf546663f6',
+    publicKey: 'dfc9425e4f968f7f0c29f0259cf5f9aed6851c2bb4ad8bfb860cfee0ab248292',
+    message: 'f726936d19c800494e3fdaff20b276a8',
+    context: '666f6f',
+    signature:
+      '55a4cc2f70a54e04288c5f4cd1e45a7b' +
+      'b520b36292911876cada7323198dd87a' +
+      '8b36950b95130022907a7fb7c4e9b2d5' +
+      'f6cca685a587b4b21f4b888e4e7edb0d',
+  },
+  {
+    secretKey: '0305334e381af78f141cb666f6199f57bc3495335a256a95bd2a55bf546663f6',
+    publicKey: 'dfc9425e4f968f7f0c29f0259cf5f9aed6851c2bb4ad8bfb860cfee0ab248292',
+    message: 'f726936d19c800494e3fdaff20b276a8',
+    context: '626172',
+    signature:
+      'fc60d5872fc46b3aa69f8b5b4351d580' +
+      '8f92bcc044606db097abab6dbcb1aee3' +
+      '216c48e8b3b66431b5b186d1d28f8ee1' +
+      '5a5ca2df6668346291c2043d4eb3e90d',
+  },
+  {
+    secretKey: '0305334e381af78f141cb666f6199f57bc3495335a256a95bd2a55bf546663f6',
+    publicKey: 'dfc9425e4f968f7f0c29f0259cf5f9aed6851c2bb4ad8bfb860cfee0ab248292',
+    message: '508e9e6882b979fea900f62adceaca35',
+    context: '666f6f',
+    signature:
+      '8b70c1cc8310e1de20ac53ce28ae6e72' +
+      '07f33c3295e03bb5c0732a1d20dc6490' +
+      '8922a8b052cf99b7c4fe107a5abb5b2c' +
+      '4085ae75890d02df26269d8945f84b0b',
+  },
+  {
+    secretKey: 'ab9c2853ce297ddab85c993b3ae14bcad39b2c682beabc27d6d4eb20711d6560',
+    publicKey: '0f1d1274943b91415889152e893d80e93275a1fc0b65fd71b4b0dda10ad7d772',
+    message: 'f726936d19c800494e3fdaff20b276a8',
+    context: '666f6f',
+    signature:
+      '21655b5f1aa965996b3f97b3c849eafb' +
+      'a922a0a62992f73b3d1b73106a84ad85' +
+      'e9b86a7b6005ea868337ff2d20a7f5fb' +
+      'd4cd10b0be49a68da2b2e0dc0ad8960f',
+  },
+];
+
+for (let i = 0; i < VECTORS_RFC8032_CTX.length; i++) {
+  const v = VECTORS_RFC8032_CTX[i];
+  should(`RFC8032ctx/${i}`, () => {
+    deepStrictEqual(hex(ed25519ctx.getPublicKey(v.secretKey)), v.publicKey);
+    deepStrictEqual(hex(ed25519ctx.sign(v.message, v.secretKey, v.context)), v.signature);
+    deepStrictEqual(ed25519ctx.verify(v.signature, v.message, v.publicKey, v.context), true);
+  });
+}
+
+const VECTORS_RFC8032_PH = [
+  {
+    secretKey: '833fe62409237b9d62ec77587520911e9a759cec1d19755b7da901b96dca3d42',
+    publicKey: 'ec172b93ad5e563bf4932c70e1245034c35467ef2efd4d64ebf819683467e2bf',
+    message: '616263',
+    signature:
+      '98a70222f0b8121aa9d30f813d683f80' +
+      '9e462b469c7ff87639499bb94e6dae41' +
+      '31f85042463c2a355a2003d062adf5aa' +
+      'a10b8c61e636062aaad11c2a26083406',
+  },
+];
+
+for (let i = 0; i < VECTORS_RFC8032_PH.length; i++) {
+  const v = VECTORS_RFC8032_PH[i];
+  should(`RFC8032ph/${i}`, () => {
+    deepStrictEqual(hex(ed25519ph.getPublicKey(v.secretKey)), v.publicKey);
+    deepStrictEqual(hex(ed25519ph.sign(v.message, v.secretKey)), v.signature);
+    deepStrictEqual(ed25519ph.verify(v.signature, v.message, v.publicKey), true);
+  });
+}
 
 // ESM is broken.
 import url from 'url';

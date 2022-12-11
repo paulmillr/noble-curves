@@ -195,7 +195,7 @@ should('secp256k1.Signature.fromDERHex() roundtrip', () => {
 should('secp256k1.sign()/should create deterministic signatures with RFC 6979', async () => {
   for (const vector of ecdsa.valid) {
     let usig = await secp.sign(vector.m, vector.d);
-    let sig = (usig.toCompactHex());
+    let sig = usig.toCompactHex();
     const vsig = vector.signature;
     deepStrictEqual(sig.slice(0, 64), vsig.slice(0, 64));
     deepStrictEqual(sig.slice(64, 128), vsig.slice(64, 128));
@@ -238,7 +238,7 @@ should('secp256k1.sign()/should create correct DER encoding against libsecp256k1
   const privKey = hexToBytes('0101010101010101010101010101010101010101010101010101010101010101');
   for (let [msg, exp] of CASES) {
     const res = await secp.sign(msg, privKey, { extraEntropy: undefined });
-    deepStrictEqual((res.toDERHex()), exp);
+    deepStrictEqual(res.toDERHex(), exp);
     const rs = secp.Signature.fromDER(res.toDERHex()).toCompactHex();
     deepStrictEqual(secp.Signature.fromCompact(rs).toDERHex(), exp);
   }
@@ -252,7 +252,7 @@ should('secp256k1.sign()/sign ecdsa extraData', async () => {
 
   for (const e of ecdsa.extraEntropy) {
     const sign = async (extraEntropy) => {
-      const s = secp.sign(e.m, e.d, {extraEntropy }).toCompactHex();
+      const s = secp.sign(e.m, e.d, { extraEntropy }).toCompactHex();
       return s;
     };
     deepStrictEqual(await sign(), e.signature);
@@ -394,7 +394,7 @@ should('secp256k1.recoverPublicKey()/should recover public key from recovery bit
   const recoveredPubkey = sig.recoverPublicKey(message);
   // const recoveredPubkey = secp.recoverPublicKey(message, signature, recovery);
   deepStrictEqual(recoveredPubkey !== null, true);
-  deepStrictEqual((recoveredPubkey).toHex(), publicKey);
+  deepStrictEqual(recoveredPubkey.toHex(), publicKey);
   deepStrictEqual(secp.verify(sig, message, publicKey), true);
 });
 should('secp256k1.recoverPublicKey()/should not recover zero points', () => {
@@ -416,10 +416,10 @@ should('secp256k1.recoverPublicKey()/should handle RFC 6979 vectors', async () =
   for (const vector of ecdsa.valid) {
     if (secp.utils.mod(hexToNumber(vector.m), secp.CURVE.n) === 0n) continue;
     let usig = secp.sign(vector.m, vector.d);
-    let sig = (usig).toDERHex();
+    let sig = usig.toDERHex();
     const vpub = secp.getPublicKey(vector.d);
     const recovered = usig.recoverPublicKey(vector.m);
-    deepStrictEqual((recovered).toHex(), hex(vpub));
+    deepStrictEqual(recovered.toHex(), hex(vpub));
   }
 });
 
