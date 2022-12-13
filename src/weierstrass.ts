@@ -3,7 +3,7 @@
 
 // TODO: sync vs async naming
 // TODO: default randomBytes
-// Differences from noble/secp256k1:
+// Differences from @noble/secp256k1 1.7:
 // 1. Different double() formula (but same addition)
 // 2. Different sqrt() function
 // 3. truncateHash() truncateOnly mode
@@ -18,10 +18,11 @@ import {
   hexToBytes,
   hexToNumber,
   numberToHexUnpadded,
-  nLength,
   hashToPrivateScalar,
+  BasicCurve,
+  validateOpts as utilOpts,
 } from './utils.js';
-import { wNAF } from './group.js';
+import { Group, GroupConstructor, wNAF } from './group.js';
 
 export type CHash = {
   (message: Uint8Array | string): Uint8Array;
@@ -35,32 +36,19 @@ type EndomorphismOpts = {
   splitScalar: (k: bigint) => { k1neg: boolean; k1: bigint; k2neg: boolean; k2: bigint };
 };
 
-export type CurveType = {
+export type CurveType = BasicCurve & {
   // Params: a, b
   a: bigint;
   b: bigint;
-  // Field over which we'll do calculations. Verify with:
-  P: bigint;
-  // Curve order, total count of valid points in the field. Verify with:
-  n: bigint;
-  nBitLength?: number;
-  nByteLength?: number;
-  // Base point (x, y) aka generator point
-  Gx: bigint;
-  Gy: bigint;
-
   // Default options
   lowS?: boolean;
-
   // Hashes
   hash: CHash; // Because we need outputLen for DRBG
   hmac: HmacFnSync;
   randomBytes: (bytesLength?: number) => Uint8Array;
-
   truncateHash?: (hash: Uint8Array, truncateOnly?: boolean) => bigint;
   // Some fields can have specialized fast case
   sqrtMod?: (n: bigint) => bigint;
-
   // TODO: move into options?
   // Endomorphism options for Koblitz curves
   endo?: EndomorphismOpts;
@@ -73,23 +61,19 @@ type PrivKey = Hex | bigint | number;
 
 // Should be separate from overrides, since overrides can use information about curve (for example nBits)
 function validateOpts(curve: CurveType) {
-  if (typeof curve.hash !== 'function' || !Number.isSafeInteger(curve.hash.outputLen))
+  const opts = utilOpts(curve);
+  if (typeof opts.hash !== 'function' || !Number.isSafeInteger(opts.hash.outputLen))
     throw new Error('Invalid hash function');
-  if (typeof curve.hmac !== 'function') throw new Error('Invalid hmac function');
-  if (typeof curve.randomBytes !== 'function') throw new Error('Invalid randomBytes function');
+  if (typeof opts.hmac !== 'function') throw new Error('Invalid hmac function');
+  if (typeof opts.randomBytes !== 'function') throw new Error('Invalid randomBytes function');
 
-  for (const i of ['a', 'b', 'P', 'n', 'Gx', 'Gy'] as const) {
-    if (typeof curve[i] !== 'bigint')
-      throw new Error(`Invalid curve param ${i}=${curve[i]} (${typeof curve[i]})`);
+  for (const i of ['a', 'b'] as const) {
+    if (typeof opts[i] !== 'bigint')
+      throw new Error(`Invalid curve param ${i}=${opts[i]} (${typeof opts[i]})`);
   }
-  for (const i of ['nBitLength', 'nByteLength'] as const) {
-    if (curve[i] === undefined) continue; // Optional
-    if (!Number.isSafeInteger(curve[i]))
-      throw new Error(`Invalid curve param ${i}=${curve[i]} (${typeof curve[i]})`);
-  }
-  const endo = curve.endo;
+  const endo = opts.endo;
   if (endo) {
-    if (curve.a !== _0n) {
+    if (opts.a !== _0n) {
       throw new Error('Endomorphism can only be defined for Koblitz curves that have a=0');
     }
     if (
@@ -101,7 +85,7 @@ function validateOpts(curve: CurveType) {
     }
   }
   // Set defaults
-  return Object.freeze({ lowS: true, ...nLength(curve.n, curve.nBitLength), ...curve } as const);
+  return Object.freeze({ lowS: true, ...opts } as const);
 }
 
 // TODO: convert bits to bytes aligned to 32 bits? (224 for example)
@@ -206,30 +190,23 @@ export type SignatureConstructor = {
 };
 
 // Instance
-export interface JacobianPointType {
+export interface JacobianPointType extends Group<JacobianPointType> {
   readonly x: bigint;
   readonly y: bigint;
   readonly z: bigint;
-  equals(other: JacobianPointType): boolean;
-  negate(): JacobianPointType;
-  double(): JacobianPointType;
-  add(other: JacobianPointType): JacobianPointType;
-  subtract(other: JacobianPointType): JacobianPointType;
   multiply(scalar: number | bigint, affinePoint?: PointType): JacobianPointType;
   multiplyUnsafe(scalar: bigint): JacobianPointType;
   toAffine(invZ?: bigint): PointType;
 }
 // Static methods
-export type JacobianPointConstructor = {
+export interface JacobianPointConstructor extends GroupConstructor<JacobianPointType> {
   new (x: bigint, y: bigint, z: bigint): JacobianPointType;
-  BASE: JacobianPointType;
-  ZERO: JacobianPointType;
   fromAffine(p: PointType): JacobianPointType;
   toAffineBatch(points: JacobianPointType[]): PointType[];
   normalizeZ(points: JacobianPointType[]): JacobianPointType[];
-};
+}
 // Instance
-export interface PointType {
+export interface PointType extends Group<PointType> {
   readonly x: bigint;
   readonly y: bigint;
   _setWindowSize(windowSize: number): void;
@@ -237,22 +214,14 @@ export interface PointType {
   toRawBytes(isCompressed?: boolean): Uint8Array;
   toHex(isCompressed?: boolean): string;
   assertValidity(): void;
-  equals(other: PointType): boolean;
-  negate(): PointType;
-  double(): PointType;
-  add(other: PointType): PointType;
-  subtract(other: PointType): PointType;
-  multiply(scalar: number | bigint): PointType;
   multiplyAndAddUnsafe(Q: PointType, a: bigint, b: bigint): PointType | undefined;
 }
 // Static methods
-export type PointConstructor = {
-  BASE: PointType;
-  ZERO: PointType;
+export interface PointConstructor extends GroupConstructor<PointType> {
   new (x: bigint, y: bigint): PointType;
   fromHex(hex: Hex): PointType;
   fromPrivateKey(privateKey: PrivKey): PointType;
-};
+}
 
 export type PubKey = Hex | PointType;
 
@@ -510,9 +479,9 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       const { x: X1, y: Y1, z: Z1 } = this;
       const { a } = CURVE;
 
-      // // Faster algorithm: when a=0
-      // // From: https://hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-0.html#doubling-dbl-2009-l
-      // // Cost: 2M + 5S + 6add + 3*2 + 1*3 + 1*8.
+      // Faster algorithm: when a=0
+      // From: https://hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-0.html#doubling-dbl-2009-l
+      // Cost: 2M + 5S + 6add + 3*2 + 1*3 + 1*8.
       if (a === _0n) {
         const A = modP(X1 * X1);
         const B = modP(Y1 * Y1);
@@ -789,6 +758,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     }
 
     equals(other: Point): boolean {
+      if (!(other instanceof Point)) throw new TypeError('Point#equals: expected Point');
       return this.x === other.x && this.y === other.y;
     }
 
@@ -965,8 +935,8 @@ export function weierstrass(curveDef: CurveType): CurveFn {
      */
     hashToPrivateKey: (hash: Hex): Uint8Array => numToField(hashToPrivateScalar(hash, CURVE_ORDER)),
 
-    // Takes curve order + 64 bits from CSPRNG
-    // so that modulo bias is neglible, matches FIPS 186 B.4.1.
+    // Takes curve order + 64 bits from CSPRNG so that modulo bias is neglible,
+    // matches FIPS 186 B.4.1.
     randomPrivateKey: (): Uint8Array => utils.hashToPrivateKey(CURVE.randomBytes(fieldLen + 8)),
 
     /**

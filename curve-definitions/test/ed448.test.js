@@ -3,6 +3,7 @@ import { should } from 'micro-should';
 import * as fc from 'fast-check';
 import { ed448, ed448ph, x448 } from '../lib/ed448.js';
 import { hexToBytes, bytesToHex, randomBytes } from '@noble/hashes/utils';
+import { numberToBytesLE } from '@noble/curves/utils';
 import { default as ed448vectors } from './wycheproof/ed448_test.json' assert { type: 'json' };
 import { default as x448vectors } from './wycheproof/x448_test.json' assert { type: 'json' };
 
@@ -645,6 +646,14 @@ for (let i = 0; i < VECTORS_RFC8032_PH.length; i++) {
     deepStrictEqual(ed448ph.verify(v.signature, v.message, v.publicKey, v.context), true);
   });
 }
+
+should('X448 base point', () => {
+  const { x, y } = ed448.Point.BASE;
+  const { P } = ed448.CURVE;
+  const invX = ed448.utils.invert(x * x, P); // x^2
+  const u = ed448.utils.mod(y * y * invX, P); // (y^2/x^2)
+  deepStrictEqual(hex(numberToBytesLE(u, 56)), x448.Gu);
+});
 
 // ESM is broken.
 import url from 'url';

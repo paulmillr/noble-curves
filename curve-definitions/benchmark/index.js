@@ -1,8 +1,9 @@
 import * as bench from 'micro-bmark';
 const { run, mark } = bench; // or bench.mark
 // Curves
-import * as nist from '../lib/nist.js';
-import * as ed from '../lib/ed.js';
+import { secp256k1 } from '../lib/secp256k1.js';
+import { ed25519 } from '../lib/ed25519.js';
+import { ed448 } from '../lib/ed448.js';
 
 // Others
 import { hmac } from '@noble/hashes/hmac';
@@ -24,10 +25,9 @@ noble_secp256k1.utils.hmacSha256Sync = (key, ...msgs) =>
     .digest();
 import * as noble_ed25519 from '@noble/ed25519';
 
-
-nist.secp256k1.utils.precompute(8); // Not enabled by default?
-ed.ed25519.utils.precompute(8);
-ed.ed448.utils.precompute(8);
+secp256k1.utils.precompute(8); // Not enabled by default?
+ed25519.utils.precompute(8);
+ed448.utils.precompute(8);
 
 noble_ed25519.utils.sha512Sync = (...m) => sha512(concatBytes(...m));
 noble_secp256k1.utils.precompute(8);
@@ -48,19 +48,18 @@ export const CURVES = {
     },
     getPublicKey: {
       samples: 10000,
-      old: () =>
-        noble_secp256k1.getPublicKey(noble_secp256k1.utils.randomPrivateKey()),
-      noble: () => nist.secp256k1.getPublicKey(nist.secp256k1.utils.randomPrivateKey()),
+      old: () => noble_secp256k1.getPublicKey(noble_secp256k1.utils.randomPrivateKey()),
+      noble: () => secp256k1.getPublicKey(secp256k1.utils.randomPrivateKey()),
     },
     sign: {
       samples: 5000,
       old: ({ msg, priv }) => noble_secp256k1.signSync(msg, priv),
-      noble: ({ msg, priv }) => nist.secp256k1.sign(msg, priv),
+      noble: ({ msg, priv }) => secp256k1.sign(msg, priv),
     },
     getSharedSecret: {
       samples: 1000,
       old: ({ pub, priv }) => noble_secp256k1.getSharedSecret(priv, pub),
-      noble: ({ pub, priv }) => nist.secp256k1.getSharedSecret(priv, pub),
+      noble: ({ pub, priv }) => secp256k1.getSharedSecret(priv, pub),
     },
   },
   ed25519: {
@@ -77,21 +76,20 @@ export const CURVES = {
     },
     getPublicKey: {
       samples: 10000,
-      old: () =>
-        noble_ed25519.sync.getPublicKey(noble_ed25519.utils.randomPrivateKey()),
-      noble: () => ed.ed25519.getPublicKey(ed.ed25519.utils.randomPrivateKey()),
-      'ed448': () => ed.ed448.getPublicKey(ed.ed448.utils.randomPrivateKey()),
+      old: () => noble_ed25519.sync.getPublicKey(noble_ed25519.utils.randomPrivateKey()),
+      noble: () => ed25519.getPublicKey(ed25519.utils.randomPrivateKey()),
+      ed448: () => ed448.getPublicKey(ed448.utils.randomPrivateKey()),
     },
     sign: {
       samples: 5000,
       old: ({ msg, priv }) => noble_ed25519.sync.sign(msg, priv),
-      noble: ({ msg, priv }) => ed.ed25519.sign(msg, priv),
-      'ed448': () => ed.ed448.sign(ed.ed448.utils.randomPrivateKey(), ed.ed448.utils.randomPrivateKey()),
+      noble: ({ msg, priv }) => ed25519.sign(msg, priv),
+      ed448: () => ed448.sign(ed448.utils.randomPrivateKey(), ed448.utils.randomPrivateKey()),
     },
     verify: {
       samples: 1000,
       old: ({ msg, pub, sig }) => noble_ed25519.sync.verify(sig, msg, pub),
-      noble: ({ msg, pub, sig }) => ed.ed25519.verify(sig, msg, pub),
+      noble: ({ msg, pub, sig }) => ed25519.verify(sig, msg, pub),
     },
   },
 };

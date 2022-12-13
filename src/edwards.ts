@@ -1,10 +1,9 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 // Implementation of Twisted Edwards curve. The formula is: ax² + y² = 1 + dx²y²
 
-// Differences with @noble/ed25519:
-// 1. EDDSA & ECDH have different field element lengths (for ed448/x448 only)
-//     https://www.rfc-editor.org/rfc/rfc8032.html says bitLength is 456 (57 bytes)
-//     https://www.rfc-editor.org/rfc/rfc7748 says bitLength is 448 (56 bytes)
+// Differences from @noble/ed25519 1.7:
+// 1. EDDSA & ECDH have different field element lengths (for ed448/x448 only):
+//   RFC8032 bitLength is 456 bits (57 bytes), RFC7748 bitLength is 448 (56 bytes)
 // 2. Different addition formula (doubling is same)
 // 3. uvRatio differs between curves (half-expected, not only pow fn changes)
 // 4. Point decompression code is different too (unexpected), now using generalized formula
@@ -17,10 +16,11 @@ import {
   ensureBytes,
   numberToBytesLE,
   bytesToNumberLE,
-  nLength,
   hashToPrivateScalar,
-} from './utils.js';
-import { wNAF } from './group.js';
+  BasicCurve,
+  validateOpts as utilOpts,
+} from './utils.js'; // TODO: import * as u from './utils.js'?
+import { Group, GroupConstructor, wNAF } from './group.js';
 
 // Be friendly to bad ECMAScript parsers by not using bigint literals like 123n
 const _0n = BigInt(0);
@@ -35,21 +35,10 @@ export type CHash = {
   create(): any;
 };
 
-export type CurveType = {
+export type CurveType = BasicCurve & {
   // Params: a, d
   a: bigint;
   d: bigint;
-  // Field over which we'll do calculations. Verify with:
-  P: bigint;
-  // Subgroup order: how many points ed25519 has
-  n: bigint; // in rfc8032 called l
-  // Cofactor
-  h: bigint;
-  nBitLength?: number;
-  nByteLength?: number;
-  // Base point (x, y) aka generator point
-  Gx: bigint;
-  Gy: bigint;
   // Hashes
   hash: CHash; // Because we need outputLen for DRBG
   randomBytes: (bytesLength?: number) => Uint8Array;
@@ -66,26 +55,22 @@ type PrivKey = Hex | bigint | number;
 
 // Should be separate from overrides, since overrides can use information about curve (for example nBits)
 function validateOpts(curve: CurveType) {
-  if (typeof curve.hash !== 'function' || !Number.isSafeInteger(curve.hash.outputLen))
+  const opts = utilOpts(curve);
+  if (typeof opts.hash !== 'function' || !Number.isSafeInteger(opts.hash.outputLen))
     throw new Error('Invalid hash function');
-  for (const i of ['a', 'd', 'P', 'n', 'h', 'Gx', 'Gy'] as const) {
-    if (typeof curve[i] !== 'bigint')
-      throw new Error(`Invalid curve param ${i}=${curve[i]} (${typeof curve[i]})`);
-  }
-  for (const i of ['nBitLength', 'nByteLength'] as const) {
-    if (curve[i] === undefined) continue; // Optional
-    if (!Number.isSafeInteger(curve[i]))
-      throw new Error(`Invalid curve param ${i}=${curve[i]} (${typeof curve[i]})`);
+  for (const i of ['a', 'd'] as const) {
+    if (typeof opts[i] !== 'bigint')
+      throw new Error(`Invalid curve param ${i}=${opts[i]} (${typeof opts[i]})`);
   }
   for (const fn of ['randomBytes'] as const) {
-    if (typeof curve[fn] !== 'function') throw new Error(`Invalid ${fn} function`);
+    if (typeof opts[fn] !== 'function') throw new Error(`Invalid ${fn} function`);
   }
   for (const fn of ['adjustScalarBytes', 'domain', 'uvRatio'] as const) {
-    if (curve[fn] === undefined) continue; // Optional
-    if (typeof curve[fn] !== 'function') throw new Error(`Invalid ${fn} function`);
+    if (opts[fn] === undefined) continue; // Optional
+    if (typeof opts[fn] !== 'function') throw new Error(`Invalid ${fn} function`);
   }
   // Set defaults
-  return Object.freeze({ ...nLength(curve.n, curve.nBitLength), ...curve } as const);
+  return Object.freeze({ ...opts } as const);
 }
 
 // Instance
@@ -103,16 +88,11 @@ export type SignatureConstructor = {
 };
 
 // Instance
-export interface ExtendedPointType {
+export interface ExtendedPointType extends Group<ExtendedPointType> {
   readonly x: bigint;
   readonly y: bigint;
   readonly z: bigint;
   readonly t: bigint;
-  equals(other: ExtendedPointType): boolean;
-  negate(): ExtendedPointType;
-  double(): ExtendedPointType;
-  add(other: ExtendedPointType): ExtendedPointType;
-  subtract(other: ExtendedPointType): ExtendedPointType;
   multiply(scalar: number | bigint, affinePoint?: PointType): ExtendedPointType;
   multiplyUnsafe(scalar: number | bigint): ExtendedPointType;
   isSmallOrder(): boolean;
@@ -120,37 +100,28 @@ export interface ExtendedPointType {
   toAffine(invZ?: bigint): PointType;
 }
 // Static methods
-export type ExtendedPointConstructor = {
+export interface ExtendedPointConstructor extends GroupConstructor<ExtendedPointType> {
   new (x: bigint, y: bigint, z: bigint, t: bigint): ExtendedPointType;
-  BASE: ExtendedPointType;
-  ZERO: ExtendedPointType;
   fromAffine(p: PointType): ExtendedPointType;
   toAffineBatch(points: ExtendedPointType[]): PointType[];
   normalizeZ(points: ExtendedPointType[]): ExtendedPointType[];
-};
+}
 
 // Instance
-export interface PointType {
+export interface PointType extends Group<PointType> {
   readonly x: bigint;
   readonly y: bigint;
   _setWindowSize(windowSize: number): void;
   toRawBytes(isCompressed?: boolean): Uint8Array;
   toHex(isCompressed?: boolean): string;
   isTorsionFree(): boolean;
-  equals(other: PointType): boolean;
-  negate(): PointType;
-  add(other: PointType): PointType;
-  subtract(other: PointType): PointType;
-  multiply(scalar: number | bigint): PointType;
 }
 // Static methods
-export type PointConstructor = {
-  BASE: PointType;
-  ZERO: PointType;
+export interface PointConstructor extends GroupConstructor<PointType> {
   new (x: bigint, y: bigint): PointType;
   fromHex(hex: Hex): PointType;
   fromPrivateKey(privateKey: PrivKey): PointType;
-};
+}
 
 export type PubKey = Hex | PointType;
 export type SigType = Hex | SignatureType;
@@ -289,6 +260,27 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       const { a, d } = CURVE;
       const { x: X1, y: Y1, z: Z1, t: T1 } = this;
       const { x: X2, y: Y2, z: Z2, t: T2 } = other;
+
+      // Faster algo for adding 2 Extended Points when curve's a=-1.
+      // http://hyperelliptic.org/EFD/g1p/auto-twisted-extended-1.html#addition-add-2008-hwcd-4
+      // Cost: 8M + 8add + 2*2.
+      // Note: It does not check whether the `other` point is valid.
+      if (a === BigInt(-1)) {
+        const A = modP((Y1 - X1) * (Y2 + X2));
+        const B = modP((Y1 + X1) * (Y2 - X2));
+        const F = modP(B - A);
+        if (F === _0n) return this.double(); // Same point.
+        const C = modP(Z1 * _2n * T2);
+        const D = modP(T1 * _2n * Z2);
+        const E = D + C;
+        const G = B + A;
+        const H = D - C;
+        const X3 = modP(E * F);
+        const Y3 = modP(G * H);
+        const T3 = modP(E * H);
+        const Z3 = modP(F * G);
+        return new ExtendedPoint(X3, Y3, Z3, T3);
+      }
       const A = modP(X1 * X2); // A = X1*X2
       const B = modP(Y1 * Y2); // B = Y1*Y2
       const C = modP(T1 * d * T2); // C = T1*d*T2
@@ -466,11 +458,16 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     }
 
     equals(other: Point): boolean {
+      if (!(other instanceof Point)) throw new TypeError('Point#equals: expected Point');
       return this.x === other.x && this.y === other.y;
     }
 
-    negate() {
+    negate(): Point {
       return new Point(modP(-this.x), this.y);
+    }
+
+    double(): Point {
+      return ExtendedPoint.fromAffine(this).double().toAffine();
     }
 
     add(other: Point) {
@@ -522,12 +519,6 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       return bytesToHex(this.toRawBytes());
     }
   }
-
-  // Little Endian
-  // function bytesToNumberLE(uint8a: Uint8Array): bigint {
-  //   if (!(uint8a instanceof Uint8Array)) throw new Error('Expected Uint8Array');
-  //   return BigInt('0x' + bytesToHex(Uint8Array.from(uint8a).reverse()));
-  // }
 
   // -------------------------
   // Little-endian SHA512 with modulo n

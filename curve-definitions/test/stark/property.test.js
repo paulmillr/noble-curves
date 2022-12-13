@@ -1,6 +1,6 @@
 import { deepStrictEqual, throws } from 'assert';
 import { should } from 'micro-should';
-import * as starknet from '../../lib/starknet.js';
+import * as starknet from '../../lib/stark.js';
 import * as fc from 'fast-check';
 
 const FC_BIGINT = fc.bigInt(1n + 1n, starknet.CURVE.n - 1n);

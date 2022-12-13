@@ -53,6 +53,8 @@ function validateOpts(curve: CurveType) {
   return Object.freeze({ ...curve } as const);
 }
 
+// NOTE: not really montgomery curve, just bunch of very specific methods for X25519/X448 (RFC 7748, https://www.rfc-editor.org/rfc/rfc7748)
+// Uses only one coordinate instead of two
 export function montgomery(curveDef: CurveType): CurveFn {
   const CURVE = validateOpts(curveDef);
   const { P } = CURVE;
@@ -83,6 +85,16 @@ export function montgomery(curveDef: CurveType): CurveFn {
   }
 
   // cswap from RFC7748
+  // NOTE: cswap is not from RFC7748!
+  /* 
+    cswap(swap, x_2, x_3):
+         dummy = mask(swap) AND (x_2 XOR x_3)
+         x_2 = x_2 XOR dummy
+         x_3 = x_3 XOR dummy
+         Return (x_2, x_3)
+  Where mask(swap) is the all-1 or all-0 word of the same length as x_2
+   and x_3, computed, e.g., as mask(swap) = 0 - swap.
+  */
   function cswap(swap: bigint, x_2: bigint, x_3: bigint): [bigint, bigint] {
     const dummy = modP(swap * (x_2 - x_3));
     x_2 = modP(x_2 - dummy);

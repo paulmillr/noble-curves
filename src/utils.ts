@@ -1,8 +1,38 @@
 /*! @noble/curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-// Convert between types
-// ---------------------
+export type Hex = string | Uint8Array;
+// NOTE: these are generic, even if curve is on some polynominal field (bls), it will still have P/n/h
+// But generator can be different (Fp2/Fp6 for bls?)
+export type BasicCurve = {
+  // Field over which we'll do calculations (Fp)
+  P: bigint;
+  // Curve order, total count of valid points in the field
+  n: bigint;
+  // Bit/byte length of curve order
+  nBitLength?: number;
+  nByteLength?: number;
+  // Cofactor
+  // NOTE: we can assign default value of 1, but then users will just ignore it, without validating with spec
+  // Has not use for now, but nice to have in API
+  h: bigint;
+  // Base point (x, y) aka generator point
+  Gx: bigint;
+  Gy: bigint;
+};
 
-type Hex = string | Uint8Array;
+export function validateOpts<T extends BasicCurve>(curve: T) {
+  for (const i of ['P', 'n', 'h', 'Gx', 'Gy'] as const) {
+    if (typeof curve[i] !== 'bigint')
+      throw new Error(`Invalid curve param ${i}=${curve[i]} (${typeof curve[i]})`);
+  }
+  for (const i of ['nBitLength', 'nByteLength'] as const) {
+    if (curve[i] === undefined) continue; // Optional
+    if (!Number.isSafeInteger(curve[i]))
+      throw new Error(`Invalid curve param ${i}=${curve[i]} (${typeof curve[i]})`);
+  }
+  // Set defaults
+  return Object.freeze({ ...nLength(curve.n, curve.nBitLength), ...curve } as const);
+}
+
 import * as mod from './modular.js';
 
 const hexes = Array.from({ length: 256 }, (v, i) => i.toString(16).padStart(2, '0'));
@@ -100,8 +130,10 @@ export function nLength(n: bigint, nBitLength?: number) {
 const _1n = BigInt(1);
 export function hashToPrivateScalar(hash: Hex, CURVE_ORDER: bigint, isLE = false): bigint {
   hash = ensureBytes(hash);
-  if (hash.length < 40 || hash.length > 1024)
-    throw new Error('Expected 40-1024 bytes of private key as per FIPS 186');
+  const orderLen = nLength(CURVE_ORDER).nByteLength;
+  const minLen = orderLen + 8;
+  if (orderLen < 16 || hash.length < minLen || hash.length > 1024)
+    throw new Error('Expected valid bytes of private key as per FIPS 186');
   const num = isLE ? bytesToNumberLE(hash) : bytesToNumberBE(hash);
   return mod.mod(num, CURVE_ORDER - _1n) + _1n;
 }

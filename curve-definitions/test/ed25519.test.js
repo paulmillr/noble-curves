@@ -5,6 +5,7 @@ import { ed25519, ed25519ctx, ed25519ph, x25519 } from '../lib/ed25519.js';
 import { readFileSync } from 'fs';
 import { default as zip215 } from './ed25519/zip215.json' assert { type: 'json' };
 import { hexToBytes, bytesToHex, randomBytes } from '@noble/hashes/utils';
+import { numberToBytesLE } from '@noble/curves/utils';
 import { default as ed25519vectors } from './wycheproof/eddsa_test.json' assert { type: 'json' };
 import { default as x25519vectors } from './wycheproof/x25519_test.json' assert { type: 'json' };
 
@@ -434,7 +435,6 @@ should('ZIP-215 compliance tests/should pass all of them', () => {
 });
 should('ZIP-215 compliance tests/disallows sig.s >= CURVE.n', () => {
   const sig = new ed.Signature(ed.Point.BASE, 1n);
-  // @ts-ignore
   sig.s = ed.CURVE.n + 1n;
   throws(() => ed.verify(sig, 'deadbeef', ed.Point.BASE));
 });
@@ -645,6 +645,12 @@ for (let i = 0; i < VECTORS_RFC8032_PH.length; i++) {
     deepStrictEqual(ed25519ph.verify(v.signature, v.message, v.publicKey), true);
   });
 }
+
+should('X25519 base point', () => {
+  const { y } = ed25519.Point.BASE;
+  const u = ed25519.utils.mod((y + 1n) * ed25519.utils.invert(1n - y, ed25519.CURVE.P));
+  deepStrictEqual(hex(numberToBytesLE(u, 32)), x25519.Gu);
+});
 
 // ESM is broken.
 import url from 'url';

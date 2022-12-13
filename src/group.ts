@@ -5,8 +5,11 @@ const _1n = BigInt(1);
 
 export interface Group<T extends Group<T>> {
   double(): T;
-  add(other: T): T;
   negate(): T;
+  add(other: T): T;
+  subtract(other: T): T;
+  equals(other: T): boolean;
+  multiply(scalar: number | bigint): T;
 }
 
 export type GroupConstructor<T> = {

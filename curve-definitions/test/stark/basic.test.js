@@ -1,6 +1,6 @@
 import { deepStrictEqual, throws } from 'assert';
 import { should } from 'micro-should';
-import * as starknet from '../../lib/starknet.js';
+import * as starknet from '../../lib/stark.js';
 import { default as issue2 } from './fixtures/issue2.json' assert { type: 'json' };
 
 should('Basic elliptic sanity check', () => {

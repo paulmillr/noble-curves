@@ -1,3 +1,4 @@
+/*! @noble/curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { shake256 } from '@noble/hashes/sha3';
 import { concatBytes, randomBytes, utf8ToBytes, wrapConstructor } from '@noble/hashes/utils';
 import { PointType, twistedEdwards } from '@noble/curves/edwards';
@@ -43,7 +44,8 @@ function adjustScalarBytes(bytes: Uint8Array): Uint8Array {
   bytes[56] = 0; // Byte outside of group (456 buts vs 448 bits)
   return bytes;
 }
-
+// Edwards448 from RFC 8032 (https://www.rfc-editor.org/rfc/rfc8032.html#section-5.2).
+// NOTE: Ed448-Goldilocks is different curve
 const ED448_DEF = {
   // Param: a
   a: BigInt(1),
