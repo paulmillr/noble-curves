@@ -508,13 +508,14 @@ should('RFC7748 getSharedKey', () => {
 
 {
   const group = x25519vectors.testGroups[0];
-  for (let i = 0; i < group.tests.length; i++) {
-    const v = group.tests[i];
-    should(`Wycheproof/X25519(${i}, ${v.result}) ${v.comment}`, () => {
+  should(`Wycheproof/X25519`, () => {
+    for (let i = 0; i < group.tests.length; i++) {
+      const v = group.tests[i];
+      const comment = `(${i}, ${v.result}) ${v.comment}`;
       if (v.result === 'valid' || v.result === 'acceptable') {
         try {
           const shared = hex(x25519.scalarMult(v.public, v.private));
-          deepStrictEqual(shared, v.shared, 'valid');
+          deepStrictEqual(shared, v.shared, comment);
         } catch (e) {
           // We are more strict
           if (e.message.includes('Expected valid scalar')) return;
@@ -528,38 +529,35 @@ should('RFC7748 getSharedKey', () => {
         } catch (error) {
           failed = true;
         }
-        deepStrictEqual(failed, true, 'invalid');
+        deepStrictEqual(failed, true, comment);
       } else throw new Error('unknown test result');
-    });
-  }
+    }
+  });
 }
 
-{
+should(`Wycheproof/ED25519`, () => {
   for (let g = 0; g < ed25519vectors.testGroups.length; g++) {
     const group = ed25519vectors.testGroups[g];
     const key = group.key;
-    should(`Wycheproof/ED25519(${g}, public)`, () => {
-      deepStrictEqual(hex(ed.getPublicKey(key.sk)), key.pk);
-    });
+    deepStrictEqual(hex(ed.getPublicKey(key.sk)), key.pk, `(${g}, public)`);
     for (let i = 0; i < group.tests.length; i++) {
       const v = group.tests[i];
-      should(`Wycheproof/ED25519(${g}/${i}, ${v.result}): ${v.comment}`, () => {
-        if (v.result === 'valid' || v.result === 'acceptable') {
-          deepStrictEqual(hex(ed.sign(v.msg, key.sk)), v.sig);
-          deepStrictEqual(ed.verify(v.sig, v.msg, key.pk), true);
-        } else if (v.result === 'invalid') {
-          let failed = false;
-          try {
-            failed = !ed.verify(v.sig, v.msg, key.pk);
-          } catch (error) {
-            failed = true;
-          }
-          deepStrictEqual(failed, true, 'invalid');
-        } else throw new Error('unknown test result');
-      });
+      const comment = `(${g}/${i}, ${v.result}): ${v.comment}`;
+      if (v.result === 'valid' || v.result === 'acceptable') {
+        deepStrictEqual(hex(ed.sign(v.msg, key.sk)), v.sig, comment);
+        deepStrictEqual(ed.verify(v.sig, v.msg, key.pk), true, comment);
+      } else if (v.result === 'invalid') {
+        let failed = false;
+        try {
+          failed = !ed.verify(v.sig, v.msg, key.pk);
+        } catch (error) {
+          failed = true;
+        }
+        deepStrictEqual(failed, true, comment);
+      } else throw new Error('unknown test result');
     }
   }
-}
+});
 
 should('Property test issue #1', () => {
   const message = new Uint8Array([12, 12, 12]);

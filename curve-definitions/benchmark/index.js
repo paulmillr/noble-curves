@@ -30,19 +30,12 @@ old_secp.utils.hmacSha256Sync = (key, ...msgs) =>
     .update(concatBytes(...msgs))
     .digest();
 import * as noble_ed25519 from '@noble/ed25519';
-
-secp256k1.utils.precompute(8); // Not enabled by default?
-ed25519.utils.precompute(8);
-ed448.utils.precompute(8);
-P256.utils.precompute(8);
-P384.utils.precompute(8);
-P521.utils.precompute(8);
-
 noble_ed25519.utils.sha512Sync = (...m) => sha512(concatBytes(...m));
-old_secp.utils.precompute(8);
-noble_ed25519.utils.precompute(8);
 
-const wrapBuf = (arrayBuffer) => new Uint8Array(arrayBuffer);
+for (let item of [secp256k1, ed25519, ed448, P256, P384, P521, old_secp, noble_ed25519]) {
+  item.utils.precompute(8);
+}
+
 const ONLY_NOBLE = process.argv[2] === 'noble';
 
 function generateData(namespace) {
@@ -73,17 +66,23 @@ export const CURVES = {
       secp256k1_old: ({ msg, priv }) => old_secp.signSync(msg, priv),
       secp256k1: ({ msg, priv }) => secp256k1.sign(msg, priv),
     },
-    getSharedSecret: {
-      samples: 1000,
-      secp256k1_old: ({ pub, priv }) => old_secp.getSharedSecret(priv, pub),
-      secp256k1: ({ pub, priv }) => secp256k1.getSharedSecret(priv, pub),
-    },
     verify: {
       samples: 1000,
       secp256k1_old: ({ sig, msg, pub }) => {
         return old_secp.verify((new old_secp.Signature(sig.r, sig.s)), msg, pub);
       },
       secp256k1: ({ sig, msg, pub }) => secp256k1.verify(sig, msg, pub)
+    },
+    getSharedSecret: {
+      samples: 1000,
+      secp256k1_old: ({ pub, priv }) => old_secp.getSharedSecret(priv, pub),
+      secp256k1: ({ pub, priv }) => secp256k1.getSharedSecret(priv, pub),
+    },
+    recoverPublicKey: {
+      samples: 1000,
+      secp256k1_old: ({ sig, msg }) =>
+        old_secp.recoverPublicKey(msg, (new old_secp.Signature(sig.r, sig.s)), sig.recovery),
+      secp256k1: ({ sig, msg }) => sig.recoverPublicKey(msg)
     }
   },
   ed25519: {

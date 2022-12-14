@@ -439,12 +439,13 @@ should('input immutability: sign/verify are immutable', () => {
     should(`Wycheproof/ED448(${g}, public)`, () => {
       deepStrictEqual(hex(ed.getPublicKey(key.sk)), key.pk);
     });
-    for (let i = 0; i < group.tests.length; i++) {
-      const v = group.tests[i];
-      should(`Wycheproof/ED448(${g}/${i}, ${v.result}): ${v.comment}`, () => {
+    should(`Wycheproof/ED448`, () => {
+      for (let i = 0; i < group.tests.length; i++) {
+        const v = group.tests[i];
+        const index = `${g}/${i} ${v.comment}`;
         if (v.result === 'valid' || v.result === 'acceptable') {
-          deepStrictEqual(hex(ed.sign(v.msg, key.sk)), v.sig);
-          deepStrictEqual(ed.verify(v.sig, v.msg, key.pk), true);
+          deepStrictEqual(hex(ed.sign(v.msg, key.sk)), v.sig, index);
+          deepStrictEqual(ed.verify(v.sig, v.msg, key.pk), true, index);
         } else if (v.result === 'invalid') {
           let failed = false;
           try {
@@ -452,10 +453,10 @@ should('input immutability: sign/verify are immutable', () => {
           } catch (error) {
             failed = true;
           }
-          deepStrictEqual(failed, true, 'invalid');
+          deepStrictEqual(failed, true, index);
         } else throw new Error('unknown test result');
-      });
-    }
+      }
+    });
   }
 }
 
@@ -524,13 +525,14 @@ should('RFC7748 getSharedKey', () => {
 
 {
   const group = x448vectors.testGroups[0];
-  for (let i = 0; i < group.tests.length; i++) {
-    const v = group.tests[i];
-    should(`Wycheproof/X448(${i}, ${v.result}) ${v.comment}`, () => {
+  should(`Wycheproof/X448`, () => {
+    for (let i = 0; i < group.tests.length; i++) {
+      const v = group.tests[i];
+      const index = `(${i}, ${v.result}) ${v.comment}`;
       if (v.result === 'valid' || v.result === 'acceptable') {
         try {
           const shared = hex(x448.scalarMult(v.public, v.private));
-          deepStrictEqual(shared, v.shared, 'valid');
+          deepStrictEqual(shared, v.shared, index);
         } catch (e) {
           // We are more strict
           if (e.message.includes('Expected valid scalar')) return;
@@ -545,10 +547,10 @@ should('RFC7748 getSharedKey', () => {
         } catch (error) {
           failed = true;
         }
-        deepStrictEqual(failed, true, 'invalid');
+        deepStrictEqual(failed, true, index);
       } else throw new Error('unknown test result');
-    });
-  }
+    }
+  });
 }
 
 // should('X448: should convert base point to montgomery using fromPoint', () => {

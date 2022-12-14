@@ -308,49 +308,55 @@ const WYCHEPROOF_ECDSA = {
   },
 };
 
+function runWycheproof(name, CURVE, group, index) {
+  const pubKey = CURVE.Point.fromHex(group.key.uncompressed);
+  deepStrictEqual(pubKey.x, BigInt(`0x${group.key.wx}`));
+  deepStrictEqual(pubKey.y, BigInt(`0x${group.key.wy}`));
+  for (const test of group.tests) {
+    const m = CURVE.CURVE.hash(hexToBytes(test.msg));
+
+    if (test.result === 'valid' || test.result === 'acceptable') {
+      try {
+        CURVE.Signature.fromDER(test.sig);
+      } catch (e) {
+        // Some tests has invalid signature which we don't accept
+        if (e.message.includes('Invalid signature: incorrect length')) continue;
+        throw e;
+      }
+      const verified = CURVE.verify(test.sig, m, pubKey);
+      if (name === 'secp256k1') {
+        // lowS: true for secp256k1
+        deepStrictEqual(verified, !CURVE.Signature.fromDER(test.sig).hasHighS(), `${index}: valid`);
+      } else {
+        deepStrictEqual(verified, true, `${index}: valid`);
+      }
+
+    } else if (test.result === 'invalid') {
+      let failed = false;
+      try {
+        failed = !CURVE.verify(test.sig, m, pubKey);
+      } catch (error) {
+        failed = true;
+      }
+      deepStrictEqual(failed, true, `${index}: invalid`);
+    } else throw new Error('unknown test result');
+  }
+}
+
 for (const name in WYCHEPROOF_ECDSA) {
   const { curve, hashes } = WYCHEPROOF_ECDSA[name];
   for (const hName in hashes) {
     const { hash, tests } = hashes[hName];
     const CURVE = curve.create(hash);
-    for (let i = 0; i < tests.length; i++) {
-      const test = tests[i];
-      for (let j = 0; j < test.testGroups.length; j++) {
-        const group = test.testGroups[j];
-        should(`Wycheproof/WYCHEPROOF_ECDSA ${name}/${hName} (${i}/${j})`, () => {
-          const pubKey = CURVE.Point.fromHex(group.key.uncompressed);
-          deepStrictEqual(pubKey.x, BigInt(`0x${group.key.wx}`));
-          deepStrictEqual(pubKey.y, BigInt(`0x${group.key.wy}`));
-          for (const test of group.tests) {
-            const m = CURVE.CURVE.hash(hexToBytes(test.msg));
-            if (test.result === 'valid' || test.result === 'acceptable') {
-              try {
-                CURVE.Signature.fromDER(test.sig);
-              } catch (e) {
-                // Some tests has invalid signature which we don't accept
-                if (e.message.includes('Invalid signature: incorrect length')) continue;
-                throw e;
-              }
-              const verified = CURVE.verify(test.sig, m, pubKey);
-              if (name === 'secp256k1') {
-                // lowS: true for secp256k1
-                deepStrictEqual(verified, !CURVE.Signature.fromDER(test.sig).hasHighS());
-              } else {
-                deepStrictEqual(verified, true, 'valid');
-              }
-            } else if (test.result === 'invalid') {
-              let failed = false;
-              try {
-                failed = !CURVE.verify(test.sig, m, pubKey);
-              } catch (error) {
-                failed = true;
-              }
-              deepStrictEqual(failed, true, 'invalid');
-            } else throw new Error('unknown test result');
-          }
-        });
+    should(`Wycheproof/WYCHEPROOF_ECDSA ${name}/${hName}`, () => {
+      for (let i = 0; i < tests.length; i++) {
+        const groups = tests[i].testGroups;
+        for (let j = 0; j < groups.length; j++) {
+          const group = groups[j];
+          runWycheproof(name, CURVE, group, `${i}/${j}`);
+        }
       }
-    }
+    });
   }
 }
 
