@@ -2,8 +2,8 @@
 // Implementation of Twisted Edwards curve. The formula is: ax² + y² = 1 + dx²y²
 
 // Differences from @noble/ed25519 1.7:
-// 1. EDDSA & ECDH have different field element lengths (for ed448/x448 only):
-//   RFC8032 bitLength is 456 bits (57 bytes), RFC7748 bitLength is 448 (56 bytes)
+// 1. Different field element lengths in ed448:
+//   EDDSA (RFC8032) is 456 bits / 57 bytes, ECDH (RFC7748) is 448 bits / 56 bytes
 // 2. Different addition formula (doubling is same)
 // 3. uvRatio differs between curves (half-expected, not only pow fn changes)
 // 4. Point decompression code is different too (unexpected), now using generalized formula
@@ -19,6 +19,8 @@ import {
   hashToPrivateScalar,
   BasicCurve,
   validateOpts as utilOpts,
+  Hex,
+  PrivKey,
 } from './utils.js'; // TODO: import * as u from './utils.js'?
 import { Group, GroupConstructor, wNAF } from './group.js';
 
@@ -47,11 +49,6 @@ export type CurveType = BasicCurve & {
   uvRatio?: (u: bigint, v: bigint) => { isValid: boolean; value: bigint };
   preHash?: CHash;
 };
-
-// We accept hex strings besides Uint8Array for simplicity
-type Hex = Uint8Array | string;
-// Very few implementations accept numbers, we do it to ease learning curve
-type PrivKey = Hex | bigint | number;
 
 // Should be separate from overrides, since overrides can use information about curve (for example nBits)
 function validateOpts(curve: CurveType) {
@@ -260,7 +257,6 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       const { a, d } = CURVE;
       const { x: X1, y: Y1, z: Z1, t: T1 } = this;
       const { x: X2, y: Y2, z: Z2, t: T2 } = other;
-
       // Faster algo for adding 2 Extended Points when curve's a=-1.
       // http://hyperelliptic.org/EFD/g1p/auto-twisted-extended-1.html#addition-add-2008-hwcd-4
       // Cost: 8M + 8add + 2*2.
@@ -520,7 +516,6 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     }
   }
 
-  // -------------------------
   // Little-endian SHA512 with modulo n
   function modlLE(hash: Uint8Array): bigint {
     return mod.mod(bytesToNumberLE(hash), CURVE_ORDER);

@@ -21,6 +21,8 @@ import {
   hashToPrivateScalar,
   BasicCurve,
   validateOpts as utilOpts,
+  Hex,
+  PrivKey,
 } from './utils.js';
 import { Group, GroupConstructor, wNAF } from './group.js';
 
@@ -53,11 +55,6 @@ export type CurveType = BasicCurve & {
   // Endomorphism options for Koblitz curves
   endo?: EndomorphismOpts;
 };
-
-// We accept hex strings besides Uint8Array for simplicity
-type Hex = Uint8Array | string;
-// Very few implementations accept numbers, we do it to ease learning curve
-type PrivKey = Hex | bigint | number;
 
 // Should be separate from overrides, since overrides can use information about curve (for example nBits)
 function validateOpts(curve: CurveType) {
@@ -244,6 +241,13 @@ export type CurveFn = {
   utils: {
     mod: (a: bigint, b?: bigint) => bigint;
     invert: (number: bigint, modulo?: bigint) => bigint;
+    _bigintToBytes: (num: bigint) => Uint8Array;
+    _bigintToString: (num: bigint) => string;
+    _normalizePrivateKey: (key: PrivKey) => bigint;
+    _normalizePublicKey: (publicKey: PubKey) => PointType;
+    _isWithinCurveOrder: (num: bigint) => boolean;
+    _isValidFieldElement: (num: bigint) => boolean;
+    _weierstrassEquation: (x: bigint) => bigint;
     isValidPrivateKey(privateKey: PrivKey): boolean;
     hashToPrivateKey: (hash: Hex) => Uint8Array;
     randomPrivateKey: () => Uint8Array;
@@ -649,7 +653,6 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     }
   }
   const wnaf = wNAF(JacobianPoint, CURVE.endo ? CURVE.nBitLength / 2 : CURVE.nBitLength);
-
   // Stores precomputed values for points.
   const pointPrecomputes = new WeakMap<Point, JacobianPoint[]>();
 
@@ -923,20 +926,22 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       }
     },
     _bigintToBytes: numToField,
+    _bigintToString: numToFieldStr,
     _normalizePrivateKey: normalizePrivateKey,
+    _normalizePublicKey: normalizePublicKey,
+    _isWithinCurveOrder: isWithinCurveOrder,
+    _isValidFieldElement: isValidFieldElement,
+    _weierstrassEquation: weierstrassEquation,
 
     /**
-     * Can take (keyLength + 8) or more bytes of uniform input e.g. from CSPRNG or KDF
-     * and convert them into private key, with the modulo bias being neglible.
-     * As per FIPS 186 B.4.1.
-     * https://research.kudelskisecurity.com/2020/07/28/the-definitive-guide-to-modulo-bias-and-how-to-avoid-it/
-     * @param hash hash output from sha512, or a similar function
-     * @returns valid private key
+     * Converts some bytes to a valid private key. Needs at least (nBitLength+64) bytes.
      */
     hashToPrivateKey: (hash: Hex): Uint8Array => numToField(hashToPrivateScalar(hash, CURVE_ORDER)),
 
-    // Takes curve order + 64 bits from CSPRNG so that modulo bias is neglible,
-    // matches FIPS 186 B.4.1.
+    /**
+     * Produces cryptographically secure private key from random of size (nBitLength+64)
+     * as per FIPS 186 B.4.1 with modulo bias being neglible.
+     */
     randomPrivateKey: (): Uint8Array => utils.hashToPrivateKey(CURVE.randomBytes(fieldLen + 8)),
 
     /**

@@ -46,10 +46,15 @@ export const CURVES = {
       const sig = noble_secp256k1.signSync(msg, priv);
       return { priv, pub, msg, sig };
     },
-    getPublicKey: {
+    getPublicKey1: {
       samples: 10000,
-      old: () => noble_secp256k1.getPublicKey(noble_secp256k1.utils.randomPrivateKey()),
-      noble: () => secp256k1.getPublicKey(secp256k1.utils.randomPrivateKey()),
+      noble: () => secp256k1.getPublicKey(3n),
+      old: () => noble_secp256k1.getPublicKey(3n),
+    },
+    getPublicKey255: {
+      samples: 10000,
+      noble: () => secp256k1.getPublicKey(2n**255n-1n),
+      old: () => noble_secp256k1.getPublicKey(2n**255n-1n),
     },
     sign: {
       samples: 5000,

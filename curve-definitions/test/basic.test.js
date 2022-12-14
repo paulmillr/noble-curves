@@ -19,7 +19,8 @@ import { jubjub } from '../lib/jubjub.js';
 
 // prettier-ignore
 const CURVES = {
-  secp192r1, secp224r1, secp256k1, secp256r1, secp384r1, secp521r1,
+  secp192r1, secp224r1, secp256r1, secp384r1, secp521r1,
+  secp256k1,
   ed25519, ed25519ctx, ed25519ph,
   ed448, ed448ph,
   starkCurve,
@@ -46,14 +47,15 @@ for (const name in CURVES) {
   const CURVE_ORDER = C.CURVE.n;
   const FC_BIGINT = fc.bigInt(1n + 1n, CURVE_ORDER - 1n);
 
-  const POINTS = { Point: C.Point, JacobianPoint: C.JacobianPoint, ExtendedPoint: C.ExtendedPoint };
   // Check that curve doesn't accept points from other curves
   const O = name === 'secp256k1' ? secp256r1 : secp256k1;
-  const OTHER_POINTS = {
-    Point: O.Point,
-    JacobianPoint: O.JacobianPoint,
-    ExtendedPoint: O.ExtendedPoint,
-  };
+  const POINTS = {};
+  const OTHER_POINTS = {};
+  for (const name of ['Point', 'JacobianPoint', 'ExtendedPoint', 'ProjectivePoint']) {
+    POINTS[name] = C[name];
+    OTHER_POINTS[name] = O[name];
+  }
+
   for (const pointName in POINTS) {
     const p = POINTS[pointName];
     const o = OTHER_POINTS[pointName];
@@ -120,6 +122,7 @@ for (const name in CURVES) {
       fc.assert(
         fc.property(FC_BIGINT, FC_BIGINT, (a, b) => {
           const c = mod.mod(a + b, CURVE_ORDER);
+          if (c === CURVE_ORDER || c < 1n) return;
           const pA = G[1].multiply(a);
           const pB = G[1].multiply(b);
           const pC = G[1].multiply(c);
@@ -157,7 +160,7 @@ for (const name in CURVES) {
         throws(() => G[1][op](new Uint8Array([1])), 'ui8a([1])');
         throws(() => G[1][op](new Uint8Array(4096).fill(1)), 'ui8a(4096*[1])');
         if (G[1].toAffine) throws(() => G[1][op](C.Point.BASE), `Point ${op} ${pointName}`);
-        throws(() => G[1][op](O.BASE), `${op}/other curve point`);
+        throws(() => G[1][op](o.BASE), `${op}/other curve point`);
       });
     }
 
@@ -177,7 +180,7 @@ for (const name in CURVES) {
       throws(() => G[1].equals(new Uint8Array([1])), 'ui8a([1])');
       throws(() => G[1].equals(new Uint8Array(4096).fill(1)), 'ui8a(4096*[1])');
       if (G[1].toAffine) throws(() => G[1].equals(C.Point.BASE), `Point.equals(${pointName})`);
-      throws(() => G[1].equals(O.BASE), 'other curve point');
+      throws(() => G[1].equals(o.BASE), 'other curve point');
     });
 
     for (const op of ['multiply', 'multiplyUnsafe']) {
@@ -199,7 +202,7 @@ for (const name in CURVES) {
         throws(() => G[1][op](new Uint8Array([0])), 'ui8a([0])');
         throws(() => G[1][op](new Uint8Array([1])), 'ui8a([1])');
         throws(() => G[1][op](new Uint8Array(4096).fill(1)), 'ui8a(4096*[1])');
-        throws(() => G[1][op](O.BASE), 'other curve point');
+        throws(() => G[1][op](o.BASE), 'other curve point');
       });
     }
     // Complex point (Extended/Jacobian/Projective?)

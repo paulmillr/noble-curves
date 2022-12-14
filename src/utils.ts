@@ -1,5 +1,10 @@
 /*! @noble/curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-export type Hex = string | Uint8Array;
+
+// We accept hex strings besides Uint8Array for simplicity
+export type Hex = Uint8Array | string;
+// Very few implementations accept numbers, we do it to ease learning curve
+export type PrivKey = Hex | bigint | number;
+
 // NOTE: these are generic, even if curve is on some polynominal field (bls), it will still have P/n/h
 // But generator can be different (Fp2/Fp6 for bls?)
 export type BasicCurve = {
@@ -124,6 +129,7 @@ export function nLength(n: bigint, nBitLength?: number) {
  * Can take (n+8) or more bytes of uniform input e.g. from CSPRNG or KDF
  * and convert them into private scalar, with the modulo bias being neglible.
  * As per FIPS 186 B.4.1.
+ * https://research.kudelskisecurity.com/2020/07/28/the-definitive-guide-to-modulo-bias-and-how-to-avoid-it/
  * @param hash hash output from sha512, or a similar function
  * @returns valid private scalar
  */
@@ -136,4 +142,11 @@ export function hashToPrivateScalar(hash: Hex, CURVE_ORDER: bigint, isLE = false
     throw new Error('Expected valid bytes of private key as per FIPS 186');
   const num = isLE ? bytesToNumberLE(hash) : bytesToNumberBE(hash);
   return mod.mod(num, CURVE_ORDER - _1n) + _1n;
+}
+
+export function equalBytes(b1: Uint8Array, b2: Uint8Array) {
+  // We don't care about timing attacks here
+  if (b1.length !== b2.length) return false;
+  for (let i = 0; i < b1.length; i++) if (b1[i] !== b2[i]) return false;
+  return true;
 }

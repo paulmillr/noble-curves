@@ -1,5 +1,5 @@
 import * as fc from 'fast-check';
-import { secp256k1 } from '../lib/secp256k1.js';
+import { secp256k1, schnorr } from '../lib/secp256k1.js';
 import { readFileSync } from 'fs';
 import { default as ecdsa } from './vectors/ecdsa.json' assert { type: 'json' };
 import { default as ecdh } from './vectors/ecdh.json' assert { type: 'json' };
@@ -341,37 +341,25 @@ should(
   }
 );
 
-// describe('schnorr', () => {
-//   // index,secret key,public key,aux_rand,message,signature,verification result,comment
-//   const vectors = schCsv
-//     .split('\n')
-//     .map((line: string) => line.split(','))
-//     .slice(1, -1);
-//   for (let vec of vectors) {
-//     const [index, sec, pub, rnd, msg, expSig, passes, comment] = vec;
-//     it(`should sign with Schnorr scheme vector ${index}`, async () => {
-//       if (sec) {
-//         expect(hex(secp.schnorr.getPublicKey(sec))).toBe(pub.toLowerCase());
-//         const sig = await secp.schnorr.sign(msg, sec, rnd);
-//         const sigS = secp.schnorr.signSync(msg, sec, rnd);
-//         expect(hex(sig)).toBe(expSig.toLowerCase());
-//         expect(hex(sigS)).toBe(expSig.toLowerCase());
-//         expect(await secp.schnorr.verify(sigS, msg, pub)).toBe(true);
-//         expect(secp.schnorr.verifySync(sig, msg, pub)).toBe(true);
-//       } else {
-//         const passed = await secp.schnorr.verify(expSig, msg, pub);
-//         const passedS = secp.schnorr.verifySync(expSig, msg, pub);
-//         if (passes === 'TRUE') {
-//           expect(passed).toBeTruthy();
-//           expect(passedS).toBeTruthy();
-//         } else {
-//           expect(passed).toBeFalsy();
-//           expect(passedS).toBeFalsy();
-//         }
-//       }
-//     });
-//   }
-// });
+// index,secret key,public key,aux_rand,message,signature,verification result,comment
+const vectors = schCsv
+  .split('\n')
+  .map((line) => line.split(','))
+  .slice(1, -1);
+for (let vec of vectors) {
+  const [index, sec, pub, rnd, msg, expSig, passes, comment] = vec;
+  should(`sign with Schnorr scheme vector ${index}`, () => {
+    if (sec) {
+      deepStrictEqual(hex(schnorr.getPublicKey(sec)), pub.toLowerCase());
+      const sig = schnorr.sign(msg, sec, rnd);
+      deepStrictEqual(hex(sig), expSig.toLowerCase());
+      deepStrictEqual(schnorr.verify(sig, msg, pub), true);
+    } else {
+      const passed = schnorr.verify(expSig, msg, pub);
+      deepStrictEqual(passed, passes === 'TRUE');
+    }
+  });
+}
 
 should('secp256k1.recoverPublicKey()/should recover public key from recovery bit', () => {
   const message = '00000000000000000000000000000000000000000000000000000000deadbeef';
