@@ -72,6 +72,66 @@ export const secp256k1 = shortw({
 // secp256k1.verify(sig, msg, pub)
 ```
 
+## Performance
+
+Benchmark results on Apple M2 with node v18.10:
+
+```
+==== secp256k1 ====
+  - getPublicKey1 (samples: 10000)
+    noble_old x 8,131 ops/sec @ 122μs/op
+    secp256k1 x 7,374 ops/sec @ 135μs/op
+  - getPublicKey255 (samples: 10000)
+    noble_old x 7,894 ops/sec @ 126μs/op
+    secp256k1 x 7,327 ops/sec @ 136μs/op
+  - sign (samples: 5000)
+    noble_old x 5,243 ops/sec @ 190μs/op
+    secp256k1 x 4,834 ops/sec @ 206μs/op
+  - getSharedSecret (samples: 1000)
+    noble_old x 653 ops/sec @ 1ms/op
+    secp256k1 x 634 ops/sec @ 1ms/op
+  - verify (samples: 1000)
+    secp256k1_old x 1,038 ops/sec @ 962μs/op
+    secp256k1 x 1,009 ops/sec @ 990μs/op
+==== ed25519 ====
+  - getPublicKey (samples: 10000)
+    old x 8,632 ops/sec @ 115μs/op
+    noble x 8,390 ops/sec @ 119μs/op
+  - sign (samples: 5000)
+    old x 4,376 ops/sec @ 228μs/op
+    noble x 4,233 ops/sec @ 236μs/op
+  - verify (samples: 1000)
+    old x 865 ops/sec @ 1ms/op
+    noble x 860 ops/sec @ 1ms/op
+==== ed448 ====
+  - getPublicKey (samples: 5000)
+    noble x 3,224 ops/sec @ 310μs/op
+  - sign (samples: 2500)
+    noble x 1,561 ops/sec @ 640μs/op
+  - verify (samples: 500)
+    noble x 313 ops/sec @ 3ms/op
+==== nist ====
+  - getPublicKey (samples: 2500)
+    P256 x 7,993 ops/sec @ 125μs/op
+    P384 x 3,819 ops/sec @ 261μs/op
+    P521 x 2,074 ops/sec @ 481μs/op
+  - sign (samples: 1000)
+    P256 x 5,327 ops/sec @ 187μs/op
+    P384 x 2,728 ops/sec @ 366μs/op
+    P521 x 1,594 ops/sec @ 626μs/op
+  - verify (samples: 250)
+    P256 x 806 ops/sec @ 1ms/op
+    P384 x 353 ops/sec @ 2ms/op
+    P521 x 171 ops/sec @ 5ms/op
+==== stark ====
+  - pedersen (samples: 500)
+    old x 85 ops/sec @ 11ms/op
+    noble x 1,216 ops/sec @ 822μs/op
+  - verify (samples: 500)
+    old x 302 ops/sec @ 3ms/op
+    noble x 698 ops/sec @ 1ms/op
+```
+
 ## License
 
 MIT (c) Paul Miller [(https://paulmillr.com)](https://paulmillr.com), see LICENSE file.
