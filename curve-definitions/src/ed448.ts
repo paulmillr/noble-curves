@@ -1,12 +1,15 @@
 /*! @noble/curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { shake256 } from '@noble/hashes/sha3';
 import { concatBytes, randomBytes, utf8ToBytes, wrapConstructor } from '@noble/hashes/utils';
-import { PointType, twistedEdwards } from '@noble/curves/edwards';
-import { mod, pow2, invert } from '@noble/curves/modular';
-import { numberToBytesLE } from '@noble/curves/utils';
+import { twistedEdwards } from '@noble/curves/edwards';
+import { mod, pow2 } from '@noble/curves/modular';
 import { montgomery } from '../../lib/montgomery.js';
 
-const _0n = BigInt(0);
+/**
+ * Edwards448 (not Ed448-Goldilocks) curve with following addons:
+ * * X448 ECDH
+ * Conforms to RFC 8032 https://www.rfc-editor.org/rfc/rfc8032.html#section-5.2
+ */
 
 const shake256_114 = wrapConstructor(() => shake256.create({ dkLen: 114 }));
 const shake256_64 = wrapConstructor(() => shake256.create({ dkLen: 64 }));
@@ -17,21 +20,24 @@ const ed448P = BigInt(
 // powPminus3div4 calculates z = x^k mod p, where k = (p-3)/4.
 function ed448_pow_Pminus3div4(x: bigint): bigint {
   const P = ed448P;
+  // prettier-ignore
+  let [_1n, _2n, _3n, _11n, _22n, _44n, _88n, _223n] = [1, 2, 3, 11, 22, 44, 88, 223]
+    .map(n => BigInt(n));
   // x ** ((P - 3n)/4n) % P
   // [223 of 1, 0, 222 of 1], almost same as secp!
   const b2 = (x * x * x) % P;
   const b3 = (b2 * b2 * x) % P;
-  const b6 = (pow2(b3, 3n, P) * b3) % P;
-  const b9 = (pow2(b6, 3n, P) * b3) % P;
-  const b11 = (pow2(b9, 2n, P) * b2) % P;
-  const b22 = (pow2(b11, 11n, P) * b11) % P;
-  const b44 = (pow2(b22, 22n, P) * b22) % P;
-  const b88 = (pow2(b44, 44n, P) * b44) % P;
-  const b176 = (pow2(b88, 88n, P) * b88) % P;
-  const b220 = (pow2(b176, 44n, P) * b44) % P;
-  const b222 = (pow2(b220, 2n, P) * b2) % P;
-  const b223 = (pow2(b222, 1n, P) * x) % P;
-  return (pow2(b223, 223n, P) * b222) % P;
+  const b6 = (pow2(b3, _3n, P) * b3) % P;
+  const b9 = (pow2(b6, _3n, P) * b3) % P;
+  const b11 = (pow2(b9, _2n, P) * b2) % P;
+  const b22 = (pow2(b11, _11n, P) * b11) % P;
+  const b44 = (pow2(b22, _22n, P) * b22) % P;
+  const b88 = (pow2(b44, _44n, P) * b44) % P;
+  const b176 = (pow2(b88, _88n, P) * b88) % P;
+  const b220 = (pow2(b176, _44n, P) * b44) % P;
+  const b222 = (pow2(b220, _2n, P) * b2) % P;
+  const b223 = (pow2(b222, _1n, P) * x) % P;
+  return (pow2(b223, _223n, P) * b222) % P;
 }
 
 function adjustScalarBytes(bytes: Uint8Array): Uint8Array {
@@ -44,13 +50,11 @@ function adjustScalarBytes(bytes: Uint8Array): Uint8Array {
   bytes[56] = 0; // Byte outside of group (456 buts vs 448 bits)
   return bytes;
 }
-// Edwards448 from RFC 8032 (https://www.rfc-editor.org/rfc/rfc8032.html#section-5.2).
-// NOTE: Ed448-Goldilocks is different curve
+
 const ED448_DEF = {
   // Param: a
   a: BigInt(1),
-  // Equal to -39081 over finite field.
-  // Negative number is P - number
+  // -39081. Negative number is P - number
   d: BigInt(
     '726838724295606890549323807888004534353641360687318060281490199180612328166730772686396383698676545930088884461843637361053498018326358'
   ),
@@ -84,8 +88,8 @@ const ED448_DEF = {
       data
     );
   },
-  // Ratio of u to v. Allows us to combine inversion and square root. Uses algo from RFC8032 5.1.3.
-  // Constant-time, u/√v
+  // Constant-time ratio of u to v. Allows to combine inversion and square root u/√v.
+  // Uses algo from RFC8032 5.1.3.
   uvRatio: (u: bigint, v: bigint): { isValid: boolean; value: bigint } => {
     const P = ed448P;
     // https://datatracker.ietf.org/doc/html/rfc8032#section-5.2.3
@@ -113,7 +117,7 @@ export const ed448 = twistedEdwards(ED448_DEF);
 export const ed448ph = twistedEdwards({ ...ED448_DEF, preHash: shake256_64 });
 
 export const x448 = montgomery({
-  a24: BigInt('39081'),
+  a24: BigInt(39081),
   montgomeryBits: 448,
   nByteLength: 57,
   P: ed448P,

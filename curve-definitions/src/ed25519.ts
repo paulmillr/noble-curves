@@ -13,7 +13,14 @@ import {
   Hex,
 } from '@noble/curves/utils';
 
-const ed25519P = BigInt(
+/**
+ * ed25519 Twisted Edwards curve with following addons:
+ * - X25519 ECDH
+ * - Ristretto cofactor elimination
+ * - Elligator hash-to-group / point indistinguishability
+ */
+
+const ED25519_P = BigInt(
   '57896044618658097711785492504343953926634992332820282019728792003956564819949'
 );
 // √(-1) aka √(a) aka 2^((p-1)/4)
@@ -21,15 +28,12 @@ const ED25519_SQRT_M1 = BigInt(
   '19681161376707505956807079304988542015446066515923890162744021073123829784752'
 );
 
+// prettier-ignore
+const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _5n = BigInt(5);
+// prettier-ignore
+const _10n = BigInt(10), _20n = BigInt(20), _40n = BigInt(40), _80n = BigInt(80);
 function ed25519_pow_2_252_3(x: bigint) {
-  const P = ed25519P;
-  const _1n = BigInt(1);
-  const _2n = BigInt(2);
-  const _5n = BigInt(5);
-  const _10n = BigInt(10);
-  const _20n = BigInt(20);
-  const _40n = BigInt(40);
-  const _80n = BigInt(80);
+  const P = ED25519_P;
   const x2 = (x * x) % P;
   const b2 = (x2 * x) % P; // x^3, 11
   const b4 = (pow2(b2, _2n, P) * b2) % P; // x^15, 1111
@@ -57,7 +61,7 @@ function adjustScalarBytes(bytes: Uint8Array): Uint8Array {
 }
 // sqrt(u/v)
 function uvRatio(u: bigint, v: bigint): { isValid: boolean; value: bigint } {
-  const P = ed25519P;
+  const P = ED25519_P;
   const v3 = mod(v * v * v, P); // v³
   const v7 = mod(v3 * v3 * v, P); // v⁷
   // (p+3)/8 and (p-5)/8
@@ -94,7 +98,7 @@ const ED25519_DEF = {
   // Negative number is P - number, and division is invert(number, P)
   d: BigInt('37095705934669439343138083508754565189542113879843219016388785533085940283555'),
   // Finite field 𝔽p over which we'll do calculations; 2n ** 255n - 19n
-  P: ed25519P,
+  P: ED25519_P,
   // Subgroup order: how many points ed25519 has
   // 2n ** 252n + 27742317777372353535851937790883648493n;
   n: BigInt('7237005577332262213973186563042994240857116359379907606001950938285454250989'),
@@ -130,13 +134,13 @@ export const ed25519ph = twistedEdwards({
 });
 
 export const x25519 = montgomery({
-  P: ed25519P,
+  P: ED25519_P,
   a24: BigInt('121665'),
   montgomeryBits: 255, // n is 253 bits
   nByteLength: 32,
   Gu: '0900000000000000000000000000000000000000000000000000000000000000',
   powPminus2: (x: bigint): bigint => {
-    const P = ed25519P;
+    const P = ED25519_P;
     // x^(p-2) aka x^(2^255-21)
     const { pow_p_5_8, b2 } = ed25519_pow_2_252_3(x);
     return mod(pow2(pow_p_5_8, BigInt(3), P) * b2, P);
@@ -144,13 +148,6 @@ export const x25519 = montgomery({
   adjustScalarBytes,
 });
 
-/**
- * Each ed25519/ExtendedPoint has 8 different equivalent points. This can be
- * a source of bugs for protocols like ring signatures. Ristretto was created to solve this.
- * Ristretto point operates in X:Y:Z:T extended coordinates like ExtendedPoint,
- * but it should work in its own namespace: do not combine those two.
- * https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-ristretto255-decaf448
- */
 function assertRstPoint(other: unknown) {
   if (!(other instanceof RistrettoPoint)) throw new TypeError('RistrettoPoint expected');
 }
@@ -175,8 +172,6 @@ const D_MINUS_ONE_SQ = BigInt(
   '40440834346308536858101042469323190826248399146238708352240133220865137265952'
 );
 // Calculates 1/√(number)
-const _0n = BigInt(0);
-const _1n = BigInt(1);
 const invertSqrt = (number: bigint) => uvRatio(_1n, number);
 
 const MAX_255B = BigInt('0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff');
@@ -184,6 +179,14 @@ const bytes255ToNumberLE = (bytes: Uint8Array) =>
   ed25519.utils.mod(bytesToNumberLE(bytes) & MAX_255B);
 
 type ExtendedPoint = ExtendedPointType;
+
+/**
+ * Each ed25519/ExtendedPoint has 8 different equivalent points. This can be
+ * a source of bugs for protocols like ring signatures. Ristretto was created to solve this.
+ * Ristretto point operates in X:Y:Z:T extended coordinates like ExtendedPoint,
+ * but it should work in its own namespace: do not combine those two.
+ * https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-ristretto255-decaf448
+ */
 export class RistrettoPoint {
   static BASE = new RistrettoPoint(ed25519.ExtendedPoint.BASE);
   static ZERO = new RistrettoPoint(ed25519.ExtendedPoint.ZERO);

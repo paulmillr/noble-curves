@@ -2,16 +2,16 @@
 import { createCurve } from './_shortw_utils.js';
 import { sha256 } from '@noble/hashes/sha256';
 
-// https://www.secg.org/sec2-v2.pdf
-// https://neuromancer.sk/std/secg/secp192r1
+// NIST secp192r1 aka P192
+// https://www.secg.org/sec2-v2.pdf, https://neuromancer.sk/std/secg/secp192r1
 export const P192 = createCurve(
   {
     // Params: a, b
     a: BigInt('0xfffffffffffffffffffffffffffffffefffffffffffffffc'),
     b: BigInt('0x64210519e59c80e70fa7e9ab72243049feb8deecc146b9b1'),
-    // Field over which we'll do calculations. Verify with: 2n ** 192n - 2n ** 64n - 1n
+    // Field over which we'll do calculations; 2n ** 192n - 2n ** 64n - 1n
     P: BigInt('0xfffffffffffffffffffffffffffffffeffffffffffffffff'),
-    // Curve order, total count of valid points in the field. Verify with:
+    // Curve order, total count of valid points in the field.
     n: BigInt('0xffffffffffffffffffffffff99def836146bc9b1b4d22831'),
     // Base point (x, y) aka generator point
     Gx: BigInt('0x188da80eb03090f67cbf20eb43a18800f4ff0afd82ff1012'),

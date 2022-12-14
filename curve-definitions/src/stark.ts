@@ -6,6 +6,9 @@ import { concatBytes, randomBytes } from '@noble/hashes/utils';
 import { weierstrass, CHash, JacobianPointType } from '@noble/curves/weierstrass';
 import * as cutils from '@noble/curves/utils';
 
+// Stark-friendly elliptic curve
+// https://docs.starkware.co/starkex/stark-curve.html
+
 function getHash(hash: CHash) {
   return {
     hash,
@@ -14,22 +17,23 @@ function getHash(hash: CHash) {
   };
 }
 
-const CURVE_N = 3618502788666131213697322783095070105526743751716087489154079457884512865583n;
+const CURVE_N = BigInt(
+  '3618502788666131213697322783095070105526743751716087489154079457884512865583'
+);
 const nBitLength = 252;
-// https://docs.starkware.co/starkex/stark-curve.html
 export const starkCurve = weierstrass({
   // Params: a, b
-  a: 1n,
-  b: 3141592653589793238462643383279502884197169399375105820974944592307816406665n,
-  // Field over which we'll do calculations. Verify with:
-  // NOTE: there is no efficient sqrt for field (P%4==1)
-  P: 2n ** 251n + 17n * 2n ** 192n + 1n,
-  // Curve order, total count of valid points in the field. Verify with:
+  a: BigInt(1),
+  b: BigInt('3141592653589793238462643383279502884197169399375105820974944592307816406665'),
+  // Field over which we'll do calculations; 2n**251n + 17n * 2n**192n + 1n
+  // There is no efficient sqrt for field (P%4==1)
+  P: BigInt('0x800000000000011000000000000000000000000000000000000000000000001'),
+  // Curve order, total count of valid points in the field.
   n: CURVE_N,
   nBitLength: nBitLength, // len(bin(N).replace('0b',''))
   // Base point (x, y) aka generator point
-  Gx: 874739451078007766457464989774322083649278607533249481151382481072868806602n,
-  Gy: 152666792071518830868575557812948353041420400780739481342941381225525861407n,
+  Gx: BigInt('874739451078007766457464989774322083649278607533249481151382481072868806602'),
+  Gy: BigInt('152666792071518830868575557812948353041420400780739481342941381225525861407'),
   h: BigInt(1),
   // Default options
   lowS: false,

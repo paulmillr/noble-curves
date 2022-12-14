@@ -14,31 +14,35 @@ import {
 import { randomBytes } from '@noble/hashes/utils';
 
 /**
- * secp256k1 definition with efficient square root and endomorphism.
- * Endomorphism works only for Koblitz curves with a == 0.
- * It improves efficiency:
+ * secp256k1 belongs to Koblitz curves: it has
+ * efficiently computable Frobenius endomorphism.
+ * Endomorphism improves efficiency:
  * Uses 2x less RAM, speeds up precomputation by 2x and ECDH / sign key recovery by 20%.
  * Should always be used for Jacobian's double-and-add multiplication.
  * For affines cached multiplication, it trades off 1/2 init time & 1/3 ram for 20% perf hit.
  * https://gist.github.com/paulmillr/eb670806793e84df628a7c434a873066
  */
+
 const secp256k1P = BigInt('0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f');
 const secp256k1N = BigInt('0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141');
 const _1n = BigInt(1);
 const _2n = BigInt(2);
 const divNearest = (a: bigint, b: bigint) => (a + b / _2n) / b;
 
-function sqrtMod(x: bigint): bigint {
+/**
+ * Allows to compute square root √y 2x faster.
+ * To calculate √y, we need to exponentiate it to a very big number:
+ * `y² = x³ + ax + b; y = y² ^ (p+1)/4`
+ * We are unwrapping the loop and multiplying it bit-by-bit.
+ * (P+1n/4n).toString(2) would produce bits [223x 1, 0, 22x 1, 4x 0, 11, 00]
+ */
+// prettier-ignore
+function sqrtMod(y: bigint): bigint {
   const P = secp256k1P;
-  const _3n = BigInt(3);
-  const _6n = BigInt(6);
-  const _11n = BigInt(11);
-  const _22n = BigInt(22);
-  const _23n = BigInt(23);
-  const _44n = BigInt(44);
-  const _88n = BigInt(88);
-  const b2 = (x * x * x) % P; // x^3, 11
-  const b3 = (b2 * b2 * x) % P; // x^7
+  const _3n = BigInt(3), _6n = BigInt(6), _11n = BigInt(11); const _22n = BigInt(22);
+  const _23n = BigInt(23), _44n = BigInt(44), _88n = BigInt(88);
+  const b2 = (y * y * y) % P; // x^3, 11
+  const b3 = (b2 * b2 * y) % P; // x^7
   const b6 = (pow2(b3, _3n, P) * b3) % P;
   const b9 = (pow2(b6, _3n, P) * b3) % P;
   const b11 = (pow2(b9, _2n, P) * b2) % P;
@@ -55,26 +59,22 @@ function sqrtMod(x: bigint): bigint {
 
 export const secp256k1 = createCurve(
   {
-    a: 0n,
-    b: 7n,
-    // Field over which we'll do calculations. Verify with:
-    // 2n ** 256n - 2n ** 32n - 2n ** 9n - 2n ** 8n - 2n ** 7n - 2n ** 6n - 2n ** 4n - 1n
+    a: BigInt(0),
+    b: BigInt(7),
+    // Field over which we'll do calculations;
+    // 2n**256n - 2n**32n - 2n**9n - 2n**8n - 2n**7n - 2n**6n - 2n**4n - 1n
     P: secp256k1P,
-    // Curve order, total count of valid points in the field. Verify with:
+    // Curve order, total count of valid points in the field
     n: secp256k1N,
     // Base point (x, y) aka generator point
     Gx: BigInt('55066263022277343669578718895168534326250603453777594175500187360389116729240'),
     Gy: BigInt('32670510020758816978083085130507043184471273380659243275938904335757337482424'),
     h: BigInt(1),
-    // noble-secp256k1 compat
+    // Alllow only low-S signatures by default in sign() and verify()
     lowS: true,
-    // Used to calculate y - the square root of y².
-    // Exponentiates it to very big number (P+1)/4.
-    // We are unwrapping the loop because it's 2x faster.
-    // (P+1n/4n).toString(2) would produce bits [223x 1, 0, 22x 1, 4x 0, 11, 00]
-    // We are multiplying it bit-by-bit
     sqrtMod,
     endo: {
+      // Params taken from https://gist.github.com/paulmillr/eb670806793e84df628a7c434a873066
       beta: BigInt('0x7ae96a2b657c07106e64479eac3434e99cf0497512f58995c1396c28719501ee'),
       splitScalar: (k: bigint) => {
         const n = secp256k1N;

@@ -4,7 +4,11 @@ import { concatBytes, randomBytes, utf8ToBytes } from '@noble/hashes/utils';
 import { twistedEdwards } from '@noble/curves/edwards';
 import { blake2s } from '@noble/hashes/blake2s';
 
-// https://neuromancer.sk/std/other/JubJub
+/**
+ * jubjub Twisted Edwards curve.
+ * https://neuromancer.sk/std/other/JubJub
+ */
+
 export const jubjub = twistedEdwards({
   // Params: a, d
   a: BigInt('0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000000'),
