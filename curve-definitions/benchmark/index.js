@@ -17,7 +17,7 @@ import * as old_secp from '@noble/secp256k1';
 import { concatBytes, hexToBytes } from '@noble/hashes/utils';
 
 import * as starkwareCrypto from '@starkware-industries/starkware-crypto-utils';
-import * as stark from '../lib/stark';
+import * as stark from '../lib/stark.js';
 
 old_secp.utils.sha256Sync = (...msgs) =>
   sha256
@@ -164,7 +164,15 @@ export const CURVES = {
       const msg = 'c465dd6b1bbffdb05442eb17f5ca38ad1aa78a6f56bf4415bdee219114a47';
       const pub = stark.getPublicKey(priv);
       const sig = stark.sign(msg, priv);
-      return { priv, sig, msg, pub }
+
+      const privateKey = '2dccce1da22003777062ee0870e9881b460a8b7eca276870f57c601f182136c';
+      const msgHash = 'c465dd6b1bbffdb05442eb17f5ca38ad1aa78a6f56bf4415bdee219114a47';
+      const keyPair = starkwareCrypto.default.ec.keyFromPrivate(privateKey, 'hex');
+      const publicKeyStark = starkwareCrypto.default.ec.keyFromPublic(
+        keyPair.getPublic(true, 'hex'), 'hex'
+      );
+
+      return { priv, sig, msg, pub, publicKeyStark, msgHash, keyPair }
     },
     pedersen: {
       samples: 500,
@@ -183,21 +191,15 @@ export const CURVES = {
     },
     verify: {
       samples: 500,
-      old: () => {
-        const privateKey = '2dccce1da22003777062ee0870e9881b460a8b7eca276870f57c601f182136c';
-        const msgHash = 'c465dd6b1bbffdb05442eb17f5ca38ad1aa78a6f56bf4415bdee219114a47';
-        const keyPair = starkwareCrypto.default.ec.keyFromPrivate(privateKey, 'hex');
-        const publicKeyStark = starkwareCrypto.default.ec.keyFromPublic(
-          keyPair.getPublic(true, 'hex'), 'hex'
-        );
+      old: ({ publicKeyStark, msgHash, keyPair }) => {
         return starkwareCrypto.default.verify(
           publicKeyStark,
           msgHash,
           starkwareCrypto.default.sign(keyPair, msgHash)
         );
       },
-      noble: ({ sig, msg, pub }) => {
-        return stark.verify(sig, msg, pub)
+      noble: ({ priv, msg, pub }) => {
+        return stark.verify(stark.sign(msg, priv), msg, pub)
       }
     }
   }
