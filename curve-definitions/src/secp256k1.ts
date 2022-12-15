@@ -59,6 +59,8 @@ function sqrtMod(y: bigint): bigint {
 
 export const secp256k1 = createCurve(
   {
+    // Params: a, b
+    // Seem to be rigid https://bitcointalk.org/index.php?topic=289795.msg3183975#msg3183975
     a: BigInt(0),
     b: BigInt(7),
     // Field over which we'll do calculations;
