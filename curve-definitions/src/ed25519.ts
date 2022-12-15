@@ -49,14 +49,18 @@ function ed25519_pow_2_252_3(x: bigint) {
   // ^ To pow to (p+3)/8, multiply it by x.
   return { pow_p_5_8, b2 };
 }
+
+/**
+ * For X25519, in order to decode 32 random bytes as an integer scalar,
+ * set the
+ * three least significant bits of the first byte 0b1111_1000,
+ * and the most significant bit of the last to zero 0b0111_1111,
+ * set the second most significant bit of the last byte to 1 0b0100_0000
+ */
 function adjustScalarBytes(bytes: Uint8Array): Uint8Array {
-  // Section 5: For X25519, in order to decode 32 random bytes as an integer scalar,
-  // set the three least significant bits of the first byte
-  bytes[0] &= 248; // 0b1111_1000
-  // and the most significant bit of the last to zero,
-  bytes[31] &= 127; // 0b0111_1111
-  // set the second most significant bit of the last byte to 1
-  bytes[31] |= 64; // 0b0100_0000
+  bytes[0] &= 248;
+  bytes[31] &= 127;
+  bytes[31] |= 64;
   return bytes;
 }
 // sqrt(u/v)

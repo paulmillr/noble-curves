@@ -47,29 +47,47 @@ npm install @noble/curves
 
 ```ts
 import { weierstrass } from '@noble/curves/weierstrass'; // Short Weierstrass curve
-import { twistedEdwards } from '@noble/curves/edwards'; // Twisted Edwards curve
 import { sha256 } from '@noble/hashes/sha256';
 import { hmac } from '@noble/hashes/hmac';
 import { concatBytes, randomBytes } from '@noble/hashes/utils';
 
-export const secp256k1 = shortw({
+const secp256k1 = weierstrass({
   a: 0n,
   b: 7n,
-  // Field over which we'll do calculations
-  P: 2n ** 256n - 2n ** 32n - 2n ** 9n - 2n ** 8n - 2n ** 7n - 2n ** 6n - 2n ** 4n - 1n,
-  // Curve order, total count of valid points in the field
+  P: 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2fn,
   n: 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n,
-  // Base point (x, y) aka generator point
   Gx: 55066263022277343669578718895168534326250603453777594175500187360389116729240n,
   Gy: 32670510020758816978083085130507043184471273380659243275938904335757337482424n,
   hash: sha256,
   hmac: (k: Uint8Array, ...msgs: Uint8Array[]) => hmac(sha256, key, concatBytes(...msgs)),
-  randomBytes: randomBytes
+  randomBytes
 });
 
-// secp256k1.getPublicKey(priv)
-// secp256k1.sign(msg, priv)
+secp256k1.getPublicKey(secp256k1.utils.randomPrivateKey());
+secp256k1.sign(randomBytes(32), secp256k1.utils.randomPrivateKey());
 // secp256k1.verify(sig, msg, pub)
+
+import { twistedEdwards } from '@noble/curves/edwards'; // Twisted Edwards curve
+import { sha512 } from '@noble/hashes/sha512';
+
+const ed25519 = twistedEdwards({
+  a: -1n,
+  d: 37095705934669439343138083508754565189542113879843219016388785533085940283555n,
+  P: 57896044618658097711785492504343953926634992332820282019728792003956564819949n,
+  n: 7237005577332262213973186563042994240857116359379907606001950938285454250989n,
+  h: 8n,
+  Gx: 15112221349535400772501151409588531511454012693041857206046113283949847762202n,
+  Gy: 46316835694926478169428394003475163141307993866256225615783033603165251855960n,
+  hash: sha512,
+  randomBytes,
+  adjustScalarBytes(bytes) { // could be no-op
+    bytes[0] &= 248;
+    bytes[31] &= 127;
+    bytes[31] |= 64;
+    return bytes;
+  },
+} as const);
+ed25519.getPublicKey(ed25519.utils.randomPrivateKey());
 ```
 
 ## Performance
