@@ -8,6 +8,7 @@ import * as cutils from '@noble/curves/utils';
 
 // Stark-friendly elliptic curve
 // https://docs.starkware.co/starkex/stark-curve.html
+// TODO: clarify exports; it is exporting both starkCurve and sign() now, can be confusing
 
 function getHash(hash: CHash) {
   return {
