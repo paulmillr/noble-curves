@@ -3,18 +3,15 @@
   "version": "0.1.0",
   "description": "Curve definitions for @noble/curves",
   "files": [
-    "index.js",
-    "index.d.ts",
-    "index.d.ts.map",
-    "index.ts"
+    "lib"
   ],
   "type": "module",
-  "main": "index.js",
-  "module": "index.js",
-  "types": "index.d.ts",
+  "main": "lib/index.js",
+  "module": "lib/index.js",
+  "types": "lib/index.d.ts",
   "dependencies": {
     "@noble/curves": "file:../",
-    "@noble/hashes": "1.1.4"
+    "@noble/hashes": "1.1.5"
   },
   "devDependencies": {
     "@scure/base": "~1.1.0",
@@ -35,7 +32,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "lint": "prettier --check index.ts",
+    "lint": "prettier --check src",
     "test": "node test/index.test.js"
   },
   "keywords": [

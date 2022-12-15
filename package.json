@@ -8,7 +8,7 @@
     "lib/esm"
   ],
   "scripts": {
-    "bench": "node test/benchmark/index.js",
+    "bench": "node curve-definitions/benchmark/index.js",
     "build": "tsc && tsc -p tsconfig.esm.json",
     "build:release": "rollup -c rollup.config.js",
     "lint": "prettier --check 'src/**/*.{js,ts}' 'curve-definitions/src/**/*.{js,ts}'",
