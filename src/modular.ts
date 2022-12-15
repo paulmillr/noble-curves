@@ -65,6 +65,16 @@ export function invert(number: bigint, modulo: bigint): bigint {
 }
 
 /**
+ * Division over finite field.
+ * `a/b mod p == a * invert(b) mod p`
+ */
+export function div(numerator: bigint, denominator: bigint, modulo: bigint): bigint {
+  const num = mod(numerator, modulo);
+  const iden = invert(denominator, modulo);
+  return mod(num * iden, modulo);
+}
+
+/**
  * Takes a list of numbers, efficiently inverts all of them.
  * @param nums list of bigints
  * @param p modulo
