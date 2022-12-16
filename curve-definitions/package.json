@@ -5,7 +5,6 @@
   "files": [
     "lib"
   ],
-  "type": "module",
   "main": "lib/index.js",
   "module": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -31,7 +30,7 @@
     "url": "git+https://github.com/paulmillr/noble-curves.git"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && tsc -p tsconfig.esm.json",
     "lint": "prettier --check src",
     "test": "node test/index.test.js"
   },

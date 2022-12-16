@@ -8,9 +8,9 @@
       "es2020",
       "dom"
     ],
-    "module": "commonjs",
+    "module": "es6",
     "moduleResolution": "node16",
-    "outDir": "lib",
+    "outDir": "lib/esm",
     "noImplicitAny": true,
     "preserveConstEnums": true,
     "baseUrl": ".",
