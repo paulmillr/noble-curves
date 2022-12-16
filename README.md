@@ -39,11 +39,9 @@ Future plans:
 Use NPM in node.js / browser, or include single file from
 [GitHub's releases page](https://github.com/paulmillr/noble-curves/releases):
 
-## Usage
+> npm install @noble/curves
 
-```sh
-npm install @noble/curves
-```
+The library does not have an entry point. It allows you to select specific primitives and drop everything else. If you only want to use secp256k1, just use the library with rollup or other bundlers. This is done to make your bundles tiny.
 
 ```ts
 import { weierstrass } from '@noble/curves/weierstrass'; // Short Weierstrass curve
@@ -60,13 +58,46 @@ const secp256k1 = weierstrass({
   Gy: 32670510020758816978083085130507043184471273380659243275938904335757337482424n,
   hash: sha256,
   hmac: (k: Uint8Array, ...msgs: Uint8Array[]) => hmac(sha256, key, concatBytes(...msgs)),
-  randomBytes
 });
 
-secp256k1.getPublicKey(secp256k1.utils.randomPrivateKey());
-secp256k1.sign(randomBytes(32), secp256k1.utils.randomPrivateKey());
-// secp256k1.verify(sig, msg, pub)
+const key = secp256k1.utils.randomPrivateKey();
+const pub = secp256k1.getPublicKey(key);
+const msg = randomBytes(32);
+const sig = secp256k1.sign(msg, key);
+secp256k1.verify(sig, msg, pub); // true
+sig.recoverPublicKey(msg); // == pub
+const someonesPubkey = secp256k1.getPublicKey(secp256k1.utils.randomPrivateKey());
+const shared = secp256k1.getSharedSecret(key, someonesPubkey);
+```
 
+##### Overview
+
+* All arithmetics is done with JS bigints in finite fields
+* Curve variables, order (number of points on curve), field prime (over which the modular division would be done)
+  are required
+* Hashes must be declared
+```
+export type CHash = {
+  (message: Uint8Array | string): Uint8Array;
+  blockLen: number;
+  outputLen: number;
+  create(): any;
+};
+```
+* It is possible to enable precomputes for edwards & weierstrass curves. When enabled,
+  all curve operations related to scalar multiplication by generator point (or any other point you specify)
+  would be speed-up by some factor. Use `curve.utils.precompute()`
+
+##### edwards: Twisted Edwards curve
+
+Twisted Edwards curve's formula is: ax² + y² = 1 + dx²y².
+
+You must specify curve params `a`, `d`, field `P`, order `n`, cofactor `h`, and coordinates `Gx`, `Gy` of generator point.
+
+For EdDSA signatures, params `hash` is also required. `adjustScalarBytes` which instructs how to change
+private scalars could be specified.
+
+```typescript
 import { twistedEdwards } from '@noble/curves/edwards'; // Twisted Edwards curve
 import { sha512 } from '@noble/hashes/sha512';
 import { div } from '@noble/curves/modular';
@@ -91,7 +122,123 @@ const ed25519 = twistedEdwards({
 ed25519.getPublicKey(ed25519.utils.randomPrivateKey());
 ```
 
-## Performance
+##### montgomery: Montgomery curve
+
+For now the module only contains methods for x-only ECDH on Curve25519 / Curve448 from RFC7748.
+
+Proper Elliptic Curve Points are not implemented yet.
+
+You must specify curve field, `a24` special variable, `montgomeryBits`, `nByteLength`, and coordinate `u` of generator point.
+
+```typescript
+const x25519 = montgomery({
+  P: 2n ** 255n - 19n,
+  a24: 121665n, // TODO: change to a
+  montgomeryBits: 255,
+  nByteLength: 32,
+  Gu: '0900000000000000000000000000000000000000000000000000000000000000',
+
+  // Optional params
+  powPminus2: (x: bigint): bigint => { return mod.pow(x, P-2, P); },
+  adjustScalarBytes(bytes) {
+    bytes[0] &= 248;
+    bytes[31] &= 127;
+    bytes[31] |= 64;
+    return bytes;
+  },
+});
+```
+
+##### weierstrass: Short Weistrass curve
+
+Short Weistrass curve's formula is: y² = x³ + ax + b.
+
+You must specify curve params: `a`, `b`; field `P`; curve order `n`; coordinates `Gx`, `Gy` of generator point.
+
+For ECDSA, you must specify `hash`, `hmac`. It is also possible to recover keys from signatures.
+
+For ECDH, use `getSharedSecret(privKeyA, pubKeyB)`.
+
+Optional params are `lowS`, `sqrtMod` and `endo`.
+
+```typescript
+import { weierstrass } from '@noble/curves/weierstrass'; // Short Weierstrass curve
+import { sha256 } from '@noble/hashes/sha256';
+import { hmac } from '@noble/hashes/hmac';
+import { concatBytes, randomBytes } from '@noble/hashes/utils';
+
+const secp256k1 = weierstrass({
+  // Required params
+  a: 0n,
+  b: 7n,
+  P: 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2fn,
+  n: 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n,
+  Gx: 55066263022277343669578718895168534326250603453777594175500187360389116729240n,
+  Gy: 32670510020758816978083085130507043184471273380659243275938904335757337482424n,
+  hash: sha256,
+  hmac: (k: Uint8Array, ...msgs: Uint8Array[]) => hmac(sha256, key, concatBytes(...msgs)),
+  randomBytes,
+
+  // Optional params
+  // Cofactor
+  h: BigInt(1),
+  // Allow only low-S signatures by default in sign() and verify()
+  lowS: true,
+  // More efficient curve-specific implementation of square root
+  sqrtMod(y: bigint) { return sqrt(y); },
+  // Endomorphism options
+  endo: {
+    // Beta param
+    beta: BigInt('0x7ae96a2b657c07106e64479eac3434e99cf0497512f58995c1396c28719501ee'),
+    // Split scalar k into k1, k2
+    splitScalar: (k: bigint) => {
+      return { k1neg: true, k1: 512n, k2neg: false, k2: 448n };
+    },
+  },
+});
+```
+
+##### modular
+
+Modular arithmetics utilities.
+
+```typescript
+import * as mod from '@noble/curves/modular';
+mod.mod(21n, 10n); // 21 mod 10 == 1n; fixed version of 21 % 10
+mod.invert(17n, 10n); // invert(17) mod 10; modular multiplicative inverse
+mod.div(5n, 17n, 10n); // 5/17 mod 10 == 5 * invert(17) mod 10; division
+mod.invertBatch([1n, 2n, 4n], 21n); // => [1n, 11n, 16n] in one inversion
+mod.sqrt(21n, 73n); // sqrt(21) mod 73; square root
+```
+
+##### utils
+
+```typescript
+import * as utils from '@noble/curves/utils';
+
+utils.bytesToHex(Uint8Array.from([0xde, 0xad, 0xbe, 0xef]));
+utils.hexToBytes('deadbeef');
+utils.hexToNumber();
+utils.bytesToNumberBE(Uint8Array.from([0xde, 0xad, 0xbe, 0xef]));
+utils.bytesToNumberLE(Uint8Array.from([0xde, 0xad, 0xbe, 0xef]));
+utils.numberToBytesBE(123n);
+utils.numberToBytesLE(123n);
+utils.numberToHexUnpadded(123n);
+utils.concatBytes(Uint8Array.from([0xde, 0xad]), Uint8Array.from([0xbe, 0xef]));
+utils.nLength(255n);
+utils.hashToPrivateScalar(sha512_of_something, secp256r1.n);
+utils.equalBytes(Uint8Array.from([0xde]), Uint8Array.from([0xde]));
+```
+
+## Security
+
+The library had no prior security audit.
+
+[Timing attack](https://en.wikipedia.org/wiki/Timing_attack) considerations: _JIT-compiler_ and _Garbage Collector_ make "constant time" extremely hard to achieve in a scripting language. Which means _any other JS library can't have constant-timeness_. Even statically typed Rust, a language without GC, [makes it harder to achieve constant-time](https://www.chosenplaintext.ca/open-source/rust-timing-shield/security) for some cases. If your goal is absolute security, don't use any JS lib — including bindings to native ones. Use low-level libraries & languages. Nonetheless we're targetting algorithmic constant time.
+
+We consider infrastructure attacks like rogue NPM modules very important; that's why it's crucial to minimize the amount of 3rd-party dependencies & native bindings. If your app uses 500 dependencies, any dep could get hacked and you'll be downloading malware with every `npm install`. Our goal is to minimize this attack vector.
+
+## Speed
 
 Benchmark results on Apple M2 with node v18.10:
 
@@ -151,6 +298,17 @@ Benchmark results on Apple M2 with node v18.10:
     noble x 698 ops/sec @ 1ms/op
 ```
 
+## Contributing & testing
+
+1. Clone the repository
+2. `npm install` to install build dependencies like TypeScript
+3. `npm run build` to compile TypeScript code
+4. `npm run test` will execute all main tests
+
 ## License
 
-MIT (c) Paul Miller [(https://paulmillr.com)](https://paulmillr.com), see LICENSE file.
+The MIT License (MIT)
+
+Copyright (c) 2022 Paul Miller [(https://paulmillr.com)](https://paulmillr.com)
+
+See LICENSE file.
