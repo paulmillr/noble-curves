@@ -70,32 +70,47 @@ const someonesPubkey = secp256k1.getPublicKey(secp256k1.utils.randomPrivateKey()
 const shared = secp256k1.getSharedSecret(key, someonesPubkey);
 ```
 
-##### Overview
+### Overview
+
+- [edwards: Twisted Edwards curve](#edwards-twisted-edwards-curve)
+- [montgomery: Montgomery curve](#montgomery-montgomery-curve)
+- [weierstrass: Short Weistrass curve](#weierstrass-short-weistrass-curve)
+- [modular](#modular)
+- [utils](#utils)
 
 * All arithmetics is done with JS bigints in finite fields
 * Curve variables, order (number of points on curve), field prime (over which the modular division would be done)
   are required
-* Hashes must be declared
-```
-export type CHash = {
-  (message: Uint8Array | string): Uint8Array;
-  blockLen: number;
-  outputLen: number;
-  create(): any;
-};
-```
-* It is possible to enable precomputes for edwards & weierstrass curves. When enabled,
-  all curve operations related to scalar multiplication by generator point (or any other point you specify)
-  would be speed-up by some factor. Use `curve.utils.precompute()`
+* Many features require hashing, which is not provided. `@noble/hashes` can be used for this purpose.
+  Any other library must conform to the CHash interface:
+    ```ts
+    export type CHash = {
+      (message: Uint8Array): Uint8Array;
+      blockLen: number; outputLen: number; create(): any;
+    };
+    ```
+* w-ary non-adjacent form (wNAF) method with constant-time adjustments is used for point multiplication.
+  It is possible to enable precomputes for edwards & weierstrass curves.
+  Precomputes are calculated once (takes ~20-40ms), after that most `G` multiplications
+  - for example, `getPublicKey()`, `sign()` and similar methods - would be much faster.
+  Use `curve.utils.precompute()`
+* Special params that tune performance can be optionally provided.
+  For example, square root calculation, which is commonly used in point decompression routines
+* Curves export `Point`, which conforms to `Group` interface, which has following methods:
+    - `double()`, `negate()`
+    - `add()`, `subtract()`, `equals()`
+    - `multiply()`
+    Every group also has `BASE` (generator) and `ZERO` (infinity) static properties.
+* Every curve exports `utils`:
+    * `randomPrivateKey()`
+    * `mod` & `invert` methods: basically utilities from `modular` with default `P`
 
-##### edwards: Twisted Edwards curve
+### edwards: Twisted Edwards curve
 
 Twisted Edwards curve's formula is: ax² + y² = 1 + dx²y².
 
-You must specify curve params `a`, `d`, field `P`, order `n`, cofactor `h`, and coordinates `Gx`, `Gy` of generator point.
-
-For EdDSA signatures, params `hash` is also required. `adjustScalarBytes` which instructs how to change
-private scalars could be specified.
+* You must specify curve params `a`, `d`, field `P`, order `n`, cofactor `h`, and coordinates `Gx`, `Gy` of generator point.
+* For EdDSA signatures, params `hash` is also required. `adjustScalarBytes` which instructs how to change private scalars could be specified.
 
 ```typescript
 import { twistedEdwards } from '@noble/curves/edwards'; // Twisted Edwards curve
@@ -122,7 +137,33 @@ const ed25519 = twistedEdwards({
 ed25519.getPublicKey(ed25519.utils.randomPrivateKey());
 ```
 
-##### montgomery: Montgomery curve
+`twistedEdwards()` returns `CurveFn` of following type:
+
+```ts
+export type CurveFn = {
+  CURVE: ReturnType<typeof validateOpts>;
+  getPublicKey: (privateKey: PrivKey, isCompressed?: boolean) => Uint8Array;
+  sign: (message: Hex, privateKey: Hex) => Uint8Array;
+  verify: (sig: SigType, message: Hex, publicKey: PubKey) => boolean;
+  Point: PointConstructor;
+  ExtendedPoint: ExtendedPointConstructor;
+  Signature: SignatureConstructor;
+  utils: {
+    mod: (a: bigint, b?: bigint) => bigint;
+    invert: (number: bigint, modulo?: bigint) => bigint;
+    randomPrivateKey: () => Uint8Array;
+    getExtendedPublicKey: (key: PrivKey) => {
+      head: Uint8Array;
+      prefix: Uint8Array;
+      scalar: bigint;
+      point: PointType;
+      pointBytes: Uint8Array;
+    };
+  };
+};
+```
+
+### montgomery: Montgomery curve
 
 For now the module only contains methods for x-only ECDH on Curve25519 / Curve448 from RFC7748.
 
@@ -149,17 +190,14 @@ const x25519 = montgomery({
 });
 ```
 
-##### weierstrass: Short Weistrass curve
+### weierstrass: Short Weistrass curve
 
-Short Weistrass curve's formula is: y² = x³ + ax + b.
+Short Weistrass curve's formula is: y² = x³ + ax + b. Supports deterministic ECDSA from RFC6979.
 
-You must specify curve params: `a`, `b`; field `P`; curve order `n`; coordinates `Gx`, `Gy` of generator point.
-
-For ECDSA, you must specify `hash`, `hmac`. It is also possible to recover keys from signatures.
-
-For ECDH, use `getSharedSecret(privKeyA, pubKeyB)`.
-
-Optional params are `lowS`, `sqrtMod` and `endo`.
+* You must specify curve params: `a`, `b`; field `P`; curve order `n`; coordinates `Gx`, `Gy` of generator point
+* For ECDSA, you must specify `hash`, `hmac`. It is also possible to recover keys from signatures
+* For ECDH, use `getSharedSecret(privKeyA, pubKeyB)`
+* Optional params are `lowS` (default value), `sqrtMod` (square root chain) and `endo` (endomorphism)
 
 ```typescript
 import { weierstrass } from '@noble/curves/weierstrass'; // Short Weierstrass curve
@@ -196,9 +234,43 @@ const secp256k1 = weierstrass({
     },
   },
 });
+
+// Usage
+const key = secp256k1.utils.randomPrivateKey();
+const pub = secp256k1.getPublicKey(key);
+const msg = randomBytes(32);
+const sig = secp256k1.sign(msg, key);
+secp256k1.verify(sig, msg, pub); // true
+sig.recoverPublicKey(msg); // == pub
+const someonesPubkey = secp256k1.getPublicKey(secp256k1.utils.randomPrivateKey());
+const shared = secp256k1.getSharedSecret(key, someonesPubkey);
 ```
 
-##### modular
+`weierstrass()` returns `CurveFn`:
+
+```ts
+export type CurveFn = {
+  CURVE: ReturnType<typeof validateOpts>;
+  getPublicKey: (privateKey: PrivKey, isCompressed?: boolean) => Uint8Array;
+  getSharedSecret: (privateA: PrivKey, publicB: PubKey, isCompressed?: boolean) => Uint8Array;
+  sign: (msgHash: Hex, privKey: PrivKey, opts?: SignOpts) => SignatureType;
+  verify: (
+    signature: Hex | SignatureType, msgHash: Hex, publicKey: PubKey, opts?: {lowS?: boolean;}
+  ) => boolean;
+  Point: PointConstructor;
+  JacobianPoint: JacobianPointConstructor;
+  Signature: SignatureConstructor;
+  utils: {
+    mod: (a: bigint, b?: bigint) => bigint;
+    invert: (number: bigint, modulo?: bigint) => bigint;
+    isValidPrivateKey(privateKey: PrivKey): boolean;
+    hashToPrivateKey: (hash: Hex) => Uint8Array;
+    randomPrivateKey: () => Uint8Array;
+  };
+};
+```
+
+### modular
 
 Modular arithmetics utilities.
 
@@ -211,7 +283,7 @@ mod.invertBatch([1n, 2n, 4n], 21n); // => [1n, 11n, 16n] in one inversion
 mod.sqrt(21n, 73n); // sqrt(21) mod 73; square root
 ```
 
-##### utils
+### utils
 
 ```typescript
 import * as utils from '@noble/curves/utils';
