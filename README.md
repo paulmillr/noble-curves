@@ -70,13 +70,16 @@ const someonesPubkey = secp256k1.getPublicKey(secp256k1.utils.randomPrivateKey()
 const shared = secp256k1.getSharedSecret(key, someonesPubkey);
 ```
 
-### Overview
+## API
 
+- [Overview](#overview)
 - [edwards: Twisted Edwards curve](#edwards-twisted-edwards-curve)
 - [montgomery: Montgomery curve](#montgomery-montgomery-curve)
 - [weierstrass: Short Weistrass curve](#weierstrass-short-weistrass-curve)
 - [modular](#modular)
 - [utils](#utils)
+
+### Overview
 
 * All arithmetics is done with JS bigints in finite fields
 * Curve variables, order (number of points on curve), field prime (over which the modular division would be done)
@@ -101,9 +104,10 @@ const shared = secp256k1.getSharedSecret(key, someonesPubkey);
     - `add()`, `subtract()`, `equals()`
     - `multiply()`
     Every group also has `BASE` (generator) and `ZERO` (infinity) static properties.
+* Every curve exports `CURVE` object
 * Every curve exports `utils`:
-    * `randomPrivateKey()`
-    * `mod` & `invert` methods: basically utilities from `modular` with default `P`
+    * `randomPrivateKey()` specific for the curve, avoiding modulo bias
+    * `mod()` & `invert()` methods: function from `modular` with default `P` set to CURVE
 
 ### edwards: Twisted Edwards curve
 
