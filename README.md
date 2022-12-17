@@ -75,7 +75,7 @@ const shared = secp256k1.getSharedSecret(key, someonesPubkey);
 - [Overview](#overview)
 - [edwards: Twisted Edwards curve](#edwards-twisted-edwards-curve)
 - [montgomery: Montgomery curve](#montgomery-montgomery-curve)
-- [weierstrass: Short Weistrass curve](#weierstrass-short-weistrass-curve)
+- [weierstrass: Short Weierstrass curve](#weierstrass-short-weierstrass-curve)
 - [modular](#modular)
 - [utils](#utils)
 
@@ -104,8 +104,8 @@ const shared = secp256k1.getSharedSecret(key, someonesPubkey);
     - `add()`, `subtract()`, `equals()`
     - `multiply()`
     Every group also has `BASE` (generator) and `ZERO` (infinity) static properties.
-* Every curve exports `CURVE` object
-* Every curve exports `utils`:
+* Curves export `CURVE` object
+* Curves export `utils`:
     * `randomPrivateKey()` specific for the curve, avoiding modulo bias
     * `mod()` & `invert()` methods: function from `modular` with default `P` set to CURVE
 
@@ -194,9 +194,9 @@ const x25519 = montgomery({
 });
 ```
 
-### weierstrass: Short Weistrass curve
+### weierstrass: Short Weierstrass curve
 
-Short Weistrass curve's formula is: y² = x³ + ax + b. Supports deterministic ECDSA from RFC6979.
+Short Weierstrass curve's formula is: y² = x³ + ax + b. Uses deterministic ECDSA from RFC6979. You can also specify `extraEntropy` in `sign()`.
 
 * You must specify curve params: `a`, `b`; field `P`; curve order `n`; coordinates `Gx`, `Gy` of generator point
 * For ECDSA, you must specify `hash`, `hmac`. It is also possible to recover keys from signatures
