@@ -81,9 +81,13 @@ const shared = secp256k1.getSharedSecret(key, someonesPubkey);
 
 ### Overview
 
-* All arithmetics is done with JS bigints in finite fields
-* Curve variables, order (number of points on curve), field prime (over which the modular division would be done)
-  are required
+* To initialize new curve, you must specify its variables, order (number of points on curve), field prime (over which the modular division would be done)
+* All curves expose same generic interface:
+    * `getPublicKey()`, `sign()`, `verify()` functions
+    * `Point` conforming to `Group` interface with add/multiply/double/negate/add/equals methods
+    * `CURVE` object with curve variables like `Gx`, `Gy`, `P` (field), `n` (order)
+    * `utils` object with `randomPrivateKey()`, `mod()`, `invert()` methods (`mod CURVE.P`)
+* All arithmetics is done with JS bigints over finite fields
 * Many features require hashing, which is not provided. `@noble/hashes` can be used for this purpose.
   Any other library must conform to the CHash interface:
     ```ts
@@ -97,17 +101,9 @@ const shared = secp256k1.getSharedSecret(key, someonesPubkey);
   Precomputes are calculated once (takes ~20-40ms), after that most `G` multiplications
   - for example, `getPublicKey()`, `sign()` and similar methods - would be much faster.
   Use `curve.utils.precompute()`
-* Special params that tune performance can be optionally provided.
-  For example, square root calculation, which is commonly used in point decompression routines
-* Curves export `Point`, which conforms to `Group` interface, which has following methods:
-    - `double()`, `negate()`
-    - `add()`, `subtract()`, `equals()`
-    - `multiply()`
-    Every group also has `BASE` (generator) and `ZERO` (infinity) static properties.
-* Curves export `CURVE` object
-* Curves export `utils`:
-    * `randomPrivateKey()` specific for the curve, avoiding modulo bias
-    * `mod()` & `invert()` methods: function from `modular` with default `P` set to CURVE
+* Special params that tune performance can be optionally provided. For example:
+    * `sqrtMod` square root calculation, used for point decompression
+    * `endo` endomorphism options for Koblitz curves
 
 ### edwards: Twisted Edwards curve
 
@@ -119,11 +115,11 @@ Twisted Edwards curve's formula is: ax² + y² = 1 + dx²y².
 ```typescript
 import { twistedEdwards } from '@noble/curves/edwards'; // Twisted Edwards curve
 import { sha512 } from '@noble/hashes/sha512';
-import { div } from '@noble/curves/modular';
+import * as mod from '@noble/curves/modular';
 
 const ed25519 = twistedEdwards({
   a: -1n,
-  d: div(-121665n, 121666n, 2n ** 255n - 19n), // -121665n/121666n
+  d: mod.div(-121665n, 121666n, 2n ** 255n - 19n), // -121665n/121666n
   P: 2n ** 255n - 19n,
   n: 2n ** 252n + 27742317777372353535851937790883648493n,
   h: 8n,
@@ -131,7 +127,7 @@ const ed25519 = twistedEdwards({
   Gy: 46316835694926478169428394003475163141307993866256225615783033603165251855960n,
   hash: sha512,
   randomBytes,
-  adjustScalarBytes(bytes) { // could be no-op
+  adjustScalarBytes(bytes) { // optional
     bytes[0] &= 248;
     bytes[31] &= 127;
     bytes[31] |= 64;
