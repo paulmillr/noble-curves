@@ -752,7 +752,8 @@ export function weierstrass(curveDef: CurveType): CurveFn {
 
     // A point on curve is valid if it conforms to equation.
     assertValidity(): void {
-      const msg = 'Point is not on curve';
+      // Some 3rd-party test vectors require different wording between here & `fromCompressedHex`
+      const msg = 'Point is not on elliptic curve';
       const { x, y } = this;
       if (!isValidFieldElement(x) || !isValidFieldElement(y)) throw new Error(msg);
       const left = modP(y * y);
