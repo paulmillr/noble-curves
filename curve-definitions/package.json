@@ -8,6 +8,70 @@
   "main": "lib/index.js",
   "module": "lib/index.js",
   "types": "lib/index.d.ts",
+  "exports": {
+    "./lib/*.js": "./lib/*.js",
+    "./lib/esm/*.js": "./lib/esm/*.js",
+    "./bn": {
+      "types": "./lib/bn.d.ts",
+      "import": "./lib/esm/bn.js",
+      "default": "./lib/bn.js"
+    },
+    "./ed25519": {
+      "types": "./lib/ed25519.d.ts",
+      "import": "./lib/esm/ed25519.js",
+      "default": "./lib/ed25519.js"
+    },
+    "./ed448": {
+      "types": "./lib/ed448.d.ts",
+      "import": "./lib/esm/ed448.js",
+      "default": "./lib/ed448.js"
+    },
+    "./jubjub": {
+      "types": "./lib/jubjub.d.ts",
+      "import": "./lib/esm/jubjub.js",
+      "default": "./lib/jubjub.js"
+    },
+    "./p192": {
+      "types": "./lib/p192.d.ts",
+      "import": "./lib/esm/p192.js",
+      "default": "./lib/p192.js"
+    },
+    "./p224": {
+      "types": "./lib/p224.d.ts",
+      "import": "./lib/esm/p224.js",
+      "default": "./lib/p224.js"
+    },
+    "./p256": {
+      "types": "./lib/p256.d.ts",
+      "import": "./lib/esm/p256.js",
+      "default": "./lib/p256.js"
+    },
+    "./p384": {
+      "types": "./lib/p384.d.ts",
+      "import": "./lib/esm/p384.js",
+      "default": "./lib/p384.js"
+    },
+    "./p521": {
+      "types": "./lib/p521.d.ts",
+      "import": "./lib/esm/p521.js",
+      "default": "./lib/p521.js"
+    },
+    "./pasta": {
+      "types": "./lib/pasta.d.ts",
+      "import": "./lib/esm/pasta.js",
+      "default": "./lib/pasta.js"
+    },
+    "./secp256k1": {
+      "types": "./lib/secp256k1.d.ts",
+      "import": "./lib/esm/secp256k1.js",
+      "default": "./lib/secp256k1.js"
+    },
+    "./stark": {
+      "types": "./lib/stark.d.ts",
+      "import": "./lib/esm/stark.js",
+      "default": "./lib/stark.js"
+    }
+  },
   "dependencies": {
     "@noble/curves": "0.2.1",
     "@noble/hashes": "1.1.5"
