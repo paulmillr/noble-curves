@@ -3,7 +3,7 @@ import { shake256 } from '@noble/hashes/sha3';
 import { concatBytes, randomBytes, utf8ToBytes, wrapConstructor } from '@noble/hashes/utils';
 import { twistedEdwards } from '@noble/curves/edwards';
 import { mod, pow2 } from '@noble/curves/modular';
-import { montgomery } from '../../lib/montgomery.js';
+import { montgomery } from '@noble/curves/montgomery';
 
 /**
  * Edwards448 (not Ed448-Goldilocks) curve with following addons:
