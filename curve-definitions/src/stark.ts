@@ -3,20 +3,14 @@ import { keccak_256 } from '@noble/hashes/sha3';
 import { sha256 } from '@noble/hashes/sha256';
 import { hmac } from '@noble/hashes/hmac';
 import { concatBytes, randomBytes } from '@noble/hashes/utils';
-import { weierstrass, CHash, JacobianPointType } from '@noble/curves/weierstrass';
+import { weierstrass, JacobianPointType } from '@noble/curves/weierstrass';
 import * as cutils from '@noble/curves/utils';
+import { Fp } from '@noble/curves/modular';
+import { getHash } from './_shortw_utils.js';
 
+type JacobianPoint = JacobianPointType<bigint>;
 // Stark-friendly elliptic curve
 // https://docs.starkware.co/starkex/stark-curve.html
-// TODO: clarify exports; it is exporting both starkCurve and sign() now, can be confusing
-
-function getHash(hash: CHash) {
-  return {
-    hash,
-    hmac: (key: Uint8Array, ...msgs: Uint8Array[]) => hmac(hash, key, concatBytes(...msgs)),
-    randomBytes,
-  };
-}
 
 const CURVE_N = BigInt(
   '3618502788666131213697322783095070105526743751716087489154079457884512865583'
@@ -28,7 +22,7 @@ export const starkCurve = weierstrass({
   b: BigInt('3141592653589793238462643383279502884197169399375105820974944592307816406665'),
   // Field over which we'll do calculations; 2n**251n + 17n * 2n**192n + 1n
   // There is no efficient sqrt for field (P%4==1)
-  P: BigInt('0x800000000000011000000000000000000000000000000000000000000000001'),
+  Fp: Fp(BigInt('0x800000000000011000000000000000000000000000000000000000000000001')),
   // Curve order, total count of valid points in the field.
   n: CURVE_N,
   nBitLength: nBitLength, // len(bin(N).replace('0b',''))
@@ -95,23 +89,34 @@ function ensureBytes0x(hex: Hex): Uint8Array {
   return hex instanceof Uint8Array ? Uint8Array.from(hex) : hexToBytes0x(hex);
 }
 
+function normalizePrivateKey(privKey: Hex) {
+  return cutils.bytesToHex(ensureBytes0x(privKey)).padStart(32 * 2, '0');
+}
+function getPublicKey0x(privKey: Hex, isCompressed?: boolean) {
+  return starkCurve.getPublicKey(normalizePrivateKey(privKey), isCompressed);
+}
+function getSharedSecret0x(privKeyA: Hex, pubKeyB: Hex) {
+  return starkCurve.getSharedSecret(normalizePrivateKey(privKeyA), pubKeyB);
+}
+
 function sign0x(msgHash: Hex, privKey: Hex, opts: any) {
-  return starkCurve.sign(ensureBytes0x(msgHash), ensureBytes0x(privKey), opts);
+  if (typeof privKey === 'string') privKey = strip0x(privKey).padStart(64, '0');
+  return starkCurve.sign(ensureBytes0x(msgHash), normalizePrivateKey(privKey), opts);
 }
 function verify0x(signature: Hex, msgHash: Hex, pubKey: Hex) {
   const sig = signature instanceof Signature ? signature : ensureBytes0x(signature);
   return starkCurve.verify(sig, ensureBytes0x(msgHash), ensureBytes0x(pubKey));
 }
 
-const { CURVE, Point, JacobianPoint, Signature, getPublicKey, getSharedSecret } = starkCurve;
+const { CURVE, Point, JacobianPoint, Signature } = starkCurve;
 export const utils = starkCurve.utils;
 export {
   CURVE,
   Point,
   Signature,
   JacobianPoint,
-  getPublicKey,
-  getSharedSecret,
+  getPublicKey0x as getPublicKey,
+  getSharedSecret0x as getSharedSecret,
   sign0x as sign,
   verify0x as verify,
 };
@@ -144,8 +149,7 @@ export function grindKey(seed: Hex) {
 }
 
 export function getStarkKey(privateKey: Hex) {
-  const priv = typeof privateKey === 'string' ? strip0x(privateKey) : privateKey;
-  return bytesToHexEth(Point.fromPrivateKey(priv).toRawBytes(true).slice(1));
+  return bytesToHexEth(getPublicKey0x(privateKey, true).slice(1));
 }
 
 export function ethSigToPrivate(signature: string) {
@@ -194,8 +198,8 @@ const PEDERSEN_POINTS = [
 // for (const p of PEDERSEN_POINTS) p._setWindowSize(8);
 const PEDERSEN_POINTS_JACOBIAN = PEDERSEN_POINTS.map(JacobianPoint.fromAffine);
 
-function pedersenPrecompute(p1: JacobianPointType, p2: JacobianPointType): JacobianPointType[] {
-  const out: JacobianPointType[] = [];
+function pedersenPrecompute(p1: JacobianPoint, p2: JacobianPoint): JacobianPoint[] {
+  const out: JacobianPoint[] = [];
   let p = p1;
   for (let i = 0; i < 248; i++) {
     out.push(p);
@@ -226,16 +230,12 @@ function pedersenArg(arg: PedersenArg): bigint {
     value = BigInt(arg);
   } else value = bytesToNumber0x(ensureBytes0x(arg));
   // [0..Fp)
-  if (!(0n <= value && value < starkCurve.CURVE.P))
+  if (!(0n <= value && value < starkCurve.CURVE.Fp.ORDER))
     throw new Error(`PedersenArg should be 0 <= value < CURVE.P: ${value}`);
   return value;
 }
 
-function pedersenSingle(
-  point: JacobianPointType,
-  value: PedersenArg,
-  constants: JacobianPointType[]
-) {
+function pedersenSingle(point: JacobianPoint, value: PedersenArg, constants: JacobianPoint[]) {
   let x = pedersenArg(value);
   for (let j = 0; j < 252; j++) {
     const pt = constants[j];
@@ -248,7 +248,7 @@ function pedersenSingle(
 
 // shift_point + x_low * P_0 + x_high * P1 + y_low * P2  + y_high * P3
 export function pedersen(x: PedersenArg, y: PedersenArg) {
-  let point: JacobianPointType = PEDERSEN_POINTS_JACOBIAN[0];
+  let point: JacobianPoint = PEDERSEN_POINTS_JACOBIAN[0];
   point = pedersenSingle(point, x, PEDERSEN_POINTS1);
   point = pedersenSingle(point, y, PEDERSEN_POINTS2);
   return bytesToHexEth(point.toAffine().toRawBytes(true).slice(1));

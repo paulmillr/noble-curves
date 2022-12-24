@@ -1,15 +1,25 @@
 /*! @noble/curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
+import * as mod from './modular.js';
+const _0n = BigInt(0);
+const _1n = BigInt(1);
+const _2n = BigInt(2);
 
 // We accept hex strings besides Uint8Array for simplicity
 export type Hex = Uint8Array | string;
 // Very few implementations accept numbers, we do it to ease learning curve
 export type PrivKey = Hex | bigint | number;
+export type CHash = {
+  (message: Uint8Array | string): Uint8Array;
+  blockLen: number;
+  outputLen: number;
+  create(): any;
+};
 
 // NOTE: these are generic, even if curve is on some polynominal field (bls), it will still have P/n/h
 // But generator can be different (Fp2/Fp6 for bls?)
-export type BasicCurve = {
+export type BasicCurve<T> = {
   // Field over which we'll do calculations (Fp)
-  P: bigint;
+  Fp: mod.Field<T>;
   // Curve order, total count of valid points in the field
   n: bigint;
   // Bit/byte length of curve order
@@ -19,16 +29,26 @@ export type BasicCurve = {
   // NOTE: we can assign default value of 1, but then users will just ignore it, without validating with spec
   // Has not use for now, but nice to have in API
   h: bigint;
+  hEff?: bigint; // Number to multiply to clear cofactor
   // Base point (x, y) aka generator point
-  Gx: bigint;
-  Gy: bigint;
+  Gx: T;
+  Gy: T;
+  // Wrap private key by curve order (% CURVE.n instead of throwing error)
+  wrapPrivateKey?: boolean;
+  // Point at infinity is perfectly valid point, but not valid public key.
+  // Disabled by default because of compatibility reasons with @noble/secp256k1
+  allowInfinityPoint?: boolean;
 };
 
-export function validateOpts<T extends BasicCurve>(curve: T) {
-  for (const i of ['P', 'n', 'h', 'Gx', 'Gy'] as const) {
+export function validateOpts<FP, T>(curve: BasicCurve<FP> & T) {
+  mod.validateField(curve.Fp);
+  for (const i of ['n', 'h'] as const) {
     if (typeof curve[i] !== 'bigint')
       throw new Error(`Invalid curve param ${i}=${curve[i]} (${typeof curve[i]})`);
   }
+  if (!curve.Fp.isValid(curve.Gx)) throw new Error('Invalid generator X coordinate Fp element');
+  if (!curve.Fp.isValid(curve.Gy)) throw new Error('Invalid generator Y coordinate Fp element');
+
   for (const i of ['nBitLength', 'nByteLength'] as const) {
     if (curve[i] === undefined) continue; // Optional
     if (!Number.isSafeInteger(curve[i]))
@@ -37,8 +57,6 @@ export function validateOpts<T extends BasicCurve>(curve: T) {
   // Set defaults
   return Object.freeze({ ...nLength(curve.n, curve.nBitLength), ...curve } as const);
 }
-
-import * as mod from './modular.js';
 
 const hexes = Array.from({ length: 256 }, (v, i) => i.toString(16).padStart(2, '0'));
 export function bytesToHex(uint8a: Uint8Array): string {
@@ -133,7 +151,6 @@ export function nLength(n: bigint, nBitLength?: number) {
  * @param hash hash output from sha512, or a similar function
  * @returns valid private scalar
  */
-const _1n = BigInt(1);
 export function hashToPrivateScalar(hash: Hex, CURVE_ORDER: bigint, isLE = false): bigint {
   hash = ensureBytes(hash);
   const orderLen = nLength(CURVE_ORDER).nByteLength;
@@ -150,3 +167,21 @@ export function equalBytes(b1: Uint8Array, b2: Uint8Array) {
   for (let i = 0; i < b1.length; i++) if (b1[i] !== b2[i]) return false;
   return true;
 }
+
+// Bit operations
+
+// Amount of bits inside bigint (Same as n.toString(2).length)
+export function bitLen(n: bigint) {
+  let len;
+  for (len = 0; n > 0n; n >>= _1n, len += 1);
+  return len;
+}
+// Gets single bit at position. NOTE: first bit position is 0 (same as arrays)
+// Same as !!+Array.from(n.toString(2)).reverse()[pos]
+export const bitGet = (n: bigint, pos: number) => (n >> BigInt(pos)) & 1n;
+// Sets single bit at position
+export const bitSet = (n: bigint, pos: number, value: boolean) =>
+  n | ((value ? _1n : _0n) << BigInt(pos));
+// Return mask for N bits (Same as BigInt(`0b${Array(i).fill('1').join('')}`))
+// Not using ** operator with bigints for old engines.
+export const bitMask = (n: number) => (_2n << BigInt(n - 1)) - _1n;

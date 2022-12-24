@@ -16,6 +16,7 @@ const privatesTxt = readFileSync('./test/vectors/privates-2.txt', 'utf-8');
 const schCsv = readFileSync('./test/vectors/schnorr.csv', 'utf-8');
 
 const FC_BIGINT = fc.bigInt(1n + 1n, secp.CURVE.n - 1n);
+const P = secp.CURVE.Fp.ORDER;
 // prettier-ignore
 const INVALID_ITEMS = ['deadbeef', Math.pow(2, 53), [1], 'xyzxyzxyxyzxyzxyxyzxyzxyxyzxyzxyxyzxyzxyxyzxyzxyxyzxyzxyxyzxyzxy', secp.CURVE.n + 2n];
 

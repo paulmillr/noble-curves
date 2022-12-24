@@ -52,6 +52,21 @@
       "import": "./lib/esm/weierstrass.js",
       "default": "./lib/weierstrass.js"
     },
+    "./bls": {
+      "types": "./lib/bls.d.ts",
+      "import": "./lib/esm/bls.js",
+      "default": "./lib/bls.js"
+    },
+    "./hashToCurve": {
+      "types": "./lib/hashToCurve.d.ts",
+      "import": "./lib/esm/hashToCurve.js",
+      "default": "./lib/hashToCurve.js"
+    },
+    "./group": {
+      "types": "./lib/group.d.ts",
+      "import": "./lib/esm/group.js",
+      "default": "./lib/group.js"
+    },
     "./utils": {
       "types": "./lib/utils.d.ts",
       "import": "./lib/esm/utils.js",
@@ -63,12 +78,6 @@
     "curve",
     "cryptography",
     "hyperelliptic",
-    "weierstrass",
-    "edwards",
-    "montgomery",
-    "secp256k1",
-    "ed25519",
-    "ed448",
     "p256",
     "p384",
     "p521",

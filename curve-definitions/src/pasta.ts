@@ -11,7 +11,7 @@ const q = BigInt('0x40000000000000000000000000000000224698fc0994a8dd8c46eb210000
 export const pallas = weierstrass({
   a: BigInt(0),
   b: BigInt(5),
-  P: p,
+  Fp: mod.Fp(p),
   n: q,
   Gx: mod.mod(BigInt(-1), p),
   Gy: BigInt(2),
@@ -22,7 +22,7 @@ export const pallas = weierstrass({
 export const vesta = weierstrass({
   a: BigInt(0),
   b: BigInt(5),
-  P: q,
+  Fp: mod.Fp(q),
   n: p,
   Gx: mod.mod(BigInt(-1), q),
   Gy: BigInt(2),

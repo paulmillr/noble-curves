@@ -3,7 +3,7 @@ import { sha512 } from '@noble/hashes/sha512';
 import { concatBytes, randomBytes, utf8ToBytes } from '@noble/hashes/utils';
 import { twistedEdwards, ExtendedPointType } from '@noble/curves/edwards';
 import { montgomery } from '@noble/curves/montgomery';
-import { mod, pow2, isNegativeLE } from '@noble/curves/modular';
+import { mod, pow2, isNegativeLE, Fp as FpFn } from '@noble/curves/modular';
 import {
   ensureBytes,
   equalBytes,
@@ -49,18 +49,14 @@ function ed25519_pow_2_252_3(x: bigint) {
   // ^ To pow to (p+3)/8, multiply it by x.
   return { pow_p_5_8, b2 };
 }
-
-/**
- * For X25519, in order to decode 32 random bytes as an integer scalar,
- * set the
- * three least significant bits of the first byte 0b1111_1000,
- * and the most significant bit of the last to zero 0b0111_1111,
- * set the second most significant bit of the last byte to 1 0b0100_0000
- */
 function adjustScalarBytes(bytes: Uint8Array): Uint8Array {
-  bytes[0] &= 248;
-  bytes[31] &= 127;
-  bytes[31] |= 64;
+  // Section 5: For X25519, in order to decode 32 random bytes as an integer scalar,
+  // set the three least significant bits of the first byte
+  bytes[0] &= 248; // 0b1111_1000
+  // and the most significant bit of the last to zero,
+  bytes[31] &= 127; // 0b0111_1111
+  // set the second most significant bit of the last byte to 1
+  bytes[31] |= 64; // 0b0100_0000
   return bytes;
 }
 // sqrt(u/v)
@@ -102,7 +98,7 @@ const ED25519_DEF = {
   // Negative number is P - number, and division is invert(number, P)
   d: BigInt('37095705934669439343138083508754565189542113879843219016388785533085940283555'),
   // Finite field 𝔽p over which we'll do calculations; 2n ** 255n - 19n
-  P: ED25519_P,
+  Fp: FpFn(ED25519_P),
   // Subgroup order: how many points ed25519 has
   // 2n ** 252n + 27742317777372353535851937790883648493n;
   n: BigInt('7237005577332262213973186563042994240857116359379907606001950938285454250989'),
@@ -202,7 +198,8 @@ export class RistrettoPoint {
   // Computes Elligator map for Ristretto
   // https://ristretto.group/formulas/elligator.html
   private static calcElligatorRistrettoMap(r0: bigint): ExtendedPoint {
-    const { d, P } = ed25519.CURVE;
+    const { d } = ed25519.CURVE;
+    const P = ed25519.CURVE.Fp.ORDER;
     const { mod } = ed25519.utils;
     const r = mod(SQRT_M1 * r0 * r0); // 1
     const Ns = mod((r + _1n) * ONE_MINUS_D_SQ); // 2
@@ -245,7 +242,8 @@ export class RistrettoPoint {
    */
   static fromHex(hex: Hex): RistrettoPoint {
     hex = ensureBytes(hex, 32);
-    const { a, d, P } = ed25519.CURVE;
+    const { a, d } = ed25519.CURVE;
+    const P = ed25519.CURVE.Fp.ORDER;
     const { mod } = ed25519.utils;
     const emsg = 'RistrettoPoint.fromHex: the hex is not valid encoding of RistrettoPoint';
     const s = bytes255ToNumberLE(hex);
@@ -275,7 +273,7 @@ export class RistrettoPoint {
    */
   toRawBytes(): Uint8Array {
     let { x, y, z, t } = this.ep;
-    const { P } = ed25519.CURVE;
+    const P = ed25519.CURVE.Fp.ORDER;
     const { mod } = ed25519.utils;
     const u1 = mod(mod(z + y) * mod(z - y)); // 1
     const u2 = mod(x * y); // 2

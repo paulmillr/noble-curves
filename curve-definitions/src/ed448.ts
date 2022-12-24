@@ -2,7 +2,7 @@
 import { shake256 } from '@noble/hashes/sha3';
 import { concatBytes, randomBytes, utf8ToBytes, wrapConstructor } from '@noble/hashes/utils';
 import { twistedEdwards } from '@noble/curves/edwards';
-import { mod, pow2 } from '@noble/curves/modular';
+import { mod, pow2, Fp } from '@noble/curves/modular';
 import { montgomery } from '../../lib/montgomery.js';
 
 /**
@@ -59,7 +59,7 @@ const ED448_DEF = {
     '726838724295606890549323807888004534353641360687318060281490199180612328166730772686396383698676545930088884461843637361053498018326358'
   ),
   // Finite field 𝔽p over which we'll do calculations; 2n ** 448n - 2n ** 224n - 1n
-  P: ed448P,
+  Fp: Fp(ed448P, 456),
   // Subgroup order: how many points ed448 has; 2n**446n - 13818066809895115352007386748515426880336692474882178609894547503885n
   n: BigInt(
     '181709681073901722637330951972001133588410340171829515070372549795146003961539585716195755291692375963310293709091662304773755859649779'

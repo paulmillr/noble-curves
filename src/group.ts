@@ -23,7 +23,6 @@ export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number) {
     return condition ? neg : item;
   };
   const opts = (W: number) => {
-    if (256 % W) throw new Error('Invalid precomputation window, must be power of 2');
     const windows = Math.ceil(bits / W) + 1; // +1, because
     const windowSize = 2 ** (W - 1); // -1 because we skip zero
     return { windows, windowSize };
@@ -73,6 +72,8 @@ export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number) {
      * @returns real and fake (for const-time) points
      */
     wNAF(W: number, precomputes: T[], n: bigint): { p: T; f: T } {
+      // TODO: maybe check that scalar is less than group order? wNAF will fail otherwise
+      // But need to carefully remove other checks before wNAF. ORDER == bits here
       const { windows, windowSize } = opts(W);
 
       let p = c.ZERO;

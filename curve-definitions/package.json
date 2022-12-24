@@ -9,7 +9,7 @@
   "module": "lib/index.js",
   "types": "lib/index.d.ts",
   "dependencies": {
-    "@noble/curves": "0.2.1",
+    "@noble/curves": "file:../",
     "@noble/hashes": "1.1.5"
   },
   "devDependencies": {

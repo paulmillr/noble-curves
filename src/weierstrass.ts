@@ -19,74 +19,34 @@ import {
   hexToNumber,
   numberToHexUnpadded,
   hashToPrivateScalar,
-  BasicCurve,
-  validateOpts as utilOpts,
   Hex,
   PrivKey,
 } from './utils.js';
+import * as utils from './utils.js';
+import { hash_to_field, htfOpts, validateHTFOpts } from './hashToCurve.js';
 import { Group, GroupConstructor, wNAF } from './group.js';
 
-export type CHash = {
-  (message: Uint8Array | string): Uint8Array;
-  blockLen: number;
-  outputLen: number;
-  create(): any;
-};
 type HmacFnSync = (key: Uint8Array, ...messages: Uint8Array[]) => Uint8Array;
 type EndomorphismOpts = {
   beta: bigint;
   splitScalar: (k: bigint) => { k1neg: boolean; k1: bigint; k2neg: boolean; k2: bigint };
 };
-
-export type CurveType = BasicCurve & {
+export type BasicCurve<T> = utils.BasicCurve<T> & {
   // Params: a, b
-  a: bigint;
-  b: bigint;
-  // Default options
-  lowS?: boolean;
-  // Hashes
-  hash: CHash; // Because we need outputLen for DRBG
-  hmac: HmacFnSync;
-  randomBytes: (bytesLength?: number) => Uint8Array;
-  truncateHash?: (hash: Uint8Array, truncateOnly?: boolean) => bigint;
-  // Some fields can have specialized fast case
-  sqrtMod?: (n: bigint) => bigint;
+  a: T;
+  b: T;
   // TODO: move into options?
+
+  normalizePrivateKey?: (key: PrivKey) => PrivKey;
   // Endomorphism options for Koblitz curves
   endo?: EndomorphismOpts;
+  // Torsions, can be optimized via endomorphisms
+  isTorsionFree?: (c: JacobianConstructor<T>, point: JacobianPointType<T>) => boolean;
+  clearCofactor?: (c: JacobianConstructor<T>, point: JacobianPointType<T>) => JacobianPointType<T>;
+  // Hash to field opts
+  htfDefaults?: htfOpts;
+  mapToCurve?: (scalar: bigint[]) => { x: T; y: T };
 };
-
-// Should be separate from overrides, since overrides can use information about curve (for example nBits)
-function validateOpts(curve: CurveType) {
-  const opts = utilOpts(curve);
-  if (typeof opts.hash !== 'function' || !Number.isSafeInteger(opts.hash.outputLen))
-    throw new Error('Invalid hash function');
-  if (typeof opts.hmac !== 'function') throw new Error('Invalid hmac function');
-  if (typeof opts.randomBytes !== 'function') throw new Error('Invalid randomBytes function');
-
-  for (const i of ['a', 'b'] as const) {
-    if (typeof opts[i] !== 'bigint')
-      throw new Error(`Invalid curve param ${i}=${opts[i]} (${typeof opts[i]})`);
-  }
-  const endo = opts.endo;
-  if (endo) {
-    if (opts.a !== _0n) {
-      throw new Error('Endomorphism can only be defined for Koblitz curves that have a=0');
-    }
-    if (
-      typeof endo !== 'object' ||
-      typeof endo.beta !== 'bigint' ||
-      typeof endo.splitScalar !== 'function'
-    ) {
-      throw new Error('Expected endomorphism with beta: bigint and splitScalar: function');
-    }
-  }
-  // Set defaults
-  return Object.freeze({ lowS: true, ...opts } as const);
-}
-
-// TODO: convert bits to bytes aligned to 32 bits? (224 for example)
-
 // DER encoding utilities
 class DERError extends Error {
   constructor(message: string) {
@@ -164,6 +124,556 @@ type SignOpts = { lowS?: boolean; extraEntropy?: Entropy };
  */
 
 // Instance
+export interface JacobianPointType<T> extends Group<JacobianPointType<T>> {
+  readonly x: T;
+  readonly y: T;
+  readonly z: T;
+  multiply(scalar: number | bigint, affinePoint?: PointType<T>): JacobianPointType<T>;
+  multiplyUnsafe(scalar: bigint): JacobianPointType<T>;
+  toAffine(invZ?: T): PointType<T>;
+}
+// Static methods
+export interface JacobianConstructor<T> extends GroupConstructor<JacobianPointType<T>> {
+  new (x: T, y: T, z: T): JacobianPointType<T>;
+  fromAffine(p: PointType<T>): JacobianPointType<T>;
+  toAffineBatch(points: JacobianPointType<T>[]): PointType<T>[];
+  normalizeZ(points: JacobianPointType<T>[]): JacobianPointType<T>[];
+}
+// Instance
+export interface PointType<T> extends Group<PointType<T>> {
+  readonly x: T;
+  readonly y: T;
+  _setWindowSize(windowSize: number): void;
+  hasEvenY(): boolean;
+  toRawBytes(isCompressed?: boolean): Uint8Array;
+  toHex(isCompressed?: boolean): string;
+  assertValidity(): void;
+  multiplyAndAddUnsafe(Q: PointType<T>, a: bigint, b: bigint): PointType<T> | undefined;
+}
+// Static methods
+export interface PointConstructor<T> extends GroupConstructor<PointType<T>> {
+  new (x: T, y: T): PointType<T>;
+  fromHex(hex: Hex): PointType<T>;
+  fromPrivateKey(privateKey: PrivKey): PointType<T>;
+  hashToCurve(msg: Hex, options?: Partial<htfOpts>): PointType<T>;
+  encodeToCurve(msg: Hex, options?: Partial<htfOpts>): PointType<T>;
+}
+
+export type CurvePointsType<T> = BasicCurve<T> & {
+  // Bytes
+  fromBytes: (bytes: Uint8Array) => { x: T; y: T };
+  toBytes: (c: PointConstructor<T>, point: PointType<T>, compressed: boolean) => Uint8Array;
+};
+
+function validatePointOpts<T>(curve: CurvePointsType<T>) {
+  const opts = utils.validateOpts(curve);
+  const Fp = opts.Fp;
+  for (const i of ['a', 'b'] as const) {
+    if (!Fp.isValid(curve[i]))
+      throw new Error(`Invalid curve param ${i}=${opts[i]} (${typeof opts[i]})`);
+  }
+  for (const i of ['isTorsionFree', 'clearCofactor', 'mapToCurve'] as const) {
+    if (curve[i] === undefined) continue; // Optional
+    if (typeof curve[i] !== 'function') throw new Error(`Invalid ${i} function`);
+  }
+  const endo = opts.endo;
+  if (endo) {
+    if (!Fp.equals(opts.a, Fp.ZERO)) {
+      throw new Error('Endomorphism can only be defined for Koblitz curves that have a=0');
+    }
+    if (
+      typeof endo !== 'object' ||
+      typeof endo.beta !== 'bigint' ||
+      typeof endo.splitScalar !== 'function'
+    ) {
+      throw new Error('Expected endomorphism with beta: bigint and splitScalar: function');
+    }
+  }
+  if (typeof opts.fromBytes !== 'function') throw new Error('Invalid fromBytes function');
+  if (typeof opts.toBytes !== 'function') throw new Error('Invalid fromBytes function');
+  // Requires including hashToCurve file
+  if (opts.htfDefaults !== undefined) validateHTFOpts(opts.htfDefaults);
+  // Set defaults
+  return Object.freeze({ ...opts } as const);
+}
+
+export type CurvePointsRes<T> = {
+  Point: PointConstructor<T>;
+  JacobianPoint: JacobianConstructor<T>;
+  normalizePrivateKey: (key: PrivKey) => bigint;
+  weierstrassEquation: (x: T) => T;
+  isWithinCurveOrder: (num: bigint) => boolean;
+};
+
+export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
+  const CURVE = validatePointOpts(opts);
+  const Fp = CURVE.Fp;
+  // Lengths
+  // All curves has same field / group length as for now, but it can be different for other curves
+  const { nByteLength, nBitLength } = CURVE;
+  const groupLen = nByteLength;
+
+  // Not using ** operator with bigints for old engines.
+  // 2n ** (8n * 32n) == 2n << (8n * 32n - 1n)
+  //const FIELD_MASK = _2n << (_8n * BigInt(fieldLen) - _1n);
+  // function numToFieldStr(num: bigint): string {
+  //   if (typeof num !== 'bigint') throw new Error('Expected bigint');
+  //   if (!(_0n <= num && num < FIELD_MASK)) throw new Error(`Expected number < 2^${fieldLen * 8}`);
+  //   return num.toString(16).padStart(2 * fieldLen, '0');
+  // }
+
+  /**
+   * y² = x³ + ax + b: Short weierstrass curve formula
+   * @returns y²
+   */
+  function weierstrassEquation(x: T): T {
+    const { a, b } = CURVE;
+    const x2 = Fp.square(x); // x * x
+    const x3 = Fp.multiply(x2, x); // x2 * x
+    return Fp.add(Fp.add(x3, Fp.multiply(x, a)), b); // x3 + a * x + b
+  }
+
+  function isWithinCurveOrder(num: bigint): boolean {
+    return _0n < num && num < CURVE.n;
+  }
+
+  function normalizePrivateKey(key: PrivKey): bigint {
+    if (typeof CURVE.normalizePrivateKey === 'function') {
+      key = CURVE.normalizePrivateKey(key);
+    }
+    let num: bigint;
+    if (typeof key === 'bigint') {
+      num = key;
+    } else if (typeof key === 'number' && Number.isSafeInteger(key) && key > 0) {
+      num = BigInt(key);
+    } else if (typeof key === 'string') {
+      if (key.length !== 2 * groupLen) throw new Error(`Expected ${groupLen} bytes of private key`);
+      num = hexToNumber(key);
+    } else if (key instanceof Uint8Array) {
+      if (key.length !== groupLen) throw new Error(`Expected ${groupLen} bytes of private key`);
+      num = bytesToNumberBE(key);
+    } else {
+      throw new TypeError('Expected valid private key');
+    }
+    if (CURVE.wrapPrivateKey) num = mod.mod(num, CURVE.n);
+    if (!isWithinCurveOrder(num)) throw new Error('Expected private key: 0 < key < n');
+    return num;
+  }
+
+  function normalizeScalar(num: number | bigint): bigint {
+    if (typeof num === 'number' && Number.isSafeInteger(num) && num > 0) return BigInt(num);
+    if (typeof num === 'bigint' && isWithinCurveOrder(num)) return num;
+    throw new TypeError('Expected valid private scalar: 0 < scalar < curve.n');
+  }
+
+  /**
+   * Jacobian Point works in 3d / jacobi coordinates: (x, y, z) ∋ (x=x/z², y=y/z³)
+   * Default Point works in 2d / affine coordinates: (x, y)
+   * We're doing calculations in jacobi, because its operations don't require costly inversion.
+   */
+  class JacobianPoint implements JacobianPointType<T> {
+    constructor(readonly x: T, readonly y: T, readonly z: T) {}
+
+    static readonly BASE = new JacobianPoint(CURVE.Gx, CURVE.Gy, Fp.ONE);
+    static readonly ZERO = new JacobianPoint(Fp.ZERO, Fp.ONE, Fp.ZERO);
+
+    static fromAffine(p: Point): JacobianPoint {
+      if (!(p instanceof Point)) {
+        throw new TypeError('JacobianPoint#fromAffine: expected Point');
+      }
+      // fromAffine(x:0, y:0) would produce (x:0, y:0, z:1), but we need (x:0, y:1, z:0)
+      if (p.equals(Point.ZERO)) return JacobianPoint.ZERO;
+      return new JacobianPoint(p.x, p.y, Fp.ONE);
+    }
+
+    /**
+     * Takes a bunch of Jacobian Points but executes only one
+     * invert on all of them. invert is very slow operation,
+     * so this improves performance massively.
+     */
+    static toAffineBatch(points: JacobianPoint[]): Point[] {
+      const toInv = Fp.invertBatch(points.map((p) => p.z));
+      return points.map((p, i) => p.toAffine(toInv[i]));
+    }
+
+    static normalizeZ(points: JacobianPoint[]): JacobianPoint[] {
+      return JacobianPoint.toAffineBatch(points).map(JacobianPoint.fromAffine);
+    }
+
+    /**
+     * Compare one point to another.
+     */
+    equals(other: JacobianPoint): boolean {
+      if (!(other instanceof JacobianPoint)) throw new TypeError('JacobianPoint expected');
+      const { x: X1, y: Y1, z: Z1 } = this;
+      const { x: X2, y: Y2, z: Z2 } = other;
+      const Z1Z1 = Fp.square(Z1); // Z1 * Z1
+      const Z2Z2 = Fp.square(Z2); // Z2 * Z2
+      const U1 = Fp.multiply(X1, Z2Z2); // X1 * Z2Z2
+      const U2 = Fp.multiply(X2, Z1Z1); // X2 * Z1Z1
+      const S1 = Fp.multiply(Fp.multiply(Y1, Z2), Z2Z2); // Y1 * Z2 * Z2Z2
+      const S2 = Fp.multiply(Fp.multiply(Y2, Z1), Z1Z1); // Y2 * Z1 * Z1Z1
+      return Fp.equals(U1, U2) && Fp.equals(S1, S2);
+    }
+
+    /**
+     * Flips point to one corresponding to (x, -y) in Affine coordinates.
+     */
+    negate(): JacobianPoint {
+      return new JacobianPoint(this.x, Fp.negate(this.y), this.z);
+    }
+
+    // Fast algo for doubling 2 Jacobian Points.
+    // From: https://hyperelliptic.org/EFD/g1p/auto-shortw-jacobian.html#doubling-dbl-2007-bl
+    // Cost: 1M + 8S + 1*a + 10add + 2*2 + 1*3 + 1*8.
+    double(): JacobianPoint {
+      const { x: X1, y: Y1, z: Z1 } = this;
+      const { a } = CURVE;
+      // Faster algorithm: when a=0
+      // From: https://hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-0.html#doubling-dbl-2009-l
+      // Cost: 2M + 5S + 6add + 3*2 + 1*3 + 1*8.
+      if (Fp.isZero(a)) {
+        const A = Fp.square(X1); // X1 * X1
+        const B = Fp.square(Y1); // Y1 * Y1
+        const C = Fp.square(B); // B * B
+        const x1b = Fp.addN(X1, B); // X1 + B
+        const D = Fp.multiply(Fp.subtractN(Fp.subtractN(Fp.square(x1b), A), C), _2n); // ((x1b * x1b) - A - C) * 2
+        const E = Fp.multiply(A, _3n); // A * 3
+        const F = Fp.square(E); // E * E
+        const X3 = Fp.subtract(F, Fp.multiplyN(D, _2n)); // F - 2 * D
+        const Y3 = Fp.subtract(Fp.multiplyN(E, Fp.subtractN(D, X3)), Fp.multiplyN(C, _8n)); // E * (D - X3) - 8 * C;
+        const Z3 = Fp.multiply(Fp.multiplyN(Y1, _2n), Z1); // 2 * Y1 * Z1
+        return new JacobianPoint(X3, Y3, Z3);
+      }
+      const XX = Fp.square(X1); //  X1 * X1
+      const YY = Fp.square(Y1); // Y1 * Y1
+      const YYYY = Fp.square(YY); // YY * YY
+      const ZZ = Fp.square(Z1); //  Z1 * Z1
+      const tmp1 = Fp.add(X1, YY); // X1 + YY
+      const S = Fp.multiply(Fp.subtractN(Fp.subtractN(Fp.square(tmp1), XX), YYYY), _2n); // 2*((X1+YY)^2-XX-YYYY)
+      const M = Fp.add(Fp.multiplyN(XX, _3n), Fp.multiplyN(Fp.square(ZZ), a)); // 3 * XX + a * ZZ^2
+      const T = Fp.subtract(Fp.square(M), Fp.multiplyN(S, _2n)); // M^2-2*S
+      const X3 = T;
+      const Y3 = Fp.subtract(Fp.multiplyN(M, Fp.subtractN(S, T)), Fp.multiplyN(YYYY, _8n)); // M*(S-T)-8*YYYY
+      const y1az1 = Fp.add(Y1, Z1); // (Y1+Z1)
+      const Z3 = Fp.subtract(Fp.subtractN(Fp.square(y1az1), YY), ZZ); // (Y1+Z1)^2-YY-ZZ
+      return new JacobianPoint(X3, Y3, Z3);
+    }
+
+    // Fast algo for adding 2 Jacobian Points.
+    // https://hyperelliptic.org/EFD/g1p/auto-shortw-jacobian.html#addition-add-1998-cmo-2
+    // Cost: 12M + 4S + 6add + 1*2
+    // Note: 2007 Bernstein-Lange (11M + 5S + 9add + 4*2) is actually 10% slower.
+    add(other: JacobianPoint): JacobianPoint {
+      if (!(other instanceof JacobianPoint)) throw new TypeError('JacobianPoint expected');
+      const { x: X1, y: Y1, z: Z1 } = this;
+      const { x: X2, y: Y2, z: Z2 } = other;
+      if (Fp.isZero(X2) || Fp.isZero(Y2)) return this;
+      if (Fp.isZero(X1) || Fp.isZero(Y1)) return other;
+      // We're using same code in equals()
+      const Z1Z1 = Fp.square(Z1); // Z1Z1 = Z1^2
+      const Z2Z2 = Fp.square(Z2); // Z2Z2 = Z2^2;
+      const U1 = Fp.multiply(X1, Z2Z2); // X1 * Z2Z2
+      const U2 = Fp.multiply(X2, Z1Z1); // X2 * Z1Z1
+      const S1 = Fp.multiply(Fp.multiply(Y1, Z2), Z2Z2); // Y1 * Z2 * Z2Z2
+      const S2 = Fp.multiply(Fp.multiply(Y2, Z1), Z1Z1); // Y2 * Z1 * Z1Z1
+      const H = Fp.subtractN(U2, U1); // H = U2 - U1
+      const r = Fp.subtractN(S2, S1); // S2 - S1
+      // H = 0 meaning it's the same point.
+      if (Fp.isZero(H)) return Fp.isZero(r) ? this.double() : JacobianPoint.ZERO;
+      const HH = Fp.square(H); // HH = H2
+      const HHH = Fp.multiply(H, HH); // HHH = H * HH
+      const V = Fp.multiply(U1, HH); // V = U1 * HH
+      const X3 = Fp.subtract(Fp.subtractN(Fp.squareN(r), HHH), Fp.multiplyN(V, _2n)); // X3 = r^2 - HHH - 2 * V;
+      const Y3 = Fp.subtract(Fp.multiplyN(r, Fp.subtractN(V, X3)), Fp.multiplyN(S1, HHH)); // Y3 = r * (V - X3) - S1 * HHH;
+      const Z3 = Fp.multiply(Fp.multiply(Z1, Z2), H); // Z3 = Z1 * Z2 * H;
+      return new JacobianPoint(X3, Y3, Z3);
+    }
+
+    subtract(other: JacobianPoint) {
+      return this.add(other.negate());
+    }
+
+    /**
+     * Non-constant-time multiplication. Uses double-and-add algorithm.
+     * It's faster, but should only be used when you don't care about
+     * an exposed private key e.g. sig verification, which works over *public* keys.
+     */
+    multiplyUnsafe(scalar: bigint): JacobianPoint {
+      const P0 = JacobianPoint.ZERO;
+      if (typeof scalar === 'bigint' && scalar === _0n) return P0;
+      // Will throw on 0
+      let n = normalizeScalar(scalar);
+      if (n === _1n) return this;
+
+      if (!CURVE.endo) return wnaf.unsafeLadder(this, n);
+
+      // Apply endomorphism
+      let { k1neg, k1, k2neg, k2 } = CURVE.endo.splitScalar(n);
+      let k1p = P0;
+      let k2p = P0;
+      let d: JacobianPoint = this;
+      while (k1 > _0n || k2 > _0n) {
+        if (k1 & _1n) k1p = k1p.add(d);
+        if (k2 & _1n) k2p = k2p.add(d);
+        d = d.double();
+        k1 >>= _1n;
+        k2 >>= _1n;
+      }
+      if (k1neg) k1p = k1p.negate();
+      if (k2neg) k2p = k2p.negate();
+      k2p = new JacobianPoint(Fp.multiply(k2p.x, CURVE.endo.beta), k2p.y, k2p.z);
+      return k1p.add(k2p);
+    }
+
+    /**
+     * Implements w-ary non-adjacent form for calculating ec multiplication.
+     */
+    private wNAF(n: bigint, affinePoint?: Point): { p: JacobianPoint; f: JacobianPoint } {
+      if (!affinePoint && this.equals(JacobianPoint.BASE)) affinePoint = Point.BASE;
+      const W = (affinePoint && affinePoint._WINDOW_SIZE) || 1;
+      // Calculate precomputes on a first run, reuse them after
+      let precomputes = affinePoint && pointPrecomputes.get(affinePoint);
+      if (!precomputes) {
+        precomputes = wnaf.precomputeWindow(this, W) as JacobianPoint[];
+        if (affinePoint && W !== 1) {
+          precomputes = JacobianPoint.normalizeZ(precomputes);
+          pointPrecomputes.set(affinePoint, precomputes);
+        }
+      }
+      return wnaf.wNAF(W, precomputes, n);
+    }
+
+    /**
+     * Constant time multiplication.
+     * Uses wNAF method. Windowed method may be 10% faster,
+     * but takes 2x longer to generate and consumes 2x memory.
+     * @param scalar by which the point would be multiplied
+     * @param affinePoint optional point ot save cached precompute windows on it
+     * @returns New point
+     */
+    multiply(scalar: number | bigint, affinePoint?: Point): JacobianPoint {
+      let n = normalizeScalar(scalar);
+
+      // Real point.
+      let point: JacobianPoint;
+      // Fake point, we use it to achieve constant-time multiplication.
+      let fake: JacobianPoint;
+      if (CURVE.endo) {
+        const { k1neg, k1, k2neg, k2 } = CURVE.endo.splitScalar(n);
+        let { p: k1p, f: f1p } = this.wNAF(k1, affinePoint);
+        let { p: k2p, f: f2p } = this.wNAF(k2, affinePoint);
+        k1p = wnaf.constTimeNegate(k1neg, k1p);
+        k2p = wnaf.constTimeNegate(k2neg, k2p);
+        k2p = new JacobianPoint(Fp.multiply(k2p.x, CURVE.endo.beta), k2p.y, k2p.z);
+        point = k1p.add(k2p);
+        fake = f1p.add(f2p);
+      } else {
+        const { p, f } = this.wNAF(n, affinePoint);
+        point = p;
+        fake = f;
+      }
+      // Normalize `z` for both points, but return only real one
+      return JacobianPoint.normalizeZ([point, fake])[0];
+    }
+
+    // Converts Jacobian point to affine (x, y) coordinates.
+    // Can accept precomputed Z^-1 - for example, from invertBatch.
+    // (x, y, z) ∋ (x=x/z², y=y/z³)
+    // https://hyperelliptic.org/EFD/g1p/auto-shortw-jacobian.html#scaling-z
+    toAffine(invZ?: T): Point {
+      const { x, y, z } = this;
+      const is0 = this.equals(JacobianPoint.ZERO);
+      // If invZ was 0, we return zero point. However we still want to execute
+      // all operations, so we replace invZ with a random number, 1.
+      if (invZ == null) invZ = is0 ? Fp.ONE : Fp.invert(z);
+      const iz1 = invZ;
+      const iz2 = Fp.square(iz1); // iz1 * iz1
+      const iz3 = Fp.multiply(iz2, iz1); // iz2 * iz1
+      const ax = Fp.multiply(x, iz2); // x * iz2
+      const ay = Fp.multiply(y, iz3); // y * iz3
+      const zz = Fp.multiply(z, iz1); // z * iz1
+      if (is0) return Point.ZERO;
+      if (!Fp.equals(zz, Fp.ONE)) throw new Error('invZ was invalid');
+      return new Point(ax, ay);
+    }
+    isTorsionFree(): boolean {
+      if (CURVE.h === _1n) return true; // No subgroups, always torsion fee
+      if (CURVE.isTorsionFree) return CURVE.isTorsionFree(JacobianPoint, this);
+      // is multiplyUnsafe(CURVE.n) is always ok, same as for edwards?
+      throw new Error('Unsupported!');
+    }
+    // Clear cofactor of G1
+    // https://eprint.iacr.org/2019/403
+    clearCofactor(): JacobianPoint {
+      if (CURVE.h === _1n) return this; // Fast-path
+      if (CURVE.clearCofactor) return CURVE.clearCofactor(JacobianPoint, this) as JacobianPoint;
+      return this.multiplyUnsafe(CURVE.h);
+    }
+  }
+  const wnaf = wNAF(JacobianPoint, CURVE.endo ? nBitLength / 2 : nBitLength);
+  // Stores precomputed values for points.
+  const pointPrecomputes = new WeakMap<Point, JacobianPoint[]>();
+
+  /**
+   * Default Point works in default aka affine coordinates: (x, y)
+   */
+  class Point implements PointType<T> {
+    /**
+     * Base point aka generator. public_key = Point.BASE * private_key
+     */
+    static BASE: Point = new Point(CURVE.Gx, CURVE.Gy);
+    /**
+     * Identity point aka point at infinity. point = point + zero_point
+     */
+    static ZERO: Point = new Point(Fp.ZERO, Fp.ZERO);
+
+    // We calculate precomputes for elliptic curve point multiplication
+    // using windowed method. This specifies window size and
+    // stores precomputed values. Usually only base point would be precomputed.
+    _WINDOW_SIZE?: number;
+
+    constructor(readonly x: T, readonly y: T) {}
+
+    // "Private method", don't use it directly
+    _setWindowSize(windowSize: number) {
+      this._WINDOW_SIZE = windowSize;
+      pointPrecomputes.delete(this);
+    }
+
+    // Checks for y % 2 == 0
+    hasEvenY(): boolean {
+      if (Fp.isOdd) return !Fp.isOdd(this.y);
+      throw new Error("Field doesn't support isOdd");
+    }
+
+    /**
+     * Converts hash string or Uint8Array to Point.
+     * @param hex short/long ECDSA hex
+     */
+    static fromHex(hex: Hex): Point {
+      const { x, y } = CURVE.fromBytes(ensureBytes(hex));
+      const point = new Point(x, y);
+      point.assertValidity();
+      return point;
+    }
+
+    // Multiplies generator point by privateKey.
+    static fromPrivateKey(privateKey: PrivKey) {
+      return Point.BASE.multiply(normalizePrivateKey(privateKey));
+    }
+
+    toRawBytes(isCompressed = false): Uint8Array {
+      this.assertValidity();
+      return CURVE.toBytes(Point, this, isCompressed);
+    }
+
+    toHex(isCompressed = false): string {
+      return bytesToHex(this.toRawBytes(isCompressed));
+    }
+    // A point on curve is valid if it conforms to equation.
+    assertValidity(): void {
+      // Zero is valid point too!
+      if (this.equals(Point.ZERO)) {
+        if (CURVE.allowInfinityPoint) return;
+        throw new Error('Point is infinity');
+      }
+      // Some 3rd-party test vectors require different wording between here & `fromCompressedHex`
+      const msg = 'Point is not on elliptic curve';
+      const { x, y } = this;
+      if (!Fp.isValid(x) || !Fp.isValid(y)) throw new Error(msg);
+      const left = Fp.square(y);
+      const right = weierstrassEquation(x);
+      if (!Fp.equals(left, right)) throw new Error(msg);
+      // TODO: flag to disable this?
+      if (!this.isTorsionFree()) throw new Error('Point must be of prime-order subgroup');
+    }
+
+    equals(other: Point): boolean {
+      if (!(other instanceof Point)) throw new TypeError('Point#equals: expected Point');
+      return Fp.equals(this.x, other.x) && Fp.equals(this.y, other.y);
+    }
+
+    // Returns the same point with inverted `y`
+    negate() {
+      return new Point(this.x, Fp.negate(this.y));
+    }
+
+    // Adds point to itself
+    double() {
+      return JacobianPoint.fromAffine(this).double().toAffine();
+    }
+
+    // Adds point to other point
+    add(other: Point) {
+      return JacobianPoint.fromAffine(this).add(JacobianPoint.fromAffine(other)).toAffine();
+    }
+
+    // Subtracts other point from the point
+    subtract(other: Point) {
+      return this.add(other.negate());
+    }
+
+    multiply(scalar: number | bigint) {
+      return JacobianPoint.fromAffine(this).multiply(scalar, this).toAffine();
+    }
+
+    multiplyUnsafe(scalar: bigint) {
+      return JacobianPoint.fromAffine(this).multiplyUnsafe(scalar).toAffine();
+    }
+    clearCofactor() {
+      return JacobianPoint.fromAffine(this).clearCofactor().toAffine();
+    }
+
+    isTorsionFree(): boolean {
+      return JacobianPoint.fromAffine(this).isTorsionFree();
+    }
+
+    /**
+     * Efficiently calculate `aP + bQ`.
+     * Unsafe, can expose private key, if used incorrectly.
+     * TODO: Utilize Shamir's trick
+     * @returns non-zero affine point
+     */
+    multiplyAndAddUnsafe(Q: Point, a: bigint, b: bigint): Point | undefined {
+      const P = JacobianPoint.fromAffine(this);
+      const aP =
+        a === _0n || a === _1n || this !== Point.BASE ? P.multiplyUnsafe(a) : P.multiply(a);
+      const bQ = JacobianPoint.fromAffine(Q).multiplyUnsafe(b);
+      const sum = aP.add(bQ);
+      return sum.equals(JacobianPoint.ZERO) ? undefined : sum.toAffine();
+    }
+
+    // Encodes byte string to elliptic curve
+    // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-3
+    static hashToCurve(msg: Hex, options?: Partial<htfOpts>) {
+      if (!CURVE.mapToCurve) throw new Error('No mapToCurve defined for curve');
+      msg = ensureBytes(msg);
+      const u = hash_to_field(msg, 2, { ...CURVE.htfDefaults, ...options } as htfOpts);
+      const { x: x0, y: y0 } = CURVE.mapToCurve(u[0]);
+      const { x: x1, y: y1 } = CURVE.mapToCurve(u[1]);
+      const p = new Point(x0, y0).add(new Point(x1, y1)).clearCofactor();
+      return p;
+    }
+    // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-16#section-3
+    static encodeToCurve(msg: Hex, options?: Partial<htfOpts>) {
+      if (!CURVE.mapToCurve) throw new Error('No mapToCurve defined for curve');
+      msg = ensureBytes(msg);
+      const u = hash_to_field(msg, 1, { ...CURVE.htfDefaults, ...options } as htfOpts);
+      const { x, y } = CURVE.mapToCurve(u[0]);
+      return new Point(x, y).clearCofactor();
+    }
+  }
+  return {
+    Point: Point as PointConstructor<T>,
+    JacobianPoint: JacobianPoint as JacobianConstructor<T>,
+    normalizePrivateKey,
+    weierstrassEquation,
+    isWithinCurveOrder,
+  };
+}
+
+// Instance
 export interface SignatureType {
   readonly r: bigint;
   readonly s: bigint;
@@ -172,7 +682,7 @@ export interface SignatureType {
   copyWithRecoveryBit(recovery: number): SignatureType;
   hasHighS(): boolean;
   normalizeS(): SignatureType;
-  recoverPublicKey(msgHash: Hex): PointType;
+  recoverPublicKey(msgHash: Hex): PointType<bigint>;
   // DER-encoded
   toDERRawBytes(isCompressed?: boolean): Uint8Array;
   toDERHex(isCompressed?: boolean): string;
@@ -186,41 +696,27 @@ export type SignatureConstructor = {
   fromDER(hex: Hex): SignatureType;
 };
 
-// Instance
-export interface JacobianPointType extends Group<JacobianPointType> {
-  readonly x: bigint;
-  readonly y: bigint;
-  readonly z: bigint;
-  multiply(scalar: number | bigint, affinePoint?: PointType): JacobianPointType;
-  multiplyUnsafe(scalar: bigint): JacobianPointType;
-  toAffine(invZ?: bigint): PointType;
-}
-// Static methods
-export interface JacobianPointConstructor extends GroupConstructor<JacobianPointType> {
-  new (x: bigint, y: bigint, z: bigint): JacobianPointType;
-  fromAffine(p: PointType): JacobianPointType;
-  toAffineBatch(points: JacobianPointType[]): PointType[];
-  normalizeZ(points: JacobianPointType[]): JacobianPointType[];
-}
-// Instance
-export interface PointType extends Group<PointType> {
-  readonly x: bigint;
-  readonly y: bigint;
-  _setWindowSize(windowSize: number): void;
-  hasEvenY(): boolean;
-  toRawBytes(isCompressed?: boolean): Uint8Array;
-  toHex(isCompressed?: boolean): string;
-  assertValidity(): void;
-  multiplyAndAddUnsafe(Q: PointType, a: bigint, b: bigint): PointType | undefined;
-}
-// Static methods
-export interface PointConstructor extends GroupConstructor<PointType> {
-  new (x: bigint, y: bigint): PointType;
-  fromHex(hex: Hex): PointType;
-  fromPrivateKey(privateKey: PrivKey): PointType;
-}
+export type PubKey = Hex | PointType<bigint>;
 
-export type PubKey = Hex | PointType;
+export type CurveType = BasicCurve<bigint> & {
+  // Default options
+  lowS?: boolean;
+  // Hashes
+  hash: utils.CHash; // Because we need outputLen for DRBG
+  hmac: HmacFnSync;
+  randomBytes: (bytesLength?: number) => Uint8Array;
+  truncateHash?: (hash: Uint8Array, truncateOnly?: boolean) => bigint;
+};
+
+function validateOpts(curve: CurveType) {
+  const opts = utils.validateOpts(curve);
+  if (typeof opts.hash !== 'function' || !Number.isSafeInteger(opts.hash.outputLen))
+    throw new Error('Invalid hash function');
+  if (typeof opts.hmac !== 'function') throw new Error('Invalid hmac function');
+  if (typeof opts.randomBytes !== 'function') throw new Error('Invalid randomBytes function');
+  // Set defaults
+  return Object.freeze({ lowS: true, ...opts } as const);
+}
 
 export type CurveFn = {
   CURVE: ReturnType<typeof validateOpts>;
@@ -235,8 +731,8 @@ export type CurveFn = {
       lowS?: boolean;
     }
   ) => boolean;
-  Point: PointConstructor;
-  JacobianPoint: JacobianPointConstructor;
+  Point: PointConstructor<bigint>;
+  JacobianPoint: JacobianConstructor<bigint>;
   Signature: SignatureConstructor;
   utils: {
     mod: (a: bigint, b?: bigint) => bigint;
@@ -244,7 +740,7 @@ export type CurveFn = {
     _bigintToBytes: (num: bigint) => Uint8Array;
     _bigintToString: (num: bigint) => string;
     _normalizePrivateKey: (key: PrivKey) => bigint;
-    _normalizePublicKey: (publicKey: PubKey) => PointType;
+    _normalizePublicKey: (publicKey: PubKey) => PointType<bigint>;
     _isWithinCurveOrder: (num: bigint) => boolean;
     _isValidFieldElement: (num: bigint) => boolean;
     _weierstrassEquation: (x: bigint) => bigint;
@@ -304,80 +800,67 @@ class HmacDrbg {
   // whether bigints are removed even if you clean Uint8Arrays.
 }
 
-// Use only input from curveOpts!
 export function weierstrass(curveDef: CurveType): CurveFn {
   const CURVE = validateOpts(curveDef) as ReturnType<typeof validateOpts>;
   const CURVE_ORDER = CURVE.n;
-  // Lengths
-  // All curves has same field / group length as for now, but it can be different for other curves
-  const groupLen = CURVE.nByteLength;
-  const fieldLen = CURVE.nByteLength; // 32 (length of one field element)
-  if (fieldLen > 2048) throw new Error('Field lengths over 2048 are not supported');
-
-  const compressedLen = fieldLen + 1; // 33
-  const uncompressedLen = 2 * fieldLen + 1; // 65
-  // Not using ** operator with bigints for old engines.
-  // 2n ** (8n * 32n) == 2n << (8n * 32n - 1n)
-  const FIELD_MASK = _2n << (_8n * BigInt(fieldLen) - _1n);
-  function numToFieldStr(num: bigint): string {
-    if (typeof num !== 'bigint') throw new Error('Expected bigint');
-    if (!(_0n <= num && num < FIELD_MASK)) throw new Error(`Expected number < 2^${fieldLen * 8}`);
-    return num.toString(16).padStart(2 * fieldLen, '0');
-  }
-
-  function numToField(num: bigint): Uint8Array {
-    const b = hexToBytes(numToFieldStr(num));
-    if (b.length !== fieldLen) throw new Error(`Error: expected ${fieldLen} bytes`);
-    return b;
-  }
-
-  function modP(n: bigint, m = CURVE.P) {
-    return mod.mod(n, m);
-  }
-
-  /**
-   * y² = x³ + ax + b: Short weierstrass curve formula
-   * @returns y²
-   */
-  function weierstrassEquation(x: bigint): bigint {
-    const { a, b } = CURVE;
-    const x2 = modP(x * x);
-    const x3 = modP(x2 * x);
-    return modP(x3 + a * x + b);
-  }
-
-  function isWithinCurveOrder(num: bigint): boolean {
-    return _0n < num && num < CURVE.n;
-  }
+  const Fp = CURVE.Fp;
+  const compressedLen = Fp.BYTES + 1; // 33
+  const uncompressedLen = 2 * Fp.BYTES + 1; // 65
 
   function isValidFieldElement(num: bigint): boolean {
-    return _0n < num && num < CURVE.P;
+    // 0 is disallowed by arbitrary reasons. Probably because infinity point?
+    return _0n < num && num < Fp.ORDER;
   }
 
-  function normalizePrivateKey(key: PrivKey): bigint {
-    let num: bigint;
-    if (typeof key === 'bigint') {
-      num = key;
-    } else if (typeof key === 'number' && Number.isSafeInteger(key) && key > 0) {
-      num = BigInt(key);
-    } else if (typeof key === 'string') {
-      key = key.padStart(2 * groupLen, '0'); // Eth-like hexes
-      if (key.length !== 2 * groupLen) throw new Error(`Expected ${groupLen} bytes of private key`);
-      num = hexToNumber(key);
-    } else if (key instanceof Uint8Array) {
-      if (key.length !== groupLen) throw new Error(`Expected ${groupLen} bytes of private key`);
-      num = bytesToNumberBE(key);
-    } else {
-      throw new TypeError('Expected valid private key');
-    }
-    if (!isWithinCurveOrder(num)) throw new Error('Expected private key: 0 < key < n');
-    return num;
+  const { Point, JacobianPoint, normalizePrivateKey, weierstrassEquation, isWithinCurveOrder } =
+    weierstrassPoints({
+      ...CURVE,
+      toBytes(c, point, isCompressed: boolean): Uint8Array {
+        if (isCompressed) {
+          return concatBytes(new Uint8Array([point.hasEvenY() ? 0x02 : 0x03]), Fp.toBytes(point.x));
+        } else {
+          return concatBytes(new Uint8Array([0x04]), Fp.toBytes(point.x), Fp.toBytes(point.y));
+        }
+      },
+      fromBytes(bytes: Uint8Array) {
+        const len = bytes.length;
+        const header = bytes[0];
+        // this.assertValidity() is done inside of fromHex
+        if (len === compressedLen && (header === 0x02 || header === 0x03)) {
+          const x = bytesToNumberBE(bytes.subarray(1));
+          if (!isValidFieldElement(x)) throw new Error('Point is not on curve');
+          const y2 = weierstrassEquation(x); // y² = x³ + ax + b
+          let y = Fp.sqrt(y2); // y = y² ^ (p+1)/4
+          const isYOdd = (y & _1n) === _1n;
+          // ECDSA
+          const isFirstByteOdd = (bytes[0] & 1) === 1;
+          if (isFirstByteOdd !== isYOdd) y = Fp.negate(y);
+          return { x, y };
+        } else if (len === uncompressedLen && header === 0x04) {
+          const x = Fp.fromBytes(bytes.subarray(1, Fp.BYTES + 1));
+          const y = Fp.fromBytes(bytes.subarray(Fp.BYTES + 1, 2 * Fp.BYTES + 1));
+          return { x, y };
+        } else {
+          throw new Error(
+            `Point.fromHex: received invalid point. Expected ${compressedLen} compressed bytes or ${uncompressedLen} uncompressed bytes, not ${len}`
+          );
+        }
+      },
+    });
+  type Point = typeof Point.BASE;
+
+  // Do we need these functions at all?
+  function numToField(num: bigint): Uint8Array {
+    if (typeof num !== 'bigint') throw new Error('Expected bigint');
+    if (!(_0n <= num && num < Fp.MASK)) throw new Error(`Expected number < 2^${Fp.BYTES * 8}`);
+    return Fp.toBytes(num);
   }
+  const numToFieldStr = (num: bigint): string => bytesToHex(numToField(num));
 
   /**
    * Normalizes hex, bytes, Point to Point. Checks for curve equation.
    */
-  function normalizePublicKey(publicKey: PubKey): Point {
+  function normalizePublicKey(publicKey: PubKey): PointType<bigint> {
     if (publicKey instanceof Point) {
       publicKey.assertValidity();
       return publicKey;
@@ -396,14 +879,6 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     return isBiggerThanHalfOrder(s) ? mod.mod(-s, CURVE_ORDER) : s;
   }
 
-  function normalizeScalar(num: number | bigint): bigint {
-    if (typeof num === 'number' && Number.isSafeInteger(num) && num > 0) return BigInt(num);
-    if (typeof num === 'bigint' && isWithinCurveOrder(num)) return num;
-    throw new TypeError('Expected valid private scalar: 0 < scalar < curve.n');
-  }
-
-  const sqrtModCurve = CURVE.sqrtMod || mod.sqrt;
-
   // Ensures ECDSA message hashes are 32 bytes and < curve order
   function _truncateHash(hash: Uint8Array, truncateOnly = false): bigint {
     const { n, nBitLength } = CURVE;
@@ -415,396 +890,6 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     return h;
   }
   const truncateHash = CURVE.truncateHash || _truncateHash;
-
-  /**
-   * Jacobian Point works in 3d / jacobi coordinates: (x, y, z) ∋ (x=x/z², y=y/z³)
-   * Default Point works in 2d / affine coordinates: (x, y)
-   * We're doing calculations in jacobi, because its operations don't require costly inversion.
-   */
-  class JacobianPoint implements JacobianPointType {
-    constructor(readonly x: bigint, readonly y: bigint, readonly z: bigint) {}
-
-    static readonly BASE = new JacobianPoint(CURVE.Gx, CURVE.Gy, _1n);
-    static readonly ZERO = new JacobianPoint(_0n, _1n, _0n);
-
-    static fromAffine(p: Point): JacobianPoint {
-      if (!(p instanceof Point)) {
-        throw new TypeError('JacobianPoint#fromAffine: expected Point');
-      }
-      // fromAffine(x:0, y:0) would produce (x:0, y:0, z:1), but we need (x:0, y:1, z:0)
-      if (p.equals(Point.ZERO)) return JacobianPoint.ZERO;
-      return new JacobianPoint(p.x, p.y, _1n);
-    }
-
-    /**
-     * Takes a bunch of Jacobian Points but executes only one
-     * invert on all of them. invert is very slow operation,
-     * so this improves performance massively.
-     */
-    static toAffineBatch(points: JacobianPoint[]): Point[] {
-      const toInv = mod.invertBatch(
-        points.map((p) => p.z),
-        CURVE.P
-      );
-      return points.map((p, i) => p.toAffine(toInv[i]));
-    }
-
-    static normalizeZ(points: JacobianPoint[]): JacobianPoint[] {
-      return JacobianPoint.toAffineBatch(points).map(JacobianPoint.fromAffine);
-    }
-
-    /**
-     * Compare one point to another.
-     */
-    equals(other: JacobianPoint): boolean {
-      if (!(other instanceof JacobianPoint)) throw new TypeError('JacobianPoint expected');
-      const { x: X1, y: Y1, z: Z1 } = this;
-      const { x: X2, y: Y2, z: Z2 } = other;
-      const Z1Z1 = modP(Z1 * Z1);
-      const Z2Z2 = modP(Z2 * Z2);
-      const U1 = modP(X1 * Z2Z2);
-      const U2 = modP(X2 * Z1Z1);
-      const S1 = modP(modP(Y1 * Z2) * Z2Z2);
-      const S2 = modP(modP(Y2 * Z1) * Z1Z1);
-      return U1 === U2 && S1 === S2;
-    }
-
-    /**
-     * Flips point to one corresponding to (x, -y) in Affine coordinates.
-     */
-    negate(): JacobianPoint {
-      return new JacobianPoint(this.x, modP(-this.y), this.z);
-    }
-
-    // Fast algo for doubling 2 Jacobian Points.
-    // From: https://hyperelliptic.org/EFD/g1p/auto-shortw-jacobian.html#doubling-dbl-2007-bl
-    // Cost: 1M + 8S + 1*a + 10add + 2*2 + 1*3 + 1*8.
-    double(): JacobianPoint {
-      const { x: X1, y: Y1, z: Z1 } = this;
-      const { a } = CURVE;
-
-      // Faster algorithm: when a=0
-      // From: https://hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-0.html#doubling-dbl-2009-l
-      // Cost: 2M + 5S + 6add + 3*2 + 1*3 + 1*8.
-      if (a === _0n) {
-        const A = modP(X1 * X1);
-        const B = modP(Y1 * Y1);
-        const C = modP(B * B);
-        const x1b = X1 + B;
-        const D = modP(_2n * (modP(x1b * x1b) - A - C));
-        const E = modP(_3n * A);
-        const F = modP(E * E);
-        const X3 = modP(F - _2n * D);
-        const Y3 = modP(E * (D - X3) - _8n * C);
-        const Z3 = modP(_2n * Y1 * Z1);
-        return new JacobianPoint(X3, Y3, Z3);
-      }
-      const XX = modP(X1 * X1);
-      const YY = modP(Y1 * Y1);
-      const YYYY = modP(YY * YY);
-      const ZZ = modP(Z1 * Z1);
-      const tmp1 = modP(X1 + YY);
-      const S = modP(_2n * (modP(tmp1 * tmp1) - XX - YYYY)); // 2*((X1+YY)^2-XX-YYYY)
-      const M = modP(_3n * XX + a * modP(ZZ * ZZ));
-      const T = modP(modP(M * M) - _2n * S); // M^2-2*S
-      const X3 = T;
-      const Y3 = modP(M * (S - T) - _8n * YYYY); // M*(S-T)-8*YYYY
-      const y1az1 = modP(Y1 + Z1); // (Y1+Z1)
-      const Z3 = modP(modP(y1az1 * y1az1) - YY - ZZ); // (Y1+Z1)^2-YY-ZZ
-      return new JacobianPoint(X3, Y3, Z3);
-    }
-
-    // Fast algo for adding 2 Jacobian Points.
-    // https://hyperelliptic.org/EFD/g1p/auto-shortw-jacobian.html#addition-add-1998-cmo-2
-    // Cost: 12M + 4S + 6add + 1*2
-    // Note: 2007 Bernstein-Lange (11M + 5S + 9add + 4*2) is actually 10% slower.
-    add(other: JacobianPoint): JacobianPoint {
-      if (!(other instanceof JacobianPoint)) throw new TypeError('JacobianPoint expected');
-      const { x: X1, y: Y1, z: Z1 } = this;
-      const { x: X2, y: Y2, z: Z2 } = other;
-      if (X2 === _0n || Y2 === _0n) return this;
-      if (X1 === _0n || Y1 === _0n) return other;
-      // We're using same code in equals()
-      const Z1Z1 = modP(Z1 * Z1); // Z1Z1 = Z1^2
-      const Z2Z2 = modP(Z2 * Z2); // Z2Z2 = Z2^2;
-      const U1 = modP(X1 * Z2Z2); // X1 * Z2Z2
-      const U2 = modP(X2 * Z1Z1); // X2 * Z1Z1
-      const S1 = modP(modP(Y1 * Z2) * Z2Z2); // Y1 * Z2 * Z2Z2
-      const S2 = modP(modP(Y2 * Z1) * Z1Z1); // Y2 * Z1 * Z1Z1
-      const H = modP(U2 - U1); // H = U2 - U1
-      const r = modP(S2 - S1); // S2 - S1
-      // H = 0 meaning it's the same point.
-      if (H === _0n) return r === _0n ? this.double() : JacobianPoint.ZERO;
-      const HH = modP(H * H); // HH = H2
-      const HHH = modP(H * HH); // HHH = H * HH
-      const V = modP(U1 * HH); // V = U1 * HH
-      const X3 = modP(r * r - HHH - _2n * V); // X3 = r^2 - HHH - 2 * V;
-      const Y3 = modP(r * (V - X3) - S1 * HHH); // Y3 = r * (V - X3) - S1 * HHH;
-      const Z3 = modP(Z1 * Z2 * H); // Z3 = Z1 * Z2 * H;
-      return new JacobianPoint(X3, Y3, Z3);
-    }
-
-    subtract(other: JacobianPoint) {
-      return this.add(other.negate());
-    }
-
-    /**
-     * Non-constant-time multiplication. Uses double-and-add algorithm.
-     * It's faster, but should only be used when you don't care about
-     * an exposed private key e.g. sig verification, which works over *public* keys.
-     */
-    multiplyUnsafe(scalar: bigint): JacobianPoint {
-      const P0 = JacobianPoint.ZERO;
-      if (typeof scalar === 'bigint' && scalar === _0n) return P0;
-      // Will throw on 0
-      let n = normalizeScalar(scalar);
-      if (n === _1n) return this;
-
-      if (!CURVE.endo) return wnaf.unsafeLadder(this, n);
-
-      // Apply endomorphism
-      let { k1neg, k1, k2neg, k2 } = CURVE.endo.splitScalar(n);
-      let k1p = P0;
-      let k2p = P0;
-      let d: JacobianPoint = this;
-      while (k1 > _0n || k2 > _0n) {
-        if (k1 & _1n) k1p = k1p.add(d);
-        if (k2 & _1n) k2p = k2p.add(d);
-        d = d.double();
-        k1 >>= _1n;
-        k2 >>= _1n;
-      }
-      if (k1neg) k1p = k1p.negate();
-      if (k2neg) k2p = k2p.negate();
-      k2p = new JacobianPoint(modP(k2p.x * CURVE.endo.beta), k2p.y, k2p.z);
-      return k1p.add(k2p);
-    }
-
-    /**
-     * Implements w-ary non-adjacent form for calculating ec multiplication.
-     */
-    private wNAF(n: bigint, affinePoint?: Point): { p: JacobianPoint; f: JacobianPoint } {
-      if (!affinePoint && this.equals(JacobianPoint.BASE)) affinePoint = Point.BASE;
-      const W = (affinePoint && affinePoint._WINDOW_SIZE) || 1;
-      // Calculate precomputes on a first run, reuse them after
-      let precomputes = affinePoint && pointPrecomputes.get(affinePoint);
-      if (!precomputes) {
-        precomputes = wnaf.precomputeWindow(this, W) as JacobianPoint[];
-        if (affinePoint && W !== 1) {
-          precomputes = JacobianPoint.normalizeZ(precomputes);
-          pointPrecomputes.set(affinePoint, precomputes);
-        }
-      }
-      return wnaf.wNAF(W, precomputes, n);
-    }
-
-    /**
-     * Constant time multiplication.
-     * Uses wNAF method. Windowed method may be 10% faster,
-     * but takes 2x longer to generate and consumes 2x memory.
-     * @param scalar by which the point would be multiplied
-     * @param affinePoint optional point ot save cached precompute windows on it
-     * @returns New point
-     */
-    multiply(scalar: number | bigint, affinePoint?: Point): JacobianPoint {
-      let n = normalizeScalar(scalar);
-
-      // Real point.
-      let point: JacobianPoint;
-      // Fake point, we use it to achieve constant-time multiplication.
-      let fake: JacobianPoint;
-      if (CURVE.endo) {
-        const { k1neg, k1, k2neg, k2 } = CURVE.endo.splitScalar(n);
-        let { p: k1p, f: f1p } = this.wNAF(k1, affinePoint);
-        let { p: k2p, f: f2p } = this.wNAF(k2, affinePoint);
-        k1p = wnaf.constTimeNegate(k1neg, k1p);
-        k2p = wnaf.constTimeNegate(k2neg, k2p);
-        k2p = new JacobianPoint(modP(k2p.x * CURVE.endo.beta), k2p.y, k2p.z);
-        point = k1p.add(k2p);
-        fake = f1p.add(f2p);
-      } else {
-        const { p, f } = this.wNAF(n, affinePoint);
-        point = p;
-        fake = f;
-      }
-      // Normalize `z` for both points, but return only real one
-      return JacobianPoint.normalizeZ([point, fake])[0];
-    }
-
-    // Converts Jacobian point to affine (x, y) coordinates.
-    // Can accept precomputed Z^-1 - for example, from invertBatch.
-    // (x, y, z) ∋ (x=x/z², y=y/z³)
-    // https://hyperelliptic.org/EFD/g1p/auto-shortw-jacobian.html#scaling-z
-    toAffine(invZ?: bigint): Point {
-      const { x, y, z } = this;
-      const is0 = this.equals(JacobianPoint.ZERO);
-      // If invZ was 0, we return zero point. However we still want to execute
-      // all operations, so we replace invZ with a random number, 8.
-      if (invZ == null) invZ = is0 ? _8n : mod.invert(z, CURVE.P);
-      const iz1 = invZ;
-      const iz2 = modP(iz1 * iz1);
-      const iz3 = modP(iz2 * iz1);
-      const ax = modP(x * iz2);
-      const ay = modP(y * iz3);
-      const zz = modP(z * iz1);
-      if (is0) return Point.ZERO;
-      if (zz !== _1n) throw new Error('invZ was invalid');
-      return new Point(ax, ay);
-    }
-  }
-  const wnaf = wNAF(JacobianPoint, CURVE.endo ? CURVE.nBitLength / 2 : CURVE.nBitLength);
-  // Stores precomputed values for points.
-  const pointPrecomputes = new WeakMap<Point, JacobianPoint[]>();
-
-  /**
-   * Default Point works in default aka affine coordinates: (x, y)
-   */
-  class Point implements PointType {
-    /**
-     * Base point aka generator. public_key = Point.BASE * private_key
-     */
-    static BASE: Point = new Point(CURVE.Gx, CURVE.Gy);
-    /**
-     * Identity point aka point at infinity. point = point + zero_point
-     */
-    static ZERO: Point = new Point(_0n, _0n);
-
-    // We calculate precomputes for elliptic curve point multiplication
-    // using windowed method. This specifies window size and
-    // stores precomputed values. Usually only base point would be precomputed.
-    _WINDOW_SIZE?: number;
-
-    constructor(readonly x: bigint, readonly y: bigint) {}
-
-    // "Private method", don't use it directly
-    _setWindowSize(windowSize: number) {
-      this._WINDOW_SIZE = windowSize;
-      pointPrecomputes.delete(this);
-    }
-
-    // Checks for y % 2 == 0
-    hasEvenY() {
-      return this.y % _2n === _0n;
-    }
-
-    /**
-     * Supports compressed ECDSA points
-     * @returns Point instance
-     */
-    private static fromCompressedHex(bytes: Uint8Array) {
-      const P = CURVE.P;
-      const x = bytesToNumberBE(bytes.subarray(1));
-      if (!isValidFieldElement(x)) throw new Error('Point is not on curve');
-      const y2 = weierstrassEquation(x); // y² = x³ + ax + b
-      let y = sqrtModCurve(y2, P); // y = y² ^ (p+1)/4
-      const isYOdd = (y & _1n) === _1n;
-      // ECDSA
-      const isFirstByteOdd = (bytes[0] & 1) === 1;
-      if (isFirstByteOdd !== isYOdd) y = modP(-y);
-      const point = new Point(x, y);
-      point.assertValidity();
-      return point;
-    }
-
-    private static fromUncompressedHex(bytes: Uint8Array) {
-      const x = bytesToNumberBE(bytes.subarray(1, fieldLen + 1));
-      const y = bytesToNumberBE(bytes.subarray(fieldLen + 1, 2 * fieldLen + 1));
-      const point = new Point(x, y);
-      point.assertValidity();
-      return point;
-    }
-
-    /**
-     * Converts hash string or Uint8Array to Point.
-     * @param hex short/long ECDSA hex
-     */
-    static fromHex(hex: Hex): Point {
-      const bytes = ensureBytes(hex);
-      const len = bytes.length;
-      const header = bytes[0];
-      // this.assertValidity() is done inside of those two functions
-      if (len === compressedLen && (header === 0x02 || header === 0x03))
-        return this.fromCompressedHex(bytes);
-      if (len === uncompressedLen && header === 0x04) return this.fromUncompressedHex(bytes);
-      throw new Error(
-        `Point.fromHex: received invalid point. Expected ${compressedLen} compressed bytes or ${uncompressedLen} uncompressed bytes, not ${len}`
-      );
-    }
-
-    // Multiplies generator point by privateKey.
-    static fromPrivateKey(privateKey: PrivKey) {
-      return Point.BASE.multiply(normalizePrivateKey(privateKey));
-    }
-
-    toRawBytes(isCompressed = false): Uint8Array {
-      return hexToBytes(this.toHex(isCompressed));
-    }
-
-    toHex(isCompressed = false): string {
-      const x = numToFieldStr(this.x);
-      if (isCompressed) {
-        const prefix = this.hasEvenY() ? '02' : '03';
-        return `${prefix}${x}`;
-      } else {
-        return `04${x}${numToFieldStr(this.y)}`;
-      }
-    }
-
-    // A point on curve is valid if it conforms to equation.
-    assertValidity(): void {
-      // Some 3rd-party test vectors require different wording between here & `fromCompressedHex`
-      const msg = 'Point is not on elliptic curve';
-      const { x, y } = this;
-      if (!isValidFieldElement(x) || !isValidFieldElement(y)) throw new Error(msg);
-      const left = modP(y * y);
-      const right = weierstrassEquation(x);
-      if (modP(left - right) !== _0n) throw new Error(msg);
-    }
-
-    equals(other: Point): boolean {
-      if (!(other instanceof Point)) throw new TypeError('Point#equals: expected Point');
-      return this.x === other.x && this.y === other.y;
-    }
-
-    // Returns the same point with inverted `y`
-    negate() {
-      return new Point(this.x, modP(-this.y));
-    }
-
-    // Adds point to itself
-    double() {
-      return JacobianPoint.fromAffine(this).double().toAffine();
-    }
-
-    // Adds point to other point
-    add(other: Point) {
-      return JacobianPoint.fromAffine(this).add(JacobianPoint.fromAffine(other)).toAffine();
-    }
-
-    // Subtracts other point from the point
-    subtract(other: Point) {
-      return this.add(other.negate());
-    }
-
-    multiply(scalar: number | bigint) {
-      return JacobianPoint.fromAffine(this).multiply(scalar, this).toAffine();
-    }
-
-    /**
-     * Efficiently calculate `aP + bQ`.
-     * Unsafe, can expose private key, if used incorrectly.
-     * TODO: Utilize Shamir's trick
-     * @returns non-zero affine point
-     */
-    multiplyAndAddUnsafe(Q: Point, a: bigint, b: bigint): Point | undefined {
-      const P = JacobianPoint.fromAffine(this);
-      const aP =
-        a === _0n || a === _1n || this !== Point.BASE ? P.multiplyUnsafe(a) : P.multiply(a);
-      const bQ = JacobianPoint.fromAffine(Q).multiplyUnsafe(b);
-      const sum = aP.add(bQ);
-      return sum.equals(JacobianPoint.ZERO) ? undefined : sum.toAffine();
-    }
-  }
 
   /**
    * ECDSA signature with its (r, s) properties. Supports DER & compact representations.
@@ -916,8 +1001,8 @@ export function weierstrass(curveDef: CurveType): CurveFn {
   }
 
   const utils = {
-    mod: modP,
-    invert: (n: bigint, m: bigint = CURVE.P) => mod.invert(n, m),
+    mod: (n: bigint, modulo = Fp.ORDER) => mod.mod(n, modulo),
+    invert: Fp.invert,
     isValidPrivateKey(privateKey: PrivKey) {
       try {
         normalizePrivateKey(privateKey);
@@ -943,7 +1028,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
      * Produces cryptographically secure private key from random of size (nBitLength+64)
      * as per FIPS 186 B.4.1 with modulo bias being neglible.
      */
-    randomPrivateKey: (): Uint8Array => utils.hashToPrivateKey(CURVE.randomBytes(fieldLen + 8)),
+    randomPrivateKey: (): Uint8Array => utils.hashToPrivateKey(CURVE.randomBytes(Fp.BYTES + 8)),
 
     /**
      * 1. Returns cached point which you can use to pass to `getSharedSecret` or `#multiply` by it.
@@ -1003,7 +1088,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
 
   // RFC6979 methods
   function bits2int(bytes: Uint8Array) {
-    const slice = bytes.length > fieldLen ? bytes.slice(0, fieldLen) : bytes;
+    const slice = bytes.length > Fp.BYTES ? bytes.slice(0, Fp.BYTES) : bytes;
     return bytesToNumberBE(slice);
   }
   function bits2octets(bytes: Uint8Array): Uint8Array {
@@ -1025,9 +1110,9 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     const seedArgs = [int2octets(d), bits2octets(h1)];
     // RFC6979 3.6: additional k' could be provided
     if (extraEntropy != null) {
-      if (extraEntropy === true) extraEntropy = CURVE.randomBytes(fieldLen);
+      if (extraEntropy === true) extraEntropy = CURVE.randomBytes(Fp.BYTES);
       const e = ensureBytes(extraEntropy);
-      if (e.length !== fieldLen) throw new Error(`sign: Expected ${fieldLen} bytes of extra data`);
+      if (e.length !== Fp.BYTES) throw new Error(`sign: Expected ${Fp.BYTES} bytes of extra data`);
       seedArgs.push(e);
     }
     // seed is constructed from private key and message

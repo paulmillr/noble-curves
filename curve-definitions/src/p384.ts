@@ -1,6 +1,7 @@
 /*! @noble/curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { createCurve } from './_shortw_utils.js';
 import { sha384 } from '@noble/hashes/sha512';
+import { Fp } from '@noble/curves/modular';
 
 // NIST secp384r1 aka P384
 // https://www.secg.org/sec2-v2.pdf, https://neuromancer.sk/std/nist/P-384
@@ -10,7 +11,7 @@ export const P384 = createCurve({
   a: BigInt('0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffeffffffff0000000000000000fffffffc'),
   b: BigInt('0xb3312fa7e23ee7e4988e056be3f82d19181d9c6efe8141120314088f5013875ac656398d8a2ed19d2a85c8edd3ec2aef'),
   // Field over which we'll do calculations. 2n**384n - 2n**128n - 2n**96n + 2n**32n - 1n
-  P: BigInt('0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffeffffffff0000000000000000ffffffff'),
+  Fp: Fp(BigInt('0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffeffffffff0000000000000000ffffffff')),
   // Curve order, total count of valid points in the field.
   n: BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffc7634d81f4372ddf581a0db248b0a77aecec196accc52973'),
   // Base point (x, y) aka generator point

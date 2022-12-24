@@ -1,6 +1,6 @@
 /*! @noble/curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha256 } from '@noble/hashes/sha256';
-import { mod, pow2 } from '@noble/curves/modular';
+import { Fp as FpFn, mod, pow2 } from '@noble/curves/modular';
 import { createCurve } from './_shortw_utils.js';
 import { PointType } from '@noble/curves/weierstrass';
 import {
@@ -57,6 +57,8 @@ function sqrtMod(y: bigint): bigint {
   return pow2(t2, _2n, P);
 }
 
+const Fp = FpFn(secp256k1P, undefined, undefined, { sqrt: sqrtMod });
+
 export const secp256k1 = createCurve(
   {
     // Params: a, b
@@ -65,7 +67,7 @@ export const secp256k1 = createCurve(
     b: BigInt(7),
     // Field over which we'll do calculations;
     // 2n**256n - 2n**32n - 2n**9n - 2n**8n - 2n**7n - 2n**6n - 2n**4n - 1n
-    P: secp256k1P,
+    Fp,
     // Curve order, total count of valid points in the field
     n: secp256k1N,
     // Base point (x, y) aka generator point
@@ -74,7 +76,6 @@ export const secp256k1 = createCurve(
     h: BigInt(1),
     // Alllow only low-S signatures by default in sign() and verify()
     lowS: true,
-    sqrtMod,
     endo: {
       // Params taken from https://gist.github.com/paulmillr/eb670806793e84df628a7c434a873066
       beta: BigInt('0x7ae96a2b657c07106e64479eac3434e99cf0497512f58995c1396c28719501ee'),
@@ -111,7 +112,7 @@ const numTo32bStr = secp256k1.utils._bigintToString;
 const normalizePrivateKey = secp256k1.utils._normalizePrivateKey;
 
 // TODO: export?
-function normalizePublicKey(publicKey: Hex | PointType): PointType {
+function normalizePublicKey(publicKey: Hex | PointType<bigint>): PointType<bigint> {
   if (publicKey instanceof secp256k1.Point) {
     publicKey.assertValidity();
     return publicKey;
@@ -125,7 +126,7 @@ function normalizePublicKey(publicKey: Hex | PointType): PointType {
       let y = sqrtMod(y2); // y = y² ^ (p+1)/4
       const isYOdd = (y & _1n) === _1n;
       // Schnorr
-      if (isYOdd) y = mod(-y, secp256k1.CURVE.P);
+      if (isYOdd) y = secp256k1.CURVE.Fp.negate(y);
       const point = new secp256k1.Point(x, y);
       point.assertValidity();
       return point;
@@ -156,7 +157,7 @@ export function taggedHash(tag: string, ...messages: Uint8Array[]): Uint8Array {
   return sha256(concatBytes(tagP, ...messages));
 }
 
-const toRawX = (point: PointType) => point.toRawBytes(true).slice(1);
+const toRawX = (point: PointType<bigint>) => point.toRawBytes(true).slice(1);
 
 // Schnorr signatures are superior to ECDSA from above.
 // Below is Schnorr-specific code as per BIP0340.

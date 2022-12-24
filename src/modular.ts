@@ -1,13 +1,9 @@
 /*! @noble/curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-
+import * as utils from './utils.js';
 // Utilities for modular arithmetics
 const _0n = BigInt(0);
 const _1n = BigInt(1);
 const _2n = BigInt(2);
-const _3n = BigInt(3);
-const _4n = BigInt(4);
-const _5n = BigInt(5);
-const _8n = BigInt(8);
 
 // Calculates a modulo b
 export function mod(a: bigint, b: bigint): bigint {
@@ -16,9 +12,11 @@ export function mod(a: bigint, b: bigint): bigint {
 }
 /**
  * Efficiently exponentiate num to power and do modular division.
+ * Unsafe in some contexts: uses ladder, so can expose bigint bits.
  * @example
  * powMod(2n, 6n, 11n) // 64n % 11n == 9n
  */
+// TODO: use field version && remove
 export function pow(num: bigint, power: bigint, modulo: bigint): bigint {
   if (modulo <= _0n || power < _0n) throw new Error('Expected power/modulo > 0');
   if (modulo === _1n) return _0n;
@@ -32,6 +30,7 @@ export function pow(num: bigint, power: bigint, modulo: bigint): bigint {
 }
 
 // Does x ^ (2 ^ power) mod p. pow2(30, 4) == 30 ^ (2 ^ 4)
+// TODO: Fp version?
 export function pow2(x: bigint, power: bigint, modulo: bigint): bigint {
   let res = x;
   while (power-- > _0n) {
@@ -65,44 +64,11 @@ export function invert(number: bigint, modulo: bigint): bigint {
 }
 
 /**
- * Division over finite field.
- * `a/b mod p == a * invert(b) mod p`
+ * Calculates Legendre symbol (a | p), which denotes the value of a^((p-1)/2) (mod p).
+ * * (a | p) ≡ 1    if a is a square (mod p)
+ * * (a | p) ≡ -1   if a is not a square (mod p)
+ * * (a | p) ≡ 0    if a ≡ 0 (mod p)
  */
-export function div(numerator: bigint, denominator: bigint, modulo: bigint): bigint {
-  const num = mod(numerator, modulo);
-  const iden = invert(denominator, modulo);
-  return mod(num * iden, modulo);
-}
-
-/**
- * Takes a list of numbers, efficiently inverts all of them.
- * @param nums list of bigints
- * @param p modulo
- * @returns list of inverted bigints
- * @example
- * invertBatch([1n, 2n, 4n], 21n);
- * // => [1n, 11n, 16n]
- */
-export function invertBatch(nums: bigint[], modulo: bigint): bigint[] {
-  const scratch = new Array(nums.length);
-  // Walk from first to last, multiply them by each other MOD p
-  const lastMultiplied = nums.reduce((acc, num, i) => {
-    if (num === _0n) return acc;
-    scratch[i] = acc;
-    return mod(acc * num, modulo);
-  }, _1n);
-  // Invert last element
-  const inverted = invert(lastMultiplied, modulo);
-  // Walk from last to first, multiply them by inverted each other MOD p
-  nums.reduceRight((acc, num, i) => {
-    if (num === _0n) return acc;
-    scratch[i] = mod(acc * scratch[i], modulo);
-    return mod(acc * num, modulo);
-  }, inverted);
-  return scratch;
-}
-
-// Calculates Legendre symbol: num^((P-1)/2)
 export function legendre(num: bigint, fieldPrime: bigint): bigint {
   return pow(num, (fieldPrime - _1n) / _2n, fieldPrime);
 }
@@ -110,16 +76,28 @@ export function legendre(num: bigint, fieldPrime: bigint): bigint {
 /**
  * Calculates square root of a number in a finite field.
  */
+// TODO: rewrite as generic Fp function && remove bls versions
 export function sqrt(number: bigint, modulo: bigint): bigint {
+  // prettier-ignore
+  const _3n = BigInt(3), _4n = BigInt(4), _5n = BigInt(5), _8n = BigInt(8);
   const n = number;
   const P = modulo;
   const p1div4 = (P + _1n) / _4n;
 
-  // P = 3 (mod 4)
+  // P ≡ 3 (mod 4)
   // sqrt n = n^((P+1)/4)
-  if (P % _4n === _3n) return pow(n, p1div4, P);
+  if (P % _4n === _3n) {
+    // Not all roots possible!
+    // const ORDER =
+    //   0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaabn;
+    // const NUM = 72057594037927816n;
+    // TODO: fix sqrtMod in secp256k1
+    const root = pow(n, p1div4, P);
+    if (mod(root * root, modulo) !== number) throw new Error('Cannot find square root');
+    return root;
+  }
 
-  // P = 5 (mod 8)
+  // P ≡ 5 (mod 8)
   if (P % _8n === _5n) {
     const n2 = mod(n * _2n, P);
     const v = pow(n2, (P - _5n) / _8n, P);
@@ -160,10 +138,164 @@ export function sqrt(number: bigint, modulo: bigint): bigint {
 // Little-endian check for first LE bit (last BE bit);
 export const isNegativeLE = (num: bigint, modulo: bigint) => (mod(num, modulo) & _1n) === _1n;
 
-// An idea on modular arithmetic for bls12-381:
-// const FIELD = {add, pow, sqrt, mul};
-// Functions will take field elements, no need for an additional class
-// Could be faster. 1 bigint field will just do operations and mod later:
-// instead of 'r = mod(r * b, P)' we will write r = mul(r, b);
-// Could be insecure without shape check, so it needs to be done.
-// Functions could be inlined by JIT.
+// Currently completly inconsistent naming:
+// - readable: add, mul, sqr, sqrt, inv, div, pow, eq, sub
+// - unreadable mess: addition, multiply, square, squareRoot, inversion, divide, power, equals, subtract
+
+export interface Field<T> {
+  ORDER: bigint;
+  BYTES: number;
+  BITS: number;
+  MASK: bigint;
+  ZERO: T;
+  ONE: T;
+  // 1-arg
+  create: (num: T) => T;
+  isValid: (num: T) => boolean;
+  isZero: (num: T) => boolean;
+  negate(num: T): T;
+  invert(num: T): T;
+  sqrt(num: T): T;
+  square(num: T): T;
+  // 2-args
+  equals(lhs: T, rhs: T): boolean;
+  add(lhs: T, rhs: T): T;
+  subtract(lhs: T, rhs: T): T;
+  multiply(lhs: T, rhs: T | bigint): T;
+  pow(lhs: T, power: bigint): T;
+  div(lhs: T, rhs: T | bigint): T;
+  // N for NonNormalized (for now)
+  addN(lhs: T, rhs: T): T;
+  subtractN(lhs: T, rhs: T): T;
+  multiplyN(lhs: T, rhs: T | bigint): T;
+  squareN(num: T): T;
+
+  // Optional
+  isOdd?(num: T): boolean; // Odd instead of even since we have it for Fp2
+  legendre?(num: T): T;
+  pow(lhs: T, power: bigint): T;
+  invertBatch: (lst: T[]) => T[];
+  toBytes(num: T): Uint8Array;
+  fromBytes(bytes: Uint8Array): T;
+}
+// prettier-ignore
+const FIELD_FIELDS = [
+  'create', 'isValid', 'isZero', 'negate', 'invert', 'sqrt', 'square',
+  'equals', 'add', 'subtract', 'multiply', 'pow', 'div',
+  'addN', 'subtractN', 'multiplyN', 'squareN'
+] as const;
+export function validateField<T>(field: Field<T>) {
+  for (const i of ['ORDER', 'MASK'] as const) {
+    if (typeof field[i] !== 'bigint')
+      throw new Error(`Invalid field param ${i}=${field[i]} (${typeof field[i]})`);
+  }
+  for (const i of ['BYTES', 'BITS'] as const) {
+    if (typeof field[i] !== 'number')
+      throw new Error(`Invalid field param ${i}=${field[i]} (${typeof field[i]})`);
+  }
+  for (const i of FIELD_FIELDS) {
+    if (typeof field[i] !== 'function')
+      throw new Error(`Invalid field param ${i}=${field[i]} (${typeof field[i]})`);
+  }
+}
+
+// Generic field functions
+export function FpPow<T>(f: Field<T>, num: T, power: bigint): T {
+  // Should have same speed as pow for bigints
+  // TODO: benchmark!
+  if (power < _0n) throw new Error('Expected power > 0');
+  if (power === _0n) return f.ONE;
+  if (power === _1n) return num;
+  let p = f.ONE;
+  let d = num;
+  while (power > _0n) {
+    if (power & _1n) p = f.multiply(p, d);
+    d = f.square(d);
+    power >>= 1n;
+  }
+  return p;
+}
+
+export function FpInvertBatch<T>(f: Field<T>, nums: T[]): T[] {
+  const tmp = new Array(nums.length);
+  // Walk from first to last, multiply them by each other MOD p
+  const lastMultiplied = nums.reduce((acc, num, i) => {
+    if (f.isZero(num)) return acc;
+    tmp[i] = acc;
+    return f.multiply(acc, num);
+  }, f.ONE);
+  // Invert last element
+  const inverted = f.invert(lastMultiplied);
+  // Walk from last to first, multiply them by inverted each other MOD p
+  nums.reduceRight((acc, num, i) => {
+    if (f.isZero(num)) return acc;
+    tmp[i] = f.multiply(acc, tmp[i]);
+    return f.multiply(acc, num);
+  }, inverted);
+  return tmp;
+}
+
+export function FpDiv<T>(f: Field<T>, lhs: T, rhs: T | bigint): T {
+  return f.multiply(lhs, typeof rhs === 'bigint' ? invert(rhs, f.ORDER) : f.invert(rhs));
+}
+
+// NOTE: very fragile, always bench. Major performance points:
+// - NonNormalized ops
+// - Object.freeze
+// - same shape of object (don't add/remove keys)
+export function Fp(
+  ORDER: bigint,
+  bitLen?: number,
+  isLE = false,
+  redef: Partial<Field<bigint>> = {}
+): Readonly<Field<bigint>> {
+  if (ORDER <= _0n) throw new Error(`Expected Fp ORDER > 0, got ${ORDER}`);
+  const { nBitLength: BITS, nByteLength: BYTES } = utils.nLength(ORDER, bitLen);
+  if (BYTES > 2048) throw new Error('Field lengths over 2048 bytes are not supported');
+  const sqrtP = (num: bigint) => sqrt(num, ORDER);
+  const f: Field<bigint> = Object.freeze({
+    ORDER,
+    BITS,
+    BYTES,
+    MASK: utils.bitMask(BITS),
+    ZERO: _0n,
+    ONE: _1n,
+    create: (num) => mod(num, ORDER),
+    isValid: (num) => {
+      if (typeof num !== 'bigint')
+        throw new Error(`Invalid field element: expected bigint, got ${typeof num}`);
+      return _0n <= num && num < ORDER;
+    },
+    isZero: (num) => num === _0n,
+    isOdd: (num) => (num & _1n) === _1n,
+    negate: (num) => mod(-num, ORDER),
+    equals: (lhs, rhs) => lhs === rhs,
+
+    square: (num) => mod(num * num, ORDER),
+    add: (lhs, rhs) => mod(lhs + rhs, ORDER),
+    subtract: (lhs, rhs) => mod(lhs - rhs, ORDER),
+    multiply: (lhs, rhs) => mod(lhs * rhs, ORDER),
+    pow: (num, power) => FpPow(f, num, power),
+    div: (lhs, rhs) => mod(lhs * invert(rhs, ORDER), ORDER),
+
+    // Same as above, but doesn't normalize
+    squareN: (num) => num * num,
+    addN: (lhs, rhs) => lhs + rhs,
+    subtractN: (lhs, rhs) => lhs - rhs,
+    multiplyN: (lhs, rhs) => lhs * rhs,
+
+    invert: (num) => invert(num, ORDER),
+    sqrt: redef.sqrt || sqrtP,
+    invertBatch: (lst) => FpInvertBatch(f, lst),
+
+    toBytes: (num) =>
+      isLE ? utils.numberToBytesLE(num, BYTES) : utils.numberToBytesBE(num, BYTES),
+
+    fromBytes: (bytes) => {
+      if (bytes.length !== BYTES)
+        throw new Error(`Fp.fromBytes: expected ${BYTES}, got ${bytes.length}`);
+      return isLE ? utils.bytesToNumberLE(bytes) : utils.bytesToNumberBE(bytes);
+    },
+  } as Field<bigint>);
+  return Object.freeze(f);
+}

@@ -8,5 +8,6 @@ import './ed25519.test.js';
 import './secp256k1.test.js';
 import './stark/stark.test.js';
 import './jubjub.test.js';
+import './bls12-381.test.js';
 
 should.run();

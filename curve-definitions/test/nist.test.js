@@ -34,7 +34,7 @@ should('Curve Fields', () => {
     secp521r1:
       0x01ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffn,
   };
-  for (const n in vectors) deepStrictEqual(NIST[n].CURVE.P, vectors[n]);
+  for (const n in vectors) deepStrictEqual(NIST[n].CURVE.Fp.ORDER, vectors[n]);
 });
 
 should('wychenproof ECDSA vectors', () => {
@@ -330,7 +330,6 @@ function runWycheproof(name, CURVE, group, index) {
       } else {
         deepStrictEqual(verified, true, `${index}: valid`);
       }
-
     } else if (test.result === 'invalid') {
       let failed = false;
       try {

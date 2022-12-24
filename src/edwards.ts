@@ -37,7 +37,7 @@ export type CHash = {
   create(): any;
 };
 
-export type CurveType = BasicCurve & {
+export type CurveType = BasicCurve<bigint> & {
   // Params: a, d
   a: bigint;
   d: bigint;
@@ -132,8 +132,8 @@ export type CurveFn = {
   ExtendedPoint: ExtendedPointConstructor;
   Signature: SignatureConstructor;
   utils: {
-    mod: (a: bigint, b?: bigint) => bigint;
-    invert: (number: bigint, modulo?: bigint) => bigint;
+    mod: (a: bigint) => bigint;
+    invert: (number: bigint) => bigint;
     randomPrivateKey: () => Uint8Array;
     getExtendedPublicKey: (key: PrivKey) => {
       head: Uint8Array;
@@ -148,21 +148,22 @@ export type CurveFn = {
 // NOTE: it is not generic twisted curve for now, but ed25519/ed448 generic implementation
 export function twistedEdwards(curveDef: CurveType): CurveFn {
   const CURVE = validateOpts(curveDef) as ReturnType<typeof validateOpts>;
+  const Fp = CURVE.Fp as mod.Field<bigint>;
   const CURVE_ORDER = CURVE.n;
-  const fieldLen = CURVE.nByteLength; // 32 (length of one field element)
+  const fieldLen = Fp.BYTES; // 32 (length of one field element)
   if (fieldLen > 2048) throw new Error('Field lengths over 2048 are not supported');
   const groupLen = CURVE.nByteLength;
   // (2n ** 256n).toString(16);
   const maxGroupElement = _2n ** BigInt(groupLen * 8); // previous POW_2_256
 
   // Function overrides
-  const { P, randomBytes } = CURVE;
-  const modP = (a: bigint) => mod.mod(a, P);
+  const { randomBytes } = CURVE;
+  const modP = Fp.create;
 
   // sqrt(u/v)
   function _uvRatio(u: bigint, v: bigint) {
     try {
-      const value = mod.sqrt(u * mod.invert(v, P), P);
+      const value = Fp.sqrt(u * Fp.invert(v));
       return { isValid: true, value };
     } catch (e) {
       return { isValid: false, value: _0n };
@@ -199,10 +200,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     // invert on all of them. invert is very slow operation,
     // so this improves performance massively.
     static toAffineBatch(points: ExtendedPoint[]): Point[] {
-      const toInv = mod.invertBatch(
-        points.map((p) => p.z),
-        P
-      );
+      const toInv = Fp.invertBatch(points.map((p) => p.z));
       return points.map((p, i) => p.toAffine(toInv[i]));
     }
 
@@ -349,7 +347,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     toAffine(invZ?: bigint): Point {
       const { x, y, z } = this;
       const is0 = this.equals(ExtendedPoint.ZERO);
-      if (invZ == null) invZ = is0 ? _8n : mod.invert(z, P); // 8 was chosen arbitrarily
+      if (invZ == null) invZ = is0 ? _8n : (Fp.invert(z) as bigint); // 8 was chosen arbitrarily
       const ax = modP(x * invZ);
       const ay = modP(y * invZ);
       const zz = modP(z * invZ);
@@ -392,7 +390,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     // Converts hash string or Uint8Array to Point.
     // Uses algo from RFC8032 5.1.3.
     static fromHex(hex: Hex, strict = true) {
-      const { d, P, a } = CURVE;
+      const { d, a } = CURVE;
       hex = ensureBytes(hex, fieldLen);
       // 1.  First, interpret the string as an integer in little-endian
       // representation. Bit 255 of this number is the least significant
@@ -404,7 +402,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       normed[fieldLen - 1] = lastByte & ~0x80;
       const y = bytesToNumberLE(normed);
 
-      if (strict && y >= P) throw new Error('Expected 0 < hex < P');
+      if (strict && y >= Fp.ORDER) throw new Error('Expected 0 < hex < P');
       if (!strict && y >= maxGroupElement) throw new Error('Expected 0 < hex < 2**256');
 
       // 2.  To recover the x-coordinate, the curve equation implies
@@ -644,7 +642,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
   const utils = {
     getExtendedPublicKey,
     mod: modP,
-    invert: (a: bigint, m = CURVE.P) => mod.invert(a, m),
+    invert: Fp.invert,
 
     /**
      * Not needed for ed25519 private keys. Needed if you use scalars directly (rare).

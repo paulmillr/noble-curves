@@ -1,6 +1,7 @@
 import { hmac } from '@noble/hashes/hmac';
 import { concatBytes, randomBytes } from '@noble/hashes/utils';
-import { weierstrass, CurveType, CHash } from '@noble/curves/weierstrass';
+import { weierstrass, CurveType } from '@noble/curves/weierstrass';
+import { CHash } from '@noble/curves/utils';
 
 export function getHash(hash: CHash) {
   return {
