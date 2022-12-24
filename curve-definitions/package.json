@@ -1,6 +1,6 @@
 {
   "name": "micro-curve-definitions",
-  "version": "0.2.1",
+  "version": "0.4.0",
   "description": "Curve definitions for @noble/curves",
   "files": [
     "lib"
@@ -9,7 +9,7 @@
   "module": "lib/index.js",
   "types": "lib/index.d.ts",
   "dependencies": {
-    "@noble/curves": "file:../",
+    "@noble/curves": "0.4.0",
     "@noble/hashes": "1.1.5"
   },
   "devDependencies": {
