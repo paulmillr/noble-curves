@@ -2,22 +2,24 @@
 
 Minimal, zero-dependency JS implementation of elliptic curve cryptography.
 
-- Short Weierstrass curve with ECDSA signatures
-- Twisted Edwards curve with EdDSA signatures
-- Montgomery curve for ECDH key agreement
+- Short Weierstrass, Edwards, Montgomery curves
+- ECDSA, EdDSA, Schnorr, BLS signature schemes
+- ECDH key agreement
+- [hash to curve](https://datatracker.ietf.org/doc/draft-irtf-cfrg-hash-to-curve/) algorithms for encoding or hashing an arbitrary string to a point on an elliptic curve
+- Auditable, [fast](#speed)
+- 🔻 Helps JS bundlers with lack of entry point, ensures small size of your app
+- 🔍 Unique tests ensure correctness. Wycheproof vectors included
 
 To keep the package minimal, no curve definitions are provided out-of-box. Use `micro-curve-definitions` module:
 
-- It provides P192, P224, P256, P384, P521, secp256k1, stark curve, bn254, pasta (pallas/vesta) short weierstrass curves
-- It also provides ed25519 and ed448 twisted edwards curves
-- Main reason for separate package is the fact hashing library (like `@noble/hashes`) is required for full functionality
+- It provides P192, P224, P256, P384, P521, secp256k1, stark, bn254, pasta (pallas/vesta), ed25519, ed448 & bls12-381 curves
+- Main reason for separate package is the fact hashing library (like @noble/hashes) is required for full functionality
 - We may reconsider merging packages in future, when a stable version would be ready
 
-Future plans:
-
-- hash to curve standard
-- point indistinguishability
-- pairings
+The goal for the near future is to update previous packages
+([secp256k1](https://github.com/paulmillr/noble-secp256k1),
+[ed25519](https://github.com/paulmillr/noble-ed25519),
+[bls12-381](https://github.com/paulmillr/noble-bls12-381)) with lean UMD builds based on noble-curves. This would improve compatibility & allow having one codebase for everything.
 
 ### This library belongs to _noble_ crypto
 
@@ -28,11 +30,10 @@ Future plans:
 - Supported in all major browsers and stable node.js versions
 - All releases are signed with PGP keys
 - Check out [homepage](https://paulmillr.com/noble/) & all libraries:
-  [secp256k1](https://github.com/paulmillr/noble-secp256k1),
+  [curves](https://github.com/paulmillr/noble-curves) ([secp256k1](https://github.com/paulmillr/noble-secp256k1),
   [ed25519](https://github.com/paulmillr/noble-ed25519),
-  [bls12-381](https://github.com/paulmillr/noble-bls12-381),
-  [hashes](https://github.com/paulmillr/noble-hashes),
-  [curves](https://github.com/paulmillr/noble-curves)
+  [bls12-381](https://github.com/paulmillr/noble-bls12-381)),
+  [hashes](https://github.com/paulmillr/noble-hashes)
 
 ## Usage
 
