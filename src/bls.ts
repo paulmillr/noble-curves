@@ -1,3 +1,4 @@
+/*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 // Barreto-Lynn-Scott Curves. A family of pairing friendly curves, with embedding degree = 12 or 24
 // NOTE: only 12 supported for now
 // Constructed from pair of weierstrass curves, based pairing logic

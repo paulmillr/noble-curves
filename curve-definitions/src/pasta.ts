@@ -4,8 +4,8 @@ import { weierstrass } from '@noble/curves/weierstrass';
 import { getHash } from './_shortw_utils.js';
 import * as mod from '@noble/curves/modular';
 
-const p = BigInt('0x40000000000000000000000000000000224698fc094cf91b992d30ed00000001');
-const q = BigInt('0x40000000000000000000000000000000224698fc0994a8dd8c46eb2100000001');
+export const p = BigInt('0x40000000000000000000000000000000224698fc094cf91b992d30ed00000001');
+export const q = BigInt('0x40000000000000000000000000000000224698fc0994a8dd8c46eb2100000001');
 
 // https://neuromancer.sk/std/other/Pallas
 export const pallas = weierstrass({

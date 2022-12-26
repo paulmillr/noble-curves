@@ -1,4 +1,4 @@
-/*! @noble/curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
+/*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import * as mod from './modular.js';
 const _0n = BigInt(0);
 const _1n = BigInt(1);

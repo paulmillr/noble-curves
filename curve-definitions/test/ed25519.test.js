@@ -346,7 +346,7 @@ should('ristretto255/should not convert bad bytes encoding', () => {
     '47cfc5497c53dc8e61c91d17fd626ffb1c49e2bca94eed052281b510b1117a24',
     'f1c6165d33367351b0da8f6e4511010c68174a03b6581212c71c0e1d026c3c72',
     '87260f7a2f12495118360f02c26a470f450dadf34a413d21042b43b9d93e1309',
-    // These are all bad because they give a nonsquare x^2.
+    // These are all bad because they give a nonsquare x².
     '26948d35ca62e643e26a83177332e6b6afeb9d08e4268b650f1f5bbd8d81d371',
     '4eac077a713c57b4f4397629a4145982c661f48044dd3f96427d40b147d9742f',
     'de6a7b00deadc788eb6b6c8d20c0ae96c2f2019078fa604fee5b87d6e989ad7b',

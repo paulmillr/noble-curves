@@ -36,10 +36,11 @@ const divNearest = (a: bigint, b: bigint) => (a + b / _2n) / b;
  * We are unwrapping the loop and multiplying it bit-by-bit.
  * (P+1n/4n).toString(2) would produce bits [223x 1, 0, 22x 1, 4x 0, 11, 00]
  */
-// prettier-ignore
 function sqrtMod(y: bigint): bigint {
   const P = secp256k1P;
-  const _3n = BigInt(3), _6n = BigInt(6), _11n = BigInt(11); const _22n = BigInt(22);
+  // prettier-ignore
+  const _3n = BigInt(3), _6n = BigInt(6), _11n = BigInt(11), _22n = BigInt(22);
+  // prettier-ignore
   const _23n = BigInt(23), _44n = BigInt(44), _88n = BigInt(88);
   const b2 = (y * y * y) % P; // x^3, 11
   const b3 = (b2 * b2 * y) % P; // x^7

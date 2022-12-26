@@ -1,5 +1,5 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-// Implementation of Twisted Edwards curve. The formula is: ax² + y² = 1 + dx²y²
+// Twisted Edwards curve. The formula is: ax² + y² = 1 + dx²y²
 
 // Differences from @noble/ed25519 1.7:
 // 1. Different field element lengths in ed448:

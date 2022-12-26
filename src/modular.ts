@@ -1,4 +1,4 @@
-/*! @noble/curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
+/*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import * as utils from './utils.js';
 // Utilities for modular arithmetics
 const _0n = BigInt(0);
@@ -75,6 +75,7 @@ export function legendre(num: bigint, fieldPrime: bigint): bigint {
 
 /**
  * Calculates square root of a number in a finite field.
+ * √a mod P
  */
 // TODO: rewrite as generic Fp function && remove bls versions
 export function sqrt(number: bigint, modulo: bigint): bigint {
@@ -85,7 +86,7 @@ export function sqrt(number: bigint, modulo: bigint): bigint {
   const p1div4 = (P + _1n) / _4n;
 
   // P ≡ 3 (mod 4)
-  // sqrt n = n^((P+1)/4)
+  // √n = n^((P+1)/4)
   if (P % _4n === _3n) {
     // Not all roots possible!
     // const ORDER =

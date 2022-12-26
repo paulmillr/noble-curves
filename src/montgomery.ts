@@ -1,3 +1,4 @@
+/*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import * as mod from './modular.js';
 import {
   ensureBytes,
@@ -86,7 +87,7 @@ export function montgomery(curveDef: CurveType): CurveFn {
 
   // cswap from RFC7748
   // NOTE: cswap is not from RFC7748!
-  /* 
+  /*
     cswap(swap, x_2, x_3):
          dummy = mask(swap) AND (x_2 XOR x_3)
          x_2 = x_2 XOR dummy

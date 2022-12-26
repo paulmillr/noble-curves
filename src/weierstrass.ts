@@ -1,5 +1,5 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-// Implementation of Short Weierstrass curve. The formula is: y² = x³ + ax + b
+// Short Weierstrass curve. The formula is: y² = x³ + ax + b
 
 // TODO: sync vs async naming
 // TODO: default randomBytes

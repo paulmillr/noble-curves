@@ -652,8 +652,8 @@ for (let i = 0; i < VECTORS_RFC8032_PH.length; i++) {
 should('X448 base point', () => {
   const { x, y } = ed448.Point.BASE;
   const { P } = ed448.CURVE;
-  const invX = ed448.utils.invert(x * x, P); // x^2
-  const u = ed448.utils.mod(y * y * invX, P); // (y^2/x^2)
+  const invX = ed448.utils.invert(x * x, P); // x²
+  const u = ed448.utils.mod(y * y * invX, P); // (y²/x²)
   deepStrictEqual(hex(numberToBytesLE(u, 56)), x448.Gu);
 });
 

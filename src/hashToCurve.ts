@@ -1,3 +1,4 @@
+/*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { CHash, concatBytes } from './utils.js';
 import * as mod from './modular.js';
 

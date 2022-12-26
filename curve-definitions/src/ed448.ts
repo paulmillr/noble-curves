@@ -18,13 +18,14 @@ const ed448P = BigInt(
 );
 
 // powPminus3div4 calculates z = x^k mod p, where k = (p-3)/4.
+// Used for efficient square root calculation.
+// ((P-3)/4).toString(2) would produce bits [223x 1, 0, 222x 1]
 function ed448_pow_Pminus3div4(x: bigint): bigint {
   const P = ed448P;
   // prettier-ignore
-  let [_1n, _2n, _3n, _11n, _22n, _44n, _88n, _223n] = [1, 2, 3, 11, 22, 44, 88, 223]
-    .map(n => BigInt(n));
-  // x ** ((P - 3n)/4n) % P
-  // [223 of 1, 0, 222 of 1], almost same as secp!
+  const _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3), _11n = BigInt(11);
+  // prettier-ignore
+  const _22n = BigInt(22), _44n = BigInt(44), _88n = BigInt(88), _223n = BigInt(223);
   const b2 = (x * x * x) % P;
   const b3 = (b2 * b2 * x) % P;
   const b6 = (pow2(b3, _3n, P) * b3) % P;
@@ -88,6 +89,7 @@ const ED448_DEF = {
       data
     );
   },
+
   // Constant-time ratio of u to v. Allows to combine inversion and square root u/√v.
   // Uses algo from RFC8032 5.1.3.
   uvRatio: (u: bigint, v: bigint): { isValid: boolean; value: bigint } => {
@@ -97,16 +99,15 @@ const ED448_DEF = {
     //   candidate root x = (u/v)^((p+1)/4).  This can be done using the
     // following trick, to use a single modular powering for both the
     // inversion of v and the square root:
-    //           (p+1)/4    3            (p-3)/4
-    // x = (u/v)        = u  v (u^5 v^3)         (mod p)
-    const u2v = mod(u * u * v, P);
-    const u3v = mod(u2v * u, P); // u^2v
-    const u5v3 = mod(u3v * u2v * v, P); // u^5v^3
+    // x = (u/v)^((p+1)/4)   = u³v(u⁵v³)^((p-3)/4)   (mod p)
+    const u2v = mod(u * u * v, P); // u²v
+    const u3v = mod(u2v * u, P); // u³v
+    const u5v3 = mod(u3v * u2v * v, P); // u⁵v³
     const root = ed448_pow_Pminus3div4(u5v3);
     const x = mod(u3v * root, P);
     // Verify that root is exists
-    const x2 = mod(x * x, P); // x^2
-    // If v * x^2 = u, the recovered x-coordinate is x.  Otherwise, no
+    const x2 = mod(x * x, P); // x²
+    // If vx² = u, the recovered x-coordinate is x.  Otherwise, no
     // square root exists, and the decoding fails.
     return { isValid: mod(x2 * v, P) === u, value: x };
   },
