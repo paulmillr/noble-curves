@@ -3,7 +3,7 @@ import { sha512 } from '@noble/hashes/sha512';
 import { concatBytes, randomBytes, utf8ToBytes } from '@noble/hashes/utils';
 import { twistedEdwards, ExtendedPointType } from '@noble/curves/edwards';
 import { montgomery } from '@noble/curves/montgomery';
-import { mod, pow2, isNegativeLE, Fp as FpFn } from '@noble/curves/modular';
+import { mod, pow2, isNegativeLE, Fp } from '@noble/curves/modular';
 import {
   ensureBytes,
   equalBytes,
@@ -98,7 +98,7 @@ const ED25519_DEF = {
   // Negative number is P - number, and division is invert(number, P)
   d: BigInt('37095705934669439343138083508754565189542113879843219016388785533085940283555'),
   // Finite field 𝔽p over which we'll do calculations; 2n ** 255n - 19n
-  Fp: FpFn(ED25519_P),
+  Fp: Fp(ED25519_P),
   // Subgroup order: how many points ed25519 has
   // 2n ** 252n + 27742317777372353535851937790883648493n;
   n: BigInt('7237005577332262213973186563042994240857116359379907606001950938285454250989'),

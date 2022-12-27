@@ -1,6 +1,6 @@
 /*! @noble/curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha256 } from '@noble/hashes/sha256';
-import { Fp as FpFn, mod, pow2 } from '@noble/curves/modular';
+import { Fp, mod, pow2 } from '@noble/curves/modular';
 import { createCurve } from './_shortw_utils.js';
 import { PointType } from '@noble/curves/weierstrass';
 import {
@@ -58,7 +58,7 @@ function sqrtMod(y: bigint): bigint {
   return pow2(t2, _2n, P);
 }
 
-const Fp = FpFn(secp256k1P, undefined, undefined, { sqrt: sqrtMod });
+const fp = Fp(secp256k1P, undefined, undefined, { sqrt: sqrtMod });
 
 export const secp256k1 = createCurve(
   {
@@ -68,7 +68,7 @@ export const secp256k1 = createCurve(
     b: BigInt(7),
     // Field over which we'll do calculations;
     // 2n**256n - 2n**32n - 2n**9n - 2n**8n - 2n**7n - 2n**6n - 2n**4n - 1n
-    Fp,
+    Fp: fp,
     // Curve order, total count of valid points in the field
     n: secp256k1N,
     // Base point (x, y) aka generator point

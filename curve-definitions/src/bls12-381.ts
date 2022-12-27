@@ -243,9 +243,7 @@ const Fp6Multiply = ({ c0, c1, c2 }: Fp6, rhs: Fp6 | bigint) => {
     // t0 + (c1 + c2) * (r1 * r2) - (T1 + T2) * (u + 1)
     c0: Fp2.add(
       t0,
-      Fp2.mulByNonresidue(
-        Fp2.sub(Fp2.mul(Fp2.add(c1, c2), Fp2.add(r1, r2)), Fp2.add(t1, t2))
-      )
+      Fp2.mulByNonresidue(Fp2.sub(Fp2.mul(Fp2.add(c1, c2), Fp2.add(r1, r2)), Fp2.add(t1, t2)))
     ),
     // (c0 + c1) * (r0 + r1) - (T0 + T1) + T2 * (u + 1)
     c1: Fp2.add(
@@ -318,10 +316,7 @@ const Fp6: mod.Field<Fp6> & Fp6Utils = {
     let t2 = Fp2.sub(Fp2.square(c1), Fp2.mul(c0, c2)); // c1² - c0 * c2
     // 1/(((c2 * T1 + c1 * T2) * v) + c0 * T0)
     let t4 = Fp2.invert(
-      Fp2.add(
-        Fp2.mulByNonresidue(Fp2.add(Fp2.mul(c2, t1), Fp2.mul(c1, t2))),
-        Fp2.mul(c0, t0)
-      )
+      Fp2.add(Fp2.mulByNonresidue(Fp2.add(Fp2.mul(c2, t1), Fp2.mul(c1, t2))), Fp2.mul(c0, t0))
     );
     return { c0: Fp2.mul(t4, t0), c1: Fp2.mul(t4, t1), c2: Fp2.mul(t4, t2) };
   },
@@ -568,10 +563,7 @@ const Fp12: mod.Field<Fp12> & Fp12Utils = {
     return {
       c0: Fp6.add(Fp6.mulByNonresidue(t1), t0), // T1 * v + T0
       // (c1 + c0) * [o0, o1+o4] - T0 - T1
-      c1: Fp6.sub(
-        Fp6.sub(Fp6.multiplyBy01(Fp6.add(c1, c0), o0, Fp2.add(o1, o4)), t0),
-        t1
-      ),
+      c1: Fp6.sub(Fp6.sub(Fp6.multiplyBy01(Fp6.add(c1, c0), o0, Fp2.add(o1, o4)), t0), t1),
     };
   },
   multiplyByFp2: ({ c0, c1 }, rhs: Fp2): Fp12 => ({
@@ -624,20 +616,14 @@ const Fp12: mod.Field<Fp12> & Fp12Utils = {
     const t3 = Fp12.mul(Fp12.conjugate(Fp12._cyclotomicSquare(t1)), t2);
     const t4 = Fp12.conjugate(Fp12._cyclotomicExp(t3, x));
     const t5 = Fp12.conjugate(Fp12._cyclotomicExp(t4, x));
-    const t6 = Fp12.mul(
-      Fp12.conjugate(Fp12._cyclotomicExp(t5, x)),
-      Fp12._cyclotomicSquare(t2)
-    );
+    const t6 = Fp12.mul(Fp12.conjugate(Fp12._cyclotomicExp(t5, x)), Fp12._cyclotomicSquare(t2));
     const t7 = Fp12.conjugate(Fp12._cyclotomicExp(t6, x));
     const t2_t5_pow_q2 = Fp12.frobeniusMap(Fp12.mul(t2, t5), 2);
     const t4_t1_pow_q3 = Fp12.frobeniusMap(Fp12.mul(t4, t1), 3);
     const t6_t1c_pow_q1 = Fp12.frobeniusMap(Fp12.mul(t6, Fp12.conjugate(t1)), 1);
     const t7_t3c_t1 = Fp12.mul(Fp12.mul(t7, Fp12.conjugate(t3)), t1);
     // (t2 * t5)^(q²) * (t4 * t1)^(q³) * (t6 * t1.conj)^(q^1) * t7 * t3.conj * t1
-    return Fp12.mul(
-      Fp12.mul(Fp12.mul(t2_t5_pow_q2, t4_t1_pow_q3), t6_t1c_pow_q1),
-      t7_t3c_t1
-    );
+    return Fp12.mul(Fp12.mul(Fp12.mul(t2_t5_pow_q2, t4_t1_pow_q3), t6_t1c_pow_q1), t7_t3c_t1);
   },
 };
 const FP12_FROBENIUS_COEFFICIENTS = [
@@ -897,10 +883,7 @@ function map_to_curve_simple_swu_9mod16(t: bigint[] | Fp2): [Fp2, Fp2] {
   let v = Fp2.pow(denominator, 3n);
   // u = N³ + a * N * D² + b * D³
   let u = Fp2.add(
-    Fp2.add(
-      Fp2.pow(numerator, 3n),
-      Fp2.mul(Fp2.mul(iso_3_a, numerator), Fp2.pow(denominator, 2n))
-    ),
+    Fp2.add(Fp2.pow(numerator, 3n), Fp2.mul(Fp2.mul(iso_3_a, numerator), Fp2.pow(denominator, 2n))),
     Fp2.mul(iso_3_b, v)
   );
   // Attempt y = sqrt(u / v)
