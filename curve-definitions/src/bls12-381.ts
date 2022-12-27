@@ -1205,32 +1205,29 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
     // point.isTorsionFree() should return true for valid points
     // It returns false for shitty points.
     // https://eprint.iacr.org/2021/1130.pdf
-    // prettier-ignore
     isTorsionFree: (c, P): boolean => {
       return P.multiplyUnsafe(bls12_381.CURVE.x).negate().equals(G2psi(c, P)); // ψ(P) == [u](P)
-      // https://eprint.iacr.org/2019/814.pdf
-      // const psi2 = P.psi2();                        // Ψ²(P)
-      // const psi3 = psi2.psi();                      // Ψ³(P)
-      // const zPsi3 = psi3.mulNegX();                 // [z]Ψ³(P) where z = -x
-      // return zPsi3.subtract(psi2).add(P).isZero();  // [z]Ψ³(P) - Ψ²(P) + P == O
+      // Older version: https://eprint.iacr.org/2019/814.pdf
+      // Ψ²(P) => Ψ³(P) => [z]Ψ³(P) where z = -x => [z]Ψ³(P) - Ψ²(P) + P == O
+      // return P.psi2().psi().mulNegX().subtract(psi2).add(P).isZero();
     },
     // Maps the point into the prime-order subgroup G2.
     // clear_cofactor_bls12381_g2 from cfrg-hash-to-curve-11
     // https://eprint.iacr.org/2017/419.pdf
     // prettier-ignore
     clearCofactor: (c, P) => {
-      // prettier-ignore
-      let t1 = P.multiplyUnsafe(bls12_381.CURVE.x).negate();   // [-x]P
-      let t2 = G2psi(c, P);           // Ψ(P)
-      let t3 = P.double();            // 2P
-      t3 = G2psi2(c, t3);                               // Ψ²(2P)
-      t3 = t3.subtract(t2);                         // Ψ²(2P) - Ψ(P)
-      t2 = t1.add(t2);                              // [-x]P + Ψ(P)
-      t2 = t2.multiplyUnsafe(bls12_381.CURVE.x).negate();    // [x²]P - [x]Ψ(P)
-      t3 = t3.add(t2);                              // Ψ²(2P) - Ψ(P) + [x²]P - [x]Ψ(P)
-      t3 = t3.subtract(t1);                         // Ψ²(2P) - Ψ(P) + [x²]P - [x]Ψ(P) + [x]P
-      const Q = t3.subtract(P); // Ψ²(2P) - Ψ(P) + [x²]P - [x]Ψ(P) + [x]P - 1P =>
-      return Q;                                            // [x²-x-1]P + [x-1]Ψ(P) + Ψ²(2P)
+      const { x } = bls12_381.CURVE;
+      let t1 = P.multiplyUnsafe(x).negate();  // [-x]P
+      let t2 = G2psi(c, P);                   // Ψ(P)
+      let t3 = P.double();                    // 2P
+      t3 = G2psi2(c, t3);                     // Ψ²(2P)
+      t3 = t3.subtract(t2);                   // Ψ²(2P) - Ψ(P)
+      t2 = t1.add(t2);                        // [-x]P + Ψ(P)
+      t2 = t2.multiplyUnsafe(x).negate();     // [x²]P - [x]Ψ(P)
+      t3 = t3.add(t2);                        // Ψ²(2P) - Ψ(P) + [x²]P - [x]Ψ(P)
+      t3 = t3.subtract(t1);                   // Ψ²(2P) - Ψ(P) + [x²]P - [x]Ψ(P) + [x]P
+      const Q = t3.subtract(P);               // Ψ²(2P) - Ψ(P) + [x²]P - [x]Ψ(P) + [x]P - 1P
+      return Q;                               // [x²-x-1]P + [x-1]Ψ(P) + Ψ²(2P)
     },
     fromBytes: (bytes: Uint8Array): { x: Fp2; y: Fp2 } => {
       const m_byte = bytes[0] & 0xe0;
