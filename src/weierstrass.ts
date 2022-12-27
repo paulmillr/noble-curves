@@ -41,8 +41,11 @@ export type BasicCurve<T> = utils.BasicCurve<T> & {
   // Endomorphism options for Koblitz curves
   endo?: EndomorphismOpts;
   // Torsions, can be optimized via endomorphisms
-  isTorsionFree?: (c: JacobianConstructor<T>, point: JacobianPointType<T>) => boolean;
-  clearCofactor?: (c: JacobianConstructor<T>, point: JacobianPointType<T>) => JacobianPointType<T>;
+  isTorsionFree?: (c: ProjectiveConstructor<T>, point: ProjectivePointType<T>) => boolean;
+  clearCofactor?: (
+    c: ProjectiveConstructor<T>,
+    point: ProjectivePointType<T>
+  ) => ProjectivePointType<T>;
   // Hash to field opts
   htfDefaults?: htfOpts;
   mapToCurve?: (scalar: bigint[]) => { x: T; y: T };
@@ -94,9 +97,7 @@ function parseDERSignature(data: Uint8Array) {
 // Be friendly to bad ECMAScript parsers by not using bigint literals like 123n
 const _0n = BigInt(0);
 const _1n = BigInt(1);
-const _2n = BigInt(2);
 const _3n = BigInt(3);
-const _8n = BigInt(8);
 
 type Entropy = Hex | true;
 type SignOpts = { lowS?: boolean; extraEntropy?: Entropy };
@@ -124,20 +125,20 @@ type SignOpts = { lowS?: boolean; extraEntropy?: Entropy };
  */
 
 // Instance
-export interface JacobianPointType<T> extends Group<JacobianPointType<T>> {
+export interface ProjectivePointType<T> extends Group<ProjectivePointType<T>> {
   readonly x: T;
   readonly y: T;
   readonly z: T;
-  multiply(scalar: number | bigint, affinePoint?: PointType<T>): JacobianPointType<T>;
-  multiplyUnsafe(scalar: bigint): JacobianPointType<T>;
+  multiply(scalar: number | bigint, affinePoint?: PointType<T>): ProjectivePointType<T>;
+  multiplyUnsafe(scalar: bigint): ProjectivePointType<T>;
   toAffine(invZ?: T): PointType<T>;
 }
 // Static methods
-export interface JacobianConstructor<T> extends GroupConstructor<JacobianPointType<T>> {
-  new (x: T, y: T, z: T): JacobianPointType<T>;
-  fromAffine(p: PointType<T>): JacobianPointType<T>;
-  toAffineBatch(points: JacobianPointType<T>[]): PointType<T>[];
-  normalizeZ(points: JacobianPointType<T>[]): JacobianPointType<T>[];
+export interface ProjectiveConstructor<T> extends GroupConstructor<ProjectivePointType<T>> {
+  new (x: T, y: T, z: T): ProjectivePointType<T>;
+  fromAffine(p: PointType<T>): ProjectivePointType<T>;
+  toAffineBatch(points: ProjectivePointType<T>[]): PointType<T>[];
+  normalizeZ(points: ProjectivePointType<T>[]): ProjectivePointType<T>[];
 }
 // Instance
 export interface PointType<T> extends Group<PointType<T>> {
@@ -199,7 +200,7 @@ function validatePointOpts<T>(curve: CurvePointsType<T>) {
 
 export type CurvePointsRes<T> = {
   Point: PointConstructor<T>;
-  JacobianPoint: JacobianConstructor<T>;
+  ProjectivePoint: ProjectiveConstructor<T>;
   normalizePrivateKey: (key: PrivKey) => bigint;
   weierstrassEquation: (x: T) => T;
   isWithinCurveOrder: (num: bigint) => boolean;
@@ -267,130 +268,160 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
   }
 
   /**
-   * Jacobian Point works in 3d / jacobi coordinates: (x, y, z) ∋ (x=x/z², y=y/z³)
+   * Projective Point works in 3d / projective (homogeneous) coordinates: (x, y, z) ∋ (x=x/z, y=y/z)
    * Default Point works in 2d / affine coordinates: (x, y)
-   * We're doing calculations in jacobi, because its operations don't require costly inversion.
+   * We're doing calculations in projective, because its operations don't require costly inversion.
    */
-  class JacobianPoint implements JacobianPointType<T> {
+  class ProjectivePoint implements ProjectivePointType<T> {
     constructor(readonly x: T, readonly y: T, readonly z: T) {}
 
-    static readonly BASE = new JacobianPoint(CURVE.Gx, CURVE.Gy, Fp.ONE);
-    static readonly ZERO = new JacobianPoint(Fp.ZERO, Fp.ONE, Fp.ZERO);
+    static readonly BASE = new ProjectivePoint(CURVE.Gx, CURVE.Gy, Fp.ONE);
+    static readonly ZERO = new ProjectivePoint(Fp.ZERO, Fp.ONE, Fp.ZERO);
 
-    static fromAffine(p: Point): JacobianPoint {
+    static fromAffine(p: Point): ProjectivePoint {
       if (!(p instanceof Point)) {
-        throw new TypeError('JacobianPoint#fromAffine: expected Point');
+        throw new TypeError('ProjectivePoint#fromAffine: expected Point');
       }
       // fromAffine(x:0, y:0) would produce (x:0, y:0, z:1), but we need (x:0, y:1, z:0)
-      if (p.equals(Point.ZERO)) return JacobianPoint.ZERO;
-      return new JacobianPoint(p.x, p.y, Fp.ONE);
+      if (p.equals(Point.ZERO)) return ProjectivePoint.ZERO;
+      return new ProjectivePoint(p.x, p.y, Fp.ONE);
     }
 
     /**
-     * Takes a bunch of Jacobian Points but executes only one
+     * Takes a bunch of Projective Points but executes only one
      * invert on all of them. invert is very slow operation,
      * so this improves performance massively.
      */
-    static toAffineBatch(points: JacobianPoint[]): Point[] {
+    static toAffineBatch(points: ProjectivePoint[]): Point[] {
       const toInv = Fp.invertBatch(points.map((p) => p.z));
       return points.map((p, i) => p.toAffine(toInv[i]));
     }
 
-    static normalizeZ(points: JacobianPoint[]): JacobianPoint[] {
-      return JacobianPoint.toAffineBatch(points).map(JacobianPoint.fromAffine);
+    static normalizeZ(points: ProjectivePoint[]): ProjectivePoint[] {
+      return ProjectivePoint.toAffineBatch(points).map(ProjectivePoint.fromAffine);
     }
 
     /**
      * Compare one point to another.
      */
-    equals(other: JacobianPoint): boolean {
-      if (!(other instanceof JacobianPoint)) throw new TypeError('JacobianPoint expected');
+    equals(other: ProjectivePoint): boolean {
+      if (!(other instanceof ProjectivePoint)) throw new TypeError('ProjectivePoint expected');
       const { x: X1, y: Y1, z: Z1 } = this;
       const { x: X2, y: Y2, z: Z2 } = other;
-      const Z1Z1 = Fp.square(Z1); // Z1 * Z1
-      const Z2Z2 = Fp.square(Z2); // Z2 * Z2
-      const U1 = Fp.multiply(X1, Z2Z2); // X1 * Z2Z2
-      const U2 = Fp.multiply(X2, Z1Z1); // X2 * Z1Z1
-      const S1 = Fp.multiply(Fp.multiply(Y1, Z2), Z2Z2); // Y1 * Z2 * Z2Z2
-      const S2 = Fp.multiply(Fp.multiply(Y2, Z1), Z1Z1); // Y2 * Z1 * Z1Z1
-      return Fp.equals(U1, U2) && Fp.equals(S1, S2);
+      const U1 = Fp.equals(Fp.multiply(X1, Z2), Fp.multiply(X2, Z1));
+      const U2 = Fp.equals(Fp.multiply(Y1, Z2), Fp.multiply(Y2, Z1));
+      return U1 && U2;
     }
 
     /**
      * Flips point to one corresponding to (x, -y) in Affine coordinates.
      */
-    negate(): JacobianPoint {
-      return new JacobianPoint(this.x, Fp.negate(this.y), this.z);
+    negate(): ProjectivePoint {
+      return new ProjectivePoint(this.x, Fp.negate(this.y), this.z);
     }
 
-    // Fast algo for doubling 2 Jacobian Points.
-    // From: https://hyperelliptic.org/EFD/g1p/auto-shortw-jacobian.html#doubling-dbl-2007-bl
-    // Cost: 1M + 8S + 1*a + 10add + 2*2 + 1*3 + 1*8.
-    double(): JacobianPoint {
+    doubleAdd(): ProjectivePoint {
+      return this.add(this);
+    }
+
+    // Renes-Costello-Batina exception-free doubling formula.
+    // There is 30% faster Jacobian formula, but it is not complete.
+    // https://eprint.iacr.org/2015/1060, algorithm 3
+    // Cost: 8M + 3S + 3*a + 2*b3 + 15add.
+    double() {
+      const { a, b } = CURVE;
+      const b3 = Fp.multiply(b, 3n);
       const { x: X1, y: Y1, z: Z1 } = this;
-      const { a } = CURVE;
-      // Faster algorithm: when a=0
-      // From: https://hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-0.html#doubling-dbl-2009-l
-      // Cost: 2M + 5S + 6add + 3*2 + 1*3 + 1*8.
-      if (Fp.isZero(a)) {
-        const A = Fp.square(X1); // X1 * X1
-        const B = Fp.square(Y1); // Y1 * Y1
-        const C = Fp.square(B); // B * B
-        const x1b = Fp.addN(X1, B); // X1 + B
-        const D = Fp.multiply(Fp.subtractN(Fp.subtractN(Fp.square(x1b), A), C), _2n); // ((x1b * x1b) - A - C) * 2
-        const E = Fp.multiply(A, _3n); // A * 3
-        const F = Fp.square(E); // E * E
-        const X3 = Fp.subtract(F, Fp.multiplyN(D, _2n)); // F - 2 * D
-        const Y3 = Fp.subtract(Fp.multiplyN(E, Fp.subtractN(D, X3)), Fp.multiplyN(C, _8n)); // E * (D - X3) - 8 * C;
-        const Z3 = Fp.multiply(Fp.multiplyN(Y1, _2n), Z1); // 2 * Y1 * Z1
-        return new JacobianPoint(X3, Y3, Z3);
-      }
-      const XX = Fp.square(X1); //  X1 * X1
-      const YY = Fp.square(Y1); // Y1 * Y1
-      const YYYY = Fp.square(YY); // YY * YY
-      const ZZ = Fp.square(Z1); //  Z1 * Z1
-      const tmp1 = Fp.add(X1, YY); // X1 + YY
-      const S = Fp.multiply(Fp.subtractN(Fp.subtractN(Fp.square(tmp1), XX), YYYY), _2n); // 2*((X1+YY)^2-XX-YYYY)
-      const M = Fp.add(Fp.multiplyN(XX, _3n), Fp.multiplyN(Fp.square(ZZ), a)); // 3 * XX + a * ZZ^2
-      const T = Fp.subtract(Fp.square(M), Fp.multiplyN(S, _2n)); // M^2-2*S
-      const X3 = T;
-      const Y3 = Fp.subtract(Fp.multiplyN(M, Fp.subtractN(S, T)), Fp.multiplyN(YYYY, _8n)); // M*(S-T)-8*YYYY
-      const y1az1 = Fp.add(Y1, Z1); // (Y1+Z1)
-      const Z3 = Fp.subtract(Fp.subtractN(Fp.square(y1az1), YY), ZZ); // (Y1+Z1)^2-YY-ZZ
-      return new JacobianPoint(X3, Y3, Z3);
+      let X3 = Fp.ZERO, Y3 = Fp.ZERO, Z3 = Fp.ZERO; // prettier-ignore
+      let t0 = Fp.multiply(X1, X1); // step 1
+      let t1 = Fp.multiply(Y1, Y1);
+      let t2 = Fp.multiply(Z1, Z1);
+      let t3 = Fp.multiply(X1, Y1);
+      t3 = Fp.add(t3, t3); // step 5
+      Z3 = Fp.multiply(X1, Z1);
+      Z3 = Fp.add(Z3, Z3);
+      X3 = Fp.multiply(a, Z3);
+      Y3 = Fp.multiply(b3, t2);
+      Y3 = Fp.add(X3, Y3); // step 10
+      X3 = Fp.subtract(t1, Y3);
+      Y3 = Fp.add(t1, Y3);
+      Y3 = Fp.multiply(X3, Y3);
+      X3 = Fp.multiply(t3, X3);
+      Z3 = Fp.multiply(b3, Z3); // step 15
+      t2 = Fp.multiply(a, t2);
+      t3 = Fp.subtract(t0, t2);
+      t3 = Fp.multiply(a, t3);
+      t3 = Fp.add(t3, Z3);
+      Z3 = Fp.add(t0, t0); // step 20
+      t0 = Fp.add(Z3, t0);
+      t0 = Fp.add(t0, t2);
+      t0 = Fp.multiply(t0, t3);
+      Y3 = Fp.add(Y3, t0);
+      t2 = Fp.multiply(Y1, Z1); // step 25
+      t2 = Fp.add(t2, t2);
+      t0 = Fp.multiply(t2, t3);
+      X3 = Fp.subtract(X3, t0);
+      Z3 = Fp.multiply(t2, t1);
+      Z3 = Fp.add(Z3, Z3); // step 30
+      Z3 = Fp.add(Z3, Z3);
+      return new ProjectivePoint(X3, Y3, Z3);
     }
 
-    // Fast algo for adding 2 Jacobian Points.
-    // https://hyperelliptic.org/EFD/g1p/auto-shortw-jacobian.html#addition-add-1998-cmo-2
-    // Cost: 12M + 4S + 6add + 1*2
-    // Note: 2007 Bernstein-Lange (11M + 5S + 9add + 4*2) is actually 10% slower.
-    add(other: JacobianPoint): JacobianPoint {
-      if (!(other instanceof JacobianPoint)) throw new TypeError('JacobianPoint expected');
+    // Renes-Costello-Batina exception-free addition formula.
+    // There is 30% faster Jacobian formula, but it is not complete.
+    // https://eprint.iacr.org/2015/1060, algorithm 1
+    // Cost: 12M + 0S + 3*a + 3*b3 + 23add.
+    add(other: ProjectivePoint): ProjectivePoint {
+      if (!(other instanceof ProjectivePoint)) throw new TypeError('ProjectivePoint expected');
       const { x: X1, y: Y1, z: Z1 } = this;
       const { x: X2, y: Y2, z: Z2 } = other;
-      if (Fp.isZero(X2) || Fp.isZero(Y2)) return this;
-      if (Fp.isZero(X1) || Fp.isZero(Y1)) return other;
-      // We're using same code in equals()
-      const Z1Z1 = Fp.square(Z1); // Z1Z1 = Z1^2
-      const Z2Z2 = Fp.square(Z2); // Z2Z2 = Z2^2;
-      const U1 = Fp.multiply(X1, Z2Z2); // X1 * Z2Z2
-      const U2 = Fp.multiply(X2, Z1Z1); // X2 * Z1Z1
-      const S1 = Fp.multiply(Fp.multiply(Y1, Z2), Z2Z2); // Y1 * Z2 * Z2Z2
-      const S2 = Fp.multiply(Fp.multiply(Y2, Z1), Z1Z1); // Y2 * Z1 * Z1Z1
-      const H = Fp.subtractN(U2, U1); // H = U2 - U1
-      const r = Fp.subtractN(S2, S1); // S2 - S1
-      // H = 0 meaning it's the same point.
-      if (Fp.isZero(H)) return Fp.isZero(r) ? this.double() : JacobianPoint.ZERO;
-      const HH = Fp.square(H); // HH = H2
-      const HHH = Fp.multiply(H, HH); // HHH = H * HH
-      const V = Fp.multiply(U1, HH); // V = U1 * HH
-      const X3 = Fp.subtract(Fp.subtractN(Fp.squareN(r), HHH), Fp.multiplyN(V, _2n)); // X3 = r^2 - HHH - 2 * V;
-      const Y3 = Fp.subtract(Fp.multiplyN(r, Fp.subtractN(V, X3)), Fp.multiplyN(S1, HHH)); // Y3 = r * (V - X3) - S1 * HHH;
-      const Z3 = Fp.multiply(Fp.multiply(Z1, Z2), H); // Z3 = Z1 * Z2 * H;
-      return new JacobianPoint(X3, Y3, Z3);
+      let X3 = Fp.ZERO, Y3 = Fp.ZERO, Z3 = Fp.ZERO; // prettier-ignore
+      const a = CURVE.a;
+      const b3 = Fp.multiply(CURVE.b, 3n);
+      let t0 = Fp.multiply(X1, X2); // step 1
+      let t1 = Fp.multiply(Y1, Y2);
+      let t2 = Fp.multiply(Z1, Z2);
+      let t3 = Fp.add(X1, Y1);
+      let t4 = Fp.add(X2, Y2); // step 5
+      t3 = Fp.multiply(t3, t4);
+      t4 = Fp.add(t0, t1);
+      t3 = Fp.subtract(t3, t4);
+      t4 = Fp.add(X1, Z1);
+      let t5 = Fp.add(X2, Z2); // step 10
+      t4 = Fp.multiply(t4, t5);
+      t5 = Fp.add(t0, t2);
+      t4 = Fp.subtract(t4, t5);
+      t5 = Fp.add(Y1, Z1);
+      X3 = Fp.add(Y2, Z2); // step 15
+      t5 = Fp.multiply(t5, X3);
+      X3 = Fp.add(t1, t2);
+      t5 = Fp.subtract(t5, X3);
+      Z3 = Fp.multiply(a, t4);
+      X3 = Fp.multiply(b3, t2); // step 20
+      Z3 = Fp.add(X3, Z3);
+      X3 = Fp.subtract(t1, Z3);
+      Z3 = Fp.add(t1, Z3);
+      Y3 = Fp.multiply(X3, Z3);
+      t1 = Fp.add(t0, t0); // step 25
+      t1 = Fp.add(t1, t0);
+      t2 = Fp.multiply(a, t2);
+      t4 = Fp.multiply(b3, t4);
+      t1 = Fp.add(t1, t2);
+      t2 = Fp.subtract(t0, t2); // step 30
+      t2 = Fp.multiply(a, t2);
+      t4 = Fp.add(t4, t2);
+      t0 = Fp.multiply(t1, t4);
+      Y3 = Fp.add(Y3, t0);
+      t0 = Fp.multiply(t5, t4); // step 35
+      X3 = Fp.multiply(t3, X3);
+      X3 = Fp.subtract(X3, t0);
+      t0 = Fp.multiply(t3, t1);
+      Z3 = Fp.multiply(t5, Z3);
+      Z3 = Fp.add(Z3, t0); // step 40
+      return new ProjectivePoint(X3, Y3, Z3);
     }
 
-    subtract(other: JacobianPoint) {
+    subtract(other: ProjectivePoint) {
       return this.add(other.negate());
     }
 
@@ -399,8 +430,8 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
      * It's faster, but should only be used when you don't care about
      * an exposed private key e.g. sig verification, which works over *public* keys.
      */
-    multiplyUnsafe(scalar: bigint): JacobianPoint {
-      const P0 = JacobianPoint.ZERO;
+    multiplyUnsafe(scalar: bigint): ProjectivePoint {
+      const P0 = ProjectivePoint.ZERO;
       if (typeof scalar === 'bigint' && scalar === _0n) return P0;
       // Will throw on 0
       let n = normalizeScalar(scalar);
@@ -412,7 +443,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
       let { k1neg, k1, k2neg, k2 } = CURVE.endo.splitScalar(n);
       let k1p = P0;
       let k2p = P0;
-      let d: JacobianPoint = this;
+      let d: ProjectivePoint = this;
       while (k1 > _0n || k2 > _0n) {
         if (k1 & _1n) k1p = k1p.add(d);
         if (k2 & _1n) k2p = k2p.add(d);
@@ -422,22 +453,22 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
       }
       if (k1neg) k1p = k1p.negate();
       if (k2neg) k2p = k2p.negate();
-      k2p = new JacobianPoint(Fp.multiply(k2p.x, CURVE.endo.beta), k2p.y, k2p.z);
+      k2p = new ProjectivePoint(Fp.multiply(k2p.x, CURVE.endo.beta), k2p.y, k2p.z);
       return k1p.add(k2p);
     }
 
     /**
      * Implements w-ary non-adjacent form for calculating ec multiplication.
      */
-    private wNAF(n: bigint, affinePoint?: Point): { p: JacobianPoint; f: JacobianPoint } {
-      if (!affinePoint && this.equals(JacobianPoint.BASE)) affinePoint = Point.BASE;
+    private wNAF(n: bigint, affinePoint?: Point): { p: ProjectivePoint; f: ProjectivePoint } {
+      if (!affinePoint && this.equals(ProjectivePoint.BASE)) affinePoint = Point.BASE;
       const W = (affinePoint && affinePoint._WINDOW_SIZE) || 1;
       // Calculate precomputes on a first run, reuse them after
       let precomputes = affinePoint && pointPrecomputes.get(affinePoint);
       if (!precomputes) {
-        precomputes = wnaf.precomputeWindow(this, W) as JacobianPoint[];
+        precomputes = wnaf.precomputeWindow(this, W) as ProjectivePoint[];
         if (affinePoint && W !== 1) {
-          precomputes = JacobianPoint.normalizeZ(precomputes);
+          precomputes = ProjectivePoint.normalizeZ(precomputes);
           pointPrecomputes.set(affinePoint, precomputes);
         }
       }
@@ -452,20 +483,20 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
      * @param affinePoint optional point ot save cached precompute windows on it
      * @returns New point
      */
-    multiply(scalar: number | bigint, affinePoint?: Point): JacobianPoint {
+    multiply(scalar: number | bigint, affinePoint?: Point): ProjectivePoint {
       let n = normalizeScalar(scalar);
 
       // Real point.
-      let point: JacobianPoint;
+      let point: ProjectivePoint;
       // Fake point, we use it to achieve constant-time multiplication.
-      let fake: JacobianPoint;
+      let fake: ProjectivePoint;
       if (CURVE.endo) {
         const { k1neg, k1, k2neg, k2 } = CURVE.endo.splitScalar(n);
         let { p: k1p, f: f1p } = this.wNAF(k1, affinePoint);
         let { p: k2p, f: f2p } = this.wNAF(k2, affinePoint);
         k1p = wnaf.constTimeNegate(k1neg, k1p);
         k2p = wnaf.constTimeNegate(k2neg, k2p);
-        k2p = new JacobianPoint(Fp.multiply(k2p.x, CURVE.endo.beta), k2p.y, k2p.z);
+        k2p = new ProjectivePoint(Fp.multiply(k2p.x, CURVE.endo.beta), k2p.y, k2p.z);
         point = k1p.add(k2p);
         fake = f1p.add(f2p);
       } else {
@@ -474,46 +505,42 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
         fake = f;
       }
       // Normalize `z` for both points, but return only real one
-      return JacobianPoint.normalizeZ([point, fake])[0];
+      return ProjectivePoint.normalizeZ([point, fake])[0];
     }
 
-    // Converts Jacobian point to affine (x, y) coordinates.
+    // Converts Projective point to affine (x, y) coordinates.
     // Can accept precomputed Z^-1 - for example, from invertBatch.
-    // (x, y, z) ∋ (x=x/z², y=y/z³)
-    // https://hyperelliptic.org/EFD/g1p/auto-shortw-jacobian.html#scaling-z
+    // (x, y, z) ∋ (x=x/z, y=y/z)
     toAffine(invZ?: T): Point {
       const { x, y, z } = this;
-      const is0 = this.equals(JacobianPoint.ZERO);
+      const is0 = this.equals(ProjectivePoint.ZERO);
       // If invZ was 0, we return zero point. However we still want to execute
       // all operations, so we replace invZ with a random number, 1.
       if (invZ == null) invZ = is0 ? Fp.ONE : Fp.invert(z);
-      const iz1 = invZ;
-      const iz2 = Fp.square(iz1); // iz1 * iz1
-      const iz3 = Fp.multiply(iz2, iz1); // iz2 * iz1
-      const ax = Fp.multiply(x, iz2); // x * iz2
-      const ay = Fp.multiply(y, iz3); // y * iz3
-      const zz = Fp.multiply(z, iz1); // z * iz1
+      const ax = Fp.multiply(x, invZ);
+      const ay = Fp.multiply(y, invZ);
+      const zz = Fp.multiply(z, invZ);
       if (is0) return Point.ZERO;
       if (!Fp.equals(zz, Fp.ONE)) throw new Error('invZ was invalid');
       return new Point(ax, ay);
     }
     isTorsionFree(): boolean {
       if (CURVE.h === _1n) return true; // No subgroups, always torsion fee
-      if (CURVE.isTorsionFree) return CURVE.isTorsionFree(JacobianPoint, this);
+      if (CURVE.isTorsionFree) return CURVE.isTorsionFree(ProjectivePoint, this);
       // is multiplyUnsafe(CURVE.n) is always ok, same as for edwards?
       throw new Error('Unsupported!');
     }
     // Clear cofactor of G1
     // https://eprint.iacr.org/2019/403
-    clearCofactor(): JacobianPoint {
+    clearCofactor(): ProjectivePoint {
       if (CURVE.h === _1n) return this; // Fast-path
-      if (CURVE.clearCofactor) return CURVE.clearCofactor(JacobianPoint, this) as JacobianPoint;
+      if (CURVE.clearCofactor) return CURVE.clearCofactor(ProjectivePoint, this) as ProjectivePoint;
       return this.multiplyUnsafe(CURVE.h);
     }
   }
-  const wnaf = wNAF(JacobianPoint, CURVE.endo ? nBitLength / 2 : nBitLength);
+  const wnaf = wNAF(ProjectivePoint, CURVE.endo ? nBitLength / 2 : nBitLength);
   // Stores precomputed values for points.
-  const pointPrecomputes = new WeakMap<Point, JacobianPoint[]>();
+  const pointPrecomputes = new WeakMap<Point, ProjectivePoint[]>();
 
   /**
    * Default Point works in default aka affine coordinates: (x, y)
@@ -601,12 +628,12 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
 
     // Adds point to itself
     double() {
-      return JacobianPoint.fromAffine(this).double().toAffine();
+      return ProjectivePoint.fromAffine(this).double().toAffine();
     }
 
     // Adds point to other point
     add(other: Point) {
-      return JacobianPoint.fromAffine(this).add(JacobianPoint.fromAffine(other)).toAffine();
+      return ProjectivePoint.fromAffine(this).add(ProjectivePoint.fromAffine(other)).toAffine();
     }
 
     // Subtracts other point from the point
@@ -615,18 +642,18 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
     }
 
     multiply(scalar: number | bigint) {
-      return JacobianPoint.fromAffine(this).multiply(scalar, this).toAffine();
+      return ProjectivePoint.fromAffine(this).multiply(scalar, this).toAffine();
     }
 
     multiplyUnsafe(scalar: bigint) {
-      return JacobianPoint.fromAffine(this).multiplyUnsafe(scalar).toAffine();
+      return ProjectivePoint.fromAffine(this).multiplyUnsafe(scalar).toAffine();
     }
     clearCofactor() {
-      return JacobianPoint.fromAffine(this).clearCofactor().toAffine();
+      return ProjectivePoint.fromAffine(this).clearCofactor().toAffine();
     }
 
     isTorsionFree(): boolean {
-      return JacobianPoint.fromAffine(this).isTorsionFree();
+      return ProjectivePoint.fromAffine(this).isTorsionFree();
     }
 
     /**
@@ -636,12 +663,12 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
      * @returns non-zero affine point
      */
     multiplyAndAddUnsafe(Q: Point, a: bigint, b: bigint): Point | undefined {
-      const P = JacobianPoint.fromAffine(this);
+      const P = ProjectivePoint.fromAffine(this);
       const aP =
         a === _0n || a === _1n || this !== Point.BASE ? P.multiplyUnsafe(a) : P.multiply(a);
-      const bQ = JacobianPoint.fromAffine(Q).multiplyUnsafe(b);
+      const bQ = ProjectivePoint.fromAffine(Q).multiplyUnsafe(b);
       const sum = aP.add(bQ);
-      return sum.equals(JacobianPoint.ZERO) ? undefined : sum.toAffine();
+      return sum.equals(ProjectivePoint.ZERO) ? undefined : sum.toAffine();
     }
 
     // Encodes byte string to elliptic curve
@@ -666,7 +693,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
   }
   return {
     Point: Point as PointConstructor<T>,
-    JacobianPoint: JacobianPoint as JacobianConstructor<T>,
+    ProjectivePoint: ProjectivePoint as ProjectiveConstructor<T>,
     normalizePrivateKey,
     weierstrassEquation,
     isWithinCurveOrder,
@@ -732,7 +759,7 @@ export type CurveFn = {
     }
   ) => boolean;
   Point: PointConstructor<bigint>;
-  JacobianPoint: JacobianConstructor<bigint>;
+  ProjectivePoint: ProjectiveConstructor<bigint>;
   Signature: SignatureConstructor;
   utils: {
     mod: (a: bigint, b?: bigint) => bigint;
@@ -812,7 +839,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     return _0n < num && num < Fp.ORDER;
   }
 
-  const { Point, JacobianPoint, normalizePrivateKey, weierstrassEquation, isWithinCurveOrder } =
+  const { Point, ProjectivePoint, normalizePrivateKey, weierstrassEquation, isWithinCurveOrder } =
     weierstrassPoints({
       ...CURVE,
       toBytes(c, point, isCompressed: boolean): Uint8Array {
@@ -1132,16 +1159,17 @@ export function weierstrass(curveDef: CurveType): CurveFn {
    * @returns Signature with its point on curve Q OR undefined if params were invalid
    */
   function kmdToSig(kBytes: Uint8Array, m: bigint, d: bigint, lowS = true): Signature | undefined {
+    const { n } = CURVE;
     const k = truncateHash(kBytes, true);
     if (!isWithinCurveOrder(k)) return;
     // Important: all mod() calls in the function must be done over `n`
-    const { n } = CURVE;
+    const kinv = mod.invert(k, n);
     const q = Point.BASE.multiply(k);
     // r = x mod n
     const r = mod.mod(q.x, n);
     if (r === _0n) return;
     // s = (1/k * (m + dr) mod n
-    const s = mod.mod(mod.invert(k, n) * mod.mod(m + d * r, n), n);
+    const s = mod.mod(kinv * mod.mod(m + mod.mod(d * r, n), n), n);
     if (s === _0n) return;
     let recovery = (q.x === r ? 0 : 2) | Number(q.y & _1n);
     let normS = s;
@@ -1221,7 +1249,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     const u1 = mod.mod(h * sinv, n);
     const u2 = mod.mod(r * sinv, n);
 
-    // Some implementations compare R.x in jacobian, without inversion.
+    // Some implementations compare R.x in projective, without inversion.
     // The speed-up is <5%, so we don't complicate the code.
     const R = Point.BASE.multiplyAndAddUnsafe(P, u1, u2);
     if (!R) return false;
@@ -1235,7 +1263,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     sign,
     verify,
     Point,
-    JacobianPoint,
+    ProjectivePoint,
     Signature,
     utils,
   };

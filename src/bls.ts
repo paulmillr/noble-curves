@@ -337,7 +337,7 @@ export function bls<Fp2, Fp6, Fp12>(
     if (!publicKeys.length) throw new Error('Expected non-empty array');
     const agg = publicKeys
       .map(normP1)
-      .reduce((sum, p) => sum.add(G1.JacobianPoint.fromAffine(p)), G1.JacobianPoint.ZERO);
+      .reduce((sum, p) => sum.add(G1.ProjectivePoint.fromAffine(p)), G1.ProjectivePoint.ZERO);
     const aggAffine = agg.toAffine();
     if (publicKeys[0] instanceof G1.Point) {
       aggAffine.assertValidity();
@@ -354,7 +354,7 @@ export function bls<Fp2, Fp6, Fp12>(
     if (!signatures.length) throw new Error('Expected non-empty array');
     const agg = signatures
       .map(normP2)
-      .reduce((sum, s) => sum.add(G2.JacobianPoint.fromAffine(s)), G2.JacobianPoint.ZERO);
+      .reduce((sum, s) => sum.add(G2.ProjectivePoint.fromAffine(s)), G2.ProjectivePoint.ZERO);
     const aggAffine = agg.toAffine();
     if (signatures[0] instanceof G2.Point) {
       aggAffine.assertValidity();

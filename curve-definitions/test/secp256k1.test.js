@@ -164,15 +164,15 @@ should('secp256k1.Point#multiply(privateKey)', () => {
 });
 
 // multiply() should equal multiplyUnsafe()
-// should('JacobianPoint#multiplyUnsafe', () => {
-//   const p0 = new secp.JacobianPoint(
+// should('ProjectivePoint#multiplyUnsafe', () => {
+//   const p0 = new secp.ProjectivePoint(
 //     55066263022277343669578718895168534326250603453777594175500187360389116729240n,
 //     32670510020758816978083085130507043184471273380659243275938904335757337482424n,
 //     1n
 //   );
 //   const z = 106011723082030650010038151861333186846790370053628296836951575624442507889495n;
 //   console.log(p0.multiply(z));
-//   console.log(secp.JacobianPoint.normalizeZ([p0.multiplyUnsafe(z)])[0])
+//   console.log(secp.ProjectivePoint.normalizeZ([p0.multiplyUnsafe(z)])[0])
 // });
 
 should('secp256k1.Signature.fromCompactHex() roundtrip', () => {

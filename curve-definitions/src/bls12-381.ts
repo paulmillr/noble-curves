@@ -14,7 +14,7 @@ import {
   bitMask,
 } from '@noble/curves/utils';
 // Types
-import { PointType, JacobianPointType, JacobianConstructor } from '@noble/curves/weierstrass';
+import { PointType, ProjectivePointType, ProjectiveConstructor } from '@noble/curves/weierstrass';
 
 // Differences from bls12-381:
 // - PointG1 -> G1.Point
@@ -1010,7 +1010,7 @@ function psi(x: Fp2, y: Fp2): [Fp2, Fp2] {
   return [x2, y2];
 }
 // Ψ endomorphism
-function G2psi(c: JacobianConstructor<Fp2>, P: JacobianPointType<Fp2>) {
+function G2psi(c: ProjectiveConstructor<Fp2>, P: ProjectivePointType<Fp2>) {
   const affine = P.toAffine();
   const p = psi(affine.x, affine.y);
   return new c(p[0], p[1], Fp2.ONE);
@@ -1023,7 +1023,7 @@ const PSI2_C1 =
 function psi2(x: Fp2, y: Fp2): [Fp2, Fp2] {
   return [Fp2.multiply(x, PSI2_C1), Fp2.negate(y)];
 }
-function G2psi2(c: JacobianConstructor<Fp2>, P: JacobianPointType<Fp2>) {
+function G2psi2(c: ProjectiveConstructor<Fp2>, P: ProjectivePointType<Fp2>) {
   const affine = P.toAffine();
   const p = psi2(affine.x, affine.y);
   return new c(p[0], p[1], Fp2.ONE);

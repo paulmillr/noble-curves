@@ -259,7 +259,7 @@ export type CurveFn = {
     signature: Hex | SignatureType, msgHash: Hex, publicKey: PubKey, opts?: {lowS?: boolean;}
   ) => boolean;
   Point: PointConstructor;
-  JacobianPoint: JacobianPointConstructor;
+  ProjectivePoint: ProjectivePointConstructor;
   Signature: SignatureConstructor;
   utils: {
     mod: (a: bigint, b?: bigint) => bigint;

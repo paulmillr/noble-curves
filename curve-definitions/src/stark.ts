@@ -3,12 +3,12 @@ import { keccak_256 } from '@noble/hashes/sha3';
 import { sha256 } from '@noble/hashes/sha256';
 import { hmac } from '@noble/hashes/hmac';
 import { concatBytes, randomBytes } from '@noble/hashes/utils';
-import { weierstrass, JacobianPointType } from '@noble/curves/weierstrass';
+import { weierstrass, ProjectivePointType } from '@noble/curves/weierstrass';
 import * as cutils from '@noble/curves/utils';
 import { Fp } from '@noble/curves/modular';
 import { getHash } from './_shortw_utils.js';
 
-type JacobianPoint = JacobianPointType<bigint>;
+type ProjectivePoint = ProjectivePointType<bigint>;
 // Stark-friendly elliptic curve
 // https://docs.starkware.co/starkex/stark-curve.html
 
@@ -108,13 +108,13 @@ function verify0x(signature: Hex, msgHash: Hex, pubKey: Hex) {
   return starkCurve.verify(sig, ensureBytes0x(msgHash), ensureBytes0x(pubKey));
 }
 
-const { CURVE, Point, JacobianPoint, Signature } = starkCurve;
+const { CURVE, Point, ProjectivePoint, Signature } = starkCurve;
 export const utils = starkCurve.utils;
 export {
   CURVE,
   Point,
   Signature,
-  JacobianPoint,
+  ProjectivePoint,
   getPublicKey0x as getPublicKey,
   getSharedSecret0x as getSharedSecret,
   sign0x as sign,
@@ -173,7 +173,7 @@ export function getAccountPath(
 }
 
 // https://docs.starkware.co/starkex/pedersen-hash-function.html
-const PEDERSEN_POINTS = [
+const PEDERSEN_POINTS_AFFINE = [
   new Point(
     2089986280348253421170679821480865132823066470938446095505822317253594081284n,
     1713931329540660377023406109199410414810705867260802078187082345529207694986n
@@ -196,10 +196,10 @@ const PEDERSEN_POINTS = [
   ),
 ];
 // for (const p of PEDERSEN_POINTS) p._setWindowSize(8);
-const PEDERSEN_POINTS_JACOBIAN = PEDERSEN_POINTS.map(JacobianPoint.fromAffine);
+const PEDERSEN_POINTS = PEDERSEN_POINTS_AFFINE.map(ProjectivePoint.fromAffine);
 
-function pedersenPrecompute(p1: JacobianPoint, p2: JacobianPoint): JacobianPoint[] {
-  const out: JacobianPoint[] = [];
+function pedersenPrecompute(p1: ProjectivePoint, p2: ProjectivePoint): ProjectivePoint[] {
+  const out: ProjectivePoint[] = [];
   let p = p1;
   for (let i = 0; i < 248; i++) {
     out.push(p);
@@ -212,14 +212,8 @@ function pedersenPrecompute(p1: JacobianPoint, p2: JacobianPoint): JacobianPoint
   }
   return out;
 }
-const PEDERSEN_POINTS1 = pedersenPrecompute(
-  PEDERSEN_POINTS_JACOBIAN[1],
-  PEDERSEN_POINTS_JACOBIAN[2]
-);
-const PEDERSEN_POINTS2 = pedersenPrecompute(
-  PEDERSEN_POINTS_JACOBIAN[3],
-  PEDERSEN_POINTS_JACOBIAN[4]
-);
+const PEDERSEN_POINTS1 = pedersenPrecompute(PEDERSEN_POINTS[1], PEDERSEN_POINTS[2]);
+const PEDERSEN_POINTS2 = pedersenPrecompute(PEDERSEN_POINTS[3], PEDERSEN_POINTS[4]);
 
 type PedersenArg = Hex | bigint | number;
 function pedersenArg(arg: PedersenArg): bigint {
@@ -235,7 +229,7 @@ function pedersenArg(arg: PedersenArg): bigint {
   return value;
 }
 
-function pedersenSingle(point: JacobianPoint, value: PedersenArg, constants: JacobianPoint[]) {
+function pedersenSingle(point: ProjectivePoint, value: PedersenArg, constants: ProjectivePoint[]) {
   let x = pedersenArg(value);
   for (let j = 0; j < 252; j++) {
     const pt = constants[j];
@@ -248,7 +242,7 @@ function pedersenSingle(point: JacobianPoint, value: PedersenArg, constants: Jac
 
 // shift_point + x_low * P_0 + x_high * P1 + y_low * P2  + y_high * P3
 export function pedersen(x: PedersenArg, y: PedersenArg) {
-  let point: JacobianPoint = PEDERSEN_POINTS_JACOBIAN[0];
+  let point: ProjectivePoint = PEDERSEN_POINTS[0];
   point = pedersenSingle(point, x, PEDERSEN_POINTS1);
   point = pedersenSingle(point, y, PEDERSEN_POINTS2);
   return bytesToHexEth(point.toAffine().toRawBytes(true).slice(1));

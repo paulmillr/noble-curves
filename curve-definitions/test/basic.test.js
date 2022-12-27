@@ -51,7 +51,7 @@ for (const name in CURVES) {
   const O = name === 'secp256k1' ? secp256r1 : secp256k1;
   const POINTS = {};
   const OTHER_POINTS = {};
-  for (const name of ['Point', 'JacobianPoint', 'ExtendedPoint', 'ProjectivePoint']) {
+  for (const name of ['Point', 'ProjectivePoint', 'ExtendedPoint', 'ProjectivePoint']) {
     POINTS[name] = C[name];
     OTHER_POINTS[name] = O[name];
   }
