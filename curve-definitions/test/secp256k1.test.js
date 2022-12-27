@@ -390,7 +390,6 @@ should('secp256k1.recoverPublicKey()/should handle all-zeros msghash', () => {
 });
 should('secp256k1.recoverPublicKey()/should handle RFC 6979 vectors', () => {
   for (const vector of ecdsa.valid) {
-    if (secp.utils.mod(hexToNumber(vector.m), secp.CURVE.n) === 0n) continue;
     let usig = secp.sign(vector.m, vector.d);
     let sig = usig.toDERHex();
     const vpub = secp.getPublicKey(vector.d);
@@ -407,8 +406,6 @@ should('secp256k1.getSharedSecret()/should produce correct results', () => {
   // TODO: Once der is there, run all tests.
   for (const vector of ecdh.testGroups[0].tests.slice(0, 230)) {
     if (vector.result === 'invalid' || vector.private.length !== 64) {
-      // We support eth-like hexes
-      if (vector.private.length < 64) continue;
       throws(() => {
         secp.getSharedSecret(vector.private, derToPub(vector.public), true);
       });
