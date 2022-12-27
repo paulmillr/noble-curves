@@ -454,7 +454,7 @@ const rfc7748Mul = [
 for (let i = 0; i < rfc7748Mul.length; i++) {
   const v = rfc7748Mul[i];
   should(`RFC7748: scalarMult (${i})`, () => {
-    deepStrictEqual(hex(x25519.scalarMult(v.u, v.scalar)), v.outputU);
+    deepStrictEqual(hex(x25519.scalarMult(v.scalar, v.u)), v.outputU);
   });
 }
 
@@ -467,7 +467,7 @@ for (let i = 0; i < rfc7748Iter.length; i++) {
   const { scalar, iters } = rfc7748Iter[i];
   should(`RFC7748: scalarMult iteration (${i})`, () => {
     let k = x25519.Gu;
-    for (let i = 0, u = k; i < iters; i++) [k, u] = [x25519.scalarMult(u, k), k];
+    for (let i = 0, u = k; i < iters; i++) [k, u] = [x25519.scalarMult(k, u), k];
     deepStrictEqual(hex(k), scalar);
   });
 }
@@ -480,8 +480,8 @@ should('RFC7748 getSharedKey', () => {
   const shared = '4a5d9d5ba4ce2de1728e3bf480350f25e07e21c947d19e3376f09b3c1e161742';
   deepStrictEqual(alicePublic, hex(x25519.getPublicKey(alicePrivate)));
   deepStrictEqual(bobPublic, hex(x25519.getPublicKey(bobPrivate)));
-  deepStrictEqual(hex(x25519.scalarMult(bobPublic, alicePrivate)), shared);
-  deepStrictEqual(hex(x25519.scalarMult(alicePublic, bobPrivate)), shared);
+  deepStrictEqual(hex(x25519.scalarMult(alicePrivate, bobPublic)), shared);
+  deepStrictEqual(hex(x25519.scalarMult(bobPrivate, alicePublic)), shared);
 });
 
 // should('X25519/getSharedSecret() should be commutative', () => {
@@ -514,7 +514,7 @@ should('RFC7748 getSharedKey', () => {
       const comment = `(${i}, ${v.result}) ${v.comment}`;
       if (v.result === 'valid' || v.result === 'acceptable') {
         try {
-          const shared = hex(x25519.scalarMult(v.public, v.private));
+          const shared = hex(x25519.scalarMult(v.private, v.public));
           deepStrictEqual(shared, v.shared, comment);
         } catch (e) {
           // We are more strict
@@ -525,7 +525,7 @@ should('RFC7748 getSharedKey', () => {
       } else if (v.result === 'invalid') {
         let failed = false;
         try {
-          x25519.scalarMult(v.public, v.private);
+          x25519.scalarMult(v.private, v.public);
         } catch (error) {
           failed = true;
         }

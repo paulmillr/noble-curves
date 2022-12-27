@@ -24,8 +24,9 @@ export type CurveType = {
   Gu: string;
 };
 export type CurveFn = {
-  scalarMult: (u: Hex, scalar: Hex) => Uint8Array;
+  scalarMult: (scalar: Hex, u: Hex) => Uint8Array;
   scalarMultBase: (scalar: Hex) => Uint8Array;
+  getSharedSecret: (privateKeyA: Hex, publicKeyB: Hex) => Uint8Array;
   getPublicKey: (privateKey: Hex) => Uint8Array;
   Gu: string;
 };
@@ -186,8 +187,14 @@ export function montgomery(curveDef: CurveType): CurveFn {
       throw new Error(`Expected ${montgomeryBytes} or ${fieldLen} bytes, got ${bytes.length}`);
     return bytesToNumberLE(adjustScalarBytes(bytes));
   }
-  // Multiply point u by scalar
-  function scalarMult(u: Hex, scalar: Hex): Uint8Array {
+  /**
+   * Computes shared secret between private key "scalar" and public key's "u" (x) coordinate.
+   * We can get 'y' coordinate from 'u',
+   * but Point.fromHex also wants 'x' coordinate oddity flag,
+   * and we cannot get 'x' without knowing 'v'.
+   * Need to add generic conversion between twisted edwards and complimentary curve for JubJub.
+   */
+  function scalarMult(scalar: Hex, u: Hex): Uint8Array {
     const pointU = decodeUCoordinate(u);
     const _scalar = decodeScalar(scalar);
     const pu = montgomeryLadder(pointU, _scalar);
@@ -196,18 +203,20 @@ export function montgomery(curveDef: CurveType): CurveFn {
     if (pu === _0n) throw new Error('Invalid private or public key received');
     return encodeUCoordinate(pu);
   }
-  // Multiply base point by scalar
+  /**
+   * Computes public key from private.
+   * Executes scalar multiplication of curve's base point by scalar.
+   * @param scalar private key
+   * @returns new public key
+   */
   function scalarMultBase(scalar: Hex): Uint8Array {
-    return scalarMult(CURVE.Gu, scalar);
+    return scalarMult(scalar, CURVE.Gu);
   }
 
   return {
-    // NOTE: we can get 'y' coordinate from 'u', but Point.fromHex also wants 'x' coordinate oddity flag, and we cannot get 'x' without knowing 'v'
-    // Need to add generic conversion between twisted edwards and complimentary curve for JubJub
     scalarMult,
     scalarMultBase,
-    // NOTE: these function work on complimentary montgomery curve
-    // getSharedSecret: (privateKey: Hex, publicKey: Hex) => scalarMult(publicKey, privateKey),
+    getSharedSecret: (privateKey: Hex, publicKey: Hex) => scalarMult(privateKey, publicKey),
     getPublicKey: (privateKey: Hex): Uint8Array => scalarMultBase(privateKey),
     Gu: CURVE.Gu,
   };

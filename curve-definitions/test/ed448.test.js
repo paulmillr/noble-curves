@@ -480,7 +480,7 @@ const rfc7748Mul = [
 for (let i = 0; i < rfc7748Mul.length; i++) {
   const v = rfc7748Mul[i];
   should(`RFC7748: scalarMult (${i})`, () => {
-    deepStrictEqual(hex(x448.scalarMult(v.u, v.scalar)), v.outputU);
+    deepStrictEqual(hex(x448.scalarMult(v.scalar, v.u)), v.outputU);
   });
 }
 
@@ -501,7 +501,7 @@ for (let i = 0; i < rfc7748Iter.length; i++) {
   const { scalar, iters } = rfc7748Iter[i];
   should(`RFC7748: scalarMult iteration (${i})`, () => {
     let k = x448.Gu;
-    for (let i = 0, u = k; i < iters; i++) [k, u] = [x448.scalarMult(u, k), k];
+    for (let i = 0, u = k; i < iters; i++) [k, u] = [x448.scalarMult(k, u), k];
     deepStrictEqual(hex(k), scalar);
   });
 }
@@ -519,8 +519,8 @@ should('RFC7748 getSharedKey', () => {
     '07fff4181ac6cc95ec1c16a94a0f74d12da232ce40a77552281d282bb60c0b56fd2464c335543936521c24403085d59a449a5037514a879d';
   deepStrictEqual(alicePublic, hex(x448.getPublicKey(alicePrivate)));
   deepStrictEqual(bobPublic, hex(x448.getPublicKey(bobPrivate)));
-  deepStrictEqual(hex(x448.scalarMult(bobPublic, alicePrivate)), shared);
-  deepStrictEqual(hex(x448.scalarMult(alicePublic, bobPrivate)), shared);
+  deepStrictEqual(hex(x448.scalarMult(alicePrivate, bobPublic)), shared);
+  deepStrictEqual(hex(x448.scalarMult(bobPrivate, alicePublic)), shared);
 });
 
 {
@@ -531,7 +531,7 @@ should('RFC7748 getSharedKey', () => {
       const index = `(${i}, ${v.result}) ${v.comment}`;
       if (v.result === 'valid' || v.result === 'acceptable') {
         try {
-          const shared = hex(x448.scalarMult(v.public, v.private));
+          const shared = hex(x448.scalarMult(v.private, v.public));
           deepStrictEqual(shared, v.shared, index);
         } catch (e) {
           // We are more strict
@@ -543,7 +543,7 @@ should('RFC7748 getSharedKey', () => {
       } else if (v.result === 'invalid') {
         let failed = false;
         try {
-          x448.scalarMult(v.public, v.private);
+          x448.scalarMult(v.private, v.public);
         } catch (error) {
           failed = true;
         }
