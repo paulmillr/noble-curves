@@ -230,8 +230,8 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
   function weierstrassEquation(x: T): T {
     const { a, b } = CURVE;
     const x2 = Fp.square(x); // x * x
-    const x3 = Fp.multiply(x2, x); // x2 * x
-    return Fp.add(Fp.add(x3, Fp.multiply(x, a)), b); // x3 + a * x + b
+    const x3 = Fp.mul(x2, x); // x2 * x
+    return Fp.add(Fp.add(x3, Fp.mul(x, a)), b); // x3 + a * x + b
   }
 
   function isWithinCurveOrder(num: bigint): boolean {
@@ -305,11 +305,11 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
      * Compare one point to another.
      */
     equals(other: ProjectivePoint): boolean {
-      if (!(other instanceof ProjectivePoint)) throw new TypeError('ProjectivePoint expected');
+      assertPrjPoint(other);
       const { x: X1, y: Y1, z: Z1 } = this;
       const { x: X2, y: Y2, z: Z2 } = other;
-      const U1 = Fp.equals(Fp.multiply(X1, Z2), Fp.multiply(X2, Z1));
-      const U2 = Fp.equals(Fp.multiply(Y1, Z2), Fp.multiply(Y2, Z1));
+      const U1 = Fp.equals(Fp.mul(X1, Z2), Fp.mul(X2, Z1));
+      const U2 = Fp.equals(Fp.mul(Y1, Z2), Fp.mul(Y2, Z1));
       return U1 && U2;
     }
 
@@ -330,38 +330,38 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
     // Cost: 8M + 3S + 3*a + 2*b3 + 15add.
     double() {
       const { a, b } = CURVE;
-      const b3 = Fp.multiply(b, 3n);
+      const b3 = Fp.mul(b, 3n);
       const { x: X1, y: Y1, z: Z1 } = this;
       let X3 = Fp.ZERO, Y3 = Fp.ZERO, Z3 = Fp.ZERO; // prettier-ignore
-      let t0 = Fp.multiply(X1, X1); // step 1
-      let t1 = Fp.multiply(Y1, Y1);
-      let t2 = Fp.multiply(Z1, Z1);
-      let t3 = Fp.multiply(X1, Y1);
+      let t0 = Fp.mul(X1, X1); // step 1
+      let t1 = Fp.mul(Y1, Y1);
+      let t2 = Fp.mul(Z1, Z1);
+      let t3 = Fp.mul(X1, Y1);
       t3 = Fp.add(t3, t3); // step 5
-      Z3 = Fp.multiply(X1, Z1);
+      Z3 = Fp.mul(X1, Z1);
       Z3 = Fp.add(Z3, Z3);
-      X3 = Fp.multiply(a, Z3);
-      Y3 = Fp.multiply(b3, t2);
+      X3 = Fp.mul(a, Z3);
+      Y3 = Fp.mul(b3, t2);
       Y3 = Fp.add(X3, Y3); // step 10
-      X3 = Fp.subtract(t1, Y3);
+      X3 = Fp.sub(t1, Y3);
       Y3 = Fp.add(t1, Y3);
-      Y3 = Fp.multiply(X3, Y3);
-      X3 = Fp.multiply(t3, X3);
-      Z3 = Fp.multiply(b3, Z3); // step 15
-      t2 = Fp.multiply(a, t2);
-      t3 = Fp.subtract(t0, t2);
-      t3 = Fp.multiply(a, t3);
+      Y3 = Fp.mul(X3, Y3);
+      X3 = Fp.mul(t3, X3);
+      Z3 = Fp.mul(b3, Z3); // step 15
+      t2 = Fp.mul(a, t2);
+      t3 = Fp.sub(t0, t2);
+      t3 = Fp.mul(a, t3);
       t3 = Fp.add(t3, Z3);
       Z3 = Fp.add(t0, t0); // step 20
       t0 = Fp.add(Z3, t0);
       t0 = Fp.add(t0, t2);
-      t0 = Fp.multiply(t0, t3);
+      t0 = Fp.mul(t0, t3);
       Y3 = Fp.add(Y3, t0);
-      t2 = Fp.multiply(Y1, Z1); // step 25
+      t2 = Fp.mul(Y1, Z1); // step 25
       t2 = Fp.add(t2, t2);
-      t0 = Fp.multiply(t2, t3);
-      X3 = Fp.subtract(X3, t0);
-      Z3 = Fp.multiply(t2, t1);
+      t0 = Fp.mul(t2, t3);
+      X3 = Fp.sub(X3, t0);
+      Z3 = Fp.mul(t2, t1);
       Z3 = Fp.add(Z3, Z3); // step 30
       Z3 = Fp.add(Z3, Z3);
       return new ProjectivePoint(X3, Y3, Z3);
@@ -372,51 +372,51 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
     // https://eprint.iacr.org/2015/1060, algorithm 1
     // Cost: 12M + 0S + 3*a + 3*b3 + 23add.
     add(other: ProjectivePoint): ProjectivePoint {
-      if (!(other instanceof ProjectivePoint)) throw new TypeError('ProjectivePoint expected');
+      assertPrjPoint(other);
       const { x: X1, y: Y1, z: Z1 } = this;
       const { x: X2, y: Y2, z: Z2 } = other;
       let X3 = Fp.ZERO, Y3 = Fp.ZERO, Z3 = Fp.ZERO; // prettier-ignore
       const a = CURVE.a;
-      const b3 = Fp.multiply(CURVE.b, 3n);
-      let t0 = Fp.multiply(X1, X2); // step 1
-      let t1 = Fp.multiply(Y1, Y2);
-      let t2 = Fp.multiply(Z1, Z2);
+      const b3 = Fp.mul(CURVE.b, 3n);
+      let t0 = Fp.mul(X1, X2); // step 1
+      let t1 = Fp.mul(Y1, Y2);
+      let t2 = Fp.mul(Z1, Z2);
       let t3 = Fp.add(X1, Y1);
       let t4 = Fp.add(X2, Y2); // step 5
-      t3 = Fp.multiply(t3, t4);
+      t3 = Fp.mul(t3, t4);
       t4 = Fp.add(t0, t1);
-      t3 = Fp.subtract(t3, t4);
+      t3 = Fp.sub(t3, t4);
       t4 = Fp.add(X1, Z1);
       let t5 = Fp.add(X2, Z2); // step 10
-      t4 = Fp.multiply(t4, t5);
+      t4 = Fp.mul(t4, t5);
       t5 = Fp.add(t0, t2);
-      t4 = Fp.subtract(t4, t5);
+      t4 = Fp.sub(t4, t5);
       t5 = Fp.add(Y1, Z1);
       X3 = Fp.add(Y2, Z2); // step 15
-      t5 = Fp.multiply(t5, X3);
+      t5 = Fp.mul(t5, X3);
       X3 = Fp.add(t1, t2);
-      t5 = Fp.subtract(t5, X3);
-      Z3 = Fp.multiply(a, t4);
-      X3 = Fp.multiply(b3, t2); // step 20
+      t5 = Fp.sub(t5, X3);
+      Z3 = Fp.mul(a, t4);
+      X3 = Fp.mul(b3, t2); // step 20
       Z3 = Fp.add(X3, Z3);
-      X3 = Fp.subtract(t1, Z3);
+      X3 = Fp.sub(t1, Z3);
       Z3 = Fp.add(t1, Z3);
-      Y3 = Fp.multiply(X3, Z3);
+      Y3 = Fp.mul(X3, Z3);
       t1 = Fp.add(t0, t0); // step 25
       t1 = Fp.add(t1, t0);
-      t2 = Fp.multiply(a, t2);
-      t4 = Fp.multiply(b3, t4);
+      t2 = Fp.mul(a, t2);
+      t4 = Fp.mul(b3, t4);
       t1 = Fp.add(t1, t2);
-      t2 = Fp.subtract(t0, t2); // step 30
-      t2 = Fp.multiply(a, t2);
+      t2 = Fp.sub(t0, t2); // step 30
+      t2 = Fp.mul(a, t2);
       t4 = Fp.add(t4, t2);
-      t0 = Fp.multiply(t1, t4);
+      t0 = Fp.mul(t1, t4);
       Y3 = Fp.add(Y3, t0);
-      t0 = Fp.multiply(t5, t4); // step 35
-      X3 = Fp.multiply(t3, X3);
-      X3 = Fp.subtract(X3, t0);
-      t0 = Fp.multiply(t3, t1);
-      Z3 = Fp.multiply(t5, Z3);
+      t0 = Fp.mul(t5, t4); // step 35
+      X3 = Fp.mul(t3, X3);
+      X3 = Fp.sub(X3, t0);
+      t0 = Fp.mul(t3, t1);
+      Z3 = Fp.mul(t5, Z3);
       Z3 = Fp.add(Z3, t0); // step 40
       return new ProjectivePoint(X3, Y3, Z3);
     }
@@ -453,7 +453,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
       }
       if (k1neg) k1p = k1p.negate();
       if (k2neg) k2p = k2p.negate();
-      k2p = new ProjectivePoint(Fp.multiply(k2p.x, CURVE.endo.beta), k2p.y, k2p.z);
+      k2p = new ProjectivePoint(Fp.mul(k2p.x, CURVE.endo.beta), k2p.y, k2p.z);
       return k1p.add(k2p);
     }
 
@@ -496,7 +496,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
         let { p: k2p, f: f2p } = this.wNAF(k2, affinePoint);
         k1p = wnaf.constTimeNegate(k1neg, k1p);
         k2p = wnaf.constTimeNegate(k2neg, k2p);
-        k2p = new ProjectivePoint(Fp.multiply(k2p.x, CURVE.endo.beta), k2p.y, k2p.z);
+        k2p = new ProjectivePoint(Fp.mul(k2p.x, CURVE.endo.beta), k2p.y, k2p.z);
         point = k1p.add(k2p);
         fake = f1p.add(f2p);
       } else {
@@ -517,9 +517,9 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
       // If invZ was 0, we return zero point. However we still want to execute
       // all operations, so we replace invZ with a random number, 1.
       if (invZ == null) invZ = is0 ? Fp.ONE : Fp.invert(z);
-      const ax = Fp.multiply(x, invZ);
-      const ay = Fp.multiply(y, invZ);
-      const zz = Fp.multiply(z, invZ);
+      const ax = Fp.mul(x, invZ);
+      const ay = Fp.mul(y, invZ);
+      const zz = Fp.mul(z, invZ);
       if (is0) return Point.ZERO;
       if (!Fp.equals(zz, Fp.ONE)) throw new Error('invZ was invalid');
       return new Point(ax, ay);
@@ -539,6 +539,10 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
     }
   }
   const wnaf = wNAF(ProjectivePoint, CURVE.endo ? nBitLength / 2 : nBitLength);
+
+  function assertPrjPoint(other: unknown) {
+    if (!(other instanceof ProjectivePoint)) throw new TypeError('ProjectivePoint expected');
+  }
   // Stores precomputed values for points.
   const pointPrecomputes = new WeakMap<Point, ProjectivePoint[]>();
 

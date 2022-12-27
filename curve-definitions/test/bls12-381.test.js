@@ -92,8 +92,8 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
     fc.assert(
       fc.property(FC_BIGINT, (num) => {
         const a = Fp.create(num);
-        deepStrictEqual(Fp.subtract(a, Fp.ZERO), a);
-        deepStrictEqual(Fp.subtract(a, a), Fp.ZERO);
+        deepStrictEqual(Fp.sub(a, Fp.ZERO), a);
+        deepStrictEqual(Fp.sub(a, a), Fp.ZERO);
       })
     );
   });
@@ -102,9 +102,9 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
       fc.property(FC_BIGINT, (num1) => {
         const a = Fp.create(num1);
         const b = Fp.create(num1);
-        deepStrictEqual(Fp.subtract(Fp.ZERO, a), Fp.negate(a));
-        deepStrictEqual(Fp.subtract(a, b), Fp.add(a, Fp.negate(b)));
-        deepStrictEqual(Fp.subtract(a, b), Fp.add(a, Fp.multiply(b, Fp.create(-1n))));
+        deepStrictEqual(Fp.sub(Fp.ZERO, a), Fp.negate(a));
+        deepStrictEqual(Fp.sub(a, b), Fp.add(a, Fp.negate(b)));
+        deepStrictEqual(Fp.sub(a, b), Fp.add(a, Fp.mul(b, Fp.create(-1n))));
       })
     );
   });
@@ -112,8 +112,8 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
     fc.assert(
       fc.property(FC_BIGINT, (num) => {
         const a = Fp.create(num);
-        deepStrictEqual(Fp.negate(a), Fp.subtract(Fp.ZERO, a));
-        deepStrictEqual(Fp.negate(a), Fp.multiply(a, Fp.create(-1n)));
+        deepStrictEqual(Fp.negate(a), Fp.sub(Fp.ZERO, a));
+        deepStrictEqual(Fp.negate(a), Fp.mul(a, Fp.create(-1n)));
       })
     );
   });
@@ -123,7 +123,7 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
       fc.property(FC_BIGINT, FC_BIGINT, (num1, num2) => {
         const a = Fp.create(num1);
         const b = Fp.create(num2);
-        deepStrictEqual(Fp.multiply(a, b), Fp.multiply(b, a));
+        deepStrictEqual(Fp.mul(a, b), Fp.mul(b, a));
       })
     );
   });
@@ -133,7 +133,7 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
         const a = Fp.create(num1);
         const b = Fp.create(num2);
         const c = Fp.create(num3);
-        deepStrictEqual(Fp.multiply(a, Fp.multiply(b, c)), Fp.multiply(Fp.multiply(a, b), c));
+        deepStrictEqual(Fp.mul(a, Fp.mul(b, c)), Fp.mul(Fp.mul(a, b), c));
       })
     );
   });
@@ -143,7 +143,7 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
         const a = Fp.create(num1);
         const b = Fp.create(num2);
         const c = Fp.create(num3);
-        deepStrictEqual(Fp.multiply(a, Fp.add(b, c)), Fp.add(Fp.multiply(b, a), Fp.multiply(c, a)));
+        deepStrictEqual(Fp.mul(a, Fp.add(b, c)), Fp.add(Fp.mul(b, a), Fp.mul(c, a)));
       })
     );
   });
@@ -151,13 +151,13 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
     fc.assert(
       fc.property(FC_BIGINT, (num) => {
         const a = Fp.create(num);
-        deepStrictEqual(Fp.multiply(a, Fp.create(0n)), Fp.ZERO);
-        deepStrictEqual(Fp.multiply(a, Fp.ZERO), Fp.ZERO);
-        deepStrictEqual(Fp.multiply(a, Fp.create(1n)), a);
-        deepStrictEqual(Fp.multiply(a, Fp.ONE), a);
-        deepStrictEqual(Fp.multiply(a, Fp.create(2n)), Fp.add(a, a));
-        deepStrictEqual(Fp.multiply(a, Fp.create(3n)), Fp.add(Fp.add(a, a), a));
-        deepStrictEqual(Fp.multiply(a, Fp.create(4n)), Fp.add(Fp.add(Fp.add(a, a), a), a));
+        deepStrictEqual(Fp.mul(a, Fp.create(0n)), Fp.ZERO);
+        deepStrictEqual(Fp.mul(a, Fp.ZERO), Fp.ZERO);
+        deepStrictEqual(Fp.mul(a, Fp.create(1n)), a);
+        deepStrictEqual(Fp.mul(a, Fp.ONE), a);
+        deepStrictEqual(Fp.mul(a, Fp.create(2n)), Fp.add(a, a));
+        deepStrictEqual(Fp.mul(a, Fp.create(3n)), Fp.add(Fp.add(a, a), a));
+        deepStrictEqual(Fp.mul(a, Fp.create(4n)), Fp.add(Fp.add(Fp.add(a, a), a), a));
       })
     );
   });
@@ -165,7 +165,7 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
     fc.assert(
       fc.property(FC_BIGINT, (num) => {
         const a = Fp.create(num);
-        deepStrictEqual(Fp.square(a), Fp.multiply(a, a));
+        deepStrictEqual(Fp.square(a), Fp.mul(a, a));
       })
     );
   });
@@ -175,8 +175,8 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
         const a = Fp.create(num);
         deepStrictEqual(Fp.pow(a, 0n), Fp.ONE);
         deepStrictEqual(Fp.pow(a, 1n), a);
-        deepStrictEqual(Fp.pow(a, 2n), Fp.multiply(a, a));
-        deepStrictEqual(Fp.pow(a, 3n), Fp.multiply(Fp.multiply(a, a), a));
+        deepStrictEqual(Fp.pow(a, 2n), Fp.mul(a, a));
+        deepStrictEqual(Fp.pow(a, 3n), Fp.mul(Fp.mul(a, a), a));
       })
     );
   });
@@ -221,7 +221,7 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
       fc.property(FC_BIGINT, FC_BIGINT, (num1, num2) => {
         const a = Fp.create(num1);
         const b = Fp.create(num2);
-        deepStrictEqual(Fp.div(a, b), Fp.multiply(a, Fp.invert(b)));
+        deepStrictEqual(Fp.div(a, b), Fp.mul(a, Fp.invert(b)));
       })
     );
   });
@@ -285,8 +285,8 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
     fc.assert(
       fc.property(FC_BIGINT_2, (num) => {
         const a = Fp2.fromBigTuple([num[0], num[1]]);
-        deepStrictEqual(Fp2.subtract(a, Fp2.ZERO), a);
-        deepStrictEqual(Fp2.subtract(a, a), Fp2.ZERO);
+        deepStrictEqual(Fp2.sub(a, Fp2.ZERO), a);
+        deepStrictEqual(Fp2.sub(a, a), Fp2.ZERO);
       })
     );
   });
@@ -295,9 +295,9 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
       fc.property(FC_BIGINT_2, (num1) => {
         const a = Fp2.fromBigTuple([num1[0], num1[1]]);
         const b = Fp2.fromBigTuple([num1[0], num1[1]]);
-        deepStrictEqual(Fp2.subtract(Fp2.ZERO, a), Fp2.negate(a));
-        deepStrictEqual(Fp2.subtract(a, b), Fp2.add(a, Fp2.negate(b)));
-        deepStrictEqual(Fp2.subtract(a, b), Fp2.add(a, Fp2.multiply(b, -1n)));
+        deepStrictEqual(Fp2.sub(Fp2.ZERO, a), Fp2.negate(a));
+        deepStrictEqual(Fp2.sub(a, b), Fp2.add(a, Fp2.negate(b)));
+        deepStrictEqual(Fp2.sub(a, b), Fp2.add(a, Fp2.mul(b, -1n)));
       })
     );
   });
@@ -305,8 +305,8 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
     fc.assert(
       fc.property(FC_BIGINT_2, (num) => {
         const a = Fp2.fromBigTuple([num[0], num[1]]);
-        deepStrictEqual(Fp2.negate(a), Fp2.subtract(Fp2.ZERO, a));
-        deepStrictEqual(Fp2.negate(a), Fp2.multiply(a, -1n));
+        deepStrictEqual(Fp2.negate(a), Fp2.sub(Fp2.ZERO, a));
+        deepStrictEqual(Fp2.negate(a), Fp2.mul(a, -1n));
       })
     );
   });
@@ -316,7 +316,7 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
       fc.property(FC_BIGINT_2, FC_BIGINT_2, (num1, num2) => {
         const a = Fp2.fromBigTuple([num1[0], num1[1]]);
         const b = Fp2.fromBigTuple([num2[0], num2[1]]);
-        deepStrictEqual(Fp2.multiply(a, b), Fp2.multiply(b, a));
+        deepStrictEqual(Fp2.mul(a, b), Fp2.mul(b, a));
       })
     );
   });
@@ -326,7 +326,7 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
         const a = Fp2.fromBigTuple([num1[0], num1[1]]);
         const b = Fp2.fromBigTuple([num2[0], num2[1]]);
         const c = Fp2.fromBigTuple([num3[0], num3[1]]);
-        deepStrictEqual(Fp2.multiply(a, Fp2.multiply(b, c)), Fp2.multiply(Fp2.multiply(a, b), c));
+        deepStrictEqual(Fp2.mul(a, Fp2.mul(b, c)), Fp2.mul(Fp2.mul(a, b), c));
       })
     );
   });
@@ -337,8 +337,8 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
         const b = Fp2.fromBigTuple([num2[0], num2[1]]);
         const c = Fp2.fromBigTuple([num3[0], num3[1]]);
         deepStrictEqual(
-          Fp2.multiply(a, Fp2.add(b, c)),
-          Fp2.add(Fp2.multiply(b, a), Fp2.multiply(c, a))
+          Fp2.mul(a, Fp2.add(b, c)),
+          Fp2.add(Fp2.mul(b, a), Fp2.mul(c, a))
         );
       })
     );
@@ -347,13 +347,13 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
     fc.assert(
       fc.property(FC_BIGINT_2, (num) => {
         const a = Fp2.fromBigTuple([num[0], num[1]]);
-        deepStrictEqual(Fp2.multiply(a, 0n), Fp2.ZERO);
-        deepStrictEqual(Fp2.multiply(a, Fp2.ZERO), Fp2.ZERO);
-        deepStrictEqual(Fp2.multiply(a, 1n), a);
-        deepStrictEqual(Fp2.multiply(a, Fp2.ONE), a);
-        deepStrictEqual(Fp2.multiply(a, 2n), Fp2.add(a, a));
-        deepStrictEqual(Fp2.multiply(a, 3n), Fp2.add(Fp2.add(a, a), a));
-        deepStrictEqual(Fp2.multiply(a, 4n), Fp2.add(Fp2.add(Fp2.add(a, a), a), a));
+        deepStrictEqual(Fp2.mul(a, 0n), Fp2.ZERO);
+        deepStrictEqual(Fp2.mul(a, Fp2.ZERO), Fp2.ZERO);
+        deepStrictEqual(Fp2.mul(a, 1n), a);
+        deepStrictEqual(Fp2.mul(a, Fp2.ONE), a);
+        deepStrictEqual(Fp2.mul(a, 2n), Fp2.add(a, a));
+        deepStrictEqual(Fp2.mul(a, 3n), Fp2.add(Fp2.add(a, a), a));
+        deepStrictEqual(Fp2.mul(a, 4n), Fp2.add(Fp2.add(Fp2.add(a, a), a), a));
       })
     );
   });
@@ -361,7 +361,7 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
     fc.assert(
       fc.property(FC_BIGINT_2, (num) => {
         const a = Fp2.fromBigTuple([num[0], num[1]]);
-        deepStrictEqual(Fp2.square(a), Fp2.multiply(a, a));
+        deepStrictEqual(Fp2.square(a), Fp2.mul(a, a));
       })
     );
   });
@@ -371,8 +371,8 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
         const a = Fp2.fromBigTuple([num[0], num[1]]);
         deepStrictEqual(Fp2.pow(a, 0n), Fp2.ONE);
         deepStrictEqual(Fp2.pow(a, 1n), a);
-        deepStrictEqual(Fp2.pow(a, 2n), Fp2.multiply(a, a));
-        deepStrictEqual(Fp2.pow(a, 3n), Fp2.multiply(Fp2.multiply(a, a), a));
+        deepStrictEqual(Fp2.pow(a, 2n), Fp2.mul(a, a));
+        deepStrictEqual(Fp2.pow(a, 3n), Fp2.mul(Fp2.mul(a, a), a));
       })
     );
   });
@@ -410,7 +410,7 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
       fc.property(FC_BIGINT_2, FC_BIGINT_2, (num1, num2) => {
         const a = Fp2.fromBigTuple([num1[0], num1[1]]);
         const b = Fp2.fromBigTuple([num2[0], num2[1]]);
-        deepStrictEqual(Fp2.div(a, b), Fp2.multiply(a, Fp2.invert(b)));
+        deepStrictEqual(Fp2.div(a, b), Fp2.mul(a, Fp2.invert(b)));
       })
     );
   });
@@ -536,8 +536,8 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
     fc.assert(
       fc.property(FC_BIGINT_12, (num) => {
         const a = Fp12.fromBigTwelve(num);
-        deepStrictEqual(Fp12.subtract(a, Fp12.ZERO), a);
-        deepStrictEqual(Fp12.subtract(a, a), Fp12.ZERO);
+        deepStrictEqual(Fp12.sub(a, Fp12.ZERO), a);
+        deepStrictEqual(Fp12.sub(a, a), Fp12.ZERO);
       })
     );
   });
@@ -546,9 +546,9 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
       fc.property(FC_BIGINT_12, (num1) => {
         const a = Fp12.fromBigTwelve(num1);
         const b = Fp12.fromBigTwelve(num1);
-        deepStrictEqual(Fp12.subtract(Fp12.ZERO, a), Fp12.negate(a));
-        deepStrictEqual(Fp12.subtract(a, b), Fp12.add(a, Fp12.negate(b)));
-        deepStrictEqual(Fp12.subtract(a, b), Fp12.add(a, Fp12.multiply(b, -1n)));
+        deepStrictEqual(Fp12.sub(Fp12.ZERO, a), Fp12.negate(a));
+        deepStrictEqual(Fp12.sub(a, b), Fp12.add(a, Fp12.negate(b)));
+        deepStrictEqual(Fp12.sub(a, b), Fp12.add(a, Fp12.mul(b, -1n)));
       })
     );
   });
@@ -556,8 +556,8 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
     fc.assert(
       fc.property(FC_BIGINT_12, (num) => {
         const a = Fp12.fromBigTwelve(num);
-        deepStrictEqual(Fp12.negate(a), Fp12.subtract(Fp12.ZERO, a));
-        deepStrictEqual(Fp12.negate(a), Fp12.multiply(a, -1n));
+        deepStrictEqual(Fp12.negate(a), Fp12.sub(Fp12.ZERO, a));
+        deepStrictEqual(Fp12.negate(a), Fp12.mul(a, -1n));
       })
     );
   });
@@ -567,7 +567,7 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
       fc.property(FC_BIGINT_12, FC_BIGINT_12, (num1, num2) => {
         const a = Fp12.fromBigTwelve(num1);
         const b = Fp12.fromBigTwelve(num2);
-        deepStrictEqual(Fp12.multiply(a, b), Fp12.multiply(b, a));
+        deepStrictEqual(Fp12.mul(a, b), Fp12.mul(b, a));
       })
     );
   });
@@ -578,8 +578,8 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
         const b = Fp12.fromBigTwelve(num2);
         const c = Fp12.fromBigTwelve(num3);
         deepStrictEqual(
-          Fp12.multiply(a, Fp12.multiply(b, c)),
-          Fp12.multiply(Fp12.multiply(a, b), c)
+          Fp12.mul(a, Fp12.mul(b, c)),
+          Fp12.mul(Fp12.mul(a, b), c)
         );
       })
     );
@@ -591,8 +591,8 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
         const b = Fp12.fromBigTwelve(num2);
         const c = Fp12.fromBigTwelve(num3);
         deepStrictEqual(
-          Fp12.multiply(a, Fp12.add(b, c)),
-          Fp12.add(Fp12.multiply(b, a), Fp12.multiply(c, a))
+          Fp12.mul(a, Fp12.add(b, c)),
+          Fp12.add(Fp12.mul(b, a), Fp12.mul(c, a))
         );
       })
     );
@@ -601,13 +601,13 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
     fc.assert(
       fc.property(FC_BIGINT_12, (num) => {
         const a = Fp12.fromBigTwelve(num);
-        deepStrictEqual(Fp12.multiply(a, 0n), Fp12.ZERO);
-        deepStrictEqual(Fp12.multiply(a, Fp12.ZERO), Fp12.ZERO);
-        deepStrictEqual(Fp12.multiply(a, 1n), a);
-        deepStrictEqual(Fp12.multiply(a, Fp12.ONE), a);
-        deepStrictEqual(Fp12.multiply(a, 2n), Fp12.add(a, a));
-        deepStrictEqual(Fp12.multiply(a, 3n), Fp12.add(Fp12.add(a, a), a));
-        deepStrictEqual(Fp12.multiply(a, 4n), Fp12.add(Fp12.add(Fp12.add(a, a), a), a));
+        deepStrictEqual(Fp12.mul(a, 0n), Fp12.ZERO);
+        deepStrictEqual(Fp12.mul(a, Fp12.ZERO), Fp12.ZERO);
+        deepStrictEqual(Fp12.mul(a, 1n), a);
+        deepStrictEqual(Fp12.mul(a, Fp12.ONE), a);
+        deepStrictEqual(Fp12.mul(a, 2n), Fp12.add(a, a));
+        deepStrictEqual(Fp12.mul(a, 3n), Fp12.add(Fp12.add(a, a), a));
+        deepStrictEqual(Fp12.mul(a, 4n), Fp12.add(Fp12.add(Fp12.add(a, a), a), a));
       })
     );
   });
@@ -615,7 +615,7 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
     fc.assert(
       fc.property(FC_BIGINT_12, (num) => {
         const a = Fp12.fromBigTwelve(num);
-        deepStrictEqual(Fp12.square(a), Fp12.multiply(a, a));
+        deepStrictEqual(Fp12.square(a), Fp12.mul(a, a));
       })
     );
   });
@@ -625,8 +625,8 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
         const a = Fp12.fromBigTwelve(num);
         deepStrictEqual(Fp12.pow(a, 0n), Fp12.ONE);
         deepStrictEqual(Fp12.pow(a, 1n), a);
-        deepStrictEqual(Fp12.pow(a, 2n), Fp12.multiply(a, a));
-        deepStrictEqual(Fp12.pow(a, 3n), Fp12.multiply(Fp12.multiply(a, a), a));
+        deepStrictEqual(Fp12.pow(a, 2n), Fp12.mul(a, a));
+        deepStrictEqual(Fp12.pow(a, 3n), Fp12.mul(Fp12.mul(a, a), a));
       })
     );
   });
@@ -664,7 +664,7 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
       fc.property(FC_BIGINT_12, FC_BIGINT_12, (num1, num2) => {
         const a = Fp12.fromBigTwelve(num1);
         const b = Fp12.fromBigTwelve(num2);
-        deepStrictEqual(Fp12.div(a, b), Fp12.multiply(a, Fp12.invert(b)));
+        deepStrictEqual(Fp12.div(a, b), Fp12.mul(a, Fp12.invert(b)));
       })
     );
   });
@@ -1519,7 +1519,7 @@ should('bls12-381/basic/should not verify wrong multi-signature as simple signat
   should('pairing/creates negative G1 pairing', () => {
     const p1 = pairing(G1, G2);
     const p2 = pairing(G1.negate(), G2);
-    deepStrictEqual(Fp12.multiply(p1, p2), Fp12.ONE);
+    deepStrictEqual(Fp12.mul(p1, p2), Fp12.ONE);
   });
   should('pairing/creates negative G2 pairing', () => {
     const p2 = pairing(G1.negate(), G2);
@@ -1534,7 +1534,7 @@ should('bls12-381/basic/should not verify wrong multi-signature as simple signat
   should('pairing/G1 billinearity', () => {
     const p1 = pairing(G1, G2);
     const p2 = pairing(G1.multiply(2n), G2);
-    deepStrictEqual(Fp12.multiply(p1, p1), p2);
+    deepStrictEqual(Fp12.mul(p1, p1), p2);
   });
   should('pairing/should not degenerate', () => {
     const p1 = pairing(G1, G2);
@@ -1547,7 +1547,7 @@ should('bls12-381/basic/should not verify wrong multi-signature as simple signat
   should('pairing/G2 billinearity', () => {
     const p1 = pairing(G1, G2);
     const p2 = pairing(G1, G2.multiply(2n));
-    deepStrictEqual(Fp12.multiply(p1, p1), p2);
+    deepStrictEqual(Fp12.mul(p1, p1), p2);
   });
   should('pairing/proper pairing composite check', () => {
     const p1 = pairing(G1.multiply(37n), G2.multiply(27n));

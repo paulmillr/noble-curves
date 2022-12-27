@@ -114,33 +114,33 @@ export function bls<Fp2, Fp6, Fp12>(
       // Double
       let t0 = Fp2.square(Ry); // Ry²
       let t1 = Fp2.square(Rz); // Rz²
-      let t2 = Fp2.multiplyByB(Fp2.multiply(t1, 3n)); // 3 * T1 * B
-      let t3 = Fp2.multiply(t2, 3n); // 3 * T2
-      let t4 = Fp2.subtract(Fp2.subtract(Fp2.square(Fp2.add(Ry, Rz)), t1), t0); // (Ry + Rz)² - T1 - T0
+      let t2 = Fp2.multiplyByB(Fp2.mul(t1, 3n)); // 3 * T1 * B
+      let t3 = Fp2.mul(t2, 3n); // 3 * T2
+      let t4 = Fp2.sub(Fp2.sub(Fp2.square(Fp2.add(Ry, Rz)), t1), t0); // (Ry + Rz)² - T1 - T0
       ell_coeff.push([
-        Fp2.subtract(t2, t0), // T2 - T0
-        Fp2.multiply(Fp2.square(Rx), 3n), // 3 * Rx²
+        Fp2.sub(t2, t0), // T2 - T0
+        Fp2.mul(Fp2.square(Rx), 3n), // 3 * Rx²
         Fp2.negate(t4), // -T4
       ]);
-      Rx = Fp2.div(Fp2.multiply(Fp2.multiply(Fp2.subtract(t0, t3), Rx), Ry), 2n); // ((T0 - T3) * Rx * Ry) / 2
-      Ry = Fp2.subtract(Fp2.square(Fp2.div(Fp2.add(t0, t3), 2n)), Fp2.multiply(Fp2.square(t2), 3n)); // ((T0 + T3) / 2)² - 3 * T2²
-      Rz = Fp2.multiply(t0, t4); // T0 * T4
+      Rx = Fp2.div(Fp2.mul(Fp2.mul(Fp2.sub(t0, t3), Rx), Ry), 2n); // ((T0 - T3) * Rx * Ry) / 2
+      Ry = Fp2.sub(Fp2.square(Fp2.div(Fp2.add(t0, t3), 2n)), Fp2.mul(Fp2.square(t2), 3n)); // ((T0 + T3) / 2)² - 3 * T2²
+      Rz = Fp2.mul(t0, t4); // T0 * T4
       if (bitGet(CURVE.x, i)) {
         // Addition
-        let t0 = Fp2.subtract(Ry, Fp2.multiply(Qy, Rz)); // Ry - Qy * Rz
-        let t1 = Fp2.subtract(Rx, Fp2.multiply(Qx, Rz)); // Rx - Qx * Rz
+        let t0 = Fp2.sub(Ry, Fp2.mul(Qy, Rz)); // Ry - Qy * Rz
+        let t1 = Fp2.sub(Rx, Fp2.mul(Qx, Rz)); // Rx - Qx * Rz
         ell_coeff.push([
-          Fp2.subtract(Fp2.multiply(t0, Qx), Fp2.multiply(t1, Qy)), // T0 * Qx - T1 * Qy
+          Fp2.sub(Fp2.mul(t0, Qx), Fp2.mul(t1, Qy)), // T0 * Qx - T1 * Qy
           Fp2.negate(t0), // -T0
           t1, // T1
         ]);
         let t2 = Fp2.square(t1); // T1²
-        let t3 = Fp2.multiply(t2, t1); // T2 * T1
-        let t4 = Fp2.multiply(t2, Rx); // T2 * Rx
-        let t5 = Fp2.add(Fp2.subtract(t3, Fp2.multiply(t4, 2n)), Fp2.multiply(Fp2.square(t0), Rz)); // T3 - 2 * T4 + T0² * Rz
-        Rx = Fp2.multiply(t1, t5); // T1 * T5
-        Ry = Fp2.subtract(Fp2.multiply(Fp2.subtract(t4, t5), t0), Fp2.multiply(t3, Ry)); // (T4 - T5) * T0 - T3 * Ry
-        Rz = Fp2.multiply(Rz, t3); // Rz * T3
+        let t3 = Fp2.mul(t2, t1); // T2 * T1
+        let t4 = Fp2.mul(t2, Rx); // T2 * Rx
+        let t5 = Fp2.add(Fp2.sub(t3, Fp2.mul(t4, 2n)), Fp2.mul(Fp2.square(t0), Rz)); // T3 - 2 * T4 + T0² * Rz
+        Rx = Fp2.mul(t1, t5); // T1 * T5
+        Ry = Fp2.sub(Fp2.mul(Fp2.sub(t4, t5), t0), Fp2.mul(t3, Ry)); // (T4 - T5) * T0 - T3 * Ry
+        Rz = Fp2.mul(Rz, t3); // Rz * T3
       }
     }
     return ell_coeff;
@@ -152,11 +152,11 @@ export function bls<Fp2, Fp6, Fp12>(
     let f12 = Fp12.ONE;
     for (let j = 0, i = BLS_X_LEN - 2; i >= 0; i--, j++) {
       const E = ell[j];
-      f12 = Fp12.multiplyBy014(f12, E[0], Fp2.multiply(E[1], Px), Fp2.multiply(E[2], Py));
+      f12 = Fp12.multiplyBy014(f12, E[0], Fp2.mul(E[1], Px), Fp2.mul(E[2], Py));
       if (bitGet(CURVE.x, i)) {
         j += 1;
         const F = ell[j];
-        f12 = Fp12.multiplyBy014(f12, F[0], Fp2.multiply(F[1], Px), Fp2.multiply(F[2], Py));
+        f12 = Fp12.multiplyBy014(f12, F[0], Fp2.mul(F[1], Px), Fp2.mul(F[2], Py));
       }
       if (i !== 0) f12 = Fp12.square(f12);
     }
@@ -325,7 +325,7 @@ export function bls<Fp2, Fp6, Fp12>(
     // and do one exp after multiplying 2 points.
     const ePHm = pairing(P.negate(), Hm, false);
     const eGS = pairing(G, S, false);
-    const exp = Fp12.finalExponentiate(Fp12.multiply(eGS, ePHm));
+    const exp = Fp12.finalExponentiate(Fp12.mul(eGS, ePHm));
     return Fp12.equals(exp, Fp12.ONE);
   }
 
@@ -385,7 +385,7 @@ export function bls<Fp2, Fp6, Fp12>(
         paired.push(pairing(groupPublicKey, message, false));
       }
       paired.push(pairing(G1.Point.BASE.negate(), sig, false));
-      const product = paired.reduce((a, b) => Fp12.multiply(a, b), Fp12.ONE);
+      const product = paired.reduce((a, b) => Fp12.mul(a, b), Fp12.ONE);
       const exp = Fp12.finalExponentiate(product);
       return Fp12.equals(exp, Fp12.ONE);
     } catch {

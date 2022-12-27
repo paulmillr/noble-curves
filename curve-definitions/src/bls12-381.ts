@@ -42,25 +42,25 @@ const Fp2Add = ({ c0, c1 }: Fp2, { c0: r0, c1: r1 }: Fp2) => ({
   c1: Fp.add(c1, r1),
 });
 const Fp2Subtract = ({ c0, c1 }: Fp2, { c0: r0, c1: r1 }: Fp2) => ({
-  c0: Fp.subtract(c0, r0),
-  c1: Fp.subtract(c1, r1),
+  c0: Fp.sub(c0, r0),
+  c1: Fp.sub(c1, r1),
 });
 const Fp2Multiply = ({ c0, c1 }: Fp2, rhs: Fp2) => {
-  if (typeof rhs === 'bigint') return { c0: Fp.multiply(c0, rhs), c1: Fp.multiply(c1, rhs) };
+  if (typeof rhs === 'bigint') return { c0: Fp.mul(c0, rhs), c1: Fp.mul(c1, rhs) };
   // (a+bi)(c+di) = (ac−bd) + (ad+bc)i
   const { c0: r0, c1: r1 } = rhs;
-  let t1 = Fp.multiply(c0, r0); // c0 * o0
-  let t2 = Fp.multiply(c1, r1); // c1 * o1
+  let t1 = Fp.mul(c0, r0); // c0 * o0
+  let t2 = Fp.mul(c1, r1); // c1 * o1
   // (T1 - T2) + ((c0 + c1) * (r0 + r1) - (T1 + T2))*i
-  const o0 = Fp.subtract(t1, t2);
-  const o1 = Fp.subtract(Fp.multiply(Fp.add(c0, c1), Fp.add(r0, r1)), Fp.add(t1, t2));
+  const o0 = Fp.sub(t1, t2);
+  const o1 = Fp.sub(Fp.mul(Fp.add(c0, c1), Fp.add(r0, r1)), Fp.add(t1, t2));
   return { c0: o0, c1: o1 };
 };
 const Fp2Square = ({ c0, c1 }: Fp2) => {
   const a = Fp.add(c0, c1);
-  const b = Fp.subtract(c0, c1);
+  const b = Fp.sub(c0, c1);
   const c = Fp.add(c0, c0);
-  return { c0: Fp.multiply(a, b), c1: Fp.multiply(c, c1) };
+  return { c0: Fp.mul(a, b), c1: Fp.mul(c, c1) };
 };
 type Fp2Utils = {
   fromBigTuple: (tuple: BigintTuple | bigint[]) => Fp2;
@@ -94,17 +94,17 @@ const Fp2: mod.Field<Fp2> & Fp2Utils = {
   invertBatch: (nums) => mod.FpInvertBatch(Fp2, nums),
   // Normalized
   add: Fp2Add,
-  subtract: Fp2Subtract,
-  multiply: Fp2Multiply,
+  sub: Fp2Subtract,
+  mul: Fp2Multiply,
   square: Fp2Square,
   // NonNormalized stuff
   addN: Fp2Add,
-  subtractN: Fp2Subtract,
-  multiplyN: Fp2Multiply,
+  subN: Fp2Subtract,
+  mulN: Fp2Multiply,
   squareN: Fp2Square,
   // Why inversion for bigint inside Fp instead of Fp2? it is even used in that context?
   div: (lhs, rhs) =>
-    Fp2.multiply(lhs, typeof rhs === 'bigint' ? Fp.invert(Fp.create(rhs)) : Fp2.invert(rhs)),
+    Fp2.mul(lhs, typeof rhs === 'bigint' ? Fp.invert(Fp.create(rhs)) : Fp2.invert(rhs)),
   invert: ({ c0: a, c1: b }) => {
     // We wish to find the multiplicative inverse of a nonzero
     // element a + bu in Fp2. We leverage an identity
@@ -120,7 +120,7 @@ const Fp2: mod.Field<Fp2> & Fp2Utils = {
     // of (a + bu). Importantly, this can be computing using
     // only a single inversion in Fp.
     const factor = Fp.invert(Fp.create(a * a + b * b));
-    return { c0: Fp.multiply(factor, Fp.create(a)), c1: Fp.multiply(factor, Fp.create(-b)) };
+    return { c0: Fp.mul(factor, Fp.create(a)), c1: Fp.mul(factor, Fp.create(-b)) };
   },
   sqrt: (num) => {
     // TODO: Optimize this line. It's extremely slow.
@@ -156,12 +156,12 @@ const Fp2: mod.Field<Fp2> & Fp2Utils = {
   // }
   reim: ({ c0, c1 }) => ({ re: c0, im: c1 }),
   // multiply by u + 1
-  mulByNonresidue: ({ c0, c1 }) => ({ c0: Fp.subtract(c0, c1), c1: Fp.add(c0, c1) }),
+  mulByNonresidue: ({ c0, c1 }) => ({ c0: Fp.sub(c0, c1), c1: Fp.add(c0, c1) }),
   multiplyByB: ({ c0, c1 }) => {
-    let t0 = Fp.multiply(c0, 4n); // 4 * c0
-    let t1 = Fp.multiply(c1, 4n); // 4 * c1
+    let t0 = Fp.mul(c0, 4n); // 4 * c0
+    let t1 = Fp.mul(c1, 4n); // 4 * c1
     // (T0-T1) + (T0+T1)*i
-    return { c0: Fp.subtract(t0, t1), c1: Fp.add(t0, t1) };
+    return { c0: Fp.sub(t0, t1), c1: Fp.add(t0, t1) };
   },
   fromBigTuple: (tuple: BigintTuple | bigint[]) => {
     if (tuple.length !== 2) throw new Error('Invalid tuple');
@@ -170,7 +170,7 @@ const Fp2: mod.Field<Fp2> & Fp2Utils = {
   },
   frobeniusMap: ({ c0, c1 }, power: number): Fp2 => ({
     c0,
-    c1: Fp.multiply(c1, FP2_FROBENIUS_COEFFICIENTS[power % 2]),
+    c1: Fp.mul(c1, FP2_FROBENIUS_COEFFICIENTS[power % 2]),
   }),
 };
 // Finite extension field over irreducible polynominal.
@@ -223,50 +223,50 @@ const Fp6Add = ({ c0, c1, c2 }: Fp6, { c0: r0, c1: r1, c2: r2 }: Fp6) => ({
   c2: Fp2.add(c2, r2),
 });
 const Fp6Subtract = ({ c0, c1, c2 }: Fp6, { c0: r0, c1: r1, c2: r2 }: Fp6) => ({
-  c0: Fp2.subtract(c0, r0),
-  c1: Fp2.subtract(c1, r1),
-  c2: Fp2.subtract(c2, r2),
+  c0: Fp2.sub(c0, r0),
+  c1: Fp2.sub(c1, r1),
+  c2: Fp2.sub(c2, r2),
 });
 const Fp6Multiply = ({ c0, c1, c2 }: Fp6, rhs: Fp6 | bigint) => {
   if (typeof rhs === 'bigint') {
     return {
-      c0: Fp2.multiply(c0, rhs),
-      c1: Fp2.multiply(c1, rhs),
-      c2: Fp2.multiply(c2, rhs),
+      c0: Fp2.mul(c0, rhs),
+      c1: Fp2.mul(c1, rhs),
+      c2: Fp2.mul(c2, rhs),
     };
   }
   const { c0: r0, c1: r1, c2: r2 } = rhs;
-  const t0 = Fp2.multiply(c0, r0); // c0 * o0
-  const t1 = Fp2.multiply(c1, r1); // c1 * o1
-  const t2 = Fp2.multiply(c2, r2); // c2 * o2
+  const t0 = Fp2.mul(c0, r0); // c0 * o0
+  const t1 = Fp2.mul(c1, r1); // c1 * o1
+  const t2 = Fp2.mul(c2, r2); // c2 * o2
   return {
     // t0 + (c1 + c2) * (r1 * r2) - (T1 + T2) * (u + 1)
     c0: Fp2.add(
       t0,
       Fp2.mulByNonresidue(
-        Fp2.subtract(Fp2.multiply(Fp2.add(c1, c2), Fp2.add(r1, r2)), Fp2.add(t1, t2))
+        Fp2.sub(Fp2.mul(Fp2.add(c1, c2), Fp2.add(r1, r2)), Fp2.add(t1, t2))
       )
     ),
     // (c0 + c1) * (r0 + r1) - (T0 + T1) + T2 * (u + 1)
     c1: Fp2.add(
-      Fp2.subtract(Fp2.multiply(Fp2.add(c0, c1), Fp2.add(r0, r1)), Fp2.add(t0, t1)),
+      Fp2.sub(Fp2.mul(Fp2.add(c0, c1), Fp2.add(r0, r1)), Fp2.add(t0, t1)),
       Fp2.mulByNonresidue(t2)
     ),
     // T1 + (c0 + c2) * (r0 + r2) - T0 + T2
-    c2: Fp2.subtract(Fp2.add(t1, Fp2.multiply(Fp2.add(c0, c2), Fp2.add(r0, r2))), Fp2.add(t0, t2)),
+    c2: Fp2.sub(Fp2.add(t1, Fp2.mul(Fp2.add(c0, c2), Fp2.add(r0, r2))), Fp2.add(t0, t2)),
   };
 };
 const Fp6Square = ({ c0, c1, c2 }: Fp6) => {
   let t0 = Fp2.square(c0); // c0²
-  let t1 = Fp2.multiply(Fp2.multiply(c0, c1), 2n); // 2 * c0 * c1
-  let t3 = Fp2.multiply(Fp2.multiply(c1, c2), 2n); // 2 * c1 * c2
+  let t1 = Fp2.mul(Fp2.mul(c0, c1), 2n); // 2 * c0 * c1
+  let t3 = Fp2.mul(Fp2.mul(c1, c2), 2n); // 2 * c1 * c2
   let t4 = Fp2.square(c2); // c2²
   return {
     c0: Fp2.add(Fp2.mulByNonresidue(t3), t0), // T3 * (u + 1) + T0
     c1: Fp2.add(Fp2.mulByNonresidue(t4), t1), // T4 * (u + 1) + T1
     // T1 + (c0 - c1 + c2)² + T3 - T0 - T4
-    c2: Fp2.subtract(
-      Fp2.subtract(Fp2.add(Fp2.add(t1, Fp2.square(Fp2.add(Fp2.subtract(c0, c1), c2))), t3), t0),
+    c2: Fp2.sub(
+      Fp2.sub(Fp2.add(Fp2.add(t1, Fp2.square(Fp2.add(Fp2.sub(c0, c1), c2))), t3), t0),
       t4
     ),
   };
@@ -298,32 +298,32 @@ const Fp6: mod.Field<Fp6> & Fp6Utils = {
   },
   // Do we need division by bigint at all? Should be done via order:
   div: (lhs, rhs) =>
-    Fp6.multiply(lhs, typeof rhs === 'bigint' ? Fp.invert(Fp.create(rhs)) : Fp6.invert(rhs)),
+    Fp6.mul(lhs, typeof rhs === 'bigint' ? Fp.invert(Fp.create(rhs)) : Fp6.invert(rhs)),
   pow: (num, power) => mod.FpPow(Fp6, num, power),
   invertBatch: (nums) => mod.FpInvertBatch(Fp6, nums),
   // Normalized
   add: Fp6Add,
-  subtract: Fp6Subtract,
-  multiply: Fp6Multiply,
+  sub: Fp6Subtract,
+  mul: Fp6Multiply,
   square: Fp6Square,
   // NonNormalized stuff
   addN: Fp6Add,
-  subtractN: Fp6Subtract,
-  multiplyN: Fp6Multiply,
+  subN: Fp6Subtract,
+  mulN: Fp6Multiply,
   squareN: Fp6Square,
 
   invert: ({ c0, c1, c2 }) => {
-    let t0 = Fp2.subtract(Fp2.square(c0), Fp2.mulByNonresidue(Fp2.multiply(c2, c1))); // c0² - c2 * c1 * (u + 1)
-    let t1 = Fp2.subtract(Fp2.mulByNonresidue(Fp2.square(c2)), Fp2.multiply(c0, c1)); // c2² * (u + 1) - c0 * c1
-    let t2 = Fp2.subtract(Fp2.square(c1), Fp2.multiply(c0, c2)); // c1² - c0 * c2
+    let t0 = Fp2.sub(Fp2.square(c0), Fp2.mulByNonresidue(Fp2.mul(c2, c1))); // c0² - c2 * c1 * (u + 1)
+    let t1 = Fp2.sub(Fp2.mulByNonresidue(Fp2.square(c2)), Fp2.mul(c0, c1)); // c2² * (u + 1) - c0 * c1
+    let t2 = Fp2.sub(Fp2.square(c1), Fp2.mul(c0, c2)); // c1² - c0 * c2
     // 1/(((c2 * T1 + c1 * T2) * v) + c0 * T0)
     let t4 = Fp2.invert(
       Fp2.add(
-        Fp2.mulByNonresidue(Fp2.add(Fp2.multiply(c2, t1), Fp2.multiply(c1, t2))),
-        Fp2.multiply(c0, t0)
+        Fp2.mulByNonresidue(Fp2.add(Fp2.mul(c2, t1), Fp2.mul(c1, t2))),
+        Fp2.mul(c0, t0)
       )
     );
-    return { c0: Fp2.multiply(t4, t0), c1: Fp2.multiply(t4, t1), c2: Fp2.multiply(t4, t2) };
+    return { c0: Fp2.mul(t4, t0), c1: Fp2.mul(t4, t1), c2: Fp2.mul(t4, t2) };
   },
   // Bytes utils
   fromBytes: (b: Uint8Array): Fp6 => {
@@ -354,35 +354,35 @@ const Fp6: mod.Field<Fp6> & Fp6Utils = {
   },
   frobeniusMap: ({ c0, c1, c2 }, power: number) => ({
     c0: Fp2.frobeniusMap(c0, power),
-    c1: Fp2.multiply(Fp2.frobeniusMap(c1, power), FP6_FROBENIUS_COEFFICIENTS_1[power % 6]),
-    c2: Fp2.multiply(Fp2.frobeniusMap(c2, power), FP6_FROBENIUS_COEFFICIENTS_2[power % 6]),
+    c1: Fp2.mul(Fp2.frobeniusMap(c1, power), FP6_FROBENIUS_COEFFICIENTS_1[power % 6]),
+    c2: Fp2.mul(Fp2.frobeniusMap(c2, power), FP6_FROBENIUS_COEFFICIENTS_2[power % 6]),
   }),
   mulByNonresidue: ({ c0, c1, c2 }) => ({ c0: Fp2.mulByNonresidue(c2), c1: c0, c2: c1 }),
 
   // Sparse multiplication
   multiplyBy1: ({ c0, c1, c2 }, b1: Fp2): Fp6 => ({
-    c0: Fp2.mulByNonresidue(Fp2.multiply(c2, b1)),
-    c1: Fp2.multiply(c0, b1),
-    c2: Fp2.multiply(c1, b1),
+    c0: Fp2.mulByNonresidue(Fp2.mul(c2, b1)),
+    c1: Fp2.mul(c0, b1),
+    c2: Fp2.mul(c1, b1),
   }),
   // Sparse multiplication
   multiplyBy01({ c0, c1, c2 }, b0: Fp2, b1: Fp2): Fp6 {
-    let t0 = Fp2.multiply(c0, b0); // c0 * b0
-    let t1 = Fp2.multiply(c1, b1); // c1 * b1
+    let t0 = Fp2.mul(c0, b0); // c0 * b0
+    let t1 = Fp2.mul(c1, b1); // c1 * b1
     return {
       // ((c1 + c2) * b1 - T1) * (u + 1) + T0
-      c0: Fp2.add(Fp2.mulByNonresidue(Fp2.subtract(Fp2.multiply(Fp2.add(c1, c2), b1), t1)), t0),
+      c0: Fp2.add(Fp2.mulByNonresidue(Fp2.sub(Fp2.mul(Fp2.add(c1, c2), b1), t1)), t0),
       // (b0 + b1) * (c0 + c1) - T0 - T1
-      c1: Fp2.subtract(Fp2.subtract(Fp2.multiply(Fp2.add(b0, b1), Fp2.add(c0, c1)), t0), t1),
+      c1: Fp2.sub(Fp2.sub(Fp2.mul(Fp2.add(b0, b1), Fp2.add(c0, c1)), t0), t1),
       // (c0 + c2) * b0 - T0 + T1
-      c2: Fp2.add(Fp2.subtract(Fp2.multiply(Fp2.add(c0, c2), b0), t0), t1),
+      c2: Fp2.add(Fp2.sub(Fp2.mul(Fp2.add(c0, c2), b0), t0), t1),
     };
   },
 
   multiplyByFp2: ({ c0, c1, c2 }, rhs: Fp2): Fp6 => ({
-    c0: Fp2.multiply(c0, rhs),
-    c1: Fp2.multiply(c1, rhs),
-    c2: Fp2.multiply(c2, rhs),
+    c0: Fp2.mul(c0, rhs),
+    c1: Fp2.mul(c1, rhs),
+    c2: Fp2.mul(c2, rhs),
   }),
 };
 
@@ -448,26 +448,26 @@ const Fp12Add = ({ c0, c1 }: Fp12, { c0: r0, c1: r1 }: Fp12) => ({
   c1: Fp6.add(c1, r1),
 });
 const Fp12Subtract = ({ c0, c1 }: Fp12, { c0: r0, c1: r1 }: Fp12) => ({
-  c0: Fp6.subtract(c0, r0),
-  c1: Fp6.subtract(c1, r1),
+  c0: Fp6.sub(c0, r0),
+  c1: Fp6.sub(c1, r1),
 });
 const Fp12Multiply = ({ c0, c1 }: Fp12, rhs: Fp12 | bigint) => {
-  if (typeof rhs === 'bigint') return { c0: Fp6.multiply(c0, rhs), c1: Fp6.multiply(c1, rhs) };
+  if (typeof rhs === 'bigint') return { c0: Fp6.mul(c0, rhs), c1: Fp6.mul(c1, rhs) };
   let { c0: r0, c1: r1 } = rhs;
-  let t1 = Fp6.multiply(c0, r0); // c0 * r0
-  let t2 = Fp6.multiply(c1, r1); // c1 * r1
+  let t1 = Fp6.mul(c0, r0); // c0 * r0
+  let t2 = Fp6.mul(c1, r1); // c1 * r1
   return {
     c0: Fp6.add(t1, Fp6.mulByNonresidue(t2)), // T1 + T2 * v
     // (c0 + c1) * (r0 + r1) - (T1 + T2)
-    c1: Fp6.subtract(Fp6.multiply(Fp6.add(c0, c1), Fp6.add(r0, r1)), Fp6.add(t1, t2)),
+    c1: Fp6.sub(Fp6.mul(Fp6.add(c0, c1), Fp6.add(r0, r1)), Fp6.add(t1, t2)),
   };
 };
 const Fp12Square = ({ c0, c1 }: Fp12) => {
-  let ab = Fp6.multiply(c0, c1); // c0 * c1
+  let ab = Fp6.mul(c0, c1); // c0 * c1
   return {
     // (c1 * v + c0) * (c0 + c1) - AB - AB * v
-    c0: Fp6.subtract(
-      Fp6.subtract(Fp6.multiply(Fp6.add(Fp6.mulByNonresidue(c1), c0), Fp6.add(c0, c1)), ab),
+    c0: Fp6.sub(
+      Fp6.sub(Fp6.mul(Fp6.add(Fp6.mulByNonresidue(c1), c0), Fp6.add(c0, c1)), ab),
       Fp6.mulByNonresidue(ab)
     ),
     c1: Fp6.add(ab, ab),
@@ -478,7 +478,7 @@ function Fp4Square(a: Fp2, b: Fp2): { first: Fp2; second: Fp2 } {
   const b2 = Fp2.square(b);
   return {
     first: Fp2.add(Fp2.mulByNonresidue(b2), a2), // b² * Nonresidue + a²
-    second: Fp2.subtract(Fp2.subtract(Fp2.square(Fp2.add(a, b)), a2), b2), // (a + b)² - a² - b²
+    second: Fp2.sub(Fp2.sub(Fp2.square(Fp2.add(a, b)), a2), b2), // (a + b)² - a² - b²
   };
 }
 type Fp12Utils = {
@@ -508,22 +508,22 @@ const Fp12: mod.Field<Fp12> & Fp12Utils = {
     throw new Error('Not implemented');
   },
   invert: ({ c0, c1 }) => {
-    let t = Fp6.invert(Fp6.subtract(Fp6.square(c0), Fp6.mulByNonresidue(Fp6.square(c1)))); // 1 / (c0² - c1² * v)
-    return { c0: Fp6.multiply(c0, t), c1: Fp6.negate(Fp6.multiply(c1, t)) }; // ((C0 * T) * T) + (-C1 * T) * w
+    let t = Fp6.invert(Fp6.sub(Fp6.square(c0), Fp6.mulByNonresidue(Fp6.square(c1)))); // 1 / (c0² - c1² * v)
+    return { c0: Fp6.mul(c0, t), c1: Fp6.negate(Fp6.mul(c1, t)) }; // ((C0 * T) * T) + (-C1 * T) * w
   },
   div: (lhs, rhs) =>
-    Fp12.multiply(lhs, typeof rhs === 'bigint' ? Fp.invert(Fp.create(rhs)) : Fp12.invert(rhs)),
+    Fp12.mul(lhs, typeof rhs === 'bigint' ? Fp.invert(Fp.create(rhs)) : Fp12.invert(rhs)),
   pow: (num, power) => mod.FpPow(Fp12, num, power),
   invertBatch: (nums) => mod.FpInvertBatch(Fp12, nums),
   // Normalized
   add: Fp12Add,
-  subtract: Fp12Subtract,
-  multiply: Fp12Multiply,
+  sub: Fp12Subtract,
+  mul: Fp12Multiply,
   square: Fp12Square,
   // NonNormalized stuff
   addN: Fp12Add,
-  subtractN: Fp12Subtract,
-  multiplyN: Fp12Multiply,
+  subN: Fp12Subtract,
+  mulN: Fp12Multiply,
   squareN: Fp12Square,
 
   // Bytes utils
@@ -555,9 +555,9 @@ const Fp12: mod.Field<Fp12> & Fp12Utils = {
     return {
       c0: r0,
       c1: Fp6.create({
-        c0: Fp2.multiply(c0, coeff),
-        c1: Fp2.multiply(c1, coeff),
-        c2: Fp2.multiply(c2, coeff),
+        c0: Fp2.mul(c0, coeff),
+        c1: Fp2.mul(c1, coeff),
+        c2: Fp2.mul(c2, coeff),
       }),
     };
   },
@@ -568,8 +568,8 @@ const Fp12: mod.Field<Fp12> & Fp12Utils = {
     return {
       c0: Fp6.add(Fp6.mulByNonresidue(t1), t0), // T1 * v + T0
       // (c1 + c0) * [o0, o1+o4] - T0 - T1
-      c1: Fp6.subtract(
-        Fp6.subtract(Fp6.multiplyBy01(Fp6.add(c1, c0), o0, Fp2.add(o1, o4)), t0),
+      c1: Fp6.sub(
+        Fp6.sub(Fp6.multiplyBy01(Fp6.add(c1, c0), o0, Fp2.add(o1, o4)), t0),
         t1
       ),
     };
@@ -593,14 +593,14 @@ const Fp12: mod.Field<Fp12> & Fp12Utils = {
     let t9 = Fp2.mulByNonresidue(t8); // T8 * (u + 1)
     return {
       c0: Fp6.create({
-        c0: Fp2.add(Fp2.multiply(Fp2.subtract(t3, c0c0), 2n), t3), // 2 * (T3 - c0c0)  + T3
-        c1: Fp2.add(Fp2.multiply(Fp2.subtract(t5, c0c1), 2n), t5), // 2 * (T5 - c0c1)  + T5
-        c2: Fp2.add(Fp2.multiply(Fp2.subtract(t7, c0c2), 2n), t7),
+        c0: Fp2.add(Fp2.mul(Fp2.sub(t3, c0c0), 2n), t3), // 2 * (T3 - c0c0)  + T3
+        c1: Fp2.add(Fp2.mul(Fp2.sub(t5, c0c1), 2n), t5), // 2 * (T5 - c0c1)  + T5
+        c2: Fp2.add(Fp2.mul(Fp2.sub(t7, c0c2), 2n), t7),
       }), // 2 * (T7 - c0c2)  + T7
       c1: Fp6.create({
-        c0: Fp2.add(Fp2.multiply(Fp2.add(t9, c1c0), 2n), t9), // 2 * (T9 + c1c0) + T9
-        c1: Fp2.add(Fp2.multiply(Fp2.add(t4, c1c1), 2n), t4), // 2 * (T4 + c1c1) + T4
-        c2: Fp2.add(Fp2.multiply(Fp2.add(t6, c1c2), 2n), t6),
+        c0: Fp2.add(Fp2.mul(Fp2.add(t9, c1c0), 2n), t9), // 2 * (T9 + c1c0) + T9
+        c1: Fp2.add(Fp2.mul(Fp2.add(t4, c1c1), 2n), t4), // 2 * (T4 + c1c1) + T4
+        c2: Fp2.add(Fp2.mul(Fp2.add(t6, c1c2), 2n), t6),
       }),
     }; // 2 * (T6 + c1c2) + T6
   },
@@ -608,7 +608,7 @@ const Fp12: mod.Field<Fp12> & Fp12Utils = {
     let z = Fp12.ONE;
     for (let i = BLS_X_LEN - 1; i >= 0; i--) {
       z = Fp12._cyclotomicSquare(z);
-      if (bitGet(n, i)) z = Fp12.multiply(z, num);
+      if (bitGet(n, i)) z = Fp12.mul(z, num);
     }
     return z;
   },
@@ -619,23 +619,23 @@ const Fp12: mod.Field<Fp12> & Fp12Utils = {
     // this^(q⁶) / this
     const t0 = Fp12.div(Fp12.frobeniusMap(num, 6), num);
     // t0^(q²) * t0
-    const t1 = Fp12.multiply(Fp12.frobeniusMap(t0, 2), t0);
+    const t1 = Fp12.mul(Fp12.frobeniusMap(t0, 2), t0);
     const t2 = Fp12.conjugate(Fp12._cyclotomicExp(t1, x));
-    const t3 = Fp12.multiply(Fp12.conjugate(Fp12._cyclotomicSquare(t1)), t2);
+    const t3 = Fp12.mul(Fp12.conjugate(Fp12._cyclotomicSquare(t1)), t2);
     const t4 = Fp12.conjugate(Fp12._cyclotomicExp(t3, x));
     const t5 = Fp12.conjugate(Fp12._cyclotomicExp(t4, x));
-    const t6 = Fp12.multiply(
+    const t6 = Fp12.mul(
       Fp12.conjugate(Fp12._cyclotomicExp(t5, x)),
       Fp12._cyclotomicSquare(t2)
     );
     const t7 = Fp12.conjugate(Fp12._cyclotomicExp(t6, x));
-    const t2_t5_pow_q2 = Fp12.frobeniusMap(Fp12.multiply(t2, t5), 2);
-    const t4_t1_pow_q3 = Fp12.frobeniusMap(Fp12.multiply(t4, t1), 3);
-    const t6_t1c_pow_q1 = Fp12.frobeniusMap(Fp12.multiply(t6, Fp12.conjugate(t1)), 1);
-    const t7_t3c_t1 = Fp12.multiply(Fp12.multiply(t7, Fp12.conjugate(t3)), t1);
+    const t2_t5_pow_q2 = Fp12.frobeniusMap(Fp12.mul(t2, t5), 2);
+    const t4_t1_pow_q3 = Fp12.frobeniusMap(Fp12.mul(t4, t1), 3);
+    const t6_t1c_pow_q1 = Fp12.frobeniusMap(Fp12.mul(t6, Fp12.conjugate(t1)), 1);
+    const t7_t3c_t1 = Fp12.mul(Fp12.mul(t7, Fp12.conjugate(t3)), t1);
     // (t2 * t5)^(q²) * (t4 * t1)^(q³) * (t6 * t1.conj)^(q^1) * t7 * t3.conj * t1
-    return Fp12.multiply(
-      Fp12.multiply(Fp12.multiply(t2_t5_pow_q2, t4_t1_pow_q3), t6_t1c_pow_q1),
+    return Fp12.mul(
+      Fp12.mul(Fp12.mul(t2_t5_pow_q2, t4_t1_pow_q3), t6_t1c_pow_q1),
       t7_t3c_t1
     );
   },
@@ -855,18 +855,18 @@ const P_MINUS_9_DIV_16 = (Fp.ORDER ** 2n - 9n) / 16n;
 // if valid square root is found
 function sqrt_div_fp2(u: Fp2, v: Fp2) {
   const v7 = Fp2.pow(v, 7n);
-  const uv7 = Fp2.multiply(u, v7);
-  const uv15 = Fp2.multiply(uv7, Fp2.multiply(v7, v));
+  const uv7 = Fp2.mul(u, v7);
+  const uv15 = Fp2.mul(uv7, Fp2.mul(v7, v));
   // gamma =  uv⁷ * (uv¹⁵)^((p² - 9) / 16)
-  const gamma = Fp2.multiply(Fp2.pow(uv15, P_MINUS_9_DIV_16), uv7);
+  const gamma = Fp2.mul(Fp2.pow(uv15, P_MINUS_9_DIV_16), uv7);
   let success = false;
   let result = gamma;
   // Constant-time routine, so we do not early-return.
   const positiveRootsOfUnity = FP2_ROOTS_OF_UNITY.slice(0, 4);
   positiveRootsOfUnity.forEach((root) => {
     // Valid if (root * gamma)² * v - u == 0
-    const candidate = Fp2.multiply(root, gamma);
-    if (Fp2.isZero(Fp2.subtract(Fp2.multiply(Fp2.pow(candidate, 2n), v), u)) && !success) {
+    const candidate = Fp2.mul(root, gamma);
+    if (Fp2.isZero(Fp2.sub(Fp2.mul(Fp2.pow(candidate, 2n), v), u)) && !success) {
       success = true;
       result = candidate;
     }
@@ -885,13 +885,13 @@ function map_to_curve_simple_swu_9mod16(t: bigint[] | Fp2): [Fp2, Fp2] {
   if (Array.isArray(t)) t = Fp2.fromBigTuple(t);
 
   const t2 = Fp2.pow(t, 2n);
-  const iso_3_z_t2 = Fp2.multiply(iso_3_z, t2);
+  const iso_3_z_t2 = Fp2.mul(iso_3_z, t2);
   const ztzt = Fp2.add(iso_3_z_t2, Fp2.pow(iso_3_z_t2, 2n)); // (Z * t² + Z² * t⁴)
-  let denominator = Fp2.negate(Fp2.multiply(iso_3_a, ztzt)); // -a(Z * t² + Z² * t⁴)
-  let numerator = Fp2.multiply(iso_3_b, Fp2.add(ztzt, Fp2.ONE)); // b(Z * t² + Z² * t⁴ + 1)
+  let denominator = Fp2.negate(Fp2.mul(iso_3_a, ztzt)); // -a(Z * t² + Z² * t⁴)
+  let numerator = Fp2.mul(iso_3_b, Fp2.add(ztzt, Fp2.ONE)); // b(Z * t² + Z² * t⁴ + 1)
 
   // Exceptional case
-  if (Fp2.isZero(denominator)) denominator = Fp2.multiply(iso_3_z, iso_3_a);
+  if (Fp2.isZero(denominator)) denominator = Fp2.mul(iso_3_z, iso_3_a);
 
   // v = D³
   let v = Fp2.pow(denominator, 3n);
@@ -899,9 +899,9 @@ function map_to_curve_simple_swu_9mod16(t: bigint[] | Fp2): [Fp2, Fp2] {
   let u = Fp2.add(
     Fp2.add(
       Fp2.pow(numerator, 3n),
-      Fp2.multiply(Fp2.multiply(iso_3_a, numerator), Fp2.pow(denominator, 2n))
+      Fp2.mul(Fp2.mul(iso_3_a, numerator), Fp2.pow(denominator, 2n))
     ),
-    Fp2.multiply(iso_3_b, v)
+    Fp2.mul(iso_3_b, v)
   );
   // Attempt y = sqrt(u / v)
   const { success, sqrtCandidateOrGamma } = sqrt_div_fp2(u, v);
@@ -909,22 +909,22 @@ function map_to_curve_simple_swu_9mod16(t: bigint[] | Fp2): [Fp2, Fp2] {
   if (success) y = sqrtCandidateOrGamma;
   // Handle case where (u / v) is not square
   // sqrt_candidate(x1) = sqrt_candidate(x0) * t³
-  const sqrtCandidateX1 = Fp2.multiply(sqrtCandidateOrGamma, Fp2.pow(t, 3n));
+  const sqrtCandidateX1 = Fp2.mul(sqrtCandidateOrGamma, Fp2.pow(t, 3n));
 
   // u(x1) = Z³ * t⁶ * u(x0)
-  u = Fp2.multiply(Fp2.pow(iso_3_z_t2, 3n), u);
+  u = Fp2.mul(Fp2.pow(iso_3_z_t2, 3n), u);
   let success2 = false;
   FP2_ETAs.forEach((eta) => {
     // Valid solution if (eta * sqrt_candidate(x1))² * v - u == 0
-    const etaSqrtCandidate = Fp2.multiply(eta, sqrtCandidateX1);
-    const temp = Fp2.subtract(Fp2.multiply(Fp2.pow(etaSqrtCandidate, 2n), v), u);
+    const etaSqrtCandidate = Fp2.mul(eta, sqrtCandidateX1);
+    const temp = Fp2.sub(Fp2.mul(Fp2.pow(etaSqrtCandidate, 2n), v), u);
     if (Fp2.isZero(temp) && !success && !success2) {
       y = etaSqrtCandidate;
       success2 = true;
     }
   });
   if (!success && !success2) throw new Error('Hash to Curve - Optimized SWU failure');
-  if (success2) numerator = Fp2.multiply(numerator, iso_3_z_t2);
+  if (success2) numerator = Fp2.mul(numerator, iso_3_z_t2);
   y = y as Fp2;
   if (sgn0_fp2(t) !== sgn0_fp2(y)) y = Fp2.negate(y);
   return [Fp2.div(numerator, denominator), y];
@@ -945,27 +945,27 @@ function map_to_curve_simple_swu_3mod4(u: Fp): [Fp, Fp] {
   // Static value so we can know that is there always root
   const c2 = Fp.sqrt(Fp.pow(Fp.negate(Z), 3n)); // sqrt((-Z) ^ 3)
   const tv1 = Fp.square(u); // u ** 2n;
-  const tv3 = Fp.multiply(Z, tv1); //
+  const tv3 = Fp.mul(Z, tv1); //
   let xDen = Fp.add(Fp.square(tv3), tv3);
   // X
-  const xNum1 = Fp.multiply(Fp.add(xDen, Fp.ONE), B); // (xd + 1) * B
-  const xNum2 = Fp.multiply(tv3, xNum1); // x2 = x2n / xd = Z * u^2 * x1n / xd
-  xDen = Fp.multiply(Fp.negate(A), xDen); // -A * xDen
-  if (Fp.isZero(xDen)) xDen = Fp.multiply(A, Z);
+  const xNum1 = Fp.mul(Fp.add(xDen, Fp.ONE), B); // (xd + 1) * B
+  const xNum2 = Fp.mul(tv3, xNum1); // x2 = x2n / xd = Z * u^2 * x1n / xd
+  xDen = Fp.mul(Fp.negate(A), xDen); // -A * xDen
+  if (Fp.isZero(xDen)) xDen = Fp.mul(A, Z);
   let tv2 = Fp.square(xDen); // xDen ^ 2
-  const gxd = Fp.multiply(tv2, xDen); // xDen ^ 3
-  tv2 = Fp.multiply(A, tv2); // A * tv2
-  let gx1 = Fp.multiply(Fp.add(Fp.square(xNum1), tv2), xNum1); // x1n^3 + A * x1n * xd^2
-  tv2 = Fp.multiply(B, gxd); // B * gxd
+  const gxd = Fp.mul(tv2, xDen); // xDen ^ 3
+  tv2 = Fp.mul(A, tv2); // A * tv2
+  let gx1 = Fp.mul(Fp.add(Fp.square(xNum1), tv2), xNum1); // x1n^3 + A * x1n * xd^2
+  tv2 = Fp.mul(B, gxd); // B * gxd
   gx1 = Fp.add(gx1, tv2); // x1n^3 + A * x1n * xd^2 + B * xd^3
-  tv2 = Fp.multiply(gx1, gxd); // gx1 * gxd
-  const tv4 = Fp.multiply(Fp.square(gxd), tv2); // gx1 * gxd^3
+  tv2 = Fp.mul(gx1, gxd); // gx1 * gxd
+  const tv4 = Fp.mul(Fp.square(gxd), tv2); // gx1 * gxd^3
   // Y
-  const y1 = Fp.multiply(Fp.pow(tv4, c1), tv2); // gx1 * gxd * (gx1 * gxd^3)^((q - 3) / 4)
-  const y2 = Fp.multiply(Fp.multiply(Fp.multiply(y1, c2), tv1), u); // y1 * c2 * tv1 * u
+  const y1 = Fp.mul(Fp.pow(tv4, c1), tv2); // gx1 * gxd * (gx1 * gxd^3)^((q - 3) / 4)
+  const y2 = Fp.mul(Fp.mul(Fp.mul(y1, c2), tv1), u); // y1 * c2 * tv1 * u
   let xNum, yPos;
   // y1^2 * gxd == gx1
-  if (Fp.equals(Fp.multiply(Fp.square(y1), gxd), gx1)) {
+  if (Fp.equals(Fp.mul(Fp.square(y1), gxd), gx1)) {
     xNum = xNum1;
     yPos = y1;
   } else {
@@ -985,10 +985,10 @@ function isogenyMap<T, F extends mod.Field<T>>(
   y: T
 ): [T, T] {
   const [xNum, xDen, yNum, yDen] = COEFF.map((val) =>
-    val.reduce((acc, i) => field.add(field.multiply(acc, x), i))
+    val.reduce((acc, i) => field.add(field.mul(acc, x), i))
   );
   x = field.div(xNum, xDen); // xNum / xDen
-  y = field.multiply(y, field.div(yNum, yDen)); // y * (yNum / yDev)
+  y = field.mul(y, field.div(yNum, yDen)); // y * (yNum / yDev)
   return [x, y];
 }
 // 3-isogeny map from E' to E
@@ -1005,8 +1005,8 @@ const wcu = Fp12.create({ c0: Fp6.ZERO, c1: ut_root });
 const [wsq_inv, wcu_inv] = Fp12.invertBatch([wsq, wcu]);
 function psi(x: Fp2, y: Fp2): [Fp2, Fp2] {
   // Untwist Fp2->Fp12 && frobenius(1) && twist back
-  const x2 = Fp12.multiply(Fp12.frobeniusMap(Fp12.multiplyByFp2(wsq_inv, x), 1), wsq).c0.c0;
-  const y2 = Fp12.multiply(Fp12.frobeniusMap(Fp12.multiplyByFp2(wcu_inv, y), 1), wcu).c0.c0;
+  const x2 = Fp12.mul(Fp12.frobeniusMap(Fp12.multiplyByFp2(wsq_inv, x), 1), wsq).c0.c0;
+  const y2 = Fp12.mul(Fp12.frobeniusMap(Fp12.multiplyByFp2(wcu_inv, y), 1), wcu).c0.c0;
   return [x2, y2];
 }
 // Ψ endomorphism
@@ -1021,7 +1021,7 @@ const PSI2_C1 =
   0x1a0111ea397fe699ec02408663d4de85aa0d857d89759ad4897d29650fb85f9b409427eb4f49fffd8bfd00000000aaacn;
 
 function psi2(x: Fp2, y: Fp2): [Fp2, Fp2] {
-  return [Fp2.multiply(x, PSI2_C1), Fp2.negate(y)];
+  return [Fp2.mul(x, PSI2_C1), Fp2.negate(y)];
 }
 function G2psi2(c: ProjectiveConstructor<Fp2>, P: ProjectivePointType<Fp2>) {
   const affine = P.toAffine();
@@ -1113,7 +1113,7 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
       // φ endomorphism
       const cubicRootOfUnityModP =
         0x5f19672fdf76ce51ba69c6076a0f77eaddb3a93be6f89688de17d813620a00022e01fffffffefffen;
-      const phi = new c(Fp.multiply(point.x, cubicRootOfUnityModP), point.y, point.z);
+      const phi = new c(Fp.mul(point.x, cubicRootOfUnityModP), point.y, point.z);
 
       // todo: unroll
       const xP = point.multiplyUnsafe(bls12_381.CURVE.x).negate(); // [x]P

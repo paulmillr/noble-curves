@@ -1,5 +1,5 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-// Default group related functions
+// Abelian group utilities
 const _0n = BigInt(0);
 const _1n = BigInt(1);
 
@@ -67,8 +67,9 @@ export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number) {
 
     /**
      * Implements w-ary non-adjacent form for calculating ec multiplication.
-     * @param n
+     * @param W window size
      * @param affinePoint optional 2d point to save cached precompute windows on it.
+     * @param n bits
      * @returns real and fake (for const-time) points
      */
     wNAF(W: number, precomputes: T[], n: bigint): { p: T; f: T } {

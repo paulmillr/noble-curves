@@ -1,6 +1,6 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import * as utils from './utils.js';
-// Utilities for modular arithmetics
+// Utilities for modular arithmetics and finite fields
 const _0n = BigInt(0);
 const _1n = BigInt(1);
 const _2n = BigInt(2);
@@ -161,14 +161,14 @@ export interface Field<T> {
   // 2-args
   equals(lhs: T, rhs: T): boolean;
   add(lhs: T, rhs: T): T;
-  subtract(lhs: T, rhs: T): T;
-  multiply(lhs: T, rhs: T | bigint): T;
+  sub(lhs: T, rhs: T): T;
+  mul(lhs: T, rhs: T | bigint): T;
   pow(lhs: T, power: bigint): T;
   div(lhs: T, rhs: T | bigint): T;
   // N for NonNormalized (for now)
   addN(lhs: T, rhs: T): T;
-  subtractN(lhs: T, rhs: T): T;
-  multiplyN(lhs: T, rhs: T | bigint): T;
+  subN(lhs: T, rhs: T): T;
+  mulN(lhs: T, rhs: T | bigint): T;
   squareN(num: T): T;
 
   // Optional
@@ -182,8 +182,8 @@ export interface Field<T> {
 // prettier-ignore
 const FIELD_FIELDS = [
   'create', 'isValid', 'isZero', 'negate', 'invert', 'sqrt', 'square',
-  'equals', 'add', 'subtract', 'multiply', 'pow', 'div',
-  'addN', 'subtractN', 'multiplyN', 'squareN'
+  'equals', 'add', 'sub', 'mul', 'pow', 'div',
+  'addN', 'subN', 'mulN', 'squareN'
 ] as const;
 export function validateField<T>(field: Field<T>) {
   for (const i of ['ORDER', 'MASK'] as const) {
@@ -210,7 +210,7 @@ export function FpPow<T>(f: Field<T>, num: T, power: bigint): T {
   let p = f.ONE;
   let d = num;
   while (power > _0n) {
-    if (power & _1n) p = f.multiply(p, d);
+    if (power & _1n) p = f.mul(p, d);
     d = f.square(d);
     power >>= 1n;
   }
@@ -223,21 +223,21 @@ export function FpInvertBatch<T>(f: Field<T>, nums: T[]): T[] {
   const lastMultiplied = nums.reduce((acc, num, i) => {
     if (f.isZero(num)) return acc;
     tmp[i] = acc;
-    return f.multiply(acc, num);
+    return f.mul(acc, num);
   }, f.ONE);
   // Invert last element
   const inverted = f.invert(lastMultiplied);
   // Walk from last to first, multiply them by inverted each other MOD p
   nums.reduceRight((acc, num, i) => {
     if (f.isZero(num)) return acc;
-    tmp[i] = f.multiply(acc, tmp[i]);
-    return f.multiply(acc, num);
+    tmp[i] = f.mul(acc, tmp[i]);
+    return f.mul(acc, num);
   }, inverted);
   return tmp;
 }
 
 export function FpDiv<T>(f: Field<T>, lhs: T, rhs: T | bigint): T {
-  return f.multiply(lhs, typeof rhs === 'bigint' ? invert(rhs, f.ORDER) : f.invert(rhs));
+  return f.mul(lhs, typeof rhs === 'bigint' ? invert(rhs, f.ORDER) : f.invert(rhs));
 }
 
 // NOTE: very fragile, always bench. Major performance points:
@@ -274,16 +274,16 @@ export function Fp(
 
     square: (num) => mod(num * num, ORDER),
     add: (lhs, rhs) => mod(lhs + rhs, ORDER),
-    subtract: (lhs, rhs) => mod(lhs - rhs, ORDER),
-    multiply: (lhs, rhs) => mod(lhs * rhs, ORDER),
+    sub: (lhs, rhs) => mod(lhs - rhs, ORDER),
+    mul: (lhs, rhs) => mod(lhs * rhs, ORDER),
     pow: (num, power) => FpPow(f, num, power),
     div: (lhs, rhs) => mod(lhs * invert(rhs, ORDER), ORDER),
 
     // Same as above, but doesn't normalize
     squareN: (num) => num * num,
     addN: (lhs, rhs) => lhs + rhs,
-    subtractN: (lhs, rhs) => lhs - rhs,
-    multiplyN: (lhs, rhs) => lhs * rhs,
+    subN: (lhs, rhs) => lhs - rhs,
+    mulN: (lhs, rhs) => lhs * rhs,
 
     invert: (num) => invert(num, ORDER),
     sqrt: redef.sqrt || sqrtP,

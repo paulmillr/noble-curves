@@ -280,7 +280,6 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       const C = modP(T1 * d * T2); // C = T1*d*T2
       const D = modP(Z1 * Z2); // D = Z1*Z2
       const E = modP((X1 + Y1) * (X2 + Y2) - A - B); // E = (X1+Y1)*(X2+Y2)-A-B
-      // TODO: do we need to check for same point here? Looks like working without it
       const F = D - C; // F = D-C
       const G = D + C; // G = D+C
       const H = modP(B - a * A); // H = B-a*A
