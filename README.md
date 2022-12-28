@@ -67,8 +67,8 @@ To define a custom curve with the same functionality:
 ```ts
 import { Fp } from '@noble/curves/abstract/modular';
 import { weierstrass } from '@noble/curves/abstract/weierstrass';
-import { sha256 } from '@noble/hashes/sha256';
 import { hmac } from '@noble/hashes/hmac';
+import { sha256 } from '@noble/hashes/sha256';
 import { concatBytes, randomBytes } from '@noble/hashes/utils';
 
 const secp256k1 = weierstrass({
@@ -87,13 +87,43 @@ const secp256k1 = weierstrass({
 ## API
 
 - [Overview](#overview)
-- [edwards: Twisted Edwards curve](#edwards-twisted-edwards-curve)
-- [montgomery: Montgomery curve](#montgomery-montgomery-curve)
-- [weierstrass: Short Weierstrass curve](#weierstrass-short-weierstrass-curve)
-- [modular](#modular)
-- [utils](#utils)
+- [Abstract algorithms](#abstract-algorithms)
+- [abstract/edwards: Twisted Edwards curve](#abstract/edwards-twisted-edwards-curve)
+- [abstract/montgomery: Montgomery curve](#abstract/montgomery-montgomery-curve)
+- [abstract/weierstrass: Short Weierstrass curve](#abstract/weierstrass-short-weierstrass-curve)
+- [abstract/modular](#abstract/modular)
+- [abstract/utils](#abstract/utils)
 
 ### Overview
+
+There are following ready-to-use curves:
+
+```ts
+import { secp256k1 } from '@noble/curves/secp256k1';
+import { ed25519, ed25519ph, ed25519ctx, x25519, RistrettoPoint } from '@noble/curves/ed25519';
+import { ed448, ed448ph, ed448ctx, x448 } from '@noble/curves/ed448';
+import { p256 } from '@noble/curves/p256';
+import { p384 } from '@noble/curves/p384';
+import { p521 } from '@noble/curves/p521';
+import { pallas, vesta } from '@noble/curves/pasta';
+import * as stark from '@noble/curves/stark';
+import { bls12_381 } from '@noble/curves/bls12-381';
+import { bn254 } from '@noble/curves/bn';
+import { jubjub } from '@noble/curves/jubjub';
+```
+
+And following zero-dependency abstract algorithms:
+
+```ts
+import { bls } from '@noble/curves/abstract/bls';
+import { twistedEdwards } from '@noble/curves/abstract/edwards';
+import { montgomery } from '@noble/curves/abstract/montgomery';
+import { weierstrass } from '@noble/curves/abstract/weierstrass';
+import * as mod from '@noble/curves/abstract/modular';
+import * as utils from '@noble/curves/abstract/utils';
+```
+
+### Abstract algorithms
 
 * To initialize new curve, you must specify its variables, order (number of points on curve), field prime (over which the modular division would be done)
 * All curves expose same generic interface:
@@ -119,7 +149,7 @@ const secp256k1 = weierstrass({
     * `Fp({sqrt})` square root calculation, used for point decompression
     * `endo` endomorphism options for Koblitz curves
 
-### edwards: Twisted Edwards curve
+### abstract/edwards: Twisted Edwards curve
 
 Twisted Edwards curve's formula is: ax² + y² = 1 + dx²y².
 
@@ -127,13 +157,13 @@ Twisted Edwards curve's formula is: ax² + y² = 1 + dx²y².
 * For EdDSA signatures, params `hash` is also required. `adjustScalarBytes` which instructs how to change private scalars could be specified
 
 ```typescript
-import { twistedEdwards } from '@noble/curves/edwards'; // Twisted Edwards curve
+import { twistedEdwards } from '@noble/curves/abstract/edwards';
+import { div } from '@noble/curves/abstract/modular';
 import { sha512 } from '@noble/hashes/sha512';
-import * as mod from '@noble/curves/modular';
 
 const ed25519 = twistedEdwards({
   a: -1n,
-  d: mod.div(-121665n, 121666n, 2n ** 255n - 19n), // -121665n/121666n
+  d: div(-121665n, 121666n, 2n ** 255n - 19n), // -121665n/121666n
   P: 2n ** 255n - 19n,
   n: 2n ** 252n + 27742317777372353535851937790883648493n,
   h: 8n,
@@ -181,7 +211,7 @@ export type CurveFn = {
 };
 ```
 
-### montgomery: Montgomery curve
+### abstract/montgomery: Montgomery curve
 
 For now the module only contains methods for x-only ECDH on Curve25519 / Curve448 from RFC7748.
 
@@ -190,6 +220,8 @@ Proper Elliptic Curve Points are not implemented yet.
 You must specify curve field, `a24` special variable, `montgomeryBits`, `nByteLength`, and coordinate `u` of generator point.
 
 ```typescript
+import { montgomery } from '@noble/curves/abstract/montgomery';
+
 const x25519 = montgomery({
   P: 2n ** 255n - 19n,
   a24: 121665n, // TODO: change to a
@@ -208,7 +240,7 @@ const x25519 = montgomery({
 });
 ```
 
-### weierstrass: Short Weierstrass curve
+### abstract/weierstrass: Short Weierstrass curve
 
 Short Weierstrass curve's formula is: y² = x³ + ax + b. Uses deterministic ECDSA from RFC6979. You can also specify `extraEntropy` in `sign()`.
 
@@ -218,8 +250,8 @@ Short Weierstrass curve's formula is: y² = x³ + ax + b. Uses deterministic ECD
 * Optional params are `lowS` (default value) and `endo` (endomorphism)
 
 ```typescript
-import { Fp } from '@noble/curves/modular';
-import { weierstrass } from '@noble/curves/weierstrass'; // Short Weierstrass curve
+import { Fp } from '@noble/curves/abstract/modular';
+import { weierstrass } from '@noble/curves/abstract/weierstrass'; // Short Weierstrass curve
 import { sha256 } from '@noble/hashes/sha256';
 import { hmac } from '@noble/hashes/hmac';
 import { concatBytes, randomBytes } from '@noble/hashes/utils';
@@ -283,12 +315,12 @@ export type CurveFn = {
 };
 ```
 
-### modular
+### abstract/modular
 
 Modular arithmetics utilities.
 
 ```typescript
-import { mod, invert, div, invertBatch, sqrt, Fp } from '@noble/curves/modular';
+import { mod, invert, div, invertBatch, sqrt, Fp } from '@noble/curves/abstract/modular';
 mod(21n, 10n); // 21 mod 10 == 1n; fixed version of 21 % 10
 invert(17n, 10n); // invert(17) mod 10; modular multiplicative inverse
 div(5n, 17n, 10n); // 5/17 mod 10 == 5 * invert(17) mod 10; division
@@ -299,10 +331,10 @@ fp.mul(591n, 932n);
 fp.pow(481n, 11024858120n);
 ```
 
-### utils
+### abstract/utils
 
 ```typescript
-import * as utils from '@noble/curves/utils';
+import * as utils from '@noble/curves/abstract/utils';
 
 utils.bytesToHex(Uint8Array.from([0xde, 0xad, 0xbe, 0xef]));
 utils.hexToBytes('deadbeef');
