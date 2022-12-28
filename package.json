@@ -3,9 +3,7 @@
   "version": "0.4.0",
   "description": "Minimal, auditable JS implementation of elliptic curve cryptography",
   "files": [
-    "index.js",
-    "lib",
-    "lib/esm"
+    "lib"
   ],
   "scripts": {
     "bench": "node benchmark/index.js",
@@ -23,7 +21,7 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@noble/hashes": "~1.1.5"
+    "@noble/hashes": "1.1.5"
   },
   "devDependencies": {
     "@rollup/plugin-node-resolve": "13.3.0",
@@ -40,6 +38,11 @@
   },
   "main": "index.js",
   "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/esm/index.js",
+      "default": "./lib/index.js"
+    },
     "./abstract/edwards": {
       "types": "./lib/abstract/edwards.d.ts",
       "import": "./lib/esm/abstract/edwards.js",
@@ -168,8 +171,11 @@
     "p521",
     "secp256r1",
     "secp256k1",
+    "ed25519",
+    "ed448",
     "bls12-381",
     "bn254",
+    "pasta",
     "bls",
     "nist",
     "ecc",
