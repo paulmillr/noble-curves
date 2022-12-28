@@ -1,19 +1,19 @@
 {
   "name": "@noble/curves",
   "version": "0.4.0",
-  "description": "Minimal, zero-dependency JS implementation of elliptic curve cryptography",
+  "description": "Minimal, auditable JS implementation of elliptic curve cryptography",
   "files": [
     "index.js",
     "lib",
     "lib/esm"
   ],
   "scripts": {
-    "bench": "node curve-definitions/benchmark/index.js",
+    "bench": "node benchmark/index.js",
     "build": "tsc && tsc -p tsconfig.esm.json",
     "build:release": "rollup -c rollup.config.js",
-    "lint": "prettier --check 'src/**/*.{js,ts}' 'curve-definitions/src/**/*.{js,ts}'",
-    "format": "prettier --write 'src/**/*.{js,ts}' 'curve-definitions/src/**/*.{js,ts}'",
-    "test": "cd curve-definitions; node test/index.test.js"
+    "lint": "prettier --check 'src/**/*.{js,ts}' 'test/*.js'",
+    "format": "prettier --write 'src/**/*.{js,ts}' 'test/*.js'",
+    "test": "node test/index.test.js"
   },
   "author": "Paul Miller (https://paulmillr.com)",
   "homepage": "https://paulmillr.com/noble/",
@@ -22,8 +22,16 @@
     "url": "https://github.com/paulmillr/noble-curves.git"
   },
   "license": "MIT",
+  "dependencies": {
+    "@noble/hashes": "~1.1.5"
+  },
   "devDependencies": {
     "@rollup/plugin-node-resolve": "13.3.0",
+    "@scure/base": "~1.1.1",
+    "@scure/bip32": "~1.1.1",
+    "@scure/bip39": "~1.1.0",
+    "@types/node": "18.11.3",
+    "fast-check": "3.0.0",
     "micro-bmark": "0.2.0",
     "micro-should": "0.2.0",
     "prettier": "2.6.2",
@@ -32,55 +40,137 @@
   },
   "main": "index.js",
   "exports": {
-    "./edwards": {
-      "types": "./lib/edwards.d.ts",
-      "import": "./lib/esm/edwards.js",
-      "default": "./lib/edwards.js"
+    "./abstract/edwards": {
+      "types": "./lib/abstract/edwards.d.ts",
+      "import": "./lib/esm/abstract/edwards.js",
+      "default": "./lib/abstract/edwards.js"
     },
-    "./modular": {
-      "types": "./lib/modular.d.ts",
-      "import": "./lib/esm/modular.js",
-      "default": "./lib/modular.js"
+    "./abstract/modular": {
+      "types": "./lib/abstract/modular.d.ts",
+      "import": "./lib/esm/abstract/modular.js",
+      "default": "./lib/abstract/modular.js"
     },
-    "./montgomery": {
-      "types": "./lib/montgomery.d.ts",
-      "import": "./lib/esm/montgomery.js",
-      "default": "./lib/montgomery.js"
+    "./abstract/montgomery": {
+      "types": "./lib/abstract/montgomery.d.ts",
+      "import": "./lib/esm/abstract/montgomery.js",
+      "default": "./lib/abstract/montgomery.js"
     },
-    "./weierstrass": {
-      "types": "./lib/weierstrass.d.ts",
-      "import": "./lib/esm/weierstrass.js",
-      "default": "./lib/weierstrass.js"
+    "./abstract/weierstrass": {
+      "types": "./lib/abstract/weierstrass.d.ts",
+      "import": "./lib/esm/abstract/weierstrass.js",
+      "default": "./lib/abstract/weierstrass.js"
     },
-    "./bls": {
-      "types": "./lib/bls.d.ts",
-      "import": "./lib/esm/bls.js",
-      "default": "./lib/bls.js"
+    "./abstract/bls": {
+      "types": "./lib/abstract/bls.d.ts",
+      "import": "./lib/esm/abstract/bls.js",
+      "default": "./lib/abstract/bls.js"
     },
-    "./hashToCurve": {
-      "types": "./lib/hashToCurve.d.ts",
-      "import": "./lib/esm/hashToCurve.js",
-      "default": "./lib/hashToCurve.js"
+    "./abstract/hash-to-curve": {
+      "types": "./lib/abstract/hash-to-curve.d.ts",
+      "import": "./lib/esm/abstract/hash-to-curve.js",
+      "default": "./lib/abstract/hash-to-curve.js"
     },
-    "./group": {
-      "types": "./lib/group.d.ts",
-      "import": "./lib/esm/group.js",
-      "default": "./lib/group.js"
+    "./abstract/group": {
+      "types": "./lib/abstract/group.d.ts",
+      "import": "./lib/esm/abstract/group.js",
+      "default": "./lib/abstract/group.js"
     },
-    "./utils": {
-      "types": "./lib/utils.d.ts",
-      "import": "./lib/esm/utils.js",
-      "default": "./lib/utils.js"
+    "./abstract/utils": {
+      "types": "./lib/abstract/utils.d.ts",
+      "import": "./lib/esm/abstract/utils.js",
+      "default": "./lib/abstract/utils.js"
+    },
+    "./_shortw_utils": {
+      "types": "./lib/_shortw_utils.d.ts",
+      "import": "./lib/esm/_shortw_utils.js",
+      "default": "./lib/_shortw_utils.js"
+    },
+    "./bls12-381": {
+      "types": "./lib/bls12-381.d.ts",
+      "import": "./lib/esm/bls12-381.js",
+      "default": "./lib/bls12-381.js"
+    },
+    "./bn": {
+      "types": "./lib/bn.d.ts",
+      "import": "./lib/esm/bn.js",
+      "default": "./lib/bn.js"
+    },
+    "./ed25519": {
+      "types": "./lib/ed25519.d.ts",
+      "import": "./lib/esm/ed25519.js",
+      "default": "./lib/ed25519.js"
+    },
+    "./ed448": {
+      "types": "./lib/ed448.d.ts",
+      "import": "./lib/esm/ed448.js",
+      "default": "./lib/ed448.js"
+    },
+    "./index": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/esm/index.js",
+      "default": "./lib/index.js"
+    },
+    "./jubjub": {
+      "types": "./lib/jubjub.d.ts",
+      "import": "./lib/esm/jubjub.js",
+      "default": "./lib/jubjub.js"
+    },
+    "./p192": {
+      "types": "./lib/p192.d.ts",
+      "import": "./lib/esm/p192.js",
+      "default": "./lib/p192.js"
+    },
+    "./p224": {
+      "types": "./lib/p224.d.ts",
+      "import": "./lib/esm/p224.js",
+      "default": "./lib/p224.js"
+    },
+    "./p256": {
+      "types": "./lib/p256.d.ts",
+      "import": "./lib/esm/p256.js",
+      "default": "./lib/p256.js"
+    },
+    "./p384": {
+      "types": "./lib/p384.d.ts",
+      "import": "./lib/esm/p384.js",
+      "default": "./lib/p384.js"
+    },
+    "./p521": {
+      "types": "./lib/p521.d.ts",
+      "import": "./lib/esm/p521.js",
+      "default": "./lib/p521.js"
+    },
+    "./pasta": {
+      "types": "./lib/pasta.d.ts",
+      "import": "./lib/esm/pasta.js",
+      "default": "./lib/pasta.js"
+    },
+    "./secp256k1": {
+      "types": "./lib/secp256k1.d.ts",
+      "import": "./lib/esm/secp256k1.js",
+      "default": "./lib/secp256k1.js"
+    },
+    "./stark": {
+      "types": "./lib/stark.d.ts",
+      "import": "./lib/esm/stark.js",
+      "default": "./lib/stark.js"
     }
   },
   "keywords": [
     "elliptic",
     "curve",
     "cryptography",
-    "hyperelliptic",
+    "weierstrass",
+    "montgomery",
+    "edwards",
     "p256",
     "p384",
     "p521",
+    "secp256r1",
+    "secp256k1",
+    "bls12-381",
+    "bn254",
+    "bls",
     "nist",
     "ecc",
     "ecdsa",

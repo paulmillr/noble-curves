@@ -1,36 +1,36 @@
 # noble-curves
 
-Minimal, zero-dependency JS implementation of elliptic curve cryptography.
+Minimal, auditable JS implementation of elliptic curve cryptography.
 
 - Short Weierstrass, Edwards, Montgomery curves
-- ECDSA, EdDSA, Schnorr, BLS signature schemes
-- ECDH key agreement
-- [hash to curve](https://datatracker.ietf.org/doc/draft-irtf-cfrg-hash-to-curve/) algorithms for encoding or hashing an arbitrary string to a point on an elliptic curve
+- ECDSA, EdDSA, Schnorr, BLS signature schemes, ECDH key agreement
+- [hash to curve](https://datatracker.ietf.org/doc/draft-irtf-cfrg-hash-to-curve/)
+  for encoding or hashing an arbitrary string to a point on an elliptic curve
 - Auditable, [fast](#speed)
-- 🔻 Helps JS bundlers with lack of entry point, ensures small size of your app
+- 🔻 Tree-shaking-friendly: there is no entry point, which ensures small size of your app
 - 🔍 Unique tests ensure correctness. Wycheproof vectors included
 
-No curve definitions are provided out-of-box. Use separate package `micro-curve-definitions`:
+There are two parts of the package:
 
-- It provides:
+1. `abstract/` directory specifies zero-dependency EC algorithms
+2. root directory utilizes one dependency `@noble/hashes` and provides ready-to-use:
     - NIST curves secp192r1/P192, secp224r1/P224, secp256r1/P256, secp384r1/P384, secp521r1/P521
     - SECG curve secp256k1
-    - bls12-381, bn254 pairing-friendly curves
+    - pairing-friendly curves bls12-381, bn254
     - ed25519/curve25519/x25519/ristretto, edwards448/curve448/x448 RFC7748 / RFC8032 / ZIP215 stuff
-- It allows to keep the main library minimal, zero-dependency.
-  m-c-d depends on a hashing library `@noble/hashes`
-- Packages may be merged later, once a stable version is ready
 
-The goal for the near future is to update previous packages
+Curves incorporate work from previous noble packages
 ([secp256k1](https://github.com/paulmillr/noble-secp256k1),
 [ed25519](https://github.com/paulmillr/noble-ed25519),
-[bls12-381](https://github.com/paulmillr/noble-bls12-381)) with lean UMD builds based on noble-curves. This would improve compatibility & allow having one codebase for everything.
+[bls12-381](https://github.com/paulmillr/noble-bls12-381)),
+which had security audits and were developed from 2019 to 2022.
+The goal is to replace them with lean UMD builds based on single-codebase noble-curves.
 
 ### This library belongs to _noble_ crypto
 
 > **noble-crypto** — high-security, easily auditable set of contained cryptographic libraries and tools.
 
-- No dependencies, small files
+- Minimal dependencies, small files
 - Easily auditable TypeScript/JS code
 - Supported in all major browsers and stable node.js versions
 - All releases are signed with PGP keys
@@ -50,8 +50,23 @@ Use NPM in node.js / browser, or include single file from
 The library does not have an entry point. It allows you to select specific primitives and drop everything else. If you only want to use secp256k1, just use the library with rollup or other bundlers. This is done to make your bundles tiny.
 
 ```ts
-import { Fp } from '@noble/curves/modular';
-import { weierstrass } from '@noble/curves/weierstrass';
+import { secp256k1 } from '@noble/curves/secp256k1';
+
+const key = secp256k1.utils.randomPrivateKey();
+const pub = secp256k1.getPublicKey(key);
+const msg = new Uint8Array(32).fill(1);
+const sig = secp256k1.sign(msg, key);
+secp256k1.verify(sig, msg, pub) === true;
+sig.recoverPublicKey(msg) === pub;
+const someonesPub = secp256k1.getPublicKey(secp256k1.utils.randomPrivateKey());
+const shared = secp256k1.getSharedSecret(key, someonesPub);
+```
+
+To define a custom curve with the same functionality:
+
+```ts
+import { Fp } from '@noble/curves/abstract/modular';
+import { weierstrass } from '@noble/curves/abstract/weierstrass';
 import { sha256 } from '@noble/hashes/sha256';
 import { hmac } from '@noble/hashes/hmac';
 import { concatBytes, randomBytes } from '@noble/hashes/utils';
@@ -65,16 +80,8 @@ const secp256k1 = weierstrass({
   Gy: 32670510020758816978083085130507043184471273380659243275938904335757337482424n,
   hash: sha256,
   hmac: (k: Uint8Array, ...msgs: Uint8Array[]) => hmac(sha256, key, concatBytes(...msgs)),
+  randomBytes
 });
-
-const key = secp256k1.utils.randomPrivateKey();
-const pub = secp256k1.getPublicKey(key);
-const msg = randomBytes(32);
-const sig = secp256k1.sign(msg, key);
-secp256k1.verify(sig, msg, pub) === true;
-sig.recoverPublicKey(msg) === pub;
-const someonesPub = secp256k1.getPublicKey(secp256k1.utils.randomPrivateKey());
-const shared = secp256k1.getSharedSecret(key, someonesPub);
 ```
 
 ## API
