@@ -41,10 +41,11 @@ should('wychenproof ECDSA vectors', () => {
   for (const group of ecdsa.testGroups) {
     // Tested in secp256k1.test.js
     if (group.key.curve === 'secp256k1') continue;
-    // We don't have SHA-224
-    if (group.key.curve === 'secp224r1' && group.sha === 'SHA-224') continue;
-    const CURVE = NIST[group.key.curve];
+    let CURVE = NIST[group.key.curve];
     if (!CURVE) continue;
+    if (group.key.curve === 'secp224r1' && group.sha !== 'SHA-224') {
+      if (group.sha === 'SHA-256') CURVE = CURVE.create(sha256);
+    }
     const pubKey = CURVE.Point.fromHex(group.key.uncompressed);
     deepStrictEqual(pubKey.x, BigInt(`0x${group.key.wx}`));
     deepStrictEqual(pubKey.y, BigInt(`0x${group.key.wy}`));
@@ -196,17 +197,16 @@ import { default as secp521r1_sha512_test } from './wycheproof/ecdsa_secp521r1_s
 
 import { sha3_224, sha3_256, sha3_384, sha3_512 } from '@noble/hashes/sha3';
 import { sha512, sha384 } from '@noble/hashes/sha512';
-import { sha256 } from '@noble/hashes/sha256';
+import { sha224, sha256 } from '@noble/hashes/sha256';
 
 const WYCHEPROOF_ECDSA = {
   P224: {
     curve: P224,
     hashes: {
-      // sha224 not released yet
-      // sha224: {
-      //   hash: sha224,
-      //   tests: [secp224r1_sha224_test],
-      // },
+      sha224: {
+        hash: sha224,
+        tests: [secp224r1_sha224_test],
+      },
       sha256: {
         hash: sha256,
         tests: [secp224r1_sha256_test],

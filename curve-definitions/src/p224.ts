@@ -1,6 +1,6 @@
 /*! @noble/curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { createCurve } from './_shortw_utils.js';
-import { sha256 } from '@noble/hashes/sha256';
+import { sha224 } from '@noble/hashes/sha256';
 import { Fp } from '@noble/curves/modular';
 
 // NIST secp224r1 aka P224
@@ -20,6 +20,6 @@ export const P224 = createCurve(
     h: BigInt(1),
     lowS: false,
   } as const,
-  sha256 // TODO: replace with sha224 when new @noble/hashes released
+  sha224
 );
 export const secp224r1 = P224;
