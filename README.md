@@ -14,10 +14,10 @@ There are two parts of the package:
 
 1. `abstract/` directory specifies zero-dependency EC algorithms
 2. root directory utilizes one dependency `@noble/hashes` and provides ready-to-use:
-    - NIST curves secp192r1/P192, secp224r1/P224, secp256r1/P256, secp384r1/P384, secp521r1/P521
-    - SECG curve secp256k1
-    - pairing-friendly curves bls12-381, bn254
-    - ed25519/curve25519/x25519/ristretto, edwards448/curve448/x448 RFC7748 / RFC8032 / ZIP215 stuff
+   - NIST curves secp192r1/P192, secp224r1/P224, secp256r1/P256, secp384r1/P384, secp521r1/P521
+   - SECG curve secp256k1
+   - pairing-friendly curves bls12-381, bn254
+   - ed25519/curve25519/x25519/ristretto, edwards448/curve448/x448 RFC7748 / RFC8032 / ZIP215 stuff
 
 Curves incorporate work from previous noble packages
 ([secp256k1](https://github.com/paulmillr/noble-secp256k1),
@@ -50,6 +50,7 @@ Use NPM in node.js / browser, or include single file from
 The library does not have an entry point. It allows you to select specific primitives and drop everything else. If you only want to use secp256k1, just use the library with rollup or other bundlers. This is done to make your bundles tiny.
 
 ```ts
+// Common.js and ECMAScript Modules (ESM)
 import { secp256k1 } from '@noble/curves/secp256k1';
 
 const key = secp256k1.utils.randomPrivateKey();
@@ -62,7 +63,47 @@ const someonesPub = secp256k1.getPublicKey(secp256k1.utils.randomPrivateKey());
 const shared = secp256k1.getSharedSecret(key, someonesPub);
 ```
 
-To define a custom curve with the same functionality:
+All curves:
+
+```ts
+import { secp256k1 } from '@noble/curves/secp256k1';
+import { ed25519, ed25519ph, ed25519ctx, x25519, RistrettoPoint } from '@noble/curves/ed25519';
+import { ed448, ed448ph, ed448ctx, x448 } from '@noble/curves/ed448';
+import { p256 } from '@noble/curves/p256';
+import { p384 } from '@noble/curves/p384';
+import { p521 } from '@noble/curves/p521';
+import { pallas, vesta } from '@noble/curves/pasta';
+import * as stark from '@noble/curves/stark';
+import { bls12_381 } from '@noble/curves/bls12-381';
+import { bn254 } from '@noble/curves/bn';
+import { jubjub } from '@noble/curves/jubjub';
+```
+
+To define a custom curve, check out API below.
+
+## API
+
+- [Overview](#overview)
+- [abstract/edwards: Twisted Edwards curve](#abstract/edwards-twisted-edwards-curve)
+- [abstract/montgomery: Montgomery curve](#abstract/montgomery-montgomery-curve)
+- [abstract/weierstrass: Short Weierstrass curve](#abstract/weierstrass-short-weierstrass-curve)
+- [abstract/modular](#abstract/modular)
+- [abstract/utils](#abstract/utils)
+
+### Overview
+
+There are following zero-dependency abstract algorithms:
+
+```ts
+import { bls } from '@noble/curves/abstract/bls';
+import { twistedEdwards } from '@noble/curves/abstract/edwards';
+import { montgomery } from '@noble/curves/abstract/montgomery';
+import { weierstrass } from '@noble/curves/abstract/weierstrass';
+import * as mod from '@noble/curves/abstract/modular';
+import * as utils from '@noble/curves/abstract/utils';
+```
+
+They allow to define a new curve in a few lines of code:
 
 ```ts
 import { Fp } from '@noble/curves/abstract/modular';
@@ -79,82 +120,43 @@ const secp256k1 = weierstrass({
   Gx: 55066263022277343669578718895168534326250603453777594175500187360389116729240n,
   Gy: 32670510020758816978083085130507043184471273380659243275938904335757337482424n,
   hash: sha256,
-  hmac: (k: Uint8Array, ...msgs: Uint8Array[]) => hmac(sha256, key, concatBytes(...msgs)),
-  randomBytes
+  hmac: (key: Uint8Array, ...msgs: Uint8Array[]) => hmac(sha256, key, concatBytes(...msgs)),
+  randomBytes,
 });
 ```
 
-## API
-
-- [Overview](#overview)
-- [Abstract algorithms](#abstract-algorithms)
-- [abstract/edwards: Twisted Edwards curve](#abstract/edwards-twisted-edwards-curve)
-- [abstract/montgomery: Montgomery curve](#abstract/montgomery-montgomery-curve)
-- [abstract/weierstrass: Short Weierstrass curve](#abstract/weierstrass-short-weierstrass-curve)
-- [abstract/modular](#abstract/modular)
-- [abstract/utils](#abstract/utils)
-
-### Overview
-
-There are following ready-to-use curves:
-
-```ts
-import { secp256k1 } from '@noble/curves/secp256k1';
-import { ed25519, ed25519ph, ed25519ctx, x25519, RistrettoPoint } from '@noble/curves/ed25519';
-import { ed448, ed448ph, ed448ctx, x448 } from '@noble/curves/ed448';
-import { p256 } from '@noble/curves/p256';
-import { p384 } from '@noble/curves/p384';
-import { p521 } from '@noble/curves/p521';
-import { pallas, vesta } from '@noble/curves/pasta';
-import * as stark from '@noble/curves/stark';
-import { bls12_381 } from '@noble/curves/bls12-381';
-import { bn254 } from '@noble/curves/bn';
-import { jubjub } from '@noble/curves/jubjub';
-```
-
-And following zero-dependency abstract algorithms:
-
-```ts
-import { bls } from '@noble/curves/abstract/bls';
-import { twistedEdwards } from '@noble/curves/abstract/edwards';
-import { montgomery } from '@noble/curves/abstract/montgomery';
-import { weierstrass } from '@noble/curves/abstract/weierstrass';
-import * as mod from '@noble/curves/abstract/modular';
-import * as utils from '@noble/curves/abstract/utils';
-```
-
-### Abstract algorithms
-
-* To initialize new curve, you must specify its variables, order (number of points on curve), field prime (over which the modular division would be done)
-* All curves expose same generic interface:
-    * `getPublicKey()`, `sign()`, `verify()` functions
-    * `Point` conforming to `Group` interface with add/multiply/double/negate/add/equals methods
-    * `CURVE` object with curve variables like `Gx`, `Gy`, `Fp` (field), `n` (order)
-    * `utils` object with `randomPrivateKey()`, `mod()`, `invert()` methods (`mod CURVE.P`)
-* All arithmetics is done with JS bigints over finite fields, which is defined from `modular` sub-module
-* Many features require hashing, which is not provided. `@noble/hashes` can be used for this purpose.
+- To initialize new curve, you must specify its variables, order (number of points on curve), field prime (over which the modular division would be done)
+- All curves expose same generic interface:
+  - `getPublicKey()`, `sign()`, `verify()` functions
+  - `Point` conforming to `Group` interface with add/multiply/double/negate/add/equals methods
+  - `CURVE` object with curve variables like `Gx`, `Gy`, `Fp` (field), `n` (order)
+  - `utils` object with `randomPrivateKey()`, `mod()`, `invert()` methods (`mod CURVE.P`)
+- All arithmetics is done with JS bigints over finite fields, which is defined from `modular` sub-module
+- Many features require hashing, which is not provided. `@noble/hashes` can be used for this purpose.
   Any other library must conform to the CHash interface:
-    ```ts
-    export type CHash = {
-      (message: Uint8Array): Uint8Array;
-      blockLen: number; outputLen: number; create(): any;
-    };
-    ```
-* w-ary non-adjacent form (wNAF) method with constant-time adjustments is used for point multiplication.
+  ```ts
+  export type CHash = {
+    (message: Uint8Array): Uint8Array;
+    blockLen: number;
+    outputLen: number;
+    create(): any;
+  };
+  ```
+- w-ary non-adjacent form (wNAF) method with constant-time adjustments is used for point multiplication.
   It is possible to enable precomputes for edwards & weierstrass curves.
   Precomputes are calculated once (takes ~20-40ms), after that most `G` base point multiplications:
   for example, `getPublicKey()`, `sign()` and similar methods - would be much faster.
   Use `curve.utils.precompute()` to adjust precomputation window size
-* You could use optional special params to tune performance:
-    * `Fp({sqrt})` square root calculation, used for point decompression
-    * `endo` endomorphism options for Koblitz curves
+- You could use optional special params to tune performance:
+  - `Fp({sqrt})` square root calculation, used for point decompression
+  - `endo` endomorphism options for Koblitz curves
 
 ### abstract/edwards: Twisted Edwards curve
 
 Twisted Edwards curve's formula is: ax² + y² = 1 + dx²y².
 
-* You must specify curve params `a`, `d`, field `Fp`, order `n`, cofactor `h` and coordinates `Gx`, `Gy` of generator point
-* For EdDSA signatures, params `hash` is also required. `adjustScalarBytes` which instructs how to change private scalars could be specified
+- You must specify curve params `a`, `d`, field `Fp`, order `n`, cofactor `h` and coordinates `Gx`, `Gy` of generator point
+- For EdDSA signatures, params `hash` is also required. `adjustScalarBytes` which instructs how to change private scalars could be specified
 
 ```typescript
 import { twistedEdwards } from '@noble/curves/abstract/edwards';
@@ -171,7 +173,8 @@ const ed25519 = twistedEdwards({
   Gy: 46316835694926478169428394003475163141307993866256225615783033603165251855960n,
   hash: sha512,
   randomBytes,
-  adjustScalarBytes(bytes) { // optional in general, mandatory in ed25519
+  adjustScalarBytes(bytes) {
+    // optional in general, mandatory in ed25519
     bytes[0] &= 248;
     bytes[31] &= 127;
     bytes[31] |= 64;
@@ -230,7 +233,9 @@ const x25519 = montgomery({
   Gu: '0900000000000000000000000000000000000000000000000000000000000000',
 
   // Optional params
-  powPminus2: (x: bigint): bigint => { return mod.pow(x, P-2, P); },
+  powPminus2: (x: bigint): bigint => {
+    return mod.pow(x, P - 2, P);
+  },
   adjustScalarBytes(bytes) {
     bytes[0] &= 248;
     bytes[31] &= 127;
@@ -244,10 +249,10 @@ const x25519 = montgomery({
 
 Short Weierstrass curve's formula is: y² = x³ + ax + b. Uses deterministic ECDSA from RFC6979. You can also specify `extraEntropy` in `sign()`.
 
-* You must specify curve params: `a`, `b`, field `Fp`, order `n`, cofactor `h` and coordinates `Gx`, `Gy` of generator point
-* For ECDSA, you must specify `hash`, `hmac`. It is also possible to recover keys from signatures
-* For ECDH, use `getSharedSecret(privKeyA, pubKeyB)`
-* Optional params are `lowS` (default value) and `endo` (endomorphism)
+- You must specify curve params: `a`, `b`, field `Fp`, order `n`, cofactor `h` and coordinates `Gx`, `Gy` of generator point
+- For ECDSA, you must specify `hash`, `hmac`. It is also possible to recover keys from signatures
+- For ECDH, use `getSharedSecret(privKeyA, pubKeyB)`
+- Optional params are `lowS` (default value) and `endo` (endomorphism)
 
 ```typescript
 import { Fp } from '@noble/curves/abstract/modular';
@@ -270,7 +275,8 @@ const secp256k1 = weierstrass({
   // Optional params
   h: 1n, // Cofactor
   lowS: true, // Allow only low-S signatures by default in sign() and verify()
-  endo: { // Endomorphism options for Koblitz curve
+  endo: {
+    // Endomorphism options for Koblitz curve
     // Beta param
     beta: 0x7ae96a2b657c07106e64479eac3434e99cf0497512f58995c1396c28719501een,
     // Split scalar k into k1, k2
@@ -300,7 +306,10 @@ export type CurveFn = {
   getSharedSecret: (privateA: PrivKey, publicB: PubKey, isCompressed?: boolean) => Uint8Array;
   sign: (msgHash: Hex, privKey: PrivKey, opts?: SignOpts) => SignatureType;
   verify: (
-    signature: Hex | SignatureType, msgHash: Hex, publicKey: PubKey, opts?: {lowS?: boolean;}
+    signature: Hex | SignatureType,
+    msgHash: Hex,
+    publicKey: PubKey,
+    opts?: { lowS?: boolean }
   ) => boolean;
   Point: PointConstructor;
   ProjectivePoint: ProjectivePointConstructor;
