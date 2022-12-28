@@ -1,9 +1,12 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import * as utils from './utils.js';
 // Utilities for modular arithmetics and finite fields
-const _0n = BigInt(0);
-const _1n = BigInt(1);
-const _2n = BigInt(2);
+// prettier-ignore
+const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3);
+// prettier-ignore
+const _4n = BigInt(4), _5n = BigInt(5), _7n = BigInt(7), _8n = BigInt(8);
+// prettier-ignore
+const _9n = BigInt(9), _16n = BigInt(16);
 
 // Calculates a modulo b
 export function mod(a: bigint, b: bigint): bigint {
@@ -80,7 +83,6 @@ export function legendre(num: bigint, fieldPrime: bigint): bigint {
 // TODO: rewrite as generic Fp function && remove bls versions
 export function sqrt(number: bigint, modulo: bigint): bigint {
   // prettier-ignore
-  const _3n = BigInt(3), _4n = BigInt(4), _5n = BigInt(5), _8n = BigInt(8);
   const n = number;
   const P = modulo;
   const p1div4 = (P + _1n) / _4n;
@@ -143,6 +145,7 @@ export const isNegativeLE = (num: bigint, modulo: bigint) => (mod(num, modulo) &
 // - readable: add, mul, sqr, sqrt, inv, div, pow, eq, sub
 // - unreadable mess: addition, multiply, square, squareRoot, inversion, divide, power, equals, subtract
 
+// Field is not always over prime, Fp2 for example has ORDER(q)=p^m
 export interface Field<T> {
   ORDER: bigint;
   BYTES: number;
@@ -172,12 +175,15 @@ export interface Field<T> {
   squareN(num: T): T;
 
   // Optional
+  // Should be same as sgn0 function in https://datatracker.ietf.org/doc/draft-irtf-cfrg-hash-to-curve/
   isOdd?(num: T): boolean; // Odd instead of even since we have it for Fp2
   legendre?(num: T): T;
   pow(lhs: T, power: bigint): T;
   invertBatch: (lst: T[]) => T[];
   toBytes(num: T): Uint8Array;
   fromBytes(bytes: Uint8Array): T;
+  // If c is False, CMOV returns a, otherwise it returns b.
+  cmov(a: T, b: T, c: boolean): T;
 }
 // prettier-ignore
 const FIELD_FIELDS = [
@@ -288,7 +294,9 @@ export function Fp(
     invert: (num) => invert(num, ORDER),
     sqrt: redef.sqrt || sqrtP,
     invertBatch: (lst) => FpInvertBatch(f, lst),
-
+    // TODO: do we really need constant cmov?
+    // We don't have const-time bigints anyway, so probably will be not very useful
+    cmov: (a, b, c) => (c ? b : a),
     toBytes: (num) =>
       isLE ? utils.numberToBytesLE(num, BYTES) : utils.numberToBytesBE(num, BYTES),
 
@@ -299,4 +307,85 @@ export function Fp(
     },
   } as Field<bigint>);
   return Object.freeze(f);
+}
+
+// TODO: re-use in bls/generic sqrt for field/etc?
+// Something like sqrtUnsafe which always returns value, but sqrt throws exception if non-square
+// From draft-irtf-cfrg-hash-to-curve-16
+export function FpSqrt<T>(Fp: Field<T>) {
+  // NOTE: it requires another sqrt for constant precomputes, but no need for roots of unity,
+  // probably we can simply bls code using it
+  const q = Fp.ORDER;
+  const squareConst = (q - _1n) / _2n;
+  // is_square(x) := { True,  if x^((q - 1) / 2) is 0 or 1 in F;
+  //                 { False, otherwise.
+  let isSquare: (x: T) => boolean = (x) => {
+    const p = Fp.pow(x, squareConst);
+    return Fp.equals(p, Fp.ZERO) || Fp.equals(p, Fp.ONE);
+  };
+  // Constant-time Tonelli-Shanks algorithm
+  let l = _0n;
+  for (let o = q - _1n; o % _2n === _0n; o /= _2n) l += _1n;
+  const c1 = l; // 1. c1, the largest integer such that 2^c1 divides q - 1.
+  const c2 = (q - _1n) / _2n ** c1; // 2. c2 = (q - 1) / (2^c1)        # Integer arithmetic
+  const c3 = (c2 - _1n) / _2n; // 3. c3 = (c2 - 1) / 2            # Integer arithmetic
+  //  4. c4, a non-square value in F
+  //  5. c5 = c4^c2 in F
+  let c4 = Fp.ONE;
+  while (isSquare(c4)) c4 = Fp.add(c4, Fp.ONE);
+  const c5 = Fp.pow(c4, c2);
+
+  let sqrt: (x: T) => T = (x) => {
+    let z = Fp.pow(x, c3); // 1.  z = x^c3
+    let t = Fp.square(z); // 2.  t = z * z
+    t = Fp.mul(t, x); // 3.  t = t * x
+    z = Fp.mul(z, x); // 4.  z = z * x
+    let b = t; // 5.  b = t
+    let c = c5; // 6.  c = c5
+    // 7.  for i in (c1, c1 - 1, ..., 2):
+    for (let i = c1; i > 1; i--) {
+      // 8.    for j in (1, 2, ..., i - 2):
+      // 9.      b = b * b
+      for (let j = _1n; j < i - _1n; i++) b = Fp.square(b);
+      const e = Fp.equals(b, Fp.ONE); // 10.   e = b == 1
+      const zt = Fp.mul(z, c); // 11.   zt = z * c
+      z = Fp.cmov(zt, z, e); // 12.   z = CMOV(zt, z, e)
+      c = Fp.square(c); // 13.   c = c * c
+      let tt = Fp.mul(t, c); // 14.   tt = t * c
+      t = Fp.cmov(tt, t, e); // 15.   t = CMOV(tt, t, e)
+      b = t; // 16.   b = t
+    }
+    return z; // 17. return z
+  };
+  if (q % _4n === _3n) {
+    const c1 = (q + _1n) / _4n; // 1. c1 = (q + 1) / 4     # Integer arithmetic
+    sqrt = (x) => Fp.pow(x, c1);
+  } else if (q % _8n === _5n) {
+    const c1 = Fp.sqrt(Fp.negate(Fp.ONE)); //  1. c1 = sqrt(-1) in F, i.e., (c1^2) == -1 in F
+    const c2 = (q + _3n) / _8n; //  2. c2 = (q + 3) / 8     # Integer arithmetic
+    sqrt = (x) => {
+      let tv1 = Fp.pow(x, c2); //  1. tv1 = x^c2
+      let tv2 = Fp.mul(tv1, c1); //  2. tv2 = tv1 * c1
+      let e = Fp.equals(Fp.square(tv1), x); //  3.   e = (tv1^2) == x
+      return Fp.cmov(tv2, tv1, e); //  4.   z = CMOV(tv2, tv1, e)
+    };
+  } else if (Fp.ORDER % _16n === _9n) {
+    const c1 = Fp.sqrt(Fp.negate(Fp.ONE)); //  1. c1 = sqrt(-1) in F, i.e., (c1^2) == -1 in F
+    const c2 = Fp.sqrt(c1); //  2. c2 = sqrt(c1) in F, i.e., (c2^2) == c1 in F
+    const c3 = Fp.sqrt(Fp.negate(c1)); //  3. c3 = sqrt(-c1) in F, i.e., (c3^2) == -c1 in F
+    const c4 = (Fp.ORDER + _7n) / _16n; //  4. c4 = (q + 7) / 16         # Integer arithmetic
+    sqrt = (x) => {
+      let tv1 = Fp.pow(x, c4); //  1. tv1 = x^c4
+      let tv2 = Fp.mul(c1, tv1); //  2. tv2 = c1 * tv1
+      const tv3 = Fp.mul(c2, tv1); //  3. tv3 = c2 * tv1
+      let tv4 = Fp.mul(c3, tv1); //  4. tv4 = c3 * tv1
+      const e1 = Fp.equals(Fp.square(tv2), x); //  5.  e1 = (tv2^2) == x
+      const e2 = Fp.equals(Fp.square(tv3), x); //  6.  e2 = (tv3^2) == x
+      tv1 = Fp.cmov(tv1, tv2, e1); //  7. tv1 = CMOV(tv1, tv2, e1)  # Select tv2 if (tv2^2) == x
+      tv2 = Fp.cmov(tv4, tv3, e2); //  8. tv2 = CMOV(tv4, tv3, e2)  # Select tv3 if (tv3^2) == x
+      const e3 = Fp.equals(Fp.square(tv2), x); //  9.  e3 = (tv2^2) == x
+      return Fp.cmov(tv1, tv2, e3); //  10.  z = CMOV(tv1, tv2, e3)  # Select the sqrt from tv1 and tv2
+    };
+  }
+  return { sqrt, isSquare };
 }

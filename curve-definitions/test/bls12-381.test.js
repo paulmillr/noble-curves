@@ -336,10 +336,7 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
         const a = Fp2.fromBigTuple([num1[0], num1[1]]);
         const b = Fp2.fromBigTuple([num2[0], num2[1]]);
         const c = Fp2.fromBigTuple([num3[0], num3[1]]);
-        deepStrictEqual(
-          Fp2.mul(a, Fp2.add(b, c)),
-          Fp2.add(Fp2.mul(b, a), Fp2.mul(c, a))
-        );
+        deepStrictEqual(Fp2.mul(a, Fp2.add(b, c)), Fp2.add(Fp2.mul(b, a), Fp2.mul(c, a)));
       })
     );
   });
@@ -577,10 +574,7 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
         const a = Fp12.fromBigTwelve(num1);
         const b = Fp12.fromBigTwelve(num2);
         const c = Fp12.fromBigTwelve(num3);
-        deepStrictEqual(
-          Fp12.mul(a, Fp12.mul(b, c)),
-          Fp12.mul(Fp12.mul(a, b), c)
-        );
+        deepStrictEqual(Fp12.mul(a, Fp12.mul(b, c)), Fp12.mul(Fp12.mul(a, b), c));
       })
     );
   });
@@ -590,10 +584,7 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
         const a = Fp12.fromBigTwelve(num1);
         const b = Fp12.fromBigTwelve(num2);
         const c = Fp12.fromBigTwelve(num3);
-        deepStrictEqual(
-          Fp12.mul(a, Fp12.add(b, c)),
-          Fp12.add(Fp12.mul(b, a), Fp12.mul(c, a))
-        );
+        deepStrictEqual(Fp12.mul(a, Fp12.add(b, c)), Fp12.add(Fp12.mul(b, a), Fp12.mul(c, a)));
       })
     );
   });

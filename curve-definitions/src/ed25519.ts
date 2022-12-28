@@ -3,7 +3,7 @@ import { sha512 } from '@noble/hashes/sha512';
 import { concatBytes, randomBytes, utf8ToBytes } from '@noble/hashes/utils';
 import { twistedEdwards, ExtendedPointType } from '@noble/curves/edwards';
 import { montgomery } from '@noble/curves/montgomery';
-import { mod, pow2, isNegativeLE, Fp } from '@noble/curves/modular';
+import { mod, pow2, isNegativeLE, Fp as Field } from '@noble/curves/modular';
 import {
   ensureBytes,
   equalBytes,
@@ -91,6 +91,8 @@ export const ED25519_TORSION_SUBGROUP = [
   'c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa',
 ];
 
+const Fp = Field(ED25519_P);
+
 const ED25519_DEF = {
   // Param: a
   a: BigInt(-1),
@@ -98,7 +100,7 @@ const ED25519_DEF = {
   // Negative number is P - number, and division is invert(number, P)
   d: BigInt('37095705934669439343138083508754565189542113879843219016388785533085940283555'),
   // Finite field 𝔽p over which we'll do calculations; 2n ** 255n - 19n
-  Fp: Fp(ED25519_P),
+  Fp,
   // Subgroup order: how many points ed25519 has
   // 2n ** 252n + 27742317777372353535851937790883648493n;
   n: BigInt('7237005577332262213973186563042994240857116359379907606001950938285454250989'),
@@ -114,6 +116,19 @@ const ED25519_DEF = {
   // Ratio of u to v. Allows us to combine inversion and square root. Uses algo from RFC8032 5.1.3.
   // Constant-time, u/√v
   uvRatio,
+  htfDefaults: {
+    DST: 'edwards25519_XMD:SHA-512_ELL2_RO_',
+    p: Fp.ORDER,
+    m: 1,
+    k: 128,
+    expand: true,
+    hash: sha512,
+  },
+  mapToCurve: (scalars: bigint[]): { x: bigint; y: bigint } => {
+    throw new Error('Not supported yet');
+    // const { x, y } = calcElligatorRistrettoMap(scalars[0]).toAffine();
+    // return { x, y };
+  },
 } as const;
 
 export const ed25519 = twistedEdwards(ED25519_DEF);
@@ -180,6 +195,30 @@ const bytes255ToNumberLE = (bytes: Uint8Array) =>
 
 type ExtendedPoint = ExtendedPointType;
 
+// Computes Elligator map for Ristretto
+// https://ristretto.group/formulas/elligator.html
+function calcElligatorRistrettoMap(r0: bigint): ExtendedPoint {
+  const { d } = ed25519.CURVE;
+  const P = ed25519.CURVE.Fp.ORDER;
+  const { mod } = ed25519.utils;
+  const r = mod(SQRT_M1 * r0 * r0); // 1
+  const Ns = mod((r + _1n) * ONE_MINUS_D_SQ); // 2
+  let c = BigInt(-1); // 3
+  const D = mod((c - d * r) * mod(r + d)); // 4
+  let { isValid: Ns_D_is_sq, value: s } = uvRatio(Ns, D); // 5
+  let s_ = mod(s * r0); // 6
+  if (!isNegativeLE(s_, P)) s_ = mod(-s_);
+  if (!Ns_D_is_sq) s = s_; // 7
+  if (!Ns_D_is_sq) c = r; // 8
+  const Nt = mod(c * (r - _1n) * D_MINUS_ONE_SQ - D); // 9
+  const s2 = s * s;
+  const W0 = mod((s + s) * D); // 10
+  const W1 = mod(Nt * SQRT_AD_MINUS_ONE); // 11
+  const W2 = mod(_1n - s2); // 12
+  const W3 = mod(_1n + s2); // 13
+  return new ed25519.ExtendedPoint(mod(W0 * W3), mod(W2 * W1), mod(W1 * W3), mod(W0 * W2));
+}
+
 /**
  * Each ed25519/ExtendedPoint has 8 different equivalent points. This can be
  * a source of bugs for protocols like ring signatures. Ristretto was created to solve this.
@@ -194,31 +233,6 @@ export class RistrettoPoint {
   // Private property to discourage combining ExtendedPoint + RistrettoPoint
   // Always use Ristretto encoding/decoding instead.
   constructor(private readonly ep: ExtendedPoint) {}
-
-  // Computes Elligator map for Ristretto
-  // https://ristretto.group/formulas/elligator.html
-  private static calcElligatorRistrettoMap(r0: bigint): ExtendedPoint {
-    const { d } = ed25519.CURVE;
-    const P = ed25519.CURVE.Fp.ORDER;
-    const { mod } = ed25519.utils;
-    const r = mod(SQRT_M1 * r0 * r0); // 1
-    const Ns = mod((r + _1n) * ONE_MINUS_D_SQ); // 2
-    let c = BigInt(-1); // 3
-    const D = mod((c - d * r) * mod(r + d)); // 4
-    let { isValid: Ns_D_is_sq, value: s } = uvRatio(Ns, D); // 5
-    let s_ = mod(s * r0); // 6
-    if (!isNegativeLE(s_, P)) s_ = mod(-s_);
-    if (!Ns_D_is_sq) s = s_; // 7
-    if (!Ns_D_is_sq) c = r; // 8
-    const Nt = mod(c * (r - _1n) * D_MINUS_ONE_SQ - D); // 9
-    const s2 = s * s;
-    const W0 = mod((s + s) * D); // 10
-    const W1 = mod(Nt * SQRT_AD_MINUS_ONE); // 11
-    const W2 = mod(_1n - s2); // 12
-    const W3 = mod(_1n + s2); // 13
-    return new ed25519.ExtendedPoint(mod(W0 * W3), mod(W2 * W1), mod(W1 * W3), mod(W0 * W2));
-  }
-
   /**
    * Takes uniform output of 64-bit hash function like sha512 and converts it to `RistrettoPoint`.
    * The hash-to-group operation applies Elligator twice and adds the results.
@@ -229,9 +243,9 @@ export class RistrettoPoint {
   static hashToCurve(hex: Hex): RistrettoPoint {
     hex = ensureBytes(hex, 64);
     const r1 = bytes255ToNumberLE(hex.slice(0, 32));
-    const R1 = this.calcElligatorRistrettoMap(r1);
+    const R1 = calcElligatorRistrettoMap(r1);
     const r2 = bytes255ToNumberLE(hex.slice(32, 64));
-    const R2 = this.calcElligatorRistrettoMap(r2);
+    const R2 = calcElligatorRistrettoMap(r2);
     return new RistrettoPoint(R1.add(R2));
   }
 

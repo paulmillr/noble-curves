@@ -529,4 +529,8 @@ should('secp256k1.wychenproof vectors', () => {
   }
 });
 
-should.run();
+// ESM is broken.
+import url from 'url';
+if (import.meta.url === url.pathToFileURL(process.argv[1]).href) {
+  should.run();
+}

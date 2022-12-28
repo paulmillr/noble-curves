@@ -304,6 +304,17 @@ export const CURVES = {
       old: () => old_bls.pairing(oldp1, oldp2),
       noble: () => bls.pairing(p1, p2),
     },
+    'hashToCurve/G1': {
+      samples: 500,
+      old: () => old_bls.PointG1.hashToCurve('abcd'),
+      noble: () => bls.G1.Point.hashToCurve('abcd'),
+    },
+    'hashToCurve/G2': {
+      samples: 200,
+      old: () => old_bls.PointG2.hashToCurve('abcd'),
+      noble: () => bls.G2.Point.hashToCurve('abcd'),
+    },
+    // SLOW PART
     // Requires points which we cannot init before (data fn same for all)
     // await mark('sign/nc', 30, () => bls.sign(msgp, priv));
     // await mark('verify/nc', 30, () => bls.verify(sigp, msgp, pubp));
@@ -356,16 +367,6 @@ export const CURVES = {
       samples: 2,
       old: ({ sig2048 }) => old_bls.aggregateSignatures(sig2048.map(old_bls.PointG2.fromSignature)),
       noble: ({ sig2048 }) => bls.aggregateSignatures(sig2048.map(bls.Signature.decode)),
-    },
-    'hashToCurve/G1': {
-      samples: 500,
-      old: () => old_bls.PointG1.hashToCurve('abcd'),
-      noble: () => bls.G1.Point.hashToCurve('abcd'),
-    },
-    'hashToCurve/G2': {
-      samples: 200,
-      old: () => old_bls.PointG2.hashToCurve('abcd'),
-      noble: () => bls.G2.Point.hashToCurve('abcd'),
     },
   },
 };

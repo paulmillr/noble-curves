@@ -35,6 +35,7 @@ export function validateHTFOpts(opts: htfOpts) {
 }
 
 // UTF8 to ui8a
+// TODO: looks broken, ASCII only, why not TextEncoder/TextDecoder? it is in hashes anyway
 export function stringToBytes(str: string) {
   const bytes = new Uint8Array(str.length);
   for (let i = 0; i < str.length; i++) bytes[i] = str.charCodeAt(i);
@@ -83,7 +84,7 @@ export function expand_message_xmd(
   // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-16#section-5.3.3
   if (DST.length > 255) DST = H(concatBytes(stringToBytes('H2C-OVERSIZE-DST-'), DST));
   const b_in_bytes = H.outputLen;
-  const r_in_bytes = b_in_bytes * 2;
+  const r_in_bytes = H.blockLen;
   const ell = Math.ceil(lenInBytes / b_in_bytes);
   if (ell > 255) throw new Error('Invalid xmd length');
   const DST_prime = concatBytes(DST, i2osp(DST.length, 1));
@@ -129,4 +130,17 @@ export function hash_to_field(msg: Uint8Array, count: number, options: htfOpts):
     u[i] = e;
   }
   return u;
+}
+
+export function isogenyMap<T, F extends mod.Field<T>>(field: F, map: [T[], T[], T[], T[]]) {
+  // Make same order as in spec
+  const COEFF = map.map((i) => Array.from(i).reverse());
+  return (x: T, y: T) => {
+    const [xNum, xDen, yNum, yDen] = COEFF.map((val) =>
+      val.reduce((acc, i) => field.add(field.mul(acc, x), i))
+    );
+    x = field.div(xNum, xDen); // xNum / xDen
+    y = field.mul(y, field.div(yNum, yDen)); // y * (yNum / yDev)
+    return { x, y };
+  };
 }

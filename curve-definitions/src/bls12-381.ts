@@ -14,13 +14,20 @@ import {
   bitMask,
 } from '@noble/curves/utils';
 // Types
-import { PointType, ProjectivePointType, ProjectiveConstructor } from '@noble/curves/weierstrass';
+import {
+  PointType,
+  ProjectivePointType,
+  ProjectiveConstructor,
+  mapToCurveSimpleSWU,
+} from '@noble/curves/weierstrass';
+import { isogenyMap } from '@noble/curves/hashToCurve';
 
 // Differences from bls12-381:
 // - PointG1 -> G1.Point
 // - PointG2 -> G2.Point
 // - PointG2.fromSignature -> Signature.decode
 // - PointG2.toSignature ->  Signature.encode
+// - Fixed Fp2 ORDER
 // Points now have only two coordinates
 
 // CURVE FIELDS
@@ -73,10 +80,10 @@ type Fp2Utils = {
 // where Fp2 is Fp[√−1]/(x2+1). #E2(Fp2 ) = h2q, where
 // G² - 1
 // h2q
+// NOTE: ORDER was wrong!
 const FP2_ORDER =
   0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaabn **
-    2n -
-  1n;
+  2n;
 
 const Fp2: mod.Field<Fp2> & Fp2Utils = {
   ORDER: FP2_ORDER,
@@ -144,12 +151,24 @@ const Fp2: mod.Field<Fp2> & Fp2Utils = {
     if (im1 > im2 || (im1 === im2 && re1 > re2)) return x1;
     return x2;
   },
+  // Same as sgn0_fp2 in draft-irtf-cfrg-hash-to-curve-16
+  isOdd: (x: Fp2) => {
+    const { re: x0, im: x1 } = Fp2.reim(x);
+    const sign_0 = x0 % 2n;
+    const zero_0 = x0 === 0n;
+    const sign_1 = x1 % 2n;
+    return BigInt(sign_0 || (zero_0 && sign_1)) == 1n;
+  },
   // Bytes util
   fromBytes(b: Uint8Array): Fp2 {
     if (b.length !== Fp2.BYTES) throw new Error(`fromBytes wrong length=${b.length}`);
     return { c0: Fp.fromBytes(b.subarray(0, Fp.BYTES)), c1: Fp.fromBytes(b.subarray(Fp.BYTES)) };
   },
   toBytes: ({ c0, c1 }) => concatBytes(Fp.toBytes(c0), Fp.toBytes(c1)),
+  cmov: ({ c0, c1 }, { c0: r0, c1: r1 }, c) => ({
+    c0: Fp.cmov(c0, r0, c),
+    c1: Fp.cmov(c1, r1, c),
+  }),
   // Specific utils
   // toString() {
   //   return `Fp2(${this.c0} + ${this.c1}×i)`;
@@ -331,7 +350,11 @@ const Fp6: mod.Field<Fp6> & Fp6Utils = {
   },
   toBytes: ({ c0, c1, c2 }): Uint8Array =>
     concatBytes(Fp2.toBytes(c0), Fp2.toBytes(c1), Fp2.toBytes(c2)),
-
+  cmov: ({ c0, c1, c2 }: Fp6, { c0: r0, c1: r1, c2: r2 }: Fp6, c) => ({
+    c0: Fp2.cmov(c0, r0, c),
+    c1: Fp2.cmov(c1, r1, c),
+    c2: Fp2.cmov(c2, r2, c),
+  }),
   // Utils
   //   fromTriple(triple: [Fp2, Fp2, Fp2]) {
   //     return new Fp6(...triple);
@@ -530,7 +553,10 @@ const Fp12: mod.Field<Fp12> & Fp12Utils = {
     };
   },
   toBytes: ({ c0, c1 }): Uint8Array => concatBytes(Fp6.toBytes(c0), Fp6.toBytes(c1)),
-
+  cmov: ({ c0, c1 }, { c0: r0, c1: r1 }, c) => ({
+    c0: Fp6.cmov(c0, r0, c),
+    c1: Fp6.cmov(c1, r1, c),
+  }),
   // Utils
   // toString() {
   //   return `Fp12(${this.c0} + ${this.c1} * w)`;
@@ -676,309 +702,170 @@ const FP12_FROBENIUS_COEFFICIENTS = [
 // END OF CURVE FIELDS
 
 // HashToCurve
-// TODO: try to move-out generic version
 
-// Utilities for 3-isogeny map from E' to E.
-const ISOGENY_COEFFICIENTS_G2: [Fp2[], Fp2[], Fp2[], Fp2[]] = [
-  // xNum
-  [
-    [
-      0x171d6541fa38ccfaed6dea691f5fb614cb14b4e7f4e810aa22d6108f142b85757098e38d0f671c7188e2aaaaaaaa5ed1n,
-      0x0n,
-    ],
-    [
-      0x11560bf17baa99bc32126fced787c88f984f87adf7ae0c7f9a208c6b4f20a4181472aaa9cb8d555526a9ffffffffc71en,
-      0x8ab05f8bdd54cde190937e76bc3e447cc27c3d6fbd7063fcd104635a790520c0a395554e5c6aaaa9354ffffffffe38dn,
-    ],
-    [
-      0x0n,
-      0x11560bf17baa99bc32126fced787c88f984f87adf7ae0c7f9a208c6b4f20a4181472aaa9cb8d555526a9ffffffffc71an,
-    ],
-    [
-      0x5c759507e8e333ebb5b7a9a47d7ed8532c52d39fd3a042a88b58423c50ae15d5c2638e343d9c71c6238aaaaaaaa97d6n,
-      0x5c759507e8e333ebb5b7a9a47d7ed8532c52d39fd3a042a88b58423c50ae15d5c2638e343d9c71c6238aaaaaaaa97d6n,
-    ],
-  ],
-  // xDen
-  [
-    [0x0n, 0x0n],
-    [0x1n, 0x0n],
-    [
-      0xcn,
-      0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaa9fn,
-    ],
-    [
-      0x0n,
-      0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaa63n,
-    ],
-  ],
-  // yNum
-  [
-    [
-      0x124c9ad43b6cf79bfbf7043de3811ad0761b0f37a1e26286b0e977c69aa274524e79097a56dc4bd9e1b371c71c718b10n,
-      0x0n,
-    ],
-    [
-      0x11560bf17baa99bc32126fced787c88f984f87adf7ae0c7f9a208c6b4f20a4181472aaa9cb8d555526a9ffffffffc71cn,
-      0x8ab05f8bdd54cde190937e76bc3e447cc27c3d6fbd7063fcd104635a790520c0a395554e5c6aaaa9354ffffffffe38fn,
-    ],
-    [
-      0x0n,
-      0x5c759507e8e333ebb5b7a9a47d7ed8532c52d39fd3a042a88b58423c50ae15d5c2638e343d9c71c6238aaaaaaaa97ben,
-    ],
-    [
-      0x1530477c7ab4113b59a4c18b076d11930f7da5d4a07f649bf54439d87d27e500fc8c25ebf8c92f6812cfc71c71c6d706n,
-      0x1530477c7ab4113b59a4c18b076d11930f7da5d4a07f649bf54439d87d27e500fc8c25ebf8c92f6812cfc71c71c6d706n,
-    ],
-  ],
-  // yDen
-  [
-    [0x1n, 0x0n],
-    [
-      0x12n,
-      0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaa99n,
-    ],
-    [
-      0x0n,
-      0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffa9d3n,
-    ],
-    [
-      0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffa8fbn,
-      0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffa8fbn,
-    ],
-  ],
-].map((i) => i.map((pair) => Fp2.fromBigTuple(pair))) as [Fp2[], Fp2[], Fp2[], Fp2[]];
-
-const ISOGENY_COEFFICIENTS_G1: [Fp[], Fp[], Fp[], Fp[]] = [
-  // xNum
-  [
-    0x06e08c248e260e70bd1e962381edee3d31d79d7e22c837bc23c0bf1bc24c6b68c24b1b80b64d391fa9c8ba2e8ba2d229n,
-    0x10321da079ce07e272d8ec09d2565b0dfa7dccdde6787f96d50af36003b14866f69b771f8c285decca67df3f1605fb7bn,
-    0x169b1f8e1bcfa7c42e0c37515d138f22dd2ecb803a0c5c99676314baf4bb1b7fa3190b2edc0327797f241067be390c9en,
-    0x080d3cf1f9a78fc47b90b33563be990dc43b756ce79f5574a2c596c928c5d1de4fa295f296b74e956d71986a8497e317n,
-    0x17b81e7701abdbe2e8743884d1117e53356de5ab275b4db1a682c62ef0f2753339b7c8f8c8f475af9ccb5618e3f0c88en,
-    0x0d6ed6553fe44d296a3726c38ae652bfb11586264f0f8ce19008e218f9c86b2a8da25128c1052ecaddd7f225a139ed84n,
-    0x1630c3250d7313ff01d1201bf7a74ab5db3cb17dd952799b9ed3ab9097e68f90a0870d2dcae73d19cd13c1c66f652983n,
-    0x0e99726a3199f4436642b4b3e4118e5499db995a1257fb3f086eeb65982fac18985a286f301e77c451154ce9ac8895d9n,
-    0x1778e7166fcc6db74e0609d307e55412d7f5e4656a8dbf25f1b33289f1b330835336e25ce3107193c5b388641d9b6861n,
-    0x0d54005db97678ec1d1048c5d10a9a1bce032473295983e56878e501ec68e25c958c3e3d2a09729fe0179f9dac9edcb0n,
-    0x17294ed3e943ab2f0588bab22147a81c7c17e75b2f6a8417f565e33c70d1e86b4838f2a6f318c356e834eef1b3cb83bbn,
-    0x11a05f2b1e833340b809101dd99815856b303e88a2d7005ff2627b56cdb4e2c85610c2d5f2e62d6eaeac1662734649b7n,
-  ],
-  // xDen
-  [
-    0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001n,
-    0x095fc13ab9e92ad4476d6e3eb3a56680f682b4ee96f7d03776df533978f31c1593174e4b4b7865002d6384d168ecdd0an,
-    0x0a10ecf6ada54f825e920b3dafc7a3cce07f8d1d7161366b74100da67f39883503826692abba43704776ec3a79a1d641n,
-    0x14a7ac2a9d64a8b230b3f5b074cf01996e7f63c21bca68a81996e1cdf9822c580fa5b9489d11e2d311f7d99bbdcc5a5en,
-    0x0772caacf16936190f3e0c63e0596721570f5799af53a1894e2e073062aede9cea73b3538f0de06cec2574496ee84a3an,
-    0x0e7355f8e4e667b955390f7f0506c6e9395735e9ce9cad4d0a43bcef24b8982f7400d24bc4228f11c02df9a29f6304a5n,
-    0x13a8e162022914a80a6f1d5f43e7a07dffdfc759a12062bb8d6b44e833b306da9bd29ba81f35781d539d395b3532a21en,
-    0x03425581a58ae2fec83aafef7c40eb545b08243f16b1655154cca8abc28d6fd04976d5243eecf5c4130de8938dc62cd8n,
-    0x0b2962fe57a3225e8137e629bff2991f6f89416f5a718cd1fca64e00b11aceacd6a3d0967c94fedcfcc239ba5cb83e19n,
-    0x12561a5deb559c4348b4711298e536367041e8ca0cf0800c0126c2588c48bf5713daa8846cb026e9e5c8276ec82b3bffn,
-    0x08ca8d548cff19ae18b2e62f4bd3fa6f01d5ef4ba35b48ba9c9588617fc8ac62b558d681be343df8993cf9fa40d21b1cn,
-  ],
-  // yNum
-  [
-    0x15e6be4e990f03ce4ea50b3b42df2eb5cb181d8f84965a3957add4fa95af01b2b665027efec01c7704b456be69c8b604n,
-    0x05c129645e44cf1102a159f748c4a3fc5e673d81d7e86568d9ab0f5d396a7ce46ba1049b6579afb7866b1e715475224bn,
-    0x0245a394ad1eca9b72fc00ae7be315dc757b3b080d4c158013e6632d3c40659cc6cf90ad1c232a6442d9d3f5db980133n,
-    0x0b182cac101b9399d155096004f53f447aa7b12a3426b08ec02710e807b4633f06c851c1919211f20d4c04f00b971ef8n,
-    0x18b46a908f36f6deb918c143fed2edcc523559b8aaf0c2462e6bfe7f911f643249d9cdf41b44d606ce07c8a4d0074d8en,
-    0x19713e47937cd1be0dfd0b8f1d43fb93cd2fcbcb6caf493fd1183e416389e61031bf3a5cce3fbafce813711ad011c132n,
-    0x0e1bba7a1186bdb5223abde7ada14a23c42a0ca7915af6fe06985e7ed1e4d43b9b3f7055dd4eba6f2bafaaebca731c30n,
-    0x09fc4018bd96684be88c9e221e4da1bb8f3abd16679dc26c1e8b6e6a1f20cabe69d65201c78607a360370e577bdba587n,
-    0x0987c8d5333ab86fde9926bd2ca6c674170a05bfe3bdd81ffd038da6c26c842642f64550fedfe935a15e4ca31870fb29n,
-    0x04ab0b9bcfac1bbcb2c977d027796b3ce75bb8ca2be184cb5231413c4d634f3747a87ac2460f415ec961f8855fe9d6f2n,
-    0x16603fca40634b6a2211e11db8f0a6a074a7d0d4afadb7bd76505c3d3ad5544e203f6326c95a807299b23ab13633a5f0n,
-    0x08cc03fdefe0ff135caf4fe2a21529c4195536fbe3ce50b879833fd221351adc2ee7f8dc099040a841b6daecf2e8fedbn,
-    0x01f86376e8981c217898751ad8746757d42aa7b90eeb791c09e4a3ec03251cf9de405aba9ec61deca6355c77b0e5f4cbn,
-    0x00cc786baa966e66f4a384c86a3b49942552e2d658a31ce2c344be4b91400da7d26d521628b00523b8dfe240c72de1f6n,
-    0x134996a104ee5811d51036d776fb46831223e96c254f383d0f906343eb67ad34d6c56711962fa8bfe097e75a2e41c696n,
-    0x090d97c81ba24ee0259d1f094980dcfa11ad138e48a869522b52af6c956543d3cd0c7aee9b3ba3c2be9845719707bb33n,
-  ],
-  // yDen
-  [
-    0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001n,
-    0x0e0fa1d816ddc03e6b24255e0d7819c171c40f65e273b853324efcd6356caa205ca2f570f13497804415473a1d634b8fn,
-    0x02660400eb2e4f3b628bdd0d53cd76f2bf565b94e72927c1cb748df27942480e420517bd8714cc80d1fadc1326ed06f7n,
-    0x0ad6b9514c767fe3c3613144b45f1496543346d98adf02267d5ceef9a00d9b8693000763e3b90ac11e99b138573345ccn,
-    0x0accbb67481d033ff5852c1e48c50c477f94ff8aefce42d28c0f9a88cea7913516f968986f7ebbea9684b529e2561092n,
-    0x04d2f259eea405bd48f010a01ad2911d9c6dd039bb61a6290e591b36e636a5c871a5c29f4f83060400f8b49cba8f6aa8n,
-    0x167a55cda70a6e1cea820597d94a84903216f763e13d87bb5308592e7ea7d4fbc7385ea3d529b35e346ef48bb8913f55n,
-    0x1866c8ed336c61231a1be54fd1d74cc4f9fb0ce4c6af5920abc5750c4bf39b4852cfe2f7bb9248836b233d9d55535d4an,
-    0x16a3ef08be3ea7ea03bcddfabba6ff6ee5a4375efa1f4fd7feb34fd206357132b920f5b00801dee460ee415a15812ed9n,
-    0x166007c08a99db2fc3ba8734ace9824b5eecfdfa8d0cf8ef5dd365bc400a0051d5fa9c01a58b1fb93d1a1399126a775cn,
-    0x08d9e5297186db2d9fb266eaac783182b70152c65550d881c5ecd87b6f0f5a6449f38db9dfa9cce202c6477faaf9b7acn,
-    0x0be0e079545f43e4b00cc912f8228ddcc6d19c9f0f69bbb0542eda0fc9dec916a20b15dc0fd2ededda39142311a5001dn,
-    0x16b7d288798e5395f20d23bf89edb4d1d115c5dbddbcd30e123da489e726af41727364f2c28297ada8d26d98445f5416n,
-    0x058df3306640da276faaae7d6e8eb15778c4855551ae7f310c35a5dd279cd2eca6757cd636f96f891e2538b53dbf67f2n,
-    0x1962d75c2381201e1a0cbd6c43c348b885c84ff731c4d59ca4a10356f453e01f78a4260763529e3532f6102c2e49a03dn,
-    0x16112c4c3a9c98b252181140fad0eae9601a6de578980be6eec3232b5be72e7a07f3688ef60c206d01479253b03663c1n,
-  ],
-];
-
-// Looks like is_y_even for fp + fp2?
-// For Fp2: if (sgn0_fp2(t) !== sgn0_fp2(y)) y = Fp2.negate(y);
-// For Fp:   const y = sgn0_m_eq_1(u) == sgn0_m_eq_1(yPos) ? yPos : yNeg;
-
-function sgn0_fp2(x: Fp2) {
-  const { re: x0, im: x1 } = Fp2.reim(x);
-  const sign_0 = x0 % 2n;
-  const zero_0 = x0 === 0n;
-  const sign_1 = x1 % 2n;
-  return BigInt(sign_0 || (zero_0 && sign_1));
-}
-
-function sgn0_m_eq_1(x: Fp) {
-  return Boolean(x % 2n);
-}
-
-const P_MINUS_9_DIV_16 = (Fp.ORDER ** 2n - 9n) / 16n;
-// Does not return a square root.
-// Returns uv⁷ * (uv¹⁵)^((p² - 9) / 16) * root of unity
-// if valid square root is found
-function sqrt_div_fp2(u: Fp2, v: Fp2) {
-  const v7 = Fp2.pow(v, 7n);
-  const uv7 = Fp2.mul(u, v7);
-  const uv15 = Fp2.mul(uv7, Fp2.mul(v7, v));
-  // gamma =  uv⁷ * (uv¹⁵)^((p² - 9) / 16)
-  const gamma = Fp2.mul(Fp2.pow(uv15, P_MINUS_9_DIV_16), uv7);
-  let success = false;
-  let result = gamma;
-  // Constant-time routine, so we do not early-return.
-  const positiveRootsOfUnity = FP2_ROOTS_OF_UNITY.slice(0, 4);
-  positiveRootsOfUnity.forEach((root) => {
-    // Valid if (root * gamma)² * v - u == 0
-    const candidate = Fp2.mul(root, gamma);
-    if (Fp2.isZero(Fp2.sub(Fp2.mul(Fp2.pow(candidate, 2n), v), u)) && !success) {
-      success = true;
-      result = candidate;
-    }
-  });
-  return { success, sqrtCandidateOrGamma: result };
-}
-
-// Optimized SWU Map - Fp2 to G2': y² = x³ + 240i * x + 1012 + 1012i
-// Found in Section 4 of https://eprint.iacr.org/2019/403
-// Note: it's constant-time
-// https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#appendix-G.2.3
-function map_to_curve_simple_swu_9mod16(t: bigint[] | Fp2): [Fp2, Fp2] {
-  const iso_3_a = Fp2.create({ c0: Fp.create(0n), c1: Fp.create(240n) });
-  const iso_3_b = Fp2.create({ c0: Fp.create(1012n), c1: Fp.create(1012n) });
-  const iso_3_z = Fp2.create({ c0: Fp.create(-2n), c1: Fp.create(-1n) });
-  if (Array.isArray(t)) t = Fp2.fromBigTuple(t);
-
-  const t2 = Fp2.pow(t, 2n);
-  const iso_3_z_t2 = Fp2.mul(iso_3_z, t2);
-  const ztzt = Fp2.add(iso_3_z_t2, Fp2.pow(iso_3_z_t2, 2n)); // (Z * t² + Z² * t⁴)
-  let denominator = Fp2.negate(Fp2.mul(iso_3_a, ztzt)); // -a(Z * t² + Z² * t⁴)
-  let numerator = Fp2.mul(iso_3_b, Fp2.add(ztzt, Fp2.ONE)); // b(Z * t² + Z² * t⁴ + 1)
-
-  // Exceptional case
-  if (Fp2.isZero(denominator)) denominator = Fp2.mul(iso_3_z, iso_3_a);
-
-  // v = D³
-  let v = Fp2.pow(denominator, 3n);
-  // u = N³ + a * N * D² + b * D³
-  let u = Fp2.add(
-    Fp2.add(Fp2.pow(numerator, 3n), Fp2.mul(Fp2.mul(iso_3_a, numerator), Fp2.pow(denominator, 2n))),
-    Fp2.mul(iso_3_b, v)
-  );
-  // Attempt y = sqrt(u / v)
-  const { success, sqrtCandidateOrGamma } = sqrt_div_fp2(u, v);
-  let y;
-  if (success) y = sqrtCandidateOrGamma;
-  // Handle case where (u / v) is not square
-  // sqrt_candidate(x1) = sqrt_candidate(x0) * t³
-  const sqrtCandidateX1 = Fp2.mul(sqrtCandidateOrGamma, Fp2.pow(t, 3n));
-
-  // u(x1) = Z³ * t⁶ * u(x0)
-  u = Fp2.mul(Fp2.pow(iso_3_z_t2, 3n), u);
-  let success2 = false;
-  FP2_ETAs.forEach((eta) => {
-    // Valid solution if (eta * sqrt_candidate(x1))² * v - u == 0
-    const etaSqrtCandidate = Fp2.mul(eta, sqrtCandidateX1);
-    const temp = Fp2.sub(Fp2.mul(Fp2.pow(etaSqrtCandidate, 2n), v), u);
-    if (Fp2.isZero(temp) && !success && !success2) {
-      y = etaSqrtCandidate;
-      success2 = true;
-    }
-  });
-  if (!success && !success2) throw new Error('Hash to Curve - Optimized SWU failure');
-  if (success2) numerator = Fp2.mul(numerator, iso_3_z_t2);
-  y = y as Fp2;
-  if (sgn0_fp2(t) !== sgn0_fp2(y)) y = Fp2.negate(y);
-  return [Fp2.div(numerator, denominator), y];
-}
-// Optimized SWU Map - Fp to G1
-// https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#appendix-G.2.1
-function map_to_curve_simple_swu_3mod4(u: Fp): [Fp, Fp] {
-  const A =
-    Fp.create(
-      0x144698a3b8e9433d693a02c96d4982b0ea985383ee66a8d8e8981aefd881ac98936f8da0e0f97f5cf428082d584c1dn
-    );
-  const B =
-    Fp.create(
-      0x12e2908d11688030018b12e8753eee3b2016c1f0f24f4070a0b9c14fcef35ef55a23215a316ceaa5d1cc48e98e172be0n
-    );
-  const Z = Fp.create(11n);
-  const c1 = (Fp.ORDER - 3n) / 4n; // (q - 3) / 4
-  // Static value so we can know that is there always root
-  const c2 = Fp.sqrt(Fp.pow(Fp.negate(Z), 3n)); // sqrt((-Z) ^ 3)
-  const tv1 = Fp.square(u); // u ** 2n;
-  const tv3 = Fp.mul(Z, tv1); //
-  let xDen = Fp.add(Fp.square(tv3), tv3);
-  // X
-  const xNum1 = Fp.mul(Fp.add(xDen, Fp.ONE), B); // (xd + 1) * B
-  const xNum2 = Fp.mul(tv3, xNum1); // x2 = x2n / xd = Z * u^2 * x1n / xd
-  xDen = Fp.mul(Fp.negate(A), xDen); // -A * xDen
-  if (Fp.isZero(xDen)) xDen = Fp.mul(A, Z);
-  let tv2 = Fp.square(xDen); // xDen ^ 2
-  const gxd = Fp.mul(tv2, xDen); // xDen ^ 3
-  tv2 = Fp.mul(A, tv2); // A * tv2
-  let gx1 = Fp.mul(Fp.add(Fp.square(xNum1), tv2), xNum1); // x1n^3 + A * x1n * xd^2
-  tv2 = Fp.mul(B, gxd); // B * gxd
-  gx1 = Fp.add(gx1, tv2); // x1n^3 + A * x1n * xd^2 + B * xd^3
-  tv2 = Fp.mul(gx1, gxd); // gx1 * gxd
-  const tv4 = Fp.mul(Fp.square(gxd), tv2); // gx1 * gxd^3
-  // Y
-  const y1 = Fp.mul(Fp.pow(tv4, c1), tv2); // gx1 * gxd * (gx1 * gxd^3)^((q - 3) / 4)
-  const y2 = Fp.mul(Fp.mul(Fp.mul(y1, c2), tv1), u); // y1 * c2 * tv1 * u
-  let xNum, yPos;
-  // y1^2 * gxd == gx1
-  if (Fp.equals(Fp.mul(Fp.square(y1), gxd), gx1)) {
-    xNum = xNum1;
-    yPos = y1;
-  } else {
-    xNum = xNum2;
-    yPos = y2;
-  }
-  const yNeg = Fp.negate(yPos);
-  const y = sgn0_m_eq_1(u) == sgn0_m_eq_1(yPos) ? yPos : yNeg;
-  // NOTE: we can batch inversion for hashToCurve, but it doesn't impact performance
-  return [Fp.div(xNum, xDen), y];
-}
-
-function isogenyMap<T, F extends mod.Field<T>>(
-  field: F,
-  COEFF: [T[], T[], T[], T[]],
-  x: T,
-  y: T
-): [T, T] {
-  const [xNum, xDen, yNum, yDen] = COEFF.map((val) =>
-    val.reduce((acc, i) => field.add(field.mul(acc, x), i))
-  );
-  x = field.div(xNum, xDen); // xNum / xDen
-  y = field.mul(y, field.div(yNum, yDen)); // y * (yNum / yDev)
-  return [x, y];
-}
 // 3-isogeny map from E' to E
 // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#appendix-E.3
-const isogenyMapG2 = (x: Fp2, y: Fp2) => isogenyMap(Fp2, ISOGENY_COEFFICIENTS_G2, x, y);
+const isogenyMapG2 = isogenyMap(
+  Fp2,
+  [
+    // xNum
+    [
+      [
+        '0x5c759507e8e333ebb5b7a9a47d7ed8532c52d39fd3a042a88b58423c50ae15d5c2638e343d9c71c6238aaaaaaaa97d6',
+        '0x5c759507e8e333ebb5b7a9a47d7ed8532c52d39fd3a042a88b58423c50ae15d5c2638e343d9c71c6238aaaaaaaa97d6',
+      ],
+      [
+        '0x0',
+        '0x11560bf17baa99bc32126fced787c88f984f87adf7ae0c7f9a208c6b4f20a4181472aaa9cb8d555526a9ffffffffc71a',
+      ],
+      [
+        '0x11560bf17baa99bc32126fced787c88f984f87adf7ae0c7f9a208c6b4f20a4181472aaa9cb8d555526a9ffffffffc71e',
+        '0x8ab05f8bdd54cde190937e76bc3e447cc27c3d6fbd7063fcd104635a790520c0a395554e5c6aaaa9354ffffffffe38d',
+      ],
+      [
+        '0x171d6541fa38ccfaed6dea691f5fb614cb14b4e7f4e810aa22d6108f142b85757098e38d0f671c7188e2aaaaaaaa5ed1',
+        '0x0',
+      ],
+    ],
+    // xDen
+    [
+      [
+        '0x0',
+        '0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaa63',
+      ],
+      [
+        '0xc',
+        '0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaa9f',
+      ],
+      ['0x1', '0x0'], // LAST 1
+    ],
+    // yNum
+    [
+      [
+        '0x1530477c7ab4113b59a4c18b076d11930f7da5d4a07f649bf54439d87d27e500fc8c25ebf8c92f6812cfc71c71c6d706',
+        '0x1530477c7ab4113b59a4c18b076d11930f7da5d4a07f649bf54439d87d27e500fc8c25ebf8c92f6812cfc71c71c6d706',
+      ],
+      [
+        '0x0',
+        '0x5c759507e8e333ebb5b7a9a47d7ed8532c52d39fd3a042a88b58423c50ae15d5c2638e343d9c71c6238aaaaaaaa97be',
+      ],
+      [
+        '0x11560bf17baa99bc32126fced787c88f984f87adf7ae0c7f9a208c6b4f20a4181472aaa9cb8d555526a9ffffffffc71c',
+        '0x8ab05f8bdd54cde190937e76bc3e447cc27c3d6fbd7063fcd104635a790520c0a395554e5c6aaaa9354ffffffffe38f',
+      ],
+      [
+        '0x124c9ad43b6cf79bfbf7043de3811ad0761b0f37a1e26286b0e977c69aa274524e79097a56dc4bd9e1b371c71c718b10',
+        '0x0',
+      ],
+    ],
+    // yDen
+    [
+      [
+        '0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffa8fb',
+        '0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffa8fb',
+      ],
+      [
+        '0x0',
+        '0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffa9d3',
+      ],
+      [
+        '0x12',
+        '0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaa99',
+      ],
+      ['0x1', '0x0'], // LAST 1
+    ],
+  ].map((i) => i.map((pair) => Fp2.fromBigTuple(pair.map(BigInt)))) as [Fp2[], Fp2[], Fp2[], Fp2[]]
+);
 // 11-isogeny map from E' to E
-const isogenyMapG1 = (x: Fp, y: Fp) => isogenyMap(Fp, ISOGENY_COEFFICIENTS_G1, x, y);
+const isogenyMapG1 = isogenyMap(
+  Fp,
+  [
+    // xNum
+    [
+      '0x11a05f2b1e833340b809101dd99815856b303e88a2d7005ff2627b56cdb4e2c85610c2d5f2e62d6eaeac1662734649b7',
+      '0x17294ed3e943ab2f0588bab22147a81c7c17e75b2f6a8417f565e33c70d1e86b4838f2a6f318c356e834eef1b3cb83bb',
+      '0xd54005db97678ec1d1048c5d10a9a1bce032473295983e56878e501ec68e25c958c3e3d2a09729fe0179f9dac9edcb0',
+      '0x1778e7166fcc6db74e0609d307e55412d7f5e4656a8dbf25f1b33289f1b330835336e25ce3107193c5b388641d9b6861',
+      '0xe99726a3199f4436642b4b3e4118e5499db995a1257fb3f086eeb65982fac18985a286f301e77c451154ce9ac8895d9',
+      '0x1630c3250d7313ff01d1201bf7a74ab5db3cb17dd952799b9ed3ab9097e68f90a0870d2dcae73d19cd13c1c66f652983',
+      '0xd6ed6553fe44d296a3726c38ae652bfb11586264f0f8ce19008e218f9c86b2a8da25128c1052ecaddd7f225a139ed84',
+      '0x17b81e7701abdbe2e8743884d1117e53356de5ab275b4db1a682c62ef0f2753339b7c8f8c8f475af9ccb5618e3f0c88e',
+      '0x80d3cf1f9a78fc47b90b33563be990dc43b756ce79f5574a2c596c928c5d1de4fa295f296b74e956d71986a8497e317',
+      '0x169b1f8e1bcfa7c42e0c37515d138f22dd2ecb803a0c5c99676314baf4bb1b7fa3190b2edc0327797f241067be390c9e',
+      '0x10321da079ce07e272d8ec09d2565b0dfa7dccdde6787f96d50af36003b14866f69b771f8c285decca67df3f1605fb7b',
+      '0x6e08c248e260e70bd1e962381edee3d31d79d7e22c837bc23c0bf1bc24c6b68c24b1b80b64d391fa9c8ba2e8ba2d229',
+    ],
+    // xDen
+    [
+      '0x8ca8d548cff19ae18b2e62f4bd3fa6f01d5ef4ba35b48ba9c9588617fc8ac62b558d681be343df8993cf9fa40d21b1c',
+      '0x12561a5deb559c4348b4711298e536367041e8ca0cf0800c0126c2588c48bf5713daa8846cb026e9e5c8276ec82b3bff',
+      '0xb2962fe57a3225e8137e629bff2991f6f89416f5a718cd1fca64e00b11aceacd6a3d0967c94fedcfcc239ba5cb83e19',
+      '0x3425581a58ae2fec83aafef7c40eb545b08243f16b1655154cca8abc28d6fd04976d5243eecf5c4130de8938dc62cd8',
+      '0x13a8e162022914a80a6f1d5f43e7a07dffdfc759a12062bb8d6b44e833b306da9bd29ba81f35781d539d395b3532a21e',
+      '0xe7355f8e4e667b955390f7f0506c6e9395735e9ce9cad4d0a43bcef24b8982f7400d24bc4228f11c02df9a29f6304a5',
+      '0x772caacf16936190f3e0c63e0596721570f5799af53a1894e2e073062aede9cea73b3538f0de06cec2574496ee84a3a',
+      '0x14a7ac2a9d64a8b230b3f5b074cf01996e7f63c21bca68a81996e1cdf9822c580fa5b9489d11e2d311f7d99bbdcc5a5e',
+      '0xa10ecf6ada54f825e920b3dafc7a3cce07f8d1d7161366b74100da67f39883503826692abba43704776ec3a79a1d641',
+      '0x95fc13ab9e92ad4476d6e3eb3a56680f682b4ee96f7d03776df533978f31c1593174e4b4b7865002d6384d168ecdd0a',
+      '0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001', // LAST 1
+    ],
+    // yNum
+    [
+      '0x90d97c81ba24ee0259d1f094980dcfa11ad138e48a869522b52af6c956543d3cd0c7aee9b3ba3c2be9845719707bb33',
+      '0x134996a104ee5811d51036d776fb46831223e96c254f383d0f906343eb67ad34d6c56711962fa8bfe097e75a2e41c696',
+      '0xcc786baa966e66f4a384c86a3b49942552e2d658a31ce2c344be4b91400da7d26d521628b00523b8dfe240c72de1f6',
+      '0x1f86376e8981c217898751ad8746757d42aa7b90eeb791c09e4a3ec03251cf9de405aba9ec61deca6355c77b0e5f4cb',
+      '0x8cc03fdefe0ff135caf4fe2a21529c4195536fbe3ce50b879833fd221351adc2ee7f8dc099040a841b6daecf2e8fedb',
+      '0x16603fca40634b6a2211e11db8f0a6a074a7d0d4afadb7bd76505c3d3ad5544e203f6326c95a807299b23ab13633a5f0',
+      '0x4ab0b9bcfac1bbcb2c977d027796b3ce75bb8ca2be184cb5231413c4d634f3747a87ac2460f415ec961f8855fe9d6f2',
+      '0x987c8d5333ab86fde9926bd2ca6c674170a05bfe3bdd81ffd038da6c26c842642f64550fedfe935a15e4ca31870fb29',
+      '0x9fc4018bd96684be88c9e221e4da1bb8f3abd16679dc26c1e8b6e6a1f20cabe69d65201c78607a360370e577bdba587',
+      '0xe1bba7a1186bdb5223abde7ada14a23c42a0ca7915af6fe06985e7ed1e4d43b9b3f7055dd4eba6f2bafaaebca731c30',
+      '0x19713e47937cd1be0dfd0b8f1d43fb93cd2fcbcb6caf493fd1183e416389e61031bf3a5cce3fbafce813711ad011c132',
+      '0x18b46a908f36f6deb918c143fed2edcc523559b8aaf0c2462e6bfe7f911f643249d9cdf41b44d606ce07c8a4d0074d8e',
+      '0xb182cac101b9399d155096004f53f447aa7b12a3426b08ec02710e807b4633f06c851c1919211f20d4c04f00b971ef8',
+      '0x245a394ad1eca9b72fc00ae7be315dc757b3b080d4c158013e6632d3c40659cc6cf90ad1c232a6442d9d3f5db980133',
+      '0x5c129645e44cf1102a159f748c4a3fc5e673d81d7e86568d9ab0f5d396a7ce46ba1049b6579afb7866b1e715475224b',
+      '0x15e6be4e990f03ce4ea50b3b42df2eb5cb181d8f84965a3957add4fa95af01b2b665027efec01c7704b456be69c8b604',
+    ],
+    // yDen
+    [
+      '0x16112c4c3a9c98b252181140fad0eae9601a6de578980be6eec3232b5be72e7a07f3688ef60c206d01479253b03663c1',
+      '0x1962d75c2381201e1a0cbd6c43c348b885c84ff731c4d59ca4a10356f453e01f78a4260763529e3532f6102c2e49a03d',
+      '0x58df3306640da276faaae7d6e8eb15778c4855551ae7f310c35a5dd279cd2eca6757cd636f96f891e2538b53dbf67f2',
+      '0x16b7d288798e5395f20d23bf89edb4d1d115c5dbddbcd30e123da489e726af41727364f2c28297ada8d26d98445f5416',
+      '0xbe0e079545f43e4b00cc912f8228ddcc6d19c9f0f69bbb0542eda0fc9dec916a20b15dc0fd2ededda39142311a5001d',
+      '0x8d9e5297186db2d9fb266eaac783182b70152c65550d881c5ecd87b6f0f5a6449f38db9dfa9cce202c6477faaf9b7ac',
+      '0x166007c08a99db2fc3ba8734ace9824b5eecfdfa8d0cf8ef5dd365bc400a0051d5fa9c01a58b1fb93d1a1399126a775c',
+      '0x16a3ef08be3ea7ea03bcddfabba6ff6ee5a4375efa1f4fd7feb34fd206357132b920f5b00801dee460ee415a15812ed9',
+      '0x1866c8ed336c61231a1be54fd1d74cc4f9fb0ce4c6af5920abc5750c4bf39b4852cfe2f7bb9248836b233d9d55535d4a',
+      '0x167a55cda70a6e1cea820597d94a84903216f763e13d87bb5308592e7ea7d4fbc7385ea3d529b35e346ef48bb8913f55',
+      '0x4d2f259eea405bd48f010a01ad2911d9c6dd039bb61a6290e591b36e636a5c871a5c29f4f83060400f8b49cba8f6aa8',
+      '0xaccbb67481d033ff5852c1e48c50c477f94ff8aefce42d28c0f9a88cea7913516f968986f7ebbea9684b529e2561092',
+      '0xad6b9514c767fe3c3613144b45f1496543346d98adf02267d5ceef9a00d9b8693000763e3b90ac11e99b138573345cc',
+      '0x2660400eb2e4f3b628bdd0d53cd76f2bf565b94e72927c1cb748df27942480e420517bd8714cc80d1fadc1326ed06f7',
+      '0xe0fa1d816ddc03e6b24255e0d7819c171c40f65e273b853324efcd6356caa205ca2f570f13497804415473a1d634b8f',
+      '0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001', // LAST 1
+    ],
+  ].map((i) => i.map((j) => BigInt(j))) as [Fp[], Fp[], Fp[], Fp[]]
+);
+
+// SWU Map - Fp2 to G2': y² = x³ + 240i * x + 1012 + 1012i
+const G2_SWU = mapToCurveSimpleSWU(Fp2, {
+  A: Fp2.create({ c0: Fp.create(0n), c1: Fp.create(240n) }), // A' = 240 * I
+  B: Fp2.create({ c0: Fp.create(1012n), c1: Fp.create(1012n) }), // B' = 1012 * (1 + I)
+  Z: Fp2.create({ c0: Fp.create(-2n), c1: Fp.create(-1n) }), // Z: -(2 + I)
+});
+// Optimized SWU Map - Fp to G1
+const G1_SWU = mapToCurveSimpleSWU(Fp, {
+  A: Fp.create(
+    0x144698a3b8e9433d693a02c96d4982b0ea985383ee66a8d8e8981aefd881ac98936f8da0e0f97f5cf428082d584c1dn
+  ),
+  B: Fp.create(
+    0x12e2908d11688030018b12e8753eee3b2016c1f0f24f4070a0b9c14fcef35ef55a23215a316ceaa5d1cc48e98e172be0n
+  ),
+  Z: Fp.create(11n),
+});
 
 // Endomorphisms (for fast cofactor clearing)
 // Ψ(P) endomorphism
@@ -1122,9 +1009,8 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
       return point.multiplyUnsafe(bls12_381.CURVE.x).add(point); // x*P + P
     },
     mapToCurve: (scalars: bigint[]) => {
-      const [x0, y0] = map_to_curve_simple_swu_3mod4(Fp.create(scalars[0]));
-      const [x, y] = isogenyMapG1(x0, y0);
-      return { x, y };
+      const { x, y } = G1_SWU(Fp.create(scalars[0]));
+      return isogenyMapG1(x, y);
     },
     fromBytes: (bytes: Uint8Array): { x: Fp; y: Fp } => {
       if (bytes.length === 48) {
@@ -1197,9 +1083,8 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
     wrapPrivateKey: true,
     allowInfinityPoint: true,
     mapToCurve: (scalars: bigint[]) => {
-      const [x0, y0] = map_to_curve_simple_swu_9mod16(Fp2.fromBigTuple(scalars));
-      const [x, y] = isogenyMapG2(x0, y0);
-      return { x, y };
+      const { x, y } = G2_SWU(Fp2.fromBigTuple(scalars));
+      return isogenyMapG2(x, y);
     },
     // Checks is the point resides in prime-order subgroup.
     // point.isTorsionFree() should return true for valid points

@@ -9,5 +9,6 @@ import './secp256k1.test.js';
 import './stark/stark.test.js';
 import './jubjub.test.js';
 import './bls12-381.test.js';
+import './hashToCurve.test.js';
 
 should.run();

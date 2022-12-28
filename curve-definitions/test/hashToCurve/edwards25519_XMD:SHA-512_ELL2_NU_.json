@@ -1,0 +1,90 @@
+{
+  "L": "0x30",
+  "Z": "0x2",
+  "ciphersuite": "edwards25519_XMD:SHA-512_ELL2_NU_",
+  "curve": "edwards25519",
+  "dst": "QUUX-V01-CS02-with-edwards25519_XMD:SHA-512_ELL2_NU_",
+  "expand": "XMD",
+  "field": {
+    "m": "0x1",
+    "p": "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed"
+  },
+  "hash": "sha512",
+  "k": "0x80",
+  "map": {
+    "name": "ELL2"
+  },
+  "randomOracle": false,
+  "vectors": [
+    {
+      "P": {
+        "x": "0x1ff2b70ecf862799e11b7ae744e3489aa058ce805dd323a936375a84695e76da",
+        "y": "0x222e314d04a4d5725e9f2aff9fb2a6b69ef375a1214eb19021ceab2d687f0f9b"
+      },
+      "Q": {
+        "x": "0x42836f691d05211ebc65ef8fcf01e0fb6328ec9c4737c26050471e50803022eb",
+        "y": "0x22cb4aaa555e23bd460262d2130d6a3c9207aa8bbb85060928beb263d6d42a95"
+      },
+      "msg": "",
+      "u": [
+        "0x7f3e7fb9428103ad7f52db32f9df32505d7b427d894c5093f7a0f0374a30641d"
+      ]
+    },
+    {
+      "P": {
+        "x": "0x5f13cc69c891d86927eb37bd4afc6672360007c63f68a33ab423a3aa040fd2a8",
+        "y": "0x67732d50f9a26f73111dd1ed5dba225614e538599db58ba30aaea1f5c827fa42"
+      },
+      "Q": {
+        "x": "0x333e41b61c6dd43af220c1ac34a3663e1cf537f996bab50ab66e33c4bd8e4e19",
+        "y": "0x51b6f178eb08c4a782c820e306b82c6e273ab22e258d972cd0c511787b2a3443"
+      },
+      "msg": "abc",
+      "u": [
+        "0x09cfa30ad79bd59456594a0f5d3a76f6b71c6787b04de98be5cd201a556e253b"
+      ]
+    },
+    {
+      "P": {
+        "x": "0x1dd2fefce934ecfd7aae6ec998de088d7dd03316aa1847198aecf699ba6613f1",
+        "y": "0x2f8a6c24dd1adde73909cada6a4a137577b0f179d336685c4a955a0a8e1a86fb"
+      },
+      "Q": {
+        "x": "0x55186c242c78e7d0ec5b6c9553f04c6aeef64e69ec2e824472394da32647cfc6",
+        "y": "0x5b9ea3c265ee42256a8f724f616307ef38496ef7eba391c08f99f3bea6fa88f0"
+      },
+      "msg": "abcdef0123456789",
+      "u": [
+        "0x475ccff99225ef90d78cc9338e9f6a6bb7b17607c0c4428937de75d33edba941"
+      ]
+    },
+    {
+      "P": {
+        "x": "0x35fbdc5143e8a97afd3096f2b843e07df72e15bfca2eaf6879bf97c5d3362f73",
+        "y": "0x2af6ff6ef5ebba128b0774f4296cb4c2279a074658b083b8dcca91f57a603450"
+      },
+      "Q": {
+        "x": "0x024b6e1621606dca8071aa97b43dce4040ca78284f2a527dcf5d0fbfac2b07e7",
+        "y": "0x5102353883d739bdc9f8a3af650342b171217167dcce34f8db57208ec1dfdbf2"
+      },
+      "msg": "q128_qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq",
+      "u": [
+        "0x049a1c8bd51bcb2aec339f387d1ff51428b88d0763a91bcdf6929814ac95d03d"
+      ]
+    },
+    {
+      "P": {
+        "x": "0x6e5e1f37e99345887fc12111575fc1c3e36df4b289b8759d23af14d774b66bff",
+        "y": "0x2c90c3d39eb18ff291d33441b35f3262cdd307162cc97c31bfcc7a4245891a37"
+      },
+      "Q": {
+        "x": "0x3e6368cff6e88a58e250c54bd27d2c989ae9b3acb6067f2651ad282ab8c21cd9",
+        "y": "0x38fb39f1566ca118ae6c7af42810c0bb9767ae5960abb5a8ca792530bfb9447d"
+      },
+      "msg": "a512_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "u": [
+        "0x3cb0178a8137cefa5b79a3a57c858d7eeeaa787b2781be4a362a2f0750d24fa0"
+      ]
+    }
+  ]
+}

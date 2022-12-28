@@ -1,17 +1,29 @@
 /*! @noble/curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { createCurve } from './_shortw_utils.js';
 import { sha256 } from '@noble/hashes/sha256';
-import { Fp } from '@noble/curves/modular';
+import { Fp as Field } from '@noble/curves/modular';
+import { mapToCurveSimpleSWU } from '@noble/curves/weierstrass';
 
 // NIST secp256r1 aka P256
 // https://www.secg.org/sec2-v2.pdf, https://neuromancer.sk/std/nist/P-256
+
+// Field over which we'll do calculations; 2n**224n * (2n**32n-1n) + 2n**192n + 2n**96n-1n
+const Fp = Field(BigInt('0xffffffff00000001000000000000000000000000ffffffffffffffffffffffff'));
+const CURVE_A = Fp.create(BigInt('-3'));
+const CURVE_B = BigInt('0x5ac635d8aa3a93e7b3ebbd55769886bc651d06b0cc53b0f63bce3c3e27d2604b');
+
+const mapSWU = mapToCurveSimpleSWU(Fp, {
+  A: CURVE_A,
+  B: CURVE_B,
+  Z: Fp.create(BigInt('-10')),
+});
+
 export const P256 = createCurve(
   {
     // Params: a, b
-    a: BigInt('0xffffffff00000001000000000000000000000000fffffffffffffffffffffffc'),
-    b: BigInt('0x5ac635d8aa3a93e7b3ebbd55769886bc651d06b0cc53b0f63bce3c3e27d2604b'),
-    // Field over which we'll do calculations; 2n**224n * (2n**32n-1n) + 2n**192n + 2n**96n-1n
-    Fp: Fp(BigInt('0xffffffff00000001000000000000000000000000ffffffffffffffffffffffff')),
+    a: CURVE_A,
+    b: CURVE_B,
+    Fp,
     // Curve order, total count of valid points in the field
     n: BigInt('0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551'),
     // Base point (x, y) aka generator point
@@ -19,6 +31,15 @@ export const P256 = createCurve(
     Gy: BigInt('0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5'),
     h: BigInt(1),
     lowS: false,
+    mapToCurve: (scalars: bigint[]) => mapSWU(scalars[0]),
+    htfDefaults: {
+      DST: 'P256_XMD:SHA-256_SSWU_RO_',
+      p: Fp.ORDER,
+      m: 1,
+      k: 128,
+      expand: true,
+      hash: sha256,
+    },
   } as const,
   sha256
 );

@@ -1272,3 +1272,119 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     utils,
   };
 }
+
+// Implementation of the Shallue and van de Woestijne method for any Weierstrass curve
+
+// TODO: check if there is a way to merge this with uvRation in Edwards && move to modular?
+// b = True and y = sqrt(u / v) if (u / v) is square in F, and
+// b = False and y = sqrt(Z * (u / v)) otherwise.
+export function SWUFpSqrtRatio<T>(Fp: mod.Field<T>, Z: T) {
+  // Generic implementation
+  const q = Fp.ORDER;
+  let l = 0n;
+  for (let o = q - 1n; o % 2n === 0n; o /= 2n) l += 1n;
+  const c1 = l; // 1. c1, the largest integer such that 2^c1 divides q - 1.
+  const c2 = (q - 1n) / 2n ** c1; // 2. c2 = (q - 1) / (2^c1)        # Integer arithmetic
+  const c3 = (c2 - 1n) / 2n; // 3. c3 = (c2 - 1) / 2            # Integer arithmetic
+  const c4 = 2n ** c1 - 1n; // 4. c4 = 2^c1 - 1                # Integer arithmetic
+  const c5 = 2n ** (c1 - 1n); // 5. c5 = 2^(c1 - 1)              # Integer arithmetic
+  const c6 = Fp.pow(Z, c2); // 6. c6 = Z^c2
+  const c7 = Fp.pow(Z, (c2 + 1n) / 2n); // 7. c7 = Z^((c2 + 1) / 2)
+  let sqrtRatio = (u: T, v: T): { isValid: boolean; value: T } => {
+    let tv1 = c6; // 1. tv1 = c6
+    let tv2 = Fp.pow(v, c4); // 2. tv2 = v^c4
+    let tv3 = Fp.square(tv2); // 3. tv3 = tv2^2
+    tv3 = Fp.mul(tv3, v); // 4. tv3 = tv3 * v
+    let tv5 = Fp.mul(u, tv3); // 5. tv5 = u * tv3
+    tv5 = Fp.pow(tv5, c3); // 6. tv5 = tv5^c3
+    tv5 = Fp.mul(tv5, tv2); // 7. tv5 = tv5 * tv2
+    tv2 = Fp.mul(tv5, v); // 8. tv2 = tv5 * v
+    tv3 = Fp.mul(tv5, u); // 9. tv3 = tv5 * u
+    let tv4 = Fp.mul(tv3, tv2); // 10. tv4 = tv3 * tv2
+    tv5 = Fp.pow(tv4, c5); // 11. tv5 = tv4^c5
+    let isQR = Fp.equals(tv5, Fp.ONE); // 12. isQR = tv5 == 1
+    tv2 = Fp.mul(tv3, c7); // 13. tv2 = tv3 * c7
+    tv5 = Fp.mul(tv4, tv1); // 14. tv5 = tv4 * tv1
+    tv3 = Fp.cmov(tv2, tv3, isQR); // 15. tv3 = CMOV(tv2, tv3, isQR)
+    tv4 = Fp.cmov(tv5, tv4, isQR); // 16. tv4 = CMOV(tv5, tv4, isQR)
+    // 17. for i in (c1, c1 - 1, ..., 2):
+    for (let i = c1; i > 1; i--) {
+      let tv5 = 2n ** (i - 2n); // 18.    tv5 = i - 2;    19.    tv5 = 2^tv5
+      let tvv5 = Fp.pow(tv4, tv5); // 20.    tv5 = tv4^tv5
+      const e1 = Fp.equals(tvv5, Fp.ONE); // 21.    e1 = tv5 == 1
+      tv2 = Fp.mul(tv3, tv1); // 22.    tv2 = tv3 * tv1
+      tv1 = Fp.mul(tv1, tv1); // 23.    tv1 = tv1 * tv1
+      tvv5 = Fp.mul(tv4, tv1); // 24.    tv5 = tv4 * tv1
+      tv3 = Fp.cmov(tv2, tv3, e1); // 25.    tv3 = CMOV(tv2, tv3, e1)
+      tv4 = Fp.cmov(tvv5, tv4, e1); // 26.    tv4 = CMOV(tv5, tv4, e1)
+    }
+    return { isValid: isQR, value: tv3 };
+  };
+  if (Fp.ORDER % 4n === 3n) {
+    // sqrt_ratio_3mod4(u, v)
+    const c1 = (Fp.ORDER - 3n) / 4n; // 1. c1 = (q - 3) / 4     # Integer arithmetic
+    const c2 = Fp.sqrt(Fp.negate(Z)); // 2. c2 = sqrt(-Z)
+    sqrtRatio = (u: T, v: T) => {
+      let tv1 = Fp.square(v); // 1. tv1 = v^2
+      const tv2 = Fp.mul(u, v); // 2. tv2 = u * v
+      tv1 = Fp.mul(tv1, tv2); // 3. tv1 = tv1 * tv2
+      let y1 = Fp.pow(tv1, c1); // 4. y1 = tv1^c1
+      y1 = Fp.mul(y1, tv2); // 5. y1 = y1 * tv2
+      const y2 = Fp.mul(y1, c2); // 6. y2 = y1 * c2
+      const tv3 = Fp.mul(Fp.square(y1), v); // 7. tv3 = y1^2; 8. tv3 = tv3 * v
+      const isQR = Fp.equals(tv3, u); // 9. isQR = tv3 == u
+      let y = Fp.cmov(y2, y1, isQR); // 10. y = CMOV(y2, y1, isQR)
+      return { isValid: isQR, value: y }; // 11. return (isQR, y) isQR ? y : y*c2
+    };
+  }
+  // No curves uses that
+  // if (Fp.ORDER % 8n === 5n) // sqrt_ratio_5mod8
+  return sqrtRatio;
+}
+// From draft-irtf-cfrg-hash-to-curve-16
+export function mapToCurveSimpleSWU<T>(
+  Fp: mod.Field<T>,
+  opts: {
+    A: T;
+    B: T;
+    Z: T;
+  }
+) {
+  mod.validateField(Fp);
+  if (!Fp.isValid(opts.A) || !Fp.isValid(opts.B) || !Fp.isValid(opts.Z))
+    throw new Error('mapToCurveSimpleSWU: invalid opts');
+  const sqrtRatio = SWUFpSqrtRatio(Fp, opts.Z);
+  if (!Fp.isOdd) throw new Error('Fp.isOdd is not implemented!');
+  // Input: u, an element of F.
+  // Output: (x, y), a point on E.
+  return (u: T): { x: T; y: T } => {
+    // prettier-ignore
+    let tv1, tv2, tv3, tv4, tv5, tv6, x, y;
+    tv1 = Fp.square(u); // 1.  tv1 = u^2
+    tv1 = Fp.mul(tv1, opts.Z); // 2.  tv1 = Z * tv1
+    tv2 = Fp.square(tv1); // 3.  tv2 = tv1^2
+    tv2 = Fp.add(tv2, tv1); // 4.  tv2 = tv2 + tv1
+    tv3 = Fp.add(tv2, Fp.ONE); // 5.  tv3 = tv2 + 1
+    tv3 = Fp.mul(tv3, opts.B); // 6.  tv3 = B * tv3
+    tv4 = Fp.cmov(opts.Z, Fp.negate(tv2), !Fp.equals(tv2, Fp.ZERO)); // 7.  tv4 = CMOV(Z, -tv2, tv2 != 0)
+    tv4 = Fp.mul(tv4, opts.A); // 8.  tv4 = A * tv4
+    tv2 = Fp.square(tv3); // 9.  tv2 = tv3^2
+    tv6 = Fp.square(tv4); // 10. tv6 = tv4^2
+    tv5 = Fp.mul(tv6, opts.A); // 11. tv5 = A * tv6
+    tv2 = Fp.add(tv2, tv5); // 12. tv2 = tv2 + tv5
+    tv2 = Fp.mul(tv2, tv3); // 13. tv2 = tv2 * tv3
+    tv6 = Fp.mul(tv6, tv4); // 14. tv6 = tv6 * tv4
+    tv5 = Fp.mul(tv6, opts.B); // 15. tv5 = B * tv6
+    tv2 = Fp.add(tv2, tv5); // 16. tv2 = tv2 + tv5
+    x = Fp.mul(tv1, tv3); // 17.   x = tv1 * tv3
+    const { isValid, value } = sqrtRatio(tv2, tv6); // 18. (is_gx1_square, y1) = sqrt_ratio(tv2, tv6)
+    y = Fp.mul(tv1, u); // 19.   y = tv1 * u  -> Z * u^3 * y1
+    y = Fp.mul(y, value); // 20.   y = y * y1
+    x = Fp.cmov(x, tv3, isValid); // 21.   x = CMOV(x, tv3, is_gx1_square)
+    y = Fp.cmov(y, value, isValid); // 22.   y = CMOV(y, y1, is_gx1_square)
+    const e1 = Fp.isOdd!(u) === Fp.isOdd!(y); // 23.  e1 = sgn0(u) == sgn0(y)
+    y = Fp.cmov(Fp.negate(y), y, e1); // 24.   y = CMOV(-y, y, e1)
+    x = Fp.div(x, tv4); // 25.   x = x / tv4
+    return { x, y };
+  };
+}

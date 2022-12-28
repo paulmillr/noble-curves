@@ -1,8 +1,8 @@
 /*! @noble/curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha256 } from '@noble/hashes/sha256';
-import { Fp, mod, pow2 } from '@noble/curves/modular';
+import { Fp as Field, mod, pow2 } from '@noble/curves/modular';
 import { createCurve } from './_shortw_utils.js';
-import { PointType } from '@noble/curves/weierstrass';
+import { PointType, mapToCurveSimpleSWU } from '@noble/curves/weierstrass';
 import {
   ensureBytes,
   concatBytes,
@@ -12,6 +12,7 @@ import {
   PrivKey,
 } from '@noble/curves/utils';
 import { randomBytes } from '@noble/hashes/utils';
+import { isogenyMap } from '@noble/curves/hashToCurve';
 
 /**
  * secp256k1 belongs to Koblitz curves: it has
@@ -58,7 +59,47 @@ function sqrtMod(y: bigint): bigint {
   return pow2(t2, _2n, P);
 }
 
-const fp = Fp(secp256k1P, undefined, undefined, { sqrt: sqrtMod });
+const Fp = Field(secp256k1P, undefined, undefined, { sqrt: sqrtMod });
+type Fp = bigint;
+
+const isoMap = isogenyMap(
+  Fp,
+  [
+    // xNum
+    [
+      '0x8e38e38e38e38e38e38e38e38e38e38e38e38e38e38e38e38e38e38daaaaa8c7',
+      '0x7d3d4c80bc321d5b9f315cea7fd44c5d595d2fc0bf63b92dfff1044f17c6581',
+      '0x534c328d23f234e6e2a413deca25caece4506144037c40314ecbd0b53d9dd262',
+      '0x8e38e38e38e38e38e38e38e38e38e38e38e38e38e38e38e38e38e38daaaaa88c',
+    ],
+    // xDen
+    [
+      '0xd35771193d94918a9ca34ccbb7b640dd86cd409542f8487d9fe6b745781eb49b',
+      '0xedadc6f64383dc1df7c4b2d51b54225406d36b641f5e41bbc52a56612a8c6d14',
+      '0x0000000000000000000000000000000000000000000000000000000000000001', // LAST 1
+    ],
+    // yNum
+    [
+      '0x4bda12f684bda12f684bda12f684bda12f684bda12f684bda12f684b8e38e23c',
+      '0xc75e0c32d5cb7c0fa9d0a54b12a0a6d5647ab046d686da6fdffc90fc201d71a3',
+      '0x29a6194691f91a73715209ef6512e576722830a201be2018a765e85a9ecee931',
+      '0x2f684bda12f684bda12f684bda12f684bda12f684bda12f684bda12f38e38d84',
+    ],
+    // yDen
+    [
+      '0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffff93b',
+      '0x7a06534bb8bdb49fd5e9e6632722c2989467c1bfc8e8d978dfb425d2685c2573',
+      '0x6484aa716545ca2cf3a70c3fa8fe337e0a3d21162f0d6299a7bf8192bfd2a76f',
+      '0x0000000000000000000000000000000000000000000000000000000000000001', // LAST 1
+    ],
+  ].map((i) => i.map((j) => BigInt(j))) as [Fp[], Fp[], Fp[], Fp[]]
+);
+
+const mapSWU = mapToCurveSimpleSWU(Fp, {
+  A: BigInt('0x3f8731abdd661adca08a5558f0f5d272e953d363cb6f0e5d405447c01a444533'),
+  B: BigInt('1771'),
+  Z: Fp.create(BigInt('-11')),
+});
 
 export const secp256k1 = createCurve(
   {
@@ -68,7 +109,7 @@ export const secp256k1 = createCurve(
     b: BigInt(7),
     // Field over which we'll do calculations;
     // 2n**256n - 2n**32n - 2n**9n - 2n**8n - 2n**7n - 2n**6n - 2n**4n - 1n
-    Fp: fp,
+    Fp,
     // Curve order, total count of valid points in the field
     n: secp256k1N,
     // Base point (x, y) aka generator point
@@ -101,6 +142,18 @@ export const secp256k1 = createCurve(
         }
         return { k1neg, k1, k2neg, k2 };
       },
+    },
+    mapToCurve: (scalars: bigint[]) => {
+      const { x, y } = mapSWU(Fp.create(scalars[0]));
+      return isoMap(x, y);
+    },
+    htfDefaults: {
+      DST: 'secp256k1_XMD:SHA-256_SSWU_RO_',
+      p: Fp.ORDER,
+      m: 1,
+      k: 128,
+      expand: true,
+      hash: sha256,
     },
   },
   sha256
