@@ -263,7 +263,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
         const A = modP((Y1 - X1) * (Y2 + X2));
         const B = modP((Y1 + X1) * (Y2 - X2));
         const F = modP(B - A);
-        if (F === _0n) return this.double(); // Same point.
+        if (F === _0n) return this.double(); // Same point. Tests say it doesn't affect timing
         const C = modP(Z1 * _2n * T2);
         const D = modP(T1 * _2n * Z2);
         const E = D + C;
