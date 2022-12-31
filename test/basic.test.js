@@ -15,7 +15,252 @@ import { starkCurve } from '../lib/esm/stark.js';
 import { pallas, vesta } from '../lib/esm/pasta.js';
 import { bn254 } from '../lib/esm/bn.js';
 import { jubjub } from '../lib/esm/jubjub.js';
+import { bls12_381 } from '../lib/esm/bls12-381.js';
 
+// Fields tests
+const FIELDS = {
+  secp192r1: { Fp: [secp192r1.CURVE.Fp] },
+  secp224r1: { Fp: [secp224r1.CURVE.Fp] },
+  secp256r1: { Fp: [secp256r1.CURVE.Fp] },
+  secp521r1: { Fp: [secp521r1.CURVE.Fp] },
+  secp256k1: { Fp: [secp256k1.CURVE.Fp] },
+  stark: { Fp: [starkCurve.CURVE.Fp] },
+  jubjub: { Fp: [jubjub.CURVE.Fp] },
+  ed25519: { Fp: [ed25519.CURVE.Fp] },
+  ed448: { Fp: [ed448.CURVE.Fp] },
+  bn254: { Fp: [bn254.CURVE.Fp] },
+  pallas: { Fp: [pallas.CURVE.Fp] },
+  vesta: { Fp: [vesta.CURVE.Fp] },
+  bls12: {
+    Fp: [bls12_381.CURVE.Fp],
+    Fp2: [
+      bls12_381.CURVE.Fp2,
+      fc.array(fc.bigInt(1n, bls12_381.CURVE.Fp.ORDER - 1n), {
+        minLength: 2,
+        maxLength: 2,
+      }),
+      (Fp2, num) => Fp2.fromBigTuple([num[0], num[1]]),
+    ],
+    // Fp6: [bls12_381.CURVE.Fp6],
+    Fp12: [
+      bls12_381.CURVE.Fp12,
+      fc.array(fc.bigInt(1n, bls12_381.CURVE.Fp.ORDER - 1n), {
+        minLength: 12,
+        maxLength: 12,
+      }),
+      (Fp12, num) => Fp12.fromBigTwelve(num),
+    ],
+  },
+};
+
+for (const c in FIELDS) {
+  const curve = FIELDS[c];
+  for (const f in curve) {
+    const Fp = curve[f][0];
+    const name = `${c}/${f}:`;
+    const FC_BIGINT = curve[f][1] ? curve[f][1] : fc.bigInt(1n, Fp.ORDER - 1n);
+
+    const create = curve[f][2] ? curve[f][2].bind(null, Fp) : (num) => Fp.create(num);
+    should(`${name} equality`, () => {
+      fc.assert(
+        fc.property(FC_BIGINT, (num) => {
+          const a = create(num);
+          const b = create(num);
+          deepStrictEqual(Fp.equals(a, b), true);
+          deepStrictEqual(Fp.equals(b, a), true);
+        })
+      );
+    });
+    should(`${name} non-equality`, () => {
+      fc.assert(
+        fc.property(FC_BIGINT, FC_BIGINT, (num1, num2) => {
+          const a = create(num1);
+          const b = create(num2);
+          deepStrictEqual(Fp.equals(a, b), num1 === num2);
+          deepStrictEqual(Fp.equals(b, a), num1 === num2);
+        })
+      );
+    });
+    should(`${name} add/subtract/commutativity`, () => {
+      fc.assert(
+        fc.property(FC_BIGINT, FC_BIGINT, (num1, num2) => {
+          const a = create(num1);
+          const b = create(num2);
+          deepStrictEqual(Fp.add(a, b), Fp.add(b, a));
+        })
+      );
+    });
+    should(`${name} add/subtract/associativity`, () => {
+      fc.assert(
+        fc.property(FC_BIGINT, FC_BIGINT, FC_BIGINT, (num1, num2, num3) => {
+          const a = create(num1);
+          const b = create(num2);
+          const c = create(num3);
+          deepStrictEqual(Fp.add(a, Fp.add(b, c)), Fp.add(Fp.add(a, b), c));
+        })
+      );
+    });
+    should(`${name} add/subtract/x+0=x`, () => {
+      fc.assert(
+        fc.property(FC_BIGINT, (num) => {
+          const a = create(num);
+          deepStrictEqual(Fp.add(a, Fp.ZERO), a);
+        })
+      );
+    });
+    should(`${name} add/subtract/x-0=x`, () => {
+      fc.assert(
+        fc.property(FC_BIGINT, (num) => {
+          const a = create(num);
+          deepStrictEqual(Fp.sub(a, Fp.ZERO), a);
+          deepStrictEqual(Fp.sub(a, a), Fp.ZERO);
+        })
+      );
+    });
+    should(`${name} add/subtract/negate equality`, () => {
+      fc.assert(
+        fc.property(FC_BIGINT, (num1) => {
+          const a = create(num1);
+          const b = create(num1);
+          deepStrictEqual(Fp.sub(Fp.ZERO, a), Fp.negate(a));
+          deepStrictEqual(Fp.sub(a, b), Fp.add(a, Fp.negate(b)));
+          deepStrictEqual(Fp.sub(a, b), Fp.add(a, Fp.mul(b, Fp.create(-1n))));
+        })
+      );
+    });
+    should(`${name} add/subtract/negate`, () => {
+      fc.assert(
+        fc.property(FC_BIGINT, (num) => {
+          const a = create(num);
+          deepStrictEqual(Fp.negate(a), Fp.sub(Fp.ZERO, a));
+          deepStrictEqual(Fp.negate(a), Fp.mul(a, Fp.create(-1n)));
+        })
+      );
+    });
+
+    should(`${name} multiply/commutativity`, () => {
+      fc.assert(
+        fc.property(FC_BIGINT, FC_BIGINT, (num1, num2) => {
+          const a = create(num1);
+          const b = create(num2);
+          deepStrictEqual(Fp.mul(a, b), Fp.mul(b, a));
+        })
+      );
+    });
+    should(`${name} multiply/associativity`, () => {
+      fc.assert(
+        fc.property(FC_BIGINT, FC_BIGINT, FC_BIGINT, (num1, num2, num3) => {
+          const a = create(num1);
+          const b = create(num2);
+          const c = create(num3);
+          deepStrictEqual(Fp.mul(a, Fp.mul(b, c)), Fp.mul(Fp.mul(a, b), c));
+        })
+      );
+    });
+    should(`${name} multiply/distributivity`, () => {
+      fc.assert(
+        fc.property(FC_BIGINT, FC_BIGINT, FC_BIGINT, (num1, num2, num3) => {
+          const a = create(num1);
+          const b = create(num2);
+          const c = create(num3);
+          deepStrictEqual(Fp.mul(a, Fp.add(b, c)), Fp.add(Fp.mul(b, a), Fp.mul(c, a)));
+        })
+      );
+    });
+    should(`${name} multiply/add equality`, () => {
+      fc.assert(
+        fc.property(FC_BIGINT, (num) => {
+          const a = create(num);
+          deepStrictEqual(Fp.mul(a, 0n), Fp.ZERO);
+          deepStrictEqual(Fp.mul(a, Fp.ZERO), Fp.ZERO);
+          deepStrictEqual(Fp.mul(a, 1n), a);
+          deepStrictEqual(Fp.mul(a, Fp.ONE), a);
+          deepStrictEqual(Fp.mul(a, 2n), Fp.add(a, a));
+          deepStrictEqual(Fp.mul(a, 3n), Fp.add(Fp.add(a, a), a));
+          deepStrictEqual(Fp.mul(a, 4n), Fp.add(Fp.add(Fp.add(a, a), a), a));
+        })
+      );
+    });
+    should(`${name} multiply/square equality`, () => {
+      fc.assert(
+        fc.property(FC_BIGINT, (num) => {
+          const a = create(num);
+          deepStrictEqual(Fp.square(a), Fp.mul(a, a));
+        })
+      );
+    });
+    should(`${name} multiply/pow equality`, () => {
+      fc.assert(
+        fc.property(FC_BIGINT, (num) => {
+          const a = create(num);
+          deepStrictEqual(Fp.pow(a, 0n), Fp.ONE);
+          deepStrictEqual(Fp.pow(a, 1n), a);
+          deepStrictEqual(Fp.pow(a, 2n), Fp.mul(a, a));
+          deepStrictEqual(Fp.pow(a, 3n), Fp.mul(Fp.mul(a, a), a));
+        })
+      );
+    });
+    const isSquare = mod.FpIsSquare(Fp);
+    should(`${name} multiply/sqrt`, () => {
+      if (Fp === bls12_381.CURVE.Fp12) return; // Not implemented
+      fc.assert(
+        fc.property(FC_BIGINT, (num) => {
+          const a = create(num);
+          let root;
+          try {
+            root = Fp.sqrt(a);
+          } catch (e) {
+            deepStrictEqual(isSquare(a), false);
+            return;
+          }
+          deepStrictEqual(isSquare(a), true);
+          deepStrictEqual(Fp.equals(Fp.square(root), a), true, 'sqrt(a)^2 == a');
+          deepStrictEqual(Fp.equals(Fp.square(Fp.negate(root)), a), true, '(-sqrt(a))^2 == a');
+        })
+      );
+    });
+
+    should(`${name} div/division by one equality`, () => {
+      fc.assert(
+        fc.property(FC_BIGINT, (num) => {
+          const a = create(num);
+          if (Fp.equals(a, Fp.ZERO)) return; // No division by zero
+          deepStrictEqual(Fp.div(a, Fp.ONE), a);
+          deepStrictEqual(Fp.div(a, a), Fp.ONE);
+        })
+      );
+    });
+    should(`${name} zero division equality`, () => {
+      fc.assert(
+        fc.property(FC_BIGINT, (num) => {
+          const a = create(num);
+          deepStrictEqual(Fp.div(Fp.ZERO, a), Fp.ZERO);
+        })
+      );
+    });
+    should(`${name} div/division distributivity`, () => {
+      fc.assert(
+        fc.property(FC_BIGINT, FC_BIGINT, FC_BIGINT, (num1, num2, num3) => {
+          const a = create(num1);
+          const b = create(num2);
+          const c = create(num3);
+          deepStrictEqual(Fp.div(Fp.add(a, b), c), Fp.add(Fp.div(a, c), Fp.div(b, c)));
+        })
+      );
+    });
+    should(`${name} div/division and multiplication equality`, () => {
+      fc.assert(
+        fc.property(FC_BIGINT, FC_BIGINT, (num1, num2) => {
+          const a = create(num1);
+          const b = create(num2);
+          deepStrictEqual(Fp.div(a, b), Fp.mul(a, Fp.invert(b)));
+        })
+      );
+    });
+  }
+}
+
+// Group tests
 // prettier-ignore
 const CURVES = {
   secp192r1, secp224r1, secp256r1, secp384r1, secp521r1,
@@ -29,6 +274,7 @@ const CURVES = {
 };
 
 const NUM_RUNS = 5;
+
 const getXY = (p) => ({ x: p.x, y: p.y });
 
 function equal(a, b, comment) {
