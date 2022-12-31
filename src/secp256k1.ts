@@ -56,7 +56,9 @@ function sqrtMod(y: bigint): bigint {
   const b223 = (pow2(b220, _3n, P) * b3) % P;
   const t1 = (pow2(b223, _23n, P) * b22) % P;
   const t2 = (pow2(t1, _6n, P) * b2) % P;
-  return pow2(t2, _2n, P);
+  const root = pow2(t2, _2n, P);
+  if (!Fp.equals(Fp.square(root), y)) throw new Error('Cannot find square root');
+  return root;
 }
 
 const Fp = Field(secp256k1P, undefined, undefined, { sqrt: sqrtMod });
@@ -152,7 +154,7 @@ export const secp256k1 = createCurve(
       p: Fp.ORDER,
       m: 1,
       k: 128,
-      expand: true,
+      expand: 'xmd',
       hash: sha256,
     },
   },
