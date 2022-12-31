@@ -109,7 +109,7 @@ export function expand_message_xof(
   lenInBytes: number,
   k: number,
   H: CHash
-) {
+): Uint8Array {
   // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-16#section-5.3.3
   // DST = H('H2C-OVERSIZE-DST-' || a_very_long_DST, Math.ceil((lenInBytes * k) / 8));
   if (DST.length > 255) {
@@ -129,13 +129,14 @@ export function expand_message_xof(
   );
 }
 
-// hashes arbitrary-length byte strings to a list of one or more elements of a finite field F
-// https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-5.3
-// Inputs:
-// msg - a byte string containing the message to hash.
-// count - the number of elements of F to output.
-// Outputs:
-// [u_0, ..., u_(count - 1)], a list of field elements.
+/**
+ * Hashes arbitrary-length byte strings to a list of one or more elements of a finite field F
+ * https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-5.3
+ * @param msg a byte string containing the message to hash
+ * @param count the number of elements of F to output
+ * @param options `{DST: string, p: bigint, m: number, k: number, expand: 'xmd' | 'xof', hash: H}`
+ * @returns [u_0, ..., u_(count - 1)], a list of field elements.
+ */
 export function hash_to_field(msg: Uint8Array, count: number, options: htfOpts): bigint[][] {
   // if options is provided but incomplete, fill any missing fields with the
   // value in hftDefaults (ie hash to G2).
