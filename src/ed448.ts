@@ -2,7 +2,7 @@
 import { shake256 } from '@noble/hashes/sha3';
 import { concatBytes, randomBytes, utf8ToBytes, wrapConstructor } from '@noble/hashes/utils';
 import { twistedEdwards } from './abstract/edwards.js';
-import { mod, pow2, Fp } from './abstract/modular.js';
+import { mod, pow2, Fp as Field } from './abstract/modular.js';
 import { montgomery } from './abstract/montgomery.js';
 
 /**
@@ -52,6 +52,83 @@ function adjustScalarBytes(bytes: Uint8Array): Uint8Array {
   return bytes;
 }
 
+const Fp = Field(ed448P, 456, true);
+
+// Hash To Curve Elligator2 Map
+const ELL2_C1 = (Fp.ORDER - BigInt(3)) / BigInt(4); // 1. c1 = (q - 3) / 4         # Integer arithmetic
+const ELL2_J = BigInt(156326);
+function map_to_curve_elligator2_curve448(u: bigint) {
+  let tv1 = Fp.square(u); // 1.  tv1 = u^2
+  let e1 = Fp.equals(tv1, Fp.ONE); // 2.   e1 = tv1 == 1
+  tv1 = Fp.cmov(tv1, Fp.ZERO, e1); // 3.  tv1 = CMOV(tv1, 0, e1)  # If Z * u^2 == -1, set tv1 = 0
+  let xd = Fp.sub(Fp.ONE, tv1); // 4.   xd = 1 - tv1
+  let x1n = Fp.negate(ELL2_J); // 5.  x1n = -J
+  let tv2 = Fp.square(xd); // 6.  tv2 = xd^2
+  let gxd = Fp.mul(tv2, xd); // 7.  gxd = tv2 * xd          # gxd = xd^3
+  let gx1 = Fp.mul(tv1, Fp.negate(ELL2_J)); // 8.  gx1 = -J * tv1          # x1n + J * xd
+  gx1 = Fp.mul(gx1, x1n); // 9.  gx1 = gx1 * x1n         # x1n^2 + J * x1n * xd
+  gx1 = Fp.add(gx1, tv2); // 10. gx1 = gx1 + tv2         # x1n^2 + J * x1n * xd + xd^2
+  gx1 = Fp.mul(gx1, x1n); // 11. gx1 = gx1 * x1n         # x1n^3 + J * x1n^2 * xd + x1n * xd^2
+  let tv3 = Fp.square(gxd); // 12. tv3 = gxd^2
+  tv2 = Fp.mul(gx1, gxd); // 13. tv2 = gx1 * gxd         # gx1 * gxd
+  tv3 = Fp.mul(tv3, tv2); // 14. tv3 = tv3 * tv2         # gx1 * gxd^3
+  let y1 = Fp.pow(tv3, ELL2_C1); // 15.  y1 = tv3^c1            # (gx1 * gxd^3)^((p - 3) / 4)
+  y1 = Fp.mul(y1, tv2); // 16.  y1 = y1 * tv2          # gx1 * gxd * (gx1 * gxd^3)^((p - 3) / 4)
+  let x2n = Fp.mul(x1n, Fp.negate(tv1)); // 17. x2n = -tv1 * x1n        # x2 = x2n / xd = -1 * u^2 * x1n / xd
+  let y2 = Fp.mul(y1, u); // 18.  y2 = y1 * u
+  y2 = Fp.cmov(y2, Fp.ZERO, e1); // 19.  y2 = CMOV(y2, 0, e1)
+  tv2 = Fp.square(y1); // 20. tv2 = y1^2
+  tv2 = Fp.mul(tv2, gxd); // 21. tv2 = tv2 * gxd
+  let e2 = Fp.equals(tv2, gx1); // 22.  e2 = tv2 == gx1
+  let xn = Fp.cmov(x2n, x1n, e2); // 23.  xn = CMOV(x2n, x1n, e2)  # If e2, x = x1, else x = x2
+  let y = Fp.cmov(y2, y1, e2); // 24.   y = CMOV(y2, y1, e2)    # If e2, y = y1, else y = y2
+  let e3 = Fp.isOdd(y); // 25.  e3 = sgn0(y) == 1        # Fix sign of y
+  y = Fp.cmov(y, Fp.negate(y), e2 !== e3); // 26.   y = CMOV(y, -y, e2 XOR e3)
+  return { xn, xd, yn: y, yd: Fp.ONE }; // 27. return (xn, xd, y, 1)
+}
+function map_to_curve_elligator2_edwards448(u: bigint) {
+  let { xn, xd, yn, yd } = map_to_curve_elligator2_curve448(u); // 1. (xn, xd, yn, yd) = map_to_curve_elligator2_curve448(u)
+  let xn2 = Fp.square(xn); // 2.  xn2 = xn^2
+  let xd2 = Fp.square(xd); // 3.  xd2 = xd^2
+  let xd4 = Fp.square(xd2); // 4.  xd4 = xd2^2
+  let yn2 = Fp.square(yn); // 5.  yn2 = yn^2
+  let yd2 = Fp.square(yd); // 6.  yd2 = yd^2
+  let xEn = Fp.sub(xn2, xd2); // 7.  xEn = xn2 - xd2
+  let tv2 = Fp.sub(xEn, xd2); // 8.  tv2 = xEn - xd2
+  xEn = Fp.mul(xEn, xd2); // 9.  xEn = xEn * xd2
+  xEn = Fp.mul(xEn, yd); // 10. xEn = xEn * yd
+  xEn = Fp.mul(xEn, yn); // 11. xEn = xEn * yn
+  xEn = Fp.mul(xEn, 4n); // 12. xEn = xEn * 4
+  tv2 = Fp.mul(tv2, xn2); // 13. tv2 = tv2 * xn2
+  tv2 = Fp.mul(tv2, yd2); // 14. tv2 = tv2 * yd2
+  let tv3 = Fp.mul(yn2, 4n); // 15. tv3 = 4 * yn2
+  let tv1 = Fp.add(tv3, yd2); // 16. tv1 = tv3 + yd2
+  tv1 = Fp.mul(tv1, xd4); // 17. tv1 = tv1 * xd4
+  let xEd = Fp.add(tv1, tv2); // 18. xEd = tv1 + tv2
+  tv2 = Fp.mul(tv2, xn); // 19. tv2 = tv2 * xn
+  let tv4 = Fp.mul(xn, xd4); // 20. tv4 = xn * xd4
+  let yEn = Fp.sub(tv3, yd2); // 21. yEn = tv3 - yd2
+  yEn = Fp.mul(yEn, tv4); // 22. yEn = yEn * tv4
+  yEn = Fp.sub(yEn, tv2); // 23. yEn = yEn - tv2
+  tv1 = Fp.add(xn2, xd2); // 24. tv1 = xn2 + xd2
+  tv1 = Fp.mul(tv1, xd2); // 25. tv1 = tv1 * xd2
+  tv1 = Fp.mul(tv1, xd); // 26. tv1 = tv1 * xd
+  tv1 = Fp.mul(tv1, yn2); // 27. tv1 = tv1 * yn2
+  tv1 = Fp.mul(tv1, BigInt(-2)); // 28. tv1 = -2 * tv1
+  let yEd = Fp.add(tv2, tv1); // 29. yEd = tv2 + tv1
+  tv4 = Fp.mul(tv4, yd2); // 30. tv4 = tv4 * yd2
+  yEd = Fp.add(yEd, tv4); // 31. yEd = yEd + tv4
+  tv1 = Fp.mul(xEd, yEd); // 32. tv1 = xEd * yEd
+  let e = Fp.equals(tv1, Fp.ZERO); // 33.   e = tv1 == 0
+  xEn = Fp.cmov(xEn, Fp.ZERO, e); // 34. xEn = CMOV(xEn, 0, e)
+  xEd = Fp.cmov(xEd, Fp.ONE, e); // 35. xEd = CMOV(xEd, 1, e)
+  yEn = Fp.cmov(yEn, Fp.ONE, e); // 36. yEn = CMOV(yEn, 1, e)
+  yEd = Fp.cmov(yEd, Fp.ONE, e); // 37. yEd = CMOV(yEd, 1, e)
+
+  const inv = Fp.invertBatch([xEd, yEd]); // batch division
+  return { x: Fp.mul(xEn, inv[0]), y: Fp.mul(yEn, inv[1]) }; // 38. return (xEn, xEd, yEn, yEd)
+}
+
 const ED448_DEF = {
   // Param: a
   a: BigInt(1),
@@ -60,7 +137,7 @@ const ED448_DEF = {
     '726838724295606890549323807888004534353641360687318060281490199180612328166730772686396383698676545930088884461843637361053498018326358'
   ),
   // Finite field 𝔽p over which we'll do calculations; 2n ** 448n - 2n ** 224n - 1n
-  Fp: Fp(ed448P, 456),
+  Fp,
   // Subgroup order: how many points ed448 has; 2n**446n - 13818066809895115352007386748515426880336692474882178609894547503885n
   n: BigInt(
     '181709681073901722637330951972001133588410340171829515070372549795146003961539585716195755291692375963310293709091662304773755859649779'
@@ -111,6 +188,15 @@ const ED448_DEF = {
     // square root exists, and the decoding fails.
     return { isValid: mod(x2 * v, P) === u, value: x };
   },
+  htfDefaults: {
+    DST: 'edwards448_XOF:SHAKE256_ELL2_RO_',
+    p: Fp.ORDER,
+    m: 1,
+    k: 224,
+    expand: 'xof',
+    hash: shake256,
+  },
+  mapToCurve: (scalars: bigint[]) => map_to_curve_elligator2_edwards448(scalars[0]),
 } as const;
 
 export const ed448 = twistedEdwards(ED448_DEF);

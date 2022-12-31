@@ -97,7 +97,7 @@ function getSharedSecret0x(privKeyA: Hex, pubKeyB: Hex) {
   return starkCurve.getSharedSecret(normalizePrivateKey(privKeyA), pubKeyB);
 }
 
-function sign0x(msgHash: Hex, privKey: Hex, opts: any) {
+function sign0x(msgHash: Hex, privKey: Hex, opts?: any) {
   if (typeof privKey === 'string') privKey = strip0x(privKey).padStart(64, '0');
   return starkCurve.sign(ensureBytes0x(msgHash), normalizePrivateKey(privKey), opts);
 }
@@ -203,6 +203,8 @@ function pedersenPrecompute(p1: ProjectivePoint, p2: ProjectivePoint): Projectiv
     out.push(p);
     p = p.double();
   }
+  // NOTE: we cannot use wNAF here, because last 4 bits will require full 248 bits multiplication
+  // We can add support for this to wNAF, but it will complicate wNAF.
   p = p2;
   for (let i = 0; i < 4; i++) {
     out.push(p);
