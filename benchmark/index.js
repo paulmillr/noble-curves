@@ -96,6 +96,10 @@ export const CURVES = {
         old_secp.recoverPublicKey(msg, new old_secp.Signature(sig.r, sig.s), sig.recovery),
       secp256k1: ({ sig, msg }) => sig.recoverPublicKey(msg),
     },
+    hashToCurve: {
+      samples: 500,
+      noble: () => secp256k1.Point.hashToCurve('abcd'),
+    },
   },
   ed25519: {
     data: () => {
@@ -124,6 +128,10 @@ export const CURVES = {
       old: ({ sig, msg, pub }) => noble_ed25519.sync.verify(sig, msg, pub),
       noble: ({ sig, msg, pub }) => ed25519.verify(sig, msg, pub),
     },
+    hashToCurve: {
+      samples: 500,
+      noble: () => ed25519.Point.hashToCurve('abcd'),
+    },
   },
   ed448: {
     data: () => {
@@ -144,6 +152,10 @@ export const CURVES = {
     verify: {
       samples: 500,
       noble: ({ sig, msg, pub }) => ed448.verify(sig, msg, pub),
+    },
+    hashToCurve: {
+      samples: 500,
+      noble: () => ed448.Point.hashToCurve('abcd'),
     },
   },
   nist: {
@@ -167,6 +179,12 @@ export const CURVES = {
       P256: ({ p256: { sig, msg, pub } }) => P256.verify(sig, msg, pub),
       P384: ({ p384: { sig, msg, pub } }) => P384.verify(sig, msg, pub),
       P521: ({ p521: { sig, msg, pub } }) => P521.verify(sig, msg, pub),
+    },
+    hashToCurve: {
+      samples: 500,
+      P256: () => P256.Point.hashToCurve('abcd'),
+      P384: () => P384.Point.hashToCurve('abcd'),
+      P521: () => P521.Point.hashToCurve('abcd'),
     },
   },
   stark: {

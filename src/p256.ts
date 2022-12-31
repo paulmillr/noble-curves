@@ -37,7 +37,7 @@ export const P256 = createCurve(
       p: Fp.ORDER,
       m: 1,
       k: 128,
-      expand: true,
+      expand: 'xmd',
       hash: sha256,
     },
   } as const,

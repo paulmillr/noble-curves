@@ -12,7 +12,7 @@ export type CHash = {
   (message: Uint8Array | string): Uint8Array;
   blockLen: number;
   outputLen: number;
-  create(): any;
+  create(opts?: { dkLen?: number }): any; // For shake
 };
 
 // NOTE: these are generic, even if curve is on some polynominal field (bls), it will still have P/n/h

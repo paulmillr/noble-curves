@@ -17,10 +17,11 @@ export type htfOpts = {
   k: number;
   // option to use a message that has already been processed by
   // expand_message_xmd
-  expand: boolean;
+  expand?: 'xmd' | 'xof';
   // Hash functions for: expand_message_xmd is appropriate for use with a
   // wide range of hash functions, including SHA-2, SHA-3, BLAKE2, and others.
   // BBS+ uses blake2: https://github.com/hyperledger/aries-framework-go/issues/2247
+  // TODO: verify that hash is shake if expand==='xof' via types
   hash: CHash;
 };
 
@@ -29,7 +30,8 @@ export function validateHTFOpts(opts: htfOpts) {
   if (typeof opts.p !== 'bigint') throw new Error('Invalid htf/p');
   if (typeof opts.m !== 'number') throw new Error('Invalid htf/m');
   if (typeof opts.k !== 'number') throw new Error('Invalid htf/k');
-  if (typeof opts.expand !== 'boolean') throw new Error('Invalid htf/expand');
+  if (opts.expand !== 'xmd' && opts.expand !== 'xof' && opts.expand !== undefined)
+    throw new Error('Invalid htf/expand');
   if (typeof opts.hash !== 'function' || !Number.isSafeInteger(opts.hash.outputLen))
     throw new Error('Invalid htf/hash function');
 }
@@ -101,6 +103,32 @@ export function expand_message_xmd(
   return pseudo_random_bytes.slice(0, lenInBytes);
 }
 
+export function expand_message_xof(
+  msg: Uint8Array,
+  DST: Uint8Array,
+  lenInBytes: number,
+  k: number,
+  H: CHash
+) {
+  // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-16#section-5.3.3
+  // DST = H('H2C-OVERSIZE-DST-' || a_very_long_DST, Math.ceil((lenInBytes * k) / 8));
+  if (DST.length > 255) {
+    const dkLen = Math.ceil((2 * k) / 8);
+    DST = H.create({ dkLen }).update(stringToBytes('H2C-OVERSIZE-DST-')).update(DST).digest();
+  }
+  if (lenInBytes > 65535 || DST.length > 255)
+    throw new Error('expand_message_xof: invalid lenInBytes');
+  return (
+    H.create({ dkLen: lenInBytes })
+      .update(msg)
+      .update(i2osp(lenInBytes, 2))
+      // 2. DST_prime = DST || I2OSP(len(DST), 1)
+      .update(DST)
+      .update(i2osp(DST.length, 1))
+      .digest()
+  );
+}
+
 // hashes arbitrary-length byte strings to a list of one or more elements of a finite field F
 // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-5.3
 // Inputs:
@@ -116,8 +144,10 @@ export function hash_to_field(msg: Uint8Array, count: number, options: htfOpts):
   const len_in_bytes = count * options.m * L;
   const DST = stringToBytes(options.DST);
   let pseudo_random_bytes = msg;
-  if (options.expand) {
+  if (options.expand === 'xmd') {
     pseudo_random_bytes = expand_message_xmd(msg, DST, len_in_bytes, options.hash);
+  } else if (options.expand === 'xof') {
+    pseudo_random_bytes = expand_message_xof(msg, DST, len_in_bytes, options.k, options.hash);
   }
   const u = new Array(count);
   for (let i = 0; i < count; i++) {

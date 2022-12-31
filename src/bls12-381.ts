@@ -926,12 +926,12 @@ const htfDefaults = {
   k: 128,
   // option to use a message that has already been processed by
   // expand_message_xmd
-  expand: true,
+  expand: 'xmd',
   // Hash functions for: expand_message_xmd is appropriate for use with a
   // wide range of hash functions, including SHA-2, SHA-3, BLAKE2, and others.
   // BBS+ uses blake2: https://github.com/hyperledger/aries-framework-go/issues/2247
   hash: sha256,
-};
+} as const;
 
 // Encoding utils
 // Point on G1 curve: (x, y)

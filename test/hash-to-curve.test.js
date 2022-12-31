@@ -4,16 +4,27 @@ import { bytesToHex } from '@noble/hashes/utils';
 // Generic tests for all curves in package
 import { sha256 } from '@noble/hashes/sha256';
 import { sha512 } from '@noble/hashes/sha512';
+import { shake128, shake256 } from '@noble/hashes/sha3';
 import { secp256r1 } from '../lib/esm/p256.js';
 import { secp384r1 } from '../lib/esm/p384.js';
 import { secp521r1 } from '../lib/esm/p521.js';
+import { ed25519 } from '../lib/esm/ed25519.js';
+import { ed448 } from '../lib/esm/ed448.js';
 import { secp256k1 } from '../lib/esm/secp256k1.js';
 import { bls12_381 } from '../lib/esm/bls12-381.js';
-import { stringToBytes, expand_message_xmd } from '../lib/esm/abstract/hash-to-curve.js';
-
+import {
+  stringToBytes,
+  expand_message_xmd,
+  expand_message_xof,
+} from '../lib/esm/abstract/hash-to-curve.js';
+// XMD
 import { default as xmd_sha256_38 } from './hash-to-curve/expand_message_xmd_SHA256_38.json' assert { type: 'json' };
 import { default as xmd_sha256_256 } from './hash-to-curve/expand_message_xmd_SHA256_256.json' assert { type: 'json' };
 import { default as xmd_sha512_38 } from './hash-to-curve/expand_message_xmd_SHA512_38.json' assert { type: 'json' };
+// XOF
+import { default as xof_shake128_36 } from './hash-to-curve/expand_message_xof_SHAKE128_36.json' assert { type: 'json' };
+import { default as xof_shake128_256 } from './hash-to-curve/expand_message_xof_SHAKE128_256.json' assert { type: 'json' };
+import { default as xof_shake256_36 } from './hash-to-curve/expand_message_xof_SHAKE256_36.json' assert { type: 'json' };
 // P256
 import { default as p256_ro } from './hash-to-curve/P256_XMD:SHA-256_SSWU_RO_.json' assert { type: 'json' };
 import { default as p256_nu } from './hash-to-curve/P256_XMD:SHA-256_SSWU_NU_.json' assert { type: 'json' };
@@ -58,6 +69,26 @@ testExpandXMD(sha256, xmd_sha256_38);
 testExpandXMD(sha256, xmd_sha256_256);
 testExpandXMD(sha512, xmd_sha512_38);
 
+function testExpandXOF(hash, vectors) {
+  for (let i = 0; i < vectors.tests.length; i++) {
+    const t = vectors.tests[i];
+    should(`expand_message_xof/${vectors.hash}/${vectors.DST.length}/${i}`, () => {
+      const p = expand_message_xof(
+        stringToBytes(t.msg),
+        stringToBytes(vectors.DST),
+        +t.len_in_bytes,
+        vectors.k,
+        hash
+      );
+      deepStrictEqual(bytesToHex(p), t.uniform_bytes);
+    });
+  }
+}
+
+testExpandXOF(shake128, xof_shake128_36);
+testExpandXOF(shake128, xof_shake128_256);
+testExpandXOF(shake256, xof_shake256_36);
+
 function stringToFp(s) {
   // bls-G2 support
   if (s.includes(',')) {
@@ -97,8 +128,8 @@ testCurve(secp521r1, p521_ro, p521_nu);
 testCurve(bls12_381.G1, g1_ro, g1_nu);
 testCurve(bls12_381.G2, g2_ro, g2_nu);
 testCurve(secp256k1, secp256k1_ro, secp256k1_nu);
-//testCurve(ed25519, ed25519_ro, ed25519_nu);
-//testCurve(ed448, ed448_ro, ed448_nu);
+testCurve(ed25519, ed25519_ro, ed25519_nu);
+testCurve(ed448, ed448_ro, ed448_nu);
 
 // ESM is broken.
 import url from 'url';

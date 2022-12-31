@@ -54,7 +54,7 @@ export const P521 = createCurve({
     p: Fp.ORDER,
     m: 1,
     k: 256,
-    expand: true,
+      expand: 'xmd',
     hash: sha512,
   },
 } as const, sha512);
