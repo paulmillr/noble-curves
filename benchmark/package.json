@@ -12,13 +12,15 @@
     "author": "",
     "license": "MIT",
     "devDependencies": {
-        "micro-bmark": "0.2.0"
+        "micro-bmark": "0.2.1"
     },
     "dependencies": {
         "@noble/bls12-381": "^1.4.0",
         "@noble/ed25519": "^1.7.1",
         "@noble/hashes": "^1.1.5",
         "@noble/secp256k1": "^1.7.0",
-        "@starkware-industries/starkware-crypto-utils": "^0.0.2"
+        "@starkware-industries/starkware-crypto-utils": "^0.0.2",
+        "calculate-correlation": "^1.2.3",
+        "elliptic": "^6.5.4"
     }
 }
