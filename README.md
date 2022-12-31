@@ -84,12 +84,12 @@ To define a custom curve, check out API below.
 ## API
 
 - [Overview](#overview)
-- [abstract/edwards: Twisted Edwards curve](#abstract/edwards-twisted-edwards-curve)
-- [abstract/montgomery: Montgomery curve](#abstract/montgomery-montgomery-curve)
-- [abstract/weierstrass: Short Weierstrass curve](#abstract/weierstrass-short-weierstrass-curve)
-- [abstract/hash-to-curve: Hashing strings to curve points](#abstracthash-to-curve-hashing-arbitrary-strings-to-curve-points)
-- [abstract/modular](#abstract/modular)
-- [abstract/utils](#abstract/utils)
+- [abstract/edwards: Twisted Edwards curve](#abstractedwards-twisted-edwards-curve)
+- [abstract/montgomery: Montgomery curve](#abstractmontgomery-montgomery-curve)
+- [abstract/weierstrass: Short Weierstrass curve](#abstractweierstrass-short-weierstrass-curve)
+- [abstract/hash-to-curve: Hashing strings to curve points](#abstracthash-to-curve-hashing-strings-to-curve-points)
+- [abstract/modular](#abstractmodular)
+- [abstract/utils](#abstractutils)
 
 ### Overview
 
