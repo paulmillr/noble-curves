@@ -370,7 +370,7 @@ should('secp256k1.recoverPublicKey()/should recover public key from recovery bit
   const recoveredPubkey = sig.recoverPublicKey(message);
   // const recoveredPubkey = secp.recoverPublicKey(message, signature, recovery);
   deepStrictEqual(recoveredPubkey !== null, true);
-  deepStrictEqual(recoveredPubkey.toHex(), publicKey);
+  deepStrictEqual(recoveredPubkey.toHex(false), publicKey);
   deepStrictEqual(secp.verify(sig, message, publicKey), true);
 });
 should('secp256k1.recoverPublicKey()/should not recover zero points', () => {

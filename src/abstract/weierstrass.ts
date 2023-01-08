@@ -8,6 +8,7 @@
 // 2. Different sqrt() function
 // 3. truncateHash() truncateOnly mode
 // 4. DRBG supports outputLen bigger than outputLen of hmac
+// 5. Support for different hash functions
 
 import * as mod from './modular.js';
 import {
@@ -238,6 +239,12 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
     return _0n < num && num < CURVE.n;
   }
 
+  /**
+   * Validates if a private key is valid and converts it to bigint form.
+   * Supports two options, that are passed when CURVE is initialized:
+   * - `normalizePrivateKey()` executed before all checks. Useful for P521 with var-length priv key
+   * - `wrapPrivateKey()` executed after most checks, but before `0 < key < n` check. Useful for BLS12-381 with cofactor higher than 1.
+   */
   function normalizePrivateKey(key: PrivKey): bigint {
     if (typeof CURVE.normalizePrivateKey === 'function') {
       key = CURVE.normalizePrivateKey(key);
@@ -261,6 +268,10 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
     return num;
   }
 
+  /**
+   * Validates if a scalar ("private number") is valid.
+   * Scalars are valid only if they are less than curve order.
+   */
   function normalizeScalar(num: number | bigint): bigint {
     if (typeof num === 'number' && Number.isSafeInteger(num) && num > 0) return BigInt(num);
     if (typeof num === 'bigint' && isWithinCurveOrder(num)) return num;
@@ -289,7 +300,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
 
     /**
      * Takes a bunch of Projective Points but executes only one
-     * invert on all of them. invert is very slow operation,
+     * inversion on all of them. Inversion is very slow operation,
      * so this improves performance massively.
      */
     static toAffineBatch(points: ProjectivePoint[]): Point[] {
@@ -297,6 +308,9 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
       return points.map((p, i) => p.toAffine(toInv[i]));
     }
 
+    /**
+     * Optimization: converts a list of projective points to a list of identical points with Z=1.
+     */
     static normalizeZ(points: ProjectivePoint[]): ProjectivePoint[] {
       return ProjectivePoint.toAffineBatch(points).map(ProjectivePoint.fromAffine);
     }
@@ -318,10 +332,6 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
      */
     negate(): ProjectivePoint {
       return new ProjectivePoint(this.x, Fp.negate(this.y), this.z);
-    }
-
-    doubleAdd(): ProjectivePoint {
-      return this.add(this);
     }
 
     // Renes-Costello-Batina exception-free doubling formula.
@@ -551,11 +561,11 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
    */
   class Point implements PointType<T> {
     /**
-     * Base point aka generator. public_key = Point.BASE * private_key
+     * Base point aka generator. Any public_key = Point.BASE * private_key
      */
     static BASE: Point = new Point(CURVE.Gx, CURVE.Gy);
     /**
-     * Identity point aka point at infinity. point = point + zero_point
+     * Identity point aka point at infinity. p - p = zero_p; p + zero_p = p
      */
     static ZERO: Point = new Point(Fp.ZERO, Fp.ZERO);
 
@@ -835,8 +845,8 @@ export function weierstrass(curveDef: CurveType): CurveFn {
   const CURVE = validateOpts(curveDef) as ReturnType<typeof validateOpts>;
   const CURVE_ORDER = CURVE.n;
   const Fp = CURVE.Fp;
-  const compressedLen = Fp.BYTES + 1; // 33
-  const uncompressedLen = 2 * Fp.BYTES + 1; // 65
+  const compressedLen = Fp.BYTES + 1; // e.g. 33 for 32
+  const uncompressedLen = 2 * Fp.BYTES + 1; // e.g. 65 for 32
 
   function isValidFieldElement(num: bigint): boolean {
     // 0 is disallowed by arbitrary reasons. Probably because infinity point?
@@ -910,13 +920,16 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     return isBiggerThanHalfOrder(s) ? mod.mod(-s, CURVE_ORDER) : s;
   }
 
+  function bits2int_2(bytes: Uint8Array): bigint {
+    const delta = bytes.length * 8 - CURVE.nBitLength;
+    const big = bytesToNumberBE(bytes);
+    return delta > 0 ? big >> BigInt(delta) : big;
+  }
+
   // Ensures ECDSA message hashes are 32 bytes and < curve order
   function _truncateHash(hash: Uint8Array, truncateOnly = false): bigint {
-    const { n, nBitLength } = CURVE;
-    const byteLength = hash.length;
-    const delta = byteLength * 8 - nBitLength; // size of curve.n (252 bits)
-    let h = bytesToNumberBE(hash);
-    if (delta > 0) h = h >> BigInt(delta);
+    let h = bits2int_2(hash);
+    const { n } = CURVE;
     if (!truncateOnly && h >= n) h -= n;
     return h;
   }
@@ -1009,16 +1022,17 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     }
 
     // DER-encoded
-    toDERRawBytes(isCompressed = false) {
-      return hexToBytes(this.toDERHex(isCompressed));
+    toDERRawBytes() {
+      return hexToBytes(this.toDERHex());
     }
-    toDERHex(isCompressed = false) {
+    toDERHex() {
       const sHex = sliceDER(numberToHexUnpadded(this.s));
-      if (isCompressed) return sHex;
       const rHex = sliceDER(numberToHexUnpadded(this.r));
-      const rLen = numberToHexUnpadded(rHex.length / 2);
-      const sLen = numberToHexUnpadded(sHex.length / 2);
-      const length = numberToHexUnpadded(rHex.length / 2 + sHex.length / 2 + 4);
+      const sHexL = sHex.length / 2;
+      const rHexL = rHex.length / 2;
+      const sLen = numberToHexUnpadded(sHexL);
+      const rLen = numberToHexUnpadded(rHexL);
+      const length = numberToHexUnpadded(rHexL + sHexL + 4);
       return `30${length}02${rLen}${rHex}02${sLen}${sHex}`;
     }
 
@@ -1078,10 +1092,10 @@ export function weierstrass(curveDef: CurveType): CurveFn {
   };
 
   /**
-   * Computes public key for a private key.
+   * Computes public key for a private key. Checks for validity of the private key.
    * @param privateKey private key
-   * @param isCompressed whether to return compact, or full key
-   * @returns Public key, full by default; short when isCompressed=true
+   * @param isCompressed whether to return compact (default), or full key
+   * @returns Public key, full when isCompressed=false; short when isCompressed=true
    */
   function getPublicKey(privateKey: PrivKey, isCompressed = false): Uint8Array {
     return Point.fromPrivateKey(privateKey).toRawBytes(isCompressed);
@@ -1101,12 +1115,12 @@ export function weierstrass(curveDef: CurveType): CurveFn {
   }
 
   /**
-   * ECDH (Elliptic Curve Diffie Hellman) implementation.
-   * 1. Checks for validity of private key
-   * 2. Checks for the public key of being on-curve
+   * ECDH (Elliptic Curve Diffie Hellman).
+   * Computes shared public key from private key and public key.
+   * Checks: 1) private key validity 2) shared key is on-curve
    * @param privateA private key
    * @param publicB different public key
-   * @param isCompressed whether to return compact (33-byte), or full (65-byte) key
+   * @param isCompressed whether to return compact (default), or full key
    * @returns shared public key
    */
   function getSharedSecret(privateA: PrivKey, publicB: PubKey, isCompressed = false): Uint8Array {
@@ -1118,8 +1132,9 @@ export function weierstrass(curveDef: CurveType): CurveFn {
   }
 
   // RFC6979 methods
-  function bits2int(bytes: Uint8Array) {
-    const slice = bytes.length > Fp.BYTES ? bytes.slice(0, Fp.BYTES) : bytes;
+  function bits2int(bytes: Uint8Array): bigint {
+    const { nByteLength } = CURVE;
+    const slice = bytes.length > nByteLength ? bytes.slice(0, nByteLength) : bytes;
     return bytesToNumberBE(slice);
   }
   function bits2octets(bytes: Uint8Array): Uint8Array {
