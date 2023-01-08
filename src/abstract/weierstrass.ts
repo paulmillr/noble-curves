@@ -922,16 +922,16 @@ export function weierstrass(curveDef: CurveType): CurveFn {
 
   function bits2int_2(bytes: Uint8Array): bigint {
     const delta = bytes.length * 8 - CURVE.nBitLength;
-    const big = bytesToNumberBE(bytes);
-    return delta > 0 ? big >> BigInt(delta) : big;
+    const num = bytesToNumberBE(bytes);
+    return delta > 0 ? num >> BigInt(delta) : num;
   }
 
   // Ensures ECDSA message hashes are 32 bytes and < curve order
   function _truncateHash(hash: Uint8Array, truncateOnly = false): bigint {
-    let h = bits2int_2(hash);
+    const h = bits2int_2(hash);
+    if (truncateOnly) return h;
     const { n } = CURVE;
-    if (!truncateOnly && h >= n) h -= n;
-    return h;
+    return h >= n ? h - n : h;
   }
   const truncateHash = CURVE.truncateHash || _truncateHash;
 
@@ -1134,8 +1134,19 @@ export function weierstrass(curveDef: CurveType): CurveFn {
   // RFC6979 methods
   function bits2int(bytes: Uint8Array): bigint {
     const { nByteLength } = CURVE;
+    if (!(bytes instanceof Uint8Array)) throw new Error('Expected Uint8Array');
     const slice = bytes.length > nByteLength ? bytes.slice(0, nByteLength) : bytes;
-    return bytesToNumberBE(slice);
+    // const slice = bytes; nByteLength; nBitLength;
+    let num = bytesToNumberBE(slice);
+    // const { nBitLength } = CURVE;
+    // const delta = (bytes.length * 8) - nBitLength;
+    // if (delta > 0) {
+    //   // console.log('bits=', bytes.length*8, 'CURVE n=', nBitLength, 'delta=', delta);
+    //   // console.log(bytes.length, nBitLength, delta);
+    //   // console.log(bytes, new Error().stack);
+    //   num >>= BigInt(delta);
+    // }
+    return num;
   }
   function bits2octets(bytes: Uint8Array): Uint8Array {
     const z1 = bits2int(bytes);

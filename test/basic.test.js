@@ -2,6 +2,7 @@ import { deepStrictEqual, throws } from 'assert';
 import { should } from 'micro-should';
 import * as fc from 'fast-check';
 import * as mod from '../lib/esm/abstract/modular.js';
+import { bytesToHex as toHex } from '../lib/esm/abstract/utils.js';
 // Generic tests for all curves in package
 import { secp192r1 } from '../lib/esm/p192.js';
 import { secp224r1 } from '../lib/esm/p224.js';
@@ -497,7 +498,11 @@ for (const name in CURVES) {
         const priv = C.utils.randomPrivateKey();
         const pub = C.getPublicKey(priv);
         const sig = C.sign(msg, priv);
-        deepStrictEqual(C.verify(sig, msg, pub), true);
+        deepStrictEqual(
+          C.verify(sig, msg, pub),
+          true,
+          `priv=${toHex(priv)},pub=${toHex(pub)},msg=${msg}`
+        );
       }),
       { numRuns: NUM_RUNS }
     )
