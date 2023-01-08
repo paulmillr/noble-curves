@@ -764,6 +764,7 @@ export type CurveFn = {
   getPublicKey: (privateKey: PrivKey, isCompressed?: boolean) => Uint8Array;
   getSharedSecret: (privateA: PrivKey, publicB: PubKey, isCompressed?: boolean) => Uint8Array;
   sign: (msgHash: Hex, privKey: PrivKey, opts?: SignOpts) => SignatureType;
+  signUnhashed: (msg: Uint8Array, privKey: PrivKey, opts?: SignOpts) => SignatureType;
   verify: (
     signature: Hex | SignatureType,
     msgHash: Hex,
@@ -977,6 +978,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     /**
      * Recovers public key from signature with recovery bit. Throws on invalid hash.
      * https://en.wikipedia.org/wiki/Elliptic_Curve_Digital_Signature_Algorithm#Public_key_recovery
+     * It's also possible to recover key without bit: try all 4 bit values and check for sig match.
      *
      * ```
      * recover(r, s, h) where
@@ -991,16 +993,18 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     recoverPublicKey(msgHash: Hex): Point {
       const { r, s, recovery } = this;
       if (recovery == null) throw new Error('Cannot recover: recovery bit is not present');
-      if (recovery !== 0 && recovery !== 1) throw new Error('Cannot recover: invalid recovery bit');
+      if (![0, 1, 2, 3].includes(recovery)) throw new Error('Cannot recover: invalid recovery bit');
       const h = truncateHash(ensureBytes(msgHash));
       const { n } = CURVE;
-      const rinv = mod.invert(r, n);
+      const radj = recovery === 2 || recovery === 3 ? r + n : r;
+      if (radj >= Fp.ORDER) throw new Error('Cannot recover: bit 2/3 is invalid with current r');
+      const rinv = mod.invert(radj, n);
       // Q = u1⋅G + u2⋅R
       const u1 = mod.mod(-h * rinv, n);
       const u2 = mod.mod(s * rinv, n);
       const prefix = recovery & 1 ? '03' : '02';
-      const R = Point.fromHex(prefix + numToFieldStr(r));
-      const Q = Point.BASE.multiplyAndAddUnsafe(R, u1, u2);
+      const R = Point.fromHex(prefix + numToFieldStr(radj));
+      const Q = Point.BASE.multiplyAndAddUnsafe(R, u1, u2); // unsafe is fine: no priv data leaked
       if (!Q) throw new Error('Cannot recover: point at infinify');
       Q.assertValidity();
       return Q;
@@ -1198,9 +1202,10 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     // r = x mod n
     const r = mod.mod(q.x, n);
     if (r === _0n) return;
-    // s = (1/k * (m + dr) mod n
+    // s = (m + dr)/k mod n where x/k == x*inv(k)
     const s = mod.mod(kinv * mod.mod(m + mod.mod(d * r, n), n), n);
     if (s === _0n) return;
+    // recovery bit is usually 0 or 1; rarely it's 2 or 3, when q.x > n
     let recovery = (q.x === r ? 0 : 2) | Number(q.y & _1n);
     let normS = s;
     if (lowS && isBiggerThanHalfOrder(s)) {
@@ -1210,11 +1215,19 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     return new Signature(r, normS, recovery);
   }
 
+  const defaultSigOpts: SignOpts = { lowS: CURVE.lowS };
+
   /**
    * Signs message hash (not message: you need to hash it by yourself).
+   * ```
+   * sign(m, d, k) where
+   *   (x, y) = G × k
+   *   r = x mod n
+   *   s = (m + dr)/k mod n
+   * ```
    * @param opts `lowS, extraEntropy`
    */
-  function sign(msgHash: Hex, privKey: PrivKey, opts: SignOpts = { lowS: CURVE.lowS }): Signature {
+  function sign(msgHash: Hex, privKey: PrivKey, opts = defaultSigOpts): Signature {
     // Steps A, D of RFC6979 3.2.
     const { seed, m, d } = initSigArgs(msgHash, privKey, opts.extraEntropy);
     // Steps B, C, D, E, F, G
@@ -1225,6 +1238,14 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     while (!(sig = kmdToSig(drbg.generateSync(), m, d, opts.lowS))) drbg.reseedSync();
     return sig;
   }
+
+  /**
+   * Signs a message (not message hash).
+   */
+  function signUnhashed(msg: Uint8Array, privKey: PrivKey, opts = defaultSigOpts): Signature {
+    return sign(CURVE.hash(ensureBytes(msg)), privKey, opts);
+  }
+
   // Enable precomputes. Slows down first publicKey computation by 20ms.
   Point.BASE._setWindowSize(8);
 
@@ -1291,6 +1312,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     getPublicKey,
     getSharedSecret,
     sign,
+    signUnhashed,
     verify,
     Point,
     ProjectivePoint,

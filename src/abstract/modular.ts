@@ -55,6 +55,7 @@ export function invert(number: bigint, modulo: bigint): bigint {
   // prettier-ignore
   let x = _0n, y = _1n, u = _1n, v = _0n;
   while (a !== _0n) {
+    // JIT applies optimization if those two lines follow each other
     const q = b / a;
     const r = b % a;
     const m = x - u * q;
