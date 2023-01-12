@@ -149,21 +149,22 @@ export function nLength(n: bigint, nBitLength?: number) {
 }
 
 /**
+ * FIPS 186 B.4.1-compliant "constant-time" private key generation utility.
  * Can take (n+8) or more bytes of uniform input e.g. from CSPRNG or KDF
  * and convert them into private scalar, with the modulo bias being neglible.
- * As per FIPS 186 B.4.1.
+ * Needs at least 40 bytes of input for 32-byte private key.
  * https://research.kudelskisecurity.com/2020/07/28/the-definitive-guide-to-modulo-bias-and-how-to-avoid-it/
- * @param hash hash output from sha512, or a similar function
+ * @param hash hash output from SHA3 or a similar function
  * @returns valid private scalar
  */
-export function hashToPrivateScalar(hash: Hex, CURVE_ORDER: bigint, isLE = false): bigint {
+export function hashToPrivateScalar(hash: Hex, groupOrder: bigint, isLE = false): bigint {
   hash = ensureBytes(hash);
-  const orderLen = nLength(CURVE_ORDER).nByteLength;
-  const minLen = orderLen + 8;
-  if (orderLen < 16 || hash.length < minLen || hash.length > 1024)
-    throw new Error('Expected valid bytes of private key as per FIPS 186');
+  const hashLen = hash.length;
+  const minLen = nLength(groupOrder).nByteLength + 8;
+  if (minLen < 24 || hashLen < minLen || hashLen > 1024)
+    throw new Error(`hashToPrivateScalar: expected ${minLen}-1024 bytes of input, got ${hashLen}`);
   const num = isLE ? bytesToNumberLE(hash) : bytesToNumberBE(hash);
-  return mod.mod(num, CURVE_ORDER - _1n) + _1n;
+  return mod.mod(num, groupOrder - _1n) + _1n;
 }
 
 export function equalBytes(b1: Uint8Array, b2: Uint8Array) {

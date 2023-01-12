@@ -601,15 +601,19 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
       // Zero is valid point too!
       if (this.equals(Point.ZERO)) {
         if (CURVE.allowInfinityPoint) return;
-        throw new Error('Point is infinity');
+        throw new Error('Point at infinity');
       }
       // Some 3rd-party test vectors require different wording between here & `fromCompressedHex`
       const msg = 'Point is not on elliptic curve';
       const { x, y } = this;
+      // Check if x, y are valid field elements
       if (!Fp.isValid(x) || !Fp.isValid(y)) throw new Error(msg);
       const left = Fp.square(y);
       const right = weierstrassEquation(x);
-      if (!Fp.equals(left, right)) throw new Error(msg);
+      // We subtract instead of comparing: it's safer
+      // (y²) - (x³ + ax + b) == 0
+      if (!Fp.isZero(Fp.sub(left, right))) throw new Error(msg);
+      // if (!Fp.equals(left, right))
       // TODO: flag to disable this?
       if (!this.isTorsionFree()) throw new Error('Point must be of prime-order subgroup');
     }

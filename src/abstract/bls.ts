@@ -108,11 +108,7 @@ export function bls<Fp2, Fp6, Fp12>(
   CURVE: CurveType<Fp, Fp2, Fp6, Fp12>
 ): CurveFn<Fp, Fp2, Fp6, Fp12> {
   // Fields looks pretty specific for curve, so for now we need to pass them with options
-  const Fp = CURVE.Fp;
-  const Fr = CURVE.Fr;
-  const Fp2 = CURVE.Fp2;
-  const Fp6 = CURVE.Fp6;
-  const Fp12 = CURVE.Fp12;
+  const { Fp, Fr, Fp2, Fp6, Fp12 } = CURVE;
   const BLS_X_LEN = ut.bitLen(CURVE.x);
   const groupLen = 32; // TODO: calculate; hardcoded for now
 
@@ -161,13 +157,14 @@ export function bls<Fp2, Fp6, Fp12>(
   }
 
   function millerLoop(ell: [Fp2, Fp2, Fp2][], g1: [Fp, Fp]): Fp12 {
+    const { x } = CURVE;
     const Px = g1[0];
     const Py = g1[1];
     let f12 = Fp12.ONE;
     for (let j = 0, i = BLS_X_LEN - 2; i >= 0; i--, j++) {
       const E = ell[j];
       f12 = Fp12.multiplyBy014(f12, E[0], Fp2.mul(E[1], Px), Fp2.mul(E[2], Py));
-      if (ut.bitGet(CURVE.x, i)) {
+      if (ut.bitGet(x, i)) {
         j += 1;
         const F = ell[j];
         f12 = Fp12.multiplyBy014(f12, F[0], Fp2.mul(F[1], Px), Fp2.mul(F[2], Py));
@@ -177,63 +174,31 @@ export function bls<Fp2, Fp6, Fp12>(
     return Fp12.conjugate(f12);
   }
 
-  const htfDefaults = { ...CURVE.htfDefaults };
-
-  // TODO: not needed?
-  function isWithinCurveOrder(num: bigint): boolean {
-    return 0 < num && num < CURVE.r;
-  }
-
   const utils = {
     hexToBytes: ut.hexToBytes,
     bytesToHex: ut.bytesToHex,
     mod: mod.mod,
-    stringToBytes,
+    stringToBytes: stringToBytes,
     // TODO: do we need to export it here?
-    hashToField: (msg: Uint8Array, count: number, options: Partial<typeof htfDefaults> = {}) =>
-      hashToField(msg, count, { ...CURVE.htfDefaults, ...options }),
+    hashToField: (
+      msg: Uint8Array,
+      count: number,
+      options: Partial<typeof CURVE.htfDefaults> = {}
+    ) => hashToField(msg, count, { ...CURVE.htfDefaults, ...options }),
     expandMessageXMD: (msg: Uint8Array, DST: Uint8Array, lenInBytes: number, H = CURVE.hash) =>
       expandMessageXMD(msg, DST, lenInBytes, H),
-
-    /**
-     * Creates FIPS 186 B.4.1 compliant private keys without modulo bias.
-     */
-    hashToPrivateKey: (hash: Hex): Uint8Array => {
-      hash = ut.ensureBytes(hash);
-      if (hash.length < 40 || hash.length > 1024)
-        throw new Error('Expected 40-1024 bytes of private key as per FIPS 186');
-      //     hashToPrivateScalar(hash, CURVE.r)
-      // NOTE: doesn't add +/-1
-      const num = mod.mod(ut.bytesToNumberBE(hash), CURVE.r);
-      // This should never happen
-      if (num === 0n || num === 1n) throw new Error('Invalid private key');
-      return ut.numberToBytesBE(num, groupLen);
-    },
-
+    hashToPrivateKey: (hash: Hex): Uint8Array => Fr.toBytes(ut.hashToPrivateScalar(hash, CURVE.r)),
     randomBytes: (bytesLength: number = groupLen): Uint8Array => CURVE.randomBytes(bytesLength),
     randomPrivateKey: (): Uint8Array => utils.hashToPrivateKey(utils.randomBytes(groupLen + 8)),
-    getDSTLabel: () => htfDefaults.DST,
+    getDSTLabel: () => CURVE.htfDefaults.DST,
     setDSTLabel(newLabel: string) {
       // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-3.1
       if (typeof newLabel !== 'string' || newLabel.length > 2048 || newLabel.length === 0) {
         throw new TypeError('Invalid DST');
       }
-      htfDefaults.DST = newLabel;
+      CURVE.htfDefaults.DST = newLabel;
     },
   };
-
-  // TODO: reuse CURVE.G1.utils.normalizePrivateKey() ?
-  function normalizePrivKey(key: PrivKey): bigint {
-    let int: bigint;
-    if (key instanceof Uint8Array && key.length === groupLen) int = ut.bytesToNumberBE(key);
-    else if (typeof key === 'string' && key.length === 2 * groupLen) int = BigInt(`0x${key}`);
-    else if (ut.isPositiveInt(key)) int = BigInt(key);
-    else if (typeof key === 'bigint' && key > 0n) int = key;
-    else throw new TypeError('Expected valid private key');
-    int = mod.mod(int, CURVE.r);
-    if (!isWithinCurveOrder(int)) throw new Error('Private key must be 0 < key < CURVE.r');
-    return int;
-  }
 
   // Point on G1 curve: (x, y)
   const G1 = weierstrassPoints({
@@ -306,7 +271,7 @@ export function bls<Fp2, Fp6, Fp12>(
   function sign(message: G2Hex, privateKey: PrivKey): Uint8Array | G2 {
     const msgPoint = normP2Hash(message);
     msgPoint.assertValidity();
-    const sigPoint = msgPoint.multiply(normalizePrivKey(privateKey));
+    const sigPoint = msgPoint.multiply(G1.normalizePrivateKey(privateKey));
     if (message instanceof G2.Point) return sigPoint;
     return Signature.encode(sigPoint);
   }

@@ -8,6 +8,7 @@ import { Fp } from './abstract/modular.js';
 /**
  * jubjub Twisted Edwards curve.
  * https://neuromancer.sk/std/other/JubJub
+ * jubjub does not use EdDSA, so `hash`/sha512 params are passed because interface expects them.
  */
 
 export const jubjub = twistedEdwards({
@@ -15,9 +16,9 @@ export const jubjub = twistedEdwards({
   a: BigInt('0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000000'),
   d: BigInt('0x2a9318e74bfa2b48f5fd9207e6bd7fd4292d7f6d37579d2601065fd6d6343eb1'),
   // Finite field 𝔽p over which we'll do calculations
+  // Same value as bls12-381 Fr (not Fp)
   Fp: Fp(BigInt('0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001')),
   // Subgroup order: how many points curve has
-  // 2n ** 252n + 27742317777372353535851937790883648493n;
   n: BigInt('0xe7db4ea6533afa906673b0101343b00a6682093ccc81082d0970e5ed6f72cb7'),
   // Cofactor
   h: BigInt(8),
