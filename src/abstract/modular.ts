@@ -69,7 +69,8 @@ export function invert(number: bigint, modulo: bigint): bigint {
 }
 
 // Tonelli-Shanks algorithm
-// https://eprint.iacr.org/2012/685.pdf (page 12)
+// Paper 1: https://eprint.iacr.org/2012/685.pdf (page 12)
+// Paper 2: Square Roots from 1; 24, 51, 10 to Dan Shanks
 export function tonelliShanks(P: bigint) {
   // Legendre constant: used to calculate Legendre symbol (a | p),
   // which denotes the value of a^((p-1)/2) (mod p).
@@ -101,29 +102,26 @@ export function tonelliShanks(P: bigint) {
   return function tonelliSlow<T>(Fp: Field<T>, n: T): T {
     // Step 0: Check that n is indeed a square: (n | p) must be ≡ 1
     if (Fp.pow(n, legendreC) !== Fp.ONE) throw new Error('Cannot find square root');
-    let s = S;
+    let r = S;
+    let g = Fp.pow(Fp.create(Z as any as T), Q); // will update both x and b
+    let x = Fp.pow(n, Q1div2); // first guess at the square root
+    let b = Fp.pow(n, Q); // first guess at the fudge factor
 
-    let c = pow(Z, Q, P);
-    let r = Fp.pow(n, Q1div2);
-    let t = Fp.pow(n, Q);
-
-    let t2 = Fp.ZERO;
-    while (!Fp.equals(Fp.sub(t, Fp.ONE), Fp.ZERO)) {
-      t2 = Fp.square(t);
-      let i;
-      for (i = 1; i < s; i++) {
-        // stop if t2-1 == 0
-        if (Fp.equals(Fp.sub(t2, Fp.ONE), Fp.ZERO)) break;
-        // t2 *= t2
-        t2 = Fp.square(t2);
+    let t2: typeof Fp.ZERO;
+    while (!Fp.equals(Fp.sub(b, Fp.ONE), Fp.ZERO)) {
+      t2 = Fp.square(b);
+      let m;
+      for (m = 1; m < r; m++) {
+        if (Fp.equals(t2, Fp.ONE)) break;
+        t2 = Fp.square(t2); // t2 *= t2
       }
-      let b = pow(c, BigInt(1 << (s - i - 1)), P);
-      r = Fp.mul(r, b);
-      c = mod(b * b, P);
-      t = Fp.mul(t, c);
-      s = i;
+      let ge = Fp.pow(g, BigInt(1 << (r - m - 1))); // ge = 2^(r-m-1)
+      g = Fp.square(ge); // g = ge * ge
+      x = Fp.mul(x, ge); // x *= ge
+      b = Fp.mul(b, g); // b *= g
+      r = m;
     }
-    return r;
+    return x;
   };
 }
 
