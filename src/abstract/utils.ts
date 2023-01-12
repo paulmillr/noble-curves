@@ -40,19 +40,24 @@ export type BasicCurve<T> = {
   allowInfinityPoint?: boolean;
 };
 
+// Bans floats and integers above 2^53-1
+export function isPositiveInt(num: any): num is number {
+  return typeof num === 'number' && Number.isSafeInteger(num) && num > 0;
+}
+
 export function validateOpts<FP, T>(curve: BasicCurve<FP> & T) {
   mod.validateField(curve.Fp);
   for (const i of ['n', 'h'] as const) {
-    if (typeof curve[i] !== 'bigint')
-      throw new Error(`Invalid curve param ${i}=${curve[i]} (${typeof curve[i]})`);
+    const val = curve[i];
+    if (typeof val !== 'bigint') throw new Error(`Invalid curve param ${i}=${val} (${typeof val})`);
   }
   if (!curve.Fp.isValid(curve.Gx)) throw new Error('Invalid generator X coordinate Fp element');
   if (!curve.Fp.isValid(curve.Gy)) throw new Error('Invalid generator Y coordinate Fp element');
 
   for (const i of ['nBitLength', 'nByteLength'] as const) {
-    if (curve[i] === undefined) continue; // Optional
-    if (!Number.isSafeInteger(curve[i]))
-      throw new Error(`Invalid curve param ${i}=${curve[i]} (${typeof curve[i]})`);
+    const val = curve[i];
+    if (val === undefined) continue; // Optional
+    if (!isPositiveInt(val)) throw new Error(`Invalid curve param ${i}=${val} (${typeof val})`);
   }
   // Set defaults
   return Object.freeze({ ...nLength(curve.n, curve.nBitLength), ...curve } as const);
