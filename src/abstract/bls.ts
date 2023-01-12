@@ -1,13 +1,26 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-// Barreto-Lynn-Scott Curves. A family of pairing friendly curves, with embedding degree = 12 or 24
-// NOTE: only 12 supported for now
-// Constructed from pair of weierstrass curves, based pairing logic
+/**
+ * BLS (Barreto-Lynn-Scott) family of pairing-friendly curves.
+ * Implements BLS (Boneh-Lynn-Shacham) signatures.
+ * Consists of two curves: G1 and G2:
+ * - G1 is a subgroup of (x, y) E(Fq) over y² = x³ + 4.
+ * - G2 is a subgroup of ((x₁, x₂+i), (y₁, y₂+i)) E(Fq²) over y² = x³ + 4(1 + i) where i is √-1
+ * - Gt, created by bilinear (ate) pairing e(G1, G2), consists of p-th roots of unity in
+ *   Fq^k where k is embedding degree. Only degree 12 is currently supported, 24 is not.
+ * Pairing is used to aggregate and verify signatures.
+ * We are using Fp for private keys (shorter) and Fp₂ for signatures (longer).
+ * Some projects may prefer to swap this relation, it is not supported for now.
+ */
 import * as mod from './modular.js';
-import { ensureBytes, numberToBytesBE, bytesToNumberBE, bitLen, bitGet } from './utils.js';
-import * as utils from './utils.js';
-// Types
-import { hexToBytes, bytesToHex, Hex, PrivKey } from './utils.js';
-import { htfOpts, stringToBytes, hash_to_field, expand_message_xmd } from './hash-to-curve.js';
+import * as ut from './utils.js';
+// Types require separate import
+import { Hex, PrivKey } from './utils.js';
+import {
+  htfOpts,
+  stringToBytes,
+  hash_to_field as hashToField,
+  expand_message_xmd as expandMessageXMD,
+} from './hash-to-curve.js';
 import { CurvePointsType, PointType, CurvePointsRes, weierstrassPoints } from './weierstrass.js';
 
 type Fp = bigint; // Can be different field?
@@ -39,7 +52,7 @@ export type CurveType<Fp, Fp2, Fp6, Fp12> = {
     finalExponentiate(num: Fp12): Fp12;
   };
   htfDefaults: htfOpts;
-  hash: utils.CHash; // Because we need outputLen for DRBG
+  hash: ut.CHash; // Because we need outputLen for DRBG
   randomBytes: (bytesLength?: number) => Uint8Array;
 };
 
@@ -80,11 +93,11 @@ export type CurveFn<Fp, Fp2, Fp6, Fp12> = {
     publicKeys: (Hex | PointType<Fp>)[]
   ) => boolean;
   utils: {
-    bytesToHex: typeof utils.bytesToHex;
-    hexToBytes: typeof utils.hexToBytes;
+    bytesToHex: typeof ut.bytesToHex;
+    hexToBytes: typeof ut.hexToBytes;
     stringToBytes: typeof stringToBytes;
-    hashToField: typeof hash_to_field;
-    expandMessageXMD: typeof expand_message_xmd;
+    hashToField: typeof hashToField;
+    expandMessageXMD: typeof expandMessageXMD;
     mod: typeof mod.mod;
     getDSTLabel: () => string;
     setDSTLabel(newLabel: string): void;
@@ -100,7 +113,8 @@ export function bls<Fp2, Fp6, Fp12>(
   const Fp2 = CURVE.Fp2;
   const Fp6 = CURVE.Fp6;
   const Fp12 = CURVE.Fp12;
-  const BLS_X_LEN = bitLen(CURVE.x);
+  const BLS_X_LEN = ut.bitLen(CURVE.x);
+  const groupLen = 32; // TODO: calculate; hardcoded for now
 
   // Pre-compute coefficients for sparse multiplication
   // Point addition and point double calculations is reused for coefficients
@@ -125,7 +139,7 @@ export function bls<Fp2, Fp6, Fp12>(
       Rx = Fp2.div(Fp2.mul(Fp2.mul(Fp2.sub(t0, t3), Rx), Ry), 2n); // ((T0 - T3) * Rx * Ry) / 2
       Ry = Fp2.sub(Fp2.square(Fp2.div(Fp2.add(t0, t3), 2n)), Fp2.mul(Fp2.square(t2), 3n)); // ((T0 + T3) / 2)² - 3 * T2²
       Rz = Fp2.mul(t0, t4); // T0 * T4
-      if (bitGet(CURVE.x, i)) {
+      if (ut.bitGet(CURVE.x, i)) {
         // Addition
         let t0 = Fp2.sub(Ry, Fp2.mul(Qy, Rz)); // Ry - Qy * Rz
         let t1 = Fp2.sub(Rx, Fp2.mul(Qx, Rz)); // Rx - Qx * Rz
@@ -153,7 +167,7 @@ export function bls<Fp2, Fp6, Fp12>(
     for (let j = 0, i = BLS_X_LEN - 2; i >= 0; i--, j++) {
       const E = ell[j];
       f12 = Fp12.multiplyBy014(f12, E[0], Fp2.mul(E[1], Px), Fp2.mul(E[2], Py));
-      if (bitGet(CURVE.x, i)) {
+      if (ut.bitGet(CURVE.x, i)) {
         j += 1;
         const F = ell[j];
         f12 = Fp12.multiplyBy014(f12, F[0], Fp2.mul(F[1], Px), Fp2.mul(F[2], Py));
@@ -163,59 +177,41 @@ export function bls<Fp2, Fp6, Fp12>(
     return Fp12.conjugate(f12);
   }
 
-  // bls12-381 is a construction of two curves:
-  // 1. Fp: (x, y)
-  // 2. Fp₂: ((x₁, x₂+i), (y₁, y₂+i)) - (complex numbers)
-  //
-  // Bilinear Pairing (ate pairing) is used to combine both elements into a paired one:
-  //   Fp₁₂ = e(Fp, Fp2)
-  //   where Fp₁₂ = 12-degree polynomial
-  // Pairing is used to verify signatures.
-  //
-  // We are using Fp for private keys (shorter) and Fp2 for signatures (longer).
-  // Some projects may prefer to swap this relation, it is not supported for now.
-
   const htfDefaults = { ...CURVE.htfDefaults };
 
+  // TODO: not needed?
   function isWithinCurveOrder(num: bigint): boolean {
     return 0 < num && num < CURVE.r;
   }
 
   const utils = {
-    hexToBytes: hexToBytes,
-    bytesToHex: bytesToHex,
+    hexToBytes: ut.hexToBytes,
+    bytesToHex: ut.bytesToHex,
     mod: mod.mod,
     stringToBytes,
     // TODO: do we need to export it here?
     hashToField: (msg: Uint8Array, count: number, options: Partial<typeof htfDefaults> = {}) =>
-      hash_to_field(msg, count, { ...CURVE.htfDefaults, ...options }),
+      hashToField(msg, count, { ...CURVE.htfDefaults, ...options }),
     expandMessageXMD: (msg: Uint8Array, DST: Uint8Array, lenInBytes: number, H = CURVE.hash) =>
-      expand_message_xmd(msg, DST, lenInBytes, H),
+      expandMessageXMD(msg, DST, lenInBytes, H),
 
     /**
-     * Can take 40 or more bytes of uniform input e.g. from CSPRNG or KDF
-     * and convert them into private key, with the modulo bias being negligible.
-     * As per FIPS 186 B.1.1.
-     * https://research.kudelskisecurity.com/2020/07/28/the-definitive-guide-to-modulo-bias-and-how-to-avoid-it/
-     * @param hash hash output from sha512, or a similar function
-     * @returns valid private key
+     * Creates FIPS 186 B.4.1 compliant private keys without modulo bias.
      */
     hashToPrivateKey: (hash: Hex): Uint8Array => {
-      hash = ensureBytes(hash);
+      hash = ut.ensureBytes(hash);
       if (hash.length < 40 || hash.length > 1024)
         throw new Error('Expected 40-1024 bytes of private key as per FIPS 186');
       //     hashToPrivateScalar(hash, CURVE.r)
       // NOTE: doesn't add +/-1
-      const num = mod.mod(bytesToNumberBE(hash), CURVE.r);
+      const num = mod.mod(ut.bytesToNumberBE(hash), CURVE.r);
       // This should never happen
       if (num === 0n || num === 1n) throw new Error('Invalid private key');
-      return numberToBytesBE(num, 32);
+      return ut.numberToBytesBE(num, groupLen);
     },
 
-    randomBytes: (bytesLength: number = 32): Uint8Array => CURVE.randomBytes(bytesLength),
-    // NIST SP 800-56A rev 3, section 5.6.1.2.2
-    // https://research.kudelskisecurity.com/2020/07/28/the-definitive-guide-to-modulo-bias-and-how-to-avoid-it/
-    randomPrivateKey: (): Uint8Array => utils.hashToPrivateKey(utils.randomBytes(40)),
+    randomBytes: (bytesLength: number = groupLen): Uint8Array => CURVE.randomBytes(bytesLength),
+    randomPrivateKey: (): Uint8Array => utils.hashToPrivateKey(utils.randomBytes(groupLen + 8)),
     getDSTLabel: () => htfDefaults.DST,
     setDSTLabel(newLabel: string) {
       // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-3.1
@@ -226,11 +222,12 @@ export function bls<Fp2, Fp6, Fp12>(
     },
   };
 
+  // TODO: reuse CURVE.G1.utils.normalizePrivateKey() ?
   function normalizePrivKey(key: PrivKey): bigint {
     let int: bigint;
-    if (key instanceof Uint8Array && key.length === 32) int = bytesToNumberBE(key);
-    else if (typeof key === 'string' && key.length === 64) int = BigInt(`0x${key}`);
-    else if (typeof key === 'number' && key > 0 && Number.isSafeInteger(key)) int = BigInt(key);
+    if (key instanceof Uint8Array && key.length === groupLen) int = ut.bytesToNumberBE(key);
+    else if (typeof key === 'string' && key.length === 2 * groupLen) int = BigInt(`0x${key}`);
+    else if (ut.isPositiveInt(key)) int = BigInt(key);
     else if (typeof key === 'bigint' && key > 0n) int = key;
     else throw new TypeError('Expected valid private key');
     int = mod.mod(int, CURVE.r);

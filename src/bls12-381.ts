@@ -1,4 +1,16 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
+
+// The pairing-friendly Barreto-Lynn-Scott elliptic curve construction allows to:
+// - Construct zk-SNARKs at the 128-bit security
+// - Use threshold signatures, which allows a user to sign lots of messages with one signature and verify them swiftly in a batch, using Boneh-Lynn-Shacham signature scheme.
+// Differences from @noble/bls12-381 1.4:
+// - PointG1 -> G1.Point
+// - PointG2 -> G2.Point
+// - PointG2.fromSignature -> Signature.decode
+// - PointG2.toSignature ->  Signature.encode
+// - Fixed Fp2 ORDER
+// - Points now have only two coordinates
+
 import { sha256 } from '@noble/hashes/sha256';
 import { randomBytes } from '@noble/hashes/utils';
 import { bls, CurveFn } from './abstract/bls.js';
@@ -22,14 +34,6 @@ import {
   mapToCurveSimpleSWU,
 } from './abstract/weierstrass.js';
 import { isogenyMap } from './abstract/hash-to-curve.js';
-
-// Differences from bls12-381:
-// - PointG1 -> G1.Point
-// - PointG2 -> G2.Point
-// - PointG2.fromSignature -> Signature.decode
-// - PointG2.toSignature ->  Signature.encode
-// - Fixed Fp2 ORDER
-// Points now have only two coordinates
 
 // CURVE FIELDS
 // Finite field over p.
