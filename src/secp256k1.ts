@@ -15,10 +15,8 @@ import { randomBytes } from '@noble/hashes/utils';
 import { isogenyMap } from './abstract/hash-to-curve.js';
 
 /**
- * secp256k1 belongs to Koblitz curves: it has
- * efficiently computable Frobenius endomorphism.
- * Endomorphism improves efficiency:
- * Uses 2x less RAM, speeds up precomputation by 2x and ECDH / sign key recovery by 20%.
+ * secp256k1 belongs to Koblitz curves: it has efficiently computable endomorphism.
+ * Endomorphism uses 2x less RAM, speeds up precomputation by 2x and ECDH / key recovery by 20%.
  * Should always be used for Projective's double-and-add multiplication.
  * For affines cached multiplication, it trades off 1/2 init time & 1/3 ram for 20% perf hit.
  * https://gist.github.com/paulmillr/eb670806793e84df628a7c434a873066
