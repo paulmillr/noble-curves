@@ -1,5 +1,5 @@
 import { deepStrictEqual } from 'assert';
-import { should } from 'micro-should';
+import { describe, should } from 'micro-should';
 import { bytesToHex } from '@noble/hashes/utils';
 // Generic tests for all curves in package
 import { sha256 } from '@noble/hashes/sha256';
@@ -51,43 +51,51 @@ import { default as ed448_ro } from './hash-to-curve/edwards448_XOF:SHAKE256_ELL
 import { default as ed448_nu } from './hash-to-curve/edwards448_XOF:SHAKE256_ELL2_NU_.json' assert { type: 'json' };
 
 function testExpandXMD(hash, vectors) {
-  for (let i = 0; i < vectors.tests.length; i++) {
-    const t = vectors.tests[i];
-    should(`expand_message_xmd/${vectors.hash}/${vectors.DST.length}/${i}`, () => {
-      const p = expand_message_xmd(
-        stringToBytes(t.msg),
-        stringToBytes(vectors.DST),
-        t.len_in_bytes,
-        hash
-      );
-      deepStrictEqual(bytesToHex(p), t.uniform_bytes);
-    });
-  }
+  describe(`${vectors.hash}/${vectors.DST.length}`, () => {
+    for (let i = 0; i < vectors.tests.length; i++) {
+      const t = vectors.tests[i];
+      should(`${vectors.hash}/${vectors.DST.length}/${i}`, () => {
+        const p = expand_message_xmd(
+          stringToBytes(t.msg),
+          stringToBytes(vectors.DST),
+          t.len_in_bytes,
+          hash
+        );
+        deepStrictEqual(bytesToHex(p), t.uniform_bytes);
+      });
+    }
+  });
 }
 
-testExpandXMD(sha256, xmd_sha256_38);
-testExpandXMD(sha256, xmd_sha256_256);
-testExpandXMD(sha512, xmd_sha512_38);
+describe('expand_message_xmd', () => {
+  testExpandXMD(sha256, xmd_sha256_38);
+  testExpandXMD(sha256, xmd_sha256_256);
+  testExpandXMD(sha512, xmd_sha512_38);
+});
 
 function testExpandXOF(hash, vectors) {
-  for (let i = 0; i < vectors.tests.length; i++) {
-    const t = vectors.tests[i];
-    should(`expand_message_xof/${vectors.hash}/${vectors.DST.length}/${i}`, () => {
-      const p = expand_message_xof(
-        stringToBytes(t.msg),
-        stringToBytes(vectors.DST),
-        +t.len_in_bytes,
-        vectors.k,
-        hash
-      );
-      deepStrictEqual(bytesToHex(p), t.uniform_bytes);
-    });
-  }
+  describe(`${vectors.hash}/${vectors.DST.length}`, () => {
+    for (let i = 0; i < vectors.tests.length; i++) {
+      const t = vectors.tests[i];
+      should(`${i}`, () => {
+        const p = expand_message_xof(
+          stringToBytes(t.msg),
+          stringToBytes(vectors.DST),
+          +t.len_in_bytes,
+          vectors.k,
+          hash
+        );
+        deepStrictEqual(bytesToHex(p), t.uniform_bytes);
+      });
+    }
+  });
 }
 
-testExpandXOF(shake128, xof_shake128_36);
-testExpandXOF(shake128, xof_shake128_256);
-testExpandXOF(shake256, xof_shake256_36);
+describe('expand_message_xof', () => {
+  testExpandXOF(shake128, xof_shake128_36);
+  testExpandXOF(shake128, xof_shake128_256);
+  testExpandXOF(shake256, xof_shake256_36);
+});
 
 function stringToFp(s) {
   // bls-G2 support
@@ -99,26 +107,30 @@ function stringToFp(s) {
 }
 
 function testCurve(curve, ro, nu) {
-  for (let i = 0; i < ro.vectors.length; i++) {
-    const t = ro.vectors[i];
-    should(`${ro.curve}/${ro.ciphersuite}(${i})`, () => {
-      const p = curve.Point.hashToCurve(stringToBytes(t.msg), {
-        DST: ro.dst,
+  describe(`${ro.curve}/${ro.ciphersuite}`, () => {
+    for (let i = 0; i < ro.vectors.length; i++) {
+      const t = ro.vectors[i];
+      should(`(${i})`, () => {
+        const p = curve.Point.hashToCurve(stringToBytes(t.msg), {
+          DST: ro.dst,
+        });
+        deepStrictEqual(p.x, stringToFp(t.P.x), 'Px');
+        deepStrictEqual(p.y, stringToFp(t.P.y), 'Py');
       });
-      deepStrictEqual(p.x, stringToFp(t.P.x), 'Px');
-      deepStrictEqual(p.y, stringToFp(t.P.y), 'Py');
-    });
-  }
-  for (let i = 0; i < nu.vectors.length; i++) {
-    const t = nu.vectors[i];
-    should(`${nu.curve}/${nu.ciphersuite}(${i})`, () => {
-      const p = curve.Point.encodeToCurve(stringToBytes(t.msg), {
-        DST: nu.dst,
+    }
+  });
+  describe(`${nu.curve}/${nu.ciphersuite}`, () => {
+    for (let i = 0; i < nu.vectors.length; i++) {
+      const t = nu.vectors[i];
+      should(`(${i})`, () => {
+        const p = curve.Point.encodeToCurve(stringToBytes(t.msg), {
+          DST: nu.dst,
+        });
+        deepStrictEqual(p.x, stringToFp(t.P.x), 'Px');
+        deepStrictEqual(p.y, stringToFp(t.P.y), 'Py');
       });
-      deepStrictEqual(p.x, stringToFp(t.P.x), 'Px');
-      deepStrictEqual(p.y, stringToFp(t.P.y), 'Py');
-    });
-  }
+    }
+  });
 }
 
 testCurve(secp256r1, p256_ro, p256_nu);

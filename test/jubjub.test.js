@@ -1,5 +1,5 @@
 import { jubjub, findGroupHash } from '../lib/esm/jubjub.js';
-import { should } from 'micro-should';
+import { describe, should } from 'micro-should';
 import { deepStrictEqual, throws } from 'assert';
 import { hexToBytes, bytesToHex } from '@noble/hashes/utils';
 
@@ -18,53 +18,55 @@ const G_PROOF = new jubjub.ExtendedPoint(
 
 const getXY = (p) => ({ x: p.x, y: p.y });
 
-should('toHex/fromHex', () => {
-  // More than field
-  throws(() =>
-    jubjub.Point.fromHex(
+describe('jubjub', () => {
+  should('toHex/fromHex', () => {
+    // More than field
+    throws(() =>
+      jubjub.Point.fromHex(
+        new Uint8Array([
+          255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+          255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+        ])
+      )
+    );
+    // Multiplicative generator (sqrt == null), not on curve.
+    throws(() =>
+      jubjub.Point.fromHex(
+        new Uint8Array([
+          7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+          0,
+        ])
+      )
+    );
+    const tmp = jubjub.Point.fromHex(
       new Uint8Array([
-        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-      ])
-    )
-  );
-  // Multiplicative generator (sqrt == null), not on curve.
-  throws(() =>
-    jubjub.Point.fromHex(
-      new Uint8Array([
-        7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0,
       ])
-    )
-  );
-  const tmp = jubjub.Point.fromHex(
-    new Uint8Array([
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-      0,
-    ])
-  );
-  deepStrictEqual(tmp.x, 0x8d51ccce760304d0ec030002760300000001000000000000n);
-  deepStrictEqual(tmp.y, 0n);
+    );
+    deepStrictEqual(tmp.x, 0x8d51ccce760304d0ec030002760300000001000000000000n);
+    deepStrictEqual(tmp.y, 0n);
 
-  const S = G_SPEND.toAffine().toRawBytes();
-  const S2 = G_SPEND.double().toAffine().toRawBytes();
-  const P = G_PROOF.toAffine().toRawBytes();
-  const P2 = G_PROOF.double().toAffine().toRawBytes();
-  const S_exp = jubjub.Point.fromHex(S);
-  const S2_exp = jubjub.Point.fromHex(S2);
-  const P_exp = jubjub.Point.fromHex(P);
-  const P2_exp = jubjub.Point.fromHex(P2);
-  deepStrictEqual(getXY(G_SPEND.toAffine()), getXY(S_exp));
-  deepStrictEqual(getXY(G_SPEND.double().toAffine()), getXY(S2_exp));
-  deepStrictEqual(getXY(G_PROOF.toAffine()), getXY(P_exp));
-  deepStrictEqual(getXY(G_PROOF.double().toAffine()), getXY(P2_exp));
-});
+    const S = G_SPEND.toAffine().toRawBytes();
+    const S2 = G_SPEND.double().toAffine().toRawBytes();
+    const P = G_PROOF.toAffine().toRawBytes();
+    const P2 = G_PROOF.double().toAffine().toRawBytes();
+    const S_exp = jubjub.Point.fromHex(S);
+    const S2_exp = jubjub.Point.fromHex(S2);
+    const P_exp = jubjub.Point.fromHex(P);
+    const P2_exp = jubjub.Point.fromHex(P2);
+    deepStrictEqual(getXY(G_SPEND.toAffine()), getXY(S_exp));
+    deepStrictEqual(getXY(G_SPEND.double().toAffine()), getXY(S2_exp));
+    deepStrictEqual(getXY(G_PROOF.toAffine()), getXY(P_exp));
+    deepStrictEqual(getXY(G_PROOF.double().toAffine()), getXY(P2_exp));
+  });
 
-should('Find generators', () => {
-  const spend = findGroupHash(new Uint8Array(), new Uint8Array([90, 99, 97, 115, 104, 95, 71, 95]));
-  const proof = findGroupHash(new Uint8Array(), new Uint8Array([90, 99, 97, 115, 104, 95, 72, 95]));
-  deepStrictEqual(getXY(spend.toAffine()), getXY(G_SPEND.toAffine()));
-  deepStrictEqual(getXY(proof.toAffine()), getXY(G_PROOF.toAffine()));
+  should('Find generators', () => {
+    const spend = findGroupHash(new Uint8Array(), new Uint8Array([90, 99, 97, 115, 104, 95, 71, 95]));
+    const proof = findGroupHash(new Uint8Array(), new Uint8Array([90, 99, 97, 115, 104, 95, 72, 95]));
+    deepStrictEqual(getXY(spend.toAffine()), getXY(G_SPEND.toAffine()));
+    deepStrictEqual(getXY(proof.toAffine()), getXY(G_PROOF.toAffine()));
+  });
 });
 
 // ESM is broken.

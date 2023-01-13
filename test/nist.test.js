@@ -1,5 +1,5 @@
 import { deepStrictEqual, throws } from 'assert';
-import { should } from 'micro-should';
+import { describe, should } from 'micro-should';
 import { secp192r1, P192 } from '../lib/esm/p192.js';
 import { secp224r1, P224 } from '../lib/esm/p224.js';
 import { secp256r1, P256 } from '../lib/esm/p256.js';
@@ -344,19 +344,21 @@ function runWycheproof(name, CURVE, group, index) {
 
 for (const name in WYCHEPROOF_ECDSA) {
   const { curve, hashes } = WYCHEPROOF_ECDSA[name];
-  for (const hName in hashes) {
-    const { hash, tests } = hashes[hName];
-    const CURVE = curve.create(hash);
-    should(`Wycheproof/WYCHEPROOF_ECDSA ${name}/${hName}`, () => {
-      for (let i = 0; i < tests.length; i++) {
-        const groups = tests[i].testGroups;
-        for (let j = 0; j < groups.length; j++) {
-          const group = groups[j];
-          runWycheproof(name, CURVE, group, `${i}/${j}`);
+  describe('Wycheproof/WYCHEPROOF_ECDSA', () => {
+    for (const hName in hashes) {
+      const { hash, tests } = hashes[hName];
+      const CURVE = curve.create(hash);
+      should(`${name}/${hName}`, () => {
+        for (let i = 0; i < tests.length; i++) {
+          const groups = tests[i].testGroups;
+          for (let j = 0; j < groups.length; j++) {
+            const group = groups[j];
+            runWycheproof(name, CURVE, group, `${i}/${j}`);
+          }
         }
-      }
-    });
-  }
+      });
+    }
+  });
 }
 
 const hexToBigint = (hex) => BigInt(`0x${hex}`);

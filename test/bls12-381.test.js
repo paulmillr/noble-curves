@@ -1,5 +1,5 @@
 import { bls12_381 } from '../lib/esm/bls12-381.js';
-import { should } from 'micro-should';
+import { describe, should } from 'micro-should';
 import { deepStrictEqual, notDeepStrictEqual, throws } from 'assert';
 import { sha512 } from '@noble/hashes/sha512';
 import * as fc from 'fast-check';
@@ -38,11 +38,11 @@ const B_384_40 = '40'.padEnd(384, '0'); // [0x40, 0, 0...]
 const getPubKey = (priv) => bls.getPublicKey(priv);
 
 // Fp
-{
+describe('bls12-381 Fp', () => {
   const Fp = bls.Fp;
   const FC_BIGINT = fc.bigInt(1n, Fp.ORDER - 1n);
 
-  should('bls12-381/Fp/multiply/sqrt', () => {
+  should('multiply/sqrt', () => {
     let sqr1 = Fp.sqrt(Fp.create(300855555557n));
     deepStrictEqual(
       sqr1 && sqr1.toString(),
@@ -50,16 +50,16 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
     );
     throws(() => Fp.sqrt(Fp.create(72057594037927816n)));
   });
-}
+});
 
 // Fp2
-{
+describe('bls12-381 Fp2', () => {
   const Fp = bls.Fp;
   const Fp2 = bls.Fp2;
   const FC_BIGINT = fc.bigInt(1n, Fp.ORDER - 1n);
   const FC_BIGINT_2 = fc.array(FC_BIGINT, { minLength: 2, maxLength: 2 });
 
-  should('bls12-381 Fp2/non-equality', () => {
+  should('non-equality', () => {
     fc.assert(
       fc.property(FC_BIGINT_2, FC_BIGINT_2, (num1, num2) => {
         const a = Fp2.fromBigTuple([num1[0], num1[1]]);
@@ -70,7 +70,7 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
     );
   });
 
-  should('bls12-381 Fp2/div/x/1=x', () => {
+  should('div/x/1=x', () => {
     fc.assert(
       fc.property(FC_BIGINT_2, (num) => {
         const a = Fp2.fromBigTuple([num[0], num[1]]);
@@ -81,7 +81,7 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
     );
   });
 
-  should('bls12-381 Fp2/frobenius', () => {
+  should('frobenius', () => {
     // expect(Fp2.FROBENIUS_COEFFICIENTS[0].equals(Fp.ONE)).toBe(true);
     // expect(
     //   Fp2.FROBENIUS_COEFFICIENTS[1].equals(
@@ -139,89 +139,88 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
       true
     );
   });
-}
+});
 
 // Point
-{
+describe('bls12-381 Point', () => {
   const Fp = bls.Fp;
   const FC_BIGINT = fc.bigInt(1n, Fp.ORDER - 1n);
   const PointG1 = bls.G1.Point;
   const PointG2 = bls.G2.Point;
 
-  should('bls12-381 Point/Point with Fp coordinates/Point equality', () => {
-    fc.assert(
-      fc.property(
-        fc.array(FC_BIGINT, { minLength: 3, maxLength: 3 }),
-        fc.array(FC_BIGINT, { minLength: 3, maxLength: 3 }),
-        ([x1, y1, z1], [x2, y2, z2]) => {
-          const p1 = new PointG1(Fp.create(x1), Fp.create(y1), Fp.create(z1));
-          const p2 = new PointG1(Fp.create(x2), Fp.create(y2), Fp.create(z2));
-          deepStrictEqual(p1.equals(p1), true);
-          deepStrictEqual(p2.equals(p2), true);
-          deepStrictEqual(p1.equals(p2), false);
-          deepStrictEqual(p2.equals(p1), false);
-        }
-      )
-    );
-  });
-  should('bls12-381 Point/Point with Fp coordinates/should be placed on curve vector 1', () => {
-    const a = new PointG1(Fp.create(0n), Fp.create(0n));
-    a.assertValidity();
-  });
-  should('bls12-381 Point/Point with Fp coordinates/should not be placed on curve vector 1', () => {
-    const a = new PointG1(Fp.create(0n), Fp.create(1n));
-    throws(() => a.assertValidity());
-  });
+  describe('with Fp coordinates', () => {
+    should('Point equality', () => {
+      fc.assert(
+        fc.property(
+          fc.array(FC_BIGINT, { minLength: 3, maxLength: 3 }),
+          fc.array(FC_BIGINT, { minLength: 3, maxLength: 3 }),
+          ([x1, y1, z1], [x2, y2, z2]) => {
+            const p1 = new PointG1(Fp.create(x1), Fp.create(y1), Fp.create(z1));
+            const p2 = new PointG1(Fp.create(x2), Fp.create(y2), Fp.create(z2));
+            deepStrictEqual(p1.equals(p1), true);
+            deepStrictEqual(p2.equals(p2), true);
+            deepStrictEqual(p1.equals(p2), false);
+            deepStrictEqual(p2.equals(p1), false);
+          }
+        )
+      );
+    });
+    should('be placed on curve vector 1', () => {
+      const a = new PointG1(Fp.create(0n), Fp.create(0n));
+      a.assertValidity();
+    });
+    should('not be placed on curve vector 1', () => {
+      const a = new PointG1(Fp.create(0n), Fp.create(1n));
+      throws(() => a.assertValidity());
+    });
 
-  should('bls12-381 Point/Point with Fp coordinates/should be placed on curve vector 2', () => {
-    const a = new PointG1(
-      Fp.create(
-        0x17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bbn
-      ),
-      Fp.create(
-        0x08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1n
-      )
-    );
-    a.assertValidity();
-  });
-  should('bls12-381 Point/Point with Fp coordinates/should be placed on curve vector 3', () => {
-    const a = new PointG1(
-      Fp.create(
-        3971675556538908004130084773503021351583407620890695272226385332452194486153316625183061567093226342405194446632851n
-      ),
-      Fp.create(
-        1120750640227410374130508113691552487207139112596221955734902008063040284119210871734388578113045163251615428544022n
-      )
-    );
+    should('be placed on curve vector 2', () => {
+      const a = new PointG1(
+        Fp.create(
+          0x17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bbn
+        ),
+        Fp.create(
+          0x08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1n
+        )
+      );
+      a.assertValidity();
+    });
+    should('be placed on curve vector 3', () => {
+      const a = new PointG1(
+        Fp.create(
+          3971675556538908004130084773503021351583407620890695272226385332452194486153316625183061567093226342405194446632851n
+        ),
+        Fp.create(
+          1120750640227410374130508113691552487207139112596221955734902008063040284119210871734388578113045163251615428544022n
+        )
+      );
 
-    a.assertValidity();
-  });
-  should('bls12-381 Point/Point with Fp coordinates/should not be placed on curve vector 3', () => {
-    const a = new PointG1(
-      Fp.create(
-        622186380008502900120948444810967255157373993223369845903602988014033704418470621816206856882891545628885272576827n
-      ),
-      Fp.create(
-        1031339409279989180383920781105371089925712739630078633497696569127911841893478548110664124341123041182605140418539n
-      )
-    );
-    throws(() => a.assertValidity());
-  });
-  should('bls12-381 Point/Point with Fp coordinates/should not be placed on curve vector 2', () => {
-    const a = new PointG1(
-      Fp.create(
-        0x17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6ban
-      ),
-      Fp.create(
-        0x08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1n
-      )
-    );
-    throws(() => a.assertValidity());
-  });
+      a.assertValidity();
+    });
+    should('not be placed on curve vector 3', () => {
+      const a = new PointG1(
+        Fp.create(
+          622186380008502900120948444810967255157373993223369845903602988014033704418470621816206856882891545628885272576827n
+        ),
+        Fp.create(
+          1031339409279989180383920781105371089925712739630078633497696569127911841893478548110664124341123041182605140418539n
+        )
+      );
+      throws(() => a.assertValidity());
+    });
+    should('not be placed on curve vector 2', () => {
+      const a = new PointG1(
+        Fp.create(
+          0x17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6ban
+        ),
+        Fp.create(
+          0x08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1n
+        )
+      );
+      throws(() => a.assertValidity());
+    });
 
-  should(
-    'bls12-381 Point/Point with Fp coordinates/should be doubled and placed on curve vector 1',
-    () => {
+    should('be doubled and placed on curve vector 1', () => {
       const a = new PointG1(
         Fp.create(
           0x17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bbn
@@ -245,11 +244,8 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
       );
       deepStrictEqual(double, a.multiply(2n));
       deepStrictEqual(double, a.add(a));
-    }
-  );
-  should(
-    'bls12-381 Point/Point with Fp coordinates/should be pdoubled and placed on curve vector 2',
-    () => {
+    });
+    should('be pdoubled and placed on curve vector 2', () => {
       const a = new PointG1(
         Fp.create(
           3971675556538908004130084773503021351583407620890695272226385332452194486153316625183061567093226342405194446632851n
@@ -273,85 +269,89 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
       );
       deepStrictEqual(double, a.multiply(2n));
       deepStrictEqual(double, a.add(a));
-    }
-  );
-  should('bls12-381 Point/Point with Fp coordinates/should not validate incorrect point', () => {
-    const x =
-      499001545268060011619089734015590154568173930614466321429631711131511181286230338880376679848890024401335766847607n;
-    const y =
-      3934582309586258715640230772291917282844636728991757779640464479794033391537662970190753981664259511166946374555673n;
+    });
+    should('not validate incorrect point', () => {
+      const x =
+        499001545268060011619089734015590154568173930614466321429631711131511181286230338880376679848890024401335766847607n;
+      const y =
+        3934582309586258715640230772291917282844636728991757779640464479794033391537662970190753981664259511166946374555673n;
 
-    const p = new PointG1(Fp.create(x), Fp.create(y));
-    throws(() => p.assertValidity());
+      const p = new PointG1(Fp.create(x), Fp.create(y));
+      throws(() => p.assertValidity());
+    });
   });
 
-  should('bls12-381 Point/Point with Fp2 coordinates/Point equality', () => {
-    fc.assert(
-      fc.property(
-        fc.array(fc.array(FC_BIGINT, { minLength: 2, maxLength: 2 }), {
-          minLength: 3,
-          maxLength: 3,
-        }),
-        fc.array(fc.array(FC_BIGINT, { minLength: 2, maxLength: 2 }), {
-          minLength: 3,
-          maxLength: 3,
-        }),
-        ([x1, y1, z1], [x2, y2, z2]) => {
-          const p1 = new PointG2(Fp2.fromBigTuple(x1), Fp2.fromBigTuple(y1), Fp2.fromBigTuple(z1));
-          const p2 = new PointG2(Fp2.fromBigTuple(x2), Fp2.fromBigTuple(y2), Fp2.fromBigTuple(z2));
-          deepStrictEqual(p1.equals(p1), true);
-          deepStrictEqual(p2.equals(p2), true);
-          deepStrictEqual(p1.equals(p2), false);
-          deepStrictEqual(p2.equals(p1), false);
-        }
-      )
-    );
-  });
-  // should('bls12-381 Point/Point with Fp2 coordinates/should be placed on curve vector 1', () => {
-  //   const a = new PointG2(Fp2.fromBigTuple([0n, 0n]), Fp2.fromBigTuple([0n, 0n]));
-  //   a.assertValidity();
-  // });
-  should('bls12-381 Point/Point with Fp2 coordinates/should be placed on curve vector 2', () => {
-    const a = new PointG2(
-      Fp2.fromBigTuple([
-        0x024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb8n,
-        0x13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7en,
-      ]),
-      Fp2.fromBigTuple([
-        0x0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801n,
-        0x0606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79ben,
-      ]),
-      Fp2.fromBigTuple([1n, 0n])
-    );
-    a.assertValidity();
-  });
-  should('bls12-381 Point/Point with Fp2 coordinates/should be placed on curve vector 3', () => {
-    const a = new PointG2(
-      Fp2.fromBigTuple([
-        233289878585407360737561818812172281900488265436962145913969074168503452745466655442125797664134009339799716079103n,
-        1890785404699189181161569277356497622423785178845737858235714310995835974899880469355250933575450045792782146044819n,
-      ]),
-      Fp2.fromBigTuple([
-        1215754321684097939278683023199690844646077558342794977283698289191570128272085945598449054373022460634252133664610n,
-        2751025411942897795042193940345989612527395984463172615380574492034129474560903255212585680112858672276592527763585n,
-      ])
-    );
-    a.assertValidity();
-  });
-  should(
-    'bls12-381 Point/Point with Fp2 coordinates/should not be placed on curve vector 1',
-    () => {
+  describe('with Fp2 coordinates', () => {
+    should('Point equality', () => {
+      fc.assert(
+        fc.property(
+          fc.array(fc.array(FC_BIGINT, { minLength: 2, maxLength: 2 }), {
+            minLength: 3,
+            maxLength: 3,
+          }),
+          fc.array(fc.array(FC_BIGINT, { minLength: 2, maxLength: 2 }), {
+            minLength: 3,
+            maxLength: 3,
+          }),
+          ([x1, y1, z1], [x2, y2, z2]) => {
+            const p1 = new PointG2(
+              Fp2.fromBigTuple(x1),
+              Fp2.fromBigTuple(y1),
+              Fp2.fromBigTuple(z1)
+            );
+            const p2 = new PointG2(
+              Fp2.fromBigTuple(x2),
+              Fp2.fromBigTuple(y2),
+              Fp2.fromBigTuple(z2)
+            );
+            deepStrictEqual(p1.equals(p1), true);
+            deepStrictEqual(p2.equals(p2), true);
+            deepStrictEqual(p1.equals(p2), false);
+            deepStrictEqual(p2.equals(p1), false);
+          }
+        )
+      );
+    });
+    // should('be placed on curve vector 1', () => {
+    //   const a = new PointG2(Fp2.fromBigTuple([0n, 0n]), Fp2.fromBigTuple([0n, 0n]));
+    //   a.assertValidity();
+    // });
+    should('be placed on curve vector 2', () => {
+      const a = new PointG2(
+        Fp2.fromBigTuple([
+          0x024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb8n,
+          0x13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7en,
+        ]),
+        Fp2.fromBigTuple([
+          0x0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801n,
+          0x0606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79ben,
+        ]),
+        Fp2.fromBigTuple([1n, 0n])
+      );
+      a.assertValidity();
+    });
+    should('be placed on curve vector 3', () => {
+      const a = new PointG2(
+        Fp2.fromBigTuple([
+          233289878585407360737561818812172281900488265436962145913969074168503452745466655442125797664134009339799716079103n,
+          1890785404699189181161569277356497622423785178845737858235714310995835974899880469355250933575450045792782146044819n,
+        ]),
+        Fp2.fromBigTuple([
+          1215754321684097939278683023199690844646077558342794977283698289191570128272085945598449054373022460634252133664610n,
+          2751025411942897795042193940345989612527395984463172615380574492034129474560903255212585680112858672276592527763585n,
+        ])
+      );
+      a.assertValidity();
+    });
+    should('not be placed on curve vector 1', () => {
       const a = new PointG2(
         Fp2.fromBigTuple([0n, 0n]),
         Fp2.fromBigTuple([1n, 0n]),
         Fp2.fromBigTuple([1n, 0n])
       );
       throws(() => a.assertValidity());
-    }
-  );
-  should(
-    'bls12-381 Point/Point with Fp2 coordinates/should not be placed on curve vector 2',
-    () => {
+    });
+    should('not be placed on curve vector 2', () => {
       const a = new PointG2(
         Fp2.fromBigTuple([
           0x024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4410b647ae3d1770bac0326a805bbefd48056c8c121bdb8n,
@@ -364,11 +364,8 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
         Fp2.fromBigTuple([1n, 0n])
       );
       throws(() => a.assertValidity());
-    }
-  );
-  should(
-    'bls12-381 Point/Point with Fp2 coordinates/should not be placed on curve vector 3',
-    () => {
+    });
+    should('not be placed on curve vector 3', () => {
       const a = new PointG2(
         Fp2.fromBigTuple([
           0x877d52dd65245f8908a03288adcd396f489ef87ae23fe110c5aa48bc208fbd1a0ed403df5b1ac137922b915f1f38ec37n,
@@ -384,10 +381,10 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
         ])
       );
       throws(() => a.assertValidity());
-    }
-  );
+    });
+  });
 
-  should('bls12-381 Point/should be doubled and placed on curve vector 1', () => {
+  should('be doubled and placed on curve vector 1', () => {
     const a = new PointG2(
       Fp2.fromBigTuple([
         0x024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb8n,
@@ -417,7 +414,7 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
     deepStrictEqual(double, a.multiply(2n));
     deepStrictEqual(double, a.add(a));
   });
-  should('bls12-381 Point/should be doubled and placed on curve vector 2', () => {
+  should('be doubled and placed on curve vector 2', () => {
     const a = new PointG2(
       Fp2.fromBigTuple([
         233289878585407360737561818812172281900488265436962145913969074168503452745466655442125797664134009339799716079103n,
@@ -455,49 +452,51 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
     0x53eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001n,
     0x63eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000000n,
   ];
-  should('bls12-381 Point/wNAF multiplication same as unsafe (G1, W=1)', () => {
-    let G = PointG1.BASE.negate().negate(); // create new point
-    G._setWindowSize(1);
-    for (let k of wNAF_VECTORS) {
-      deepStrictEqual(G.multiply(k).equals(G.multiplyUnsafe(k)), true);
-    }
+  describe('wNAF multiplication same as unsafe', () => {
+    should('(G1, W=1)', () => {
+      let G = PointG1.BASE.negate().negate(); // create new point
+      G._setWindowSize(1);
+      for (let k of wNAF_VECTORS) {
+        deepStrictEqual(G.multiply(k).equals(G.multiplyUnsafe(k)), true);
+      }
+    });
+    should('(G1, W=4)', () => {
+      let G = PointG1.BASE.negate().negate();
+      G._setWindowSize(4);
+      for (let k of wNAF_VECTORS) {
+        deepStrictEqual(G.multiply(k).equals(G.multiplyUnsafe(k)), true);
+      }
+    });
+    should('(G1, W=5)', () => {
+      let G = PointG1.BASE.negate().negate();
+      G._setWindowSize(5);
+      for (let k of wNAF_VECTORS) {
+        deepStrictEqual(G.multiply(k).equals(G.multiplyUnsafe(k)), true);
+      }
+    });
+    should('(G2, W=1)', () => {
+      let G = PointG2.BASE.negate().negate();
+      G._setWindowSize(1);
+      for (let k of wNAF_VECTORS) {
+        deepStrictEqual(G.multiply(k).equals(G.multiplyUnsafe(k)), true);
+      }
+    });
+    should('(G2, W=4)', () => {
+      let G = PointG2.BASE.negate().negate();
+      G._setWindowSize(4);
+      for (let k of wNAF_VECTORS) {
+        deepStrictEqual(G.multiply(k).equals(G.multiplyUnsafe(k)), true);
+      }
+    });
+    should('(G2, W=5)', () => {
+      let G = PointG2.BASE.negate().negate();
+      G._setWindowSize(5);
+      for (let k of wNAF_VECTORS) {
+        deepStrictEqual(G.multiply(k).equals(G.multiplyUnsafe(k)), true);
+      }
+    });
   });
-  should('bls12-381 Point/wNAF multiplication same as unsafe (G1, W=4)', () => {
-    let G = PointG1.BASE.negate().negate();
-    G._setWindowSize(4);
-    for (let k of wNAF_VECTORS) {
-      deepStrictEqual(G.multiply(k).equals(G.multiplyUnsafe(k)), true);
-    }
-  });
-  should('bls12-381 Point/wNAF multiplication same as unsafe (G1, W=5)', () => {
-    let G = PointG1.BASE.negate().negate();
-    G._setWindowSize(5);
-    for (let k of wNAF_VECTORS) {
-      deepStrictEqual(G.multiply(k).equals(G.multiplyUnsafe(k)), true);
-    }
-  });
-  should('bls12-381 Point/wNAF multiplication same as unsafe (G2, W=1)', () => {
-    let G = PointG2.BASE.negate().negate();
-    G._setWindowSize(1);
-    for (let k of wNAF_VECTORS) {
-      deepStrictEqual(G.multiply(k).equals(G.multiplyUnsafe(k)), true);
-    }
-  });
-  should('bls12-381 Point/wNAF multiplication same as unsafe (G2, W=4)', () => {
-    let G = PointG2.BASE.negate().negate();
-    G._setWindowSize(4);
-    for (let k of wNAF_VECTORS) {
-      deepStrictEqual(G.multiply(k).equals(G.multiplyUnsafe(k)), true);
-    }
-  });
-  should('bls12-381 Point/wNAF multiplication same as unsafe (G2, W=5)', () => {
-    let G = PointG2.BASE.negate().negate();
-    G._setWindowSize(5);
-    for (let k of wNAF_VECTORS) {
-      deepStrictEqual(G.multiply(k).equals(G.multiplyUnsafe(k)), true);
-    }
-  });
-  should('bls12-381 Point/PSI cofactor cleaning same as multiplication', () => {
+  should('PSI cofactor cleaning same as multiplication', () => {
     const points = [
       new PointG2(
         Fp2.fromBigTuple([
@@ -558,456 +557,458 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
       deepStrictEqual(ours.equals(shouldBe), true, 'clearLast');
     }
   });
-}
+});
 
 // index.ts
 
 // bls.PointG1.BASE.clearMultiplyPrecomputes();
 // bls.PointG1.BASE.calcMultiplyPrecomputes(4);
 
-should('bls12-381/basic/should construct point G1 from its uncompressed form (Raw Bytes)', () => {
-  // Test Zero
-  const g1 = bls.G1.Point.fromHex(B_192_40);
-  deepStrictEqual(g1.x, bls.G1.Point.ZERO.x);
-  deepStrictEqual(g1.y, bls.G1.Point.ZERO.y);
-  // Test Non-Zero
-  const x = bls.Fp.create(
-    BigInt(
-      '0x17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb'
+describe('bls12-381/basic', () => {
+  should('construct point G1 from its uncompressed form (Raw Bytes)', () => {
+    // Test Zero
+    const g1 = bls.G1.Point.fromHex(B_192_40);
+    deepStrictEqual(g1.x, bls.G1.Point.ZERO.x);
+    deepStrictEqual(g1.y, bls.G1.Point.ZERO.y);
+    // Test Non-Zero
+    const x = bls.Fp.create(
+      BigInt(
+        '0x17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb'
+      )
+    );
+    const y = bls.Fp.create(
+      BigInt(
+        '0x08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
+      )
+    );
+
+    const g1_ = bls.G1.Point.fromHex(
+      '17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
+    );
+
+    deepStrictEqual(g1_.x, x);
+    deepStrictEqual(g1_.y, y);
+  });
+
+  should('construct point G1 from its uncompressed form (Hex)', () => {
+    // Test Zero
+    const g1 = bls.G1.Point.fromHex(B_192_40);
+
+    deepStrictEqual(g1.x, bls.G1.Point.ZERO.x);
+    deepStrictEqual(g1.y, bls.G1.Point.ZERO.y);
+    // Test Non-Zero
+    const x = bls.Fp.create(
+      BigInt(
+        '0x17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb'
+      )
+    );
+    const y = bls.Fp.create(
+      BigInt(
+        '0x08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
+      )
+    );
+
+    const g1_ = bls.G1.Point.fromHex(
+      '17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
+    );
+
+    deepStrictEqual(g1_.x, x);
+    deepStrictEqual(g1_.y, y);
+  });
+
+  should('construct point G2 from its uncompressed form (Raw Bytes)', () => {
+    // Test Zero
+    const g2 = bls.G2.Point.fromHex(B_384_40);
+    deepStrictEqual(g2.x, bls.G2.Point.ZERO.x, 'zero(x)');
+    deepStrictEqual(g2.y, bls.G2.Point.ZERO.y, 'zero(y)');
+    // Test Non-Zero
+    const x = Fp2.fromBigTuple([
+      BigInt(
+        '0x024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb8'
+      ),
+      BigInt(
+        '0x13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e'
+      ),
+    ]);
+    const y = Fp2.fromBigTuple([
+      BigInt(
+        '0x0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801'
+      ),
+      BigInt(
+        '0x0606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79be'
+      ),
+    ]);
+
+    const g2_ = bls.G2.Point.fromHex(
+      '13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb80606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79be0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801'
+    );
+
+    deepStrictEqual(g2_.x, x);
+    deepStrictEqual(g2_.y, y);
+  });
+
+  should('construct point G2 from its uncompressed form (Hex)', () => {
+    // Test Zero
+    const g2 = bls.G2.Point.fromHex(B_384_40);
+
+    deepStrictEqual(g2.x, bls.G2.Point.ZERO.x);
+    deepStrictEqual(g2.y, bls.G2.Point.ZERO.y);
+    // Test Non-Zero
+    const x = Fp2.fromBigTuple([
+      BigInt(
+        '0x024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb8'
+      ),
+      BigInt(
+        '0x13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e'
+      ),
+    ]);
+    const y = Fp2.fromBigTuple([
+      BigInt(
+        '0x0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801'
+      ),
+      BigInt(
+        '0x0606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79be'
+      ),
+    ]);
+
+    const g2_ = bls.G2.Point.fromHex(
+      '13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb80606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79be0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801'
+    );
+
+    deepStrictEqual(g2_.x, x);
+    deepStrictEqual(g2_.y, y);
+  });
+
+  should('get uncompressed form of point G1 (Raw Bytes)', () => {
+    // Test Zero
+    deepStrictEqual(bls.G1.Point.ZERO.toHex(false), B_192_40);
+    // Test Non-Zero
+    const x = bls.Fp.create(
+      BigInt(
+        '0x17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb'
+      )
+    );
+    const y = bls.Fp.create(
+      BigInt(
+        '0x08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
+      )
+    );
+    const g1 = new bls.G1.Point(x, y);
+    deepStrictEqual(
+      g1.toHex(false),
+      '17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
+    );
+  });
+
+  should('get uncompressed form of point G1 (Hex)', () => {
+    // Test Zero
+    deepStrictEqual(bls.G1.Point.ZERO.toHex(false), B_192_40);
+    // Test Non-Zero
+    const x = bls.Fp.create(
+      BigInt(
+        '0x17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb'
+      )
+    );
+    const y = bls.Fp.create(
+      BigInt(
+        '0x08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
+      )
+    );
+    const g1 = new bls.G1.Point(x, y);
+    deepStrictEqual(
+      g1.toHex(false),
+      '17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
+    );
+  });
+
+  should('get uncompressed form of point G2 (Raw Bytes)', () => {
+    // Test Zero
+    deepStrictEqual(bls.G2.Point.ZERO.toHex(false), B_384_40);
+    // Test Non-Zero
+    const x = Fp2.fromBigTuple([
+      BigInt(
+        '0x024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb8'
+      ),
+      BigInt(
+        '0x13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e'
+      ),
+    ]);
+    const y = Fp2.fromBigTuple([
+      BigInt(
+        '0x0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801'
+      ),
+      BigInt(
+        '0x0606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79be'
+      ),
+    ]);
+    const g2 = new bls.G2.Point(x, y);
+    deepStrictEqual(
+      g2.toHex(false),
+      '13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb80606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79be0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801'
+    );
+  });
+
+  should('get uncompressed form of point G2 (Hex)', () => {
+    // Test Zero
+    deepStrictEqual(bls.G2.Point.ZERO.toHex(false), B_384_40);
+
+    // Test Non-Zero
+    const x = Fp2.fromBigTuple([
+      BigInt(
+        '0x024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb8'
+      ),
+      BigInt(
+        '0x13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e'
+      ),
+    ]);
+    const y = Fp2.fromBigTuple([
+      BigInt(
+        '0x0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801'
+      ),
+      BigInt(
+        '0x0606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79be'
+      ),
+    ]);
+    const g2 = new bls.G2.Point(x, y);
+    deepStrictEqual(
+      g2.toHex(false),
+      '13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb80606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79be0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801'
+    );
+  });
+
+  should('compress and decompress G1 points', async () => {
+    const priv = bls.G1.Point.fromPrivateKey(42n);
+    const publicKey = priv.toHex(true);
+    const decomp = bls.G1.Point.fromHex(publicKey);
+    deepStrictEqual(publicKey, decomp.toHex(true));
+  });
+  should('not compress and decompress zero G1 point', () => {
+    throws(() => bls.G1.Point.fromPrivateKey(0n));
+  });
+  should('compress and decompress G2 points', () => {
+    const priv = bls.G2.Point.fromPrivateKey(42n);
+    const publicKey = priv.toHex(true);
+    const decomp = bls.G2.Point.fromHex(publicKey);
+    deepStrictEqual(publicKey, decomp.toHex(true));
+  });
+  should('not compress and decompress zero G2 point', () => {
+    throws(() => bls.G2.Point.fromPrivateKey(0n));
+  });
+  const VALID_G1 = new bls.G1.Point(
+    bls.Fp.create(
+      3609742242174788176010452839163620388872641749536604986743596621604118973777515189035770461528205168143692110933639n
+    ),
+    bls.Fp.create(
+      1619277690257184054444116778047375363103842303863153349133480657158810226683757397206929105479676799650932070320089n
     )
   );
-  const y = bls.Fp.create(
-    BigInt(
-      '0x08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
+  const VALID_G1_2 = new bls.G1.Point(
+    bls.Fp.create(
+      1206972466279728255044019580914616126536509750250979180256809997983196363639429409634110400978470384566664128085207n
+    ),
+    bls.Fp.create(
+      2991142246317096160788653339959532007292638191110818490939476869616372888657136539642598243964263069435065725313423n
     )
   );
 
-  const g1_ = bls.G1.Point.fromHex(
-    '17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
-  );
-
-  deepStrictEqual(g1_.x, x);
-  deepStrictEqual(g1_.y, y);
-});
-
-should('bls12-381/basic/should construct point G1 from its uncompressed form (Hex)', () => {
-  // Test Zero
-  const g1 = bls.G1.Point.fromHex(B_192_40);
-
-  deepStrictEqual(g1.x, bls.G1.Point.ZERO.x);
-  deepStrictEqual(g1.y, bls.G1.Point.ZERO.y);
-  // Test Non-Zero
-  const x = bls.Fp.create(
-    BigInt(
-      '0x17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb'
-    )
-  );
-  const y = bls.Fp.create(
-    BigInt(
-      '0x08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
+  const INVALID_G1 = new bls.G1.Point(
+    bls.Fp.create(
+      499001545268060011619089734015590154568173930614466321429631711131511181286230338880376679848890024401335766847607n
+    ),
+    bls.Fp.create(
+      3934582309586258715640230772291917282844636728991757779640464479794033391537662970190753981664259511166946374555673n
     )
   );
 
-  const g1_ = bls.G1.Point.fromHex(
-    '17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
-  );
+  should('aggregate pubkeys', () => {
+    const agg = bls.aggregatePublicKeys([VALID_G1, VALID_G1_2]);
+    deepStrictEqual(
+      agg.x,
+      2636337749883017793009944726560363863546595464242083394883491066895536780554574413337005575305023872925406746684807n
+    );
+    deepStrictEqual(
+      agg.y,
+      2200256264293372104833346444532839112556752874984721583125881868863625579979779052307146195064914375388929781136724n
+    );
+  });
 
-  deepStrictEqual(g1_.x, x);
-  deepStrictEqual(g1_.y, y);
-});
+  should('not aggregate invalid pubkeys', () => {
+    throws(() => bls.aggregatePublicKeys([VALID_G1, INVALID_G1]));
+  });
+  // should aggregate signatures
 
-should('bls12-381/basic/should construct point G2 from its uncompressed form (Raw Bytes)', () => {
-  // Test Zero
-  const g2 = bls.G2.Point.fromHex(B_384_40);
-  deepStrictEqual(g2.x, bls.G2.Point.ZERO.x, 'zero(x)');
-  deepStrictEqual(g2.y, bls.G2.Point.ZERO.y, 'zero(y)');
-  // Test Non-Zero
-  const x = Fp2.fromBigTuple([
-    BigInt(
-      '0x024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb8'
-    ),
-    BigInt(
-      '0x13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e'
-    ),
-  ]);
-  const y = Fp2.fromBigTuple([
-    BigInt(
-      '0x0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801'
-    ),
-    BigInt(
-      '0x0606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79be'
-    ),
-  ]);
-
-  const g2_ = bls.G2.Point.fromHex(
-    '13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb80606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79be0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801'
-  );
-
-  deepStrictEqual(g2_.x, x);
-  deepStrictEqual(g2_.y, y);
-});
-
-should('bls12-381/basic/should construct point G2 from its uncompressed form (Hex)', () => {
-  // Test Zero
-  const g2 = bls.G2.Point.fromHex(B_384_40);
-
-  deepStrictEqual(g2.x, bls.G2.Point.ZERO.x);
-  deepStrictEqual(g2.y, bls.G2.Point.ZERO.y);
-  // Test Non-Zero
-  const x = Fp2.fromBigTuple([
-    BigInt(
-      '0x024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb8'
-    ),
-    BigInt(
-      '0x13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e'
-    ),
-  ]);
-  const y = Fp2.fromBigTuple([
-    BigInt(
-      '0x0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801'
-    ),
-    BigInt(
-      '0x0606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79be'
-    ),
-  ]);
-
-  const g2_ = bls.G2.Point.fromHex(
-    '13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb80606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79be0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801'
-  );
-
-  deepStrictEqual(g2_.x, x);
-  deepStrictEqual(g2_.y, y);
-});
-
-should('bls12-381/basic/should get uncompressed form of point G1 (Raw Bytes)', () => {
-  // Test Zero
-  deepStrictEqual(bls.G1.Point.ZERO.toHex(false), B_192_40);
-  // Test Non-Zero
-  const x = bls.Fp.create(
-    BigInt(
-      '0x17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb'
-    )
-  );
-  const y = bls.Fp.create(
-    BigInt(
-      '0x08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
-    )
-  );
-  const g1 = new bls.G1.Point(x, y);
-  deepStrictEqual(
-    g1.toHex(false),
-    '17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
-  );
-});
-
-should('bls12-381/basic/should get uncompressed form of point G1 (Hex)', () => {
-  // Test Zero
-  deepStrictEqual(bls.G1.Point.ZERO.toHex(false), B_192_40);
-  // Test Non-Zero
-  const x = bls.Fp.create(
-    BigInt(
-      '0x17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb'
-    )
-  );
-  const y = bls.Fp.create(
-    BigInt(
-      '0x08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
-    )
-  );
-  const g1 = new bls.G1.Point(x, y);
-  deepStrictEqual(
-    g1.toHex(false),
-    '17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
-  );
-});
-
-should('bls12-381/basic/should get uncompressed form of point G2 (Raw Bytes)', () => {
-  // Test Zero
-  deepStrictEqual(bls.G2.Point.ZERO.toHex(false), B_384_40);
-  // Test Non-Zero
-  const x = Fp2.fromBigTuple([
-    BigInt(
-      '0x024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb8'
-    ),
-    BigInt(
-      '0x13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e'
-    ),
-  ]);
-  const y = Fp2.fromBigTuple([
-    BigInt(
-      '0x0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801'
-    ),
-    BigInt(
-      '0x0606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79be'
-    ),
-  ]);
-  const g2 = new bls.G2.Point(x, y);
-  deepStrictEqual(
-    g2.toHex(false),
-    '13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb80606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79be0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801'
-  );
-});
-
-should('bls12-381/basic/should get uncompressed form of point G2 (Hex)', () => {
-  // Test Zero
-  deepStrictEqual(bls.G2.Point.ZERO.toHex(false), B_384_40);
-
-  // Test Non-Zero
-  const x = Fp2.fromBigTuple([
-    BigInt(
-      '0x024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb8'
-    ),
-    BigInt(
-      '0x13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e'
-    ),
-  ]);
-  const y = Fp2.fromBigTuple([
-    BigInt(
-      '0x0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801'
-    ),
-    BigInt(
-      '0x0606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79be'
-    ),
-  ]);
-  const g2 = new bls.G2.Point(x, y);
-  deepStrictEqual(
-    g2.toHex(false),
-    '13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb80606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79be0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801'
-  );
-});
-
-should('bls12-381/basic/should compress and decompress G1 points', async () => {
-  const priv = bls.G1.Point.fromPrivateKey(42n);
-  const publicKey = priv.toHex(true);
-  const decomp = bls.G1.Point.fromHex(publicKey);
-  deepStrictEqual(publicKey, decomp.toHex(true));
-});
-should('bls12-381/basic/should not compress and decompress zero G1 point', () => {
-  throws(() => bls.G1.Point.fromPrivateKey(0n));
-});
-should('bls12-381/basic/should compress and decompress G2 points', () => {
-  const priv = bls.G2.Point.fromPrivateKey(42n);
-  const publicKey = priv.toHex(true);
-  const decomp = bls.G2.Point.fromHex(publicKey);
-  deepStrictEqual(publicKey, decomp.toHex(true));
-});
-should('bls12-381/basic/should not compress and decompress zero G2 point', () => {
-  throws(() => bls.G2.Point.fromPrivateKey(0n));
-});
-const VALID_G1 = new bls.G1.Point(
-  bls.Fp.create(
-    3609742242174788176010452839163620388872641749536604986743596621604118973777515189035770461528205168143692110933639n
-  ),
-  bls.Fp.create(
-    1619277690257184054444116778047375363103842303863153349133480657158810226683757397206929105479676799650932070320089n
-  )
-);
-const VALID_G1_2 = new bls.G1.Point(
-  bls.Fp.create(
-    1206972466279728255044019580914616126536509750250979180256809997983196363639429409634110400978470384566664128085207n
-  ),
-  bls.Fp.create(
-    2991142246317096160788653339959532007292638191110818490939476869616372888657136539642598243964263069435065725313423n
-  )
-);
-
-const INVALID_G1 = new bls.G1.Point(
-  bls.Fp.create(
-    499001545268060011619089734015590154568173930614466321429631711131511181286230338880376679848890024401335766847607n
-  ),
-  bls.Fp.create(
-    3934582309586258715640230772291917282844636728991757779640464479794033391537662970190753981664259511166946374555673n
-  )
-);
-
-should('bls12-381/basic/should aggregate pubkeys', () => {
-  const agg = bls.aggregatePublicKeys([VALID_G1, VALID_G1_2]);
-  deepStrictEqual(
-    agg.x,
-    2636337749883017793009944726560363863546595464242083394883491066895536780554574413337005575305023872925406746684807n
-  );
-  deepStrictEqual(
-    agg.y,
-    2200256264293372104833346444532839112556752874984721583125881868863625579979779052307146195064914375388929781136724n
-  );
-});
-
-should('bls12-381/basic/should not aggregate invalid pubkeys', () => {
-  throws(() => bls.aggregatePublicKeys([VALID_G1, INVALID_G1]));
-});
-// should aggregate signatures
-
-should(`should produce correct signatures (${G2_VECTORS.length} vectors)`, async () => {
-  for (let vector of G2_VECTORS) {
-    const [priv, msg, expected] = vector;
-    const sig = await bls.sign(msg, priv);
-    deepStrictEqual(bls.utils.bytesToHex(sig), expected);
-  }
-});
-should(`should produce correct scalars (${SCALAR_VECTORS.length} vectors)`, async () => {
-  const options = {
-    p: bls.CURVE.r,
-    m: 1,
-    expand: false,
-  };
-  for (let vector of SCALAR_VECTORS) {
-    const [okmAscii, expectedHex] = vector;
-    const expected = BigInt('0x' + expectedHex);
-    const okm = new Uint8Array(okmAscii.split('').map((c) => c.charCodeAt(0)));
-    const scalars = await bls.utils.hashToField(okm, 1, options);
-    deepStrictEqual(scalars[0][0], expected);
-  }
-});
-should('bls12-381/basic/should verify signed message', async () => {
-  for (let i = 0; i < NUM_RUNS; i++) {
-    const [priv, msg] = G2_VECTORS[i];
-    const sig = await bls.sign(msg, priv);
-    const pub = bls.getPublicKey(priv);
-    const res = await bls.verify(sig, msg, pub);
-    deepStrictEqual(res, true);
-  }
-});
-should('bls12-381/basic/should not verify signature with wrong message', async () => {
-  for (let i = 0; i < NUM_RUNS; i++) {
-    const [priv, msg] = G2_VECTORS[i];
-    const invMsg = G2_VECTORS[i + 1][1];
-    const sig = await bls.sign(msg, priv);
-    const pub = bls.getPublicKey(priv);
-    const res = await bls.verify(sig, invMsg, pub);
-    deepStrictEqual(res, false);
-  }
-});
-should('bls12-381/basic/should not verify signature with wrong key', async () => {
-  for (let i = 0; i < NUM_RUNS; i++) {
-    const [priv, msg] = G2_VECTORS[i];
-    const sig = await bls.sign(msg, priv);
-    const invPriv = G2_VECTORS[i + 1][1].padStart(64, '0');
-    const invPub = bls.getPublicKey(invPriv);
-    const res = await bls.verify(sig, msg, invPub);
-    deepStrictEqual(res, false);
-  }
-});
-should('bls12-381/basic/should verify multi-signature', async () => {
-  await fc.assert(
-    fc.asyncProperty(FC_MSG_5, FC_BIGINT_5, async (messages, privateKeys) => {
-      privateKeys = privateKeys.slice(0, messages.length);
-      messages = messages.slice(0, privateKeys.length);
-      const publicKey = privateKeys.map(getPubKey);
-      const signatures = await Promise.all(
-        messages.map((message, i) => bls.sign(message, privateKeys[i]))
-      );
-      const aggregatedSignature = await bls.aggregateSignatures(signatures);
-      deepStrictEqual(await bls.verifyBatch(aggregatedSignature, messages, publicKey), true);
-    })
-  );
-});
-should('bls12-381/basic/should batch verify multi-signatures', async () => {
-  await fc.assert(
-    fc.asyncProperty(
-      FC_MSG_5,
-      FC_MSG_5,
-      FC_BIGINT_5,
-      async (messages, wrongMessages, privateKeys) => {
+  should(`produce correct signatures (${G2_VECTORS.length} vectors)`, async () => {
+    for (let vector of G2_VECTORS) {
+      const [priv, msg, expected] = vector;
+      const sig = await bls.sign(msg, priv);
+      deepStrictEqual(bls.utils.bytesToHex(sig), expected);
+    }
+  });
+  should(`produce correct scalars (${SCALAR_VECTORS.length} vectors)`, async () => {
+    const options = {
+      p: bls.CURVE.r,
+      m: 1,
+      expand: false,
+    };
+    for (let vector of SCALAR_VECTORS) {
+      const [okmAscii, expectedHex] = vector;
+      const expected = BigInt('0x' + expectedHex);
+      const okm = new Uint8Array(okmAscii.split('').map((c) => c.charCodeAt(0)));
+      const scalars = await bls.utils.hashToField(okm, 1, options);
+      deepStrictEqual(scalars[0][0], expected);
+    }
+  });
+  should('verify signed message', async () => {
+    for (let i = 0; i < NUM_RUNS; i++) {
+      const [priv, msg] = G2_VECTORS[i];
+      const sig = await bls.sign(msg, priv);
+      const pub = bls.getPublicKey(priv);
+      const res = await bls.verify(sig, msg, pub);
+      deepStrictEqual(res, true);
+    }
+  });
+  should('not verify signature with wrong message', async () => {
+    for (let i = 0; i < NUM_RUNS; i++) {
+      const [priv, msg] = G2_VECTORS[i];
+      const invMsg = G2_VECTORS[i + 1][1];
+      const sig = await bls.sign(msg, priv);
+      const pub = bls.getPublicKey(priv);
+      const res = await bls.verify(sig, invMsg, pub);
+      deepStrictEqual(res, false);
+    }
+  });
+  should('not verify signature with wrong key', async () => {
+    for (let i = 0; i < NUM_RUNS; i++) {
+      const [priv, msg] = G2_VECTORS[i];
+      const sig = await bls.sign(msg, priv);
+      const invPriv = G2_VECTORS[i + 1][1].padStart(64, '0');
+      const invPub = bls.getPublicKey(invPriv);
+      const res = await bls.verify(sig, msg, invPub);
+      deepStrictEqual(res, false);
+    }
+  });
+  should('verify multi-signature', async () => {
+    await fc.assert(
+      fc.asyncProperty(FC_MSG_5, FC_BIGINT_5, async (messages, privateKeys) => {
         privateKeys = privateKeys.slice(0, messages.length);
         messages = messages.slice(0, privateKeys.length);
-        wrongMessages = messages.map((a, i) =>
-          typeof wrongMessages[i] === 'undefined' ? a : wrongMessages[i]
+        const publicKey = privateKeys.map(getPubKey);
+        const signatures = await Promise.all(
+          messages.map((message, i) => bls.sign(message, privateKeys[i]))
         );
+        const aggregatedSignature = await bls.aggregateSignatures(signatures);
+        deepStrictEqual(await bls.verifyBatch(aggregatedSignature, messages, publicKey), true);
+      })
+    );
+  });
+  should('batch verify multi-signatures', async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        FC_MSG_5,
+        FC_MSG_5,
+        FC_BIGINT_5,
+        async (messages, wrongMessages, privateKeys) => {
+          privateKeys = privateKeys.slice(0, messages.length);
+          messages = messages.slice(0, privateKeys.length);
+          wrongMessages = messages.map((a, i) =>
+            typeof wrongMessages[i] === 'undefined' ? a : wrongMessages[i]
+          );
+          const publicKey = await Promise.all(privateKeys.map(getPubKey));
+          const signatures = await Promise.all(
+            messages.map((message, i) => bls.sign(message, privateKeys[i]))
+          );
+          const aggregatedSignature = await bls.aggregateSignatures(signatures);
+          deepStrictEqual(
+            await bls.verifyBatch(aggregatedSignature, wrongMessages, publicKey),
+            messages.every((m, i) => m === wrongMessages[i])
+          );
+        }
+      )
+    );
+  });
+  should('not verify multi-signature with wrong public keys', async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        FC_MSG_5,
+        FC_BIGINT_5,
+        FC_BIGINT_5,
+        async (messages, privateKeys, wrongPrivateKeys) => {
+          privateKeys = privateKeys.slice(0, messages.length);
+          wrongPrivateKeys = privateKeys.map((a, i) =>
+            wrongPrivateKeys[i] !== undefined ? wrongPrivateKeys[i] : a
+          );
+          messages = messages.slice(0, privateKeys.length);
+          const wrongPublicKeys = await Promise.all(wrongPrivateKeys.map(getPubKey));
+          const signatures = await Promise.all(
+            messages.map((message, i) => bls.sign(message, privateKeys[i]))
+          );
+          const aggregatedSignature = await bls.aggregateSignatures(signatures);
+          deepStrictEqual(
+            await bls.verifyBatch(aggregatedSignature, messages, wrongPublicKeys),
+            wrongPrivateKeys.every((p, i) => p === privateKeys[i])
+          );
+        }
+      )
+    );
+  });
+  should('verify multi-signature as simple signature', async () => {
+    await fc.assert(
+      fc.asyncProperty(FC_MSG, FC_BIGINT_5, async (message, privateKeys) => {
         const publicKey = await Promise.all(privateKeys.map(getPubKey));
         const signatures = await Promise.all(
-          messages.map((message, i) => bls.sign(message, privateKeys[i]))
+          privateKeys.map((privateKey) => bls.sign(message, privateKey))
         );
         const aggregatedSignature = await bls.aggregateSignatures(signatures);
-        deepStrictEqual(
-          await bls.verifyBatch(aggregatedSignature, wrongMessages, publicKey),
-          messages.every((m, i) => m === wrongMessages[i])
-        );
-      }
-    )
-  );
-});
-should('bls12-381/basic/should not verify multi-signature with wrong public keys', async () => {
-  await fc.assert(
-    fc.asyncProperty(
-      FC_MSG_5,
-      FC_BIGINT_5,
-      FC_BIGINT_5,
-      async (messages, privateKeys, wrongPrivateKeys) => {
-        privateKeys = privateKeys.slice(0, messages.length);
-        wrongPrivateKeys = privateKeys.map((a, i) =>
-          wrongPrivateKeys[i] !== undefined ? wrongPrivateKeys[i] : a
-        );
-        messages = messages.slice(0, privateKeys.length);
-        const wrongPublicKeys = await Promise.all(wrongPrivateKeys.map(getPubKey));
+        const aggregatedPublicKey = await bls.aggregatePublicKeys(publicKey);
+        deepStrictEqual(await bls.verify(aggregatedSignature, message, aggregatedPublicKey), true);
+      })
+    );
+  });
+  should('not verify wrong multi-signature as simple signature', async () => {
+    await fc.assert(
+      fc.asyncProperty(FC_MSG, FC_MSG, FC_BIGINT_5, async (message, wrongMessage, privateKeys) => {
+        const publicKey = await Promise.all(privateKeys.map(getPubKey));
         const signatures = await Promise.all(
-          messages.map((message, i) => bls.sign(message, privateKeys[i]))
+          privateKeys.map((privateKey) => bls.sign(message, privateKey))
         );
         const aggregatedSignature = await bls.aggregateSignatures(signatures);
+        const aggregatedPublicKey = await bls.aggregatePublicKeys(publicKey);
         deepStrictEqual(
-          await bls.verifyBatch(aggregatedSignature, messages, wrongPublicKeys),
-          wrongPrivateKeys.every((p, i) => p === privateKeys[i])
+          await bls.verify(aggregatedSignature, wrongMessage, aggregatedPublicKey),
+          message === wrongMessage
         );
-      }
-    )
-  );
-});
-should('bls12-381/basic/should verify multi-signature as simple signature', async () => {
-  await fc.assert(
-    fc.asyncProperty(FC_MSG, FC_BIGINT_5, async (message, privateKeys) => {
-      const publicKey = await Promise.all(privateKeys.map(getPubKey));
-      const signatures = await Promise.all(
-        privateKeys.map((privateKey) => bls.sign(message, privateKey))
-      );
-      const aggregatedSignature = await bls.aggregateSignatures(signatures);
-      const aggregatedPublicKey = await bls.aggregatePublicKeys(publicKey);
-      deepStrictEqual(await bls.verify(aggregatedSignature, message, aggregatedPublicKey), true);
-    })
-  );
-});
-should('bls12-381/basic/should not verify wrong multi-signature as simple signature', async () => {
-  await fc.assert(
-    fc.asyncProperty(FC_MSG, FC_MSG, FC_BIGINT_5, async (message, wrongMessage, privateKeys) => {
-      const publicKey = await Promise.all(privateKeys.map(getPubKey));
-      const signatures = await Promise.all(
-        privateKeys.map((privateKey) => bls.sign(message, privateKey))
-      );
-      const aggregatedSignature = await bls.aggregateSignatures(signatures);
-      const aggregatedPublicKey = await bls.aggregatePublicKeys(publicKey);
-      deepStrictEqual(
-        await bls.verify(aggregatedSignature, wrongMessage, aggregatedPublicKey),
-        message === wrongMessage
-      );
-    })
-  );
+      })
+    );
+  });
 });
 
 // Pairing
-{
+describe('pairing', () => {
   const { pairing, Fp12 } = bls;
   const G1 = bls.G1.Point.BASE;
   const G2 = bls.G2.Point.BASE;
 
-  should('pairing/creates negative G1 pairing', () => {
+  should('creates negative G1 pairing', () => {
     const p1 = pairing(G1, G2);
     const p2 = pairing(G1.negate(), G2);
     deepStrictEqual(Fp12.mul(p1, p2), Fp12.ONE);
   });
-  should('pairing/creates negative G2 pairing', () => {
+  should('creates negative G2 pairing', () => {
     const p2 = pairing(G1.negate(), G2);
     const p3 = pairing(G1, G2.negate());
     deepStrictEqual(p2, p3);
   });
-  should('pairing/creates proper pairing output order', () => {
+  should('creates proper pairing output order', () => {
     const p1 = pairing(G1, G2);
     const p2 = Fp12.pow(p1, CURVE_ORDER);
     deepStrictEqual(p2, Fp12.ONE);
   });
-  should('pairing/G1 billinearity', () => {
+  should('G1 billinearity', () => {
     const p1 = pairing(G1, G2);
     const p2 = pairing(G1.multiply(2n), G2);
     deepStrictEqual(Fp12.mul(p1, p1), p2);
   });
-  should('pairing/should not degenerate', () => {
+  should('should not degenerate', () => {
     const p1 = pairing(G1, G2);
     const p2 = pairing(G1.multiply(2n), G2);
     const p3 = pairing(G1, G2.negate());
@@ -1015,17 +1016,17 @@ should('bls12-381/basic/should not verify wrong multi-signature as simple signat
     notDeepStrictEqual(p1, p3);
     notDeepStrictEqual(p2, p3);
   });
-  should('pairing/G2 billinearity', () => {
+  should('G2 billinearity', () => {
     const p1 = pairing(G1, G2);
     const p2 = pairing(G1, G2.multiply(2n));
     deepStrictEqual(Fp12.mul(p1, p1), p2);
   });
-  should('pairing/proper pairing composite check', () => {
+  should('proper pairing composite check', () => {
     const p1 = pairing(G1.multiply(37n), G2.multiply(27n));
     const p2 = pairing(G1.multiply(999n), G2);
     deepStrictEqual(p1, p2);
   });
-  should('pairing/vectors from https://github.com/zkcrypto/pairing', () => {
+  should('vectors from https://github.com/zkcrypto/pairing', () => {
     const p1 = pairing(G1, G2);
     deepStrictEqual(
       p1,
@@ -1045,7 +1046,7 @@ should('bls12-381/basic/should not verify wrong multi-signature as simple signat
       ])
     );
   });
-  should('pairing/finalExponentiate is correct', () => {
+  should('finalExponentiate is correct', () => {
     const p1 = Fp12.fromBigTwelve([
       690392658038414015999440694435086329841032295415825549843130960252222448232974816207293269712691075396080336239827n,
       1673244384695948045466836192250093912021245353707563547917201356526057153141766171738038843400145227470982267854187n,
@@ -1078,9 +1079,9 @@ should('bls12-381/basic/should not verify wrong multi-signature as simple signat
       ])
     );
   });
-}
+});
 // hashToCurve
-{
+describe('hash-to-curve', () => {
   const DST = 'QUUX-V01-CS02-with-expander-SHA256-128';
   const VECTORS = [
     {
@@ -1824,9 +1825,9 @@ should('bls12-381/basic/should not verify wrong multi-signature as simple signat
       deepStrictEqual(p.toHex(), t.expected);
     });
   }
-}
+});
 // Deterministic
-{
+describe('bls12-381 deterministic', () => {
   // NOTE: Killic returns all items in reversed order, which looks strange:
   // instead of `Fp2(${this.c0} + ${this.c1}×i)`; it returns `Fp2(${this.c0}×i + ${this.c1})`;
   const killicHex = (lst) =>
@@ -1934,7 +1935,7 @@ should('bls12-381/basic/should not verify wrong multi-signature as simple signat
       }
     }
   });
-}
+});
 
 // ESM is broken.
 import url from 'url';
