@@ -593,7 +593,7 @@ for (const name in CURVES) {
   }
 }
 
-should('Secp224k1 sqrt bug', () => {
+should('secp224k1 sqrt bug', () => {
   const { Fp } = secp224r1.CURVE;
   const sqrtMinus1 = Fp.sqrt(-1n);
   // Verified against sage
