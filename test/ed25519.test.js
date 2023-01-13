@@ -646,7 +646,8 @@ for (let i = 0; i < VECTORS_RFC8032_PH.length; i++) {
 
 should('X25519 base point', () => {
   const { y } = ed25519.Point.BASE;
-  const u = ed25519.utils.mod((y + 1n) * ed25519.utils.invert(1n - y, ed25519.CURVE.P));
+  const { Fp } = ed25519.CURVE;
+  const u = Fp.create((y + 1n) * Fp.invert(1n - y));
   deepStrictEqual(hex(numberToBytesLE(u, 32)), x25519.Gu);
 });
 

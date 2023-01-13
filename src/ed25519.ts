@@ -260,7 +260,7 @@ const invertSqrt = (number: bigint) => uvRatio(_1n, number);
 
 const MAX_255B = BigInt('0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff');
 const bytes255ToNumberLE = (bytes: Uint8Array) =>
-  ed25519.utils.mod(bytesToNumberLE(bytes) & MAX_255B);
+  ed25519.CURVE.Fp.create(bytesToNumberLE(bytes) & MAX_255B);
 
 type ExtendedPoint = ExtendedPointType;
 
@@ -269,7 +269,7 @@ type ExtendedPoint = ExtendedPointType;
 function calcElligatorRistrettoMap(r0: bigint): ExtendedPoint {
   const { d } = ed25519.CURVE;
   const P = ed25519.CURVE.Fp.ORDER;
-  const { mod } = ed25519.utils;
+  const mod = ed25519.CURVE.Fp.create;
   const r = mod(SQRT_M1 * r0 * r0); // 1
   const Ns = mod((r + _1n) * ONE_MINUS_D_SQ); // 2
   let c = BigInt(-1); // 3
@@ -327,7 +327,7 @@ export class RistrettoPoint {
     hex = ensureBytes(hex, 32);
     const { a, d } = ed25519.CURVE;
     const P = ed25519.CURVE.Fp.ORDER;
-    const { mod } = ed25519.utils;
+    const mod = ed25519.CURVE.Fp.create;
     const emsg = 'RistrettoPoint.fromHex: the hex is not valid encoding of RistrettoPoint';
     const s = bytes255ToNumberLE(hex);
     // 1. Check that s_bytes is the canonical encoding of a field element, or else abort.
@@ -357,7 +357,7 @@ export class RistrettoPoint {
   toRawBytes(): Uint8Array {
     let { x, y, z, t } = this.ep;
     const P = ed25519.CURVE.Fp.ORDER;
-    const { mod } = ed25519.utils;
+    const mod = ed25519.CURVE.Fp.create;
     const u1 = mod(mod(z + y) * mod(z - y)); // 1
     const u2 = mod(x * y); // 2
     // Square root always exists
@@ -395,7 +395,7 @@ export class RistrettoPoint {
     assertRstPoint(other);
     const a = this.ep;
     const b = other.ep;
-    const { mod } = ed25519.utils;
+    const mod = ed25519.CURVE.Fp.create;
     // (x1 * y2 == y1 * x2) | (y1 * y2 == x1 * x2)
     const one = mod(a.x * b.y) === mod(a.y * b.x);
     const two = mod(a.y * b.y) === mod(a.x * b.x);

@@ -93,12 +93,9 @@ export type CurveFn<Fp, Fp2, Fp6, Fp12> = {
     publicKeys: (Hex | PointType<Fp>)[]
   ) => boolean;
   utils: {
-    bytesToHex: typeof ut.bytesToHex;
-    hexToBytes: typeof ut.hexToBytes;
     stringToBytes: typeof stringToBytes;
     hashToField: typeof hashToField;
     expandMessageXMD: typeof expandMessageXMD;
-    mod: typeof mod.mod;
     getDSTLabel: () => string;
     setDSTLabel(newLabel: string): void;
   };
@@ -177,7 +174,6 @@ export function bls<Fp2, Fp6, Fp12>(
   const utils = {
     hexToBytes: ut.hexToBytes,
     bytesToHex: ut.bytesToHex,
-    mod: mod.mod,
     stringToBytes: stringToBytes,
     // TODO: do we need to export it here?
     hashToField: (

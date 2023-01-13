@@ -135,6 +135,7 @@ const Fp2: mod.Field<Fp2> & Fp2Utils = {
     return { c0: Fp.mul(factor, Fp.create(a)), c1: Fp.mul(factor, Fp.create(-b)) };
   },
   sqrt: (num) => {
+    if (Fp2.equals(num, Fp2.ZERO)) return Fp2.ZERO; // Algo doesn't handles this case
     // TODO: Optimize this line. It's extremely slow.
     // Speeding this up would boost aggregateSignatures.
     // https://eprint.iacr.org/2012/685.pdf applicable?

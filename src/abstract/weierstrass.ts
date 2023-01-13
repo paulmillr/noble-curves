@@ -608,13 +608,9 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
       const { x, y } = this;
       // Check if x, y are valid field elements
       if (!Fp.isValid(x) || !Fp.isValid(y)) throw new Error(msg);
-      const left = Fp.square(y);
-      const right = weierstrassEquation(x);
-      // We subtract instead of comparing: it's safer
-      // (y²) - (x³ + ax + b) == 0
-      if (!Fp.isZero(Fp.sub(left, right))) throw new Error(msg);
-      // if (!Fp.equals(left, right))
-      // TODO: flag to disable this?
+      const left = Fp.square(y); // y²
+      const right = weierstrassEquation(x); // x³ + ax + b
+      if (!Fp.equals(left, right)) throw new Error(msg);
       if (!this.isTorsionFree()) throw new Error('Point must be of prime-order subgroup');
     }
 
@@ -771,8 +767,6 @@ export type CurveFn = {
   ProjectivePoint: ProjectiveConstructor<bigint>;
   Signature: SignatureConstructor;
   utils: {
-    mod: (a: bigint, b?: bigint) => bigint;
-    invert: (number: bigint, modulo?: bigint) => bigint;
     _bigintToBytes: (num: bigint) => Uint8Array;
     _bigintToString: (num: bigint) => string;
     _normalizePrivateKey: (key: PrivKey) => bigint;
@@ -831,9 +825,7 @@ class HmacDrbg {
     }
     return ut.concatBytes(...out);
   }
-  // There is no need in clean() method
-  // It's useless, there are no guarantees with JS GC
-  // whether bigints are removed even if you clean Uint8Arrays.
+  // There are no guarantees with JS GC whether bigints are removed even if you clean Uint8Arrays.
 }
 
 export function weierstrass(curveDef: CurveType): CurveFn {
@@ -1049,8 +1041,6 @@ export function weierstrass(curveDef: CurveType): CurveFn {
   }
 
   const utils = {
-    mod: (n: bigint, modulo = Fp.ORDER) => mod.mod(n, modulo),
-    invert: Fp.invert,
     isValidPrivateKey(privateKey: PrivKey) {
       try {
         normalizePrivateKey(privateKey);

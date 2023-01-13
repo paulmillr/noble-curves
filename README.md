@@ -201,8 +201,6 @@ export type CurveFn = {
   ExtendedPoint: ExtendedPointConstructor;
   Signature: SignatureConstructor;
   utils: {
-    mod: (a: bigint, b?: bigint) => bigint;
-    invert: (number: bigint, modulo?: bigint) => bigint;
     randomPrivateKey: () => Uint8Array;
     getExtendedPublicKey: (key: PrivKey) => {
       head: Uint8Array;
@@ -306,6 +304,7 @@ export type CurveFn = {
   getPublicKey: (privateKey: PrivKey, isCompressed?: boolean) => Uint8Array;
   getSharedSecret: (privateA: PrivKey, publicB: PubKey, isCompressed?: boolean) => Uint8Array;
   sign: (msgHash: Hex, privKey: PrivKey, opts?: SignOpts) => SignatureType;
+  signUnhashed: (msg: Uint8Array, privKey: PrivKey, opts?: SignOpts) => SignatureType;
   verify: (
     signature: Hex | SignatureType,
     msgHash: Hex,
@@ -316,8 +315,6 @@ export type CurveFn = {
   ProjectivePoint: ProjectivePointConstructor;
   Signature: SignatureConstructor;
   utils: {
-    mod: (a: bigint) => bigint;
-    invert: (number: bigint) => bigint;
     isValidPrivateKey(privateKey: PrivKey): boolean;
     hashToPrivateKey: (hash: Hex) => Uint8Array;
     randomPrivateKey: () => Uint8Array;

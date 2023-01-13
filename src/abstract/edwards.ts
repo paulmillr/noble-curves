@@ -130,8 +130,6 @@ export type CurveFn = {
   ExtendedPoint: ExtendedPointConstructor;
   Signature: SignatureConstructor;
   utils: {
-    mod: (a: bigint) => bigint;
-    invert: (number: bigint) => bigint;
     randomPrivateKey: () => Uint8Array;
     getExtendedPublicKey: (key: PrivKey) => {
       head: Uint8Array;
@@ -146,7 +144,7 @@ export type CurveFn = {
 // NOTE: it is not generic twisted curve for now, but ed25519/ed448 generic implementation
 export function twistedEdwards(curveDef: CurveType): CurveFn {
   const CURVE = validateOpts(curveDef) as ReturnType<typeof validateOpts>;
-  const Fp = CURVE.Fp as mod.Field<bigint>;
+  const Fp = CURVE.Fp;
   const CURVE_ORDER = CURVE.n;
   const maxGroupElement = _2n ** BigInt(CURVE.nByteLength * 8);
 
@@ -662,9 +660,6 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
 
   const utils = {
     getExtendedPublicKey,
-    mod: modP,
-    invert: Fp.invert,
-
     /**
      * Not needed for ed25519 private keys. Needed if you use scalars directly (rare).
      */

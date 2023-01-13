@@ -1,5 +1,6 @@
 import * as fc from 'fast-check';
 import { secp256k1, schnorr } from '../lib/esm/secp256k1.js';
+import { Fp } from '../lib/esm/abstract/modular.js';
 import { readFileSync } from 'fs';
 import { default as ecdsa } from './vectors/ecdsa.json' assert { type: 'json' };
 import { default as ecdh } from './vectors/ecdh.json' assert { type: 'json' };
@@ -16,7 +17,6 @@ const privatesTxt = readFileSync('./test/vectors/privates-2.txt', 'utf-8');
 const schCsv = readFileSync('./test/vectors/schnorr.csv', 'utf-8');
 
 const FC_BIGINT = fc.bigInt(1n + 1n, secp.CURVE.n - 1n);
-const P = secp.CURVE.Fp.ORDER;
 // prettier-ignore
 const INVALID_ITEMS = ['deadbeef', Math.pow(2, 53), [1], 'xyzxyzxyxyzxyzxyxyzxyzxyxyzxyzxyxyzxyzxyxyzxyzxyxyzxyzxyxyzxyzxy', secp.CURVE.n + 2n];
 
@@ -50,9 +50,9 @@ should('secp256k1.getPublicKey()', () => {
   }
 });
 should('secp256k1.getPublicKey() rejects invalid keys', () => {
-  // for (const item of INVALID_ITEMS) {
-  //   throws(() => secp.getPublicKey(item));
-  // }
+  for (const item of INVALID_ITEMS) {
+    throws(() => secp.getPublicKey(item));
+  }
 });
 should('secp256k1.precompute', () => {
   secp.utils.precompute(4);
@@ -434,17 +434,26 @@ should('secp256k1.utils.isValidPrivateKey()', () => {
     deepStrictEqual(secp.utils.isValidPrivateKey(d), expected);
   }
 });
+should('have proper curve equation in assertValidity()', () => {
+  throws(() => {
+    const { Fp } = secp.CURVE;
+    let point = new secp.Point(Fp.create(-2n), Fp.create(-1n));
+    point.assertValidity();
+  });
+});
+
+const Fn = Fp(secp.CURVE.n);
 const normal = secp.utils._normalizePrivateKey;
 const tweakUtils = {
   privateAdd: (privateKey, tweak) => {
     const p = normal(privateKey);
     const t = normal(tweak);
-    return secp.utils._bigintToBytes(secp.utils.mod(p + t, secp.CURVE.n));
+    return secp.utils._bigintToBytes(Fn.create(p + t));
   },
 
   privateNegate: (privateKey) => {
     const p = normal(privateKey);
-    return secp.utils._bigintToBytes(secp.CURVE.n - p);
+    return secp.utils._bigintToBytes(Fn.negate(p));
   },
 
   pointAddScalar: (p, tweak, isCompressed) => {

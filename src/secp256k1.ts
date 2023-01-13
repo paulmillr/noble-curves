@@ -127,7 +127,7 @@ export const secp256k1 = createCurve(
         const b1 = -_1n * BigInt('0xe4437ed6010e88286f547fa90abfe4c3');
         const a2 = BigInt('0x114ca50f7a8e2f3f657c1108d9d44cfd8');
         const b2 = a1;
-        const POW_2_128 = BigInt('0x100000000000000000000000000000000');
+        const POW_2_128 = BigInt('0x100000000000000000000000000000000'); // (2n**128n).toString(16)
 
         const c1 = divNearest(b2 * k, n);
         const c2 = divNearest(-b1 * k, n);
@@ -173,20 +173,17 @@ function normalizePublicKey(publicKey: Hex | PointType<bigint>): PointType<bigin
   } else {
     const bytes = ensureBytes(publicKey);
     // Schnorr is 32 bytes
-    if (bytes.length === 32) {
-      const x = bytesToNumberBE(bytes);
-      if (!isValidFieldElement(x)) throw new Error('Point is not on curve');
-      const y2 = secp256k1.utils._weierstrassEquation(x); // y² = x³ + ax + b
-      let y = sqrtMod(y2); // y = y² ^ (p+1)/4
-      const isYOdd = (y & _1n) === _1n;
-      // Schnorr
-      if (isYOdd) y = secp256k1.CURVE.Fp.negate(y);
-      const point = new secp256k1.Point(x, y);
-      point.assertValidity();
-      return point;
-    }
-    // Do we need that in schnorr at all?
-    return secp256k1.Point.fromHex(publicKey);
+    if (bytes.length !== 32) throw new Error('Schnorr pubkeys must be 32 bytes');
+    const x = bytesToNumberBE(bytes);
+    if (!isValidFieldElement(x)) throw new Error('Point is not on curve');
+    const y2 = secp256k1.utils._weierstrassEquation(x); // y² = x³ + ax + b
+    let y = sqrtMod(y2); // y = y² ^ (p+1)/4
+    const isYOdd = (y & _1n) === _1n;
+    // Schnorr
+    if (isYOdd) y = secp256k1.CURVE.Fp.negate(y);
+    const point = new secp256k1.Point(x, y);
+    point.assertValidity();
+    return point;
   }
 }
 
@@ -225,10 +222,13 @@ class SchnorrSignature {
   }
   static fromHex(hex: Hex) {
     const bytes = ensureBytes(hex);
-    if (bytes.length !== 64)
-      throw new TypeError(`SchnorrSignature.fromHex: expected 64 bytes, not ${bytes.length}`);
-    const r = bytesToNumberBE(bytes.subarray(0, 32));
-    const s = bytesToNumberBE(bytes.subarray(32, 64));
+    const len = 32; // group length
+    if (bytes.length !== 2 * len)
+      throw new TypeError(
+        `SchnorrSignature.fromHex: expected ${2 * len} bytes, not ${bytes.length}`
+      );
+    const r = bytesToNumberBE(bytes.subarray(0, len));
+    const s = bytesToNumberBE(bytes.subarray(len, 2 * len));
     return new SchnorrSignature(r, s);
   }
   assertValidity() {

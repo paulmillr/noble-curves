@@ -138,11 +138,12 @@ function hashKeyWithIndex(key: Uint8Array, index: number) {
 export function grindKey(seed: Hex) {
   const _seed = ensureBytes0x(seed);
   const sha256mask = 2n ** 256n;
-  const limit = sha256mask - starkCurve.utils.mod(sha256mask, starkCurve.CURVE.n);
+  const Fn = Fp(CURVE.n);
+  const limit = sha256mask - Fn.create(sha256mask);
   for (let i = 0; ; i++) {
     const key = hashKeyWithIndex(_seed, i);
     // key should be in [0, limit)
-    if (key < limit) return starkCurve.utils.mod(key, starkCurve.CURVE.n).toString(16);
+    if (key < limit) return Fn.create(key).toString(16);
   }
 }
 
