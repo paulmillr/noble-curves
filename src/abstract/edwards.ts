@@ -311,25 +311,27 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     // Non-constant-time multiplication. Uses double-and-add algorithm.
     // It's faster, but should only be used when you don't care about
     // an exposed private key e.g. sig verification.
-    // Allows scalar bigger than curve order, but less than 2^256
     multiplyUnsafe(scalar: number | bigint): ExtendedPoint {
       let n = normalizeScalar(scalar, CURVE_ORDER, false);
-      const G = ExtendedPoint.BASE;
       const P0 = ExtendedPoint.ZERO;
       if (n === _0n) return P0;
       if (this.equals(P0) || n === _1n) return this;
-      if (this.equals(G)) return this.wNAF(n);
+      if (this.equals(ExtendedPoint.BASE)) return this.wNAF(n);
       return wnaf.unsafeLadder(this, n);
     }
 
+    // Checks if point is of small order.
+    // If you add something to small order point, you will have "dirty"
+    // point with torsion component.
     // Multiplies point by cofactor and checks if the result is 0.
     isSmallOrder(): boolean {
       return this.multiplyUnsafe(CURVE.h).equals(ExtendedPoint.ZERO);
     }
 
-    // Multiplies point by a very big scalar n and checks if the result is 0.
+    // Multiplies point by curve order (very big scalar CURVE.n) and checks if the result is 0.
+    // Returns `false` is the point is dirty.
     isTorsionFree(): boolean {
-      return this.multiplyUnsafe(CURVE_ORDER).equals(ExtendedPoint.ZERO);
+      return wnaf.unsafeLadder(this, CURVE_ORDER).equals(ExtendedPoint.ZERO);
     }
 
     // Converts Extended point to default (x, y) coordinates.
@@ -345,9 +347,6 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       if (zz !== _1n) throw new Error('invZ was invalid');
       return new Point(ax, ay);
     }
-    // Custom functions are unsupported for now: no effective cofactor clearing formulas
-    // This only clears low-torsion component: the point could still be "unsafe".
-    // To "fix" the point fully, it needs to be multiplied by expensive curve order CURVE.n
     clearCofactor(): ExtendedPoint {
       const { h: cofactor } = CURVE;
       if (cofactor === _1n) return this;
@@ -446,6 +445,8 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       return ut.bytesToHex(this.toRawBytes());
     }
 
+    // Determines if point is in prime-order subgroup.
+    // Returns `false` is the point is dirty.
     isTorsionFree(): boolean {
       return ExtendedPoint.fromAffine(this).isTorsionFree();
     }
@@ -550,8 +551,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
    */
   function normalizeScalar(num: number | bigint, max: bigint, strict = true): bigint {
     if (!max) throw new TypeError('Specify max value');
-    // No > 0 check: done in bigint case
-    if (typeof num === 'number' && Number.isSafeInteger(num)) num = BigInt(num);
+    if (ut.isPositiveInt(num)) num = BigInt(num);
     if (typeof num === 'bigint' && num < max) {
       if (strict) {
         if (_0n < num) return num;
@@ -559,7 +559,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
         if (_0n <= num) return num;
       }
     }
-    throw new TypeError('Expected valid scalar: 0 < scalar < max');
+    throw new TypeError(`Expected valid scalar: 0 < scalar < ${max}`);
   }
 
   /** Convenience method that creates public key and other stuff. RFC8032 5.1.5 */
@@ -652,7 +652,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     const kA = ExtendedPoint.fromAffine(publicKey).multiplyUnsafe(k);
     const RkA = ExtendedPoint.fromAffine(r).add(kA);
     // [8][S]B = [8]R + [8][k]A'
-    return RkA.subtract(SB).multiplyUnsafe(CURVE.h).equals(ExtendedPoint.ZERO);
+    return RkA.subtract(SB).clearCofactor().equals(ExtendedPoint.ZERO);
   }
 
   // Enable precomputes. Slows down first publicKey computation by 20ms.
