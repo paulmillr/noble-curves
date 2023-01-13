@@ -33,8 +33,8 @@ describe('jubjub', () => {
     throws(() =>
       jubjub.Point.fromHex(
         new Uint8Array([
-          7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-          0,
+          7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+          0, 0,
         ])
       )
     );
@@ -62,8 +62,14 @@ describe('jubjub', () => {
   });
 
   should('Find generators', () => {
-    const spend = findGroupHash(new Uint8Array(), new Uint8Array([90, 99, 97, 115, 104, 95, 71, 95]));
-    const proof = findGroupHash(new Uint8Array(), new Uint8Array([90, 99, 97, 115, 104, 95, 72, 95]));
+    const spend = findGroupHash(
+      new Uint8Array(),
+      new Uint8Array([90, 99, 97, 115, 104, 95, 71, 95])
+    );
+    const proof = findGroupHash(
+      new Uint8Array(),
+      new Uint8Array([90, 99, 97, 115, 104, 95, 72, 95])
+    );
     deepStrictEqual(getXY(spend.toAffine()), getXY(G_SPEND.toAffine()));
     deepStrictEqual(getXY(proof.toAffine()), getXY(G_PROOF.toAffine()));
   });
