@@ -138,6 +138,9 @@ for (const c in FIELDS) {
         })
       );
     });
+    should(`${name} negate(0)`, () => {
+      deepStrictEqual(Fp.negate(Fp.ZERO), Fp.ZERO);
+    });
 
     should(`${name} multiply/commutativity`, () => {
       fc.assert(
@@ -201,25 +204,54 @@ for (const c in FIELDS) {
         })
       );
     });
-    const isSquare = mod.FpIsSquare(Fp);
-    should(`${name} multiply/sqrt`, () => {
-      if (Fp === bls12_381.CURVE.Fp12) return; // Not implemented
-      fc.assert(
-        fc.property(FC_BIGINT, (num) => {
-          const a = create(num);
-          let root;
-          try {
-            root = Fp.sqrt(a);
-          } catch (e) {
-            deepStrictEqual(isSquare(a), false);
-            return;
-          }
-          deepStrictEqual(isSquare(a), true);
-          deepStrictEqual(Fp.equals(Fp.square(root), a), true, 'sqrt(a)^2 == a');
-          deepStrictEqual(Fp.equals(Fp.square(Fp.negate(root)), a), true, '(-sqrt(a))^2 == a');
-        })
-      );
+
+    should(`${name} square(0)`, () => {
+      deepStrictEqual(Fp.square(Fp.ZERO), Fp.ZERO);
+      deepStrictEqual(Fp.mul(Fp.ZERO, Fp.ZERO), Fp.ZERO);
     });
+
+    should(`${name} square(1)`, () => {
+      deepStrictEqual(Fp.square(Fp.ONE), Fp.ONE);
+      deepStrictEqual(Fp.mul(Fp.ONE, Fp.ONE), Fp.ONE);
+    });
+
+    should(`${name} square(-1)`, () => {
+      const minus1 = Fp.negate(Fp.ONE);
+      deepStrictEqual(Fp.square(minus1), Fp.ONE);
+      deepStrictEqual(Fp.mul(minus1, minus1), Fp.ONE);
+    });
+
+    const isSquare = mod.FpIsSquare(Fp);
+    // Not implemented
+    if (Fp !== bls12_381.CURVE.Fp12) {
+      should(`${name} multiply/sqrt`, () => {
+        fc.assert(
+          fc.property(FC_BIGINT, (num) => {
+            const a = create(num);
+            let root;
+            try {
+              root = Fp.sqrt(a);
+            } catch (e) {
+              deepStrictEqual(isSquare(a), false);
+              return;
+            }
+            deepStrictEqual(isSquare(a), true);
+            deepStrictEqual(Fp.equals(Fp.square(root), a), true, 'sqrt(a)^2 == a');
+            deepStrictEqual(Fp.equals(Fp.square(Fp.negate(root)), a), true, '(-sqrt(a))^2 == a');
+          })
+        );
+      });
+
+      should(`${name} sqrt(0)`, () => {
+        deepStrictEqual(Fp.sqrt(Fp.ZERO), Fp.ZERO);
+        const sqrt1 = Fp.sqrt(Fp.ONE);
+        deepStrictEqual(
+          Fp.equals(sqrt1, Fp.ONE) || Fp.equals(sqrt1, Fp.negate(Fp.ONE)),
+          true,
+          'sqrt(1) = 1 or -1'
+        );
+      });
+    }
 
     should(`${name} div/division by one equality`, () => {
       fc.assert(
@@ -560,6 +592,22 @@ for (const name in CURVES) {
     });
   }
 }
+
+should('Secp224k1 sqrt bug', () => {
+  const { Fp } = secp224r1.CURVE;
+  const sqrtMinus1 = Fp.sqrt(-1n);
+  // Verified against sage
+  deepStrictEqual(
+    sqrtMinus1,
+    23621584063597419797792593680131996961517196803742576047493035507225n
+  );
+  deepStrictEqual(
+    Fp.negate(sqrtMinus1),
+    3338362603553219996874421406887633712040719456283732096017030791656n
+  );
+  deepStrictEqual(Fp.square(sqrtMinus1), Fp.create(-1n));
+});
+
 // ESM is broken.
 import url from 'url';
 if (import.meta.url === url.pathToFileURL(process.argv[1]).href) {

@@ -81,7 +81,7 @@ export function tonelliShanks(P: bigint) {
 
   let Q: bigint, S: number, Z: bigint;
   // Step 1: By factoring out powers of 2 from p - 1,
-  // find q and s such that p - 1 = q2s with q odd
+  // find q and s such that p - 1 = q*(2^s) with q odd
   for (Q = P - _1n, S = 0; Q % _2n === _0n; Q /= _2n, S++);
 
   // Step 2: Select a non-square z such that (z | p) ≡ -1 and set c ≡ zq
@@ -100,22 +100,24 @@ export function tonelliShanks(P: bigint) {
   // Slow-path
   const Q1div2 = (Q + _1n) / _2n;
   return function tonelliSlow<T>(Fp: Field<T>, n: T): T {
-    // Step 0: Check that n is indeed a square: (n | p) must be ≡ 1
-    if (Fp.pow(n, legendreC) !== Fp.ONE) throw new Error('Cannot find square root');
+    // Step 0: Check that n is indeed a square: (n | p) should not be ≡ -1
+    if (Fp.pow(n, legendreC) === Fp.negate(Fp.ONE)) throw new Error('Cannot find square root');
     let r = S;
-    let g = Fp.pow(Fp.create(Z as any as T), Q); // will update both x and b
+    // TODO: will fail at Fp2/etc
+    let g = Fp.pow(Fp.mul(Fp.ONE, Z), Q); // will update both x and b
     let x = Fp.pow(n, Q1div2); // first guess at the square root
     let b = Fp.pow(n, Q); // first guess at the fudge factor
 
-    let t2: typeof Fp.ZERO;
-    while (!Fp.equals(Fp.sub(b, Fp.ONE), Fp.ZERO)) {
-      t2 = Fp.square(b);
-      let m;
-      for (m = 1; m < r; m++) {
+    while (!Fp.equals(b, Fp.ONE)) {
+      if (Fp.equals(b, Fp.ZERO)) return Fp.ZERO; // https://en.wikipedia.org/wiki/Tonelli%E2%80%93Shanks_algorithm (4. If t = 0, return r = 0)
+      // Find m such b^(2^m)==1
+      let m = 1;
+      for (let t2 = Fp.square(b); m < r; m++) {
         if (Fp.equals(t2, Fp.ONE)) break;
         t2 = Fp.square(t2); // t2 *= t2
       }
-      let ge = Fp.pow(g, BigInt(1 << (r - m - 1))); // ge = 2^(r-m-1)
+      // NOTE: r-m-1 can be bigger than 32, need to convert to bigint before shift, otherwise there will be overflow
+      const ge = Fp.pow(g, _1n << BigInt(r - m - 1)); // ge = 2^(r-m-1)
       g = Fp.square(ge); // g = ge * ge
       x = Fp.mul(x, ge); // x *= ge
       b = Fp.mul(b, g); // b *= g
