@@ -920,6 +920,7 @@ const htfDefaults = {
   // defined in section 2.2.5
   // Use utils.getDSTLabel(), utils.setDSTLabel(value)
   DST: 'BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_NUL_',
+  encodeDST: 'BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_NUL_',
   // p: the characteristic of F
   //    where F is a finite field of characteristic p and order q = p^m
   p: Fp.ORDER,

@@ -255,7 +255,7 @@ should('Starknet.js cross-tests', () => {
   );
   const msgHash = '0x6d1706bd3d1ba7c517be2a2a335996f63d4738e2f182144d078a1dd9997062e';
   const sig = starknet.sign(msgHash, privateKey);
-  const { r, s } = (sig);
+  const { r, s } = sig;
 
   deepStrictEqual(
     r.toString(),

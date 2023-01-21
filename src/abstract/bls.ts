@@ -15,12 +15,7 @@ import * as mod from './modular.js';
 import * as ut from './utils.js';
 // Types require separate import
 import { Hex, PrivKey } from './utils.js';
-import {
-  htfOpts,
-  stringToBytes,
-  hash_to_field as hashToField,
-  expand_message_xmd as expandMessageXMD,
-} from './hash-to-curve.js';
+import * as htf from './hash-to-curve.js';
 import { CurvePointsType, PointType, CurvePointsRes, weierstrassPoints } from './weierstrass.js';
 
 type Fp = bigint; // Can be different field?
@@ -32,9 +27,14 @@ export type SignatureCoder<Fp2> = {
 
 export type CurveType<Fp, Fp2, Fp6, Fp12> = {
   r: bigint;
-  G1: Omit<CurvePointsType<Fp>, 'n'>;
+  G1: Omit<CurvePointsType<Fp>, 'n'> & {
+    mapToCurve: htf.MapToCurve<Fp>;
+    htfDefaults: htf.Opts;
+  };
   G2: Omit<CurvePointsType<Fp2>, 'n'> & {
     Signature: SignatureCoder<Fp2>;
+    mapToCurve: htf.MapToCurve<Fp2>;
+    htfDefaults: htf.Opts;
   };
   x: bigint;
   Fp: mod.Field<Fp>;
@@ -51,7 +51,7 @@ export type CurveType<Fp, Fp2, Fp6, Fp12> = {
     conjugate(num: Fp12): Fp12;
     finalExponentiate(num: Fp12): Fp12;
   };
-  htfDefaults: htfOpts;
+  htfDefaults: htf.Opts;
   hash: ut.CHash; // Because we need outputLen for DRBG
   randomBytes: (bytesLength?: number) => Uint8Array;
 };
@@ -68,6 +68,11 @@ export type CurveFn<Fp, Fp2, Fp6, Fp12> = {
   Signature: SignatureCoder<Fp2>;
   millerLoop: (ell: [Fp2, Fp2, Fp2][], g1: [Fp, Fp]) => Fp12;
   calcPairingPrecomputes: (x: Fp2, y: Fp2) => [Fp2, Fp2, Fp2][];
+  // prettier-ignore
+  hashToCurve: {
+    G1: ReturnType<(typeof htf.hashToCurve<Fp>)>,
+    G2: ReturnType<(typeof htf.hashToCurve<Fp2>)>,
+  },
   pairing: (P: PointType<Fp>, Q: PointType<Fp2>, withFinalExponent?: boolean) => Fp12;
   getPublicKey: (privateKey: PrivKey) => Uint8Array;
   sign: {
@@ -93,11 +98,9 @@ export type CurveFn<Fp, Fp2, Fp6, Fp12> = {
     publicKeys: (Hex | PointType<Fp>)[]
   ) => boolean;
   utils: {
-    stringToBytes: typeof stringToBytes;
-    hashToField: typeof hashToField;
-    expandMessageXMD: typeof expandMessageXMD;
-    getDSTLabel: () => string;
-    setDSTLabel(newLabel: string): void;
+    stringToBytes: typeof htf.stringToBytes;
+    hashToField: typeof htf.hash_to_field;
+    expandMessageXMD: typeof htf.expand_message_xmd;
   };
 };
 
@@ -174,32 +177,28 @@ export function bls<Fp2, Fp6, Fp12>(
   const utils = {
     hexToBytes: ut.hexToBytes,
     bytesToHex: ut.bytesToHex,
-    stringToBytes: stringToBytes,
+    stringToBytes: htf.stringToBytes,
     // TODO: do we need to export it here?
     hashToField: (
       msg: Uint8Array,
       count: number,
       options: Partial<typeof CURVE.htfDefaults> = {}
-    ) => hashToField(msg, count, { ...CURVE.htfDefaults, ...options }),
+    ) => htf.hash_to_field(msg, count, { ...CURVE.htfDefaults, ...options }),
     expandMessageXMD: (msg: Uint8Array, DST: Uint8Array, lenInBytes: number, H = CURVE.hash) =>
-      expandMessageXMD(msg, DST, lenInBytes, H),
+      htf.expand_message_xmd(msg, DST, lenInBytes, H),
     hashToPrivateKey: (hash: Hex): Uint8Array => Fr.toBytes(ut.hashToPrivateScalar(hash, CURVE.r)),
     randomBytes: (bytesLength: number = groupLen): Uint8Array => CURVE.randomBytes(bytesLength),
     randomPrivateKey: (): Uint8Array => utils.hashToPrivateKey(utils.randomBytes(groupLen + 8)),
-    getDSTLabel: () => CURVE.htfDefaults.DST,
-    setDSTLabel(newLabel: string) {
-      // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-3.1
-      if (typeof newLabel !== 'string' || newLabel.length > 2048 || newLabel.length === 0) {
-        throw new TypeError('Invalid DST');
-      }
-      CURVE.htfDefaults.DST = newLabel;
-    },
   };
 
   // Point on G1 curve: (x, y)
   const G1 = weierstrassPoints({
     n: Fr.ORDER,
     ...CURVE.G1,
+  });
+  const G1HashToCurve = htf.hashToCurve(G1.Point, CURVE.G1.mapToCurve, {
+    ...CURVE.htfDefaults,
+    ...CURVE.G1.htfDefaults,
   });
 
   // Sparse multiplication against precomputed coefficients
@@ -227,6 +226,11 @@ export function bls<Fp2, Fp6, Fp12>(
     n: Fr.ORDER,
     ...CURVE.G2,
   });
+  const G2HashToCurve = htf.hashToCurve(G2.Point, CURVE.G2.mapToCurve, {
+    ...CURVE.htfDefaults,
+    ...CURVE.G2.htfDefaults,
+  });
+
   const { Signature } = CURVE.G2;
 
   // Calculates bilinear pairing
@@ -250,8 +254,8 @@ export function bls<Fp2, Fp6, Fp12>(
   function normP2(point: G2Hex): G2 {
     return point instanceof G2.Point ? point : Signature.decode(point);
   }
-  function normP2Hash(point: G2Hex): G2 {
-    return point instanceof G2.Point ? point : G2.Point.hashToCurve(point);
+  function normP2Hash(point: G2Hex, htfOpts?: htf.htfBasicOpts): G2 {
+    return point instanceof G2.Point ? point : (G2HashToCurve.hashToCurve(point, htfOpts) as G2);
   }
 
   // Multiplies generator by private key.
@@ -262,10 +266,10 @@ export function bls<Fp2, Fp6, Fp12>(
 
   // Executes `hashToCurve` on the message and then multiplies the result by private key.
   // S = pk x H(m)
-  function sign(message: Hex, privateKey: PrivKey): Uint8Array;
-  function sign(message: G2, privateKey: PrivKey): G2;
-  function sign(message: G2Hex, privateKey: PrivKey): Uint8Array | G2 {
-    const msgPoint = normP2Hash(message);
+  function sign(message: Hex, privateKey: PrivKey, htfOpts?: htf.htfBasicOpts): Uint8Array;
+  function sign(message: G2, privateKey: PrivKey, htfOpts?: htf.htfBasicOpts): G2;
+  function sign(message: G2Hex, privateKey: PrivKey, htfOpts?: htf.htfBasicOpts): Uint8Array | G2 {
+    const msgPoint = normP2Hash(message, htfOpts);
     msgPoint.assertValidity();
     const sigPoint = msgPoint.multiply(G1.normalizePrivateKey(privateKey));
     if (message instanceof G2.Point) return sigPoint;
@@ -274,9 +278,14 @@ export function bls<Fp2, Fp6, Fp12>(
 
   // Checks if pairing of public key & hash is equal to pairing of generator & signature.
   // e(P, H(m)) == e(G, S)
-  function verify(signature: G2Hex, message: G2Hex, publicKey: G1Hex): boolean {
+  function verify(
+    signature: G2Hex,
+    message: G2Hex,
+    publicKey: G1Hex,
+    htfOpts?: htf.htfBasicOpts
+  ): boolean {
     const P = normP1(publicKey);
-    const Hm = normP2Hash(message);
+    const Hm = normP2Hash(message, htfOpts);
     const G = G1.Point.BASE;
     const S = normP2(signature);
     // Instead of doing 2 exponentiations, we use property of billinear maps
@@ -323,12 +332,17 @@ export function bls<Fp2, Fp6, Fp12>(
 
   // https://ethresear.ch/t/fast-verification-of-multiple-bls-signatures/5407
   // e(G, S) = e(G, SUM(n)(Si)) = MUL(n)(e(G, Si))
-  function verifyBatch(signature: G2Hex, messages: G2Hex[], publicKeys: G1Hex[]): boolean {
+  function verifyBatch(
+    signature: G2Hex,
+    messages: G2Hex[],
+    publicKeys: G1Hex[],
+    htfOpts?: htf.htfBasicOpts
+  ): boolean {
     if (!messages.length) throw new Error('Expected non-empty messages array');
     if (publicKeys.length !== messages.length)
       throw new Error('Pubkey count should equal msg count');
     const sig = normP2(signature);
-    const nMessages = messages.map(normP2Hash);
+    const nMessages = messages.map((i) => normP2Hash(i, htfOpts));
     const nPublicKeys = publicKeys.map(normP1);
     try {
       const paired = [];
@@ -365,6 +379,7 @@ export function bls<Fp2, Fp6, Fp12>(
     Signature,
     millerLoop,
     calcPairingPrecomputes,
+    hashToCurve: { G1: G1HashToCurve, G2: G2HashToCurve },
     pairing,
     getPublicKey,
     sign,

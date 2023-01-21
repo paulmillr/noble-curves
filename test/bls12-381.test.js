@@ -1459,8 +1459,8 @@ describe('hash-to-curve', () => {
   ];
   for (let i = 0; i < VECTORS_G1.length; i++) {
     const t = VECTORS_G1[i];
-    should(`hashToCurve/G1 Killic (${i})`, async () => {
-      const p = await bls.G1.Point.hashToCurve(t.msg, {
+    should(`hashToCurve/G1 Killic (${i})`, () => {
+      const p = bls.hashToCurve.G1.hashToCurve(t.msg, {
         DST: 'BLS12381G1_XMD:SHA-256_SSWU_RO_TESTGEN',
       });
       deepStrictEqual(p.toHex(), t.expected);
@@ -1514,8 +1514,8 @@ describe('hash-to-curve', () => {
   ];
   for (let i = 0; i < VECTORS_G1_RO.length; i++) {
     const t = VECTORS_G1_RO[i];
-    should(`hashToCurve/G1 (BLS12381G1_XMD:SHA-256_SSWU_RO_) (${i})`, async () => {
-      const p = await bls.G1.Point.hashToCurve(t.msg, {
+    should(`hashToCurve/G1 (BLS12381G1_XMD:SHA-256_SSWU_RO_) (${i})`, () => {
+      const p = bls.hashToCurve.G1.hashToCurve(t.msg, {
         DST: 'QUUX-V01-CS02-with-BLS12381G1_XMD:SHA-256_SSWU_RO_',
       });
       deepStrictEqual(p.toHex(), t.expected);
@@ -1560,8 +1560,8 @@ describe('hash-to-curve', () => {
   ];
   for (let i = 0; i < VECTORS_G1_NU.length; i++) {
     const t = VECTORS_G1_NU[i];
-    should(`hashToCurve/G1 (BLS12381G1_XMD:SHA-256_SSWU_NU_) (${i})`, async () => {
-      const p = await bls.G1.Point.encodeToCurve(t.msg, {
+    should(`hashToCurve/G1 (BLS12381G1_XMD:SHA-256_SSWU_NU_) (${i})`, () => {
+      const p = bls.hashToCurve.G1.encodeToCurve(t.msg, {
         DST: 'QUUX-V01-CS02-with-BLS12381G1_XMD:SHA-256_SSWU_NU_',
       });
       deepStrictEqual(p.toHex(), t.expected);
@@ -1597,8 +1597,8 @@ describe('hash-to-curve', () => {
   ];
   for (let i = 0; i < VECTORS_ENCODE_G1.length; i++) {
     const t = VECTORS_ENCODE_G1[i];
-    should(`hashToCurve/G1 (Killic, encodeToCurve) (${i})`, async () => {
-      const p = await bls.G1.Point.encodeToCurve(t.msg, {
+    should(`hashToCurve/G1 (Killic, encodeToCurve) (${i})`, () => {
+      const p = bls.hashToCurve.G1.encodeToCurve(t.msg, {
         DST: 'BLS12381G1_XMD:SHA-256_SSWU_NU_TESTGEN',
       });
       deepStrictEqual(p.toHex(), t.expected);
@@ -1643,8 +1643,8 @@ describe('hash-to-curve', () => {
   ];
   for (let i = 0; i < VECTORS_G2.length; i++) {
     const t = VECTORS_G2[i];
-    should(`hashToCurve/G2 Killic (${i})`, async () => {
-      const p = await bls.G2.Point.hashToCurve(t.msg, {
+    should(`hashToCurve/G2 Killic (${i})`, () => {
+      const p = bls.hashToCurve.G2.hashToCurve(t.msg, {
         DST: 'BLS12381G2_XMD:SHA-256_SSWU_RO_TESTGEN',
       });
       deepStrictEqual(p.toHex(), t.expected);
@@ -1708,8 +1708,8 @@ describe('hash-to-curve', () => {
   ];
   for (let i = 0; i < VECTORS_G2_RO.length; i++) {
     const t = VECTORS_G2_RO[i];
-    should(`hashToCurve/G2 (BLS12381G2_XMD:SHA-256_SSWU_RO_) (${i})`, async () => {
-      const p = await bls.G2.Point.hashToCurve(t.msg, {
+    should(`hashToCurve/G2 (BLS12381G2_XMD:SHA-256_SSWU_RO_) (${i})`, () => {
+      const p = bls.hashToCurve.G2.hashToCurve(t.msg, {
         DST: 'QUUX-V01-CS02-with-BLS12381G2_XMD:SHA-256_SSWU_RO_',
       });
       deepStrictEqual(p.toHex(), t.expected);
@@ -1773,8 +1773,8 @@ describe('hash-to-curve', () => {
   ];
   for (let i = 0; i < VECTORS_G2_NU.length; i++) {
     const t = VECTORS_G2_NU[i];
-    should(`hashToCurve/G2 (BLS12381G2_XMD:SHA-256_SSWU_NU_) (${i})`, async () => {
-      const p = await bls.G2.Point.encodeToCurve(t.msg, {
+    should(`hashToCurve/G2 (BLS12381G2_XMD:SHA-256_SSWU_NU_) (${i})`, () => {
+      const p = bls.hashToCurve.G2.encodeToCurve(t.msg, {
         DST: 'QUUX-V01-CS02-with-BLS12381G2_XMD:SHA-256_SSWU_NU_',
       });
       deepStrictEqual(p.toHex(), t.expected);
@@ -1818,8 +1818,8 @@ describe('hash-to-curve', () => {
   ];
   for (let i = 0; i < VECTORS_ENCODE_G2.length; i++) {
     const t = VECTORS_ENCODE_G2[i];
-    should(`hashToCurve/G2 (Killic, encodeToCurve) (${i})`, async () => {
-      const p = await bls.G2.Point.encodeToCurve(t.msg, {
+    should(`hashToCurve/G2 (Killic, encodeToCurve) (${i})`, () => {
+      const p = bls.hashToCurve.G2.encodeToCurve(t.msg, {
         DST: 'BLS12381G2_XMD:SHA-256_SSWU_NU_TESTGEN',
       });
       deepStrictEqual(p.toHex(), t.expected);

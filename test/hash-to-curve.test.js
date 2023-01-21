@@ -5,12 +5,12 @@ import { bytesToHex } from '@noble/hashes/utils';
 import { sha256 } from '@noble/hashes/sha256';
 import { sha512 } from '@noble/hashes/sha512';
 import { shake128, shake256 } from '@noble/hashes/sha3';
-import { secp256r1 } from '../lib/esm/p256.js';
-import { secp384r1 } from '../lib/esm/p384.js';
-import { secp521r1 } from '../lib/esm/p521.js';
-import { ed25519 } from '../lib/esm/ed25519.js';
-import { ed448 } from '../lib/esm/ed448.js';
-import { secp256k1 } from '../lib/esm/secp256k1.js';
+import * as secp256r1 from '../lib/esm/p256.js';
+import * as secp384r1 from '../lib/esm/p384.js';
+import * as secp521r1 from '../lib/esm/p521.js';
+import * as ed25519 from '../lib/esm/ed25519.js';
+import * as ed448 from '../lib/esm/ed448.js';
+import * as secp256k1 from '../lib/esm/secp256k1.js';
 import { bls12_381 } from '../lib/esm/bls12-381.js';
 import {
   stringToBytes,
@@ -111,7 +111,7 @@ function testCurve(curve, ro, nu) {
     for (let i = 0; i < ro.vectors.length; i++) {
       const t = ro.vectors[i];
       should(`(${i})`, () => {
-        const p = curve.Point.hashToCurve(stringToBytes(t.msg), {
+        const p = curve.hashToCurve(stringToBytes(t.msg), {
           DST: ro.dst,
         });
         deepStrictEqual(p.x, stringToFp(t.P.x), 'Px');
@@ -123,7 +123,7 @@ function testCurve(curve, ro, nu) {
     for (let i = 0; i < nu.vectors.length; i++) {
       const t = nu.vectors[i];
       should(`(${i})`, () => {
-        const p = curve.Point.encodeToCurve(stringToBytes(t.msg), {
+        const p = curve.encodeToCurve(stringToBytes(t.msg), {
           DST: nu.dst,
         });
         deepStrictEqual(p.x, stringToFp(t.P.x), 'Px');
@@ -137,8 +137,8 @@ testCurve(secp256r1, p256_ro, p256_nu);
 testCurve(secp384r1, p384_ro, p384_nu);
 testCurve(secp521r1, p521_ro, p521_nu);
 // TODO: remove same tests from bls12
-testCurve(bls12_381.G1, g1_ro, g1_nu);
-testCurve(bls12_381.G2, g2_ro, g2_nu);
+testCurve(bls12_381.hashToCurve.G1, g1_ro, g1_nu);
+testCurve(bls12_381.hashToCurve.G2, g2_ro, g2_nu);
 testCurve(secp256k1, secp256k1_ro, secp256k1_nu);
 testCurve(ed25519, ed25519_ro, ed25519_nu);
 testCurve(ed448, ed448_ro, ed448_nu);

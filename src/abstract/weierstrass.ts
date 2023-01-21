@@ -11,7 +11,6 @@
 import * as mod from './modular.js';
 import * as ut from './utils.js';
 import { bytesToHex, Hex, PrivKey } from './utils.js';
-import { hash_to_field, htfOpts, validateHTFOpts } from './hash-to-curve.js';
 import { Group, GroupConstructor, wNAF } from './group.js';
 
 type HmacFnSync = (key: Uint8Array, ...messages: Uint8Array[]) => Uint8Array;
@@ -39,9 +38,6 @@ export type BasicCurve<T> = ut.BasicCurve<T> & {
     c: ProjectiveConstructor<T>,
     point: ProjectivePointType<T>
   ) => ProjectivePointType<T>;
-  // Hash to field options
-  htfDefaults?: htfOpts;
-  mapToCurve?: (scalar: bigint[]) => { x: T; y: T };
 };
 
 // ASN.1 DER encoding utilities
@@ -121,6 +117,7 @@ export interface ProjectivePointType<T> extends Group<ProjectivePointType<T>> {
   multiply(scalar: number | bigint, affinePoint?: PointType<T>): ProjectivePointType<T>;
   multiplyUnsafe(scalar: bigint): ProjectivePointType<T>;
   toAffine(invZ?: T): PointType<T>;
+  clearCofactor(): ProjectivePointType<T>;
 }
 // Static methods for 3d XYZ points
 export interface ProjectiveConstructor<T> extends GroupConstructor<ProjectivePointType<T>> {
@@ -139,14 +136,13 @@ export interface PointType<T> extends Group<PointType<T>> {
   toHex(isCompressed?: boolean): string;
   assertValidity(): void;
   multiplyAndAddUnsafe(Q: PointType<T>, a: bigint, b: bigint): PointType<T> | undefined;
+  clearCofactor(): PointType<T>;
 }
 // Static methods for 2d XY points
 export interface PointConstructor<T> extends GroupConstructor<PointType<T>> {
   new (x: T, y: T): PointType<T>;
   fromHex(hex: Hex): PointType<T>;
   fromPrivateKey(privateKey: PrivKey): PointType<T>;
-  hashToCurve(msg: Hex, options?: Partial<htfOpts>): PointType<T>;
-  encodeToCurve(msg: Hex, options?: Partial<htfOpts>): PointType<T>;
 }
 
 export type CurvePointsType<T> = BasicCurve<T> & {
@@ -162,7 +158,7 @@ function validatePointOpts<T>(curve: CurvePointsType<T>) {
     if (!Fp.isValid(curve[i]))
       throw new Error(`Invalid curve param ${i}=${opts[i]} (${typeof opts[i]})`);
   }
-  for (const i of ['isTorsionFree', 'clearCofactor', 'mapToCurve'] as const) {
+  for (const i of ['isTorsionFree', 'clearCofactor'] as const) {
     if (curve[i] === undefined) continue; // Optional
     if (typeof curve[i] !== 'function') throw new Error(`Invalid ${i} function`);
   }
@@ -181,8 +177,6 @@ function validatePointOpts<T>(curve: CurvePointsType<T>) {
   }
   if (typeof opts.fromBytes !== 'function') throw new Error('Invalid fromBytes function');
   if (typeof opts.toBytes !== 'function') throw new Error('Invalid fromBytes function');
-  // Requires including hashToCurve file
-  if (opts.htfDefaults !== undefined) validateHTFOpts(opts.htfDefaults);
   // Set defaults
   return Object.freeze({ ...opts } as const);
 }
@@ -670,28 +664,6 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
       const bQ = ProjectivePoint.fromAffine(Q).multiplyUnsafe(b);
       const sum = aP.add(bQ);
       return sum.equals(ProjectivePoint.ZERO) ? undefined : sum.toAffine();
-    }
-
-    // Encodes byte string to elliptic curve
-    // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-3
-    static hashToCurve(msg: Hex, options?: Partial<htfOpts>) {
-      const { mapToCurve } = CURVE;
-      if (!mapToCurve) throw new Error('CURVE.mapToCurve() has not been defined');
-      msg = ut.ensureBytes(msg);
-      const u = hash_to_field(msg, 2, { ...CURVE.htfDefaults, ...options } as htfOpts);
-      const { x: x0, y: y0 } = mapToCurve(u[0]);
-      const { x: x1, y: y1 } = mapToCurve(u[1]);
-      return new Point(x0, y0).add(new Point(x1, y1)).clearCofactor();
-    }
-
-    // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-16#section-3
-    static encodeToCurve(msg: Hex, options?: Partial<htfOpts>) {
-      const { mapToCurve } = CURVE;
-      if (!mapToCurve) throw new Error('CURVE.mapToCurve() has not been defined');
-      msg = ut.ensureBytes(msg);
-      const u = hash_to_field(msg, 1, { ...CURVE.htfDefaults, ...options } as htfOpts);
-      const { x, y } = mapToCurve(u[0]);
-      return new Point(x, y).clearCofactor();
     }
   }
 

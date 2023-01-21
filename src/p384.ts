@@ -3,6 +3,7 @@ import { createCurve } from './_shortw_utils.js';
 import { sha384 } from '@noble/hashes/sha512';
 import { Fp as Field } from './abstract/modular.js';
 import { mapToCurveSimpleSWU } from './abstract/weierstrass.js';
+import * as htf from './abstract/hash-to-curve.js';
 
 // NIST secp384r1 aka P384
 // https://www.secg.org/sec2-v2.pdf, https://neuromancer.sk/std/nist/P-384
@@ -35,16 +36,22 @@ export const P384 = createCurve({
     Gy: BigInt('0x3617de4a96262c6f5d9e98bf9292dc29f8f41dbd289a147ce9da3113b5f0b8c00a60b1ce1d7e819d7a431d7c90ea0e5f'),
     h: BigInt(1),
     lowS: false,
-    mapToCurve: (scalars: bigint[]) => mapSWU(scalars[0]),
-    htfDefaults: {
-      DST: 'P384_XMD:SHA-384_SSWU_RO_',
-      p: Fp.ORDER,
-      m: 1,
-      k: 192,
-      expand: 'xmd',
-      hash: sha384,
-    },
   } as const,
   sha384
 );
 export const secp384r1 = P384;
+
+const { hashToCurve, encodeToCurve } = htf.hashToCurve(
+  secp384r1.Point,
+  (scalars: bigint[]) => mapSWU(scalars[0]),
+  {
+    DST: 'P384_XMD:SHA-384_SSWU_RO_',
+    encodeDST: 'P384_XMD:SHA-384_SSWU_NU_',
+    p: Fp.ORDER,
+    m: 1,
+    k: 192,
+    expand: 'xmd',
+    hash: sha384,
+  }
+);
+export { hashToCurve, encodeToCurve };

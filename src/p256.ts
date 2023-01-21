@@ -3,6 +3,7 @@ import { createCurve } from './_shortw_utils.js';
 import { sha256 } from '@noble/hashes/sha256';
 import { Fp as Field } from './abstract/modular.js';
 import { mapToCurveSimpleSWU } from './abstract/weierstrass.js';
+import * as htf from './abstract/hash-to-curve.js';
 
 // NIST secp256r1 aka P256
 // https://www.secg.org/sec2-v2.pdf, https://neuromancer.sk/std/nist/P-256
@@ -31,16 +32,22 @@ export const P256 = createCurve(
     Gy: BigInt('0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5'),
     h: BigInt(1),
     lowS: false,
-    mapToCurve: (scalars: bigint[]) => mapSWU(scalars[0]),
-    htfDefaults: {
-      DST: 'P256_XMD:SHA-256_SSWU_RO_',
-      p: Fp.ORDER,
-      m: 1,
-      k: 128,
-      expand: 'xmd',
-      hash: sha256,
-    },
   } as const,
   sha256
 );
 export const secp256r1 = P256;
+
+const { hashToCurve, encodeToCurve } = htf.hashToCurve(
+  secp256r1.Point,
+  (scalars: bigint[]) => mapSWU(scalars[0]),
+  {
+    DST: 'P256_XMD:SHA-256_SSWU_RO_',
+    encodeDST: 'P256_XMD:SHA-256_SSWU_NU_',
+    p: Fp.ORDER,
+    m: 1,
+    k: 128,
+    expand: 'xmd',
+    hash: sha256,
+  }
+);
+export { hashToCurve, encodeToCurve };

@@ -4,6 +4,7 @@ import { sha512 } from '@noble/hashes/sha512';
 import { bytesToHex, PrivKey } from './abstract/utils.js';
 import { Fp as Field } from './abstract/modular.js';
 import { mapToCurveSimpleSWU } from './abstract/weierstrass.js';
+import * as htf from './abstract/hash-to-curve.js';
 
 // NIST secp521r1 aka P521
 // Note that it's 521, which differs from 512 of its hash function.
@@ -48,14 +49,20 @@ export const P521 = createCurve({
     }
     return key.padStart(66 * 2, '0');
   },
-  mapToCurve: (scalars: bigint[]) => mapSWU(scalars[0]),
-  htfDefaults: {
+} as const, sha512);
+export const secp521r1 = P521;
+
+const { hashToCurve, encodeToCurve } = htf.hashToCurve(
+  secp521r1.Point,
+  (scalars: bigint[]) => mapSWU(scalars[0]),
+  {
     DST: 'P521_XMD:SHA-512_SSWU_RO_',
+    encodeDST: 'P521_XMD:SHA-512_SSWU_NU_',
     p: Fp.ORDER,
     m: 1,
     k: 256,
-      expand: 'xmd',
+    expand: 'xmd',
     hash: sha512,
-  },
-} as const, sha512);
-export const secp521r1 = P521;
+  }
+);
+export { hashToCurve, encodeToCurve };

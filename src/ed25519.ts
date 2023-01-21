@@ -12,6 +12,7 @@ import {
   numberToBytesLE,
   Hex,
 } from './abstract/utils.js';
+import * as htf from './abstract/hash-to-curve.js';
 
 /**
  * ed25519 Twisted Edwards curve with following addons:
@@ -189,15 +190,6 @@ const ED25519_DEF = {
   // Ratio of u to v. Allows us to combine inversion and square root. Uses algo from RFC8032 5.1.3.
   // Constant-time, u/√v
   uvRatio,
-  htfDefaults: {
-    DST: 'edwards25519_XMD:SHA-512_ELL2_RO_',
-    p: Fp.ORDER,
-    m: 1,
-    k: 128,
-    expand: 'xmd',
-    hash: sha512,
-  },
-  mapToCurve: (scalars: bigint[]) => map_to_curve_elligator2_edwards25519(scalars[0]),
 } as const;
 
 export const ed25519 = twistedEdwards(ED25519_DEF);
@@ -216,6 +208,21 @@ export const ed25519ph = twistedEdwards({
   domain: ed25519_domain,
   preHash: sha512,
 });
+
+const { hashToCurve, encodeToCurve } = htf.hashToCurve(
+  ed25519.Point,
+  (scalars: bigint[]) => map_to_curve_elligator2_edwards25519(scalars[0]),
+  {
+    DST: 'edwards25519_XMD:SHA-512_ELL2_RO_',
+    encodeDST: 'edwards25519_XMD:SHA-512_ELL2_NU_',
+    p: Fp.ORDER,
+    m: 1,
+    k: 128,
+    expand: 'xmd',
+    hash: sha512,
+  }
+);
+export { hashToCurve, encodeToCurve };
 
 export const x25519 = montgomery({
   P: ED25519_P,

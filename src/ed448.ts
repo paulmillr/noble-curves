@@ -4,6 +4,7 @@ import { concatBytes, randomBytes, utf8ToBytes, wrapConstructor } from '@noble/h
 import { twistedEdwards } from './abstract/edwards.js';
 import { mod, pow2, Fp as Field } from './abstract/modular.js';
 import { montgomery } from './abstract/montgomery.js';
+import * as htf from './abstract/hash-to-curve.js';
 
 /**
  * Edwards448 (not Ed448-Goldilocks) curve with following addons:
@@ -189,20 +190,26 @@ const ED448_DEF = {
     // square root exists, and the decoding fails.
     return { isValid: mod(x2 * v, P) === u, value: x };
   },
-  htfDefaults: {
-    DST: 'edwards448_XOF:SHAKE256_ELL2_RO_',
-    p: Fp.ORDER,
-    m: 1,
-    k: 224,
-    expand: 'xof',
-    hash: shake256,
-  },
-  mapToCurve: (scalars: bigint[]) => map_to_curve_elligator2_edwards448(scalars[0]),
 } as const;
 
 export const ed448 = twistedEdwards(ED448_DEF);
 // NOTE: there is no ed448ctx, since ed448 supports ctx by default
 export const ed448ph = twistedEdwards({ ...ED448_DEF, preHash: shake256_64 });
+
+const { hashToCurve, encodeToCurve } = htf.hashToCurve(
+  ed448.Point,
+  (scalars: bigint[]) => map_to_curve_elligator2_edwards448(scalars[0]),
+  {
+    DST: 'edwards448_XOF:SHAKE256_ELL2_RO_',
+    encodeDST: 'edwards448_XOF:SHAKE256_ELL2_NU_',
+    p: Fp.ORDER,
+    m: 1,
+    k: 224,
+    expand: 'xof',
+    hash: shake256,
+  }
+);
+export { hashToCurve, encodeToCurve };
 
 export const x448 = montgomery({
   a24: BigInt(39081),

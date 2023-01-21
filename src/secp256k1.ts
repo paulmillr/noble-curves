@@ -12,7 +12,7 @@ import {
   PrivKey,
 } from './abstract/utils.js';
 import { randomBytes } from '@noble/hashes/utils';
-import { isogenyMap } from './abstract/hash-to-curve.js';
+import * as htf from './abstract/hash-to-curve.js';
 
 /**
  * secp256k1 belongs to Koblitz curves: it has efficiently computable endomorphism.
@@ -62,7 +62,7 @@ function sqrtMod(y: bigint): bigint {
 const Fp = Field(secp256k1P, undefined, undefined, { sqrt: sqrtMod });
 type Fp = bigint;
 
-const isoMap = isogenyMap(
+const isoMap = htf.isogenyMap(
   Fp,
   [
     // xNum
@@ -143,21 +143,27 @@ export const secp256k1 = createCurve(
         return { k1neg, k1, k2neg, k2 };
       },
     },
-    mapToCurve: (scalars: bigint[]) => {
-      const { x, y } = mapSWU(Fp.create(scalars[0]));
-      return isoMap(x, y);
-    },
-    htfDefaults: {
-      DST: 'secp256k1_XMD:SHA-256_SSWU_RO_',
-      p: Fp.ORDER,
-      m: 1,
-      k: 128,
-      expand: 'xmd',
-      hash: sha256,
-    },
   },
   sha256
 );
+
+const { hashToCurve, encodeToCurve } = htf.hashToCurve(
+  secp256k1.Point,
+  (scalars: bigint[]) => {
+    const { x, y } = mapSWU(Fp.create(scalars[0]));
+    return isoMap(x, y);
+  },
+  {
+    DST: 'secp256k1_XMD:SHA-256_SSWU_RO_',
+    encodeDST: 'secp256k1_XMD:SHA-256_SSWU_NU_',
+    p: Fp.ORDER,
+    m: 1,
+    k: 128,
+    expand: 'xmd',
+    hash: sha256,
+  }
+);
+export { hashToCurve, encodeToCurve };
 
 // Schnorr
 const _0n = BigInt(0);

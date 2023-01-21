@@ -13,7 +13,6 @@ import * as mod from './modular.js';
 import * as ut from './utils.js';
 import { ensureBytes, Hex, PrivKey } from './utils.js';
 import { Group, GroupConstructor, wNAF } from './group.js';
-import { hash_to_field as hashToField, htfOpts, validateHTFOpts } from './hash-to-curve.js';
 
 // Be friendly to bad ECMAScript parsers by not using bigint literals like 123n
 const _0n = BigInt(0);
@@ -39,8 +38,6 @@ export type CurveType = ut.BasicCurve<bigint> & {
   uvRatio?: (u: bigint, v: bigint) => { isValid: boolean; value: bigint };
   // RFC 8032 pre-hashing of messages to sign() / verify()
   preHash?: ut.CHash;
-  // Hash to field options
-  htfDefaults?: htfOpts;
   mapToCurve?: (scalar: bigint[]) => { x: bigint; y: bigint };
 };
 
@@ -59,7 +56,6 @@ function validateOpts(curve: CurveType) {
     if (opts[fn] === undefined) continue; // Optional
     if (typeof opts[fn] !== 'function') throw new Error(`Invalid ${fn} function`);
   }
-  if (opts.htfDefaults !== undefined) validateHTFOpts(opts.htfDefaults);
   // Set defaults
   return Object.freeze({ ...opts } as const);
 }
@@ -114,8 +110,6 @@ export interface PointConstructor extends GroupConstructor<PointType> {
   new (x: bigint, y: bigint): PointType;
   fromHex(hex: Hex): PointType;
   fromPrivateKey(privateKey: PrivKey): PointType;
-  hashToCurve(msg: Hex, options?: Partial<htfOpts>): PointType;
-  encodeToCurve(msg: Hex, options?: Partial<htfOpts>): PointType;
 }
 
 export type PubKey = Hex | PointType;
@@ -483,25 +477,6 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
 
     clearCofactor() {
       return ExtendedPoint.fromAffine(this).clearCofactor().toAffine();
-    }
-    // Encodes byte string to elliptic curve
-    // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-3
-    static hashToCurve(msg: Hex, options?: Partial<htfOpts>) {
-      const { mapToCurve, htfDefaults } = CURVE;
-      if (!mapToCurve) throw new Error('No mapToCurve defined for curve');
-      const u = hashToField(ensureBytes(msg), 2, { ...htfDefaults, ...options } as htfOpts);
-      const { x: x0, y: y0 } = mapToCurve(u[0]);
-      const { x: x1, y: y1 } = mapToCurve(u[1]);
-      const p = new Point(x0, y0).add(new Point(x1, y1)).clearCofactor();
-      return p;
-    }
-    // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-16#section-3
-    static encodeToCurve(msg: Hex, options?: Partial<htfOpts>) {
-      const { mapToCurve, htfDefaults } = CURVE;
-      if (!mapToCurve) throw new Error('No mapToCurve defined for curve');
-      const u = hashToField(ensureBytes(msg), 1, { ...htfDefaults, ...options } as htfOpts);
-      const { x, y } = mapToCurve(u[0]);
-      return new Point(x, y).clearCofactor();
     }
   }
 
