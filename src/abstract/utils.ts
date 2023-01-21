@@ -116,6 +116,12 @@ export function bytesToNumberLE(uint8a: Uint8Array): bigint {
 export const numberToBytesBE = (n: bigint, len: number) =>
   hexToBytes(n.toString(16).padStart(len * 2, '0'));
 export const numberToBytesLE = (n: bigint, len: number) => numberToBytesBE(n, len).reverse();
+// Returns variable number bytes (minimal bigint encoding?)
+export const numberToVarBytesBE = (n: bigint) => {
+  let hex = n.toString(16);
+  if (hex.length & 1) hex = '0' + hex;
+  return hexToBytes(hex);
+};
 
 export function ensureBytes(hex: Hex, expectedLength?: number): Uint8Array {
   // Uint8Array.from() instead of hash.slice() because node.js Buffer

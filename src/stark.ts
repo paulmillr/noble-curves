@@ -3,7 +3,7 @@ import { keccak_256 } from '@noble/hashes/sha3';
 import { sha256 } from '@noble/hashes/sha256';
 import { weierstrass, ProjectivePointType } from './abstract/weierstrass.js';
 import * as cutils from './abstract/utils.js';
-import { Fp } from './abstract/modular.js';
+import { Fp, mod } from './abstract/modular.js';
 import { getHash } from './_shortw_utils.js';
 
 type ProjectivePoint = ProjectivePointType<bigint>;
@@ -31,8 +31,7 @@ export const starkCurve = weierstrass({
   // Default options
   lowS: false,
   ...getHash(sha256),
-  truncateHash: (hash: Uint8Array, truncateOnly = false): bigint => {
-    // TODO: cleanup, ugly code
+  truncateHash: (hash: Uint8Array, truncateOnly = false): Uint8Array => {
     // Fix truncation
     if (!truncateOnly) {
       let hashS = bytesToNumber0x(hash).toString(16);
@@ -43,12 +42,13 @@ export const starkCurve = weierstrass({
     }
     // Truncate zero bytes on left (compat with elliptic)
     while (hash[0] === 0) hash = hash.subarray(1);
+    // bits2int + part of bits2octets (mod if !truncateOnly)
     const byteLength = hash.length;
     const delta = byteLength * 8 - nBitLength; // size of curve.n (252 bits)
     let h = hash.length ? bytesToNumber0x(hash) : 0n;
-    if (delta > 0) h = h >> BigInt(delta);
-    if (!truncateOnly && h >= CURVE_N) h -= CURVE_N;
-    return h;
+    if (delta > 0) h = h >> BigInt(delta); // truncate to nBitLength leftmost bits
+    if (!truncateOnly) h = mod(h, CURVE_N);
+    return cutils.numberToVarBytesBE(h);
   },
 });
 
