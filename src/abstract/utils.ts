@@ -4,6 +4,10 @@ const _0n = BigInt(0);
 const _1n = BigInt(1);
 const _2n = BigInt(2);
 
+const str = (a: any): a is string => typeof a === 'string';
+const big = (a: any): a is bigint => typeof a === 'bigint';
+const u8a = (a: any): a is Uint8Array => a instanceof Uint8Array;
+
 // We accept hex strings besides Uint8Array for simplicity
 export type Hex = Uint8Array | string;
 // Very few implementations accept numbers, we do it to ease learning curve
@@ -49,7 +53,7 @@ export function validateOpts<FP, T>(curve: BasicCurve<FP> & T) {
   mod.validateField(curve.Fp);
   for (const i of ['n', 'h'] as const) {
     const val = curve[i];
-    if (typeof val !== 'bigint') throw new Error(`Invalid curve param ${i}=${val} (${typeof val})`);
+    if (!big(val)) throw new Error(`Invalid curve param ${i}=${val} (${typeof val})`);
   }
   if (!curve.Fp.isValid(curve.Gx)) throw new Error('Invalid generator X coordinate Fp element');
   if (!curve.Fp.isValid(curve.Gy)) throw new Error('Invalid generator Y coordinate Fp element');
@@ -64,12 +68,12 @@ export function validateOpts<FP, T>(curve: BasicCurve<FP> & T) {
 }
 
 const hexes = Array.from({ length: 256 }, (v, i) => i.toString(16).padStart(2, '0'));
-export function bytesToHex(uint8a: Uint8Array): string {
-  if (!(uint8a instanceof Uint8Array)) throw new Error('Expected Uint8Array');
+export function bytesToHex(bytes: Uint8Array): string {
+  if (!u8a(bytes)) throw new Error('Expected Uint8Array');
   // pre-caching improves the speed 6x
   let hex = '';
-  for (let i = 0; i < uint8a.length; i++) {
-    hex += hexes[uint8a[i]];
+  for (let i = 0; i < bytes.length; i++) {
+    hex += hexes[bytes[i]];
   }
   return hex;
 }
@@ -80,18 +84,14 @@ export function numberToHexUnpadded(num: number | bigint): string {
 }
 
 export function hexToNumber(hex: string): bigint {
-  if (typeof hex !== 'string') {
-    throw new TypeError('hexToNumber: expected string, got ' + typeof hex);
-  }
+  if (!str(hex)) throw new TypeError('hexToNumber: expected string, got ' + typeof hex);
   // Big Endian
   return BigInt(`0x${hex}`);
 }
 
 // Caching slows it down 2-3x
 export function hexToBytes(hex: string): Uint8Array {
-  if (typeof hex !== 'string') {
-    throw new TypeError('hexToBytes: expected string, got ' + typeof hex);
-  }
+  if (!str(hex)) throw new TypeError('hexToBytes: expected string, got ' + typeof hex);
   if (hex.length % 2) throw new Error('hexToBytes: received invalid unpadded hex ' + hex.length);
   const array = new Uint8Array(hex.length / 2);
   for (let i = 0; i < array.length; i++) {
@@ -108,9 +108,9 @@ export function hexToBytes(hex: string): Uint8Array {
 export function bytesToNumberBE(bytes: Uint8Array): bigint {
   return hexToNumber(bytesToHex(bytes));
 }
-export function bytesToNumberLE(uint8a: Uint8Array): bigint {
-  if (!(uint8a instanceof Uint8Array)) throw new Error('Expected Uint8Array');
-  return BigInt('0x' + bytesToHex(Uint8Array.from(uint8a).reverse()));
+export function bytesToNumberLE(bytes: Uint8Array): bigint {
+  if (!u8a(bytes)) throw new Error('Expected Uint8Array');
+  return hexToNumber(bytesToHex(Uint8Array.from(bytes).reverse()));
 }
 
 export const numberToBytesBE = (n: bigint, len: number) =>
@@ -126,7 +126,7 @@ export const numberToVarBytesBE = (n: bigint) => {
 export function ensureBytes(hex: Hex, expectedLength?: number): Uint8Array {
   // Uint8Array.from() instead of hash.slice() because node.js Buffer
   // is instance of Uint8Array, and its slice() creates **mutable** copy
-  const bytes = hex instanceof Uint8Array ? Uint8Array.from(hex) : hexToBytes(hex);
+  const bytes = u8a(hex) ? Uint8Array.from(hex) : hexToBytes(hex);
   if (typeof expectedLength === 'number' && bytes.length !== expectedLength)
     throw new Error(`Expected ${expectedLength} bytes`);
   return bytes;
@@ -134,7 +134,7 @@ export function ensureBytes(hex: Hex, expectedLength?: number): Uint8Array {
 
 // Copies several Uint8Arrays into one.
 export function concatBytes(...arrays: Uint8Array[]): Uint8Array {
-  if (!arrays.every((b) => b instanceof Uint8Array)) throw new Error('Uint8Array list expected');
+  if (!arrays.every((b) => u8a(b))) throw new Error('Uint8Array list expected');
   if (arrays.length === 1) return arrays[0];
   const length = arrays.reduce((a, arr) => a + arr.length, 0);
   const result = new Uint8Array(length);
