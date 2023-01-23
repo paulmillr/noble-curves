@@ -87,7 +87,7 @@ describe('ed25519', () => {
       deepStrictEqual(ed.verify(signature, msg, publicKey), true);
     });
     should('not verify signature with wrong public key', () => {
-      const publicKey = ed.getPublicKey(12);
+      const publicKey = ed.getPublicKey(12n);
       const signature = ed.sign(msg, privKey);
       deepStrictEqual(ed.verify(signature, msg, publicKey), false);
     });
@@ -104,7 +104,7 @@ describe('ed25519', () => {
       deepStrictEqual(ed.verify(signature, msg, publicKey), true);
     });
     should('not verify signature with wrong public key', () => {
-      const publicKey = ed.getPublicKey(12);
+      const publicKey = ed.getPublicKey(12n);
       const signature = ed.sign(msg, privKey);
       deepStrictEqual(ed.verify(signature, msg, publicKey), false);
     });

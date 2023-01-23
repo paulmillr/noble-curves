@@ -170,16 +170,21 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
    * https://en.wikipedia.org/wiki/Twisted_Edwards_curve#Extended_coordinates
    */
   class ExtendedPoint implements ExtendedPointType {
-    constructor(readonly x: bigint, readonly y: bigint, readonly z: bigint, readonly t: bigint) {}
+    constructor(
+      readonly x: bigint,
+      readonly y: bigint,
+      readonly z = _1n,
+      readonly t = modP(x * y)
+    ) {}
 
-    static BASE = new ExtendedPoint(CURVE.Gx, CURVE.Gy, _1n, modP(CURVE.Gx * CURVE.Gy));
-    static ZERO = new ExtendedPoint(_0n, _1n, _1n, _0n);
+    static BASE = new ExtendedPoint(CURVE.Gx, CURVE.Gy);
+    static ZERO = new ExtendedPoint(_0n, _1n); // 0, 1, 1, 0
     static fromAffine(p: Point): ExtendedPoint {
       if (!(p instanceof Point)) {
         throw new TypeError('ExtendedPoint#fromAffine: expected Point');
       }
       if (p.equals(Point.ZERO)) return ExtendedPoint.ZERO;
-      return new ExtendedPoint(p.x, p.y, _1n, modP(p.x * p.y));
+      return new ExtendedPoint(p.x, p.y);
     }
     // Takes a bunch of Jacobian Points but executes only one
     // invert on all of them. invert is very slow operation,
@@ -306,8 +311,9 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     // It's faster, but should only be used when you don't care about
     // an exposed private key e.g. sig verification.
     multiplyUnsafe(scalar: number | bigint): ExtendedPoint {
-      let n = normalizeScalar(scalar, CURVE_ORDER, false);
       const P0 = ExtendedPoint.ZERO;
+      if (scalar === _0n) return P0;
+      let n = normalizeScalar(scalar, CURVE_ORDER, false);
       if (n === _0n) return P0;
       if (this.equals(P0) || n === _1n) return this;
       if (this.equals(ExtendedPoint.BASE)) return this.wNAF(n);
@@ -542,7 +548,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     const groupLen = CURVE.nByteLength;
     // Normalize bigint / number / string to Uint8Array
     const keyb =
-      typeof key === 'bigint' || typeof key === 'number'
+      typeof key === 'bigint'
         ? ut.numberToBytesLE(normalizeScalar(key, maxGroupElement), groupLen)
         : key;
     // Hash private key with curve's hash function to produce uniformingly random input

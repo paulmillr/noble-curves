@@ -382,7 +382,7 @@ describe('ed448', () => {
       deepStrictEqual(ed.verify(signature, msg, publicKey), true);
     });
     should('not verify signature with wrong public key', () => {
-      const publicKey = ed.getPublicKey(12);
+      const publicKey = ed.getPublicKey(12n);
       const signature = ed.sign(msg, privKey);
       deepStrictEqual(ed.verify(signature, msg, publicKey), false);
     });
@@ -392,19 +392,18 @@ describe('ed448', () => {
       deepStrictEqual(ed.verify(signature, wrongMsg, publicKey), false);
     });
   });
-
   describe('sync methods', () => {
     should('sign and verify', () => {
       const publicKey = ed.getPublicKey(privKey);
       const signature = ed.sign(msg, privKey);
       deepStrictEqual(ed.verify(signature, msg, publicKey), true);
     });
-    should('not verify signature with wrong public key', async () => {
-      const publicKey = ed.getPublicKey(12);
+    should('not verify signature with wrong public key', () => {
+      const publicKey = ed.getPublicKey(12n);
       const signature = ed.sign(msg, privKey);
       deepStrictEqual(ed.verify(signature, msg, publicKey), false);
     });
-    should('not verify signature with wrong hash', async () => {
+    should('not verify signature with wrong hash', () => {
       const publicKey = ed.getPublicKey(privKey);
       const signature = ed.sign(msg, privKey);
       deepStrictEqual(ed.verify(signature, wrongMsg, publicKey), false);

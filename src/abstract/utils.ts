@@ -7,7 +7,7 @@ const _2n = BigInt(2);
 // We accept hex strings besides Uint8Array for simplicity
 export type Hex = Uint8Array | string;
 // Very few implementations accept numbers, we do it to ease learning curve
-export type PrivKey = Hex | bigint | number;
+export type PrivKey = Hex | bigint;
 export type CHash = {
   (message: Uint8Array | string): Uint8Array;
   blockLen: number;
