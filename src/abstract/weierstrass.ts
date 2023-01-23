@@ -708,7 +708,9 @@ export type CurveType = BasicCurve<bigint> & {
   hash: ut.CHash; // Because we need outputLen for DRBG
   hmac: HmacFnSync;
   randomBytes: (bytesLength?: number) => Uint8Array;
-  truncateHash?: (hash: Uint8Array, truncateOnly?: boolean) => Uint8Array;
+  // truncateHash?: (hash: Uint8Array, truncateOnly?: boolean) => Uint8Array;
+  bits2int?: (bytes: Uint8Array) => bigint;
+  bits2int_modN?: (bytes: Uint8Array) => bigint;
 };
 
 function validateOpts(curve: CurveType) {
@@ -881,18 +883,6 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     return isBiggerThanHalfOrder(s) ? mod.mod(-s, CURVE_ORDER) : s;
   }
 
-  // Ensures ECDSA message hashes are 32 bytes and < curve order
-  // RFC6979 suggest optional truncating via bits2octets
-  // FIPS 186-4 Section 4.6 suggest the leftmost min(N, outlen) bits, where N = nBitLength, which is exactly what bits2int does
-  // However, result of bits2int can be higher than order, but since there is same amount of bits, modulo operation
-  // can be done via 'h >= n ? h - n : h'.
-  // But we cannot use int2octets, since it pads small hash with zeros which should not happen on truncate as per RFC6979 vectors
-  function _truncateHash(hash: Uint8Array, truncateOnly = false): Uint8Array {
-    const num = bits2int(hash);
-    return ut.numberToVarBytesBE(truncateOnly ? num : mod.mod(num, CURVE_ORDER)); // same as bits2octets but without zero padding
-  }
-  const truncateHash = CURVE.truncateHash || _truncateHash;
-
   /**
    * ECDSA signature with its (r, s) properties. Supports DER & compact representations.
    */
@@ -953,7 +943,8 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       const { r, s, recovery } = this;
       if (recovery == null) throw new Error('Cannot recover: recovery bit is not present');
       if (![0, 1, 2, 3].includes(recovery)) throw new Error('Cannot recover: invalid recovery bit');
-      const h = ut.bytesToNumberBE(truncateHash(ut.ensureBytes(msgHash)));
+      const h = bits2int_modN(ut.ensureBytes(msgHash));
+
       const { n } = CURVE;
       const radj = recovery === 2 || recovery === 3 ? r + n : r;
       if (radj >= Fp.ORDER) throw new Error('Cannot recover: bit 2/3 is invalid with current r');
@@ -1095,14 +1086,27 @@ export function weierstrass(curveDef: CurveType): CurveFn {
   }
 
   // RFC6979 methods
-  function bits2int(bytes: Uint8Array): bigint {
-    // Truncate to nBitLength leftmost bits (kinda)
-    // NOTE: for curves with nBitLength % 8 !== 0: bits2octets(bits2octets(hash)) !== bits2octets(hash)
-    // for some cases, because bytes.length * 8 is not actual bitLength.
-    const delta = bytes.length * 8 - CURVE.nBitLength;
-    const num = ut.bytesToNumberBE(bytes);
-    return delta > 0 ? num >> BigInt(delta) : num;
-  }
+  // Ensures ECDSA message hashes are 32 bytes and < curve order
+  // RFC6979 suggest optional truncating via bits2octets
+  // FIPS 186-4 Section 4.6 suggest the leftmost min(N, outlen) bits, where N = nBitLength, which is exactly what bits2int does
+  // However, result of bits2int can be higher than order, but since there is same amount of bits, modulo operation
+  // can be done via 'h >= n ? h - n : h'.
+  // But we cannot use int2octets, since it pads small hash with zeros which should not happen on truncate as per RFC6979 vectors
+  const bits2int =
+    CURVE.bits2int ||
+    function (bytes: Uint8Array): bigint {
+      // Truncate to nBitLength leftmost bits (kinda)
+      // NOTE: for curves with nBitLength % 8 !== 0: bits2octets(bits2octets(hash)) !== bits2octets(hash)
+      // for some cases, because bytes.length * 8 is not actual bitLength.
+      const delta = bytes.length * 8 - CURVE.nBitLength;
+      const num = ut.bytesToNumberBE(bytes);
+      return delta > 0 ? num >> BigInt(delta) : num;
+    };
+  const bits2int_modN =
+    CURVE.bits2int_modN ||
+    function (bytes: Uint8Array): bigint {
+      return mod.mod(bits2int(bytes), CURVE_ORDER); // can't use bytesToNumberBE here
+    };
   // NOTE: pads output with zero as per spec
   const ORDER_MASK = ut.bitMask(CURVE.nBitLength);
   function int2octets(num: bigint): Uint8Array {
@@ -1125,8 +1129,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     // However, we cannot later call bits2octets (which is truncateHash + int2octets), since nested bits2int is broken
     // for curves where nBitLength % 8 !== 0, so we unwrap it here as int2octets call.
     // const bits2octets = (bits)=>int2octets(ut.bytesToNumberBE(truncateHash(bits)))
-    const h1 = truncateHash(ut.ensureBytes(msgHash));
-    const h1int = ut.bytesToNumberBE(h1);
+    const h1int = bits2int_modN(ut.ensureBytes(msgHash));
     const h1octets = int2octets(h1int);
 
     const d = normalizePrivateKey(privateKey);
@@ -1158,7 +1161,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
   function kmdToSig(kBytes: Uint8Array, m: bigint, d: bigint, lowS = true): Signature | undefined {
     const { n } = CURVE;
     // RFC 6979 Section 3.2, step 3: k = bits2int(T)
-    const k = ut.bytesToNumberBE(truncateHash(kBytes, true)); // Cannot use fields methods, since it is group element
+    const k = bits2int(kBytes); // Cannot use fields methods, since it is group element
     if (!isWithinCurveOrder(k)) return;
     // Important: all mod() calls in the function must be done over `n`
     const kinv = mod.invert(k, n);
@@ -1259,7 +1262,8 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     }
     const { n } = CURVE;
     const { r, s } = signature;
-    const h = ut.bytesToNumberBE(truncateHash(msgHash)); // Cannot use fields methods, since it is group element
+
+    const h = bits2int_modN(msgHash); // Cannot use fields methods, since it is group element
     const sinv = mod.invert(s, n); // s^-1
     // R = u1⋅G - u2⋅P
     const u1 = mod.mod(h * sinv, n);
