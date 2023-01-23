@@ -16,6 +16,15 @@ const CURVE_N = BigInt(
   '3618502788666131213697322783095070105526743751716087489154079457884512865583'
 );
 const nBitLength = 252;
+// Copy-pasted from weierstrass.ts
+function bits2int(bytes: Uint8Array): bigint {
+  const delta = bytes.length * 8 - nBitLength;
+  const num = cutils.bytesToNumberBE(bytes);
+  return delta > 0 ? num >> BigInt(delta) : num;
+}
+function bits2int_modN(bytes: Uint8Array): bigint {
+  return mod(bits2int(bytes), CURVE_N);
+}
 export const starkCurve = weierstrass({
   // Params: a, b
   a: BigInt(1),
@@ -33,24 +42,20 @@ export const starkCurve = weierstrass({
   // Default options
   lowS: false,
   ...getHash(sha256),
-  truncateHash: (hash: Uint8Array, truncateOnly = false): Uint8Array => {
-    // Fix truncation
-    if (!truncateOnly) {
-      let hashS = bytesToNumber0x(hash).toString(16);
-      if (hashS.length === 63) {
-        hashS += '0';
-        hash = hexToBytes0x(hashS);
-      }
+  // Custom truncation routines for stark curve
+  bits2int: (bytes: Uint8Array): bigint => {
+    while (bytes[0] === 0) bytes = bytes.subarray(1);
+    return bits2int(bytes);
+  },
+  bits2int_modN: (bytes: Uint8Array): bigint => {
+    let hashS = cutils.bytesToNumberBE(bytes).toString(16);
+    if (hashS.length === 63) {
+      hashS += '0';
+      bytes = hexToBytes0x(hashS);
     }
     // Truncate zero bytes on left (compat with elliptic)
-    while (hash[0] === 0) hash = hash.subarray(1);
-    // bits2int + part of bits2octets (mod if !truncateOnly)
-    const byteLength = hash.length;
-    const delta = byteLength * 8 - nBitLength; // size of curve.n (252 bits)
-    let h = hash.length ? bytesToNumber0x(hash) : 0n;
-    if (delta > 0) h = h >> BigInt(delta); // truncate to nBitLength leftmost bits
-    if (!truncateOnly) h = mod(h, CURVE_N);
-    return cutils.numberToVarBytesBE(h);
+    while (bytes[0] === 0) bytes = bytes.subarray(1);
+    return bits2int_modN(bytes);
   },
 });
 
@@ -134,7 +139,7 @@ type Hex = Uint8Array | string;
 function hashKeyWithIndex(key: Uint8Array, index: number) {
   let indexHex = cutils.numberToHexUnpadded(index);
   if (indexHex.length & 1) indexHex = '0' + indexHex;
-  return bytesToNumber0x(sha256(cutils.concatBytes(key, hexToBytes0x(indexHex))));
+  return sha256Num(cutils.concatBytes(key, hexToBytes0x(indexHex)));
 }
 
 export function grindKey(seed: Hex) {
@@ -167,8 +172,8 @@ export function getAccountPath(
   ethereumAddress: string,
   index: number
 ) {
-  const layerNum = int31(bytesToNumber0x(sha256(layer)));
-  const applicationNum = int31(bytesToNumber0x(sha256(application)));
+  const layerNum = int31(sha256Num(layer));
+  const applicationNum = int31(sha256Num(application));
   const eth = hexToNumber0x(ethereumAddress);
   return `m/2645'/${layerNum}'/${applicationNum}'/${int31(eth)}'/${int31(eth >> 31n)}'/${index}`;
 }
@@ -264,7 +269,8 @@ export const computeHashOnElements = (data: PedersenArg[], fn = pedersen) =>
   [0, ...data, data.length].reduce((x, y) => fn(x, y));
 
 const MASK_250 = cutils.bitMask(250);
-export const keccak = (data: Uint8Array) => bytesToNumber0x(keccak_256(data)) & MASK_250;
+export const keccak = (data: Uint8Array): bigint => bytesToNumber0x(keccak_256(data)) & MASK_250;
+const sha256Num = (data: Uint8Array | string): bigint => cutils.bytesToNumberBE(sha256(data));
 
 // Poseidon hash
 export const Fp253 = Fp(
