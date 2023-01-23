@@ -3,8 +3,10 @@ import { keccak_256 } from '@noble/hashes/sha3';
 import { sha256 } from '@noble/hashes/sha256';
 import { weierstrass, ProjectivePointType } from './abstract/weierstrass.js';
 import * as cutils from './abstract/utils.js';
-import { Fp, mod } from './abstract/modular.js';
+import { Fp, mod, Field, validateField } from './abstract/modular.js';
 import { getHash } from './_shortw_utils.js';
+import * as poseidon from './abstract/poseidon.js';
+import { utf8ToBytes } from '@noble/hashes/utils';
 
 type ProjectivePoint = ProjectivePointType<bigint>;
 // Stark-friendly elliptic curve
@@ -138,12 +140,12 @@ function hashKeyWithIndex(key: Uint8Array, index: number) {
 export function grindKey(seed: Hex) {
   const _seed = ensureBytes0x(seed);
   const sha256mask = 2n ** 256n;
-  const Fn = Fp(CURVE.n);
-  const limit = sha256mask - Fn.create(sha256mask);
+
+  const limit = sha256mask - mod(sha256mask, CURVE_N);
   for (let i = 0; ; i++) {
     const key = hashKeyWithIndex(_seed, i);
     // key should be in [0, limit)
-    if (key < limit) return Fn.create(key).toString(16);
+    if (key < limit) return mod(key, CURVE_N).toString(16);
   }
 }
 
@@ -261,5 +263,84 @@ export function hashChain(data: PedersenArg[], fn = pedersen) {
 export const computeHashOnElements = (data: PedersenArg[], fn = pedersen) =>
   [0, ...data, data.length].reduce((x, y) => fn(x, y));
 
-const MASK_250 = 2n ** 250n - 1n;
+const MASK_250 = cutils.bitMask(250);
 export const keccak = (data: Uint8Array) => bytesToNumber0x(keccak_256(data)) & MASK_250;
+
+// Poseidon hash
+export const Fp253 = Fp(
+  BigInt('14474011154664525231415395255581126252639794253786371766033694892385558855681')
+); // 2^253 + 2^199 + 1
+export const Fp251 = Fp(
+  BigInt('3618502788666131213697322783095070105623107215331596699973092056135872020481')
+); // 2^251 + 17 * 2^192 + 1
+
+function poseidonRoundConstant(Fp: Field<bigint>, name: string, idx: number) {
+  const val = Fp.fromBytes(sha256(utf8ToBytes(`${name}${idx}`)));
+  return Fp.create(val);
+}
+
+// NOTE: doesn't check eiginvalues and possible can create unsafe matrix. But any filtration here will break compatibility with starknet
+// Please use only if you really know what you doing.
+// https://eprint.iacr.org/2019/458.pdf Section 2.3 (Avoiding Insecure Matrices)
+export function _poseidonMDS(Fp: Field<bigint>, name: string, m: number, attempt = 0) {
+  const x_values: bigint[] = [];
+  const y_values: bigint[] = [];
+  for (let i = 0; i < m; i++) {
+    x_values.push(poseidonRoundConstant(Fp, `${name}x`, attempt * m + i));
+    y_values.push(poseidonRoundConstant(Fp, `${name}y`, attempt * m + i));
+  }
+  if (new Set([...x_values, ...y_values]).size !== 2 * m)
+    throw new Error('X and Y values are not distinct');
+  return x_values.map((x) => y_values.map((y) => Fp.invert(Fp.sub(x, y))));
+}
+
+const MDS_SMALL = [
+  [3, 1, 1],
+  [1, -1, 1],
+  [1, 1, -2],
+].map((i) => i.map(BigInt));
+
+export type PoseidonOpts = {
+  Fp: Field<bigint>;
+  rate: number;
+  capacity: number;
+  roundsFull: number;
+  roundsPartial: number;
+};
+
+function poseidonBasic(opts: PoseidonOpts, mds: bigint[][]) {
+  validateField(opts.Fp);
+  if (!Number.isSafeInteger(opts.rate) || !Number.isSafeInteger(opts.capacity))
+    throw new Error(`Wrong poseidon opts: ${opts}`);
+  const m = opts.rate + opts.capacity;
+  const rounds = opts.roundsFull + opts.roundsPartial;
+  const roundConstants = [];
+  for (let i = 0; i < rounds; i++) {
+    const row = [];
+    for (let j = 0; j < m; j++) row.push(poseidonRoundConstant(opts.Fp, 'Hades', m * i + j));
+    roundConstants.push(row);
+  }
+  return poseidon.poseidon({
+    ...opts,
+    t: m,
+    sboxPower: 3,
+    reversePartialPowIdx: true, // Why?!
+    mds,
+    roundConstants,
+  });
+}
+
+export function poseidonCreate(opts: PoseidonOpts, mdsAttempt = 0) {
+  const m = opts.rate + opts.capacity;
+  if (!Number.isSafeInteger(mdsAttempt)) throw new Error(`Wrong mdsAttempt=${mdsAttempt}`);
+  return poseidonBasic(opts, _poseidonMDS(opts.Fp, 'HadesMDS', m, mdsAttempt));
+}
+
+export const poseidonSmall = poseidonBasic(
+  { Fp: Fp251, rate: 2, capacity: 1, roundsFull: 8, roundsPartial: 83 },
+  MDS_SMALL
+);
+
+export function poseidonHash(x: bigint, y: bigint, fn = poseidonSmall) {
+  return fn([x, y, 2n])[0];
+}

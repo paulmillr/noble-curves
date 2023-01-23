@@ -83,6 +83,11 @@
       "import": "./lib/esm/abstract/utils.js",
       "default": "./lib/abstract/utils.js"
     },
+    "./abstract/poseidon": {
+      "types": "./lib/abstract/poseidon.d.ts",
+      "import": "./lib/esm/abstract/poseidon.js",
+      "default": "./lib/abstract/poseidon.js"
+    },
     "./_shortw_utils": {
       "types": "./lib/_shortw_utils.d.ts",
       "import": "./lib/esm/_shortw_utils.js",

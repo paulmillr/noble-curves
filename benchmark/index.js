@@ -219,6 +219,15 @@ export const CURVES = {
         );
       },
     },
+    poseidon: {
+      samples: 2000,
+      noble: () => {
+        return stark.poseidonHash(
+          0x3d937c035c878245caf64531a5756109c53068da139362728feb561405371cbn,
+          0x208a0a10250e382e1e4bbe2880906c2791bf6275695e02fbbc6aeff9cd8b31an
+        );
+      },
+    },
     verify: {
       samples: 500,
       old: ({ publicKeyStark, msgHash, keyPair }) => {
