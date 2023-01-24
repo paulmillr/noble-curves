@@ -9,7 +9,7 @@ export interface Group<T extends Group<T>> {
   add(other: T): T;
   subtract(other: T): T;
   equals(other: T): boolean;
-  multiply(scalar: number | bigint): T;
+  multiply(scalar: bigint): T;
 }
 
 export type GroupConstructor<T> = {

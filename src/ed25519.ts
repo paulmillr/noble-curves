@@ -419,11 +419,11 @@ export class RistrettoPoint {
     return new RistrettoPoint(this.ep.subtract(other.ep));
   }
 
-  multiply(scalar: number | bigint): RistrettoPoint {
+  multiply(scalar: bigint): RistrettoPoint {
     return new RistrettoPoint(this.ep.multiply(scalar));
   }
 
-  multiplyUnsafe(scalar: number | bigint): RistrettoPoint {
+  multiplyUnsafe(scalar: bigint): RistrettoPoint {
     return new RistrettoPoint(this.ep.multiplyUnsafe(scalar));
   }
 }

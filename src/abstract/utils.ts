@@ -5,7 +5,7 @@ const _1n = BigInt(1);
 const _2n = BigInt(2);
 
 const str = (a: any): a is string => typeof a === 'string';
-const big = (a: any): a is bigint => typeof a === 'bigint';
+export const big = (a: any): a is bigint => typeof a === 'bigint';
 const u8a = (a: any): a is Uint8Array => a instanceof Uint8Array;
 
 // We accept hex strings besides Uint8Array for simplicity
