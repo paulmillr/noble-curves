@@ -80,8 +80,8 @@ export interface ExtendedPointType extends Group<ExtendedPointType> {
   readonly y: bigint;
   readonly z: bigint;
   readonly t: bigint;
-  multiply(scalar: number | bigint, affinePoint?: PointType): ExtendedPointType;
-  multiplyUnsafe(scalar: number | bigint): ExtendedPointType;
+  multiply(scalar: bigint, affinePoint?: PointType): ExtendedPointType;
+  multiplyUnsafe(scalar: bigint): ExtendedPointType;
   isSmallOrder(): boolean;
   isTorsionFree(): boolean;
   toAffine(invZ?: bigint): PointType;
@@ -140,7 +140,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
   const CURVE = validateOpts(curveDef) as ReturnType<typeof validateOpts>;
   const Fp = CURVE.Fp;
   const CURVE_ORDER = CURVE.n;
-  const maxGroupElement = _2n ** BigInt(CURVE.nByteLength * 8);
+  const MASK = _2n ** BigInt(CURVE.nByteLength * 8);
 
   // Function overrides
   const { randomBytes } = CURVE;
@@ -163,6 +163,26 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       if (ctx.length || phflag) throw new Error('Contexts/pre-hash are not supported');
       return data;
     }); // NOOP
+  function inBig(n: bigint) {
+    return typeof n === 'bigint' && 0n < n;
+  }
+  function assertInMask(n: bigint) {
+    if (inBig(n) && n < MASK) return n;
+    throw new Error(`Expected valid scalar < MASK, got ${typeof n} ${n}`);
+  }
+  function assertFE(n: bigint) {
+    if (inBig(n) && n < Fp.ORDER) return n;
+    throw new Error(`Expected valid scalar < P, got ${typeof n} ${n}`);
+  }
+  function assertGE(n: bigint) {
+    // GE = subgroup element, not full group
+    if (inBig(n) && n < CURVE_ORDER) return n;
+    throw new Error(`Expected valid scalar < N, got ${typeof n} ${n}`);
+  }
+  function assertGE0(n: bigint) {
+    // GE = subgroup element, not full group
+    return n === _0n ? n : assertGE(n);
+  }
 
   /**
    * Extended Point works in extended coordinates: (x, y, z, t) ∋ (x=x/z, y=y/z, t=xy).
@@ -303,20 +323,20 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     // Constant time multiplication.
     // Uses wNAF method. Windowed method may be 10% faster,
     // but takes 2x longer to generate and consumes 2x memory.
-    multiply(scalar: number | bigint, affinePoint?: Point): ExtendedPoint {
-      return this.wNAF(normalizeScalar(scalar, CURVE_ORDER), affinePoint);
+    multiply(scalar: bigint, affinePoint?: Point): ExtendedPoint {
+      return this.wNAF(assertGE(scalar), affinePoint);
     }
 
     // Non-constant-time multiplication. Uses double-and-add algorithm.
     // It's faster, but should only be used when you don't care about
     // an exposed private key e.g. sig verification.
-    multiplyUnsafe(scalar: number | bigint): ExtendedPoint {
+    multiplyUnsafe(scalar: bigint): ExtendedPoint {
+      let n = assertGE0(scalar);
+      const G = ExtendedPoint.BASE;
       const P0 = ExtendedPoint.ZERO;
-      if (scalar === _0n) return P0;
-      let n = normalizeScalar(scalar, CURVE_ORDER, false);
       if (n === _0n) return P0;
       if (this.equals(P0) || n === _1n) return this;
-      if (this.equals(ExtendedPoint.BASE)) return this.wNAF(n);
+      if (this.equals(G)) return this.wNAF(n);
       return wnaf.unsafeLadder(this, n);
     }
 
@@ -400,8 +420,12 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       normed[len - 1] = lastByte & ~0x80;
       const y = ut.bytesToNumberLE(normed);
 
-      if (strict && y >= Fp.ORDER) throw new Error('Expected 0 < hex < P');
-      if (!strict && y >= maxGroupElement) throw new Error('Expected 0 < hex < CURVE.n');
+      if (y === _0n) {
+        // y=0 is allowed
+      } else {
+        if (strict) assertFE(y); // strict=true [0..CURVE.Fp.P] (2^255-19 for ed25519)
+        else assertInMask(y); // strict=false [0..MASK] (2^256 for ed25519)
+      }
 
       // 2.  To recover the x-coordinate, the curve equation implies
       // Ed25519: x² = (y² - 1) / (d y² + 1) (mod p).
@@ -477,7 +501,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
      * @param scalar Big-Endian number
      * @returns new point
      */
-    multiply(scalar: number | bigint): Point {
+    multiply(scalar: bigint): Point {
       return ExtendedPoint.fromAffine(this).multiply(scalar, this).toAffine();
     }
 
@@ -505,8 +529,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     assertValidity() {
       const { r, s } = this;
       if (!(r instanceof Point)) throw new Error('Expected Point instance');
-      // 0 <= s < l
-      normalizeScalar(s, CURVE_ORDER, false);
+      assertGE0(s); // 0 <= s < l
       return this;
     }
 
@@ -524,33 +547,11 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     return mod.mod(ut.bytesToNumberLE(hash), CURVE_ORDER);
   }
 
-  /**
-   * Checks for num to be in range:
-   * For strict == true:  `0 <  num < max`.
-   * For strict == false: `0 <= num < max`.
-   * Converts non-float safe numbers to bigints.
-   */
-  function normalizeScalar(num: number | bigint, max: bigint, strict = true): bigint {
-    if (!max) throw new TypeError('Specify max value');
-    if (ut.isPositiveInt(num)) num = BigInt(num);
-    if (typeof num === 'bigint' && num < max) {
-      if (strict) {
-        if (_0n < num) return num;
-      } else {
-        if (_0n <= num) return num;
-      }
-    }
-    throw new TypeError(`Expected valid scalar: 0 < scalar < ${max}`);
-  }
-
   /** Convenience method that creates public key and other stuff. RFC8032 5.1.5 */
   function getExtendedPublicKey(key: PrivKey) {
     const groupLen = CURVE.nByteLength;
     // Normalize bigint / number / string to Uint8Array
-    const keyb =
-      typeof key === 'bigint'
-        ? ut.numberToBytesLE(normalizeScalar(key, maxGroupElement), groupLen)
-        : key;
+    const keyb = typeof key === 'bigint' ? ut.numberToBytesLE(assertInMask(key), groupLen) : key;
     // Hash private key with curve's hash function to produce uniformingly random input
     // We check byte lengths e.g.: ensureBytes(64, hash(ensureBytes(32, key)))
     const hashed = ensureBytes(CURVE.hash(ensureBytes(keyb, groupLen)), 2 * groupLen);

@@ -68,7 +68,7 @@ export function montgomery(curveDef: CurveType): CurveFn {
    * For strict == false: `0 <= num < max`.
    * Converts non-float safe numbers to bigints.
    */
-  function normalizeScalar(num: number | bigint, max: bigint, strict = true): bigint {
+  function normalizeScalar(num: bigint, max: bigint, strict = true): bigint {
     if (!max) throw new TypeError('Specify max value');
     if (typeof num === 'number' && Number.isSafeInteger(num)) num = BigInt(num);
     if (typeof num === 'bigint' && num < max) {
