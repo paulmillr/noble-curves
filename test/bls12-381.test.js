@@ -783,7 +783,7 @@ describe('bls12-381/basic', () => {
     );
   });
 
-  should('compress and decompress G1 points', async () => {
+  should('compress and decompress G1 points', () => {
     const priv = G1Point.fromPrivateKey(42n);
     const publicKey = priv.toHex(true);
     const decomp = G1Point.fromHex(publicKey);
@@ -847,14 +847,14 @@ describe('bls12-381/basic', () => {
   });
   // should aggregate signatures
 
-  should(`produce correct signatures (${G2_VECTORS.length} vectors)`, async () => {
+  should(`produce correct signatures (${G2_VECTORS.length} vectors)`, () => {
     for (let vector of G2_VECTORS) {
       const [priv, msg, expected] = vector;
       const sig = bls.sign(msg, priv);
       deepStrictEqual(bls.utils.bytesToHex(sig), expected);
     }
   });
-  should(`produce correct scalars (${SCALAR_VECTORS.length} vectors)`, async () => {
+  should(`produce correct scalars (${SCALAR_VECTORS.length} vectors)`, () => {
     const options = {
       p: bls.CURVE.r,
       m: 1,
@@ -1074,7 +1074,7 @@ describe('hash-to-curve', () => {
   ];
   for (let i = 0; i < VECTORS.length; i++) {
     const t = VECTORS[i];
-    should(`hash_to_field/expand_message_xmd(SHA-256) (${i})`, async () => {
+    should(`hash_to_field/expand_message_xmd(SHA-256) (${i})`, () => {
       const p = bls.utils.expandMessageXMD(
         bls.utils.stringToBytes(t.msg),
         bls.utils.stringToBytes(DST),
@@ -1192,7 +1192,7 @@ describe('hash-to-curve', () => {
   ];
   for (let i = 0; i < VECTORS_BIG.length; i++) {
     const t = VECTORS_BIG[i];
-    should(`hash_to_field/expand_message_xmd(SHA-256) (long DST) (${i})`, async () => {
+    should(`hash_to_field/expand_message_xmd(SHA-256) (long DST) (${i})`, () => {
       const p = bls.utils.expandMessageXMD(
         bls.utils.stringToBytes(t.msg),
         bls.utils.stringToBytes(LONG_DST),
@@ -1305,7 +1305,7 @@ describe('hash-to-curve', () => {
   ];
   for (let i = 0; i < VECTORS_SHA512.length; i++) {
     const t = VECTORS_SHA512[i];
-    should(`hash_to_field/expand_message_xmd(SHA-256) (long DST) (${i})`, async () => {
+    should(`hash_to_field/expand_message_xmd(SHA-256) (long DST) (${i})`, () => {
       const p = bls.utils.expandMessageXMD(
         bls.utils.stringToBytes(t.msg),
         bls.utils.stringToBytes(DST_512),
@@ -1716,7 +1716,7 @@ describe('hash-to-curve', () => {
 });
 
 describe('verify()', () => {
-  should('verify signed message', async () => {
+  should('verify signed message', () => {
     for (let i = 0; i < NUM_RUNS; i++) {
       const [priv, msg] = G2_VECTORS[i];
       const sig = bls.sign(msg, priv);
@@ -1725,7 +1725,7 @@ describe('verify()', () => {
       deepStrictEqual(res, true, `${priv}-${msg}`);
     }
   });
-  should('not verify signature with wrong message', async () => {
+  should('not verify signature with wrong message', () => {
     for (let i = 0; i < NUM_RUNS; i++) {
       const [priv, msg] = G2_VECTORS[i];
       const invMsg = G2_VECTORS[i + 1][1];
@@ -1735,7 +1735,7 @@ describe('verify()', () => {
       deepStrictEqual(res, false);
     }
   });
-  should('not verify signature with wrong key', async () => {
+  should('not verify signature with wrong key', () => {
     for (let i = 0; i < NUM_RUNS; i++) {
       const [priv, msg] = G2_VECTORS[i];
       const sig = bls.sign(msg, priv);
@@ -1746,9 +1746,9 @@ describe('verify()', () => {
     }
   });
   describe('batch', () => {
-    should('verify multi-signature', async () => {
-      await fc.assert(
-        fc.asyncProperty(FC_MSG_5, FC_BIGINT_5, async (messages, privateKeys) => {
+    should.only('verify multi-signature', () => {
+      fc.assert(
+        fc.property(FC_MSG_5, FC_BIGINT_5, (messages, privateKeys) => {
           privateKeys = privateKeys.slice(0, messages.length);
           messages = messages.slice(0, privateKeys.length);
           const publicKey = privateKeys.map(getPubKey);
@@ -1758,36 +1758,31 @@ describe('verify()', () => {
         })
       );
     });
-    should('batch verify multi-signatures', async () => {
-      await fc.assert(
-        fc.asyncProperty(
-          FC_MSG_5,
-          FC_MSG_5,
-          FC_BIGINT_5,
-          async (messages, wrongMessages, privateKeys) => {
-            privateKeys = privateKeys.slice(0, messages.length);
-            messages = messages.slice(0, privateKeys.length);
-            wrongMessages = messages.map((a, i) =>
-              typeof wrongMessages[i] === 'undefined' ? a : wrongMessages[i]
-            );
-            const publicKey = privateKeys.map(getPubKey);
-            const signatures = messages.map((message, i) => bls.sign(message, privateKeys[i]));
-            const aggregatedSignature = bls.aggregateSignatures(signatures);
-            deepStrictEqual(
-              bls.verifyBatch(aggregatedSignature, wrongMessages, publicKey),
-              messages.every((m, i) => m === wrongMessages[i])
-            );
-          }
-        )
+    should('batch verify multi-signatures', () => {
+      fc.assert(
+        fc.property(FC_MSG_5, FC_MSG_5, FC_BIGINT_5, (messages, wrongMessages, privateKeys) => {
+          privateKeys = privateKeys.slice(0, messages.length);
+          messages = messages.slice(0, privateKeys.length);
+          wrongMessages = messages.map((a, i) =>
+            typeof wrongMessages[i] === 'undefined' ? a : wrongMessages[i]
+          );
+          const publicKey = privateKeys.map(getPubKey);
+          const signatures = messages.map((message, i) => bls.sign(message, privateKeys[i]));
+          const aggregatedSignature = bls.aggregateSignatures(signatures);
+          deepStrictEqual(
+            bls.verifyBatch(aggregatedSignature, wrongMessages, publicKey),
+            messages.every((m, i) => m === wrongMessages[i])
+          );
+        })
       );
     });
-    should('not verify multi-signature with wrong public keys', async () => {
-      await fc.assert(
-        fc.asyncProperty(
+    should('not verify multi-signature with wrong public keys', () => {
+      fc.assert(
+        fc.property(
           FC_MSG_5,
           FC_BIGINT_5,
           FC_BIGINT_5,
-          async (messages, privateKeys, wrongPrivateKeys) => {
+          (messages, privateKeys, wrongPrivateKeys) => {
             privateKeys = privateKeys.slice(0, messages.length);
             wrongPrivateKeys = privateKeys.map((a, i) =>
               wrongPrivateKeys[i] !== undefined ? wrongPrivateKeys[i] : a
@@ -1804,9 +1799,9 @@ describe('verify()', () => {
         )
       );
     });
-    should('verify multi-signature as simple signature', async () => {
-      await fc.assert(
-        fc.asyncProperty(FC_MSG, FC_BIGINT_5, async (message, privateKeys) => {
+    should('verify multi-signature as simple signature', () => {
+      fc.assert(
+        fc.property(FC_MSG, FC_BIGINT_5, (message, privateKeys) => {
           const publicKey = privateKeys.map(getPubKey);
           const signatures = privateKeys.map((privateKey) => bls.sign(message, privateKey));
           const aggregatedSignature = bls.aggregateSignatures(signatures);
@@ -1815,23 +1810,18 @@ describe('verify()', () => {
         })
       );
     });
-    should('not verify wrong multi-signature as simple signature', async () => {
-      await fc.assert(
-        fc.asyncProperty(
-          FC_MSG,
-          FC_MSG,
-          FC_BIGINT_5,
-          async (message, wrongMessage, privateKeys) => {
-            const publicKey = privateKeys.map(getPubKey);
-            const signatures = privateKeys.map((privateKey) => bls.sign(message, privateKey));
-            const aggregatedSignature = bls.aggregateSignatures(signatures);
-            const aggregatedPublicKey = bls.aggregatePublicKeys(publicKey);
-            deepStrictEqual(
-              bls.verify(aggregatedSignature, wrongMessage, aggregatedPublicKey),
-              message === wrongMessage
-            );
-          }
-        )
+    should('not verify wrong multi-signature as simple signature', () => {
+      fc.assert(
+        fc.property(FC_MSG, FC_MSG, FC_BIGINT_5, (message, wrongMessage, privateKeys) => {
+          const publicKey = privateKeys.map(getPubKey);
+          const signatures = privateKeys.map((privateKey) => bls.sign(message, privateKey));
+          const aggregatedSignature = bls.aggregateSignatures(signatures);
+          const aggregatedPublicKey = bls.aggregatePublicKeys(publicKey);
+          deepStrictEqual(
+            bls.verify(aggregatedSignature, wrongMessage, aggregatedPublicKey),
+            message === wrongMessage
+          );
+        })
       );
     });
   });
