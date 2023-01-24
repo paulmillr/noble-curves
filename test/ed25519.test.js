@@ -440,7 +440,7 @@ describe('ed25519', () => {
       } catch (e) {
         noble = false;
       }
-      deepStrictEqual(noble, v.valid_zip215);
+      deepStrictEqual(noble, v.valid_zip215, JSON.stringify(v));
     }
   });
   should('ZIP-215 compliance tests/disallows sig.s >= CURVE.n', () => {

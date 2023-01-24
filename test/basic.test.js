@@ -342,7 +342,7 @@ for (const name in CURVES) {
     if (!p) continue;
 
     const G = [p.ZERO, p.BASE];
-    for (let i = 2; i < 10; i++) G.push(G[1].multiply(i));
+    for (let i = 2n; i < 10n; i++) G.push(G[1].multiply(i));
     const title = `${name}/${pointName}`;
     describe(title, () => {
       describe('basic group laws', () => {
@@ -355,7 +355,7 @@ for (const name in CURVES) {
           for (let i = 0; i < G.length; i++) {
             const p = G[i];
             equal(p, p.add(G[0]), '${i}*G + 0 = ${i}*G');
-            equal(G[0].multiply(i + 1), G[0], '${i + 1}*0 = 0');
+            equal(G[0].multiply(BigInt(i + 1)), G[0], '${i + 1}*0 = 0');
           }
         });
         should('(one)', () => {
@@ -376,7 +376,7 @@ for (const name in CURVES) {
           equal(G[3].double(), G[6], '(3*G).double() = 6*G');
         });
         should('(multiply)', () => {
-          equal(G[2].multiply(3), G[6], '(2*G).multiply(3) = 6*G');
+          equal(G[2].multiply(3n), G[6], '(2*G).multiply(3) = 6*G');
         });
         should('(same point addition)', () => {
           equal(G[3].add(G[3]), G[6], '3*G + 3*G = 6*G');
