@@ -39,7 +39,7 @@ export function groupHash(tag: Uint8Array, personalization: Uint8Array) {
   h.update(GH_FIRST_BLOCK);
   h.update(tag);
   // NOTE: returns ExtendedPoint, in case it will be multiplied later
-  let p = jubjub.ExtendedPoint.fromAffine(jubjub.Point.fromHex(h.digest()));
+  let p = jubjub.ExtendedPoint.fromAffine(jubjub.ExtendedPoint.fromHex(h.digest()));
   // NOTE: cannot replace with isSmallOrder, returns Point*8
   p = p.multiply(jubjub.CURVE.h);
   if (p.equals(jubjub.ExtendedPoint.ZERO)) throw new Error('Point has small order');

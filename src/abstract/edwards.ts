@@ -61,7 +61,10 @@ function validateOpts(curve: CurveType) {
 }
 
 // 2d point in XY coords
-export interface AffinePoint { x: bigint; y: bigint };
+export interface AffinePoint {
+  x: bigint;
+  y: bigint;
+}
 
 // Instance of Extended Point with coordinates in X, Y, Z, T
 export interface ExtendedPointType extends Group<ExtendedPointType> {
@@ -384,7 +387,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     }
   }
   const { BASE: G, ZERO: I } = ExtendedPoint;
-  let Gpows: ExtendedPoint[] | undefined = undefined;      // precomputes for base point G
+  let Gpows: ExtendedPoint[] | undefined = undefined; // precomputes for base point G
   const wnaf = wNAF(ExtendedPoint, CURVE.nByteLength * 8);
   function wNAF_TMP_FN(P: ExtendedPoint, n: bigint): ExtendedPoint {
     if (P.equals(G)) {

@@ -210,7 +210,7 @@ export const ed25519ph = twistedEdwards({
 });
 
 const { hashToCurve, encodeToCurve } = htf.hashToCurve(
-  ed25519.Point,
+  ed25519.ExtendedPoint,
   (scalars: bigint[]) => map_to_curve_elligator2_edwards25519(scalars[0]),
   {
     DST: 'edwards25519_XMD:SHA-512_ELL2_RO_',

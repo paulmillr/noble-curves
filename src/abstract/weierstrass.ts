@@ -137,10 +137,12 @@ export interface PointType<T> extends Group<PointType<T>> {
   assertValidity(): void;
   multiplyAndAddUnsafe(Q: PointType<T>, a: bigint, b: bigint): PointType<T> | undefined;
   clearCofactor(): PointType<T>;
+  toAffine(iz?: bigint): { x: T; y: T };
 }
 // Static methods for 2d XY points
 export interface PointConstructor<T> extends GroupConstructor<PointType<T>> {
   new (x: T, y: T): PointType<T>;
+  fromAffine(ap: { x: T; y: T }): PointType<T>;
   fromHex(hex: Hex): PointType<T>;
   fromPrivateKey(privateKey: PrivKey): PointType<T>;
 }
@@ -546,6 +548,12 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
      * Identity point aka point at infinity. p - p = zero_p; p + zero_p = p
      */
     static ZERO: Point = new Point(Fp.ZERO, Fp.ZERO);
+    static fromAffine(ap: { x: T; y: T }) {
+      return new Point(ap.x, ap.y);
+    }
+    toAffine(iz?: bigint) {
+      return { x: this.x, y: this.y };
+    }
 
     // We calculate precomputes for elliptic curve point multiplication
     // using windowed method. This specifies window size and
@@ -1124,10 +1132,11 @@ export function weierstrass(curveDef: CurveType): CurveFn {
   // Also it can be bigger for P224 + SHA256
   function prepSig(msgHash: Hex, privateKey: PrivKey, opts = defaultSigOpts) {
     if (msgHash == null) throw new Error(`sign: expected valid message hash, not "${msgHash}"`);
-    if (['recovered', 'canonical'].some(k => k in opts)) // Ban legacy options
+    if (['recovered', 'canonical'].some((k) => k in opts))
+      // Ban legacy options
       throw new Error('sign() legacy options not supported');
-    let { lowS } = opts;                                  // generates low-s sigs by default
-    if (lowS == null) lowS = true;                        // RFC6979 3.2: we skip step A, because
+    let { lowS } = opts; // generates low-s sigs by default
+    if (lowS == null) lowS = true; // RFC6979 3.2: we skip step A, because
     // Step A is ignored, since we already provide hash instead of msg
 
     // NOTE: instead of bits2int, we calling here truncateHash, since we need
@@ -1141,7 +1150,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     const d = normalizePrivateKey(privateKey);
     // K = HMAC_K(V || 0x00 || int2octets(x) || bits2octets(h1) || k')
     const seedArgs = [int2octets(d), h1octets];
-    let ent = opts.extraEntropy;                          // RFC6979 3.6: additional k' (optional)
+    let ent = opts.extraEntropy; // RFC6979 3.6: additional k' (optional)
     if (ent != null) {
       if (ent === true) ent = CURVE.randomBytes(Fp.BYTES);
       const e = ut.ensureBytes(ent);

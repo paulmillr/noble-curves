@@ -111,9 +111,11 @@ function testCurve(curve, ro, nu) {
     for (let i = 0; i < ro.vectors.length; i++) {
       const t = ro.vectors[i];
       should(`(${i})`, () => {
-        const p = curve.hashToCurve(stringToBytes(t.msg), {
-          DST: ro.dst,
-        });
+        const p = curve
+          .hashToCurve(stringToBytes(t.msg), {
+            DST: ro.dst,
+          })
+          .toAffine();
         deepStrictEqual(p.x, stringToFp(t.P.x), 'Px');
         deepStrictEqual(p.y, stringToFp(t.P.y), 'Py');
       });
@@ -123,9 +125,11 @@ function testCurve(curve, ro, nu) {
     for (let i = 0; i < nu.vectors.length; i++) {
       const t = nu.vectors[i];
       should(`(${i})`, () => {
-        const p = curve.encodeToCurve(stringToBytes(t.msg), {
-          DST: nu.dst,
-        });
+        const p = curve
+          .encodeToCurve(stringToBytes(t.msg), {
+            DST: nu.dst,
+          })
+          .toAffine();
         deepStrictEqual(p.x, stringToFp(t.P.x), 'Px');
         deepStrictEqual(p.y, stringToFp(t.P.y), 'Py');
       });

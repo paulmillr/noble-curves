@@ -96,10 +96,10 @@ export const CURVES = {
         old_secp.recoverPublicKey(msg, new old_secp.Signature(sig.r, sig.s), sig.recovery),
       secp256k1: ({ sig, msg }) => sig.recoverPublicKey(msg),
     },
-    hashToCurve: {
-      samples: 500,
-      noble: () => secp256k1.Point.hashToCurve('abcd'),
-    },
+    // hashToCurve: {
+    //   samples: 500,
+    //   noble: () => secp256k1.Point.hashToCurve('abcd'),
+    // },
   },
   ed25519: {
     data: () => {
@@ -128,10 +128,10 @@ export const CURVES = {
       old: ({ sig, msg, pub }) => noble_ed25519.sync.verify(sig, msg, pub),
       noble: ({ sig, msg, pub }) => ed25519.verify(sig, msg, pub),
     },
-    hashToCurve: {
-      samples: 500,
-      noble: () => ed25519.Point.hashToCurve('abcd'),
-    },
+    // hashToCurve: {
+    //   samples: 500,
+    //   noble: () => ed25519.Point.hashToCurve('abcd'),
+    // },
   },
   ed448: {
     data: () => {

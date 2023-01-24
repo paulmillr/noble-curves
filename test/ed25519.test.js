@@ -20,6 +20,7 @@ import { default as x25519vectors } from './wycheproof/x25519_test.json' assert 
 describe('ed25519', () => {
   const ed = ed25519;
   const hex = bytesToHex;
+  const Point = ed.ExtendedPoint;
 
   function to32Bytes(numOrStr) {
     let hex = typeof numOrStr === 'string' ? numOrStr : numOrStr.toString(16);
@@ -114,55 +115,45 @@ describe('ed25519', () => {
       deepStrictEqual(ed.verify(signature, wrongMsg, publicKey), false);
     });
   });
-  // https://xmr.llcoins.net/addresstests.html
-  should(
-    'ed25519/BASE_POINT.multiply()/should create right publicKey without SHA-512 hashing TEST 1',
-    () => {
+  describe('BASE_POINT.multiply()', () => {
+    // https://xmr.llcoins.net/addresstests.html
+    should('create right publicKey without SHA-512 hashing TEST 1', () => {
       const publicKey =
-        ed.Point.BASE.multiply(0x90af56259a4b6bfbc4337980d5d75fbe3c074630368ff3804d33028e5dbfa77n);
+        Point.BASE.multiply(0x90af56259a4b6bfbc4337980d5d75fbe3c074630368ff3804d33028e5dbfa77n);
       deepStrictEqual(
         publicKey.toHex(),
         '0f3b913371411b27e646b537e888f685bf929ea7aab93c950ed84433f064480d'
       );
-    }
-  );
-  should(
-    'ed25519/BASE_POINT.multiply()/should create right publicKey without SHA-512 hashing TEST 2',
-    () => {
+    });
+    should('create right publicKey without SHA-512 hashing TEST 2', () => {
       const publicKey =
-        ed.Point.BASE.multiply(0x364e8711a60780382a5d57b061c126f039940f28a9e91fe039d4d3094d8b88n);
+        Point.BASE.multiply(0x364e8711a60780382a5d57b061c126f039940f28a9e91fe039d4d3094d8b88n);
       deepStrictEqual(
         publicKey.toHex(),
         'ad545340b58610f0cd62f17d55af1ab11ecde9c084d5476865ddb4dbda015349'
       );
-    }
-  );
-  should(
-    'ed25519/BASE_POINT.multiply()/should create right publicKey without SHA-512 hashing TEST 3',
-    () => {
+    });
+    should('create right publicKey without SHA-512 hashing TEST 3', () => {
       const publicKey =
-        ed.Point.BASE.multiply(0xb9bf90ff3abec042752cac3a07a62f0c16cfb9d32a3fc2305d676ec2d86e941n);
+        Point.BASE.multiply(0xb9bf90ff3abec042752cac3a07a62f0c16cfb9d32a3fc2305d676ec2d86e941n);
       deepStrictEqual(
         publicKey.toHex(),
         'e097c4415fe85724d522b2e449e8fd78dd40d20097bdc9ae36fe8ec6fe12cb8c'
       );
-    }
-  );
-  should(
-    'ed25519/BASE_POINT.multiply()/should create right publicKey without SHA-512 hashing TEST 4',
-    () => {
+    });
+    should('create right publicKey without SHA-512 hashing TEST 4', () => {
       const publicKey =
-        ed.Point.BASE.multiply(0x69d896f02d79524c9878e080308180e2859d07f9f54454e0800e8db0847a46en);
+        Point.BASE.multiply(0x69d896f02d79524c9878e080308180e2859d07f9f54454e0800e8db0847a46en);
       deepStrictEqual(
         publicKey.toHex(),
         'f12cb7c43b59971395926f278ce7c2eaded9444fbce62ca717564cb508a0db1d'
       );
-    }
-  );
-  should('ed25519/BASE_POINT.multiply()/should throw Point#multiply on TEST 5', () => {
-    for (const num of [0n, 0, -1n, -1, 1.1]) {
-      throws(() => ed.Point.BASE.multiply(num));
-    }
+    });
+    should('throw Point#multiply on TEST 5', () => {
+      for (const num of [0n, 0, -1n, -1, 1.1]) {
+        throws(() => Point.BASE.multiply(num));
+      }
+    });
   });
 
   // https://ed25519.cr.yp.to/python/sign.py
@@ -184,7 +175,7 @@ describe('ed25519', () => {
       // Calculate
       const pub = ed.getPublicKey(to32Bytes(priv));
       deepStrictEqual(hex(pub), expectedPub);
-      deepStrictEqual(pub, ed.Point.fromHex(pub).toRawBytes());
+      deepStrictEqual(pub, Point.fromHex(pub).toRawBytes());
 
       const signature = hex(ed.sign(msg, priv));
       // console.log('vector', i);
@@ -444,9 +435,10 @@ describe('ed25519', () => {
     }
   });
   should('ZIP-215 compliance tests/disallows sig.s >= CURVE.n', () => {
-    const sig = new ed.Signature(ed.Point.BASE, 1n);
-    sig.s = ed.CURVE.n + 1n;
-    throws(() => ed.verify(sig, 'deadbeef', ed.Point.BASE));
+    // sig.R = BASE, sig.s = N+1
+    const sig =
+      '5866666666666666666666666666666666666666666666666666666666666666eed3f55c1a631258d69cf7a2def9de1400000000000000000000000000000010';
+    throws(() => ed.verify(sig, 'deadbeef', Point.BASE));
   });
 
   const rfc7748Mul = [
@@ -511,7 +503,7 @@ describe('ed25519', () => {
 
   // should('X25519: should convert base point to montgomery using fromPoint', () => {
   //   deepStrictEqual(
-  //     hex(ed.montgomeryCurve.UfromPoint(ed.Point.BASE)),
+  //     hex(ed.montgomeryCurve.UfromPoint(Point.BASE)),
   //     ed.montgomeryCurve.BASE_POINT_U
   //   );
   // });
@@ -655,7 +647,7 @@ describe('ed25519', () => {
   }
 
   should('X25519 base point', () => {
-    const { y } = ed25519.Point.BASE;
+    const { y } = ed25519.ExtendedPoint.BASE;
     const { Fp } = ed25519.CURVE;
     const u = Fp.create((y + 1n) * Fp.invert(1n - y));
     deepStrictEqual(hex(numberToBytesLE(u, 32)), x25519.Gu);
@@ -664,7 +656,7 @@ describe('ed25519', () => {
   should('isTorsionFree()', () => {
     const orig = ed.utils.getExtendedPublicKey(ed.utils.randomPrivateKey()).point;
     for (const hex of ED25519_TORSION_SUBGROUP.slice(1)) {
-      const dirty = orig.add(ed.Point.fromHex(hex));
+      const dirty = orig.add(Point.fromHex(hex));
       const cleared = dirty.clearCofactor();
       strictEqual(orig.isTorsionFree(), true, `orig must be torsionFree: ${hex}`);
       strictEqual(dirty.isTorsionFree(), false, `dirty must not be torsionFree: ${hex}`);

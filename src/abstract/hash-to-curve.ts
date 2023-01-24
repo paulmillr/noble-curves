@@ -179,13 +179,16 @@ export function isogenyMap<T, F extends mod.Field<T>>(field: F, map: [T[], T[], 
 }
 
 export interface Point<T> extends Group<Point<T>> {
-  readonly x: T;
-  readonly y: T;
+  // readonly x: T;
+  // readonly y: T;
+  add(rhs: Point<T>): Point<T>;
+  toAffine(iz?: bigint): { x: T; y: T };
   clearCofactor(): Point<T>;
 }
 
 export interface PointConstructor<T> extends GroupConstructor<Point<T>> {
-  new (x: T, y: T): Point<T>;
+  // new (x: T, y: T): Point<T>;
+  fromAffine(ap: { x: T; y: T }): Point<T>;
 }
 
 export type MapToCurve<T> = (scalar: bigint[]) => { x: T; y: T };
@@ -207,9 +210,9 @@ export function hashToCurve<T>(Point: PointConstructor<T>, mapToCurve: MapToCurv
       if (!mapToCurve) throw new Error('CURVE.mapToCurve() has not been defined');
       msg = ut.ensureBytes(msg);
       const u = hash_to_field(msg, 2, { ...def, DST: def.DST, ...options } as Opts);
-      const { x: x0, y: y0 } = mapToCurve(u[0]);
-      const { x: x1, y: y1 } = mapToCurve(u[1]);
-      return new Point(x0, y0).add(new Point(x1, y1)).clearCofactor();
+      return Point.fromAffine(mapToCurve(u[0]))
+        .add(Point.fromAffine(mapToCurve(u[1])))
+        .clearCofactor();
     },
 
     // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-16#section-3
@@ -217,8 +220,7 @@ export function hashToCurve<T>(Point: PointConstructor<T>, mapToCurve: MapToCurv
       if (!mapToCurve) throw new Error('CURVE.mapToCurve() has not been defined');
       msg = ut.ensureBytes(msg);
       const u = hash_to_field(msg, 1, { ...def, DST: def.encodeDST, ...options } as Opts);
-      const { x, y } = mapToCurve(u[0]);
-      return new Point(x, y).clearCofactor();
+      return Point.fromAffine(mapToCurve(u[0])).clearCofactor();
     },
   };
 }

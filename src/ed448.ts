@@ -197,7 +197,7 @@ export const ed448 = twistedEdwards(ED448_DEF);
 export const ed448ph = twistedEdwards({ ...ED448_DEF, preHash: shake256_64 });
 
 const { hashToCurve, encodeToCurve } = htf.hashToCurve(
-  ed448.Point,
+  ed448.ExtendedPoint,
   (scalars: bigint[]) => map_to_curve_elligator2_edwards448(scalars[0]),
   {
     DST: 'edwards448_XOF:SHAKE256_ELL2_RO_',

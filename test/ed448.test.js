@@ -11,9 +11,10 @@ describe('ed448', () => {
   const ed = ed448;
   const hex = bytesToHex;
   ed.utils.precompute(4);
+  const Point = ed.ExtendedPoint;
 
   should(`Basic`, () => {
-    const G1 = ed.Point.BASE;
+    const G1 = Point.BASE.toAffine();
     deepStrictEqual(
       G1.x,
       224580040295924300187604334099896036246789641632564134246125461686950415467406032909029192869357953282578032075146446173674602635247710n
@@ -22,7 +23,7 @@ describe('ed448', () => {
       G1.y,
       298819210078481492676017930443930673437544040154080242095928241372331506189835876003536878655418784733982303233503462500531545062832660n
     );
-    const G2 = ed.Point.BASE.multiply(2n);
+    const G2 = Point.BASE.multiply(2n).toAffine();
     deepStrictEqual(
       G2.x,
       484559149530404593699549205258669689569094240458212040187660132787056912146709081364401144455726350866276831544947397859048262938744149n
@@ -31,7 +32,7 @@ describe('ed448', () => {
       G2.y,
       494088759867433727674302672526735089350544552303727723746126484473087719117037293890093462157703888342865036477787453078312060500281069n
     );
-    const G3 = ed.Point.BASE.multiply(3n);
+    const G3 = Point.BASE.multiply(3n).toAffine();
     deepStrictEqual(
       G3.x,
       23839778817283171003887799738662344287085130522697782688245073320169861206004018274567429238677677920280078599146891901463786155880335n
@@ -43,12 +44,12 @@ describe('ed448', () => {
   });
 
   should('Basic/decompress', () => {
-    const G1 = ed.Point.BASE;
-    const G2 = ed.Point.BASE.multiply(2n);
-    const G3 = ed.Point.BASE.multiply(3n);
+    const G1 = Point.BASE;
+    const G2 = Point.BASE.multiply(2n);
+    const G3 = Point.BASE.multiply(3n);
     const points = [G1, G2, G3];
-    const getXY = (p) => ({ x: p.x, y: p.y });
-    for (const p of points) deepStrictEqual(getXY(ed.Point.fromHex(p.toHex())), getXY(p));
+    const getXY = (p) => p.toAffine();
+    for (const p of points) deepStrictEqual(getXY(Point.fromHex(p.toHex())), getXY(p));
   });
 
   const VECTORS_RFC8032 = [
@@ -412,7 +413,7 @@ describe('ed448', () => {
 
   should('BASE_POINT.multiply() throws in Point#multiply on TEST 5', () => {
     for (const num of [0n, 0, -1n, -1, 1.1]) {
-      throws(() => ed.Point.BASE.multiply(num));
+      throws(() => ed.ExtendedPoint.BASE.multiply(num));
     }
   });
 
@@ -559,7 +560,7 @@ describe('ed448', () => {
 
   // should('X448: should convert base point to montgomery using fromPoint', () => {
   //   deepStrictEqual(
-  //     hex(ed.montgomeryCurve.UfromPoint(ed.Point.BASE)),
+  //     hex(ed.montgomeryCurve.UfromPoint(Point.BASE)),
   //     ed.montgomeryCurve.BASE_POINT_U
   //   );
   // });
@@ -654,7 +655,7 @@ describe('ed448', () => {
   }
 
   should('X448 base point', () => {
-    const { x, y } = ed448.Point.BASE;
+    const { x, y } = Point.BASE;
     const { Fp } = ed448.CURVE;
     // const invX = Fp.invert(x * x); // x²
     const u = Fp.div(Fp.create(y * y), Fp.create(x * x)); // (y²/x²)
