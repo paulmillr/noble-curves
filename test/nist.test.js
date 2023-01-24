@@ -46,7 +46,7 @@ should('wychenproof ECDSA vectors', () => {
     if (group.key.curve === 'secp224r1' && group.sha !== 'SHA-224') {
       if (group.sha === 'SHA-256') CURVE = CURVE.create(sha256);
     }
-    const pubKey = CURVE.Point.fromHex(group.key.uncompressed);
+    const pubKey = CURVE.ProjectivePoint.fromHex(group.key.uncompressed);
     deepStrictEqual(pubKey.x, BigInt(`0x${group.key.wx}`));
     deepStrictEqual(pubKey.y, BigInt(`0x${group.key.wy}`));
     for (const test of group.tests) {
@@ -87,7 +87,7 @@ should('wychenproof ECDH vectors', () => {
     for (const test of group.tests) {
       if (test.result === 'valid' || test.result === 'acceptable') {
         try {
-          const pub = CURVE.Point.fromHex(test.public);
+          const pub = CURVE.ProjectivePoint.fromHex(test.public);
         } catch (e) {
           if (e.message.includes('Point.fromHex: received invalid point.')) continue;
           throw e;
@@ -147,7 +147,7 @@ for (const name in WYCHEPROOF_ECDH) {
         for (const test of group.tests) {
           if (test.result === 'valid' || test.result === 'acceptable') {
             try {
-              const pub = curve.Point.fromHex(test.public);
+              const pub = curve.ProjectivePoint.fromHex(test.public);
             } catch (e) {
               if (e.message.includes('Point.fromHex: received invalid point.')) continue;
               throw e;
@@ -309,7 +309,7 @@ const WYCHEPROOF_ECDSA = {
 };
 
 function runWycheproof(name, CURVE, group, index) {
-  const pubKey = CURVE.Point.fromHex(group.key.uncompressed);
+  const pubKey = CURVE.ProjectivePoint.fromHex(group.key.uncompressed);
   deepStrictEqual(pubKey.x, BigInt(`0x${group.key.wx}`));
   deepStrictEqual(pubKey.y, BigInt(`0x${group.key.wy}`));
   for (const test of group.tests) {
@@ -367,7 +367,7 @@ should('RFC6979', () => {
     const curve = NIST[v.curve];
     deepStrictEqual(curve.CURVE.n, hexToBigint(v.q));
     const pubKey = curve.getPublicKey(v.private);
-    const pubPoint = curve.Point.fromHex(pubKey);
+    const pubPoint = curve.ProjectivePoint.fromHex(pubKey);
     deepStrictEqual(pubPoint.x, hexToBigint(v.Ux));
     deepStrictEqual(pubPoint.y, hexToBigint(v.Uy));
     for (const c of v.cases) {

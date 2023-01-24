@@ -16,13 +16,18 @@ import * as ut from './utils.js';
 // Types require separate import
 import { Hex, PrivKey } from './utils.js';
 import * as htf from './hash-to-curve.js';
-import { CurvePointsType, PointType, CurvePointsRes, weierstrassPoints } from './weierstrass.js';
+import {
+  CurvePointsType,
+  ProjectivePointType as PPointType,
+  CurvePointsRes,
+  weierstrassPoints,
+} from './weierstrass.js';
 
 type Fp = bigint; // Can be different field?
 
 export type SignatureCoder<Fp2> = {
-  decode(hex: Hex): PointType<Fp2>;
-  encode(point: PointType<Fp2>): Uint8Array;
+  decode(hex: Hex): PPointType<Fp2>;
+  encode(point: PPointType<Fp2>): Uint8Array;
 };
 
 export type CurveType<Fp, Fp2, Fp6, Fp12> = {
@@ -73,29 +78,29 @@ export type CurveFn<Fp, Fp2, Fp6, Fp12> = {
     G1: ReturnType<(typeof htf.hashToCurve<Fp>)>,
     G2: ReturnType<(typeof htf.hashToCurve<Fp2>)>,
   },
-  pairing: (P: PointType<Fp>, Q: PointType<Fp2>, withFinalExponent?: boolean) => Fp12;
+  pairing: (P: PPointType<Fp>, Q: PPointType<Fp2>, withFinalExponent?: boolean) => Fp12;
   getPublicKey: (privateKey: PrivKey) => Uint8Array;
   sign: {
     (message: Hex, privateKey: PrivKey): Uint8Array;
-    (message: PointType<Fp2>, privateKey: PrivKey): PointType<Fp2>;
+    (message: PPointType<Fp2>, privateKey: PrivKey): PPointType<Fp2>;
   };
   verify: (
-    signature: Hex | PointType<Fp2>,
-    message: Hex | PointType<Fp2>,
-    publicKey: Hex | PointType<Fp>
+    signature: Hex | PPointType<Fp2>,
+    message: Hex | PPointType<Fp2>,
+    publicKey: Hex | PPointType<Fp>
   ) => boolean;
   aggregatePublicKeys: {
     (publicKeys: Hex[]): Uint8Array;
-    (publicKeys: PointType<Fp>[]): PointType<Fp>;
+    (publicKeys: PPointType<Fp>[]): PPointType<Fp>;
   };
   aggregateSignatures: {
     (signatures: Hex[]): Uint8Array;
-    (signatures: PointType<Fp2>[]): PointType<Fp2>;
+    (signatures: PPointType<Fp2>[]): PPointType<Fp2>;
   };
   verifyBatch: (
-    signature: Hex | PointType<Fp2>,
-    messages: (Hex | PointType<Fp2>)[],
-    publicKeys: (Hex | PointType<Fp>)[]
+    signature: Hex | PPointType<Fp2>,
+    messages: (Hex | PPointType<Fp2>)[],
+    publicKeys: (Hex | PPointType<Fp>)[]
   ) => boolean;
   utils: {
     stringToBytes: typeof htf.stringToBytes;
@@ -196,7 +201,7 @@ export function bls<Fp2, Fp6, Fp12>(
     n: Fr.ORDER,
     ...CURVE.G1,
   });
-  const G1HashToCurve = htf.hashToCurve(G1.Point, CURVE.G1.mapToCurve, {
+  const G1HashToCurve = htf.hashToCurve(G1.ProjectivePoint, CURVE.G1.mapToCurve, {
     ...CURVE.htfDefaults,
     ...CURVE.G1.htfDefaults,
   });
@@ -226,7 +231,8 @@ export function bls<Fp2, Fp6, Fp12>(
     n: Fr.ORDER,
     ...CURVE.G2,
   });
-  const G2HashToCurve = htf.hashToCurve(G2.Point, CURVE.G2.mapToCurve, {
+  const C = G2.ProjectivePoint as htf.H2CPointConstructor<Fp2>; // TODO: fix
+  const G2HashToCurve = htf.hashToCurve(C, CURVE.G2.mapToCurve, {
     ...CURVE.htfDefaults,
     ...CURVE.G2.htfDefaults,
   });
@@ -235,7 +241,7 @@ export function bls<Fp2, Fp6, Fp12>(
 
   // Calculates bilinear pairing
   function pairing(P: G1, Q: G2, withFinalExponent: boolean = true): Fp12 {
-    if (P.equals(G1.Point.ZERO) || Q.equals(G2.Point.ZERO))
+    if (P.equals(G1.ProjectivePoint.ZERO) || Q.equals(G2.ProjectivePoint.ZERO))
       throw new Error('No pairings at point of Infinity');
     P.assertValidity();
     Q.assertValidity();
@@ -243,25 +249,27 @@ export function bls<Fp2, Fp6, Fp12>(
     const looped = millerLoopG1(P, Q);
     return withFinalExponent ? Fp12.finalExponentiate(looped) : looped;
   }
-  type G1 = typeof G1.Point.BASE;
-  type G2 = typeof G2.Point.BASE;
+  type G1 = typeof G1.ProjectivePoint.BASE;
+  type G2 = typeof G2.ProjectivePoint.BASE;
 
   type G1Hex = Hex | G1;
   type G2Hex = Hex | G2;
   function normP1(point: G1Hex): G1 {
-    return point instanceof G1.Point ? (point as G1) : G1.Point.fromHex(point);
+    return point instanceof G1.ProjectivePoint ? (point as G1) : G1.ProjectivePoint.fromHex(point);
   }
   function normP2(point: G2Hex): G2 {
-    return point instanceof G2.Point ? point : Signature.decode(point);
+    return point instanceof G2.ProjectivePoint ? point : Signature.decode(point);
   }
   function normP2Hash(point: G2Hex, htfOpts?: htf.htfBasicOpts): G2 {
-    return point instanceof G2.Point ? point : (G2HashToCurve.hashToCurve(point, htfOpts) as G2);
+    return point instanceof G2.ProjectivePoint
+      ? point
+      : (G2HashToCurve.hashToCurve(point, htfOpts) as G2);
   }
 
   // Multiplies generator by private key.
   // P = pk x G
   function getPublicKey(privateKey: PrivKey): Uint8Array {
-    return G1.Point.fromPrivateKey(privateKey).toRawBytes(true);
+    return G1.ProjectivePoint.fromPrivateKey(privateKey).toRawBytes(true);
   }
 
   // Executes `hashToCurve` on the message and then multiplies the result by private key.
@@ -272,7 +280,7 @@ export function bls<Fp2, Fp6, Fp12>(
     const msgPoint = normP2Hash(message, htfOpts);
     msgPoint.assertValidity();
     const sigPoint = msgPoint.multiply(G1.normalizePrivateKey(privateKey));
-    if (message instanceof G2.Point) return sigPoint;
+    if (message instanceof G2.ProjectivePoint) return sigPoint;
     return Signature.encode(sigPoint);
   }
 
@@ -286,7 +294,7 @@ export function bls<Fp2, Fp6, Fp12>(
   ): boolean {
     const P = normP1(publicKey);
     const Hm = normP2Hash(message, htfOpts);
-    const G = G1.Point.BASE;
+    const G = G1.ProjectivePoint.BASE;
     const S = normP2(signature);
     // Instead of doing 2 exponentiations, we use property of billinear maps
     // and do one exp after multiplying 2 points.
@@ -305,8 +313,8 @@ export function bls<Fp2, Fp6, Fp12>(
     const agg = publicKeys
       .map(normP1)
       .reduce((sum, p) => sum.add(G1.ProjectivePoint.fromAffine(p)), G1.ProjectivePoint.ZERO);
-    const aggAffine = agg.toAffine();
-    if (publicKeys[0] instanceof G1.Point) {
+    const aggAffine = agg; //.toAffine();
+    if (publicKeys[0] instanceof G1.ProjectivePoint) {
       aggAffine.assertValidity();
       return aggAffine;
     }
@@ -322,8 +330,8 @@ export function bls<Fp2, Fp6, Fp12>(
     const agg = signatures
       .map(normP2)
       .reduce((sum, s) => sum.add(G2.ProjectivePoint.fromAffine(s)), G2.ProjectivePoint.ZERO);
-    const aggAffine = agg.toAffine();
-    if (signatures[0] instanceof G2.Point) {
+    const aggAffine = agg; //.toAffine();
+    if (signatures[0] instanceof G2.ProjectivePoint) {
       aggAffine.assertValidity();
       return aggAffine;
     }
@@ -350,13 +358,13 @@ export function bls<Fp2, Fp6, Fp12>(
         const groupPublicKey = nMessages.reduce(
           (groupPublicKey, subMessage, i) =>
             subMessage === message ? groupPublicKey.add(nPublicKeys[i]) : groupPublicKey,
-          G1.Point.ZERO
+          G1.ProjectivePoint.ZERO
         );
         // const msg = message instanceof PointG2 ? message : await PointG2.hashToCurve(message);
         // Possible to batch pairing for same msg with different groupPublicKey here
         paired.push(pairing(groupPublicKey, message, false));
       }
-      paired.push(pairing(G1.Point.BASE.negate(), sig, false));
+      paired.push(pairing(G1.ProjectivePoint.BASE.negate(), sig, false));
       const product = paired.reduce((a, b) => Fp12.mul(a, b), Fp12.ONE);
       const exp = Fp12.finalExponentiate(product);
       return Fp12.equals(exp, Fp12.ONE);
@@ -366,7 +374,8 @@ export function bls<Fp2, Fp6, Fp12>(
   }
 
   // Pre-compute points. Refer to README.
-  G1.Point.BASE._setWindowSize(4);
+  // TODO
+  // G1.ProjectivePoint.BASE._setWindowSize(4);
   return {
     CURVE,
     Fr,

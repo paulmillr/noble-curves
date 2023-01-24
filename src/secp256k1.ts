@@ -2,7 +2,7 @@
 import { sha256 } from '@noble/hashes/sha256';
 import { Fp as Field, mod, pow2 } from './abstract/modular.js';
 import { createCurve } from './_shortw_utils.js';
-import { PointType, mapToCurveSimpleSWU } from './abstract/weierstrass.js';
+import { ProjectivePointType as PointType, mapToCurveSimpleSWU } from './abstract/weierstrass.js';
 import {
   ensureBytes,
   concatBytes,
@@ -148,7 +148,7 @@ export const secp256k1 = createCurve(
 );
 
 const { hashToCurve, encodeToCurve } = htf.hashToCurve(
-  secp256k1.Point,
+  secp256k1.ProjectivePoint,
   (scalars: bigint[]) => {
     const { x, y } = mapSWU(Fp.create(scalars[0]));
     return isoMap(x, y);
@@ -173,7 +173,7 @@ const normalizePrivateKey = secp256k1.utils._normalizePrivateKey;
 
 // TODO: export?
 function normalizePublicKey(publicKey: Hex | PointType<bigint>): PointType<bigint> {
-  if (publicKey instanceof secp256k1.Point) {
+  if (publicKey instanceof secp256k1.ProjectivePoint) {
     publicKey.assertValidity();
     return publicKey;
   } else {
@@ -187,7 +187,7 @@ function normalizePublicKey(publicKey: Hex | PointType<bigint>): PointType<bigin
     const isYOdd = (y & _1n) === _1n;
     // Schnorr
     if (isYOdd) y = secp256k1.CURVE.Fp.negate(y);
-    const point = new secp256k1.Point(x, y);
+    const point = secp256k1.ProjectivePoint.fromAffine({ x, y });
     point.assertValidity();
     return point;
   }
@@ -250,7 +250,7 @@ class SchnorrSignature {
 }
 
 function schnorrGetScalar(priv: bigint) {
-  const point = secp256k1.Point.fromPrivateKey(priv);
+  const point = secp256k1.ProjectivePoint.fromPrivateKey(priv);
   const scalar = point.hasEvenY() ? priv : secp256k1.CURVE.n - priv;
   return { point, scalar, x: toRawX(point) };
 }
@@ -301,12 +301,12 @@ function schnorrVerify(signature: Hex, message: Hex, publicKey: Hex): boolean {
     // Finalize
     // R = s⋅G - e⋅P
     // -eP == (n-e)P
-    const R = secp256k1.Point.BASE.multiplyAndAddUnsafe(
+    const R = secp256k1.ProjectivePoint.BASE.multiplyAndAddUnsafe(
       P,
       normalizePrivateKey(s),
       mod(-e, secp256k1.CURVE.n)
     );
-    if (!R || !R.hasEvenY() || R.x !== r) return false;
+    if (!R || !R.hasEvenY() || R.toAffine().x !== r) return false;
     return true;
   } catch (error) {
     return false;
@@ -317,7 +317,7 @@ export const schnorr = {
   Signature: SchnorrSignature,
   // Schnorr's pubkey is just `x` of Point (BIP340)
   getPublicKey: (privateKey: PrivKey): Uint8Array =>
-    toRawX(secp256k1.Point.fromPrivateKey(privateKey)),
+    toRawX(secp256k1.ProjectivePoint.fromPrivateKey(privateKey)),
   sign: schnorrSign,
   verify: schnorrVerify,
 };

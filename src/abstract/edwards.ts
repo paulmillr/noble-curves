@@ -93,7 +93,6 @@ export type CurveFn = {
   getPublicKey: (privateKey: PrivKey, isCompressed?: boolean) => Uint8Array;
   sign: (message: Hex, privateKey: Hex) => Uint8Array;
   verify: (sig: Hex, message: Hex, publicKey: Hex) => boolean;
-  // Point: PointConstructor;
   ExtendedPoint: ExtendedPointConstructor;
   utils: {
     randomPrivateKey: () => Uint8Array;

@@ -28,7 +28,6 @@ import {
 } from './abstract/utils.js';
 // Types
 import {
-  PointType,
   ProjectivePointType,
   ProjectiveConstructor,
   mapToCurveSimpleSWU,
@@ -1035,7 +1034,7 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
         return { x: Fp.create(x), y: Fp.create(y) };
       } else if (bytes.length === 96) {
         // Check if the infinity flag is set
-        if ((bytes[0] & (1 << 6)) !== 0) return bls12_381.G1.Point.ZERO;
+        if ((bytes[0] & (1 << 6)) !== 0) return bls12_381.G1.ProjectivePoint.ZERO;
         const x = bytesToNumberBE(bytes.slice(0, Fp.BYTES));
         const y = bytesToNumberBE(bytes.slice(Fp.BYTES));
         return { x: Fp.create(x), y: Fp.create(y) };
@@ -1188,7 +1187,7 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
     },
     Signature: {
       // TODO: Optimize, it's very slow because of sqrt.
-      decode(hex: Hex): PointType<Fp2> {
+      decode(hex: Hex): ProjectivePointType<Fp2> {
         hex = ensureBytes(hex);
         const P = Fp.ORDER;
         const half = hex.length / 2;
@@ -1198,7 +1197,7 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
         const z2 = bytesToNumberBE(hex.slice(half));
         // Indicates the infinity point
         const bflag1 = bitGet(z1, I_BIT_POS);
-        if (bflag1 === 1n) return bls12_381.G2.Point.ZERO;
+        if (bflag1 === 1n) return bls12_381.G2.ProjectivePoint.ZERO;
 
         const x1 = Fp.create(z1 & Fp.MASK);
         const x2 = Fp.create(z2);
@@ -1215,14 +1214,14 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
         const isGreater = y1 > 0n && (y1 * 2n) / P !== aflag1;
         const isZero = y1 === 0n && (y0 * 2n) / P !== aflag1;
         if (isGreater || isZero) y = Fp2.negate(y);
-        const point = new bls12_381.G2.Point(x, y);
+        const point = bls12_381.G2.ProjectivePoint.fromAffine({ x, y });
         point.assertValidity();
         return point;
       },
-      encode(point: PointType<Fp2>) {
+      encode(point: ProjectivePointType<Fp2>) {
         // NOTE: by some reasons it was missed in bls12-381, looks like bug
         point.assertValidity();
-        if (point.equals(bls12_381.G2.Point.ZERO))
+        if (point.equals(bls12_381.G2.ProjectivePoint.ZERO))
           return concatBytes(COMPRESSED_ZERO, numberToBytesBE(0n, Fp.BYTES));
         const { re: x0, im: x1 } = Fp2.reim(point.x);
         const { re: y0, im: y1 } = Fp2.reim(point.y);

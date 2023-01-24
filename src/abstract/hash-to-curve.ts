@@ -178,17 +178,16 @@ export function isogenyMap<T, F extends mod.Field<T>>(field: F, map: [T[], T[], 
   };
 }
 
-export interface Point<T> extends Group<Point<T>> {
-  // readonly x: T;
-  // readonly y: T;
-  add(rhs: Point<T>): Point<T>;
+export interface H2CPoint<T> extends Group<H2CPoint<T>> {
+  readonly x: T;
+  readonly y: T;
+  add(rhs: H2CPoint<T>): H2CPoint<T>;
   toAffine(iz?: bigint): { x: T; y: T };
-  clearCofactor(): Point<T>;
+  clearCofactor(): H2CPoint<T>;
 }
 
-export interface PointConstructor<T> extends GroupConstructor<Point<T>> {
-  // new (x: T, y: T): Point<T>;
-  fromAffine(ap: { x: T; y: T }): Point<T>;
+export interface H2CPointConstructor<T> extends GroupConstructor<H2CPoint<T>> {
+  fromAffine(ap: { x: T; y: T }): H2CPoint<T>;
 }
 
 export type MapToCurve<T> = (scalar: bigint[]) => { x: T; y: T };
@@ -198,7 +197,11 @@ export type htfBasicOpts = {
   DST: string;
 };
 
-export function hashToCurve<T>(Point: PointConstructor<T>, mapToCurve: MapToCurve<T>, def: Opts) {
+export function hashToCurve<T>(
+  Point: H2CPointConstructor<T>,
+  mapToCurve: MapToCurve<T>,
+  def: Opts
+) {
   validateOpts(def);
   if (typeof mapToCurve !== 'function')
     throw new Error('hashToCurve: mapToCurve() has not been defined');

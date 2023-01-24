@@ -53,7 +53,7 @@ export const P521 = createCurve({
 export const secp521r1 = P521;
 
 const { hashToCurve, encodeToCurve } = htf.hashToCurve(
-  secp521r1.Point,
+  secp521r1.ProjectivePoint,
   (scalars: bigint[]) => mapSWU(scalars[0]),
   {
     DST: 'P521_XMD:SHA-512_SSWU_RO_',

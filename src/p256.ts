@@ -38,7 +38,7 @@ export const P256 = createCurve(
 export const secp256r1 = P256;
 
 const { hashToCurve, encodeToCurve } = htf.hashToCurve(
-  secp256r1.Point,
+  secp256r1.ProjectivePoint,
   (scalars: bigint[]) => mapSWU(scalars[0]),
   {
     DST: 'P256_XMD:SHA-256_SSWU_RO_',

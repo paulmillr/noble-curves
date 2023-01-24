@@ -13,6 +13,7 @@ import { hexToBytes, bytesToHex } from '@noble/hashes/utils';
 
 const hex = bytesToHex;
 const secp = secp256k1;
+const Point = secp.ProjectivePoint;
 const privatesTxt = readFileSync('./test/vectors/privates-2.txt', 'utf-8');
 const schCsv = readFileSync('./test/vectors/schnorr.csv', 'utf-8');
 
@@ -37,15 +38,15 @@ describe('secp256k1', () => {
       .filter((line) => line)
       .map((line) => line.split(':'));
     for (let [priv, x, y] of data) {
-      const point = secp.Point.fromPrivateKey(BigInt(priv));
+      const point = Point.fromPrivateKey(BigInt(priv));
       deepStrictEqual(toBEHex(point.x), x);
       deepStrictEqual(toBEHex(point.y), y);
 
-      const point2 = secp.Point.fromHex(secp.getPublicKey(toBEHex(BigInt(priv))));
+      const point2 = Point.fromHex(secp.getPublicKey(toBEHex(BigInt(priv))));
       deepStrictEqual(toBEHex(point2.x), x);
       deepStrictEqual(toBEHex(point2.y), y);
 
-      const point3 = secp.Point.fromHex(secp.getPublicKey(hexToBytes(toBEHex(BigInt(priv)))));
+      const point3 = Point.fromHex(secp.getPublicKey(hexToBytes(toBEHex(BigInt(priv)))));
       deepStrictEqual(toBEHex(point3.x), x);
       deepStrictEqual(toBEHex(point3.y), y);
     }
@@ -62,15 +63,15 @@ describe('secp256k1', () => {
       .filter((line) => line)
       .map((line) => line.split(':'));
     for (let [priv, x, y] of data) {
-      const point = secp.Point.fromPrivateKey(BigInt(priv));
+      const point = Point.fromPrivateKey(BigInt(priv));
       deepStrictEqual(toBEHex(point.x), x);
       deepStrictEqual(toBEHex(point.y), y);
 
-      const point2 = secp.Point.fromHex(secp.getPublicKey(toBEHex(BigInt(priv))));
+      const point2 = Point.fromHex(secp.getPublicKey(toBEHex(BigInt(priv))));
       deepStrictEqual(toBEHex(point2.x), x);
       deepStrictEqual(toBEHex(point2.y), y);
 
-      const point3 = secp.Point.fromHex(secp.getPublicKey(hexToBytes(toBEHex(BigInt(priv)))));
+      const point3 = Point.fromHex(secp.getPublicKey(hexToBytes(toBEHex(BigInt(priv)))));
       deepStrictEqual(toBEHex(point3.x), x);
       deepStrictEqual(toBEHex(point3.y), y);
     }
@@ -81,9 +82,9 @@ describe('secp256k1', () => {
       for (const vector of points.valid.isPoint) {
         const { P, expected } = vector;
         if (expected) {
-          secp.Point.fromHex(P);
+          Point.fromHex(P);
         } else {
-          throws(() => secp.Point.fromHex(P));
+          throws(() => Point.fromHex(P));
         }
       }
     });
@@ -91,7 +92,7 @@ describe('secp256k1', () => {
     should('.fromPrivateKey()', () => {
       for (const vector of points.valid.pointFromScalar) {
         const { d, expected } = vector;
-        let p = secp.Point.fromPrivateKey(d);
+        let p = Point.fromPrivateKey(d);
         deepStrictEqual(p.toHex(true), expected);
       }
     });
@@ -99,26 +100,26 @@ describe('secp256k1', () => {
     should('#toHex(compressed)', () => {
       for (const vector of points.valid.pointCompress) {
         const { P, compress, expected } = vector;
-        let p = secp.Point.fromHex(P);
+        let p = Point.fromHex(P);
         deepStrictEqual(p.toHex(compress), expected);
       }
     });
 
     should('#toHex() roundtrip (failed case)', () => {
       const point1 =
-        secp.Point.fromPrivateKey(
+        Point.fromPrivateKey(
           88572218780422190464634044548753414301110513745532121983949500266768436236425n
         );
       // const hex = point1.toHex(true);
-      // deepStrictEqual(secp.Point.fromHex(hex).toHex(true), hex);
+      // deepStrictEqual(Point.fromHex(hex).toHex(true), hex);
     });
 
     should('#toHex() roundtrip', () => {
       fc.assert(
         fc.property(FC_BIGINT, (x) => {
-          const point1 = secp.Point.fromPrivateKey(x);
+          const point1 = Point.fromPrivateKey(x);
           const hex = point1.toHex(true);
-          deepStrictEqual(secp.Point.fromHex(hex).toHex(true), hex);
+          deepStrictEqual(Point.fromHex(hex).toHex(true), hex);
         })
       );
     });
@@ -126,8 +127,8 @@ describe('secp256k1', () => {
     should('#add(other)', () => {
       for (const vector of points.valid.pointAdd) {
         const { P, Q, expected } = vector;
-        let p = secp.Point.fromHex(P);
-        let q = secp.Point.fromHex(Q);
+        let p = Point.fromHex(P);
+        let q = Point.fromHex(Q);
         if (expected) {
           deepStrictEqual(p.add(q).toHex(true), expected);
         } else {
@@ -141,7 +142,7 @@ describe('secp256k1', () => {
     should('#multiply(privateKey)', () => {
       for (const vector of points.valid.pointMultiply) {
         const { P, d, expected } = vector;
-        const p = secp.Point.fromHex(P);
+        const p = Point.fromHex(P);
         if (expected) {
           deepStrictEqual(p.multiply(hexToNumber(d)).toHex(true), expected);
         } else {
@@ -155,13 +156,13 @@ describe('secp256k1', () => {
         const { P, d } = vector;
         if (hexToNumber(d) < secp.CURVE.n) {
           throws(() => {
-            const p = secp.Point.fromHex(P);
+            const p = Point.fromHex(P);
             p.multiply(hexToNumber(d)).toHex(true);
           });
         }
       }
       for (const num of [0n, 0, -1n, -1, 1.1]) {
-        throws(() => secp.Point.BASE.multiply(num));
+        throws(() => Point.BASE.multiply(num));
       }
     });
   });
@@ -280,7 +281,7 @@ describe('secp256k1', () => {
       const PRIV_KEY = 0x2n;
       const WRONG_PRIV_KEY = 0x22n;
       const signature = secp.sign(MSG, PRIV_KEY);
-      const publicKey = secp.Point.fromPrivateKey(WRONG_PRIV_KEY).toHex();
+      const publicKey = Point.fromPrivateKey(WRONG_PRIV_KEY).toHex();
       deepStrictEqual(publicKey.length, 66);
       deepStrictEqual(secp.verify(signature, MSG, publicKey), false);
     });
@@ -313,7 +314,7 @@ describe('secp256k1', () => {
       const r = 1n;
       const s = 115792089237316195423570985008687907852837564279074904382605163141518162728904n;
 
-      const pub = new secp.Point(x, y);
+      const pub = new Point(x, y);
       const signature = new secp.Signature(2n, 2n);
       signature.r = r;
       signature.s = s;
@@ -328,7 +329,7 @@ describe('secp256k1', () => {
       const y = 32670510020758816978083085130507043184471273380659243275938904335757337482424n;
       const r = 104546003225722045112039007203142344920046999340768276760147352389092131869133n;
       const s = 96900796730960181123786672629079577025401317267213807243199432755332205217369n;
-      const pub = new secp.Point(x, y);
+      const pub = new Point(x, y);
       const sig = new secp.Signature(r, s);
       deepStrictEqual(secp.verify(sig, msg, pub), false);
     });
@@ -338,7 +339,7 @@ describe('secp256k1', () => {
       const y = 17482644437196207387910659778872952193236850502325156318830589868678978890912n;
       const r = 432420386565659656852420866390673177323n;
       const s = 115792089237316195423570985008687907852837564279074904382605163141518161494334n;
-      const pub = new secp.Point(x, y);
+      const pub = new Point(x, y);
       const sig = new secp.Signature(r, s);
       deepStrictEqual(secp.verify(sig, msg, pub, { strict: false }), true);
     });
@@ -376,7 +377,7 @@ describe('secp256k1', () => {
     should('recover public key from recovery bit', () => {
       const message = '00000000000000000000000000000000000000000000000000000000deadbeef';
       const privateKey = 123456789n;
-      const publicKey = secp.Point.fromHex(secp.getPublicKey(privateKey)).toHex(false);
+      const publicKey = Point.fromHex(secp.getPublicKey(privateKey)).toHex(false);
       const sig = secp.sign(message, privateKey);
       const recoveredPubkey = sig.recoverPublicKey(message);
       // const recoveredPubkey = secp.recoverPublicKey(message, signature, recovery);
@@ -451,7 +452,7 @@ describe('secp256k1', () => {
   should('have proper curve equation in assertValidity()', () => {
     throws(() => {
       const { Fp } = secp.CURVE;
-      let point = new secp.Point(Fp.create(-2n), Fp.create(-1n));
+      let point = new Point(Fp.create(-2n), Fp.create(-1n));
       point.assertValidity();
     });
   });
@@ -472,15 +473,15 @@ describe('secp256k1', () => {
       },
 
       pointAddScalar: (p, tweak, isCompressed) => {
-        const P = secp.Point.fromHex(p);
+        const P = Point.fromHex(p);
         const t = normal(tweak);
-        const Q = secp.Point.BASE.multiplyAndAddUnsafe(P, t, 1n);
+        const Q = Point.BASE.multiplyAndAddUnsafe(P, t, 1n);
         if (!Q) throw new Error('Tweaked point at infinity');
         return Q.toRawBytes(isCompressed);
       },
 
       pointMultiply: (p, tweak, isCompressed) => {
-        const P = secp.Point.fromHex(p);
+        const P = Point.fromHex(p);
         const h = typeof tweak === 'string' ? tweak : bytesToHex(tweak);
         const t = BigInt(`0x${h}`);
         return P.multiply(t).toRawBytes(isCompressed);
@@ -528,7 +529,7 @@ describe('secp256k1', () => {
 
   should('wychenproof vectors', () => {
     for (let group of wp.testGroups) {
-      const pubKey = secp.Point.fromHex(group.key.uncompressed);
+      const pubKey = Point.fromHex(group.key.uncompressed);
       for (let test of group.tests) {
         const m = secp.CURVE.hash(hexToBytes(test.msg));
         if (test.result === 'valid' || test.result === 'acceptable') {

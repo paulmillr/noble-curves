@@ -42,7 +42,7 @@ export const P384 = createCurve({
 export const secp384r1 = P384;
 
 const { hashToCurve, encodeToCurve } = htf.hashToCurve(
-  secp384r1.Point,
+  secp384r1.ProjectivePoint,
   (scalars: bigint[]) => mapSWU(scalars[0]),
   {
     DST: 'P384_XMD:SHA-384_SSWU_RO_',
