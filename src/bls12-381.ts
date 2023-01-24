@@ -1227,8 +1227,9 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
         point.assertValidity();
         if (point.equals(bls12_381.G2.ProjectivePoint.ZERO))
           return concatB(COMPRESSED_ZERO, numberToBytesBE(0n, Fp.BYTES));
-        const { re: x0, im: x1 } = Fp2.reim(point.x);
-        const { re: y0, im: y1 } = Fp2.reim(point.y);
+        const a = point.toAffine();
+        const { re: x0, im: x1 } = Fp2.reim(a.x);
+        const { re: y0, im: y1 } = Fp2.reim(a.y);
         const tmp = y1 > 0n ? y1 * 2n : y0 * 2n;
         const aflag1 = Boolean((tmp / Fp.ORDER) & 1n);
         const z1 = bitSet(bitSet(x1, 381, aflag1), S_BIT_POS, true);

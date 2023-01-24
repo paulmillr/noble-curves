@@ -318,7 +318,7 @@ export type PoseidonOpts = {
   roundsPartial: number;
 };
 
-function poseidonBasic(opts: PoseidonOpts, mds: bigint[][]) {
+export function poseidonBasic(opts: PoseidonOpts, mds: bigint[][]) {
   validateField(opts.Fp);
   if (!Number.isSafeInteger(opts.rate) || !Number.isSafeInteger(opts.capacity))
     throw new Error(`Wrong poseidon opts: ${opts}`);

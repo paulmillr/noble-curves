@@ -1746,7 +1746,7 @@ describe('verify()', () => {
     }
   });
   describe('batch', () => {
-    should.only('verify multi-signature', () => {
+    should('verify multi-signature', () => {
       fc.assert(
         fc.property(FC_MSG_5, FC_BIGINT_5, (messages, privateKeys) => {
           privateKeys = privateKeys.slice(0, messages.length);

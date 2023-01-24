@@ -95,7 +95,7 @@ export function poseidon(opts: PoseidonOpts) {
     );
     return values;
   };
-  return function poseidonHash(values: bigint[]) {
+  const poseidonHash = function poseidonHash(values: bigint[]) {
     if (!Array.isArray(values) || values.length !== t)
       throw new Error(`Poseidon: wrong values (expected array of bigints with length ${t})`);
     values = values.map((i) => {
@@ -114,4 +114,7 @@ export function poseidon(opts: PoseidonOpts) {
       throw new Error(`Poseidon: wrong number of rounds: last round=${round}, total=${rounds}`);
     return values;
   };
+  // For verification in tests
+  poseidonHash.roundConstants = opts.roundConstants;
+  return poseidonHash;
 }

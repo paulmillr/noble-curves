@@ -4,49 +4,49 @@ import * as starknet from '../../lib/esm/stark.js';
 import { default as issue2 } from './fixtures/issue2.json' assert { type: 'json' };
 
 should('Basic elliptic sanity check', () => {
-  const g1 = starknet.Point.BASE;
+  const g1 = starknet.ProjectivePoint.BASE;
   deepStrictEqual(
-    g1.x.toString(16),
+    g1.toAffine().x.toString(16),
     '1ef15c18599971b7beced415a40f0c7deacfd9b0d1819e03d723d8bc943cfca'
   );
   deepStrictEqual(
-    g1.y.toString(16),
+    g1.toAffine().y.toString(16),
     '5668060aa49730b7be4801df46ec62de53ecd11abe43a32873000c36e8dc1f'
   );
   const g2 = g1.double();
   deepStrictEqual(
-    g2.x.toString(16),
+    g2.toAffine().x.toString(16),
     '759ca09377679ecd535a81e83039658bf40959283187c654c5416f439403cf5'
   );
   deepStrictEqual(
-    g2.y.toString(16),
+    g2.toAffine().y.toString(16),
     '6f524a3400e7708d5c01a28598ad272e7455aa88778b19f93b562d7a9646c41'
   );
   const g3 = g2.add(g1);
   deepStrictEqual(
-    g3.x.toString(16),
+    g3.toAffine().x.toString(16),
     '411494b501a98abd8262b0da1351e17899a0c4ef23dd2f96fec5ba847310b20'
   );
   deepStrictEqual(
-    g3.y.toString(16),
+    g3.toAffine().y.toString(16),
     '7e1b3ebac08924d2c26f409549191fcf94f3bf6f301ed3553e22dfb802f0686'
   );
   const g32 = g1.multiply(3);
   deepStrictEqual(
-    g32.x.toString(16),
+    g32.toAffine().x.toString(16),
     '411494b501a98abd8262b0da1351e17899a0c4ef23dd2f96fec5ba847310b20'
   );
   deepStrictEqual(
-    g32.y.toString(16),
+    g32.toAffine().y.toString(16),
     '7e1b3ebac08924d2c26f409549191fcf94f3bf6f301ed3553e22dfb802f0686'
   );
   const minus1 = g1.multiply(starknet.CURVE.n - 1n);
   deepStrictEqual(
-    minus1.x.toString(16),
+    minus1.toAffine().x.toString(16),
     '1ef15c18599971b7beced415a40f0c7deacfd9b0d1819e03d723d8bc943cfca'
   );
   deepStrictEqual(
-    minus1.y.toString(16),
+    minus1.toAffine().y.toString(16),
     '7a997f9f55b68e04841b7fe20b9139d21ac132ee541bc5cd78cfff3c91723e2'
   );
 });
@@ -156,7 +156,7 @@ should('Seed derivation (example)', () => {
 });
 
 should('Compressed keys', () => {
-  const G = starknet.Point.BASE;
+  const G = starknet.ProjectivePoint.BASE;
   const half = starknet.CURVE.n / 2n;
   const last = starknet.CURVE.n;
   const vectors = [
@@ -182,14 +182,14 @@ should('Compressed keys', () => {
     last - 2n,
     last - 1n,
   ].map((i) => G.multiply(i));
-  const fixPoint = (pt) => ({ ...pt, _WINDOW_SIZE: undefined });
+  const fixPoint = (pt) => pt.toAffine();
   for (const v of vectors) {
     const uncompressed = v.toHex();
     const compressed = v.toHex(true);
     const exp = fixPoint(v);
-    deepStrictEqual(fixPoint(starknet.Point.fromHex(uncompressed)), exp);
-    deepStrictEqual(fixPoint(starknet.Point.fromHex(compressed)), exp);
-    deepStrictEqual(starknet.Point.fromHex(compressed).toHex(), uncompressed);
+    deepStrictEqual(fixPoint(starknet.ProjectivePoint.fromHex(uncompressed)), exp);
+    deepStrictEqual(fixPoint(starknet.ProjectivePoint.fromHex(compressed)), exp);
+    deepStrictEqual(starknet.ProjectivePoint.fromHex(compressed).toHex(), uncompressed);
   }
 });
 

@@ -373,7 +373,7 @@ describe('ed25519', () => {
       throws(() => RistrettoPoint.fromHex(b), badBytes);
     }
   });
-  should('ristretto255/should create right points from uniform hash', async () => {
+  should('ristretto255/should create right points from uniform hash', () => {
     const labels = [
       'Ristretto is traditionally a short shot of espresso coffee',
       'made with the normal amount of ground coffee but extracted with',
