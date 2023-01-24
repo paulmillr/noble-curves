@@ -9,6 +9,9 @@ import pairingVectors from './bls12-381/go_pairing_vectors/pairing.json' assert 
 import { wNAF } from '../lib/esm/abstract/group.js';
 const bls = bls12_381;
 const { Fp2 } = bls;
+const G1Point = bls.G1.ProjectivePoint;
+const G2Point = bls.G2.ProjectivePoint;
+const G1Aff = (x, y) => G1Point.fromAffine({ x, y });
 
 const G2_VECTORS = readFileSync('./test/bls12-381/bls12-381-g2-test-vectors.txt', 'utf-8')
   .trim()
@@ -36,6 +39,10 @@ const B_192_40 = '40'.padEnd(192, '0');
 const B_384_40 = '40'.padEnd(384, '0'); // [0x40, 0, 0...]
 
 const getPubKey = (priv) => bls.getPublicKey(priv);
+
+function equal(a, b, comment) {
+  deepStrictEqual(a.equals(b), true, `eq(${comment})`);
+}
 
 // Fp
 describe('bls12-381 Fp', () => {
@@ -145,8 +152,8 @@ describe('bls12-381 Fp2', () => {
 describe('bls12-381 Point', () => {
   const Fp = bls.Fp;
   const FC_BIGINT = fc.bigInt(1n, Fp.ORDER - 1n);
-  const PointG1 = bls.G1.Point;
-  const PointG2 = bls.G2.Point;
+  const PointG1 = G1Point;
+  const PointG2 = G2Point;
 
   describe('with Fp coordinates', () => {
     should('Point equality', () => {
@@ -157,8 +164,8 @@ describe('bls12-381 Point', () => {
           ([x1, y1, z1], [x2, y2, z2]) => {
             const p1 = new PointG1(Fp.create(x1), Fp.create(y1), Fp.create(z1));
             const p2 = new PointG1(Fp.create(x2), Fp.create(y2), Fp.create(z2));
-            deepStrictEqual(p1.equals(p1), true);
-            deepStrictEqual(p2.equals(p2), true);
+            equal(p1, p1);
+            equal(p2, p2);
             deepStrictEqual(p1.equals(p2), false);
             deepStrictEqual(p2.equals(p1), false);
           }
@@ -166,27 +173,27 @@ describe('bls12-381 Point', () => {
       );
     });
     should('be placed on curve vector 1', () => {
-      const a = new PointG1(Fp.create(0n), Fp.create(0n));
+      const a = PointG1.fromAffine({ x: Fp.create(0n), y: Fp.create(0n) });
       a.assertValidity();
     });
     should('not be placed on curve vector 1', () => {
-      const a = new PointG1(Fp.create(0n), Fp.create(1n));
+      const a = PointG1.fromAffine({ x: Fp.create(0n), y: Fp.create(1n) });
       throws(() => a.assertValidity());
     });
 
     should('be placed on curve vector 2', () => {
-      const a = new PointG1(
-        Fp.create(
+      const a = PointG1.fromAffine({
+        x: Fp.create(
           0x17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bbn
         ),
-        Fp.create(
+        y: Fp.create(
           0x08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1n
-        )
-      );
+        ),
+      });
       a.assertValidity();
     });
     should('be placed on curve vector 3', () => {
-      const a = new PointG1(
+      const a = G1Aff(
         Fp.create(
           3971675556538908004130084773503021351583407620890695272226385332452194486153316625183061567093226342405194446632851n
         ),
@@ -198,7 +205,7 @@ describe('bls12-381 Point', () => {
       a.assertValidity();
     });
     should('not be placed on curve vector 3', () => {
-      const a = new PointG1(
+      const a = G1Aff(
         Fp.create(
           622186380008502900120948444810967255157373993223369845903602988014033704418470621816206856882891545628885272576827n
         ),
@@ -209,7 +216,7 @@ describe('bls12-381 Point', () => {
       throws(() => a.assertValidity());
     });
     should('not be placed on curve vector 2', () => {
-      const a = new PointG1(
+      const a = G1Aff(
         Fp.create(
           0x17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6ban
         ),
@@ -221,7 +228,7 @@ describe('bls12-381 Point', () => {
     });
 
     should('be doubled and placed on curve vector 1', () => {
-      const a = new PointG1(
+      const a = G1Aff(
         Fp.create(
           0x17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bbn
         ),
@@ -231,9 +238,9 @@ describe('bls12-381 Point', () => {
       );
       const double = a.double();
       double.assertValidity();
-      deepStrictEqual(
+      equal(
         double,
-        new PointG1(
+        G1Aff(
           Fp.create(
             838589206289216005799424730305866328161735431124665289961769162861615689790485775997575391185127590486775437397838n
           ),
@@ -242,11 +249,11 @@ describe('bls12-381 Point', () => {
           )
         )
       );
-      deepStrictEqual(double, a.multiply(2n));
-      deepStrictEqual(double, a.add(a));
+      equal(double, a.multiply(2n));
+      equal(double, a.add(a));
     });
     should('be pdoubled and placed on curve vector 2', () => {
-      const a = new PointG1(
+      const a = G1Aff(
         Fp.create(
           3971675556538908004130084773503021351583407620890695272226385332452194486153316625183061567093226342405194446632851n
         ),
@@ -256,9 +263,9 @@ describe('bls12-381 Point', () => {
       );
       const double = a.double();
       double.assertValidity();
-      deepStrictEqual(
+      equal(
         double,
-        new PointG1(
+        G1Aff(
           Fp.create(
             2820140907397376715097155275119328764341377106900140435029293933353987248389870417008333350832041425944924730501850n
           ),
@@ -267,8 +274,8 @@ describe('bls12-381 Point', () => {
           )
         )
       );
-      deepStrictEqual(double, a.multiply(2n));
-      deepStrictEqual(double, a.add(a));
+      equal(double, a.multiply(2n));
+      equal(double, a.add(a));
     });
     should('not validate incorrect point', () => {
       const x =
@@ -276,7 +283,7 @@ describe('bls12-381 Point', () => {
       const y =
         3934582309586258715640230772291917282844636728991757779640464479794033391537662970190753981664259511166946374555673n;
 
-      const p = new PointG1(Fp.create(x), Fp.create(y));
+      const p = PointG1.fromAffine({ x: Fp.create(x), y: Fp.create(y) });
       throws(() => p.assertValidity());
     });
   });
@@ -331,16 +338,16 @@ describe('bls12-381 Point', () => {
       a.assertValidity();
     });
     should('be placed on curve vector 3', () => {
-      const a = new PointG2(
-        Fp2.fromBigTuple([
+      const a = PointG2.fromAffine({
+        x: Fp2.fromBigTuple([
           233289878585407360737561818812172281900488265436962145913969074168503452745466655442125797664134009339799716079103n,
           1890785404699189181161569277356497622423785178845737858235714310995835974899880469355250933575450045792782146044819n,
         ]),
-        Fp2.fromBigTuple([
+        y: Fp2.fromBigTuple([
           1215754321684097939278683023199690844646077558342794977283698289191570128272085945598449054373022460634252133664610n,
           2751025411942897795042193940345989612527395984463172615380574492034129474560903255212585680112858672276592527763585n,
-        ])
-      );
+        ]),
+      });
       a.assertValidity();
     });
     should('not be placed on curve vector 1', () => {
@@ -398,50 +405,50 @@ describe('bls12-381 Point', () => {
     );
     const double = a.double();
     double.assertValidity();
-    deepStrictEqual(
+    equal(
       double,
-      new PointG2(
-        Fp2.fromBigTuple([
+      PointG2.fromAffine({
+        x: Fp2.fromBigTuple([
           3419974069068927546093595533691935972093267703063689549934039433172037728172434967174817854768758291501458544631891n,
           1586560233067062236092888871453626466803933380746149805590083683748120990227823365075019078675272292060187343402359n,
         ]),
-        Fp2.fromBigTuple([
+        y: Fp2.fromBigTuple([
           678774053046495337979740195232911687527971909891867263302465188023833943429943242788645503130663197220262587963545n,
           2374407843478705782611042739236452317510200146460567463070514850492917978226342495167066333366894448569891658583283n,
-        ])
-      )
+        ]),
+      })
     );
-    deepStrictEqual(double, a.multiply(2n));
-    deepStrictEqual(double, a.add(a));
+    equal(double, a.multiply(2n));
+    equal(double, a.add(a));
   });
   should('be doubled and placed on curve vector 2', () => {
-    const a = new PointG2(
-      Fp2.fromBigTuple([
+    const a = PointG2.fromAffine({
+      x: Fp2.fromBigTuple([
         233289878585407360737561818812172281900488265436962145913969074168503452745466655442125797664134009339799716079103n,
         1890785404699189181161569277356497622423785178845737858235714310995835974899880469355250933575450045792782146044819n,
       ]),
-      Fp2.fromBigTuple([
+      y: Fp2.fromBigTuple([
         1215754321684097939278683023199690844646077558342794977283698289191570128272085945598449054373022460634252133664610n,
         2751025411942897795042193940345989612527395984463172615380574492034129474560903255212585680112858672276592527763585n,
-      ])
-    );
+      ]),
+    });
     const double = a.double();
     double.assertValidity();
-    deepStrictEqual(
+    equal(
       double,
-      new PointG2(
-        Fp2.fromBigTuple([
+      PointG2.fromAffine({
+        x: Fp2.fromBigTuple([
           725284069620738622060750301926991261102335618423691881774095602348039360646278290301007111649920759181128494302803n,
           919264895242212954093039181597172832206919609583188170141409360396089107784684267919047943917330182442049667967832n,
         ]),
-        Fp2.fromBigTuple([
+        y: Fp2.fromBigTuple([
           671406920027112857569775418033910829294759327652470956866749681326509356602892160214948716653598897872184523683037n,
           3055998868118150255613397668970777574660658983679486410738349400795670735303668556065367873243198246660959891663772n,
-        ])
-      )
+        ]),
+      })
     );
-    deepStrictEqual(double, a.multiply(2n));
-    deepStrictEqual(double, a.add(a));
+    equal(double, a.multiply(2n));
+    equal(double, a.add(a));
   });
   const wNAF_VECTORS = [
     0x28b90deaf189015d3a325908c5e0e4bf00f84f7e639b056ff82d7e70b6eede4cn,
@@ -498,59 +505,59 @@ describe('bls12-381 Point', () => {
   });
   should('PSI cofactor cleaning same as multiplication', () => {
     const points = [
-      new PointG2(
-        Fp2.fromBigTuple([
+      PointG2.fromAffine({
+        x: Fp2.fromBigTuple([
           3241532514922300496112840946857937535679746598786089852337901560508502000671236210655544891931896207857529462155216n,
           1895396002326546958606807865184627576810563909325590769826854838265038910148901969770093629785689196200738594051207n,
         ]),
-        Fp2.fromBigTuple([
+        y: Fp2.fromBigTuple([
           3837310786345067009730271578787473898123345117675361644389016087559904243233782782806882170766697501716660726009081n,
           1677898256818258755710370015632820289344925154952470675147754839082216730170149764842062980567113751550792217387778n,
-        ])
-      ),
-      new PointG2(
-        Fp2.fromBigTuple([
+        ]),
+      }),
+      PointG2.fromAffine({
+        x: Fp2.fromBigTuple([
           3953605227375649587553282126565793338489478933421008011676219910137022551750442290689597974472294891051907650111197n,
           2357556650209231585002654467241659159063900268360871707630297623496109598089657193704186795702074478622917895656384n,
         ]),
-        Fp2.fromBigTuple([
+        y: Fp2.fromBigTuple([
           2495601009524620857707705364800595215702994859258454180584354350679476916692161325761009870302795857111988758374874n,
           2636356076845621042340998927146453389877292467744110912831694031602037452225656755036030562878672313329396684758868n,
-        ])
-      ),
-      new PointG2(
-        Fp2.fromBigTuple([
+        ]),
+      }),
+      PointG2.fromAffine({
+        x: Fp2.fromBigTuple([
           3194353741003351193683364524319044762011830478765020903432624057794333426495229091698895944358182869251271971124925n,
           3653808358303084112668893108836368862445971143336505524596401519323087809653188999580874561318367165116767192535630n,
         ]),
-        Fp2.fromBigTuple([
+        y: Fp2.fromBigTuple([
           1293147983982604948417085455043456439133874729834486879326988078136905862300347946661594156148773025247657033069058n,
           304385694250536139727810974742746004825746444239830780412067821920180289379490776439208435270467062610041367314353n,
-        ])
-      ),
-      new PointG2(
-        Fp2.fromBigTuple([
+        ]),
+      }),
+      PointG2.fromAffine({
+        x: Fp2.fromBigTuple([
           3913848356631365121633829648186849525632038637523196801515536004438620269011326037518995697522336713513734205291154n,
           2892036022910655232784554063257167431129586441456677365843329976181438736451469367386635015809932785607079312857252n,
         ]),
-        Fp2.fromBigTuple([
+        y: Fp2.fromBigTuple([
           2946839687749075245408468852956330519059225766361204396943480879518352257697157665323514637184706466306723801095265n,
           1858741481287683941330484703798096212920693492850150667744795312336588840954530505769251621475693006537257913664280n,
-        ])
-      ),
-      new PointG2(
-        Fp2.fromBigTuple([
+        ]),
+      }),
+      PointG2.fromAffine({
+        x: Fp2.fromBigTuple([
           3241532514922300496112840946857937535679746598786089852337901560508502000671236210655544891931896207857529462155216n,
           1895396002326546958606807865184627576810563909325590769826854838265038910148901969770093629785689196200738594051207n,
         ]),
-        Fp2.fromBigTuple([
+        y: Fp2.fromBigTuple([
           3837310786345067009730271578787473898123345117675361644389016087559904243233782782806882170766697501716660726009081n,
           1677898256818258755710370015632820289344925154952470675147754839082216730170149764842062980567113751550792217387778n,
-        ])
-      ),
+        ]),
+      }),
     ];
     // Use wNAF allow scalars higher than CURVE.r
-    const w = wNAF(bls.G2.Point, 1);
+    const w = wNAF(G2Point, 1);
     for (let p of points) {
       const ours = p.clearCofactor();
       const shouldBe = w.unsafeLadder(p, bls.CURVE.G2.hEff);
@@ -561,15 +568,15 @@ describe('bls12-381 Point', () => {
 
 // index.ts
 
-// bls.PointG1.BASE.clearMultiplyPrecomputes();
-// bls.PointG1.BASE.calcMultiplyPrecomputes(4);
+// bls.G1.ProjectivePoint.BASE.clearMultiplyPrecomputes();
+// bls.G1.ProjectivePoint.BASE.calcMultiplyPrecomputes(4);
 
 describe('bls12-381/basic', () => {
   should('construct point G1 from its uncompressed form (Raw Bytes)', () => {
     // Test Zero
-    const g1 = bls.G1.Point.fromHex(B_192_40);
-    deepStrictEqual(g1.x, bls.G1.Point.ZERO.x);
-    deepStrictEqual(g1.y, bls.G1.Point.ZERO.y);
+    const g1 = G1Point.fromHex(B_192_40);
+    deepStrictEqual(g1.x, G1Point.ZERO.x);
+    deepStrictEqual(g1.y, G1Point.ZERO.y);
     // Test Non-Zero
     const x = bls.Fp.create(
       BigInt(
@@ -582,7 +589,7 @@ describe('bls12-381/basic', () => {
       )
     );
 
-    const g1_ = bls.G1.Point.fromHex(
+    const g1_ = G1Point.fromHex(
       '17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
     );
 
@@ -592,10 +599,10 @@ describe('bls12-381/basic', () => {
 
   should('construct point G1 from its uncompressed form (Hex)', () => {
     // Test Zero
-    const g1 = bls.G1.Point.fromHex(B_192_40);
+    const g1 = G1Point.fromHex(B_192_40);
 
-    deepStrictEqual(g1.x, bls.G1.Point.ZERO.x);
-    deepStrictEqual(g1.y, bls.G1.Point.ZERO.y);
+    deepStrictEqual(g1.x, G1Point.ZERO.x);
+    deepStrictEqual(g1.y, G1Point.ZERO.y);
     // Test Non-Zero
     const x = bls.Fp.create(
       BigInt(
@@ -608,7 +615,7 @@ describe('bls12-381/basic', () => {
       )
     );
 
-    const g1_ = bls.G1.Point.fromHex(
+    const g1_ = G1Point.fromHex(
       '17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
     );
 
@@ -618,9 +625,9 @@ describe('bls12-381/basic', () => {
 
   should('construct point G2 from its uncompressed form (Raw Bytes)', () => {
     // Test Zero
-    const g2 = bls.G2.Point.fromHex(B_384_40);
-    deepStrictEqual(g2.x, bls.G2.Point.ZERO.x, 'zero(x)');
-    deepStrictEqual(g2.y, bls.G2.Point.ZERO.y, 'zero(y)');
+    const g2 = G2Point.fromHex(B_384_40);
+    deepStrictEqual(g2.x, G2Point.ZERO.x, 'zero(x)');
+    deepStrictEqual(g2.y, G2Point.ZERO.y, 'zero(y)');
     // Test Non-Zero
     const x = Fp2.fromBigTuple([
       BigInt(
@@ -639,7 +646,7 @@ describe('bls12-381/basic', () => {
       ),
     ]);
 
-    const g2_ = bls.G2.Point.fromHex(
+    const g2_ = G2Point.fromHex(
       '13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb80606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79be0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801'
     );
 
@@ -649,10 +656,10 @@ describe('bls12-381/basic', () => {
 
   should('construct point G2 from its uncompressed form (Hex)', () => {
     // Test Zero
-    const g2 = bls.G2.Point.fromHex(B_384_40);
+    const g2 = G2Point.fromHex(B_384_40);
 
-    deepStrictEqual(g2.x, bls.G2.Point.ZERO.x);
-    deepStrictEqual(g2.y, bls.G2.Point.ZERO.y);
+    deepStrictEqual(g2.x, G2Point.ZERO.x);
+    deepStrictEqual(g2.y, G2Point.ZERO.y);
     // Test Non-Zero
     const x = Fp2.fromBigTuple([
       BigInt(
@@ -671,7 +678,7 @@ describe('bls12-381/basic', () => {
       ),
     ]);
 
-    const g2_ = bls.G2.Point.fromHex(
+    const g2_ = G2Point.fromHex(
       '13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb80606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79be0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801'
     );
 
@@ -681,7 +688,7 @@ describe('bls12-381/basic', () => {
 
   should('get uncompressed form of point G1 (Raw Bytes)', () => {
     // Test Zero
-    deepStrictEqual(bls.G1.Point.ZERO.toHex(false), B_192_40);
+    deepStrictEqual(G1Point.ZERO.toHex(false), B_192_40);
     // Test Non-Zero
     const x = bls.Fp.create(
       BigInt(
@@ -693,7 +700,7 @@ describe('bls12-381/basic', () => {
         '0x08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
       )
     );
-    const g1 = new bls.G1.Point(x, y);
+    const g1 = G1Point.fromAffine({ x, y });
     deepStrictEqual(
       g1.toHex(false),
       '17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
@@ -702,7 +709,7 @@ describe('bls12-381/basic', () => {
 
   should('get uncompressed form of point G1 (Hex)', () => {
     // Test Zero
-    deepStrictEqual(bls.G1.Point.ZERO.toHex(false), B_192_40);
+    deepStrictEqual(G1Point.ZERO.toHex(false), B_192_40);
     // Test Non-Zero
     const x = bls.Fp.create(
       BigInt(
@@ -714,7 +721,7 @@ describe('bls12-381/basic', () => {
         '0x08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
       )
     );
-    const g1 = new bls.G1.Point(x, y);
+    const g1 = G1Point.fromAffine({ x, y });
     deepStrictEqual(
       g1.toHex(false),
       '17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
@@ -723,7 +730,7 @@ describe('bls12-381/basic', () => {
 
   should('get uncompressed form of point G2 (Raw Bytes)', () => {
     // Test Zero
-    deepStrictEqual(bls.G2.Point.ZERO.toHex(false), B_384_40);
+    deepStrictEqual(G2Point.ZERO.toHex(false), B_384_40);
     // Test Non-Zero
     const x = Fp2.fromBigTuple([
       BigInt(
@@ -741,7 +748,7 @@ describe('bls12-381/basic', () => {
         '0x0606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79be'
       ),
     ]);
-    const g2 = new bls.G2.Point(x, y);
+    const g2 = G2Point.fromAffine({ x, y });
     deepStrictEqual(
       g2.toHex(false),
       '13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb80606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79be0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801'
@@ -750,7 +757,7 @@ describe('bls12-381/basic', () => {
 
   should('get uncompressed form of point G2 (Hex)', () => {
     // Test Zero
-    deepStrictEqual(bls.G2.Point.ZERO.toHex(false), B_384_40);
+    deepStrictEqual(G2Point.ZERO.toHex(false), B_384_40);
 
     // Test Non-Zero
     const x = Fp2.fromBigTuple([
@@ -769,7 +776,7 @@ describe('bls12-381/basic', () => {
         '0x0606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79be'
       ),
     ]);
-    const g2 = new bls.G2.Point(x, y);
+    const g2 = G2Point.fromAffine({ x, y });
     deepStrictEqual(
       g2.toHex(false),
       '13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb80606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79be0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801'
@@ -777,51 +784,54 @@ describe('bls12-381/basic', () => {
   });
 
   should('compress and decompress G1 points', async () => {
-    const priv = bls.G1.Point.fromPrivateKey(42n);
+    const priv = G1Point.fromPrivateKey(42n);
     const publicKey = priv.toHex(true);
-    const decomp = bls.G1.Point.fromHex(publicKey);
+    const decomp = G1Point.fromHex(publicKey);
     deepStrictEqual(publicKey, decomp.toHex(true));
   });
   should('not compress and decompress zero G1 point', () => {
-    throws(() => bls.G1.Point.fromPrivateKey(0n));
+    throws(() => G1Point.fromPrivateKey(0n));
   });
   should('compress and decompress G2 points', () => {
-    const priv = bls.G2.Point.fromPrivateKey(42n);
+    const priv = G2Point.fromPrivateKey(42n);
     const publicKey = priv.toHex(true);
-    const decomp = bls.G2.Point.fromHex(publicKey);
+    const decomp = G2Point.fromHex(publicKey);
     deepStrictEqual(publicKey, decomp.toHex(true));
   });
   should('not compress and decompress zero G2 point', () => {
-    throws(() => bls.G2.Point.fromPrivateKey(0n));
+    throws(() => G2Point.fromPrivateKey(0n));
   });
-  const VALID_G1 = new bls.G1.Point(
+  const VALID_G1 = new G1Point(
     bls.Fp.create(
       3609742242174788176010452839163620388872641749536604986743596621604118973777515189035770461528205168143692110933639n
     ),
     bls.Fp.create(
       1619277690257184054444116778047375363103842303863153349133480657158810226683757397206929105479676799650932070320089n
-    )
+    ),
+    bls.Fp.create(1n)
   );
-  const VALID_G1_2 = new bls.G1.Point(
+  const VALID_G1_2 = new G1Point(
     bls.Fp.create(
       1206972466279728255044019580914616126536509750250979180256809997983196363639429409634110400978470384566664128085207n
     ),
     bls.Fp.create(
       2991142246317096160788653339959532007292638191110818490939476869616372888657136539642598243964263069435065725313423n
-    )
+    ),
+    bls.Fp.create(1n)
   );
 
-  const INVALID_G1 = new bls.G1.Point(
+  const INVALID_G1 = new G1Point(
     bls.Fp.create(
       499001545268060011619089734015590154568173930614466321429631711131511181286230338880376679848890024401335766847607n
     ),
     bls.Fp.create(
       3934582309586258715640230772291917282844636728991757779640464479794033391537662970190753981664259511166946374555673n
-    )
+    ),
+    bls.Fp.create(1n)
   );
 
   should('aggregate pubkeys', () => {
-    const agg = bls.aggregatePublicKeys([VALID_G1, VALID_G1_2]);
+    const agg = bls.aggregatePublicKeys([VALID_G1, VALID_G1_2]).toAffine();
     deepStrictEqual(
       agg.x,
       2636337749883017793009944726560363863546595464242083394883491066895536780554574413337005575305023872925406746684807n
@@ -840,7 +850,7 @@ describe('bls12-381/basic', () => {
   should(`produce correct signatures (${G2_VECTORS.length} vectors)`, async () => {
     for (let vector of G2_VECTORS) {
       const [priv, msg, expected] = vector;
-      const sig = await bls.sign(msg, priv);
+      const sig = bls.sign(msg, priv);
       deepStrictEqual(bls.utils.bytesToHex(sig), expected);
     }
   });
@@ -854,139 +864,17 @@ describe('bls12-381/basic', () => {
       const [okmAscii, expectedHex] = vector;
       const expected = BigInt('0x' + expectedHex);
       const okm = new Uint8Array(okmAscii.split('').map((c) => c.charCodeAt(0)));
-      const scalars = await bls.utils.hashToField(okm, 1, options);
+      const scalars = bls.utils.hashToField(okm, 1, options);
       deepStrictEqual(scalars[0][0], expected);
     }
-  });
-  should('verify signed message', async () => {
-    for (let i = 0; i < NUM_RUNS; i++) {
-      const [priv, msg] = G2_VECTORS[i];
-      const sig = await bls.sign(msg, priv);
-      const pub = bls.getPublicKey(priv);
-      const res = await bls.verify(sig, msg, pub);
-      deepStrictEqual(res, true);
-    }
-  });
-  should('not verify signature with wrong message', async () => {
-    for (let i = 0; i < NUM_RUNS; i++) {
-      const [priv, msg] = G2_VECTORS[i];
-      const invMsg = G2_VECTORS[i + 1][1];
-      const sig = await bls.sign(msg, priv);
-      const pub = bls.getPublicKey(priv);
-      const res = await bls.verify(sig, invMsg, pub);
-      deepStrictEqual(res, false);
-    }
-  });
-  should('not verify signature with wrong key', async () => {
-    for (let i = 0; i < NUM_RUNS; i++) {
-      const [priv, msg] = G2_VECTORS[i];
-      const sig = await bls.sign(msg, priv);
-      const invPriv = G2_VECTORS[i + 1][1].padStart(64, '0');
-      const invPub = bls.getPublicKey(invPriv);
-      const res = await bls.verify(sig, msg, invPub);
-      deepStrictEqual(res, false);
-    }
-  });
-  should('verify multi-signature', async () => {
-    await fc.assert(
-      fc.asyncProperty(FC_MSG_5, FC_BIGINT_5, async (messages, privateKeys) => {
-        privateKeys = privateKeys.slice(0, messages.length);
-        messages = messages.slice(0, privateKeys.length);
-        const publicKey = privateKeys.map(getPubKey);
-        const signatures = await Promise.all(
-          messages.map((message, i) => bls.sign(message, privateKeys[i]))
-        );
-        const aggregatedSignature = await bls.aggregateSignatures(signatures);
-        deepStrictEqual(await bls.verifyBatch(aggregatedSignature, messages, publicKey), true);
-      })
-    );
-  });
-  should('batch verify multi-signatures', async () => {
-    await fc.assert(
-      fc.asyncProperty(
-        FC_MSG_5,
-        FC_MSG_5,
-        FC_BIGINT_5,
-        async (messages, wrongMessages, privateKeys) => {
-          privateKeys = privateKeys.slice(0, messages.length);
-          messages = messages.slice(0, privateKeys.length);
-          wrongMessages = messages.map((a, i) =>
-            typeof wrongMessages[i] === 'undefined' ? a : wrongMessages[i]
-          );
-          const publicKey = await Promise.all(privateKeys.map(getPubKey));
-          const signatures = await Promise.all(
-            messages.map((message, i) => bls.sign(message, privateKeys[i]))
-          );
-          const aggregatedSignature = await bls.aggregateSignatures(signatures);
-          deepStrictEqual(
-            await bls.verifyBatch(aggregatedSignature, wrongMessages, publicKey),
-            messages.every((m, i) => m === wrongMessages[i])
-          );
-        }
-      )
-    );
-  });
-  should('not verify multi-signature with wrong public keys', async () => {
-    await fc.assert(
-      fc.asyncProperty(
-        FC_MSG_5,
-        FC_BIGINT_5,
-        FC_BIGINT_5,
-        async (messages, privateKeys, wrongPrivateKeys) => {
-          privateKeys = privateKeys.slice(0, messages.length);
-          wrongPrivateKeys = privateKeys.map((a, i) =>
-            wrongPrivateKeys[i] !== undefined ? wrongPrivateKeys[i] : a
-          );
-          messages = messages.slice(0, privateKeys.length);
-          const wrongPublicKeys = await Promise.all(wrongPrivateKeys.map(getPubKey));
-          const signatures = await Promise.all(
-            messages.map((message, i) => bls.sign(message, privateKeys[i]))
-          );
-          const aggregatedSignature = await bls.aggregateSignatures(signatures);
-          deepStrictEqual(
-            await bls.verifyBatch(aggregatedSignature, messages, wrongPublicKeys),
-            wrongPrivateKeys.every((p, i) => p === privateKeys[i])
-          );
-        }
-      )
-    );
-  });
-  should('verify multi-signature as simple signature', async () => {
-    await fc.assert(
-      fc.asyncProperty(FC_MSG, FC_BIGINT_5, async (message, privateKeys) => {
-        const publicKey = await Promise.all(privateKeys.map(getPubKey));
-        const signatures = await Promise.all(
-          privateKeys.map((privateKey) => bls.sign(message, privateKey))
-        );
-        const aggregatedSignature = await bls.aggregateSignatures(signatures);
-        const aggregatedPublicKey = await bls.aggregatePublicKeys(publicKey);
-        deepStrictEqual(await bls.verify(aggregatedSignature, message, aggregatedPublicKey), true);
-      })
-    );
-  });
-  should('not verify wrong multi-signature as simple signature', async () => {
-    await fc.assert(
-      fc.asyncProperty(FC_MSG, FC_MSG, FC_BIGINT_5, async (message, wrongMessage, privateKeys) => {
-        const publicKey = await Promise.all(privateKeys.map(getPubKey));
-        const signatures = await Promise.all(
-          privateKeys.map((privateKey) => bls.sign(message, privateKey))
-        );
-        const aggregatedSignature = await bls.aggregateSignatures(signatures);
-        const aggregatedPublicKey = await bls.aggregatePublicKeys(publicKey);
-        deepStrictEqual(
-          await bls.verify(aggregatedSignature, wrongMessage, aggregatedPublicKey),
-          message === wrongMessage
-        );
-      })
-    );
   });
 });
 
 // Pairing
 describe('pairing', () => {
   const { pairing, Fp12 } = bls;
-  const G1 = bls.G1.Point.BASE;
-  const G2 = bls.G2.Point.BASE;
+  const G1 = G1Point.BASE;
+  const G2 = G2Point.BASE;
 
   should('creates negative G1 pairing', () => {
     const p1 = pairing(G1, G2);
@@ -1187,7 +1075,7 @@ describe('hash-to-curve', () => {
   for (let i = 0; i < VECTORS.length; i++) {
     const t = VECTORS[i];
     should(`hash_to_field/expand_message_xmd(SHA-256) (${i})`, async () => {
-      const p = await bls.utils.expandMessageXMD(
+      const p = bls.utils.expandMessageXMD(
         bls.utils.stringToBytes(t.msg),
         bls.utils.stringToBytes(DST),
         t.len
@@ -1305,7 +1193,7 @@ describe('hash-to-curve', () => {
   for (let i = 0; i < VECTORS_BIG.length; i++) {
     const t = VECTORS_BIG[i];
     should(`hash_to_field/expand_message_xmd(SHA-256) (long DST) (${i})`, async () => {
-      const p = await bls.utils.expandMessageXMD(
+      const p = bls.utils.expandMessageXMD(
         bls.utils.stringToBytes(t.msg),
         bls.utils.stringToBytes(LONG_DST),
         t.len
@@ -1418,7 +1306,7 @@ describe('hash-to-curve', () => {
   for (let i = 0; i < VECTORS_SHA512.length; i++) {
     const t = VECTORS_SHA512[i];
     should(`hash_to_field/expand_message_xmd(SHA-256) (long DST) (${i})`, async () => {
-      const p = await bls.utils.expandMessageXMD(
+      const p = bls.utils.expandMessageXMD(
         bls.utils.stringToBytes(t.msg),
         bls.utils.stringToBytes(DST_512),
         t.len,
@@ -1463,7 +1351,7 @@ describe('hash-to-curve', () => {
       const p = bls.hashToCurve.G1.hashToCurve(t.msg, {
         DST: 'BLS12381G1_XMD:SHA-256_SSWU_RO_TESTGEN',
       });
-      deepStrictEqual(p.toHex(), t.expected);
+      deepStrictEqual(p.toHex(false), t.expected);
     });
   }
   const VECTORS_G1_RO = [
@@ -1518,7 +1406,7 @@ describe('hash-to-curve', () => {
       const p = bls.hashToCurve.G1.hashToCurve(t.msg, {
         DST: 'QUUX-V01-CS02-with-BLS12381G1_XMD:SHA-256_SSWU_RO_',
       });
-      deepStrictEqual(p.toHex(), t.expected);
+      deepStrictEqual(p.toHex(false), t.expected);
     });
   }
   const VECTORS_G1_NU = [
@@ -1564,7 +1452,7 @@ describe('hash-to-curve', () => {
       const p = bls.hashToCurve.G1.encodeToCurve(t.msg, {
         DST: 'QUUX-V01-CS02-with-BLS12381G1_XMD:SHA-256_SSWU_NU_',
       });
-      deepStrictEqual(p.toHex(), t.expected);
+      deepStrictEqual(p.toHex(false), t.expected);
     });
   }
   const VECTORS_ENCODE_G1 = [
@@ -1601,7 +1489,7 @@ describe('hash-to-curve', () => {
       const p = bls.hashToCurve.G1.encodeToCurve(t.msg, {
         DST: 'BLS12381G1_XMD:SHA-256_SSWU_NU_TESTGEN',
       });
-      deepStrictEqual(p.toHex(), t.expected);
+      deepStrictEqual(p.toHex(false), t.expected);
     });
   }
   // Point G2
@@ -1647,7 +1535,7 @@ describe('hash-to-curve', () => {
       const p = bls.hashToCurve.G2.hashToCurve(t.msg, {
         DST: 'BLS12381G2_XMD:SHA-256_SSWU_RO_TESTGEN',
       });
-      deepStrictEqual(p.toHex(), t.expected);
+      deepStrictEqual(p.toHex(false), t.expected);
     });
   }
   const VECTORS_G2_RO = [
@@ -1712,7 +1600,7 @@ describe('hash-to-curve', () => {
       const p = bls.hashToCurve.G2.hashToCurve(t.msg, {
         DST: 'QUUX-V01-CS02-with-BLS12381G2_XMD:SHA-256_SSWU_RO_',
       });
-      deepStrictEqual(p.toHex(), t.expected);
+      deepStrictEqual(p.toHex(false), t.expected);
     });
   }
   const VECTORS_G2_NU = [
@@ -1777,7 +1665,7 @@ describe('hash-to-curve', () => {
       const p = bls.hashToCurve.G2.encodeToCurve(t.msg, {
         DST: 'QUUX-V01-CS02-with-BLS12381G2_XMD:SHA-256_SSWU_NU_',
       });
-      deepStrictEqual(p.toHex(), t.expected);
+      deepStrictEqual(p.toHex(false), t.expected);
     });
   }
   const VECTORS_ENCODE_G2 = [
@@ -1822,9 +1710,131 @@ describe('hash-to-curve', () => {
       const p = bls.hashToCurve.G2.encodeToCurve(t.msg, {
         DST: 'BLS12381G2_XMD:SHA-256_SSWU_NU_TESTGEN',
       });
-      deepStrictEqual(p.toHex(), t.expected);
+      deepStrictEqual(p.toHex(false), t.expected);
     });
   }
+});
+
+describe('verify()', () => {
+  should('verify signed message', async () => {
+    for (let i = 0; i < NUM_RUNS; i++) {
+      const [priv, msg] = G2_VECTORS[i];
+      const sig = bls.sign(msg, priv);
+      const pub = bls.getPublicKey(priv);
+      const res = bls.verify(sig, msg, pub);
+      deepStrictEqual(res, true, `${priv}-${msg}`);
+    }
+  });
+  should('not verify signature with wrong message', async () => {
+    for (let i = 0; i < NUM_RUNS; i++) {
+      const [priv, msg] = G2_VECTORS[i];
+      const invMsg = G2_VECTORS[i + 1][1];
+      const sig = bls.sign(msg, priv);
+      const pub = bls.getPublicKey(priv);
+      const res = bls.verify(sig, invMsg, pub);
+      deepStrictEqual(res, false);
+    }
+  });
+  should('not verify signature with wrong key', async () => {
+    for (let i = 0; i < NUM_RUNS; i++) {
+      const [priv, msg] = G2_VECTORS[i];
+      const sig = bls.sign(msg, priv);
+      const invPriv = G2_VECTORS[i + 1][1].padStart(64, '0');
+      const invPub = bls.getPublicKey(invPriv);
+      const res = bls.verify(sig, msg, invPub);
+      deepStrictEqual(res, false);
+    }
+  });
+  describe('batch', () => {
+    should('verify multi-signature', async () => {
+      await fc.assert(
+        fc.asyncProperty(FC_MSG_5, FC_BIGINT_5, async (messages, privateKeys) => {
+          privateKeys = privateKeys.slice(0, messages.length);
+          messages = messages.slice(0, privateKeys.length);
+          const publicKey = privateKeys.map(getPubKey);
+          const signatures = messages.map((message, i) => bls.sign(message, privateKeys[i]));
+          const aggregatedSignature = bls.aggregateSignatures(signatures);
+          deepStrictEqual(bls.verifyBatch(aggregatedSignature, messages, publicKey), true);
+        })
+      );
+    });
+    should('batch verify multi-signatures', async () => {
+      await fc.assert(
+        fc.asyncProperty(
+          FC_MSG_5,
+          FC_MSG_5,
+          FC_BIGINT_5,
+          async (messages, wrongMessages, privateKeys) => {
+            privateKeys = privateKeys.slice(0, messages.length);
+            messages = messages.slice(0, privateKeys.length);
+            wrongMessages = messages.map((a, i) =>
+              typeof wrongMessages[i] === 'undefined' ? a : wrongMessages[i]
+            );
+            const publicKey = privateKeys.map(getPubKey);
+            const signatures = messages.map((message, i) => bls.sign(message, privateKeys[i]));
+            const aggregatedSignature = bls.aggregateSignatures(signatures);
+            deepStrictEqual(
+              bls.verifyBatch(aggregatedSignature, wrongMessages, publicKey),
+              messages.every((m, i) => m === wrongMessages[i])
+            );
+          }
+        )
+      );
+    });
+    should('not verify multi-signature with wrong public keys', async () => {
+      await fc.assert(
+        fc.asyncProperty(
+          FC_MSG_5,
+          FC_BIGINT_5,
+          FC_BIGINT_5,
+          async (messages, privateKeys, wrongPrivateKeys) => {
+            privateKeys = privateKeys.slice(0, messages.length);
+            wrongPrivateKeys = privateKeys.map((a, i) =>
+              wrongPrivateKeys[i] !== undefined ? wrongPrivateKeys[i] : a
+            );
+            messages = messages.slice(0, privateKeys.length);
+            const wrongPublicKeys = wrongPrivateKeys.map(getPubKey);
+            const signatures = messages.map((message, i) => bls.sign(message, privateKeys[i]));
+            const aggregatedSignature = bls.aggregateSignatures(signatures);
+            deepStrictEqual(
+              bls.verifyBatch(aggregatedSignature, messages, wrongPublicKeys),
+              wrongPrivateKeys.every((p, i) => p === privateKeys[i])
+            );
+          }
+        )
+      );
+    });
+    should('verify multi-signature as simple signature', async () => {
+      await fc.assert(
+        fc.asyncProperty(FC_MSG, FC_BIGINT_5, async (message, privateKeys) => {
+          const publicKey = privateKeys.map(getPubKey);
+          const signatures = privateKeys.map((privateKey) => bls.sign(message, privateKey));
+          const aggregatedSignature = bls.aggregateSignatures(signatures);
+          const aggregatedPublicKey = bls.aggregatePublicKeys(publicKey);
+          deepStrictEqual(bls.verify(aggregatedSignature, message, aggregatedPublicKey), true);
+        })
+      );
+    });
+    should('not verify wrong multi-signature as simple signature', async () => {
+      await fc.assert(
+        fc.asyncProperty(
+          FC_MSG,
+          FC_MSG,
+          FC_BIGINT_5,
+          async (message, wrongMessage, privateKeys) => {
+            const publicKey = privateKeys.map(getPubKey);
+            const signatures = privateKeys.map((privateKey) => bls.sign(message, privateKey));
+            const aggregatedSignature = bls.aggregateSignatures(signatures);
+            const aggregatedPublicKey = bls.aggregatePublicKeys(publicKey);
+            deepStrictEqual(
+              bls.verify(aggregatedSignature, wrongMessage, aggregatedPublicKey),
+              message === wrongMessage
+            );
+          }
+        )
+      );
+    });
+  });
 });
 // Deterministic
 describe('bls12-381 deterministic', () => {
@@ -1838,7 +1848,7 @@ describe('bls12-381 deterministic', () => {
   const Fp12 = bls.Fp12;
 
   should('Killic based/Pairing', () => {
-    const t = bls.pairing(bls.G1.Point.BASE, bls.G2.Point.BASE);
+    const t = bls.pairing(G1Point.BASE, G2Point.BASE);
     deepStrictEqual(
       bls.utils.bytesToHex(Fp12.toBytes(t)),
       killicHex([
@@ -1858,80 +1868,81 @@ describe('bls12-381 deterministic', () => {
     );
   });
   should('Killic based/Pairing (big)', () => {
-    let p1 = bls.G1.Point.BASE;
-    let p2 = bls.G2.Point.BASE;
+    let p1 = G1Point.BASE;
+    let p2 = G2Point.BASE;
     for (let v of pairingVectors) {
       deepStrictEqual(
         bls.utils.bytesToHex(Fp12.toBytes(bls.pairing(p1, p2))),
         // Reverse order
         v.match(/.{96}/g).reverse().join('')
       );
-      p1 = p1.add(bls.G1.Point.BASE);
-      p2 = p2.add(bls.G2.Point.BASE);
+      p1 = p1.add(G1Point.BASE);
+      p2 = p2.add(G2Point.BASE);
     }
   });
 
   should(`zkcrypto/G1/compressed`, () => {
-    let p1 = bls.G1.Point.ZERO;
+    let p1 = G1Point.ZERO;
     for (let i = 0; i < zkVectors.G1_Compressed.length; i++) {
       const t = zkVectors.G1_Compressed[i];
-      const P = bls.G1.Point.fromHex(t);
+      const P = G1Point.fromHex(t);
       deepStrictEqual(P.toHex(true), t);
       deepStrictEqual(P.equals(p1), true);
       deepStrictEqual(p1.toHex(true), t);
-      p1 = p1.add(bls.G1.Point.BASE);
+      p1 = p1.add(G1Point.BASE);
       if (i) {
-        deepStrictEqual(bls.G1.Point.BASE.multiply(BigInt(i)).toHex(true), t);
-        deepStrictEqual(bls.G1.Point.BASE.multiplyUnsafe(BigInt(i)).toHex(true), t);
-        deepStrictEqual(bls.G1.Point.BASE.multiply(BigInt(i)).toHex(true), t);
+        deepStrictEqual(G1Point.BASE.multiply(BigInt(i)).toHex(true), t);
+        deepStrictEqual(G1Point.BASE.multiplyUnsafe(BigInt(i)).toHex(true), t);
+        deepStrictEqual(G1Point.BASE.multiply(BigInt(i)).toHex(true), t);
       }
     }
   });
   should(`zkcrypto/G1/uncompressed`, () => {
-    let p1 = bls.G1.Point.ZERO;
+    let p1 = G1Point.ZERO;
     for (let i = 0; i < zkVectors.G1_Uncompressed.length; i++) {
       const t = zkVectors.G1_Uncompressed[i];
-      const P = bls.G1.Point.fromHex(t);
-      deepStrictEqual(P.toHex(), t);
+      const P = G1Point.fromHex(t);
+      deepStrictEqual(P.toHex(false), t);
       deepStrictEqual(P.equals(p1), true);
-      deepStrictEqual(p1.toHex(), t);
-      p1 = p1.add(bls.G1.Point.BASE);
+      deepStrictEqual(p1.toHex(false), t);
+      p1 = p1.add(G1Point.BASE);
       if (i) {
-        deepStrictEqual(bls.G1.Point.BASE.multiply(BigInt(i)).toHex(), t);
-        deepStrictEqual(bls.G1.Point.BASE.multiplyUnsafe(BigInt(i)).toHex(), t);
-        deepStrictEqual(bls.G1.Point.BASE.multiply(BigInt(i)).toHex(), t);
+        deepStrictEqual(G1Point.BASE.multiply(BigInt(i)).toHex(false), t);
+        deepStrictEqual(G1Point.BASE.multiplyUnsafe(BigInt(i)).toHex(false), t);
+        deepStrictEqual(G1Point.BASE.multiply(BigInt(i)).toHex(false), t);
       }
     }
   });
   should(`zkcrypto/G2/compressed`, () => {
-    let p1 = bls.G2.Point.ZERO;
+    let p1 = G2Point.ZERO;
     for (let i = 0; i < zkVectors.G2_Compressed.length; i++) {
       const t = zkVectors.G2_Compressed[i];
-      const P = bls.G2.Point.fromHex(t);
+      const P = G2Point.fromHex(t);
       deepStrictEqual(P.toHex(true), t);
       deepStrictEqual(P.equals(p1), true);
       deepStrictEqual(p1.toHex(true), t);
-      p1 = p1.add(bls.G2.Point.BASE);
+      p1 = p1.add(G2Point.BASE);
       if (i) {
-        deepStrictEqual(bls.G2.Point.BASE.multiply(BigInt(i)).toHex(true), t);
-        deepStrictEqual(bls.G2.Point.BASE.multiplyUnsafe(BigInt(i)).toHex(true), t);
-        deepStrictEqual(bls.G2.Point.BASE.multiply(BigInt(i)).toHex(true), t);
+        let n = BigInt(i);
+        deepStrictEqual(G2Point.BASE.multiply(n).toHex(true), t);
+        deepStrictEqual(G2Point.BASE.multiplyUnsafe(n).toHex(true), t);
+        deepStrictEqual(G2Point.BASE.multiply(n).toHex(true), t);
       }
     }
   });
   should(`zkcrypto/G2/uncompressed`, () => {
-    let p1 = bls.G2.Point.ZERO;
+    let p1 = G2Point.ZERO;
     for (let i = 0; i < zkVectors.G2_Uncompressed.length; i++) {
       const t = zkVectors.G2_Uncompressed[i];
-      const P = bls.G2.Point.fromHex(t);
-      deepStrictEqual(P.toHex(), t);
+      const P = G2Point.fromHex(t);
+      deepStrictEqual(P.toHex(false), t);
       deepStrictEqual(P.equals(p1), true);
-      deepStrictEqual(p1.toHex(), t);
-      p1 = p1.add(bls.G2.Point.BASE);
+      deepStrictEqual(p1.toHex(false), t);
+      p1 = p1.add(G2Point.BASE);
       if (i) {
-        deepStrictEqual(bls.G2.Point.BASE.multiply(BigInt(i)).toHex(), t);
-        deepStrictEqual(bls.G2.Point.BASE.multiplyUnsafe(BigInt(i)).toHex(), t);
-        deepStrictEqual(bls.G2.Point.BASE.multiply(BigInt(i)).toHex(), t);
+        deepStrictEqual(G2Point.BASE.multiply(BigInt(i)).toHex(false), t);
+        deepStrictEqual(G2Point.BASE.multiplyUnsafe(BigInt(i)).toHex(false), t);
+        deepStrictEqual(G2Point.BASE.multiply(BigInt(i)).toHex(false), t);
       }
     }
   });

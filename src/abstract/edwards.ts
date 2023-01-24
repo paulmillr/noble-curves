@@ -38,7 +38,7 @@ export type CurveType = ut.BasicCurve<bigint> & {
   uvRatio?: (u: bigint, v: bigint) => { isValid: boolean; value: bigint };
   // RFC 8032 pre-hashing of messages to sign() / verify()
   preHash?: ut.CHash;
-  mapToCurve?: (scalar: bigint[]) => { x: bigint; y: bigint };
+  mapToCurve?: (scalar: bigint[]) => AffinePoint;
 };
 
 function validateOpts(curve: CurveType) {
@@ -61,10 +61,10 @@ function validateOpts(curve: CurveType) {
 }
 
 // 2d point in XY coords
-export interface AffinePoint {
+export type AffinePoint = {
   x: bigint;
   y: bigint;
-}
+} & { z?: never; t?: never };
 
 // Instance of Extended Point with coordinates in X, Y, Z, T
 export interface ExtendedPointType extends Group<ExtendedPointType> {
@@ -76,16 +76,16 @@ export interface ExtendedPointType extends Group<ExtendedPointType> {
   multiplyUnsafe(scalar: bigint): ExtendedPointType;
   isSmallOrder(): boolean;
   isTorsionFree(): boolean;
-  toAffine(invZ?: bigint): AffinePoint;
+  toAffine(iz?: bigint): AffinePoint;
   clearCofactor(): ExtendedPointType;
 }
 // Static methods of Extended Point with coordinates in X, Y, Z, T
 export interface ExtendedPointConstructor extends GroupConstructor<ExtendedPointType> {
   new (x: bigint, y: bigint, z: bigint, t: bigint): ExtendedPointType;
   fromAffine(p: AffinePoint): ExtendedPointType;
-  toAffineBatch(points: ExtendedPointType[]): AffinePoint[];
   fromHex(hex: Hex): ExtendedPointType;
   fromPrivateKey(privateKey: PrivKey): ExtendedPointType; // TODO: remove
+  toAffineBatch(points: ExtendedPointType[]): AffinePoint[];
 }
 
 export type CurveFn = {
@@ -161,20 +161,21 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
    * https://en.wikipedia.org/wiki/Twisted_Edwards_curve#Extended_coordinates
    */
   class ExtendedPoint implements ExtendedPointType {
-    constructor(
-      readonly x: bigint,
-      readonly y: bigint,
-      readonly z = _1n,
-      readonly t = modP(x * y)
-    ) {}
+    constructor(readonly x: bigint, readonly y: bigint, readonly z: bigint, readonly t: bigint) {
+      if (y == null || !ut.big(y)) throw new Error('y required');
+      if (z == null || !ut.big(z)) throw new Error('z required');
+      if (t == null || !ut.big(t)) throw new Error('t required');
+    }
 
-    static BASE = new ExtendedPoint(CURVE.Gx, CURVE.Gy);
-    static ZERO = new ExtendedPoint(_0n, _1n); // 0, 1, 1, 0
+    static BASE = new ExtendedPoint(CURVE.Gx, CURVE.Gy, _1n, modP(CURVE.Gx * CURVE.Gy));
+    static ZERO = new ExtendedPoint(_0n, _1n, _1n, _0n); // 0, 1, 1, 0
+
     static fromAffine(p: AffinePoint): ExtendedPoint {
-      if (!(p && typeof p === 'object' && typeof p.x === 'bigint' && typeof p.y === 'bigint'))
-        throw new Error('fromAffine error');
-      if (p.x === 0n && p.y === 1n) return ExtendedPoint.ZERO;
-      return new ExtendedPoint(p.x, p.y);
+      const { x, y } = p || {};
+      if (p instanceof ExtendedPoint) throw new Error('fromAffine: extended point not allowed');
+      if (!ut.big(x) || !ut.big(y)) throw new Error('fromAffine: invalid affine point');
+      if (p.x === _0n && p.y === _1n) return ExtendedPoint.ZERO;
+      return new ExtendedPoint(p.x, p.y, _1n, modP(x * y));
     }
     // Takes a bunch of Jacobian Points but executes only one
     // invert on all of them. invert is very slow operation,
@@ -197,6 +198,9 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       const Y1Z2 = modP(Y1 * Z2);
       const Y2Z1 = modP(Y2 * Z1);
       return X1Z2 === X2Z1 && Y1Z2 === Y2Z1;
+    }
+    protected is0(): boolean {
+      return this.equals(ExtendedPoint.ZERO);
     }
 
     // Inverses point to one corresponding to (x, -y) in Affine coordinates.
@@ -297,20 +301,20 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     // point with torsion component.
     // Multiplies point by cofactor and checks if the result is 0.
     isSmallOrder(): boolean {
-      return this.multiplyUnsafe(CURVE.h).equals(ExtendedPoint.ZERO);
+      return this.multiplyUnsafe(CURVE.h).is0();
     }
 
     // Multiplies point by curve order (very big scalar CURVE.n) and checks if the result is 0.
     // Returns `false` is the point is dirty.
     isTorsionFree(): boolean {
-      return wnaf.unsafeLadder(this, CURVE_ORDER).equals(ExtendedPoint.ZERO);
+      return wnaf.unsafeLadder(this, CURVE_ORDER).is0();
     }
 
     // Converts Extended point to default (x, y) coordinates.
     // Can accept precomputed Z^-1 - for example, from invertBatch.
     toAffine(iz?: bigint): AffinePoint {
       const { x, y, z } = this;
-      const is0 = this.equals(ExtendedPoint.ZERO);
+      const is0 = this.is0();
       if (iz == null) iz = is0 ? _8n : (Fp.invert(z) as bigint); // 8 was chosen arbitrarily
       const ax = modP(x * iz);
       const ay = modP(y * iz);
@@ -369,7 +373,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       const isXOdd = (x & _1n) === _1n;
       const isLastByteOdd = (lastByte & 0x80) !== 0;
       if (isLastByteOdd !== isXOdd) x = modP(-x);
-      return new ExtendedPoint(x, y);
+      return ExtendedPoint.fromAffine({ x, y });
     }
     static fromPrivateKey(privateKey: PrivKey) {
       return getExtendedPublicKey(privateKey).point;
@@ -526,7 +530,6 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     sign,
     verify,
     ExtendedPoint,
-    // Point: ExtendedPoint,
     utils,
   };
 }

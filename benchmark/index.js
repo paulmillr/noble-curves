@@ -286,11 +286,11 @@ export const CURVES = {
       },
       noble: () => {
         p1 =
-          bls.G1.Point.BASE.multiply(
+          bls.G1.ProjectivePoint.BASE.multiply(
             0x28b90deaf189015d3a325908c5e0e4bf00f84f7e639b056ff82d7e70b6eede4cn
           );
         p2 =
-          bls.G2.Point.BASE.multiply(
+          bls.G2.ProjectivePoint.BASE.multiply(
             0x28b90deaf189015d3a325908c5e0e4bf00f84f7e639b056ff82d7e70b6eede4dn
           );
         bls.pairing(p1, p2);
@@ -334,12 +334,12 @@ export const CURVES = {
     'hashToCurve/G1': {
       samples: 500,
       old: () => old_bls.PointG1.hashToCurve('abcd'),
-      noble: () => bls.G1.Point.hashToCurve('abcd'),
+      noble: () => bls.hashToCurve.G1.hashToCurve('abcd'),
     },
     'hashToCurve/G2': {
       samples: 200,
       old: () => old_bls.PointG2.hashToCurve('abcd'),
-      noble: () => bls.G2.Point.hashToCurve('abcd'),
+      noble: () => bls.hashToCurve.G2.hashToCurve('abcd'),
     },
     // SLOW PART
     // Requires points which we cannot init before (data fn same for all)
@@ -353,22 +353,22 @@ export const CURVES = {
     'aggregatePublicKeys/32': {
       samples: 50,
       old: ({ pub32 }) => old_bls.aggregatePublicKeys(pub32.map(old_bls.PointG1.fromHex)),
-      noble: ({ pub32 }) => bls.aggregatePublicKeys(pub32.map(bls.G1.Point.fromHex)),
+      noble: ({ pub32 }) => bls.aggregatePublicKeys(pub32.map(bls.G1.ProjectivePoint.fromHex)),
     },
     'aggregatePublicKeys/128': {
       samples: 20,
       old: ({ pub128 }) => old_bls.aggregatePublicKeys(pub128.map(old_bls.PointG1.fromHex)),
-      noble: ({ pub128 }) => bls.aggregatePublicKeys(pub128.map(bls.G1.Point.fromHex)),
+      noble: ({ pub128 }) => bls.aggregatePublicKeys(pub128.map(bls.G1.ProjectivePoint.fromHex)),
     },
     'aggregatePublicKeys/512': {
       samples: 10,
       old: ({ pub512 }) => old_bls.aggregatePublicKeys(pub512.map(old_bls.PointG1.fromHex)),
-      noble: ({ pub512 }) => bls.aggregatePublicKeys(pub512.map(bls.G1.Point.fromHex)),
+      noble: ({ pub512 }) => bls.aggregatePublicKeys(pub512.map(bls.G1.ProjectivePoint.fromHex)),
     },
     'aggregatePublicKeys/2048': {
       samples: 5,
       old: ({ pub2048 }) => old_bls.aggregatePublicKeys(pub2048.map(old_bls.PointG1.fromHex)),
-      noble: ({ pub2048 }) => bls.aggregatePublicKeys(pub2048.map(bls.G1.Point.fromHex)),
+      noble: ({ pub2048 }) => bls.aggregatePublicKeys(pub2048.map(bls.G1.ProjectivePoint.fromHex)),
     },
     'aggregateSignatures/8': {
       samples: 50,

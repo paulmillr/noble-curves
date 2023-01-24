@@ -144,7 +144,7 @@ describe('secp256k1', () => {
         const { P, d, expected } = vector;
         const p = Point.fromHex(P);
         if (expected) {
-          deepStrictEqual(p.multiply(hexToNumber(d)).toHex(true), expected);
+          deepStrictEqual(p.multiply(hexToNumber(d)).toHex(true), expected, P);
         } else {
           throws(() => {
             p.multiply(hexToNumber(d)).toHex(true);
@@ -314,7 +314,7 @@ describe('secp256k1', () => {
       const r = 1n;
       const s = 115792089237316195423570985008687907852837564279074904382605163141518162728904n;
 
-      const pub = new Point(x, y);
+      const pub = new Point(x, y, 1n);
       const signature = new secp.Signature(2n, 2n);
       signature.r = r;
       signature.s = s;
@@ -329,7 +329,7 @@ describe('secp256k1', () => {
       const y = 32670510020758816978083085130507043184471273380659243275938904335757337482424n;
       const r = 104546003225722045112039007203142344920046999340768276760147352389092131869133n;
       const s = 96900796730960181123786672629079577025401317267213807243199432755332205217369n;
-      const pub = new Point(x, y);
+      const pub = new Point(x, y, 1n);
       const sig = new secp.Signature(r, s);
       deepStrictEqual(secp.verify(sig, msg, pub), false);
     });
@@ -339,7 +339,7 @@ describe('secp256k1', () => {
       const y = 17482644437196207387910659778872952193236850502325156318830589868678978890912n;
       const r = 432420386565659656852420866390673177323n;
       const s = 115792089237316195423570985008687907852837564279074904382605163141518161494334n;
-      const pub = new Point(x, y);
+      const pub = new Point(x, y, 1n);
       const sig = new secp.Signature(r, s);
       deepStrictEqual(secp.verify(sig, msg, pub, { strict: false }), true);
     });
@@ -452,7 +452,7 @@ describe('secp256k1', () => {
   should('have proper curve equation in assertValidity()', () => {
     throws(() => {
       const { Fp } = secp.CURVE;
-      let point = new Point(Fp.create(-2n), Fp.create(-1n));
+      let point = new Point(Fp.create(-2n), Fp.create(-1n), Fp.create(1n));
       point.assertValidity();
     });
   });

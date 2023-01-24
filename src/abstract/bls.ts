@@ -21,6 +21,7 @@ import {
   ProjectivePointType as PPointType,
   CurvePointsRes,
   weierstrassPoints,
+  AffinePoint,
 } from './weierstrass.js';
 
 type Fp = bigint; // Can be different field?
@@ -72,7 +73,7 @@ export type CurveFn<Fp, Fp2, Fp6, Fp12> = {
   G2: CurvePointsRes<Fp2>;
   Signature: SignatureCoder<Fp2>;
   millerLoop: (ell: [Fp2, Fp2, Fp2][], g1: [Fp, Fp]) => Fp12;
-  calcPairingPrecomputes: (x: Fp2, y: Fp2) => [Fp2, Fp2, Fp2][];
+  calcPairingPrecomputes: (p: AffinePoint<Fp2>) => [Fp2, Fp2, Fp2][];
   // prettier-ignore
   hashToCurve: {
     G1: ReturnType<(typeof htf.hashToCurve<Fp>)>,
@@ -119,7 +120,8 @@ export function bls<Fp2, Fp6, Fp12>(
 
   // Pre-compute coefficients for sparse multiplication
   // Point addition and point double calculations is reused for coefficients
-  function calcPairingPrecomputes(x: Fp2, y: Fp2) {
+  function calcPairingPrecomputes(p: AffinePoint<Fp2>) {
+    const { x, y } = p;
     // prettier-ignore
     const Qx = x, Qy = y, Qz = Fp2.ONE;
     // prettier-ignore
@@ -212,19 +214,15 @@ export function bls<Fp2, Fp6, Fp12>(
   function pairingPrecomputes(point: G2): [Fp2, Fp2, Fp2][] {
     const p = point as G2 & withPairingPrecomputes;
     if (p._PPRECOMPUTES) return p._PPRECOMPUTES;
-    p._PPRECOMPUTES = calcPairingPrecomputes(p.x, p.y);
+    p._PPRECOMPUTES = calcPairingPrecomputes(point.toAffine());
     return p._PPRECOMPUTES;
   }
 
-  function clearPairingPrecomputes(point: G2) {
-    const p = point as G2 & withPairingPrecomputes;
-    p._PPRECOMPUTES = undefined;
-  }
-  clearPairingPrecomputes;
-
-  function millerLoopG1(Q: G1, P: G2): Fp12 {
-    return millerLoop(pairingPrecomputes(P), [Q.x, Q.y]);
-  }
+  // TODO: export
+  // function clearPairingPrecomputes(point: G2) {
+  //   const p = point as G2 & withPairingPrecomputes;
+  //   p._PPRECOMPUTES = undefined;
+  // }
 
   // Point on G2 curve (complex numbers): (x₁, x₂+i), (y₁, y₂+i)
   const G2 = weierstrassPoints({
@@ -240,13 +238,14 @@ export function bls<Fp2, Fp6, Fp12>(
   const { Signature } = CURVE.G2;
 
   // Calculates bilinear pairing
-  function pairing(P: G1, Q: G2, withFinalExponent: boolean = true): Fp12 {
-    if (P.equals(G1.ProjectivePoint.ZERO) || Q.equals(G2.ProjectivePoint.ZERO))
-      throw new Error('No pairings at point of Infinity');
-    P.assertValidity();
+  function pairing(Q: G1, P: G2, withFinalExponent: boolean = true): Fp12 {
+    if (Q.equals(G1.ProjectivePoint.ZERO) || P.equals(G2.ProjectivePoint.ZERO))
+      throw new Error('pairing is not available for ZERO point');
     Q.assertValidity();
+    P.assertValidity();
     // Performance: 9ms for millerLoop and ~14ms for exp.
-    const looped = millerLoopG1(P, Q);
+    const Qa = Q.toAffine();
+    const looped = millerLoop(pairingPrecomputes(P), [Qa.x, Qa.y]);
     return withFinalExponent ? Fp12.finalExponentiate(looped) : looped;
   }
   type G1 = typeof G1.ProjectivePoint.BASE;
@@ -310,9 +309,7 @@ export function bls<Fp2, Fp6, Fp12>(
   function aggregatePublicKeys(publicKeys: G1[]): G1;
   function aggregatePublicKeys(publicKeys: G1Hex[]): Uint8Array | G1 {
     if (!publicKeys.length) throw new Error('Expected non-empty array');
-    const agg = publicKeys
-      .map(normP1)
-      .reduce((sum, p) => sum.add(G1.ProjectivePoint.fromAffine(p)), G1.ProjectivePoint.ZERO);
+    const agg = publicKeys.map(normP1).reduce((sum, p) => sum.add(p), G1.ProjectivePoint.ZERO);
     const aggAffine = agg; //.toAffine();
     if (publicKeys[0] instanceof G1.ProjectivePoint) {
       aggAffine.assertValidity();
@@ -327,9 +324,7 @@ export function bls<Fp2, Fp6, Fp12>(
   function aggregateSignatures(signatures: G2[]): G2;
   function aggregateSignatures(signatures: G2Hex[]): Uint8Array | G2 {
     if (!signatures.length) throw new Error('Expected non-empty array');
-    const agg = signatures
-      .map(normP2)
-      .reduce((sum, s) => sum.add(G2.ProjectivePoint.fromAffine(s)), G2.ProjectivePoint.ZERO);
+    const agg = signatures.map(normP2).reduce((sum, s) => sum.add(s), G2.ProjectivePoint.ZERO);
     const aggAffine = agg; //.toAffine();
     if (signatures[0] instanceof G2.ProjectivePoint) {
       aggAffine.assertValidity();
@@ -346,6 +341,9 @@ export function bls<Fp2, Fp6, Fp12>(
     publicKeys: G1Hex[],
     htfOpts?: htf.htfBasicOpts
   ): boolean {
+    // @ts-ignore
+    // console.log('verifyBatch', ut.bytesToHex(signature as any), messages, publicKeys.map(ut.bytesToHex));
+
     if (!messages.length) throw new Error('Expected non-empty messages array');
     if (publicKeys.length !== messages.length)
       throw new Error('Pubkey count should equal msg count');
@@ -373,9 +371,8 @@ export function bls<Fp2, Fp6, Fp12>(
     }
   }
 
-  // Pre-compute points. Refer to README.
-  // TODO
-  // G1.ProjectivePoint.BASE._setWindowSize(4);
+  G1.ProjectivePoint.BASE._setWindowSize(4);
+
   return {
     CURVE,
     Fr,

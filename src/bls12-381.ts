@@ -16,7 +16,7 @@ import { randomBytes } from '@noble/hashes/utils';
 import { bls, CurveFn } from './abstract/bls.js';
 import * as mod from './abstract/modular.js';
 import {
-  concatBytes,
+  concatBytes as concatB,
   ensureBytes,
   numberToBytesBE,
   bytesToNumberBE,
@@ -31,6 +31,7 @@ import {
   ProjectivePointType,
   ProjectiveConstructor,
   mapToCurveSimpleSWU,
+  AffinePoint,
 } from './abstract/weierstrass.js';
 import { isogenyMap } from './abstract/hash-to-curve.js';
 
@@ -169,7 +170,7 @@ const Fp2: mod.Field<Fp2> & Fp2Utils = {
     if (b.length !== Fp2.BYTES) throw new Error(`fromBytes wrong length=${b.length}`);
     return { c0: Fp.fromBytes(b.subarray(0, Fp.BYTES)), c1: Fp.fromBytes(b.subarray(Fp.BYTES)) };
   },
-  toBytes: ({ c0, c1 }) => concatBytes(Fp.toBytes(c0), Fp.toBytes(c1)),
+  toBytes: ({ c0, c1 }) => concatB(Fp.toBytes(c0), Fp.toBytes(c1)),
   cmov: ({ c0, c1 }, { c0: r0, c1: r1 }, c) => ({
     c0: Fp.cmov(c0, r0, c),
     c1: Fp.cmov(c1, r1, c),
@@ -354,7 +355,7 @@ const Fp6: mod.Field<Fp6> & Fp6Utils = {
     };
   },
   toBytes: ({ c0, c1, c2 }): Uint8Array =>
-    concatBytes(Fp2.toBytes(c0), Fp2.toBytes(c1), Fp2.toBytes(c2)),
+    concatB(Fp2.toBytes(c0), Fp2.toBytes(c1), Fp2.toBytes(c2)),
   cmov: ({ c0, c1, c2 }: Fp6, { c0: r0, c1: r1, c2: r2 }: Fp6, c) => ({
     c0: Fp2.cmov(c0, r0, c),
     c1: Fp2.cmov(c1, r1, c),
@@ -557,7 +558,7 @@ const Fp12: mod.Field<Fp12> & Fp12Utils = {
       c1: Fp6.fromBytes(b.subarray(Fp6.BYTES)),
     };
   },
-  toBytes: ({ c0, c1 }): Uint8Array => concatBytes(Fp6.toBytes(c0), Fp6.toBytes(c1)),
+  toBytes: ({ c0, c1 }): Uint8Array => concatB(Fp6.toBytes(c0), Fp6.toBytes(c1)),
   cmov: ({ c0, c1 }, { c0: r0, c1: r1 }, c) => ({
     c0: Fp6.cmov(c0, r0, c),
     c1: Fp6.cmov(c1, r1, c),
@@ -1018,7 +1019,7 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
       const { x, y } = G1_SWU(Fp.create(scalars[0]));
       return isogenyMapG1(x, y);
     },
-    fromBytes: (bytes: Uint8Array): { x: Fp; y: Fp } => {
+    fromBytes: (bytes: Uint8Array): AffinePoint<Fp> => {
       if (bytes.length === 48) {
         const P = Fp.ORDER;
         const compressedValue = bytesToNumberBE(bytes);
@@ -1034,7 +1035,7 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
         return { x: Fp.create(x), y: Fp.create(y) };
       } else if (bytes.length === 96) {
         // Check if the infinity flag is set
-        if ((bytes[0] & (1 << 6)) !== 0) return bls12_381.G1.ProjectivePoint.ZERO;
+        if ((bytes[0] & (1 << 6)) !== 0) return bls12_381.G1.ProjectivePoint.ZERO.toAffine();
         const x = bytesToNumberBE(bytes.slice(0, Fp.BYTES));
         const y = bytesToNumberBE(bytes.slice(Fp.BYTES));
         return { x: Fp.create(x), y: Fp.create(y) };
@@ -1044,7 +1045,7 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
     },
     toBytes: (c, point, isCompressed) => {
       const isZero = point.equals(c.ZERO);
-      const { x, y } = point;
+      const { x, y } = point.toAffine();
       if (isCompressed) {
         if (isZero) return COMPRESSED_ZERO.slice();
         const P = Fp.ORDER;
@@ -1055,10 +1056,10 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
       } else {
         if (isZero) {
           // 2x PUBLIC_KEY_LENGTH
-          const x = concatBytes(new Uint8Array([0x40]), new Uint8Array(2 * Fp.BYTES - 1));
+          const x = concatB(new Uint8Array([0x40]), new Uint8Array(2 * Fp.BYTES - 1));
           return x;
         } else {
-          return concatBytes(numberToBytesBE(x, Fp.BYTES), numberToBytesBE(y, Fp.BYTES));
+          return concatB(numberToBytesBE(x, Fp.BYTES), numberToBytesBE(y, Fp.BYTES));
         }
       }
     },
@@ -1120,7 +1121,7 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
       const Q = t3.subtract(P);               // Ψ²(2P) - Ψ(P) + [x²]P - [x]Ψ(P) + [x]P - 1P
       return Q;                               // [x²-x-1]P + [x-1]Ψ(P) + Ψ²(2P)
     },
-    fromBytes: (bytes: Uint8Array): { x: Fp2; y: Fp2 } => {
+    fromBytes: (bytes: Uint8Array): AffinePoint<Fp2> => {
       const m_byte = bytes[0] & 0xe0;
       if (m_byte === 0x20 || m_byte === 0x60 || m_byte === 0xe0) {
         throw new Error('Invalid encoding flag: ' + m_byte);
@@ -1128,6 +1129,8 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
       const bitC = m_byte & 0x80; // compression bit
       const bitI = m_byte & 0x40; // point at infinity bit
       const bitS = m_byte & 0x20; // sign bit
+      const L = Fp.BYTES;
+      const slc = (b: Uint8Array, from: number, to?: number) => bytesToNumberBE(b.slice(from, to));
       if (bytes.length === 96 && bitC) {
         const { b } = bls12_381.CURVE.G2;
         const P = Fp.ORDER;
@@ -1140,8 +1143,8 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
           }
           return { x: Fp2.ZERO, y: Fp2.ZERO };
         }
-        const x_1 = bytesToNumberBE(bytes.slice(0, Fp.BYTES));
-        const x_0 = bytesToNumberBE(bytes.slice(Fp.BYTES));
+        const x_1 = slc(bytes, 0, L);
+        const x_0 = slc(bytes, L, 2 * L);
         const x = Fp2.create({ c0: Fp.create(x_0), c1: Fp.create(x_1) });
         const right = Fp2.add(Fp2.pow(x, 3n), b); // y² = x³ + 4 * (u+1) = x³ + b
         let y = Fp2.sqrt(right);
@@ -1153,10 +1156,10 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
         if ((bytes[0] & (1 << 6)) !== 0) {
           return { x: Fp2.ZERO, y: Fp2.ZERO };
         }
-        const x1 = bytesToNumberBE(bytes.slice(0, Fp.BYTES));
-        const x0 = bytesToNumberBE(bytes.slice(Fp.BYTES, 2 * Fp.BYTES));
-        const y1 = bytesToNumberBE(bytes.slice(2 * Fp.BYTES, 3 * Fp.BYTES));
-        const y0 = bytesToNumberBE(bytes.slice(3 * Fp.BYTES));
+        const x1 = slc(bytes, 0, L);
+        const x0 = slc(bytes, L, 2 * L);
+        const y1 = slc(bytes, 2 * L, 3 * L);
+        const y0 = slc(bytes, 3 * L, 4 * L);
         return { x: Fp2.fromBigTuple([x0, x1]), y: Fp2.fromBigTuple([y0, y1]) };
       } else {
         throw new Error('Invalid point G2, expected 96/192 bytes');
@@ -1164,20 +1167,20 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
     },
     toBytes: (c, point, isCompressed) => {
       const isZero = point.equals(c.ZERO);
-      const { x, y } = point;
+      const { x, y } = point.toAffine();
       if (isCompressed) {
         const P = Fp.ORDER;
-        if (isZero) return concatBytes(COMPRESSED_ZERO, numberToBytesBE(0n, Fp.BYTES));
+        if (isZero) return concatB(COMPRESSED_ZERO, numberToBytesBE(0n, Fp.BYTES));
         const flag = Boolean(y.c1 === 0n ? (y.c0 * 2n) / P : (y.c1 * 2n) / P);
         // set compressed & sign bits (looks like different offsets than for G1/Fp?)
         let x_1 = bitSet(x.c1, C_BIT_POS, flag);
         x_1 = bitSet(x_1, S_BIT_POS, true);
-        return concatBytes(numberToBytesBE(x_1, Fp.BYTES), numberToBytesBE(x.c0, Fp.BYTES));
+        return concatB(numberToBytesBE(x_1, Fp.BYTES), numberToBytesBE(x.c0, Fp.BYTES));
       } else {
-        if (isZero) return concatBytes(new Uint8Array([0x40]), new Uint8Array(4 * Fp.BYTES - 1)); // bytes[0] |= 1 << 6;
+        if (isZero) return concatB(new Uint8Array([0x40]), new Uint8Array(4 * Fp.BYTES - 1)); // bytes[0] |= 1 << 6;
         const { re: x0, im: x1 } = Fp2.reim(x);
         const { re: y0, im: y1 } = Fp2.reim(y);
-        return concatBytes(
+        return concatB(
           numberToBytesBE(x1, Fp.BYTES),
           numberToBytesBE(x0, Fp.BYTES),
           numberToBytesBE(y1, Fp.BYTES),
@@ -1215,6 +1218,7 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
         const isZero = y1 === 0n && (y0 * 2n) / P !== aflag1;
         if (isGreater || isZero) y = Fp2.negate(y);
         const point = bls12_381.G2.ProjectivePoint.fromAffine({ x, y });
+        // console.log('Signature.decode', point);
         point.assertValidity();
         return point;
       },
@@ -1222,14 +1226,14 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
         // NOTE: by some reasons it was missed in bls12-381, looks like bug
         point.assertValidity();
         if (point.equals(bls12_381.G2.ProjectivePoint.ZERO))
-          return concatBytes(COMPRESSED_ZERO, numberToBytesBE(0n, Fp.BYTES));
+          return concatB(COMPRESSED_ZERO, numberToBytesBE(0n, Fp.BYTES));
         const { re: x0, im: x1 } = Fp2.reim(point.x);
         const { re: y0, im: y1 } = Fp2.reim(point.y);
         const tmp = y1 > 0n ? y1 * 2n : y0 * 2n;
         const aflag1 = Boolean((tmp / Fp.ORDER) & 1n);
         const z1 = bitSet(bitSet(x1, 381, aflag1), S_BIT_POS, true);
         const z2 = x0;
-        return concatBytes(numberToBytesBE(z1, Fp.BYTES), numberToBytesBE(z2, Fp.BYTES));
+        return concatB(numberToBytesBE(z1, Fp.BYTES), numberToBytesBE(z2, Fp.BYTES));
       },
     },
   },

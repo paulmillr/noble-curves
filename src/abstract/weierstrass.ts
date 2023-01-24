@@ -109,10 +109,10 @@ export type SignOpts = { lowS?: boolean; extraEntropy?: Entropy };
  * TODO: https://www.typescriptlang.org/docs/handbook/release-notes/typescript-2-7.html#unique-symbol
  */
 
-export interface AffinePoint<T> {
+export type AffinePoint<T> = {
   x: T;
   y: T;
-}
+} & { z?: never };
 // Instance for 3d XYZ points
 export interface ProjectivePointType<T> extends Group<ProjectivePointType<T>> {
   readonly x: T;
@@ -125,7 +125,8 @@ export interface ProjectivePointType<T> extends Group<ProjectivePointType<T>> {
     a: bigint,
     b: bigint
   ): ProjectivePointType<T> | undefined;
-  toAffine(invZ?: T): AffinePoint<T>;
+  _setWindowSize(windowSize: number): void;
+  toAffine(iz?: T): AffinePoint<T>;
   isTorsionFree(): boolean;
   clearCofactor(): ProjectivePointType<T>;
   assertValidity(): void;
@@ -135,19 +136,17 @@ export interface ProjectivePointType<T> extends Group<ProjectivePointType<T>> {
 }
 // Static methods for 3d XYZ points
 export interface ProjectiveConstructor<T> extends GroupConstructor<ProjectivePointType<T>> {
-  new (x: T, y: T, z?: T): ProjectivePointType<T>;
+  new (x: T, y: T, z: T): ProjectivePointType<T>;
   fromAffine(p: AffinePoint<T>): ProjectivePointType<T>;
-  toAffineBatch(points: ProjectivePointType<T>[]): AffinePoint<T>[];
-  normalizeZ(points: ProjectivePointType<T>[]): ProjectivePointType<T>[];
-
-  fromAffine(ap: { x: T; y: T }): ProjectivePointType<T>;
   fromHex(hex: Hex): ProjectivePointType<T>;
   fromPrivateKey(privateKey: PrivKey): ProjectivePointType<T>;
+  toAffineBatch(points: ProjectivePointType<T>[]): AffinePoint<T>[];
+  normalizeZ(points: ProjectivePointType<T>[]): ProjectivePointType<T>[];
 }
 
 export type CurvePointsType<T> = BasicCurve<T> & {
   // Bytes
-  fromBytes: (bytes: Uint8Array) => { x: T; y: T };
+  fromBytes: (bytes: Uint8Array) => AffinePoint<T>;
   toBytes: (
     c: ProjectiveConstructor<T>,
     point: ProjectivePointType<T>,
@@ -186,7 +185,6 @@ function validatePointOpts<T>(curve: CurvePointsType<T>) {
 }
 
 export type CurvePointsRes<T> = {
-  // Point: PointConstructor<T>;
   ProjectivePoint: ProjectiveConstructor<T>;
   normalizePrivateKey: (key: PrivKey) => bigint;
   weierstrassEquation: (x: T) => T;
@@ -258,26 +256,56 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
     throw new TypeError('Expected valid private scalar: 0 < scalar < curve.n');
   }
 
+  const pointPrecomputes = new Map<ProjectivePoint, ProjectivePoint[]>();
   /**
    * Projective Point works in 3d / projective (homogeneous) coordinates: (x, y, z) ∋ (x=x/z, y=y/z)
    * Default Point works in 2d / affine coordinates: (x, y)
    * We're doing calculations in projective, because its operations don't require costly inversion.
    */
   class ProjectivePoint implements ProjectivePointType<T> {
-    constructor(readonly x: T, readonly y: T, readonly z: T = Fp.ONE) {}
-
+    constructor(readonly x: T, readonly y: T, readonly z: T) {
+      if (y == null || !Fp.isValid(y)) throw new Error('ProjectivePoint: y required');
+      if (z == null || !Fp.isValid(z)) throw new Error('ProjectivePoint: z required');
+    }
     static readonly BASE = new ProjectivePoint(CURVE.Gx, CURVE.Gy, Fp.ONE);
     static readonly ZERO = new ProjectivePoint(Fp.ZERO, Fp.ONE, Fp.ZERO);
 
     static fromAffine(p: AffinePoint<T>): ProjectivePoint {
-      // TODO: validate
-      // if (!(p instanceof Point)) {
-      //   throw new TypeError('ProjectivePoint#fromAffine: expected Point');
-      // }
+      const { x, y } = p || {};
+      if (!p || !Fp.isValid(x) || !Fp.isValid(y))
+        throw new Error('fromAffine: invalid affine point');
+      if (p instanceof ProjectivePoint) throw new Error('fromAffine: projective point not allowed');
+      const is0 = (i: T) => Fp.equals(i, Fp.ZERO);
       // fromAffine(x:0, y:0) would produce (x:0, y:0, z:1), but we need (x:0, y:1, z:0)
-      // if (p.equals(Point.ZERO)) return ProjectivePoint.ZERO;
-      if (Fp.equals(p.x, Fp.ZERO) && Fp.equals(p.y, Fp.ZERO)) return ProjectivePoint.ZERO;
-      return new ProjectivePoint(p.x, p.y, Fp.ONE);
+      if (is0(x) && is0(y)) return ProjectivePoint.ZERO;
+      return new ProjectivePoint(x, y, Fp.ONE);
+    }
+
+    // We calculate precomputes for elliptic curve point multiplication
+    // using windowed method. This specifies window size and
+    // stores precomputed values. Usually only base point would be precomputed.
+    _WINDOW_SIZE?: number;
+
+    // "Private method", don't use it directly
+    _setWindowSize(windowSize: number) {
+      this._WINDOW_SIZE = windowSize;
+      pointPrecomputes.delete(this);
+    }
+    protected is0() {
+      return this.equals(ProjectivePoint.ZERO);
+    }
+    private wNAF(n: bigint): { p: ProjectivePoint; f: ProjectivePoint } {
+      const W = this._WINDOW_SIZE || 1;
+      // Calculate precomputes on a first run, reuse them after
+      let comp = pointPrecomputes.get(this);
+      if (!comp) {
+        comp = wnaf.precomputeWindow(this, W) as ProjectivePoint[];
+        if (W !== 1) {
+          comp = ProjectivePoint.normalizeZ(comp);
+          pointPrecomputes.set(this, comp);
+        }
+      }
+      return wnaf.wNAF(W, comp, n);
     }
 
     /**
@@ -465,15 +493,15 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
       let fake: ProjectivePoint;
       if (CURVE.endo) {
         const { k1neg, k1, k2neg, k2 } = CURVE.endo.splitScalar(n);
-        let { p: k1p, f: f1p } = wNAF_TMP_FN(this, k1);
-        let { p: k2p, f: f2p } = wNAF_TMP_FN(this, k2);
+        let { p: k1p, f: f1p } = this.wNAF(k1);
+        let { p: k2p, f: f2p } = this.wNAF(k2);
         k1p = wnaf.constTimeNegate(k1neg, k1p);
         k2p = wnaf.constTimeNegate(k2neg, k2p);
         k2p = new ProjectivePoint(Fp.mul(k2p.x, CURVE.endo.beta), k2p.y, k2p.z);
         point = k1p.add(k2p);
         fake = f1p.add(f2p);
       } else {
-        const { p, f } = wNAF_TMP_FN(this, n);
+        const { p, f } = this.wNAF(n);
         point = p;
         fake = f;
       }
@@ -484,15 +512,15 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
     // Converts Projective point to affine (x, y) coordinates.
     // Can accept precomputed Z^-1 - for example, from invertBatch.
     // (x, y, z) ∋ (x=x/z, y=y/z)
-    toAffine(invZ?: T): AffinePoint<T> {
+    toAffine(iz?: T): AffinePoint<T> {
       const { x, y, z } = this;
-      const is0 = this.equals(ProjectivePoint.ZERO);
+      const is0 = this.is0();
       // If invZ was 0, we return zero point. However we still want to execute
       // all operations, so we replace invZ with a random number, 1.
-      if (invZ == null) invZ = is0 ? Fp.ONE : Fp.invert(z);
-      const ax = Fp.mul(x, invZ);
-      const ay = Fp.mul(y, invZ);
-      const zz = Fp.mul(z, invZ);
+      if (iz == null) iz = is0 ? Fp.ONE : Fp.invert(z);
+      const ax = Fp.mul(x, iz);
+      const ay = Fp.mul(y, iz);
+      const zz = Fp.mul(z, iz);
       if (is0) return { x: Fp.ZERO, y: Fp.ZERO };
       if (!Fp.equals(zz, Fp.ONE)) throw new Error('invZ was invalid');
       return { x: ax, y: ay };
@@ -521,27 +549,27 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
         a === _0n || a === _1n || !P.equals(ProjectivePoint.BASE)
           ? P.multiplyUnsafe(a)
           : P.multiply(a);
-      const bQ = ProjectivePoint.fromAffine(Q).multiplyUnsafe(b);
+      const bQ = Q.multiplyUnsafe(b);
       const sum = aP.add(bQ);
-      return sum.equals(ProjectivePoint.ZERO) ? undefined : sum;
+      return sum.is0() ? undefined : sum;
     }
 
     // A point on curve is valid if it conforms to equation.
     assertValidity(): void {
+      const err = 'Point invalid:';
       // Zero is valid point too!
-      if (this.equals(ProjectivePoint.ZERO)) {
+      if (this.is0()) {
         if (CURVE.allowInfinityPoint) return;
-        throw new Error('Point at infinity');
+        throw new Error(`${err} ZERO`);
       }
       // Some 3rd-party test vectors require different wording between here & `fromCompressedHex`
-      const msg = 'Point is not on elliptic curve';
       const { x, y } = this.toAffine();
       // Check if x, y are valid field elements
-      if (!Fp.isValid(x) || !Fp.isValid(y)) throw new Error(msg);
+      if (!Fp.isValid(x) || !Fp.isValid(y)) throw new Error(`${err} x or y not FE`);
       const left = Fp.square(y); // y²
       const right = weierstrassEquation(x); // x³ + ax + b
-      if (!Fp.equals(left, right)) throw new Error(msg);
-      if (!this.isTorsionFree()) throw new Error('Point must be of prime-order subgroup');
+      if (!Fp.equals(left, right)) throw new Error(`${err} equation left != right`);
+      if (!this.isTorsionFree()) throw new Error(`${err} not in prime-order subgroup`);
     }
     hasEvenY(): boolean {
       const { y } = this.toAffine();
@@ -562,10 +590,9 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
      * @param hex short/long ECDSA hex
      */
     static fromHex(hex: Hex): ProjectivePoint {
-      const { x, y } = CURVE.fromBytes(ut.ensureBytes(hex));
-      const point = new ProjectivePoint(x, y);
-      point.assertValidity();
-      return point;
+      const P = ProjectivePoint.fromAffine(CURVE.fromBytes(ut.ensureBytes(hex)));
+      P.assertValidity();
+      return P;
     }
 
     // Multiplies generator point by privateKey.
@@ -575,27 +602,6 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
   }
   const _bits = CURVE.nBitLength;
   const wnaf = wNAF(ProjectivePoint, CURVE.endo ? Math.ceil(_bits / 2) : _bits);
-
-  const { BASE: G } = ProjectivePoint;
-  let Gpows: ProjectivePoint[] | undefined = undefined; // precomputes for base point G
-  function wNAF_TMP_FN(P: ProjectivePoint, n: bigint): { p: ProjectivePoint; f: ProjectivePoint } {
-    const C = ProjectivePoint;
-    if (P.equals(G)) {
-      const W = 8;
-      if (!Gpows) {
-        const denorm = wnaf.precomputeWindow(P, W) as ProjectivePoint[];
-        const norm = C.toAffineBatch(denorm).map(C.fromAffine);
-        Gpows = norm;
-      }
-      const comp = Gpows;
-      return wnaf.wNAF(W, comp, n);
-    }
-    const W = 1;
-    const denorm = wnaf.precomputeWindow(P, W) as ProjectivePoint[];
-    // const norm = C.toAffineBatch(denorm).map(C.fromAffine);
-    const norm = denorm;
-    return wnaf.wNAF(W, norm, n);
-  }
 
   function assertPrjPoint(other: unknown) {
     if (!(other instanceof ProjectivePoint)) throw new TypeError('ProjectivePoint expected');
@@ -976,12 +982,10 @@ export function weierstrass(curveDef: CurveType): CurveFn {
      * @returns cached point
      */
     precompute(windowSize = 8, point = ProjectivePoint.BASE): typeof ProjectivePoint.BASE {
-      return ProjectivePoint.BASE;
-      // return cache
-      // const cached = point === Point.BASE ? point : new Point(point.x, point.y);
-      // cached._setWindowSize(windowSize);
-      // cached.multiply(_3n);
-      // return cached;
+      // const cached = point === ProjectivePoint.BASE ? point : ProjectivePoint.fromAffine({x, y});
+      point._setWindowSize(windowSize);
+      point.multiply(BigInt(3));
+      return point;
     },
   };
 
@@ -1142,7 +1146,8 @@ export function weierstrass(curveDef: CurveType): CurveFn {
   }
 
   // Enable precomputes. Slows down first publicKey computation by 20ms.
-  // Point.BASE._setWindowSize(8);
+  ProjectivePoint.BASE._setWindowSize(8);
+  // utils.precompute(8, ProjectivePoint.BASE)
 
   /**
    * Verifies a signature against message hash and public key.
