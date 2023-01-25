@@ -3,7 +3,14 @@ import { sha256 } from '@noble/hashes/sha256';
 import { Fp as Field, mod, pow2 } from './abstract/modular.js';
 import { createCurve } from './_shortw_utils.js';
 import { ProjPointType as PointType, mapToCurveSimpleSWU } from './abstract/weierstrass.js';
-import { ensureBytes, concatBytes, Hex, bytesToNumberBE, PrivKey } from './abstract/utils.js';
+import {
+  ensureBytes,
+  concatBytes,
+  Hex,
+  bytesToNumberBE as bytesToNum,
+  PrivKey,
+  numberToBytesBE,
+} from './abstract/utils.js';
 import { randomBytes } from '@noble/hashes/utils';
 import * as htf from './abstract/hash-to-curve.js';
 
@@ -103,7 +110,6 @@ export const secp256k1 = createCurve(
 
 // Schnorr
 const _0n = BigInt(0);
-const numTo32b = secp256k1.utils._bigintToBytes;
 const fe = (x: bigint) => typeof x === 'bigint' && _0n < x && x < secp256k1P;
 const ge = (x: bigint) => typeof x === 'bigint' && _0n < x && x < secp256k1N;
 
@@ -129,7 +135,7 @@ export function taggedHash(tag: string, ...messages: Uint8Array[]): Uint8Array {
 
 const tag = taggedHash;
 const toRawX = (point: PointType<bigint>) => point.toRawBytes(true).slice(1);
-const b2num = bytesToNumberBE;
+const numTo32b = (n: bigint) => numberToBytesBE(n, 32);
 const modN = (x: bigint) => mod(x, secp256k1N);
 const _Point = secp256k1.ProjectivePoint;
 const Gmul = (priv: PrivKey) => _Point.fromPrivateKey(priv);
@@ -150,7 +156,7 @@ function lift_x(x: bigint) {
   return p;
 }
 function challenge(...args: Uint8Array[]) {
-  return modN(b2num(tag(TAGS.challenge, ...args)));
+  return modN(bytesToNum(tag(TAGS.challenge, ...args)));
 }
 /**
  * Synchronously creates Schnorr signature. Improved security: verifies itself before
@@ -163,12 +169,12 @@ function schnorrSign(message: Hex, privateKey: Hex, auxRand: Hex = randomBytes(3
   if (message == null) throw new Error(`sign: Expected valid message, not "${message}"`);
   const m = ensureBytes(message);
   // checks for isWithinCurveOrder
-  const { x: px, scalar: d } = schnorrGetScalar(b2num(ensureBytes(privateKey, 32)));
+  const { x: px, scalar: d } = schnorrGetScalar(bytesToNum(ensureBytes(privateKey, 32)));
   const a = ensureBytes(auxRand, 32); // Auxiliary random data a: a 32-byte array
   // TODO: replace with proper xor?
-  const t = numTo32b(d ^ bytesToNumberBE(tag(TAGS.aux, a))); // Let t be the byte-wise xor of bytes(d) and hashBIP0340/aux(a)
+  const t = numTo32b(d ^ bytesToNum(tag(TAGS.aux, a))); // Let t be the byte-wise xor of bytes(d) and hashBIP0340/aux(a)
   const rand = tag(TAGS.nonce, t, px, m); // Let rand = hashBIP0340/nonce(t || bytes(P) || m)
-  const k_ = modN(bytesToNumberBE(rand)); // Let k' = int(rand) mod n
+  const k_ = modN(bytesToNum(rand)); // Let k' = int(rand) mod n
   if (k_ === _0n) throw new Error('sign failed: k is zero'); // Fail if k' = 0.
   const { point: R, x: rx, scalar: k } = schnorrGetScalar(k_);
   const e = challenge(rx, px, m);
@@ -184,11 +190,11 @@ function schnorrSign(message: Hex, privateKey: Hex, auxRand: Hex = randomBytes(3
  */
 function schnorrVerify(signature: Hex, message: Hex, publicKey: Hex): boolean {
   try {
-    const P = lift_x(b2num(ensureBytes(publicKey, 32))); // P = lift_x(int(pk)); fail if that fails
+    const P = lift_x(bytesToNum(ensureBytes(publicKey, 32))); // P = lift_x(int(pk)); fail if that fails
     const sig = ensureBytes(signature, 64);
-    const r = b2num(sig.subarray(0, 32)); // Let r = int(sig[0:32]); fail if r ≥ p.
+    const r = bytesToNum(sig.subarray(0, 32)); // Let r = int(sig[0:32]); fail if r ≥ p.
     if (!fe(r)) return false;
-    const s = b2num(sig.subarray(32, 64)); // Let s = int(sig[32:64]); fail if s ≥ n.
+    const s = bytesToNum(sig.subarray(32, 64)); // Let s = int(sig[32:64]); fail if s ≥ n.
     if (!ge(s)) return false;
     const m = ensureBytes(message);
     const e = challenge(numTo32b(r), toRawX(P), m); // int(challenge(bytes(r)||bytes(P)||m)) mod n
