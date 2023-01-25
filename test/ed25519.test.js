@@ -29,7 +29,7 @@ describe('ed25519', () => {
 
   function utf8ToBytes(str) {
     if (typeof str !== 'string') {
-      throw new TypeError(`utf8ToBytes expected string, got ${typeof str}`);
+      throw new Error(`utf8ToBytes expected string, got ${typeof str}`);
     }
     return new TextEncoder().encode(str);
   }

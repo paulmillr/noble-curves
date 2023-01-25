@@ -62,7 +62,7 @@ export const starkCurve = weierstrass({
 // Custom Starknet type conversion functions that can handle 0x and unpadded hex
 function hexToBytes0x(hex: string): Uint8Array {
   if (typeof hex !== 'string') {
-    throw new TypeError('hexToBytes: expected string, got ' + typeof hex);
+    throw new Error('hexToBytes: expected string, got ' + typeof hex);
   }
   hex = strip0x(hex);
   if (hex.length & 1) hex = '0' + hex; // padding
@@ -79,7 +79,7 @@ function hexToBytes0x(hex: string): Uint8Array {
 }
 function hexToNumber0x(hex: string): bigint {
   if (typeof hex !== 'string') {
-    throw new TypeError('hexToNumber: expected string, got ' + typeof hex);
+    throw new Error('hexToNumber: expected string, got ' + typeof hex);
   }
   // Big Endian
   // TODO: strip vs no strip?

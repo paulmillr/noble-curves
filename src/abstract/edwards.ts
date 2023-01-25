@@ -419,7 +419,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
   const wnaf = wNAF(ExtendedPoint, CURVE.nByteLength * 8);
 
   function assertExtPoint(other: unknown) {
-    if (!(other instanceof ExtendedPoint)) throw new TypeError('ExtendedPoint expected');
+    if (!(other instanceof ExtendedPoint)) throw new Error('ExtendedPoint expected');
   }
   // Little-endian SHA512 with modulo n
   function modnLE(hash: Uint8Array): bigint {

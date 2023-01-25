@@ -230,7 +230,7 @@ class SchnorrSignature {
     const bytes = ensureBytes(hex);
     const len = 32; // group length
     if (bytes.length !== 2 * len)
-      throw new TypeError(
+      throw new Error(
         `SchnorrSignature.fromHex: expected ${2 * len} bytes, not ${bytes.length}`
       );
     const r = bytesToNumberBE(bytes.subarray(0, len));
@@ -266,12 +266,12 @@ function schnorrSign(
   privateKey: PrivKey,
   auxRand: Hex = randomBytes(32)
 ): Uint8Array {
-  if (message == null) throw new TypeError(`sign: Expected valid message, not "${message}"`);
+  if (message == null) throw new Error(`sign: Expected valid message, not "${message}"`);
   const m = ensureBytes(message);
   // checks for isWithinCurveOrder
   const { x: px, scalar: d } = schnorrGetScalar(normalizePrivateKey(privateKey));
   const rand = ensureBytes(auxRand);
-  if (rand.length !== 32) throw new TypeError('sign: Expected 32 bytes of aux randomness');
+  if (rand.length !== 32) throw new Error('sign: Expected 32 bytes of aux randomness');
   const tag = taggedHash;
   const t0h = tag(TAGS.aux, rand);
   const t = numTo32b(d ^ bytesToNumberBE(t0h));
@@ -301,7 +301,7 @@ function schnorrVerify(signature: Hex, message: Hex, publicKey: Hex): boolean {
     // Finalize
     // R = s⋅G - e⋅P
     // -eP == (n-e)P
-    const R = secp256k1.ProjectivePoint.BASE.multiplyAndAddUnsafe(
+    const R = secp256k1.ProjectivePoint.BASE.mulAddQUnsafe(
       P,
       normalizePrivateKey(s),
       mod(-e, secp256k1.CURVE.n)

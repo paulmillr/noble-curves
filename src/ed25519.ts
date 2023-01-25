@@ -240,7 +240,7 @@ export const x25519 = montgomery({
 });
 
 function assertRstPoint(other: unknown) {
-  if (!(other instanceof RistrettoPoint)) throw new TypeError('RistrettoPoint expected');
+  if (!(other instanceof RistrettoPoint)) throw new Error('RistrettoPoint expected');
 }
 // √(-1) aka √(a) aka 2^((p-1)/4)
 const SQRT_M1 = BigInt(

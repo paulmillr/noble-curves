@@ -25,7 +25,7 @@ const toBEHex = (n) => n.toString(16).padStart(64, '0');
 
 function hexToNumber(hex) {
   if (typeof hex !== 'string') {
-    throw new TypeError('hexToNumber: expected string, got ' + typeof hex);
+    throw new Error('hexToNumber: expected string, got ' + typeof hex);
   }
   // Big Endian
   return BigInt(`0x${hex}`);

@@ -84,14 +84,14 @@ export function numberToHexUnpadded(num: number | bigint): string {
 }
 
 export function hexToNumber(hex: string): bigint {
-  if (!str(hex)) throw new TypeError('hexToNumber: expected string, got ' + typeof hex);
+  if (!str(hex)) throw new Error('hexToNumber: expected string, got ' + typeof hex);
   // Big Endian
   return BigInt(`0x${hex}`);
 }
 
 // Caching slows it down 2-3x
 export function hexToBytes(hex: string): Uint8Array {
-  if (!str(hex)) throw new TypeError('hexToBytes: expected string, got ' + typeof hex);
+  if (!str(hex)) throw new Error('hexToBytes: expected string, got ' + typeof hex);
   if (hex.length % 2) throw new Error('hexToBytes: received invalid unpadded hex ' + hex.length);
   const array = new Uint8Array(hex.length / 2);
   for (let i = 0; i < array.length; i++) {
