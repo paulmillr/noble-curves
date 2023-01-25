@@ -32,12 +32,9 @@ export type BasicCurve<T> = ut.BasicCurve<T> & {
   endo?: EndomorphismOpts;
   // When a cofactor != 1, there can be an effective methods to:
   // 1. Determine whether a point is torsion-free
-  isTorsionFree?: (c: ProjectiveConstructor<T>, point: ProjectivePointType<T>) => boolean;
+  isTorsionFree?: (c: ProjConstructor<T>, point: ProjPointType<T>) => boolean;
   // 2. Clear torsion component
-  clearCofactor?: (
-    c: ProjectiveConstructor<T>,
-    point: ProjectivePointType<T>
-  ) => ProjectivePointType<T>;
+  clearCofactor?: (c: ProjConstructor<T>, point: ProjPointType<T>) => ProjPointType<T>;
 };
 
 // ASN.1 DER encoding utilities
@@ -115,43 +112,35 @@ export type AffinePoint<T> = {
   y: T;
 } & { z?: never };
 // Instance for 3d XYZ points
-export interface ProjectivePointType<T> extends Group<ProjectivePointType<T>> {
+export interface ProjPointType<T> extends Group<ProjPointType<T>> {
   readonly px: T;
   readonly py: T;
   readonly pz: T;
-  multiply(scalar: bigint): ProjectivePointType<T>;
-  multiplyUnsafe(scalar: bigint): ProjectivePointType<T>;
-  multiplyAndAddUnsafe(
-    Q: ProjectivePointType<T>,
-    a: bigint,
-    b: bigint
-  ): ProjectivePointType<T> | undefined;
+  multiply(scalar: bigint): ProjPointType<T>;
+  multiplyUnsafe(scalar: bigint): ProjPointType<T>;
+  multiplyAndAddUnsafe(Q: ProjPointType<T>, a: bigint, b: bigint): ProjPointType<T> | undefined;
   _setWindowSize(windowSize: number): void;
   toAffine(iz?: T): AffinePoint<T>;
   isTorsionFree(): boolean;
-  clearCofactor(): ProjectivePointType<T>;
+  clearCofactor(): ProjPointType<T>;
   assertValidity(): void;
   hasEvenY(): boolean;
   toRawBytes(isCompressed?: boolean): Uint8Array;
   toHex(isCompressed?: boolean): string;
 }
 // Static methods for 3d XYZ points
-export interface ProjectiveConstructor<T> extends GroupConstructor<ProjectivePointType<T>> {
-  new (x: T, y: T, z: T): ProjectivePointType<T>;
-  fromAffine(p: AffinePoint<T>): ProjectivePointType<T>;
-  fromHex(hex: Hex): ProjectivePointType<T>;
-  fromPrivateKey(privateKey: PrivKey): ProjectivePointType<T>;
-  normalizeZ(points: ProjectivePointType<T>[]): ProjectivePointType<T>[];
+export interface ProjConstructor<T> extends GroupConstructor<ProjPointType<T>> {
+  new (x: T, y: T, z: T): ProjPointType<T>;
+  fromAffine(p: AffinePoint<T>): ProjPointType<T>;
+  fromHex(hex: Hex): ProjPointType<T>;
+  fromPrivateKey(privateKey: PrivKey): ProjPointType<T>;
+  normalizeZ(points: ProjPointType<T>[]): ProjPointType<T>[];
 }
 
 export type CurvePointsType<T> = BasicCurve<T> & {
   // Bytes
   fromBytes: (bytes: Uint8Array) => AffinePoint<T>;
-  toBytes: (
-    c: ProjectiveConstructor<T>,
-    point: ProjectivePointType<T>,
-    compressed: boolean
-  ) => Uint8Array;
+  toBytes: (c: ProjConstructor<T>, point: ProjPointType<T>, compressed: boolean) => Uint8Array;
 };
 
 function validatePointOpts<T>(curve: CurvePointsType<T>) {
@@ -185,7 +174,7 @@ function validatePointOpts<T>(curve: CurvePointsType<T>) {
 }
 
 export type CurvePointsRes<T> = {
-  ProjectivePoint: ProjectiveConstructor<T>;
+  ProjectivePoint: ProjConstructor<T>;
   normalizePrivateKey: (key: PrivKey) => bigint;
   weierstrassEquation: (x: T) => T;
   isWithinCurveOrder: (num: bigint) => boolean;
@@ -230,17 +219,15 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
     if (typeof key === 'bigint') {
       // Curve order check is done below
       num = key;
-    } else if (ut.isPositiveInt(key)) {
-      num = BigInt(key);
     } else if (typeof key === 'string') {
-      if (key.length !== 2 * groupLen) throw new Error(`Private key must be ${groupLen} bytes`);
+      if (key.length !== 2 * groupLen) throw new Error(`must be ${groupLen} bytes`);
       // Validates individual octets
       num = ut.hexToNumber(key);
     } else if (key instanceof Uint8Array) {
-      if (key.length !== groupLen) throw new Error(`Private key must be ${groupLen} bytes`);
+      if (key.length !== groupLen) throw new Error(`must be ${groupLen} bytes`);
       num = ut.bytesToNumberBE(key);
     } else {
-      throw new Error('Private key was invalid');
+      throw new Error('private key must be bytes, hex or bigint, not ' + typeof key);
     }
     // Useful for curves with cofactor != 1
     if (wrapPrivateKey) num = mod.mod(num, order);
@@ -249,25 +236,28 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
   }
 
   const pointPrecomputes = new Map<ProjectivePoint, ProjectivePoint[]>();
+  function assertPrjPoint(other: unknown) {
+    if (!(other instanceof ProjectivePoint)) throw new Error('ProjectivePoint expected');
+  }
   /**
    * Projective Point works in 3d / projective (homogeneous) coordinates: (x, y, z) ∋ (x=x/z, y=y/z)
    * Default Point works in 2d / affine coordinates: (x, y)
    * We're doing calculations in projective, because its operations don't require costly inversion.
    */
-  class ProjectivePoint implements ProjectivePointType<T> {
+  class ProjectivePoint implements ProjPointType<T> {
     static readonly BASE = new ProjectivePoint(CURVE.Gx, CURVE.Gy, Fp.ONE);
     static readonly ZERO = new ProjectivePoint(Fp.ZERO, Fp.ONE, Fp.ZERO);
 
     constructor(readonly px: T, readonly py: T, readonly pz: T) {
-      if (py == null || !Fp.isValid(py)) throw new Error('ProjectivePoint: y required');
-      if (pz == null || !Fp.isValid(pz)) throw new Error('ProjectivePoint: z required');
+      if (px == null || !Fp.isValid(px)) throw new Error('x required');
+      if (py == null || !Fp.isValid(py)) throw new Error('y required');
+      if (pz == null || !Fp.isValid(pz)) throw new Error('z required');
     }
 
     static fromAffine(p: AffinePoint<T>): ProjectivePoint {
       const { x, y } = p || {};
-      if (!p || !Fp.isValid(x) || !Fp.isValid(y))
-        throw new Error('fromAffine: invalid affine point');
-      if (p instanceof ProjectivePoint) throw new Error('fromAffine: projective point not allowed');
+      if (!p || !Fp.isValid(x) || !Fp.isValid(y)) throw new Error('invalid affine point');
+      if (p instanceof ProjectivePoint) throw new Error('projective point not allowed');
       const is0 = (i: T) => Fp.equals(i, Fp.ZERO);
       // fromAffine(x:0, y:0) would produce (x:0, y:0, z:1), but we need (x:0, y:1, z:0)
       if (is0(x) && is0(y)) return ProjectivePoint.ZERO;
@@ -587,11 +577,8 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
   const _bits = CURVE.nBitLength;
   const wnaf = wNAF(ProjectivePoint, CURVE.endo ? Math.ceil(_bits / 2) : _bits);
 
-  function assertPrjPoint(other: unknown) {
-    if (!(other instanceof ProjectivePoint)) throw new Error('ProjectivePoint expected');
-  }
   return {
-    ProjectivePoint: ProjectivePoint as ProjectiveConstructor<T>,
+    ProjectivePoint: ProjectivePoint as ProjConstructor<T>,
     normalizePrivateKey,
     weierstrassEquation,
     isWithinCurveOrder,
@@ -607,7 +594,7 @@ export interface SignatureType {
   addRecoveryBit(recovery: number): SignatureType;
   hasHighS(): boolean;
   normalizeS(): SignatureType;
-  recoverPublicKey(msgHash: Hex): ProjectivePointType<bigint>;
+  recoverPublicKey(msgHash: Hex): ProjPointType<bigint>;
   // DER-encoded
   toDERRawBytes(isCompressed?: boolean): Uint8Array;
   toDERHex(isCompressed?: boolean): string;
@@ -621,7 +608,7 @@ export type SignatureConstructor = {
   fromDER(hex: Hex): SignatureType;
 };
 
-export type PubKey = Hex | ProjectivePointType<bigint>;
+export type PubKey = Hex | ProjPointType<bigint>;
 
 export type CurveType = BasicCurve<bigint> & {
   // Default options
@@ -651,7 +638,7 @@ export type CurveFn = {
   getSharedSecret: (privateA: PrivKey, publicB: Hex, isCompressed?: boolean) => Uint8Array;
   sign: (msgHash: Hex, privKey: PrivKey, opts?: SignOpts) => SignatureType;
   verify: (signature: Hex | SignatureType, msgHash: Hex, publicKey: Hex, opts?: VerOpts) => boolean;
-  ProjectivePoint: ProjectiveConstructor<bigint>;
+  ProjectivePoint: ProjConstructor<bigint>;
   Signature: SignatureConstructor;
   utils: {
     _bigintToBytes: (num: bigint) => Uint8Array;
@@ -1104,7 +1091,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     publicKey: Hex,
     opts = defaultVerOpts
   ): boolean {
-    let P: ProjectivePointType<bigint>;
+    let P: ProjPointType<bigint>;
     let _sig: Signature | undefined = undefined;
     if (publicKey instanceof Point) throw new Error('publicKey must be hex');
     try {

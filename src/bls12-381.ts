@@ -28,8 +28,8 @@ import {
 } from './abstract/utils.js';
 // Types
 import {
-  ProjectivePointType,
-  ProjectiveConstructor,
+  ProjPointType,
+  ProjConstructor,
   mapToCurveSimpleSWU,
   AffinePoint,
 } from './abstract/weierstrass.js';
@@ -886,7 +886,7 @@ function psi(x: Fp2, y: Fp2): [Fp2, Fp2] {
   return [x2, y2];
 }
 // Ψ endomorphism
-function G2psi(c: ProjectiveConstructor<Fp2>, P: ProjectivePointType<Fp2>) {
+function G2psi(c: ProjConstructor<Fp2>, P: ProjPointType<Fp2>) {
   const affine = P.toAffine();
   const p = psi(affine.x, affine.y);
   return new c(p[0], p[1], Fp2.ONE);
@@ -899,7 +899,7 @@ const PSI2_C1 =
 function psi2(x: Fp2, y: Fp2): [Fp2, Fp2] {
   return [Fp2.mul(x, PSI2_C1), Fp2.negate(y)];
 }
-function G2psi2(c: ProjectiveConstructor<Fp2>, P: ProjectivePointType<Fp2>) {
+function G2psi2(c: ProjConstructor<Fp2>, P: ProjPointType<Fp2>) {
   const affine = P.toAffine();
   const p = psi2(affine.x, affine.y);
   return new c(p[0], p[1], Fp2.ONE);
@@ -1190,7 +1190,7 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
     },
     Signature: {
       // TODO: Optimize, it's very slow because of sqrt.
-      decode(hex: Hex): ProjectivePointType<Fp2> {
+      decode(hex: Hex): ProjPointType<Fp2> {
         hex = ensureBytes(hex);
         const P = Fp.ORDER;
         const half = hex.length / 2;
@@ -1222,7 +1222,7 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
         point.assertValidity();
         return point;
       },
-      encode(point: ProjectivePointType<Fp2>) {
+      encode(point: ProjPointType<Fp2>) {
         // NOTE: by some reasons it was missed in bls12-381, looks like bug
         point.assertValidity();
         if (point.equals(bls12_381.G2.ProjectivePoint.ZERO))

@@ -18,7 +18,7 @@ import { Hex, PrivKey } from './utils.js';
 import * as htf from './hash-to-curve.js';
 import {
   CurvePointsType,
-  ProjectivePointType as PPointType,
+  ProjPointType as ProjPointType,
   CurvePointsRes,
   weierstrassPoints,
   AffinePoint,
@@ -27,8 +27,8 @@ import {
 type Fp = bigint; // Can be different field?
 
 export type SignatureCoder<Fp2> = {
-  decode(hex: Hex): PPointType<Fp2>;
-  encode(point: PPointType<Fp2>): Uint8Array;
+  decode(hex: Hex): ProjPointType<Fp2>;
+  encode(point: ProjPointType<Fp2>): Uint8Array;
 };
 
 export type CurveType<Fp, Fp2, Fp6, Fp12> = {
@@ -79,29 +79,29 @@ export type CurveFn<Fp, Fp2, Fp6, Fp12> = {
     G1: ReturnType<(typeof htf.hashToCurve<Fp>)>,
     G2: ReturnType<(typeof htf.hashToCurve<Fp2>)>,
   },
-  pairing: (P: PPointType<Fp>, Q: PPointType<Fp2>, withFinalExponent?: boolean) => Fp12;
+  pairing: (P: ProjPointType<Fp>, Q: ProjPointType<Fp2>, withFinalExponent?: boolean) => Fp12;
   getPublicKey: (privateKey: PrivKey) => Uint8Array;
   sign: {
     (message: Hex, privateKey: PrivKey): Uint8Array;
-    (message: PPointType<Fp2>, privateKey: PrivKey): PPointType<Fp2>;
+    (message: ProjPointType<Fp2>, privateKey: PrivKey): ProjPointType<Fp2>;
   };
   verify: (
-    signature: Hex | PPointType<Fp2>,
-    message: Hex | PPointType<Fp2>,
-    publicKey: Hex | PPointType<Fp>
+    signature: Hex | ProjPointType<Fp2>,
+    message: Hex | ProjPointType<Fp2>,
+    publicKey: Hex | ProjPointType<Fp>
   ) => boolean;
   aggregatePublicKeys: {
     (publicKeys: Hex[]): Uint8Array;
-    (publicKeys: PPointType<Fp>[]): PPointType<Fp>;
+    (publicKeys: ProjPointType<Fp>[]): ProjPointType<Fp>;
   };
   aggregateSignatures: {
     (signatures: Hex[]): Uint8Array;
-    (signatures: PPointType<Fp2>[]): PPointType<Fp2>;
+    (signatures: ProjPointType<Fp2>[]): ProjPointType<Fp2>;
   };
   verifyBatch: (
-    signature: Hex | PPointType<Fp2>,
-    messages: (Hex | PPointType<Fp2>)[],
-    publicKeys: (Hex | PPointType<Fp>)[]
+    signature: Hex | ProjPointType<Fp2>,
+    messages: (Hex | ProjPointType<Fp2>)[],
+    publicKeys: (Hex | ProjPointType<Fp>)[]
   ) => boolean;
   utils: {
     stringToBytes: typeof htf.stringToBytes;

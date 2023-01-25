@@ -1,14 +1,14 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { keccak_256 } from '@noble/hashes/sha3';
 import { sha256 } from '@noble/hashes/sha256';
-import { weierstrass, ProjectivePointType } from './abstract/weierstrass.js';
+import { weierstrass, ProjPointType } from './abstract/weierstrass.js';
 import * as cutils from './abstract/utils.js';
 import { Fp, mod, Field, validateField } from './abstract/modular.js';
 import { getHash } from './_shortw_utils.js';
 import * as poseidon from './abstract/poseidon.js';
 import { utf8ToBytes } from '@noble/hashes/utils';
 
-type ProjectivePoint = ProjectivePointType<bigint>;
+type ProjectivePoint = ProjPointType<bigint>;
 // Stark-friendly elliptic curve
 // https://docs.starkware.co/starkex/stark-curve.html
 

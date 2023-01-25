@@ -1,7 +1,7 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha512 } from '@noble/hashes/sha512';
 import { concatBytes, randomBytes, utf8ToBytes } from '@noble/hashes/utils';
-import { twistedEdwards, ExtendedPointType } from './abstract/edwards.js';
+import { twistedEdwards, ExtPointType } from './abstract/edwards.js';
 import { montgomery } from './abstract/montgomery.js';
 import { mod, pow2, isNegativeLE, Fp as Field, FpSqrtEven } from './abstract/modular.js';
 import {
@@ -269,7 +269,7 @@ const MAX_255B = BigInt('0x7ffffffffffffffffffffffffffffffffffffffffffffffffffff
 const bytes255ToNumberLE = (bytes: Uint8Array) =>
   ed25519.CURVE.Fp.create(bytesToNumberLE(bytes) & MAX_255B);
 
-type ExtendedPoint = ExtendedPointType;
+type ExtendedPoint = ExtPointType;
 
 // Computes Elligator map for Ristretto
 // https://ristretto.group/formulas/elligator.html
