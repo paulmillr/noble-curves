@@ -131,9 +131,6 @@ const tag = taggedHash;
 const toRawX = (point: PointType<bigint>) => point.toRawBytes(true).slice(1);
 const b2num = bytesToNumberBE;
 const modN = (x: bigint) => mod(x, secp256k1N);
-function validateRS(r: bigint, s: bigint) {
-  if (!fe(r) || !ge(s)) throw new Error('Invalid signature');
-}
 const PPoint = secp256k1.ProjectivePoint;
 function schnorrGetScalar(priv: bigint) {
   const point = PPoint.fromPrivateKey(priv);
@@ -184,8 +181,9 @@ function schnorrVerify(signature: Hex, message: Hex, publicKey: Hex): boolean {
     const P = lift_x(b2num(ensureBytes(publicKey, 32))); // P = lift_x(int(pk)); fail if that fails
     const sig = ensureBytes(signature, 64);
     const r = b2num(sig.subarray(0, 32)); // Let r = int(sig[0:32]); fail if r ≥ p.
+    if (!fe(r)) throw new Error('');
     const s = b2num(sig.subarray(32, 64)); // Let s = int(sig[32:64]); fail if s ≥ n.
-    validateRS(r, s);
+    if (!ge(s)) throw new Error('');
     const m = ensureBytes(message);
     const e = modN(b2num(tag(TAGS.challenge, numTo32b(r), toRawX(P), m)));
     const R = PPoint.BASE.multiplyAndAddUnsafe(P, s, modN(-e)); // R = s⋅G - e⋅P
