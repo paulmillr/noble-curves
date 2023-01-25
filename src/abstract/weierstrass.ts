@@ -641,12 +641,7 @@ export type CurveFn = {
   ProjectivePoint: ProjConstructor<bigint>;
   Signature: SignatureConstructor;
   utils: {
-    _bigintToBytes: (num: bigint) => Uint8Array;
-    _bigintToString: (num: bigint) => string;
     _normalizePrivateKey: (key: PrivKey) => bigint;
-    _isWithinCurveOrder: (num: bigint) => boolean;
-    _isValidFieldElement: (num: bigint) => boolean;
-    _weierstrassEquation: (x: bigint) => bigint;
     isValidPrivateKey(privateKey: PrivKey): boolean;
     hashToPrivateKey: (hash: Hex) => Uint8Array;
     randomPrivateKey: () => Uint8Array;
@@ -884,12 +879,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
         return false;
       }
     },
-    _bigintToBytes: numToField,
-    _bigintToString: numToFieldStr,
     _normalizePrivateKey: normalizePrivateKey,
-    _isWithinCurveOrder: isWithinCurveOrder,
-    _isValidFieldElement: isValidFieldElement,
-    _weierstrassEquation: weierstrassEquation,
 
     /**
      * Converts some bytes to a valid private key. Needs at least (nBitLength+64) bytes.

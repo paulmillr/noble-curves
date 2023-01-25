@@ -1,6 +1,7 @@
 import * as fc from 'fast-check';
 import { secp256k1, schnorr } from '../lib/esm/secp256k1.js';
 import { Fp } from '../lib/esm/abstract/modular.js';
+import { bytesToNumberBE, numberToBytesBE } from '../lib/esm/abstract/utils.js';
 import { readFileSync } from 'fs';
 import { default as ecdsa } from './vectors/ecdsa.json' assert { type: 'json' };
 import { default as ecdh } from './vectors/ecdh.json' assert { type: 'json' };
@@ -464,12 +465,11 @@ describe('secp256k1', () => {
       privateAdd: (privateKey, tweak) => {
         const p = normal(privateKey);
         const t = normal(tweak);
-        return secp.utils._bigintToBytes(Fn.create(p + t));
+        return numberToBytesBE(Fn.create(p + t), 32);
       },
 
       privateNegate: (privateKey) => {
-        const p = normal(privateKey);
-        return secp.utils._bigintToBytes(Fn.negate(p));
+        return numberToBytesBE(Fn.negate(normal(privateKey)), 32);
       },
 
       pointAddScalar: (p, tweak, isCompressed) => {
