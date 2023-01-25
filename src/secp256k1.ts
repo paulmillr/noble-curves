@@ -149,19 +149,6 @@ function lift_x(x: bigint) {
   p.assertValidity();
   return p;
 }
-function packSig(r: bigint, s: bigint): Uint8Array {
-  validateRS(r, s);
-  const sig = new Uint8Array(64);
-  sig.set(numTo32b(r), 0);
-  sig.set(numTo32b(s), 32);
-  return sig;
-}
-function unpackSig(sig: Uint8Array): { r: bigint; s: bigint } {
-  const r = b2num(sig.subarray(0, 32)); // Let r = int(sig[0:32]); fail if r ≥ p.
-  const s = b2num(sig.subarray(32, 64)); // Let s = int(sig[32:64]); fail if s ≥ n.
-  validateRS(r, s);
-  return { r, s };
-}
 /**
  * Synchronously creates Schnorr signature. Improved security: verifies itself before
  * producing an output.
@@ -182,7 +169,9 @@ function schnorrSign(message: Hex, privateKey: Hex, auxRand: Hex = randomBytes(3
   if (k_ === _0n) throw new Error('sign failed: k is zero'); // Fail if k' = 0.
   const { point: R, x: rx, scalar: k } = schnorrGetScalar(k_);
   const e = modN(b2num(tag(TAGS.challenge, rx, px, m)));
-  const sig = packSig(R.px, modN(k + e * d));
+  const sig = new Uint8Array(64); // Let sig = bytes(R) || bytes((k + ed) mod n).
+  sig.set(numTo32b(R.px), 0);
+  sig.set(numTo32b(modN(k + e * d)), 32);
   if (!schnorrVerify(sig, m, px)) throw new Error('sign: Invalid signature produced');
   return sig;
 }
@@ -193,7 +182,10 @@ function schnorrSign(message: Hex, privateKey: Hex, auxRand: Hex = randomBytes(3
 function schnorrVerify(signature: Hex, message: Hex, publicKey: Hex): boolean {
   try {
     const P = lift_x(b2num(ensureBytes(publicKey, 32))); // P = lift_x(int(pk)); fail if that fails
-    const { r, s } = unpackSig(ensureBytes(signature, 64));
+    const sig = ensureBytes(signature, 64);
+    const r = b2num(sig.subarray(0, 32)); // Let r = int(sig[0:32]); fail if r ≥ p.
+    const s = b2num(sig.subarray(32, 64)); // Let s = int(sig[32:64]); fail if s ≥ n.
+    validateRS(r, s);
     const m = ensureBytes(message);
     const e = modN(b2num(tag(TAGS.challenge, numTo32b(r), toRawX(P), m)));
     const R = PPoint.BASE.multiplyAndAddUnsafe(P, s, modN(-e)); // R = s⋅G - e⋅P
