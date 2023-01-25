@@ -131,9 +131,12 @@ const tag = taggedHash;
 const toRawX = (point: PointType<bigint>) => point.toRawBytes(true).slice(1);
 const b2num = bytesToNumberBE;
 const modN = (x: bigint) => mod(x, secp256k1N);
-const PPoint = secp256k1.ProjectivePoint;
+const _Point = secp256k1.ProjectivePoint;
+const Gmul = (priv: PrivKey) => _Point.fromPrivateKey(priv);
+const GmulAdd = (Q: PointType<bigint>, a: bigint, b: bigint) =>
+  _Point.BASE.multiplyAndAddUnsafe(Q, a, b);
 function schnorrGetScalar(priv: bigint) {
-  const point = PPoint.fromPrivateKey(priv);
+  const point = Gmul(priv);
   const scalar = point.hasEvenY() ? priv : modN(-priv);
   return { point, scalar, x: toRawX(point) };
 }
@@ -142,9 +145,12 @@ function lift_x(x: bigint) {
   const c = mod(x * x * x + BigInt(7), secp256k1P); // Let c = x3 + 7 mod p.
   let y = sqrtMod(c); // Let y = c^(p+1)/4 mod p.
   if (y % 2n !== 0n) y = mod(-y, secp256k1P); // Return the unique point P such that x(P) = x and
-  const p = new PPoint(x, y, _1n); // y(P) = y if y mod 2 = 0 or y(P) = p-y otherwise.
+  const p = new _Point(x, y, _1n); // y(P) = y if y mod 2 = 0 or y(P) = p-y otherwise.
   p.assertValidity();
   return p;
+}
+function challenge(...args: Uint8Array[]) {
+  return modN(b2num(tag(TAGS.challenge, ...args)));
 }
 /**
  * Synchronously creates Schnorr signature. Improved security: verifies itself before
@@ -165,7 +171,7 @@ function schnorrSign(message: Hex, privateKey: Hex, auxRand: Hex = randomBytes(3
   const k_ = modN(bytesToNumberBE(rand)); // Let k' = int(rand) mod n
   if (k_ === _0n) throw new Error('sign failed: k is zero'); // Fail if k' = 0.
   const { point: R, x: rx, scalar: k } = schnorrGetScalar(k_);
-  const e = modN(b2num(tag(TAGS.challenge, rx, px, m)));
+  const e = challenge(rx, px, m);
   const sig = new Uint8Array(64); // Let sig = bytes(R) || bytes((k + ed) mod n).
   sig.set(numTo32b(R.px), 0);
   sig.set(numTo32b(modN(k + e * d)), 32);
@@ -181,12 +187,12 @@ function schnorrVerify(signature: Hex, message: Hex, publicKey: Hex): boolean {
     const P = lift_x(b2num(ensureBytes(publicKey, 32))); // P = lift_x(int(pk)); fail if that fails
     const sig = ensureBytes(signature, 64);
     const r = b2num(sig.subarray(0, 32)); // Let r = int(sig[0:32]); fail if r ≥ p.
-    if (!fe(r)) throw new Error('');
+    if (!fe(r)) return false;
     const s = b2num(sig.subarray(32, 64)); // Let s = int(sig[32:64]); fail if s ≥ n.
-    if (!ge(s)) throw new Error('');
+    if (!ge(s)) return false;
     const m = ensureBytes(message);
-    const e = modN(b2num(tag(TAGS.challenge, numTo32b(r), toRawX(P), m)));
-    const R = PPoint.BASE.multiplyAndAddUnsafe(P, s, modN(-e)); // R = s⋅G - e⋅P
+    const e = challenge(numTo32b(r), toRawX(P), m); // int(challenge(bytes(r)||bytes(P)||m)) mod n
+    const R = GmulAdd(P, s, modN(-e)); // R = s⋅G - e⋅P
     if (!R || !R.hasEvenY() || R.toAffine().x !== r) return false; // -eP == (n-e)P
     return true;
   } catch (error) {
@@ -196,7 +202,7 @@ function schnorrVerify(signature: Hex, message: Hex, publicKey: Hex): boolean {
 
 export const schnorr = {
   // Schnorr's pubkey is just `x` of Point (BIP340)
-  getPublicKey: (privateKey: PrivKey): Uint8Array => toRawX(PPoint.fromPrivateKey(privateKey)),
+  getPublicKey: (privateKey: PrivKey): Uint8Array => toRawX(Gmul(privateKey)),
   sign: schnorrSign,
   verify: schnorrVerify,
 };
