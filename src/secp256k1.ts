@@ -230,9 +230,7 @@ class SchnorrSignature {
     const bytes = ensureBytes(hex);
     const len = 32; // group length
     if (bytes.length !== 2 * len)
-      throw new Error(
-        `SchnorrSignature.fromHex: expected ${2 * len} bytes, not ${bytes.length}`
-      );
+      throw new Error(`SchnorrSignature.fromHex: expected ${2 * len} bytes, not ${bytes.length}`);
     const r = bytesToNumberBE(bytes.subarray(0, len));
     const s = bytesToNumberBE(bytes.subarray(len, 2 * len));
     return new SchnorrSignature(r, s);
@@ -301,7 +299,7 @@ function schnorrVerify(signature: Hex, message: Hex, publicKey: Hex): boolean {
     // Finalize
     // R = s⋅G - e⋅P
     // -eP == (n-e)P
-    const R = secp256k1.ProjectivePoint.BASE.mulAddQUnsafe(
+    const R = secp256k1.ProjectivePoint.BASE.multiplyAndAddUnsafe(
       P,
       normalizePrivateKey(s),
       mod(-e, secp256k1.CURVE.n)

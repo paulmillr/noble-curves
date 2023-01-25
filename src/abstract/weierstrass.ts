@@ -85,7 +85,8 @@ const DER = {
 };
 
 type Entropy = Hex | true;
-export type SignOpts = { lowS?: boolean; extraEntropy?: Entropy };
+export type SignOpts = { lowS?: boolean; extraEntropy?: Entropy; prehash?: boolean };
+export type VerOpts = { lowS?: boolean; prehash?: boolean };
 
 /**
  * ### Design rationale for types
@@ -214,8 +215,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
     return typeof num === 'bigint' && _0n < num && num < CURVE.n;
   }
   function assertGE(num: bigint) {
-    if (!isWithinCurveOrder(num))
-      throw new TypeError('Expected valid bigint: 0 < bigint < curve.n');
+    if (!isWithinCurveOrder(num)) throw new Error('Expected valid bigint: 0 < bigint < curve.n');
   }
   /**
    * Validates if a private key is valid and converts it to bigint form.
@@ -240,7 +240,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
       if (key.length !== groupLen) throw new Error(`Private key must be ${groupLen} bytes`);
       num = ut.bytesToNumberBE(key);
     } else {
-      throw new TypeError('Private key was invalid');
+      throw new Error('Private key was invalid');
     }
     // Useful for curves with cofactor != 1
     if (wrapPrivateKey) num = mod.mod(num, order);
@@ -588,7 +588,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
   const wnaf = wNAF(ProjectivePoint, CURVE.endo ? Math.ceil(_bits / 2) : _bits);
 
   function assertPrjPoint(other: unknown) {
-    if (!(other instanceof ProjectivePoint)) throw new TypeError('ProjectivePoint expected');
+    if (!(other instanceof ProjectivePoint)) throw new Error('ProjectivePoint expected');
   }
   return {
     ProjectivePoint: ProjectivePoint as ProjectiveConstructor<T>,
@@ -648,24 +648,15 @@ function validateOpts(curve: CurveType) {
 export type CurveFn = {
   CURVE: ReturnType<typeof validateOpts>;
   getPublicKey: (privateKey: PrivKey, isCompressed?: boolean) => Uint8Array;
-  getSharedSecret: (privateA: PrivKey, publicB: PubKey, isCompressed?: boolean) => Uint8Array;
+  getSharedSecret: (privateA: PrivKey, publicB: Hex, isCompressed?: boolean) => Uint8Array;
   sign: (msgHash: Hex, privKey: PrivKey, opts?: SignOpts) => SignatureType;
-  signUnhashed: (msg: Uint8Array, privKey: PrivKey, opts?: SignOpts) => SignatureType;
-  verify: (
-    signature: Hex | SignatureType,
-    msgHash: Hex,
-    publicKey: PubKey,
-    opts?: {
-      lowS?: boolean;
-    }
-  ) => boolean;
+  verify: (signature: Hex | SignatureType, msgHash: Hex, publicKey: Hex, opts?: VerOpts) => boolean;
   ProjectivePoint: ProjectiveConstructor<bigint>;
   Signature: SignatureConstructor;
   utils: {
     _bigintToBytes: (num: bigint) => Uint8Array;
     _bigintToString: (num: bigint) => string;
     _normalizePrivateKey: (key: PrivKey) => bigint;
-    _normalizePublicKey: (publicKey: PubKey) => ProjectivePointType<bigint>;
     _isWithinCurveOrder: (num: bigint) => boolean;
     _isValidFieldElement: (num: bigint) => boolean;
     _weierstrassEquation: (x: bigint) => bigint;
@@ -793,19 +784,6 @@ export function weierstrass(curveDef: CurveType): CurveFn {
   }
   const numToFieldStr = (num: bigint): string => bytesToHex(numToField(num));
 
-  /**
-   * Normalizes hex, bytes, Point to Point. Checks for curve equation.
-   */
-  function normalizePublicKey(publicKey: PubKey): ProjectivePointType<bigint> {
-    if (publicKey instanceof Point) {
-      publicKey.assertValidity();
-      return publicKey;
-    } else if (publicKey instanceof Uint8Array || typeof publicKey === 'string') {
-      return Point.fromHex(publicKey);
-      // This can happen because PointType can be instance of different class
-    } else throw new Error(`Unknown type of public key: ${publicKey}`);
-  }
-
   function isBiggerThanHalfOrder(number: bigint) {
     const HALF = CURVE_ORDER >> _1n;
     return number > HALF;
@@ -837,7 +815,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     static fromDER(hex: Hex) {
       const arr = hex instanceof Uint8Array;
       if (typeof hex !== 'string' && !arr)
-        throw new TypeError(`Signature.fromDER: Expected string or Uint8Array`);
+        throw new Error(`Signature.fromDER: Expected string or Uint8Array`);
       const { r, s } = DER.parseSig(arr ? hex : ut.hexToBytes(hex));
       return new Signature(r, s);
     }
@@ -852,35 +830,19 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       return new Signature(this.r, this.s, recovery);
     }
 
-    /**
-     * Recovers public key from signature with recovery bit. Throws on invalid hash.
-     * https://en.wikipedia.org/wiki/Elliptic_Curve_Digital_Signature_Algorithm#Public_key_recovery
-     * It's also possible to recover key without bit: try all 4 bit values and check for sig match.
-     *
-     * ```
-     * recover(r, s, h) where
-     *   u1 = hs^-1 mod n
-     *   u2 = sr^-1 mod n
-     *   Q = u1⋅G + u2⋅R
-     * ```
-     *
-     * @param msgHash message hash
-     * @returns Point corresponding to public key
-     */
     recoverPublicKey(msgHash: Hex): typeof Point.BASE {
-      const { n: N } = CURVE;
+      const { n: N } = CURVE; // ECDSA public key recovery secg.org/sec1-v2.pdf 4.1.6
       const { r, s, recovery: rec } = this;
-      const h = bits2int_modN(ut.ensureBytes(msgHash));
+      const h = bits2int_modN(ut.ensureBytes(msgHash)); // Truncate hash
       if (rec == null || ![0, 1, 2, 3].includes(rec)) throw new Error('recovery id invalid');
       const radj = rec === 2 || rec === 3 ? r + N : r;
-      if (radj >= Fp.ORDER) throw new Error('recovery id 2 or 3 currently invalid');
+      if (radj >= Fp.ORDER) throw new Error('recovery id 2 or 3 invalid');
       const prefix = (rec & 1) === 0 ? '02' : '03';
       const R = Point.fromHex(prefix + numToFieldStr(radj));
       const ir = mod.invert(radj, N); // r^-1
       const u1 = mod.mod(-h * ir, N); // -hr^-1
       const u2 = mod.mod(s * ir, N); // sr^-1
-      //  (sr^-1)R-(hr^-1)G = -(hr^-1)G + (sr^-1)
-      const Q = Point.BASE.multiplyAndAddUnsafe(R, u1, u2);
+      const Q = Point.BASE.multiplyAndAddUnsafe(R, u1, u2); //  (sr^-1)R-(hr^-1)G = -(hr^-1)G + (sr^-1)
       if (!Q) throw new Error('point at infinify'); // unsafe is fine: no priv data leaked
       Q.assertValidity();
       return Q;
@@ -938,7 +900,6 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     _bigintToBytes: numToField,
     _bigintToString: numToFieldStr,
     _normalizePrivateKey: normalizePrivateKey,
-    _normalizePublicKey: normalizePublicKey,
     _isWithinCurveOrder: isWithinCurveOrder,
     _isValidFieldElement: isValidFieldElement,
     _weierstrassEquation: weierstrassEquation,
@@ -1002,11 +963,10 @@ export function weierstrass(curveDef: CurveType): CurveFn {
    * @param isCompressed whether to return compact (default), or full key
    * @returns shared public key
    */
-  function getSharedSecret(privateA: PrivKey, publicB: PubKey, isCompressed = true): Uint8Array {
-    if (isProbPub(privateA)) throw new TypeError('getSharedSecret: first arg must be private key');
-    if (!isProbPub(publicB)) throw new TypeError('getSharedSecret: second arg must be public key');
-    const b = normalizePublicKey(publicB);
-    b.assertValidity();
+  function getSharedSecret(privateA: PrivKey, publicB: Hex, isCompressed = true): Uint8Array {
+    if (isProbPub(privateA)) throw new Error('first arg must be private key');
+    if (!isProbPub(publicB)) throw new Error('second arg must be public key');
+    const b = Point.fromHex(publicB); // check for being on-curve
     return b.multiply(normalizePrivateKey(privateA)).toRawBytes(isCompressed);
   }
 
@@ -1047,7 +1007,8 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     if (['recovered', 'canonical'].some((k) => k in opts))
       // Ban legacy options
       throw new Error('sign() legacy options not supported');
-    let { lowS } = opts; // generates low-s sigs by default
+    let { lowS, prehash, extraEntropy: ent } = opts; // generates low-s sigs by default
+    if (prehash) msgHash = CURVE.hash(ut.ensureBytes(msgHash));
     if (lowS == null) lowS = true; // RFC6979 3.2: we skip step A, because
     // Step A is ignored, since we already provide hash instead of msg
 
@@ -1062,8 +1023,8 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     const d = normalizePrivateKey(privateKey);
     // K = HMAC_K(V || 0x00 || int2octets(x) || bits2octets(h1) || k')
     const seedArgs = [int2octets(d), h1octets];
-    let ent = opts.extraEntropy; // RFC6979 3.6: additional k' (optional)
     if (ent != null) {
+      // RFC6979 3.6: additional k' (optional)
       if (ent === true) ent = CURVE.randomBytes(Fp.BYTES);
       const e = ut.ensureBytes(ent);
       if (e.length !== Fp.BYTES) throw new Error(`sign: Expected ${Fp.BYTES} bytes of extra data`);
@@ -1100,7 +1061,8 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     }
     return { seed, k2sig };
   }
-  const defaultSigOpts: SignOpts = { lowS: CURVE.lowS };
+  const defaultSigOpts: SignOpts = { lowS: CURVE.lowS, prehash: false };
+  const defaultVerOpts: VerOpts = { lowS: CURVE.lowS, prehash: false };
 
   /**
    * Signs message hash (not message: you need to hash it by yourself).
@@ -1117,13 +1079,6 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     const { seed, k2sig } = prepSig(msgHash, privKey, opts); // Steps A, D of RFC6979 3.2.
     const genUntil = hmacDrbg<Signature>(CURVE.hash.outputLen, CURVE.nByteLength, CURVE.hmac);
     return genUntil(seed, k2sig); // Steps B, C, D, E, F, G
-  }
-
-  /**
-   * Signs a message (not message hash).
-   */
-  function signUnhashed(msg: Uint8Array, privKey: PrivKey, opts = defaultSigOpts): Signature {
-    return sign(CURVE.hash(ut.ensureBytes(msg)), privKey, opts);
   }
 
   // Enable precomputes. Slows down first publicKey computation by 20ms.
@@ -1146,10 +1101,12 @@ export function weierstrass(curveDef: CurveType): CurveFn {
   function verify(
     signature: Hex | SignatureType,
     msgHash: Hex,
-    publicKey: PubKey,
-    opts: { lowS?: boolean } = { lowS: CURVE.lowS }
+    publicKey: Hex,
+    opts = defaultVerOpts
   ): boolean {
+    let P: ProjectivePointType<bigint>;
     let _sig: Signature | undefined = undefined;
+    if (publicKey instanceof Point) throw new Error('publicKey must be hex');
     try {
       if (signature instanceof Signature) {
         signature.assertValidity();
@@ -1165,28 +1122,21 @@ export function weierstrass(curveDef: CurveType): CurveFn {
         }
       }
       msgHash = ut.ensureBytes(msgHash);
+      P = Point.fromHex(publicKey);
     } catch (error) {
       return false;
     }
     if (opts.lowS && _sig.hasHighS()) return false;
-    let P;
-    try {
-      P = normalizePublicKey(publicKey);
-    } catch (error) {
-      return false;
-    }
-    const { n } = CURVE;
+    if (opts.prehash) msgHash = CURVE.hash(msgHash);
+    const { n: N } = CURVE;
     const { r, s } = _sig;
-
     const h = bits2int_modN(msgHash); // Cannot use fields methods, since it is group element
-    const sinv = mod.invert(s, n); // s^-1
-    // R = u1⋅G - u2⋅P
-    const u1 = mod.mod(h * sinv, n);
-    const u2 = mod.mod(r * sinv, n);
-
-    const R = Point.BASE.multiplyAndAddUnsafe(P, u1, u2)?.toAffine();
+    const is = mod.invert(s, N); // s^-1
+    const u1 = mod.mod(h * is, N); // u1 = hs^-1 mod n
+    const u2 = mod.mod(r * is, N); // u2 = rs^-1 mod n
+    const R = Point.BASE.multiplyAndAddUnsafe(P, u1, u2)?.toAffine(); // R = u1⋅G + u2⋅P
     if (!R) return false;
-    const v = mod.mod(R.x, n);
+    const v = mod.mod(R.x, N);
     return v === r;
   }
   return {
@@ -1194,7 +1144,6 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     getPublicKey,
     getSharedSecret,
     sign,
-    signUnhashed,
     verify,
     // Point,
     ProjectivePoint: Point,

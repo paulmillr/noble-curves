@@ -62,12 +62,12 @@ should('wychenproof ECDSA vectors', () => {
           if (e.message.includes('Invalid signature: incorrect length')) continue;
           throw e;
         }
-        const verified = CURVE.verify(test.sig, m, pubKey);
+        const verified = CURVE.verify(test.sig, m, pubKey.toHex());
         deepStrictEqual(verified, true, 'valid');
       } else if (test.result === 'invalid') {
         let failed = false;
         try {
-          failed = !CURVE.verify(test.sig, m, pubKey);
+          failed = !CURVE.verify(test.sig, m, pubKey.toHex());
         } catch (error) {
           failed = true;
         }
@@ -312,28 +312,30 @@ function runWycheproof(name, CURVE, group, index) {
   const pubKey = CURVE.ProjectivePoint.fromHex(group.key.uncompressed);
   deepStrictEqual(pubKey.x, BigInt(`0x${group.key.wx}`));
   deepStrictEqual(pubKey.y, BigInt(`0x${group.key.wy}`));
+  const pubR = pubKey.toRawBytes();
   for (const test of group.tests) {
     const m = CURVE.CURVE.hash(hexToBytes(test.msg));
+    const { sig } = test;
 
     if (test.result === 'valid' || test.result === 'acceptable') {
       try {
-        CURVE.Signature.fromDER(test.sig);
+        CURVE.Signature.fromDER(sig);
       } catch (e) {
         // Some tests has invalid signature which we don't accept
         if (e.message.includes('Invalid signature: incorrect length')) continue;
         throw e;
       }
-      const verified = CURVE.verify(test.sig, m, pubKey);
+      const verified = CURVE.verify(sig, m, pubR);
       if (name === 'secp256k1') {
         // lowS: true for secp256k1
-        deepStrictEqual(verified, !CURVE.Signature.fromDER(test.sig).hasHighS(), `${index}: valid`);
+        deepStrictEqual(verified, !CURVE.Signature.fromDER(sig).hasHighS(), `${index}: valid`);
       } else {
         deepStrictEqual(verified, true, `${index}: valid`);
       }
     } else if (test.result === 'invalid') {
       let failed = false;
       try {
-        failed = !CURVE.verify(test.sig, m, pubKey);
+        failed = !CURVE.verify(sig, m, pubR);
       } catch (error) {
         failed = true;
       }
