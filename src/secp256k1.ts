@@ -280,7 +280,7 @@ function schnorrSign(
   if (k0 === _0n) throw new Error('sign: Creation of signature failed. k is zero');
   const { point: R, x: rx, scalar: k } = schnorrGetScalar(k0);
   const e = schnorrChallengeFinalize(tag(TAGS.challenge, rx, px, m));
-  const sig = new SchnorrSignature(R.x, mod(k + e * d, secp256k1.CURVE.n)).toRawBytes();
+  const sig = new SchnorrSignature(R.px, mod(k + e * d, secp256k1.CURVE.n)).toRawBytes();
   if (!schnorrVerify(sig, m, px)) throw new Error('sign: Invalid signature produced');
   return sig;
 }

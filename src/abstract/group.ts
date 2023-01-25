@@ -16,6 +16,7 @@ export type GroupConstructor<T> = {
   BASE: T;
   ZERO: T;
 };
+export type Mapper<T> = (i: T[]) => T[];
 // Not big, but pretty complex and it is easy to break stuff. To avoid too much copy paste
 export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number) {
   const constTimeNegate = (condition: boolean, item: T): T => {
@@ -124,6 +125,20 @@ export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number) {
       // At this point there is a way to F be infinity-point even if p is not,
       // which makes it less const-time: around 1 bigint multiply.
       return { p, f };
+    },
+
+    wNAFCached(P: T, precomputesMap: Map<T, T[]>, n: bigint, transform: Mapper<T>): { p: T; f: T } {
+      // @ts-ignore
+      const W: number = '_WINDOW_SIZE' in P ? P._WINDOW_SIZE : 1;
+      // Calculate precomputes on a first run, reuse them after
+      let comp = precomputesMap.get(P);
+      if (!comp) {
+        comp = this.precomputeWindow(P, W) as T[];
+        if (W !== 1) {
+          precomputesMap.set(P, transform(comp));
+        }
+      }
+      return this.wNAF(W, comp, n);
     },
   };
 }

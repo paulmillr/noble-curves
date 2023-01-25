@@ -990,7 +990,7 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
       // φ endomorphism
       const cubicRootOfUnityModP =
         0x5f19672fdf76ce51ba69c6076a0f77eaddb3a93be6f89688de17d813620a00022e01fffffffefffen;
-      const phi = new c(Fp.mul(point.x, cubicRootOfUnityModP), point.y, point.z);
+      const phi = new c(Fp.mul(point.px, cubicRootOfUnityModP), point.py, point.pz);
 
       // todo: unroll
       const xP = point.multiplyUnsafe(bls12_381.CURVE.x).negate(); // [x]P

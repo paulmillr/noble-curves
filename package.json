@@ -6,7 +6,7 @@
     "lib"
   ],
   "scripts": {
-    "bench": "node benchmark/index.js",
+    "bench": "cd benchmark; node index.js",
     "build": "tsc && tsc -p tsconfig.esm.json",
     "build:release": "rollup -c rollup.config.js",
     "lint": "prettier --check 'src/**/*.{js,ts}' 'test/*.js'",

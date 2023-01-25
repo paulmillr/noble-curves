@@ -332,7 +332,7 @@ export function Fp(
     isValid: (num) => {
       if (typeof num !== 'bigint')
         throw new Error(`Invalid field element: expected bigint, got ${typeof num}`);
-      return _0n <= num && num < ORDER;
+      return _0n <= num && num < ORDER; // 0 is valid element, but it's not invertible
     },
     isZero: (num) => num === _0n,
     isOdd: (num) => (num & _1n) === _1n,
@@ -360,7 +360,6 @@ export function Fp(
     cmov: (a, b, c) => (c ? b : a),
     toBytes: (num) =>
       isLE ? utils.numberToBytesLE(num, BYTES) : utils.numberToBytesBE(num, BYTES),
-
     fromBytes: (bytes) => {
       if (bytes.length !== BYTES)
         throw new Error(`Fp.fromBytes: expected ${BYTES}, got ${bytes.length}`);

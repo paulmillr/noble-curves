@@ -362,7 +362,7 @@ export class RistrettoPoint {
    * https://ristretto.group/formulas/encoding.html
    */
   toRawBytes(): Uint8Array {
-    let { x, y, z, t } = this.ep;
+    let { ex: x, ey: y, ez: z, et: t } = this.ep;
     const P = ed25519.CURVE.Fp.ORDER;
     const mod = ed25519.CURVE.Fp.create;
     const u1 = mod(mod(z + y) * mod(z - y)); // 1
@@ -400,12 +400,12 @@ export class RistrettoPoint {
   // Compare one point to another.
   equals(other: RistrettoPoint): boolean {
     assertRstPoint(other);
-    const a = this.ep;
-    const b = other.ep;
+    const { ex: X1, ey: Y1 } = this.ep;
+    const { ex: X2, ey: Y2 } = this.ep;
     const mod = ed25519.CURVE.Fp.create;
     // (x1 * y2 == y1 * x2) | (y1 * y2 == x1 * x2)
-    const one = mod(a.x * b.y) === mod(a.y * b.x);
-    const two = mod(a.y * b.y) === mod(a.x * b.x);
+    const one = mod(X1 * Y2) === mod(Y1 * X2);
+    const two = mod(Y1 * Y2) === mod(X1 * X2);
     return one || two;
   }
 

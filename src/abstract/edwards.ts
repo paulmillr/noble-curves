@@ -68,10 +68,10 @@ export type AffinePoint = {
 
 // Instance of Extended Point with coordinates in X, Y, Z, T
 export interface ExtendedPointType extends Group<ExtendedPointType> {
-  readonly x: bigint;
-  readonly y: bigint;
-  readonly z: bigint;
-  readonly t: bigint;
+  readonly ex: bigint;
+  readonly ey: bigint;
+  readonly ez: bigint;
+  readonly et: bigint;
   multiply(scalar: bigint): ExtendedPointType;
   multiplyUnsafe(scalar: bigint): ExtendedPointType;
   isSmallOrder(): boolean;
@@ -85,7 +85,6 @@ export interface ExtendedPointConstructor extends GroupConstructor<ExtendedPoint
   fromAffine(p: AffinePoint): ExtendedPointType;
   fromHex(hex: Hex): ExtendedPointType;
   fromPrivateKey(privateKey: PrivKey): ExtendedPointType; // TODO: remove
-  toAffineBatch(points: ExtendedPointType[]): AffinePoint[];
 }
 
 export type CurveFn = {
@@ -154,6 +153,11 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     // GE = subgroup element, not full group
     return n === _0n ? n : assertGE(n);
   }
+  function badc(a: any) {
+    return a == null || !ut.big(a);
+  }
+
+  const pointPrecomputes = new Map<ExtendedPoint, ExtendedPoint[]>();
 
   /**
    * Extended Point works in extended coordinates: (x, y, z, t) ∋ (x=x/z, y=y/z, t=xy).
@@ -161,51 +165,68 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
    * https://en.wikipedia.org/wiki/Twisted_Edwards_curve#Extended_coordinates
    */
   class ExtendedPoint implements ExtendedPointType {
-    constructor(readonly x: bigint, readonly y: bigint, readonly z: bigint, readonly t: bigint) {
-      if (y == null || !ut.big(y)) throw new Error('y required');
-      if (z == null || !ut.big(z)) throw new Error('z required');
-      if (t == null || !ut.big(t)) throw new Error('t required');
-    }
-
     static BASE = new ExtendedPoint(CURVE.Gx, CURVE.Gy, _1n, modP(CURVE.Gx * CURVE.Gy));
     static ZERO = new ExtendedPoint(_0n, _1n, _1n, _0n); // 0, 1, 1, 0
+
+    constructor(
+      readonly ex: bigint,
+      readonly ey: bigint,
+      readonly ez: bigint,
+      readonly et: bigint
+    ) {
+      if (badc(ey)) throw new Error('y required');
+      if (badc(ez)) throw new Error('z required');
+      if (badc(et)) throw new Error('t required');
+    }
+
+    get x(): bigint {
+      return this.toAffine().x;
+    }
+    get y(): bigint {
+      return this.toAffine().y;
+    }
 
     static fromAffine(p: AffinePoint): ExtendedPoint {
       const { x, y } = p || {};
       if (p instanceof ExtendedPoint) throw new Error('fromAffine: extended point not allowed');
       if (!ut.big(x) || !ut.big(y)) throw new Error('fromAffine: invalid affine point');
-      if (p.x === _0n && p.y === _1n) return ExtendedPoint.ZERO;
-      return new ExtendedPoint(p.x, p.y, _1n, modP(x * y));
+      return new ExtendedPoint(x, y, _1n, modP(x * y));
     }
-    // Takes a bunch of Jacobian Points but executes only one
-    // invert on all of them. invert is very slow operation,
-    // so this improves performance massively.
-    static toAffineBatch(points: ExtendedPoint[]): AffinePoint[] {
-      const toInv = Fp.invertBatch(points.map((p) => p.z));
-      return points.map((p, i) => p.toAffine(toInv[i]));
+    static normalizeZ(points: ExtendedPoint[]): ExtendedPoint[] {
+      const toInv = Fp.invertBatch(points.map((p) => p.ez));
+      return points.map((p, i) => p.toAffine(toInv[i])).map(ExtendedPoint.fromAffine);
     }
-    static normalizeZ(denorm: ExtendedPoint[]): ExtendedPoint[] {
-      return ExtendedPoint.toAffineBatch(denorm).map(ExtendedPoint.fromAffine);
+
+    // We calculate precomputes for elliptic curve point multiplication
+    // using windowed method. This specifies window size and
+    // stores precomputed values. Usually only base point would be precomputed.
+    _WINDOW_SIZE?: number;
+
+    // "Private method", don't use it directly
+    _setWindowSize(windowSize: number) {
+      this._WINDOW_SIZE = windowSize;
+      pointPrecomputes.delete(this);
     }
 
     // Compare one point to another.
     equals(other: ExtendedPoint): boolean {
       assertExtPoint(other);
-      const { x: X1, y: Y1, z: Z1 } = this;
-      const { x: X2, y: Y2, z: Z2 } = other;
+      const { ex: X1, ey: Y1, ez: Z1 } = this;
+      const { ex: X2, ey: Y2, ez: Z2 } = other;
       const X1Z2 = modP(X1 * Z2);
       const X2Z1 = modP(X2 * Z1);
       const Y1Z2 = modP(Y1 * Z2);
       const Y2Z1 = modP(Y2 * Z1);
       return X1Z2 === X2Z1 && Y1Z2 === Y2Z1;
     }
+
     protected is0(): boolean {
       return this.equals(ExtendedPoint.ZERO);
     }
 
     // Inverses point to one corresponding to (x, -y) in Affine coordinates.
     negate(): ExtendedPoint {
-      return new ExtendedPoint(modP(-this.x), this.y, this.z, modP(-this.t));
+      return new ExtendedPoint(modP(-this.ex), this.ey, this.ez, modP(-this.et));
     }
 
     // Fast algo for doubling Extended Point.
@@ -213,7 +234,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     // Cost: 4M + 4S + 1*a + 6add + 1*2.
     double(): ExtendedPoint {
       const { a } = CURVE;
-      const { x: X1, y: Y1, z: Z1 } = this;
+      const { ex: X1, ey: Y1, ez: Z1 } = this;
       const A = modP(X1 * X1); // A = X12
       const B = modP(Y1 * Y1); // B = Y12
       const C = modP(_2n * modP(Z1 * Z1)); // C = 2*Z12
@@ -236,8 +257,8 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     add(other: ExtendedPoint) {
       assertExtPoint(other);
       const { a, d } = CURVE;
-      const { x: X1, y: Y1, z: Z1, t: T1 } = this;
-      const { x: X2, y: Y2, z: Z2, t: T2 } = other;
+      const { ex: X1, ey: Y1, ez: Z1, et: T1 } = this;
+      const { ex: X2, ey: Y2, ez: Z2, et: T2 } = other;
       // Faster algo for adding 2 Extended Points when curve's a=-1.
       // http://hyperelliptic.org/EFD/g1p/auto-twisted-extended-1.html#addition-add-2008-hwcd-4
       // Cost: 8M + 8add + 2*2.
@@ -278,11 +299,16 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       return this.add(other.negate());
     }
 
+    private wNAF(n: bigint): { p: ExtendedPoint; f: ExtendedPoint } {
+      return wnaf.wNAFCached(this, pointPrecomputes, n, ExtendedPoint.normalizeZ);
+    }
+
     // Constant time multiplication.
     // Uses wNAF method. Windowed method may be 10% faster,
     // but takes 2x longer to generate and consumes 2x memory.
     multiply(scalar: bigint): ExtendedPoint {
-      return wNAF_TMP_FN(this, assertGE(scalar));
+      const { p, f } = this.wNAF(assertGE(scalar));
+      return ExtendedPoint.normalizeZ([p, f])[0];
     }
 
     // Non-constant-time multiplication. Uses double-and-add algorithm.
@@ -292,7 +318,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       let n = assertGE0(scalar);
       if (n === _0n) return I;
       if (this.equals(I) || n === _1n) return this;
-      if (this.equals(G)) return wNAF_TMP_FN(this, n);
+      if (this.equals(G)) return this.wNAF(n).p;
       return wnaf.unsafeLadder(this, n);
     }
 
@@ -313,7 +339,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     // Converts Extended point to default (x, y) coordinates.
     // Can accept precomputed Z^-1 - for example, from invertBatch.
     toAffine(iz?: bigint): AffinePoint {
-      const { x, y, z } = this;
+      const { ex: x, ey: y, ez: z } = this;
       const is0 = this.is0();
       if (iz == null) iz = is0 ? _8n : (Fp.invert(z) as bigint); // 8 was chosen arbitrarily
       const ax = modP(x * iz);
@@ -390,26 +416,8 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     }
   }
   const { BASE: G, ZERO: I } = ExtendedPoint;
-  let Gpows: ExtendedPoint[] | undefined = undefined; // precomputes for base point G
   const wnaf = wNAF(ExtendedPoint, CURVE.nByteLength * 8);
-  function wNAF_TMP_FN(P: ExtendedPoint, n: bigint): ExtendedPoint {
-    if (P.equals(G)) {
-      const W = 8;
-      if (!Gpows) {
-        const denorm = wnaf.precomputeWindow(P, W) as ExtendedPoint[];
-        const norm = ExtendedPoint.toAffineBatch(denorm).map(ExtendedPoint.fromAffine);
-        Gpows = norm;
-      }
-      const comp = Gpows;
-      const { p, f } = wnaf.wNAF(W, comp, n);
-      return ExtendedPoint.normalizeZ([p, f])[0];
-    }
-    const W = 1;
-    const denorm = wnaf.precomputeWindow(P, W) as ExtendedPoint[];
-    const norm = ExtendedPoint.toAffineBatch(denorm).map(ExtendedPoint.fromAffine);
-    const { p, f } = wnaf.wNAF(W, norm, n);
-    return ExtendedPoint.normalizeZ([p, f])[0];
-  }
+
   function assertExtPoint(other: unknown) {
     if (!(other instanceof ExtendedPoint)) throw new TypeError('ExtendedPoint expected');
   }
@@ -494,7 +502,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
   }
 
   // Enable precomputes. Slows down first publicKey computation by 20ms.
-  // G._setWindowSize(8);
+  G._setWindowSize(8);
 
   const utils = {
     getExtendedPublicKey,
@@ -515,12 +523,10 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
      * but allows to speed-up subsequent getPublicKey() calls up to 20x.
      * @param windowSize 2, 4, 8, 16
      */
-    precompute(windowSize = 8, point = G): ExtendedPoint {
-      return G.multiply(2n);
-      // const cached = point.equals(Point.BASE) ? point : new Point(point.x, point.y);
-      // cached._setWindowSize(windowSize);
-      // cached.multiply(_2n);
-      // return cached;
+    precompute(windowSize = 8, point = ExtendedPoint.BASE): typeof ExtendedPoint.BASE {
+      point._setWindowSize(windowSize);
+      point.multiply(BigInt(3));
+      return point;
     },
   };
 

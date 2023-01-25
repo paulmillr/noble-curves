@@ -115,9 +115,9 @@ export type AffinePoint<T> = {
 } & { z?: never };
 // Instance for 3d XYZ points
 export interface ProjectivePointType<T> extends Group<ProjectivePointType<T>> {
-  readonly x: T;
-  readonly y: T;
-  readonly z: T;
+  readonly px: T;
+  readonly py: T;
+  readonly pz: T;
   multiply(scalar: bigint): ProjectivePointType<T>;
   multiplyUnsafe(scalar: bigint): ProjectivePointType<T>;
   multiplyAndAddUnsafe(
@@ -140,7 +140,6 @@ export interface ProjectiveConstructor<T> extends GroupConstructor<ProjectivePoi
   fromAffine(p: AffinePoint<T>): ProjectivePointType<T>;
   fromHex(hex: Hex): ProjectivePointType<T>;
   fromPrivateKey(privateKey: PrivKey): ProjectivePointType<T>;
-  toAffineBatch(points: ProjectivePointType<T>[]): AffinePoint<T>[];
   normalizeZ(points: ProjectivePointType<T>[]): ProjectivePointType<T>[];
 }
 
@@ -212,9 +211,12 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
 
   // Valid group elements reside in range 1..n-1
   function isWithinCurveOrder(num: bigint): boolean {
-    return _0n < num && num < CURVE.n;
+    return typeof num === 'bigint' && _0n < num && num < CURVE.n;
   }
-
+  function assertGE(num: bigint) {
+    if (!isWithinCurveOrder(num))
+      throw new TypeError('Expected valid bigint: 0 < bigint < curve.n');
+  }
   /**
    * Validates if a private key is valid and converts it to bigint form.
    * Supports two options, that are passed when CURVE is initialized:
@@ -231,29 +233,19 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
     } else if (ut.isPositiveInt(key)) {
       num = BigInt(key);
     } else if (typeof key === 'string') {
-      if (key.length !== 2 * groupLen) throw new Error(`Expected ${groupLen} bytes of private key`);
+      if (key.length !== 2 * groupLen) throw new Error(`Private key must be ${groupLen} bytes`);
       // Validates individual octets
       num = ut.hexToNumber(key);
     } else if (key instanceof Uint8Array) {
-      if (key.length !== groupLen) throw new Error(`Expected ${groupLen} bytes of private key`);
+      if (key.length !== groupLen) throw new Error(`Private key must be ${groupLen} bytes`);
       num = ut.bytesToNumberBE(key);
     } else {
-      throw new TypeError('Expected valid private key');
+      throw new TypeError('Private key was invalid');
     }
     // Useful for curves with cofactor != 1
     if (wrapPrivateKey) num = mod.mod(num, order);
-    if (!isWithinCurveOrder(num)) throw new Error('Expected private key: 0 < key < n');
+    assertGE(num);
     return num;
-  }
-
-  /**
-   * Validates if a scalar ("private number") is valid.
-   * Scalars are valid only if they are less than curve order.
-   */
-  function normalizeScalar(num: bigint): bigint {
-    if (ut.isPositiveInt(num)) return BigInt(num);
-    if (typeof num === 'bigint' && isWithinCurveOrder(num)) return num;
-    throw new TypeError('Expected valid private scalar: 0 < scalar < curve.n');
   }
 
   const pointPrecomputes = new Map<ProjectivePoint, ProjectivePoint[]>();
@@ -263,12 +255,13 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
    * We're doing calculations in projective, because its operations don't require costly inversion.
    */
   class ProjectivePoint implements ProjectivePointType<T> {
-    constructor(readonly x: T, readonly y: T, readonly z: T) {
-      if (y == null || !Fp.isValid(y)) throw new Error('ProjectivePoint: y required');
-      if (z == null || !Fp.isValid(z)) throw new Error('ProjectivePoint: z required');
-    }
     static readonly BASE = new ProjectivePoint(CURVE.Gx, CURVE.Gy, Fp.ONE);
     static readonly ZERO = new ProjectivePoint(Fp.ZERO, Fp.ONE, Fp.ZERO);
+
+    constructor(readonly px: T, readonly py: T, readonly pz: T) {
+      if (py == null || !Fp.isValid(py)) throw new Error('ProjectivePoint: y required');
+      if (pz == null || !Fp.isValid(pz)) throw new Error('ProjectivePoint: z required');
+    }
 
     static fromAffine(p: AffinePoint<T>): ProjectivePoint {
       const { x, y } = p || {};
@@ -281,6 +274,39 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
       return new ProjectivePoint(x, y, Fp.ONE);
     }
 
+    get x(): T {
+      return this.toAffine().x;
+    }
+    get y(): T {
+      return this.toAffine().y;
+    }
+
+    /**
+     * Takes a bunch of Projective Points but executes only one
+     * inversion on all of them. Inversion is very slow operation,
+     * so this improves performance massively.
+     * Optimization: converts a list of projective points to a list of identical points with Z=1.
+     */
+    static normalizeZ(points: ProjectivePoint[]): ProjectivePoint[] {
+      const toInv = Fp.invertBatch(points.map((p) => p.pz));
+      return points.map((p, i) => p.toAffine(toInv[i])).map(ProjectivePoint.fromAffine);
+    }
+
+    /**
+     * Converts hash string or Uint8Array to Point.
+     * @param hex short/long ECDSA hex
+     */
+    static fromHex(hex: Hex): ProjectivePoint {
+      const P = ProjectivePoint.fromAffine(CURVE.fromBytes(ut.ensureBytes(hex)));
+      P.assertValidity();
+      return P;
+    }
+
+    // Multiplies generator point by privateKey.
+    static fromPrivateKey(privateKey: PrivKey) {
+      return ProjectivePoint.BASE.multiply(normalizePrivateKey(privateKey));
+    }
+
     // We calculate precomputes for elliptic curve point multiplication
     // using windowed method. This specifies window size and
     // stores precomputed values. Usually only base point would be precomputed.
@@ -291,38 +317,27 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
       this._WINDOW_SIZE = windowSize;
       pointPrecomputes.delete(this);
     }
-    protected is0() {
-      return this.equals(ProjectivePoint.ZERO);
-    }
-    private wNAF(n: bigint): { p: ProjectivePoint; f: ProjectivePoint } {
-      const W = this._WINDOW_SIZE || 1;
-      // Calculate precomputes on a first run, reuse them after
-      let comp = pointPrecomputes.get(this);
-      if (!comp) {
-        comp = wnaf.precomputeWindow(this, W) as ProjectivePoint[];
-        if (W !== 1) {
-          comp = ProjectivePoint.normalizeZ(comp);
-          pointPrecomputes.set(this, comp);
-        }
+
+    // A point on curve is valid if it conforms to equation.
+    assertValidity(): void {
+      // Zero is valid point too!
+      if (this.is0()) {
+        if (CURVE.allowInfinityPoint) return;
+        throw new Error('bad point: ZERO');
       }
-      return wnaf.wNAF(W, comp, n);
+      // Some 3rd-party test vectors require different wording between here & `fromCompressedHex`
+      const { x, y } = this.toAffine();
+      // Check if x, y are valid field elements
+      if (!Fp.isValid(x) || !Fp.isValid(y)) throw new Error('bad point: x or y not FE');
+      const left = Fp.square(y); // y²
+      const right = weierstrassEquation(x); // x³ + ax + b
+      if (!Fp.equals(left, right)) throw new Error('bad point: equation left != right');
+      if (!this.isTorsionFree()) throw new Error('bad point: not in prime-order subgroup');
     }
-
-    /**
-     * Takes a bunch of Projective Points but executes only one
-     * inversion on all of them. Inversion is very slow operation,
-     * so this improves performance massively.
-     */
-    static toAffineBatch(points: ProjectivePoint[]): AffinePoint<T>[] {
-      const toInv = Fp.invertBatch(points.map((p) => p.z));
-      return points.map((p, i) => p.toAffine(toInv[i]));
-    }
-
-    /**
-     * Optimization: converts a list of projective points to a list of identical points with Z=1.
-     */
-    static normalizeZ(points: ProjectivePoint[]): ProjectivePoint[] {
-      return ProjectivePoint.toAffineBatch(points).map(ProjectivePoint.fromAffine);
+    hasEvenY(): boolean {
+      const { y } = this.toAffine();
+      if (Fp.isOdd) return !Fp.isOdd(y);
+      throw new Error("Field doesn't support isOdd");
     }
 
     /**
@@ -330,8 +345,8 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
      */
     equals(other: ProjectivePoint): boolean {
       assertPrjPoint(other);
-      const { x: X1, y: Y1, z: Z1 } = this;
-      const { x: X2, y: Y2, z: Z2 } = other;
+      const { px: X1, py: Y1, pz: Z1 } = this;
+      const { px: X2, py: Y2, pz: Z2 } = other;
       const U1 = Fp.equals(Fp.mul(X1, Z2), Fp.mul(X2, Z1));
       const U2 = Fp.equals(Fp.mul(Y1, Z2), Fp.mul(Y2, Z1));
       return U1 && U2;
@@ -341,7 +356,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
      * Flips point to one corresponding to (x, -y) in Affine coordinates.
      */
     negate(): ProjectivePoint {
-      return new ProjectivePoint(this.x, Fp.negate(this.y), this.z);
+      return new ProjectivePoint(this.px, Fp.negate(this.py), this.pz);
     }
 
     // Renes-Costello-Batina exception-free doubling formula.
@@ -351,7 +366,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
     double() {
       const { a, b } = CURVE;
       const b3 = Fp.mul(b, 3n);
-      const { x: X1, y: Y1, z: Z1 } = this;
+      const { px: X1, py: Y1, pz: Z1 } = this;
       let X3 = Fp.ZERO, Y3 = Fp.ZERO, Z3 = Fp.ZERO; // prettier-ignore
       let t0 = Fp.mul(X1, X1); // step 1
       let t1 = Fp.mul(Y1, Y1);
@@ -393,8 +408,8 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
     // Cost: 12M + 0S + 3*a + 3*b3 + 23add.
     add(other: ProjectivePoint): ProjectivePoint {
       assertPrjPoint(other);
-      const { x: X1, y: Y1, z: Z1 } = this;
-      const { x: X2, y: Y2, z: Z2 } = other;
+      const { px: X1, py: Y1, pz: Z1 } = this;
+      const { px: X2, py: Y2, pz: Z2 } = other;
       let X3 = Fp.ZERO, Y3 = Fp.ZERO, Z3 = Fp.ZERO; // prettier-ignore
       const a = CURVE.a;
       const b3 = Fp.mul(CURVE.b, 3n);
@@ -445,24 +460,33 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
       return this.add(other.negate());
     }
 
+    private is0() {
+      return this.equals(ProjectivePoint.ZERO);
+    }
+    private wNAF(n: bigint): { p: ProjectivePoint; f: ProjectivePoint } {
+      return wnaf.wNAFCached(this, pointPrecomputes, n, (comp: ProjectivePoint[]) => {
+        const toInv = Fp.invertBatch(comp.map((p) => p.pz));
+        return comp.map((p, i) => p.toAffine(toInv[i])).map(ProjectivePoint.fromAffine);
+      });
+    }
+
     /**
      * Non-constant-time multiplication. Uses double-and-add algorithm.
      * It's faster, but should only be used when you don't care about
      * an exposed private key e.g. sig verification, which works over *public* keys.
      */
-    multiplyUnsafe(scalar: bigint): ProjectivePoint {
-      const P0 = ProjectivePoint.ZERO;
-      if (typeof scalar === 'bigint' && scalar === _0n) return P0;
-      // Will throw on 0
-      let n = normalizeScalar(scalar);
+    multiplyUnsafe(n: bigint): ProjectivePoint {
+      const I = ProjectivePoint.ZERO;
+      if (n === _0n) return I;
+      assertGE(n); // Will throw on 0
       if (n === _1n) return this;
-
-      if (!CURVE.endo) return wnaf.unsafeLadder(this, n);
+      const { endo } = CURVE;
+      if (!endo) return wnaf.unsafeLadder(this, n);
 
       // Apply endomorphism
-      let { k1neg, k1, k2neg, k2 } = CURVE.endo.splitScalar(n);
-      let k1p = P0;
-      let k2p = P0;
+      let { k1neg, k1, k2neg, k2 } = endo.splitScalar(n);
+      let k1p = I;
+      let k2p = I;
       let d: ProjectivePoint = this;
       while (k1 > _0n || k2 > _0n) {
         if (k1 & _1n) k1p = k1p.add(d);
@@ -473,9 +497,10 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
       }
       if (k1neg) k1p = k1p.negate();
       if (k2neg) k2p = k2p.negate();
-      k2p = new ProjectivePoint(Fp.mul(k2p.x, CURVE.endo.beta), k2p.y, k2p.z);
+      k2p = new ProjectivePoint(Fp.mul(k2p.px, endo.beta), k2p.py, k2p.pz);
       return k1p.add(k2p);
     }
+
     /**
      * Constant time multiplication.
      * Uses wNAF method. Windowed method may be 10% faster,
@@ -485,19 +510,17 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
      * @returns New point
      */
     multiply(scalar: bigint): ProjectivePoint {
-      let n = normalizeScalar(scalar);
-
-      // Real point.
-      let point: ProjectivePoint;
-      // Fake point, we use it to achieve constant-time multiplication.
-      let fake: ProjectivePoint;
-      if (CURVE.endo) {
-        const { k1neg, k1, k2neg, k2 } = CURVE.endo.splitScalar(n);
+      assertGE(scalar);
+      let n = scalar;
+      let point: ProjectivePoint, fake: ProjectivePoint; // Fake point is used to const-time mult
+      const { endo } = CURVE;
+      if (endo) {
+        const { k1neg, k1, k2neg, k2 } = endo.splitScalar(n);
         let { p: k1p, f: f1p } = this.wNAF(k1);
         let { p: k2p, f: f2p } = this.wNAF(k2);
         k1p = wnaf.constTimeNegate(k1neg, k1p);
         k2p = wnaf.constTimeNegate(k2neg, k2p);
-        k2p = new ProjectivePoint(Fp.mul(k2p.x, CURVE.endo.beta), k2p.y, k2p.z);
+        k2p = new ProjectivePoint(Fp.mul(k2p.px, endo.beta), k2p.py, k2p.pz);
         point = k1p.add(k2p);
         fake = f1p.add(f2p);
       } else {
@@ -509,11 +532,25 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
       return ProjectivePoint.normalizeZ([point, fake])[0];
     }
 
+    /**
+     * Efficiently calculate `aP + bQ`. Unsafe, can expose private key, if used incorrectly.
+     * @returns non-zero affine point
+     */
+    multiplyAndAddUnsafe(Q: ProjectivePoint, a: bigint, b: bigint): ProjectivePoint | undefined {
+      const G = ProjectivePoint.BASE; // No Strauss-Shamir trick: we have 10% faster G precomputes
+      const mul = (
+        P: ProjectivePoint,
+        a: bigint // Select faster multiply() method
+      ) => (a === _0n || a === _1n || !P.equals(G) ? P.multiplyUnsafe(a) : P.multiply(a));
+      const sum = mul(this, a).add(mul(Q, b));
+      return sum.is0() ? undefined : sum;
+    }
+
     // Converts Projective point to affine (x, y) coordinates.
     // Can accept precomputed Z^-1 - for example, from invertBatch.
     // (x, y, z) ∋ (x=x/z, y=y/z)
     toAffine(iz?: T): AffinePoint<T> {
-      const { x, y, z } = this;
+      const { px: x, py: y, pz: z } = this;
       const is0 = this.is0();
       // If invZ was 0, we return zero point. However we still want to execute
       // all operations, so we replace invZ with a random number, 1.
@@ -537,45 +574,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
       if (clearCofactor) return clearCofactor(ProjectivePoint, this) as ProjectivePoint;
       return this.multiplyUnsafe(CURVE.h);
     }
-    /**
-     * Efficiently calculate `aP + bQ`.
-     * Unsafe, can expose private key, if used incorrectly.
-     * TODO: Utilize Shamir's trick
-     * @returns non-zero affine point
-     */
-    multiplyAndAddUnsafe(Q: ProjectivePoint, a: bigint, b: bigint): ProjectivePoint | undefined {
-      const P = this;
-      const aP =
-        a === _0n || a === _1n || !P.equals(ProjectivePoint.BASE)
-          ? P.multiplyUnsafe(a)
-          : P.multiply(a);
-      const bQ = Q.multiplyUnsafe(b);
-      const sum = aP.add(bQ);
-      return sum.is0() ? undefined : sum;
-    }
 
-    // A point on curve is valid if it conforms to equation.
-    assertValidity(): void {
-      const err = 'Point invalid:';
-      // Zero is valid point too!
-      if (this.is0()) {
-        if (CURVE.allowInfinityPoint) return;
-        throw new Error(`${err} ZERO`);
-      }
-      // Some 3rd-party test vectors require different wording between here & `fromCompressedHex`
-      const { x, y } = this.toAffine();
-      // Check if x, y are valid field elements
-      if (!Fp.isValid(x) || !Fp.isValid(y)) throw new Error(`${err} x or y not FE`);
-      const left = Fp.square(y); // y²
-      const right = weierstrassEquation(x); // x³ + ax + b
-      if (!Fp.equals(left, right)) throw new Error(`${err} equation left != right`);
-      if (!this.isTorsionFree()) throw new Error(`${err} not in prime-order subgroup`);
-    }
-    hasEvenY(): boolean {
-      const { y } = this.toAffine();
-      if (Fp.isOdd) return !Fp.isOdd(y);
-      throw new Error("Field doesn't support isOdd");
-    }
     toRawBytes(isCompressed = true): Uint8Array {
       this.assertValidity();
       return CURVE.toBytes(ProjectivePoint, this, isCompressed);
@@ -583,21 +582,6 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
 
     toHex(isCompressed = true): string {
       return bytesToHex(this.toRawBytes(isCompressed));
-    }
-
-    /**
-     * Converts hash string or Uint8Array to Point.
-     * @param hex short/long ECDSA hex
-     */
-    static fromHex(hex: Hex): ProjectivePoint {
-      const P = ProjectivePoint.fromAffine(CURVE.fromBytes(ut.ensureBytes(hex)));
-      P.assertValidity();
-      return P;
-    }
-
-    // Multiplies generator point by privateKey.
-    static fromPrivateKey(privateKey: PrivKey) {
-      return ProjectivePoint.BASE.multiply(normalizePrivateKey(privateKey));
     }
   }
   const _bits = CURVE.nBitLength;
@@ -620,7 +604,7 @@ export interface SignatureType {
   readonly s: bigint;
   readonly recovery?: number;
   assertValidity(): void;
-  copyWithRecoveryBit(recovery: number): SignatureType;
+  addRecoveryBit(recovery: number): SignatureType;
   hasHighS(): boolean;
   normalizeS(): SignatureType;
   recoverPublicKey(msgHash: Hex): ProjectivePointType<bigint>;
@@ -752,49 +736,53 @@ export function weierstrass(curveDef: CurveType): CurveFn {
   const uncompressedLen = 2 * Fp.BYTES + 1; // e.g. 65 for 32
 
   function isValidFieldElement(num: bigint): boolean {
-    // 0 is disallowed by arbitrary reasons. Probably because infinity point?
-    return _0n < num && num < Fp.ORDER;
+    return _0n < num && num < Fp.ORDER; // 0 is banned since it's not invertible FE
   }
 
-  const { ProjectivePoint, normalizePrivateKey, weierstrassEquation, isWithinCurveOrder } =
-    weierstrassPoints({
-      ...CURVE,
-      toBytes(c, point, isCompressed: boolean): Uint8Array {
-        const a = point.toAffine();
-        const x = Fp.toBytes(a.x);
-        const cat = ut.concatBytes;
-        if (isCompressed) {
-          // TODO: hasEvenY
-          return cat(Uint8Array.from([point.hasEvenY() ? 0x02 : 0x03]), x);
-        } else {
-          return cat(Uint8Array.from([0x04]), x, Fp.toBytes(a.y));
-        }
-      },
-      fromBytes(bytes: Uint8Array) {
-        const len = bytes.length;
-        const header = bytes[0];
-        // this.assertValidity() is done inside of fromHex
-        if (len === compressedLen && (header === 0x02 || header === 0x03)) {
-          const x = ut.bytesToNumberBE(bytes.subarray(1));
-          if (!isValidFieldElement(x)) throw new Error('Point is not on curve');
-          const y2 = weierstrassEquation(x); // y² = x³ + ax + b
-          let y = Fp.sqrt(y2); // y = y² ^ (p+1)/4
-          const isYOdd = (y & _1n) === _1n;
-          // ECDSA
-          const isFirstByteOdd = (bytes[0] & 1) === 1;
-          if (isFirstByteOdd !== isYOdd) y = Fp.negate(y);
-          return { x, y };
-        } else if (len === uncompressedLen && header === 0x04) {
-          const x = Fp.fromBytes(bytes.subarray(1, Fp.BYTES + 1));
-          const y = Fp.fromBytes(bytes.subarray(Fp.BYTES + 1, 2 * Fp.BYTES + 1));
-          return { x, y };
-        } else {
-          throw new Error(
-            `Point.fromHex: received invalid point. Expected ${compressedLen} compressed bytes or ${uncompressedLen} uncompressed bytes, not ${len}`
-          );
-        }
-      },
-    });
+  const {
+    ProjectivePoint: Point,
+    normalizePrivateKey,
+    weierstrassEquation,
+    isWithinCurveOrder,
+  } = weierstrassPoints({
+    ...CURVE,
+    toBytes(c, point, isCompressed: boolean): Uint8Array {
+      const a = point.toAffine();
+      const x = Fp.toBytes(a.x);
+      const cat = ut.concatBytes;
+      if (isCompressed) {
+        // TODO: hasEvenY
+        return cat(Uint8Array.from([point.hasEvenY() ? 0x02 : 0x03]), x);
+      } else {
+        return cat(Uint8Array.from([0x04]), x, Fp.toBytes(a.y));
+      }
+    },
+    fromBytes(bytes: Uint8Array) {
+      const len = bytes.length;
+      const head = bytes[0];
+      const tail = bytes.subarray(1);
+      // this.assertValidity() is done inside of fromHex
+      if (len === compressedLen && (head === 0x02 || head === 0x03)) {
+        const x = ut.bytesToNumberBE(tail);
+        if (!isValidFieldElement(x)) throw new Error('Point is not on curve');
+        const y2 = weierstrassEquation(x); // y² = x³ + ax + b
+        let y = Fp.sqrt(y2); // y = y² ^ (p+1)/4
+        const isYOdd = (y & _1n) === _1n;
+        // ECDSA
+        const isHeadOdd = (head & 1) === 1;
+        if (isHeadOdd !== isYOdd) y = Fp.negate(y);
+        return { x, y };
+      } else if (len === uncompressedLen && head === 0x04) {
+        const x = Fp.fromBytes(tail.subarray(0, Fp.BYTES));
+        const y = Fp.fromBytes(tail.subarray(Fp.BYTES, 2 * Fp.BYTES));
+        return { x, y };
+      } else {
+        throw new Error(
+          `Point.fromHex: received invalid point. Expected ${compressedLen} compressed bytes or ${uncompressedLen} uncompressed bytes, not ${len}`
+        );
+      }
+    },
+  });
   // type Point = typeof ProjectivePoint.BASE;
 
   // Do we need these functions at all?
@@ -809,11 +797,11 @@ export function weierstrass(curveDef: CurveType): CurveFn {
    * Normalizes hex, bytes, Point to Point. Checks for curve equation.
    */
   function normalizePublicKey(publicKey: PubKey): ProjectivePointType<bigint> {
-    if (publicKey instanceof ProjectivePoint) {
+    if (publicKey instanceof Point) {
       publicKey.assertValidity();
       return publicKey;
     } else if (publicKey instanceof Uint8Array || typeof publicKey === 'string') {
-      return ProjectivePoint.fromHex(publicKey);
+      return Point.fromHex(publicKey);
       // This can happen because PointType can be instance of different class
     } else throw new Error(`Unknown type of public key: ${publicKey}`);
   }
@@ -826,6 +814,8 @@ export function weierstrass(curveDef: CurveType): CurveFn {
   function normalizeS(s: bigint) {
     return isBiggerThanHalfOrder(s) ? mod.mod(-s, CURVE_ORDER) : s;
   }
+  // slice bytes num
+  const slcNum = (b: Uint8Array, from: number, to: number) => ut.bytesToNumberBE(b.slice(from, to));
 
   /**
    * ECDSA signature with its (r, s) properties. Supports DER & compact representations.
@@ -837,15 +827,9 @@ export function weierstrass(curveDef: CurveType): CurveFn {
 
     // pair (bytes of r, bytes of s)
     static fromCompact(hex: Hex) {
-      const arr = hex instanceof Uint8Array;
-      const name = 'Signature.fromCompact';
-      if (typeof hex !== 'string' && !arr)
-        throw new TypeError(`${name}: Expected string or Uint8Array`);
-      const str = arr ? bytesToHex(hex) : hex;
-      const gl = CURVE.nByteLength * 2; // group length in hex, not ui8a
-      if (str.length !== 2 * gl) throw new Error(`${name}: Expected ${gl / 2}-byte hex`);
-      const slice = (from: number, to: number) => ut.hexToNumber(str.slice(from, to));
-      return new Signature(slice(0, gl), slice(gl, 2 * gl));
+      const gl = CURVE.nByteLength;
+      hex = ut.ensureBytes(hex, gl * 2);
+      return new Signature(slcNum(hex, 0, gl), slcNum(hex, gl, 2 * gl));
     }
 
     // DER encoded ECDSA signature
@@ -859,12 +843,12 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     }
 
     assertValidity(): void {
-      const { r, s } = this;
-      if (!isWithinCurveOrder(r)) throw new Error('Invalid Signature: r must be 0 < r < n');
-      if (!isWithinCurveOrder(s)) throw new Error('Invalid Signature: s must be 0 < s < n');
+      // can use assertGE here
+      if (!isWithinCurveOrder(this.r)) throw new Error('r must be 0 < r < n');
+      if (!isWithinCurveOrder(this.s)) throw new Error('s must be 0 < s < n');
     }
 
-    copyWithRecoveryBit(recovery: number) {
+    addRecoveryBit(recovery: number) {
       return new Signature(this.r, this.s, recovery);
     }
 
@@ -883,23 +867,21 @@ export function weierstrass(curveDef: CurveType): CurveFn {
      * @param msgHash message hash
      * @returns Point corresponding to public key
      */
-    recoverPublicKey(msgHash: Hex): typeof ProjectivePoint.BASE {
-      const { r, s, recovery } = this;
-      if (recovery == null) throw new Error('Cannot recover: recovery bit is not present');
-      if (![0, 1, 2, 3].includes(recovery)) throw new Error('Cannot recover: invalid recovery bit');
+    recoverPublicKey(msgHash: Hex): typeof Point.BASE {
+      const { n: N } = CURVE;
+      const { r, s, recovery: rec } = this;
       const h = bits2int_modN(ut.ensureBytes(msgHash));
-
-      const { n } = CURVE;
-      const radj = recovery === 2 || recovery === 3 ? r + n : r;
-      if (radj >= Fp.ORDER) throw new Error('Cannot recover: bit 2/3 is invalid with current r');
-      const rinv = mod.invert(radj, n);
-      // Q = u1⋅G + u2⋅R
-      const u1 = mod.mod(-h * rinv, n);
-      const u2 = mod.mod(s * rinv, n);
-      const prefix = recovery & 1 ? '03' : '02';
-      const R = ProjectivePoint.fromHex(prefix + numToFieldStr(radj));
-      const Q = ProjectivePoint.BASE.multiplyAndAddUnsafe(R, u1, u2); // unsafe is fine: no priv data leaked
-      if (!Q) throw new Error('Cannot recover: point at infinify');
+      if (rec == null || ![0, 1, 2, 3].includes(rec)) throw new Error('recovery id invalid');
+      const radj = rec === 2 || rec === 3 ? r + N : r;
+      if (radj >= Fp.ORDER) throw new Error('recovery id 2 or 3 currently invalid');
+      const prefix = (rec & 1) === 0 ? '02' : '03';
+      const R = Point.fromHex(prefix + numToFieldStr(radj));
+      const ir = mod.invert(radj, N); // r^-1
+      const u1 = mod.mod(-h * ir, N); // -hr^-1
+      const u2 = mod.mod(s * ir, N); // sr^-1
+      //  (sr^-1)R-(hr^-1)G = -(hr^-1)G + (sr^-1)
+      const Q = Point.BASE.multiplyAndAddUnsafe(R, u1, u2);
+      if (!Q) throw new Error('point at infinify'); // unsafe is fine: no priv data leaked
       Q.assertValidity();
       return Q;
     }
@@ -981,8 +963,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
      * @param windowSize 2, 4, 8, 16
      * @returns cached point
      */
-    precompute(windowSize = 8, point = ProjectivePoint.BASE): typeof ProjectivePoint.BASE {
-      // const cached = point === ProjectivePoint.BASE ? point : ProjectivePoint.fromAffine({x, y});
+    precompute(windowSize = 8, point = Point.BASE): typeof Point.BASE {
       point._setWindowSize(windowSize);
       point.multiply(BigInt(3));
       return point;
@@ -996,7 +977,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
    * @returns Public key, full when isCompressed=false; short when isCompressed=true
    */
   function getPublicKey(privateKey: PrivKey, isCompressed = true): Uint8Array {
-    return ProjectivePoint.fromPrivateKey(privateKey).toRawBytes(isCompressed);
+    return Point.fromPrivateKey(privateKey).toRawBytes(isCompressed);
   }
 
   /**
@@ -1008,7 +989,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     const len = (arr || str) && (item as Hex).length;
     if (arr) return len === compressedLen || len === uncompressedLen;
     if (str) return len === 2 * compressedLen || len === 2 * uncompressedLen;
-    if (item instanceof ProjectivePoint) return true;
+    if (item instanceof Point) return true;
     return false;
   }
 
@@ -1101,7 +1082,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       if (!isWithinCurveOrder(k)) return;
       // Important: all mod() calls in the function must be done over `n`
       const ik = mod.invert(k, n);
-      const q = ProjectivePoint.BASE.multiply(k).toAffine();
+      const q = Point.BASE.multiply(k).toAffine();
       // r = x mod n
       const r = mod.mod(q.x, n);
       if (r === _0n) return;
@@ -1146,7 +1127,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
   }
 
   // Enable precomputes. Slows down first publicKey computation by 20ms.
-  ProjectivePoint.BASE._setWindowSize(8);
+  Point.BASE._setWindowSize(8);
   // utils.precompute(8, ProjectivePoint.BASE)
 
   /**
@@ -1203,9 +1184,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     const u1 = mod.mod(h * sinv, n);
     const u2 = mod.mod(r * sinv, n);
 
-    // Some implementations compare R.x in projective, without inversion.
-    // The speed-up is <5%, so we don't complicate the code.
-    const R = ProjectivePoint.BASE.multiplyAndAddUnsafe(P, u1, u2)?.toAffine();
+    const R = Point.BASE.multiplyAndAddUnsafe(P, u1, u2)?.toAffine();
     if (!R) return false;
     const v = mod.mod(R.x, n);
     return v === r;
@@ -1218,7 +1197,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     signUnhashed,
     verify,
     // Point,
-    ProjectivePoint,
+    ProjectivePoint: Point,
     Signature,
     utils,
   };

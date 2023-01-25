@@ -245,7 +245,7 @@ function pedersenSingle(point: ProjectivePoint, value: PedersenArg, constants: P
   let x = pedersenArg(value);
   for (let j = 0; j < 252; j++) {
     const pt = constants[j];
-    if (pt.x === point.x) throw new Error('Same point');
+    if (pt.px === point.px) throw new Error('Same point');
     if ((x & 1n) !== 0n) point = point.add(pt);
     x >>= 1n;
   }

@@ -178,19 +178,18 @@ export function isogenyMap<T, F extends mod.Field<T>>(field: F, map: [T[], T[], 
   };
 }
 
+type AffinePoint<T> = { x: T; y: T };
 export interface H2CPoint<T> extends Group<H2CPoint<T>> {
-  readonly x: T;
-  readonly y: T;
   add(rhs: H2CPoint<T>): H2CPoint<T>;
-  toAffine(iz?: bigint): { x: T; y: T };
+  toAffine(iz?: bigint): AffinePoint<T>;
   clearCofactor(): H2CPoint<T>;
 }
 
 export interface H2CPointConstructor<T> extends GroupConstructor<H2CPoint<T>> {
-  fromAffine(ap: { x: T; y: T }): H2CPoint<T>;
+  fromAffine(ap: AffinePoint<T>): H2CPoint<T>;
 }
 
-export type MapToCurve<T> = (scalar: bigint[]) => { x: T; y: T };
+export type MapToCurve<T> = (scalar: bigint[]) => AffinePoint<T>;
 
 // Separated from initialization opts, so users won't accidentally change per-curve parameters (changing DST is ok!)
 export type htfBasicOpts = {
