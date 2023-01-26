@@ -3,8 +3,16 @@
 import * as mod from './modular.js';
 import * as ut from './utils.js';
 import { Hex, PrivKey, ensureBytes, CHash } from './utils.js';
-import { Group, GroupConstructor, wNAF, AbstractCurve, validateAbsOpts } from './curve.js';
+import {
+  Group,
+  GroupConstructor,
+  wNAF,
+  AbstractCurve,
+  validateAbsOpts,
+  AffinePoint,
+} from './curve.js';
 
+export type { AffinePoint };
 type HmacFnSync = (key: Uint8Array, ...messages: Uint8Array[]) => Uint8Array;
 type EndomorphismOpts = {
   beta: bigint;
@@ -55,10 +63,6 @@ export type VerOpts = { lowS?: boolean; prehash?: boolean };
  * TODO: https://www.typescriptlang.org/docs/handbook/release-notes/typescript-2-7.html#unique-symbol
  */
 
-export type AffinePoint<T> = {
-  x: T;
-  y: T;
-} & { z?: never };
 // Instance for 3d XYZ points
 export interface ProjPointType<T> extends Group<ProjPointType<T>> {
   readonly px: T;

@@ -10,7 +10,14 @@ import {
   Hex,
   numberToBytesLE,
 } from './utils.js';
-import { Group, GroupConstructor, wNAF, AbstractCurve, validateAbsOpts } from './curve.js';
+import {
+  Group,
+  GroupConstructor,
+  wNAF,
+  AbstractCurve,
+  validateAbsOpts,
+  AffinePoint,
+} from './curve.js';
 
 // Be friendly to bad ECMAScript parsers by not using bigint literals like 123n
 const _0n = BigInt(0);
@@ -28,7 +35,7 @@ export type CurveType = AbstractCurve<bigint> & {
   domain?: (data: Uint8Array, ctx: Uint8Array, phflag: boolean) => Uint8Array; // Used for hashing
   uvRatio?: (u: bigint, v: bigint) => { isValid: boolean; value: bigint }; // Ratio √(u/v)
   preHash?: FHash; // RFC 8032 pre-hashing of messages to sign() / verify()
-  mapToCurve?: (scalar: bigint[]) => AffinePoint; // for hash-to-curve standard
+  mapToCurve?: (scalar: bigint[]) => AffinePoint<bigint>; // for hash-to-curve standard
 };
 
 function validateOpts(curve: CurveType) {
@@ -49,29 +56,24 @@ function validateOpts(curve: CurveType) {
   return Object.freeze({ ...opts } as const);
 }
 
-// 2d point in XY coords
-export type AffinePoint = {
-  x: bigint;
-  y: bigint;
-} & { z?: never; t?: never };
-
 // Instance of Extended Point with coordinates in X, Y, Z, T
 export interface ExtPointType extends Group<ExtPointType> {
   readonly ex: bigint;
   readonly ey: bigint;
   readonly ez: bigint;
   readonly et: bigint;
+  assertValidity(): void;
   multiply(scalar: bigint): ExtPointType;
   multiplyUnsafe(scalar: bigint): ExtPointType;
   isSmallOrder(): boolean;
   isTorsionFree(): boolean;
-  toAffine(iz?: bigint): AffinePoint;
   clearCofactor(): ExtPointType;
+  toAffine(iz?: bigint): AffinePoint<bigint>;
 }
 // Static methods of Extended Point with coordinates in X, Y, Z, T
 export interface ExtPointConstructor extends GroupConstructor<ExtPointType> {
   new (x: bigint, y: bigint, z: bigint, t: bigint): ExtPointType;
-  fromAffine(p: AffinePoint): ExtPointType;
+  fromAffine(p: AffinePoint<bigint>): ExtPointType;
   fromHex(hex: Hex): ExtPointType;
   fromPrivateKey(privateKey: Hex): ExtPointType; // TODO: remove
 }
@@ -159,7 +161,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       return this.toAffine().y;
     }
 
-    static fromAffine(p: AffinePoint): Point {
+    static fromAffine(p: AffinePoint<bigint>): Point {
       if (p instanceof Point) throw new Error('extended point not allowed');
       const { x, y } = p || {};
       if (!in0MaskRange(x) || !in0MaskRange(y)) throw new Error('invalid affine point');
@@ -180,6 +182,8 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       this._WINDOW_SIZE = windowSize;
       pointPrecomputes.delete(this);
     }
+
+    assertValidity(): void {}
 
     // Compare one point to another.
     equals(other: Point): boolean {
@@ -309,7 +313,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
 
     // Converts Extended point to default (x, y) coordinates.
     // Can accept precomputed Z^-1 - for example, from invertBatch.
-    toAffine(iz?: bigint): AffinePoint {
+    toAffine(iz?: bigint): AffinePoint<bigint> {
       const { ex: x, ey: y, ez: z } = this;
       const is0 = this.is0();
       if (iz == null) iz = is0 ? _8n : (Fp.inv(z) as bigint); // 8 was chosen arbitrarily

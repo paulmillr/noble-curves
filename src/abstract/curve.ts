@@ -4,6 +4,11 @@ import { Field, validateField, nLength } from './modular.js';
 const _0n = BigInt(0);
 const _1n = BigInt(1);
 
+export type AffinePoint<T> = {
+  x: T;
+  y: T;
+} & { z?: never; t?: never };
+
 export interface Group<T extends Group<T>> {
   double(): T;
   negate(): T;

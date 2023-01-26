@@ -11,6 +11,7 @@
  * We are using Fp for private keys (shorter) and Fp₂ for signatures (longer).
  * Some projects may prefer to swap this relation, it is not supported for now.
  */
+import { AffinePoint } from './curve.js';
 import { Field, hashToPrivateScalar } from './modular.js';
 import { Hex, PrivKey, CHash, bitLen, bitGet, hexToBytes, bytesToHex } from './utils.js';
 import * as htf from './hash-to-curve.js';
@@ -19,7 +20,6 @@ import {
   ProjPointType as ProjPointType,
   CurvePointsRes,
   weierstrassPoints,
-  AffinePoint,
 } from './weierstrass.js';
 
 type Fp = bigint; // Can be different field?

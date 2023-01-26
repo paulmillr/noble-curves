@@ -1,5 +1,5 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import type { Group, GroupConstructor } from './curve.js';
+import type { Group, GroupConstructor, AffinePoint } from './curve.js';
 import { mod, Field } from './modular.js';
 import { CHash, Hex, concatBytes, ensureBytes } from './utils.js';
 
@@ -182,11 +182,11 @@ export function isogenyMap<T, F extends Field<T>>(field: F, map: [T[], T[], T[],
   };
 }
 
-type AffinePoint<T> = { x: T; y: T };
 export interface H2CPoint<T> extends Group<H2CPoint<T>> {
   add(rhs: H2CPoint<T>): H2CPoint<T>;
   toAffine(iz?: bigint): AffinePoint<T>;
   clearCofactor(): H2CPoint<T>;
+  assertValidity(): void;
 }
 
 export interface H2CPointConstructor<T> extends GroupConstructor<H2CPoint<T>> {
@@ -216,9 +216,11 @@ export function hashToCurve<T>(
       if (!mapToCurve) throw new Error('CURVE.mapToCurve() has not been defined');
       msg = ensureBytes(msg);
       const u = hash_to_field(msg, 2, { ...def, DST: def.DST, ...options } as Opts);
-      return Point.fromAffine(mapToCurve(u[0]))
+      const P = Point.fromAffine(mapToCurve(u[0]))
         .add(Point.fromAffine(mapToCurve(u[1])))
         .clearCofactor();
+      P.assertValidity();
+      return P;
     },
 
     // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-16#section-3
@@ -226,7 +228,9 @@ export function hashToCurve<T>(
       if (!mapToCurve) throw new Error('CURVE.mapToCurve() has not been defined');
       msg = ensureBytes(msg);
       const u = hash_to_field(msg, 1, { ...def, DST: def.encodeDST, ...options } as Opts);
-      return Point.fromAffine(mapToCurve(u[0])).clearCofactor();
+      const P = Point.fromAffine(mapToCurve(u[0])).clearCofactor();
+      P.assertValidity();
+      return P;
     },
   };
 }
