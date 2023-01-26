@@ -458,6 +458,25 @@ verify
   noble x 698 ops/sec @ 1ms/op
 ```
 
+## Upgrading
+
+Differences from @noble/secp256k1 1.7:
+
+1. Different double() formula (but same addition)
+2. Different sqrt() function
+3. DRBG supports outputLen bigger than outputLen of hmac
+4. Support for different hash functions
+
+Differences from @noble/ed25519 1.7:
+
+1. Variable field element lengths between EDDSA/ECDH:
+  EDDSA (RFC8032) is 456 bits / 57 bytes, ECDH (RFC7748) is 448 bits / 56 bytes
+2. Different addition formula (doubling is same)
+3. uvRatio differs between curves (half-expected, not only pow fn changes)
+4. Point decompression code is different (unexpected), now using generalized formula
+5. Domain function was no-op for ed25519, but adds some data even with empty context for ed448
+
+
 ## Contributing & testing
 
 1. Clone the repository

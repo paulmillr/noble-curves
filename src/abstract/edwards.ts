@@ -1,17 +1,8 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 // Twisted Edwards curve. The formula is: ax² + y² = 1 + dx²y²
-
-// Differences from @noble/ed25519 1.7:
-// 1. Variable field element lengths between EDDSA/ECDH:
-//   EDDSA (RFC8032) is 456 bits / 57 bytes, ECDH (RFC7748) is 448 bits / 56 bytes
-// 2. Different addition formula (doubling is same)
-// 3. uvRatio differs between curves (half-expected, not only pow fn changes)
-// 4. Point decompression code is different (unexpected), now using generalized formula
-// 5. Domain function was no-op for ed25519, but adds some data even with empty context for ed448
-
 import * as mod from './modular.js';
 import * as ut from './utils.js';
-import { ensureBytes, Hex, PrivKey } from './utils.js';
+import { ensureBytes, Hex } from './utils.js';
 import { Group, GroupConstructor, wNAF } from './group.js';
 
 // Be friendly to bad ECMAScript parsers by not using bigint literals like 123n
@@ -22,29 +13,20 @@ const _8n = BigInt(8);
 
 // Edwards curves must declare params a & d.
 export type CurveType = ut.BasicCurve<bigint> & {
-  // Params: a, d
-  a: bigint;
-  d: bigint;
-  // Hashes
-  // The interface, because we need outputLen for DRBG
-  hash: ut.CHash;
-  // CSPRNG
-  randomBytes: (bytesLength?: number) => Uint8Array;
-  // Probably clears bits in a byte array to produce a valid field element
-  adjustScalarBytes?: (bytes: Uint8Array) => Uint8Array;
-  // Used during hashing
-  domain?: (data: Uint8Array, ctx: Uint8Array, phflag: boolean) => Uint8Array;
-  // Ratio √(u/v)
-  uvRatio?: (u: bigint, v: bigint) => { isValid: boolean; value: bigint };
-  // RFC 8032 pre-hashing of messages to sign() / verify()
-  preHash?: ut.CHash;
-  mapToCurve?: (scalar: bigint[]) => AffinePoint;
+  a: bigint; // curve param a
+  d: bigint; // curve param d
+  hash: ut.FHash; // Hashing
+  randomBytes: (bytesLength?: number) => Uint8Array; // CSPRNG
+  adjustScalarBytes?: (bytes: Uint8Array) => Uint8Array; // clears bits to get valid field elemtn
+  domain?: (data: Uint8Array, ctx: Uint8Array, phflag: boolean) => Uint8Array; // Used for hashing
+  uvRatio?: (u: bigint, v: bigint) => { isValid: boolean; value: bigint }; // Ratio √(u/v)
+  preHash?: ut.FHash; // RFC 8032 pre-hashing of messages to sign() / verify()
+  mapToCurve?: (scalar: bigint[]) => AffinePoint; // for hash-to-curve standard
 };
 
 function validateOpts(curve: CurveType) {
   const opts = ut.validateOpts(curve);
-  if (typeof opts.hash !== 'function' || !ut.isPositiveInt(opts.hash.outputLen))
-    throw new Error('Invalid hash function');
+  if (typeof opts.hash !== 'function') throw new Error('Invalid hash function');
   for (const i of ['a', 'd'] as const) {
     const val = opts[i];
     if (typeof val !== 'bigint') throw new Error(`Invalid curve param ${i}=${val} (${typeof val})`);
@@ -84,7 +66,7 @@ export interface ExtPointConstructor extends GroupConstructor<ExtPointType> {
   new (x: bigint, y: bigint, z: bigint, t: bigint): ExtPointType;
   fromAffine(p: AffinePoint): ExtPointType;
   fromHex(hex: Hex): ExtPointType;
-  fromPrivateKey(privateKey: PrivKey): ExtPointType; // TODO: remove
+  fromPrivateKey(privateKey: Hex): ExtPointType; // TODO: remove
 }
 
 export type CurveFn = {
@@ -105,23 +87,19 @@ export type CurveFn = {
   };
 };
 
-// NOTE: it is not generic twisted curve for now, but ed25519/ed448 generic implementation
+// It is not generic twisted curve for now, but ed25519/ed448 generic implementation
 export function twistedEdwards(curveDef: CurveType): CurveFn {
   const CURVE = validateOpts(curveDef) as ReturnType<typeof validateOpts>;
-  const Fp = CURVE.Fp;
-  const CURVE_ORDER = CURVE.n;
-  const MASK = _2n ** BigInt(CURVE.nByteLength * 8);
-
-  // Function overrides
-  const { randomBytes } = CURVE;
-  const modP = Fp.create;
+  const { Fp, n: CURVE_ORDER, preHash, hash: cHash, randomBytes, nByteLength, h: cofactor } = CURVE;
+  const MASK = _2n ** BigInt(nByteLength * 8);
+  const modP = Fp.create; // Function overrides
 
   // sqrt(u/v)
   const uvRatio =
     CURVE.uvRatio ||
     ((u: bigint, v: bigint) => {
       try {
-        return { isValid: true, value: Fp.sqrt(u * Fp.invert(v)) };
+        return { isValid: true, value: Fp.sqrt(u * Fp.inv(v)) };
       } catch (e) {
         return { isValid: false, value: _0n };
       }
@@ -133,35 +111,24 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       if (ctx.length || phflag) throw new Error('Contexts/pre-hash are not supported');
       return data;
     }); // NOOP
-  function inBig(n: bigint) {
-    return typeof n === 'bigint' && 0n < n;
-  }
-  function assertInMask(n: bigint) {
-    if (inBig(n) && n < MASK) return n;
-    throw new Error(`Expected valid scalar < MASK, got ${typeof n} ${n}`);
-  }
-  function assertFE(n: bigint) {
-    if (inBig(n) && n < Fp.ORDER) return n;
-    throw new Error(`Expected valid scalar < P, got ${typeof n} ${n}`);
-  }
-  function assertGE(n: bigint) {
-    // GE = subgroup element, not full group
-    if (inBig(n) && n < CURVE_ORDER) return n;
-    throw new Error(`Expected valid scalar < N, got ${typeof n} ${n}`);
+  const inBig = (n: bigint) => typeof n === 'bigint' && 0n < n; // n in [1..]
+  const inRange = (n: bigint, max: bigint) => inBig(n) && inBig(max) && n < max; // n in [1..max-1]
+  const in0MaskRange = (n: bigint) => n === _0n || inRange(n, MASK); // n in [0..MASK-1]
+  function assertInRange(n: bigint, max: bigint) {
+    // n in [1..max-1]
+    if (inRange(n, max)) return n;
+    throw new Error(`Expected valid scalar < ${max}, got ${typeof n} ${n}`);
   }
   function assertGE0(n: bigint) {
-    // GE = subgroup element, not full group
-    return n === _0n ? n : assertGE(n);
+    // n in [0..CURVE_ORDER-1]
+    return n === _0n ? n : assertInRange(n, CURVE_ORDER); // GE = prime subgroup, not full group
   }
-  const coord = (n: bigint) => _0n <= n && n < MASK; // not < P because of ZIP215
-
   const pointPrecomputes = new Map<Point, Point[]>();
-
-  /**
-   * Extended Point works in extended coordinates: (x, y, z, t) ∋ (x=x/z, y=y/z, t=xy).
-   * Default Point works in affine coordinates: (x, y)
-   * https://en.wikipedia.org/wiki/Twisted_Edwards_curve#Extended_coordinates
-   */
+  function isPoint(other: unknown) {
+    if (!(other instanceof Point)) throw new Error('ExtendedPoint expected');
+  }
+  // Extended Point works in extended coordinates: (x, y, z, t) ∋ (x=x/z, y=y/z, t=xy).
+  // https://en.wikipedia.org/wiki/Twisted_Edwards_curve#Extended_coordinates
   class Point implements ExtPointType {
     static readonly BASE = new Point(CURVE.Gx, CURVE.Gy, _1n, modP(CURVE.Gx * CURVE.Gy));
     static readonly ZERO = new Point(_0n, _1n, _1n, _0n); // 0, 1, 1, 0
@@ -172,10 +139,10 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       readonly ez: bigint,
       readonly et: bigint
     ) {
-      if (!coord(ex)) throw new Error('x required');
-      if (!coord(ey)) throw new Error('y required');
-      if (!coord(ez)) throw new Error('z required');
-      if (!coord(et)) throw new Error('t required');
+      if (!in0MaskRange(ex)) throw new Error('x required');
+      if (!in0MaskRange(ey)) throw new Error('y required');
+      if (!in0MaskRange(ez)) throw new Error('z required');
+      if (!in0MaskRange(et)) throw new Error('t required');
     }
 
     get x(): bigint {
@@ -186,9 +153,9 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     }
 
     static fromAffine(p: AffinePoint): Point {
+      if (p instanceof Point) throw new Error('extended point not allowed');
       const { x, y } = p || {};
-      if (p instanceof Point) throw new Error('fromAffine: extended point not allowed');
-      if (!ut.big(x) || !ut.big(y)) throw new Error('fromAffine: invalid affine point');
+      if (!in0MaskRange(x) || !in0MaskRange(y)) throw new Error('invalid affine point');
       return new Point(x, y, _1n, modP(x * y));
     }
     static normalizeZ(points: Point[]): Point[] {
@@ -209,7 +176,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
 
     // Compare one point to another.
     equals(other: Point): boolean {
-      assertExtPoint(other);
+      isPoint(other);
       const { ex: X1, ey: Y1, ez: Z1 } = this;
       const { ex: X2, ey: Y2, ez: Z2 } = other;
       const X1Z2 = modP(X1 * Z2);
@@ -223,8 +190,8 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       return this.equals(Point.ZERO);
     }
 
-    // Inverses point to one corresponding to (x, -y) in Affine coordinates.
     negate(): Point {
+      // Flips point sign to a negative one (-x, y in affine coords)
       return new Point(modP(-this.ex), this.ey, this.ez, modP(-this.et));
     }
 
@@ -254,7 +221,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     // https://hyperelliptic.org/EFD/g1p/auto-twisted-extended.html#addition-add-2008-hwcd
     // Cost: 9M + 1*a + 1*d + 7add.
     add(other: Point) {
-      assertExtPoint(other);
+      isPoint(other);
       const { a, d } = CURVE;
       const { ex: X1, ey: Y1, ez: Z1, et: T1 } = this;
       const { ex: X2, ey: Y2, ez: Z2, et: T2 } = other;
@@ -302,11 +269,9 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       return wnaf.wNAFCached(this, pointPrecomputes, n, Point.normalizeZ);
     }
 
-    // Constant time multiplication.
-    // Uses wNAF method. Windowed method may be 10% faster,
-    // but takes 2x longer to generate and consumes 2x memory.
+    // Constant-time multiplication.
     multiply(scalar: bigint): Point {
-      const { p, f } = this.wNAF(assertGE(scalar));
+      const { p, f } = this.wNAF(assertInRange(scalar, CURVE_ORDER));
       return Point.normalizeZ([p, f])[0];
     }
 
@@ -326,10 +291,10 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     // point with torsion component.
     // Multiplies point by cofactor and checks if the result is 0.
     isSmallOrder(): boolean {
-      return this.multiplyUnsafe(CURVE.h).is0();
+      return this.multiplyUnsafe(cofactor).is0();
     }
 
-    // Multiplies point by curve order (very big scalar CURVE.n) and checks if the result is 0.
+    // Multiplies point by curve order and checks if the result is 0.
     // Returns `false` is the point is dirty.
     isTorsionFree(): boolean {
       return wnaf.unsafeLadder(this, CURVE_ORDER).is0();
@@ -340,7 +305,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     toAffine(iz?: bigint): AffinePoint {
       const { ex: x, ey: y, ez: z } = this;
       const is0 = this.is0();
-      if (iz == null) iz = is0 ? _8n : (Fp.invert(z) as bigint); // 8 was chosen arbitrarily
+      if (iz == null) iz = is0 ? _8n : (Fp.inv(z) as bigint); // 8 was chosen arbitrarily
       const ax = modP(x * iz);
       const ay = modP(y * iz);
       const zz = modP(z * iz);
@@ -348,6 +313,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       if (zz !== _1n) throw new Error('invZ was invalid');
       return { x: ax, y: ay };
     }
+
     clearCofactor(): Point {
       const { h: cofactor } = CURVE;
       if (cofactor === _1n) return this;
@@ -356,58 +322,41 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
 
     // Converts hash string or Uint8Array to Point.
     // Uses algo from RFC8032 5.1.3.
-    static fromHex(hex: Hex, strict = true) {
+    static fromHex(hex: Hex, strict = true): Point {
       const { d, a } = CURVE;
       const len = Fp.BYTES;
-      hex = ensureBytes(hex, len);
-      // 1.  First, interpret the string as an integer in little-endian
-      // representation. Bit 255 of this number is the least significant
-      // bit of the x-coordinate and denote this value x_0.  The
-      // y-coordinate is recovered simply by clearing this bit.  If the
-      // resulting value is >= p, decoding fails.
-      const normed = hex.slice();
-      const lastByte = hex[len - 1];
-      normed[len - 1] = lastByte & ~0x80;
+      hex = ensureBytes(hex, len); // copy hex to a new array
+      const normed = hex.slice(); // copy again, we'll manipulate it
+      const lastByte = hex[len - 1]; // select last byte
+      normed[len - 1] = lastByte & ~0x80; // clear last bit
       const y = ut.bytesToNumberLE(normed);
-
       if (y === _0n) {
         // y=0 is allowed
       } else {
-        if (strict) assertFE(y); // strict=true [0..CURVE.Fp.P] (2^255-19 for ed25519)
-        else assertInMask(y); // strict=false [0..MASK] (2^256 for ed25519)
+        // RFC8032 prohibits >= p, but ZIP215 doesn't
+        if (strict) assertInRange(y, Fp.ORDER); // strict=true [1..P-1] (2^255-19-1 for ed25519)
+        else assertInRange(y, MASK); // strict=false [1..MASK-1] (2^256-1 for ed25519)
       }
 
-      // 2.  To recover the x-coordinate, the curve equation implies
-      // Ed25519: x² = (y² - 1) / (d y² + 1) (mod p).
-      // Ed448: x² = (y² - 1) / (d y² - 1) (mod p).
-      // For generic case:
-      // a*x²+y²=1+d*x²*y²
-      // -> y²-1 = d*x²*y²-a*x²
-      // -> y²-1 = x² (d*y²-a)
-      // -> x² = (y²-1) / (d*y²-a)
-
-      // The denominator is always non-zero mod p.  Let u = y² - 1 and v = d y² + 1.
-      const y2 = modP(y * y);
-      const u = modP(y2 - _1n);
-      const v = modP(d * y2 - a);
-      let { isValid, value: x } = uvRatio(u, v);
+      // Ed25519: x² = (y²-1)/(dy²+1) mod p. Ed448: x² = (y²-1)/(dy²-1) mod p. Generic case:
+      // ax²+y²=1+dx²y² => y²-1=dx²y²-ax² => y²-1=x²(dy²-a) => x²=(y²-1)/(dy²-a)
+      const y2 = modP(y * y); // denominator is always non-0 mod p.
+      const u = modP(y2 - _1n); // u = y² - 1
+      const v = modP(d * y2 - a); // v = d y² + 1.
+      let { isValid, value: x } = uvRatio(u, v); // √(u/v)
       if (!isValid) throw new Error('Point.fromHex: invalid y coordinate');
-      // 4.  Finally, use the x_0 bit to select the right square root.  If
-      // x = 0, and x_0 = 1, decoding fails.  Otherwise, if x_0 != x mod
-      // 2, set x <-- p - x.  Return the decoded point (x,y).
-      const isXOdd = (x & _1n) === _1n;
-      const isLastByteOdd = (lastByte & 0x80) !== 0;
-      if (isLastByteOdd !== isXOdd) x = modP(-x);
+      const isXOdd = (x & _1n) === _1n; // There are 2 square roots. Use x_0 bit to select proper
+      const isLastByteOdd = (lastByte & 0x80) !== 0; // if x=0 and x_0 = 1, fail
+      if (isLastByteOdd !== isXOdd) x = modP(-x); // if x_0 != x mod 2, set x = p-x
       return Point.fromAffine({ x, y });
     }
-    static fromPrivateKey(privateKey: PrivKey) {
-      return getExtendedPublicKey(privateKey).point;
+    static fromPrivateKey(privKey: Hex) {
+      return getExtendedPublicKey(privKey).point;
     }
     toRawBytes(): Uint8Array {
       const { x, y } = this.toAffine();
-      const len = Fp.BYTES;
-      const bytes = ut.numberToBytesLE(y, len); // each y has 2 x values (x, -y)
-      bytes[len - 1] |= x & _1n ? 0x80 : 0; // when compressing, it's enough to store y
+      const bytes = ut.numberToBytesLE(y, Fp.BYTES); // each y has 2 x values (x, -y)
+      bytes[bytes.length - 1] |= x & _1n ? 0x80 : 0; // when compressing, it's enough to store y
       return bytes; // and use the last byte to encode sign of x
     }
     toHex(): string {
@@ -415,105 +364,80 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     }
   }
   const { BASE: G, ZERO: I } = Point;
-  const wnaf = wNAF(Point, CURVE.nByteLength * 8);
+  const wnaf = wNAF(Point, nByteLength * 8);
 
-  function assertExtPoint(other: unknown) {
-    if (!(other instanceof Point)) throw new Error('ExtendedPoint expected');
-  }
   // Little-endian SHA512 with modulo n
   function modnLE(hash: Uint8Array): bigint {
     return mod.mod(ut.bytesToNumberLE(hash), CURVE_ORDER);
   }
+  function isHex(item: Hex, err: string) {
+    if (typeof item !== 'string' && !(item instanceof Uint8Array))
+      throw new Error(`${err} must be hex string or Uint8Array`);
+  }
 
   /** Convenience method that creates public key and other stuff. RFC8032 5.1.5 */
-  function getExtendedPublicKey(key: PrivKey) {
-    const groupLen = CURVE.nByteLength;
-    // Normalize bigint / number / string to Uint8Array
-    const keyb = typeof key === 'bigint' ? ut.numberToBytesLE(assertInMask(key), groupLen) : key;
+  function getExtendedPublicKey(key: Hex) {
+    isHex(key, 'private key');
+    const len = nByteLength;
     // Hash private key with curve's hash function to produce uniformingly random input
-    // We check byte lengths e.g.: ensureBytes(64, hash(ensureBytes(32, key)))
-    const hashed = ensureBytes(CURVE.hash(ensureBytes(keyb, groupLen)), 2 * groupLen);
-
-    // First half's bits are cleared to produce a random field element.
-    const head = adjustScalarBytes(hashed.slice(0, groupLen));
-    // Second half is called key prefix (5.1.6)
-    const prefix = hashed.slice(groupLen, 2 * groupLen);
-    // The actual private scalar
-    const scalar = modnLE(head);
-    // Point on Edwards curve aka public key
-    const point = G.multiply(scalar);
-    // Uint8Array representation
-    const pointBytes = point.toRawBytes();
+    // Check byte lengths: ensure(64, h(ensure(32, key)))
+    const hashed = ensureBytes(cHash(ensureBytes(key, len)), 2 * len);
+    const head = adjustScalarBytes(hashed.slice(0, len)); // clear first half bits, produce FE
+    const prefix = hashed.slice(len, 2 * len); // second half is called key prefix (5.1.6)
+    const scalar = modnLE(head); // The actual private scalar
+    const point = G.multiply(scalar); // Point on Edwards curve aka public key
+    const pointBytes = point.toRawBytes(); // Uint8Array representation
     return { head, prefix, scalar, point, pointBytes };
   }
 
-  /**
-   * Calculates ed25519 public key. RFC8032 5.1.5
-   * 1. private key is hashed with sha512, then first 32 bytes are taken from the hash
-   * 2. 3 least significant bits of the first byte are cleared
-   */
-  function getPublicKey(privateKey: PrivKey): Uint8Array {
-    return getExtendedPublicKey(privateKey).pointBytes;
+  // Calculates EdDSA pub key. RFC8032 5.1.5. Privkey is hashed. Use first half with 3 bits cleared
+  function getPublicKey(privKey: Hex): Uint8Array {
+    return getExtendedPublicKey(privKey).pointBytes;
   }
 
-  const EMPTY = new Uint8Array();
-  function hashDomainToScalar(message: Uint8Array, context: Hex = EMPTY) {
-    context = ensureBytes(context);
-    return modnLE(CURVE.hash(domain(message, context, !!CURVE.preHash)));
+  // int('LE', SHA512(dom2(F, C) || msgs)) mod N
+  function hashDomainToScalar(context: Hex = new Uint8Array(), ...msgs: Uint8Array[]) {
+    const msg = ut.concatBytes(...msgs);
+    return modnLE(cHash(domain(msg, ensureBytes(context), !!preHash)));
   }
 
   /** Signs message with privateKey. RFC8032 5.1.6 */
-  function sign(message: Hex, privateKey: Hex, context?: Hex): Uint8Array {
-    message = ensureBytes(message);
-    if (CURVE.preHash) message = CURVE.preHash(message);
-    const { prefix, scalar, pointBytes } = getExtendedPublicKey(privateKey);
-    const r = hashDomainToScalar(ut.concatBytes(prefix, message), context);
-    const R = G.multiply(r); // R = rG
-    const k = hashDomainToScalar(ut.concatBytes(R.toRawBytes(), pointBytes, message), context); // k = hash(R+P+msg)
-    const s = mod.mod(r + k * scalar, CURVE_ORDER); // s = r + kp
+  function sign(msg: Hex, privKey: Hex, context?: Hex): Uint8Array {
+    isHex(msg, 'message');
+    msg = ensureBytes(msg);
+    if (preHash) msg = preHash(msg); // for ed25519ph etc.
+    const { prefix, scalar, pointBytes } = getExtendedPublicKey(privKey);
+    const r = hashDomainToScalar(context, prefix, msg); // r = dom2(F, C) || prefix || PH(M)
+    const R = G.multiply(r).toRawBytes(); // R = rG
+    const k = hashDomainToScalar(context, R, pointBytes, msg); // R || A || PH(M)
+    const s = mod.mod(r + k * scalar, CURVE_ORDER); // S = (r + k * s) mod L
     assertGE0(s); // 0 <= s < l
-    return ut.concatBytes(R.toRawBytes(), ut.numberToBytesLE(s, Fp.BYTES));
+    const res = ut.concatBytes(R, ut.numberToBytesLE(s, Fp.BYTES));
+    return ensureBytes(res, nByteLength * 2); // 64-byte signature
   }
 
-  /**
-   * Verifies EdDSA signature against message and public key.
-   * An extended group equation is checked.
-   * RFC8032 5.1.7
-   * Compliant with ZIP215:
-   * 0 <= sig.R/publicKey < 2**256 (can be >= curve.P)
-   * 0 <= sig.s < l
-   * Not compliant with RFC8032: it's not possible to comply to both ZIP & RFC at the same time.
-   */
-  function verify(sig: Hex, message: Hex, publicKey: Hex, context?: Hex): boolean {
-    const len = Fp.BYTES;
-    sig = ensureBytes(sig, 2 * len);
-    message = ensureBytes(message);
-    if (CURVE.preHash) message = CURVE.preHash(message);
-    const R = Point.fromHex(sig.slice(0, len), false); // non-strict; allows 0..MASK
-    const s = ut.bytesToNumberLE(sig.slice(len, 2 * len));
+  function verify(sig: Hex, msg: Hex, publicKey: Hex, context?: Hex): boolean {
+    isHex(sig, 'sig');
+    isHex(msg, 'message');
+    const len = Fp.BYTES; // Verifies EdDSA signature against message and public key. RFC8032 5.1.7.
+    sig = ensureBytes(sig, 2 * len); // An extended group equation is checked.
+    msg = ensureBytes(msg); // ZIP215 compliant, which means not fully RFC8032 compliant.
+    if (preHash) msg = preHash(msg); // for ed25519ph, etc
     const A = Point.fromHex(publicKey, false); // Check for s bounds, hex validity
+    const R = Point.fromHex(sig.slice(0, len), false); // 0 <= R < 2^256: ZIP215 R can be >= P
+    const s = ut.bytesToNumberLE(sig.slice(len, 2 * len)); // 0 <= s < l
     const SB = G.multiplyUnsafe(s);
-    const k = hashDomainToScalar(ut.concatBytes(R.toRawBytes(), A.toRawBytes(), message), context);
-    const kA = A.multiplyUnsafe(k);
-    const RkA = R.add(kA);
+    const k = hashDomainToScalar(context, R.toRawBytes(), A.toRawBytes(), msg);
+    const RkA = R.add(A.multiplyUnsafe(k));
     // [8][S]B = [8]R + [8][k]A'
     return RkA.subtract(SB).clearCofactor().equals(Point.ZERO);
   }
 
-  // Enable precomputes. Slows down first publicKey computation by 20ms.
-  G._setWindowSize(8);
+  G._setWindowSize(8); // Enable precomputes. Slows down first publicKey computation by 20ms.
 
   const utils = {
     getExtendedPublicKey,
-    /**
-     * Not needed for ed25519 private keys. Needed if you use scalars directly (rare).
-     */
-    hashToPrivateScalar: (hash: Hex): bigint => ut.hashToPrivateScalar(hash, CURVE_ORDER, true),
-
-    /**
-     * ed25519 private keys are uniform 32-bit strings. We do not need to check for
-     * modulo bias like we do in secp256k1 randomPrivateKey()
-     */
+    // ed25519 private keys are uniform 32b. No need to check for modulo bias, like in secp256k1.
     randomPrivateKey: (): Uint8Array => randomBytes(Fp.BYTES),
 
     /**

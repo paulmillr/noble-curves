@@ -1,16 +1,8 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 // Short Weierstrass curve. The formula is: y² = x³ + ax + b
-
-// Differences from @noble/secp256k1 1.7:
-// 1. Different double() formula (but same addition)
-// 2. Different sqrt() function
-// 3. truncateHash() truncateOnly mode
-// 4. DRBG supports outputLen bigger than outputLen of hmac
-// 5. Support for different hash functions
-
 import * as mod from './modular.js';
 import * as ut from './utils.js';
-import { bytesToHex, Hex, PrivKey } from './utils.js';
+import { Hex, PrivKey } from './utils.js';
 import { Group, GroupConstructor, wNAF } from './group.js';
 
 type HmacFnSync = (key: Uint8Array, ...messages: Uint8Array[]) => Uint8Array;
@@ -52,7 +44,7 @@ const DER = {
   },
   parseInt(data: Uint8Array): { data: bigint; left: Uint8Array } {
     if (data.length < 2 || data[0] !== 0x02) {
-      throw new DERError(`Invalid signature integer tag: ${bytesToHex(data)}`);
+      throw new DERError(`Invalid signature integer tag: ${ut.bytesToHex(data)}`);
     }
     const len = data[1];
     const res = data.subarray(2, len + 2);
@@ -67,7 +59,7 @@ const DER = {
   },
   parseSig(data: Uint8Array): { r: bigint; s: bigint } {
     if (data.length < 2 || data[0] != 0x30) {
-      throw new DERError(`Invalid signature tag: ${bytesToHex(data)}`);
+      throw new DERError(`Invalid signature tag: ${ut.bytesToHex(data)}`);
     }
     if (data[1] !== data.length - 2) {
       throw new DERError('Invalid signature: incorrect length');
@@ -75,7 +67,9 @@ const DER = {
     const { data: r, left: sBytes } = DER.parseInt(data.subarray(2));
     const { data: s, left: rBytesLeft } = DER.parseInt(sBytes);
     if (rBytesLeft.length) {
-      throw new DERError(`Invalid signature: left bytes after parsing: ${bytesToHex(rBytesLeft)}`);
+      throw new DERError(
+        `Invalid signature: left bytes after parsing: ${ut.bytesToHex(rBytesLeft)}`
+      );
     }
     return { r, s };
   },
@@ -156,7 +150,7 @@ function validatePointOpts<T>(curve: CurvePointsType<T>) {
   }
   const endo = opts.endo;
   if (endo) {
-    if (!Fp.equals(opts.a, Fp.ZERO)) {
+    if (!Fp.eql(opts.a, Fp.ZERO)) {
       throw new Error('Endomorphism can only be defined for Koblitz curves that have a=0');
     }
     if (
@@ -194,7 +188,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
    */
   function weierstrassEquation(x: T): T {
     const { a, b } = CURVE;
-    const x2 = Fp.square(x); // x * x
+    const x2 = Fp.sqr(x); // x * x
     const x3 = Fp.mul(x2, x); // x2 * x
     return Fp.add(Fp.add(x3, Fp.mul(x, a)), b); // x3 + a * x + b
   }
@@ -213,7 +207,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
    * - `wrapPrivateKey` when true, executed after most checks, but before `0 < key < n`
    */
   function normalizePrivateKey(key: PrivKey): bigint {
-    const { normalizePrivateKey: custom, nByteLength: groupLen, wrapPrivateKey, n: order } = CURVE;
+    const { normalizePrivateKey: custom, nByteLength: groupLen, wrapPrivateKey, n } = CURVE;
     if (typeof custom === 'function') key = custom(key);
     let num: bigint;
     if (typeof key === 'bigint') {
@@ -230,7 +224,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
       throw new Error('private key must be bytes, hex or bigint, not ' + typeof key);
     }
     // Useful for curves with cofactor != 1
-    if (wrapPrivateKey) num = mod.mod(num, order);
+    if (wrapPrivateKey) num = mod.mod(num, n);
     assertGE(num);
     return num;
   }
@@ -258,7 +252,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
       const { x, y } = p || {};
       if (!p || !Fp.isValid(x) || !Fp.isValid(y)) throw new Error('invalid affine point');
       if (p instanceof ProjectivePoint) throw new Error('projective point not allowed');
-      const is0 = (i: T) => Fp.equals(i, Fp.ZERO);
+      const is0 = (i: T) => Fp.eql(i, Fp.ZERO);
       // fromAffine(x:0, y:0) would produce (x:0, y:0, z:1), but we need (x:0, y:1, z:0)
       if (is0(x) && is0(y)) return ProjectivePoint.ZERO;
       return new ProjectivePoint(x, y, Fp.ONE);
@@ -319,9 +313,9 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
       const { x, y } = this.toAffine();
       // Check if x, y are valid field elements
       if (!Fp.isValid(x) || !Fp.isValid(y)) throw new Error('bad point: x or y not FE');
-      const left = Fp.square(y); // y²
+      const left = Fp.sqr(y); // y²
       const right = weierstrassEquation(x); // x³ + ax + b
-      if (!Fp.equals(left, right)) throw new Error('bad point: equation left != right');
+      if (!Fp.eql(left, right)) throw new Error('bad point: equation left != right');
       if (!this.isTorsionFree()) throw new Error('bad point: not in prime-order subgroup');
     }
     hasEvenY(): boolean {
@@ -337,8 +331,8 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
       assertPrjPoint(other);
       const { px: X1, py: Y1, pz: Z1 } = this;
       const { px: X2, py: Y2, pz: Z2 } = other;
-      const U1 = Fp.equals(Fp.mul(X1, Z2), Fp.mul(X2, Z1));
-      const U2 = Fp.equals(Fp.mul(Y1, Z2), Fp.mul(Y2, Z1));
+      const U1 = Fp.eql(Fp.mul(X1, Z2), Fp.mul(X2, Z1));
+      const U2 = Fp.eql(Fp.mul(Y1, Z2), Fp.mul(Y2, Z1));
       return U1 && U2;
     }
 
@@ -346,7 +340,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
      * Flips point to one corresponding to (x, -y) in Affine coordinates.
      */
     negate(): ProjectivePoint {
-      return new ProjectivePoint(this.px, Fp.negate(this.py), this.pz);
+      return new ProjectivePoint(this.px, Fp.neg(this.py), this.pz);
     }
 
     // Renes-Costello-Batina exception-free doubling formula.
@@ -544,12 +538,12 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
       const is0 = this.is0();
       // If invZ was 0, we return zero point. However we still want to execute
       // all operations, so we replace invZ with a random number, 1.
-      if (iz == null) iz = is0 ? Fp.ONE : Fp.invert(z);
+      if (iz == null) iz = is0 ? Fp.ONE : Fp.inv(z);
       const ax = Fp.mul(x, iz);
       const ay = Fp.mul(y, iz);
       const zz = Fp.mul(z, iz);
       if (is0) return { x: Fp.ZERO, y: Fp.ZERO };
-      if (!Fp.equals(zz, Fp.ONE)) throw new Error('invZ was invalid');
+      if (!Fp.eql(zz, Fp.ONE)) throw new Error('invZ was invalid');
       return { x: ax, y: ay };
     }
     isTorsionFree(): boolean {
@@ -571,7 +565,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
     }
 
     toHex(isCompressed = true): string {
-      return bytesToHex(this.toRawBytes(isCompressed));
+      return ut.bytesToHex(this.toRawBytes(isCompressed));
     }
   }
   const _bits = CURVE.nBitLength;
@@ -743,7 +737,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
         const isYOdd = (y & _1n) === _1n;
         // ECDSA
         const isHeadOdd = (head & 1) === 1;
-        if (isHeadOdd !== isYOdd) y = Fp.negate(y);
+        if (isHeadOdd !== isYOdd) y = Fp.neg(y);
         return { x, y };
       } else if (len === uncompressedLen && head === 0x04) {
         const x = Fp.fromBytes(tail.subarray(0, Fp.BYTES));
@@ -756,15 +750,8 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       }
     },
   });
-  // type Point = typeof ProjectivePoint.BASE;
-
-  // Do we need these functions at all?
-  function numToField(num: bigint): Uint8Array {
-    if (typeof num !== 'bigint') throw new Error('Expected bigint');
-    if (!(_0n <= num && num < Fp.MASK)) throw new Error(`Expected number < 2^${Fp.BYTES * 8}`);
-    return Fp.toBytes(num);
-  }
-  const numToFieldStr = (num: bigint): string => bytesToHex(numToField(num));
+  const numToNByteStr = (num: bigint): string =>
+    ut.bytesToHex(ut.numberToBytesBE(num, CURVE.nByteLength));
 
   function isBiggerThanHalfOrder(number: bigint) {
     const HALF = CURVE_ORDER >> _1n;
@@ -820,21 +807,18 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       const radj = rec === 2 || rec === 3 ? r + N : r;
       if (radj >= Fp.ORDER) throw new Error('recovery id 2 or 3 invalid');
       const prefix = (rec & 1) === 0 ? '02' : '03';
-      const R = Point.fromHex(prefix + numToFieldStr(radj));
-      const ir = mod.invert(radj, N); // r^-1
-      const u1 = mod.mod(-h * ir, N); // -hr^-1
-      const u2 = mod.mod(s * ir, N); // sr^-1
+      const R = Point.fromHex(prefix + numToNByteStr(radj));
+      const Fn = mod.Fp(N);
+      const ir = Fn.inv(radj); // r^-1
+      const u1 = Fn.mul(-h, ir); // -hr^-1
+      const u2 = Fn.mul(s, ir); // sr^-1
       const Q = Point.BASE.multiplyAndAddUnsafe(R, u1, u2); //  (sr^-1)R-(hr^-1)G = -(hr^-1)G + (sr^-1)
       if (!Q) throw new Error('point at infinify'); // unsafe is fine: no priv data leaked
       Q.assertValidity();
       return Q;
     }
 
-    /**
-     * Default signatures are always low-s, to prevent malleability.
-     * `sign(lowS: true)` always produces low-s sigs.
-     * `verify(lowS: true)` always fails for high-s.
-     */
+    // Signatures should be low-s, to prevent malleability.
     hasHighS(): boolean {
       return isBiggerThanHalfOrder(this.s);
     }
@@ -866,7 +850,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       return ut.hexToBytes(this.toCompactHex());
     }
     toCompactHex() {
-      return numToFieldStr(this.r) + numToFieldStr(this.s);
+      return numToNByteStr(this.r) + numToNByteStr(this.s);
     }
   }
 
@@ -885,7 +869,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
      * Converts some bytes to a valid private key. Needs at least (nBitLength+64) bytes.
      */
     hashToPrivateKey: (hash: Hex): Uint8Array =>
-      numToField(ut.hashToPrivateScalar(hash, CURVE_ORDER)),
+      ut.numberToBytesBE(ut.hashToPrivateScalar(hash, CURVE_ORDER), CURVE.nByteLength),
 
     /**
      * Produces cryptographically secure private key from random of size (nBitLength+64)
@@ -1014,27 +998,26 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     const m = h1int; // NOTE: no need to call bits2int second time here, it is inside truncateHash!
     // Converts signature params into point w r/s, checks result for validity.
     function k2sig(kBytes: Uint8Array): Signature | undefined {
-      const { n } = CURVE;
+      // const { n } = CURVE;
       // RFC 6979 Section 3.2, step 3: k = bits2int(T)
       const k = bits2int(kBytes); // Cannot use fields methods, since it is group element
       if (!isWithinCurveOrder(k)) return;
       // Important: all mod() calls in the function must be done over `n`
-      const ik = mod.invert(k, n);
-      const q = Point.BASE.multiply(k).toAffine();
-      // r = x mod n
-      const r = mod.mod(q.x, n);
-      if (r === _0n) return;
-      // s = (m + dr)/k mod n where x/k == x*inv(k)
-      const s = mod.mod(ik * mod.mod(m + mod.mod(d * r, n), n), n);
-      if (s === _0n) return;
-      // recovery bit is usually 0 or 1; rarely it's 2 or 3, when q.x > n
-      let recovery = (q.x === r ? 0 : 2) | Number(q.y & _1n);
+      const Fn = mod.Fp(CURVE.n);
+      const ik = Fn.inv(k); // k^-1 mod n
+      const q = Point.BASE.multiply(k).toAffine(); // q = Gk
+      const r = Fn.create(q.x); // r = q.x mod n
+      if (r === _0n) return; // r=0 invalid
+      const s = Fn.mul(ik, Fn.add(m, Fn.mul(d, r))); // s = k^-1(m + rd) mod n
+      if (s === _0n) return; // s=0 invalid
+      let recovery = (q.x === r ? 0 : 2) | Number(q.y & _1n); // recovery bit (2 or 3, when q.x > n)
       let normS = s;
       if (lowS && isBiggerThanHalfOrder(s)) {
-        normS = normalizeS(s);
+        // if lowS was passed, ensure s is always
+        normS = normalizeS(s); // in the bottom half of CURVE.n
         recovery ^= 1;
       }
-      return new Signature(r, normS, recovery);
+      return new Signature(r, normS, recovery); // use normS, not s
     }
     return { seed, k2sig };
   }
@@ -1049,9 +1032,8 @@ export function weierstrass(curveDef: CurveType): CurveFn {
    *   r = x mod n
    *   s = (m + dr)/k mod n
    * ```
-   * @param opts `lowS, extraEntropy`
+   * @param opts `lowS, extraEntropy, prehash`
    */
-  // TODO: add opts.prehashed = True, if !opts.prehashed do hash on msg?
   function sign(msgHash: Hex, privKey: PrivKey, opts = defaultSigOpts): Signature {
     const { seed, k2sig } = prepSig(msgHash, privKey, opts); // Steps A, D of RFC6979 3.2.
     const genUntil = hmacDrbg<Signature>(CURVE.hash.outputLen, CURVE.nByteLength, CURVE.hmac);
@@ -1108,12 +1090,13 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     const { n: N } = CURVE;
     const { r, s } = _sig;
     const h = bits2int_modN(msgHash); // Cannot use fields methods, since it is group element
-    const is = mod.invert(s, N); // s^-1
-    const u1 = mod.mod(h * is, N); // u1 = hs^-1 mod n
-    const u2 = mod.mod(r * is, N); // u2 = rs^-1 mod n
+    const Fn = mod.Fp(N);
+    const is = Fn.inv(s); // s^-1
+    const u1 = Fn.mul(h, is); // u1 = hs^-1 mod n
+    const u2 = Fn.mul(r, is); // u2 = rs^-1 mod n
     const R = Point.BASE.multiplyAndAddUnsafe(P, u1, u2)?.toAffine(); // R = u1⋅G + u2⋅P
     if (!R) return false;
-    const v = mod.mod(R.x, N);
+    const v = Fn.create(R.x);
     return v === r;
   }
   return {
@@ -1131,7 +1114,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
 
 // Implementation of the Shallue and van de Woestijne method for any Weierstrass curve
 
-// TODO: check if there is a way to merge this with uvRation in Edwards && move to modular?
+// TODO: check if there is a way to merge this with uvRatio in Edwards && move to modular?
 // b = True and y = sqrt(u / v) if (u / v) is square in F, and
 // b = False and y = sqrt(Z * (u / v)) otherwise.
 export function SWUFpSqrtRatio<T>(Fp: mod.Field<T>, Z: T) {
@@ -1149,7 +1132,7 @@ export function SWUFpSqrtRatio<T>(Fp: mod.Field<T>, Z: T) {
   let sqrtRatio = (u: T, v: T): { isValid: boolean; value: T } => {
     let tv1 = c6; // 1. tv1 = c6
     let tv2 = Fp.pow(v, c4); // 2. tv2 = v^c4
-    let tv3 = Fp.square(tv2); // 3. tv3 = tv2^2
+    let tv3 = Fp.sqr(tv2); // 3. tv3 = tv2^2
     tv3 = Fp.mul(tv3, v); // 4. tv3 = tv3 * v
     let tv5 = Fp.mul(u, tv3); // 5. tv5 = u * tv3
     tv5 = Fp.pow(tv5, c3); // 6. tv5 = tv5^c3
@@ -1158,7 +1141,7 @@ export function SWUFpSqrtRatio<T>(Fp: mod.Field<T>, Z: T) {
     tv3 = Fp.mul(tv5, u); // 9. tv3 = tv5 * u
     let tv4 = Fp.mul(tv3, tv2); // 10. tv4 = tv3 * tv2
     tv5 = Fp.pow(tv4, c5); // 11. tv5 = tv4^c5
-    let isQR = Fp.equals(tv5, Fp.ONE); // 12. isQR = tv5 == 1
+    let isQR = Fp.eql(tv5, Fp.ONE); // 12. isQR = tv5 == 1
     tv2 = Fp.mul(tv3, c7); // 13. tv2 = tv3 * c7
     tv5 = Fp.mul(tv4, tv1); // 14. tv5 = tv4 * tv1
     tv3 = Fp.cmov(tv2, tv3, isQR); // 15. tv3 = CMOV(tv2, tv3, isQR)
@@ -1167,7 +1150,7 @@ export function SWUFpSqrtRatio<T>(Fp: mod.Field<T>, Z: T) {
     for (let i = c1; i > 1; i--) {
       let tv5 = 2n ** (i - 2n); // 18.    tv5 = i - 2;    19.    tv5 = 2^tv5
       let tvv5 = Fp.pow(tv4, tv5); // 20.    tv5 = tv4^tv5
-      const e1 = Fp.equals(tvv5, Fp.ONE); // 21.    e1 = tv5 == 1
+      const e1 = Fp.eql(tvv5, Fp.ONE); // 21.    e1 = tv5 == 1
       tv2 = Fp.mul(tv3, tv1); // 22.    tv2 = tv3 * tv1
       tv1 = Fp.mul(tv1, tv1); // 23.    tv1 = tv1 * tv1
       tvv5 = Fp.mul(tv4, tv1); // 24.    tv5 = tv4 * tv1
@@ -1179,16 +1162,16 @@ export function SWUFpSqrtRatio<T>(Fp: mod.Field<T>, Z: T) {
   if (Fp.ORDER % 4n === 3n) {
     // sqrt_ratio_3mod4(u, v)
     const c1 = (Fp.ORDER - 3n) / 4n; // 1. c1 = (q - 3) / 4     # Integer arithmetic
-    const c2 = Fp.sqrt(Fp.negate(Z)); // 2. c2 = sqrt(-Z)
+    const c2 = Fp.sqrt(Fp.neg(Z)); // 2. c2 = sqrt(-Z)
     sqrtRatio = (u: T, v: T) => {
-      let tv1 = Fp.square(v); // 1. tv1 = v^2
+      let tv1 = Fp.sqr(v); // 1. tv1 = v^2
       const tv2 = Fp.mul(u, v); // 2. tv2 = u * v
       tv1 = Fp.mul(tv1, tv2); // 3. tv1 = tv1 * tv2
       let y1 = Fp.pow(tv1, c1); // 4. y1 = tv1^c1
       y1 = Fp.mul(y1, tv2); // 5. y1 = y1 * tv2
       const y2 = Fp.mul(y1, c2); // 6. y2 = y1 * c2
-      const tv3 = Fp.mul(Fp.square(y1), v); // 7. tv3 = y1^2; 8. tv3 = tv3 * v
-      const isQR = Fp.equals(tv3, u); // 9. isQR = tv3 == u
+      const tv3 = Fp.mul(Fp.sqr(y1), v); // 7. tv3 = y1^2; 8. tv3 = tv3 * v
+      const isQR = Fp.eql(tv3, u); // 9. isQR = tv3 == u
       let y = Fp.cmov(y2, y1, isQR); // 10. y = CMOV(y2, y1, isQR)
       return { isValid: isQR, value: y }; // 11. return (isQR, y) isQR ? y : y*c2
     };
@@ -1216,16 +1199,16 @@ export function mapToCurveSimpleSWU<T>(
   return (u: T): { x: T; y: T } => {
     // prettier-ignore
     let tv1, tv2, tv3, tv4, tv5, tv6, x, y;
-    tv1 = Fp.square(u); // 1.  tv1 = u^2
+    tv1 = Fp.sqr(u); // 1.  tv1 = u^2
     tv1 = Fp.mul(tv1, opts.Z); // 2.  tv1 = Z * tv1
-    tv2 = Fp.square(tv1); // 3.  tv2 = tv1^2
+    tv2 = Fp.sqr(tv1); // 3.  tv2 = tv1^2
     tv2 = Fp.add(tv2, tv1); // 4.  tv2 = tv2 + tv1
     tv3 = Fp.add(tv2, Fp.ONE); // 5.  tv3 = tv2 + 1
     tv3 = Fp.mul(tv3, opts.B); // 6.  tv3 = B * tv3
-    tv4 = Fp.cmov(opts.Z, Fp.negate(tv2), !Fp.equals(tv2, Fp.ZERO)); // 7.  tv4 = CMOV(Z, -tv2, tv2 != 0)
+    tv4 = Fp.cmov(opts.Z, Fp.neg(tv2), !Fp.eql(tv2, Fp.ZERO)); // 7.  tv4 = CMOV(Z, -tv2, tv2 != 0)
     tv4 = Fp.mul(tv4, opts.A); // 8.  tv4 = A * tv4
-    tv2 = Fp.square(tv3); // 9.  tv2 = tv3^2
-    tv6 = Fp.square(tv4); // 10. tv6 = tv4^2
+    tv2 = Fp.sqr(tv3); // 9.  tv2 = tv3^2
+    tv6 = Fp.sqr(tv4); // 10. tv6 = tv4^2
     tv5 = Fp.mul(tv6, opts.A); // 11. tv5 = A * tv6
     tv2 = Fp.add(tv2, tv5); // 12. tv2 = tv2 + tv5
     tv2 = Fp.mul(tv2, tv3); // 13. tv2 = tv2 * tv3
@@ -1239,7 +1222,7 @@ export function mapToCurveSimpleSWU<T>(
     x = Fp.cmov(x, tv3, isValid); // 21.   x = CMOV(x, tv3, is_gx1_square)
     y = Fp.cmov(y, value, isValid); // 22.   y = CMOV(y, y1, is_gx1_square)
     const e1 = Fp.isOdd!(u) === Fp.isOdd!(y); // 23.  e1 = sgn0(u) == sgn0(y)
-    y = Fp.cmov(Fp.negate(y), y, e1); // 24.   y = CMOV(-y, y, e1)
+    y = Fp.cmov(Fp.neg(y), y, e1); // 24.   y = CMOV(-y, y, e1)
     x = Fp.div(x, tv4); // 25.   x = x / tv4
     return { x, y };
   };

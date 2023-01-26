@@ -301,7 +301,7 @@ export function _poseidonMDS(Fp: Field<bigint>, name: string, m: number, attempt
   }
   if (new Set([...x_values, ...y_values]).size !== 2 * m)
     throw new Error('X and Y values are not distinct');
-  return x_values.map((x) => y_values.map((y) => Fp.invert(Fp.sub(x, y))));
+  return x_values.map((x) => y_values.map((y) => Fp.inv(Fp.sub(x, y))));
 }
 
 const MDS_SMALL = [

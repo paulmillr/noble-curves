@@ -129,18 +129,18 @@ export function bls<Fp2, Fp6, Fp12>(
     let ell_coeff: [Fp2, Fp2, Fp2][] = [];
     for (let i = BLS_X_LEN - 2; i >= 0; i--) {
       // Double
-      let t0 = Fp2.square(Ry); // Ry²
-      let t1 = Fp2.square(Rz); // Rz²
+      let t0 = Fp2.sqr(Ry); // Ry²
+      let t1 = Fp2.sqr(Rz); // Rz²
       let t2 = Fp2.multiplyByB(Fp2.mul(t1, 3n)); // 3 * T1 * B
       let t3 = Fp2.mul(t2, 3n); // 3 * T2
-      let t4 = Fp2.sub(Fp2.sub(Fp2.square(Fp2.add(Ry, Rz)), t1), t0); // (Ry + Rz)² - T1 - T0
+      let t4 = Fp2.sub(Fp2.sub(Fp2.sqr(Fp2.add(Ry, Rz)), t1), t0); // (Ry + Rz)² - T1 - T0
       ell_coeff.push([
         Fp2.sub(t2, t0), // T2 - T0
-        Fp2.mul(Fp2.square(Rx), 3n), // 3 * Rx²
-        Fp2.negate(t4), // -T4
+        Fp2.mul(Fp2.sqr(Rx), 3n), // 3 * Rx²
+        Fp2.neg(t4), // -T4
       ]);
       Rx = Fp2.div(Fp2.mul(Fp2.mul(Fp2.sub(t0, t3), Rx), Ry), 2n); // ((T0 - T3) * Rx * Ry) / 2
-      Ry = Fp2.sub(Fp2.square(Fp2.div(Fp2.add(t0, t3), 2n)), Fp2.mul(Fp2.square(t2), 3n)); // ((T0 + T3) / 2)² - 3 * T2²
+      Ry = Fp2.sub(Fp2.sqr(Fp2.div(Fp2.add(t0, t3), 2n)), Fp2.mul(Fp2.sqr(t2), 3n)); // ((T0 + T3) / 2)² - 3 * T2²
       Rz = Fp2.mul(t0, t4); // T0 * T4
       if (ut.bitGet(CURVE.x, i)) {
         // Addition
@@ -148,13 +148,13 @@ export function bls<Fp2, Fp6, Fp12>(
         let t1 = Fp2.sub(Rx, Fp2.mul(Qx, Rz)); // Rx - Qx * Rz
         ell_coeff.push([
           Fp2.sub(Fp2.mul(t0, Qx), Fp2.mul(t1, Qy)), // T0 * Qx - T1 * Qy
-          Fp2.negate(t0), // -T0
+          Fp2.neg(t0), // -T0
           t1, // T1
         ]);
-        let t2 = Fp2.square(t1); // T1²
+        let t2 = Fp2.sqr(t1); // T1²
         let t3 = Fp2.mul(t2, t1); // T2 * T1
         let t4 = Fp2.mul(t2, Rx); // T2 * Rx
-        let t5 = Fp2.add(Fp2.sub(t3, Fp2.mul(t4, 2n)), Fp2.mul(Fp2.square(t0), Rz)); // T3 - 2 * T4 + T0² * Rz
+        let t5 = Fp2.add(Fp2.sub(t3, Fp2.mul(t4, 2n)), Fp2.mul(Fp2.sqr(t0), Rz)); // T3 - 2 * T4 + T0² * Rz
         Rx = Fp2.mul(t1, t5); // T1 * T5
         Ry = Fp2.sub(Fp2.mul(Fp2.sub(t4, t5), t0), Fp2.mul(t3, Ry)); // (T4 - T5) * T0 - T3 * Ry
         Rz = Fp2.mul(Rz, t3); // Rz * T3
@@ -176,7 +176,7 @@ export function bls<Fp2, Fp6, Fp12>(
         const F = ell[j];
         f12 = Fp12.multiplyBy014(f12, F[0], Fp2.mul(F[1], Px), Fp2.mul(F[2], Py));
       }
-      if (i !== 0) f12 = Fp12.square(f12);
+      if (i !== 0) f12 = Fp12.sqr(f12);
     }
     return Fp12.conjugate(f12);
   }
@@ -300,7 +300,7 @@ export function bls<Fp2, Fp6, Fp12>(
     const ePHm = pairing(P.negate(), Hm, false);
     const eGS = pairing(G, S, false);
     const exp = Fp12.finalExponentiate(Fp12.mul(eGS, ePHm));
-    return Fp12.equals(exp, Fp12.ONE);
+    return Fp12.eql(exp, Fp12.ONE);
   }
 
   // Adds a bunch of public key points together.
@@ -365,7 +365,7 @@ export function bls<Fp2, Fp6, Fp12>(
       paired.push(pairing(G1.ProjectivePoint.BASE.negate(), sig, false));
       const product = paired.reduce((a, b) => Fp12.mul(a, b), Fp12.ONE);
       const exp = Fp12.finalExponentiate(product);
-      return Fp12.equals(exp, Fp12.ONE);
+      return Fp12.eql(exp, Fp12.ONE);
     } catch {
       return false;
     }

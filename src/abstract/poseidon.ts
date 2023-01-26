@@ -33,8 +33,8 @@ export function validateOpts(opts: PoseidonOpts) {
   const _sboxPower = BigInt(sboxPower);
   let sboxFn = (n: bigint) => mod.FpPow(Fp, n, _sboxPower);
   // Unwrapped sbox power for common cases (195->142μs)
-  if (sboxPower === 3) sboxFn = (n: bigint) => Fp.mul(Fp.squareN(n), n);
-  else if (sboxPower === 5) sboxFn = (n: bigint) => Fp.mul(Fp.squareN(Fp.squareN(n)), n);
+  if (sboxPower === 3) sboxFn = (n: bigint) => Fp.mul(Fp.sqrN(n), n);
+  else if (sboxPower === 5) sboxFn = (n: bigint) => Fp.mul(Fp.sqrN(Fp.sqrN(n)), n);
 
   if (opts.roundsFull % 2 !== 0)
     throw new Error(`Poseidon roundsFull is not even: ${opts.roundsFull}`);

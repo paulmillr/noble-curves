@@ -41,6 +41,7 @@ export function validateOpts(opts: Opts) {
 // UTF8 to ui8a
 // TODO: looks broken, ASCII only, why not TextEncoder/TextDecoder? it is in hashes anyway
 export function stringToBytes(str: string) {
+  // return new TextEncoder().encode(str);
   const bytes = new Uint8Array(str.length);
   for (let i = 0; i < str.length; i++) bytes[i] = str.charCodeAt(i);
   return bytes;

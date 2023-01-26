@@ -18,6 +18,7 @@ export type CHash = {
   outputLen: number;
   create(opts?: { dkLen?: number }): any; // For shake
 };
+export type FHash = (message: Uint8Array | string) => Uint8Array;
 
 // NOTE: these are generic, even if curve is on some polynominal field (bls), it will still have P/n/h
 // But generator can be different (Fp2/Fp6 for bls?)

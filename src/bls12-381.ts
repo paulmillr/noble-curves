@@ -99,25 +99,24 @@ const Fp2: mod.Field<Fp2> & Fp2Utils = {
   ONE: { c0: Fp.ONE, c1: Fp.ZERO },
   create: (num) => num,
   isValid: ({ c0, c1 }) => typeof c0 === 'bigint' && typeof c1 === 'bigint',
-  isZero: ({ c0, c1 }) => Fp.isZero(c0) && Fp.isZero(c1),
-  equals: ({ c0, c1 }: Fp2, { c0: r0, c1: r1 }: Fp2) => Fp.equals(c0, r0) && Fp.equals(c1, r1),
-  negate: ({ c0, c1 }) => ({ c0: Fp.negate(c0), c1: Fp.negate(c1) }),
+  is0: ({ c0, c1 }) => Fp.is0(c0) && Fp.is0(c1),
+  eql: ({ c0, c1 }: Fp2, { c0: r0, c1: r1 }: Fp2) => Fp.eql(c0, r0) && Fp.eql(c1, r1),
+  neg: ({ c0, c1 }) => ({ c0: Fp.neg(c0), c1: Fp.neg(c1) }),
   pow: (num, power) => mod.FpPow(Fp2, num, power),
   invertBatch: (nums) => mod.FpInvertBatch(Fp2, nums),
   // Normalized
   add: Fp2Add,
   sub: Fp2Subtract,
   mul: Fp2Multiply,
-  square: Fp2Square,
+  sqr: Fp2Square,
   // NonNormalized stuff
   addN: Fp2Add,
   subN: Fp2Subtract,
   mulN: Fp2Multiply,
-  squareN: Fp2Square,
+  sqrN: Fp2Square,
   // Why inversion for bigint inside Fp instead of Fp2? it is even used in that context?
-  div: (lhs, rhs) =>
-    Fp2.mul(lhs, typeof rhs === 'bigint' ? Fp.invert(Fp.create(rhs)) : Fp2.invert(rhs)),
-  invert: ({ c0: a, c1: b }) => {
+  div: (lhs, rhs) => Fp2.mul(lhs, typeof rhs === 'bigint' ? Fp.inv(Fp.create(rhs)) : Fp2.inv(rhs)),
+  inv: ({ c0: a, c1: b }) => {
     // We wish to find the multiplicative inverse of a nonzero
     // element a + bu in Fp2. We leverage an identity
     //
@@ -131,11 +130,11 @@ const Fp2: mod.Field<Fp2> & Fp2Utils = {
     // This gives that (a - bu)/(a² + b²) is the inverse
     // of (a + bu). Importantly, this can be computing using
     // only a single inversion in Fp.
-    const factor = Fp.invert(Fp.create(a * a + b * b));
+    const factor = Fp.inv(Fp.create(a * a + b * b));
     return { c0: Fp.mul(factor, Fp.create(a)), c1: Fp.mul(factor, Fp.create(-b)) };
   },
   sqrt: (num) => {
-    if (Fp2.equals(num, Fp2.ZERO)) return Fp2.ZERO; // Algo doesn't handles this case
+    if (Fp2.eql(num, Fp2.ZERO)) return Fp2.ZERO; // Algo doesn't handles this case
     // TODO: Optimize this line. It's extremely slow.
     // Speeding this up would boost aggregateSignatures.
     // https://eprint.iacr.org/2012/685.pdf applicable?
@@ -143,15 +142,15 @@ const Fp2: mod.Field<Fp2> & Fp2Utils = {
     // https://github.com/supranational/blst/blob/aae0c7d70b799ac269ff5edf29d8191dbd357876/src/exp2.c#L1
     // Inspired by https://github.com/dalek-cryptography/curve25519-dalek/blob/17698df9d4c834204f83a3574143abacb4fc81a5/src/field.rs#L99
     const candidateSqrt = Fp2.pow(num, (Fp2.ORDER + 8n) / 16n);
-    const check = Fp2.div(Fp2.square(candidateSqrt), num); // candidateSqrt.square().div(this);
+    const check = Fp2.div(Fp2.sqr(candidateSqrt), num); // candidateSqrt.square().div(this);
     const R = FP2_ROOTS_OF_UNITY;
-    const divisor = [R[0], R[2], R[4], R[6]].find((r) => Fp2.equals(r, check));
+    const divisor = [R[0], R[2], R[4], R[6]].find((r) => Fp2.eql(r, check));
     if (!divisor) throw new Error('No root');
     const index = R.indexOf(divisor);
     const root = R[index / 2];
     if (!root) throw new Error('Invalid root');
     const x1 = Fp2.div(candidateSqrt, root);
-    const x2 = Fp2.negate(x1);
+    const x2 = Fp2.neg(x1);
     const { re: re1, im: im1 } = Fp2.reim(x1);
     const { re: re2, im: im2 } = Fp2.reim(x2);
     if (im1 > im2 || (im1 === im2 && re1 > re2)) return x1;
@@ -280,18 +279,15 @@ const Fp6Multiply = ({ c0, c1, c2 }: Fp6, rhs: Fp6 | bigint) => {
   };
 };
 const Fp6Square = ({ c0, c1, c2 }: Fp6) => {
-  let t0 = Fp2.square(c0); // c0²
+  let t0 = Fp2.sqr(c0); // c0²
   let t1 = Fp2.mul(Fp2.mul(c0, c1), 2n); // 2 * c0 * c1
   let t3 = Fp2.mul(Fp2.mul(c1, c2), 2n); // 2 * c1 * c2
-  let t4 = Fp2.square(c2); // c2²
+  let t4 = Fp2.sqr(c2); // c2²
   return {
     c0: Fp2.add(Fp2.mulByNonresidue(t3), t0), // T3 * (u + 1) + T0
     c1: Fp2.add(Fp2.mulByNonresidue(t4), t1), // T4 * (u + 1) + T1
     // T1 + (c0 - c1 + c2)² + T3 - T0 - T4
-    c2: Fp2.sub(
-      Fp2.sub(Fp2.add(Fp2.add(t1, Fp2.square(Fp2.add(Fp2.sub(c0, c1), c2))), t3), t0),
-      t4
-    ),
+    c2: Fp2.sub(Fp2.sub(Fp2.add(Fp2.add(t1, Fp2.sqr(Fp2.add(Fp2.sub(c0, c1), c2))), t3), t0), t4),
   };
 };
 type Fp6Utils = {
@@ -312,35 +308,34 @@ const Fp6: mod.Field<Fp6> & Fp6Utils = {
   ONE: { c0: Fp2.ONE, c1: Fp2.ZERO, c2: Fp2.ZERO },
   create: (num) => num,
   isValid: ({ c0, c1, c2 }) => Fp2.isValid(c0) && Fp2.isValid(c1) && Fp2.isValid(c2),
-  isZero: ({ c0, c1, c2 }) => Fp2.isZero(c0) && Fp2.isZero(c1) && Fp2.isZero(c2),
-  negate: ({ c0, c1, c2 }) => ({ c0: Fp2.negate(c0), c1: Fp2.negate(c1), c2: Fp2.negate(c2) }),
-  equals: ({ c0, c1, c2 }, { c0: r0, c1: r1, c2: r2 }) =>
-    Fp2.equals(c0, r0) && Fp2.equals(c1, r1) && Fp2.equals(c2, r2),
+  is0: ({ c0, c1, c2 }) => Fp2.is0(c0) && Fp2.is0(c1) && Fp2.is0(c2),
+  neg: ({ c0, c1, c2 }) => ({ c0: Fp2.neg(c0), c1: Fp2.neg(c1), c2: Fp2.neg(c2) }),
+  eql: ({ c0, c1, c2 }, { c0: r0, c1: r1, c2: r2 }) =>
+    Fp2.eql(c0, r0) && Fp2.eql(c1, r1) && Fp2.eql(c2, r2),
   sqrt: () => {
     throw new Error('Not implemented');
   },
   // Do we need division by bigint at all? Should be done via order:
-  div: (lhs, rhs) =>
-    Fp6.mul(lhs, typeof rhs === 'bigint' ? Fp.invert(Fp.create(rhs)) : Fp6.invert(rhs)),
+  div: (lhs, rhs) => Fp6.mul(lhs, typeof rhs === 'bigint' ? Fp.inv(Fp.create(rhs)) : Fp6.inv(rhs)),
   pow: (num, power) => mod.FpPow(Fp6, num, power),
   invertBatch: (nums) => mod.FpInvertBatch(Fp6, nums),
   // Normalized
   add: Fp6Add,
   sub: Fp6Subtract,
   mul: Fp6Multiply,
-  square: Fp6Square,
+  sqr: Fp6Square,
   // NonNormalized stuff
   addN: Fp6Add,
   subN: Fp6Subtract,
   mulN: Fp6Multiply,
-  squareN: Fp6Square,
+  sqrN: Fp6Square,
 
-  invert: ({ c0, c1, c2 }) => {
-    let t0 = Fp2.sub(Fp2.square(c0), Fp2.mulByNonresidue(Fp2.mul(c2, c1))); // c0² - c2 * c1 * (u + 1)
-    let t1 = Fp2.sub(Fp2.mulByNonresidue(Fp2.square(c2)), Fp2.mul(c0, c1)); // c2² * (u + 1) - c0 * c1
-    let t2 = Fp2.sub(Fp2.square(c1), Fp2.mul(c0, c2)); // c1² - c0 * c2
+  inv: ({ c0, c1, c2 }) => {
+    let t0 = Fp2.sub(Fp2.sqr(c0), Fp2.mulByNonresidue(Fp2.mul(c2, c1))); // c0² - c2 * c1 * (u + 1)
+    let t1 = Fp2.sub(Fp2.mulByNonresidue(Fp2.sqr(c2)), Fp2.mul(c0, c1)); // c2² * (u + 1) - c0 * c1
+    let t2 = Fp2.sub(Fp2.sqr(c1), Fp2.mul(c0, c2)); // c1² - c0 * c2
     // 1/(((c2 * T1 + c1 * T2) * v) + c0 * T0)
-    let t4 = Fp2.invert(
+    let t4 = Fp2.inv(
       Fp2.add(Fp2.mulByNonresidue(Fp2.add(Fp2.mul(c2, t1), Fp2.mul(c1, t2))), Fp2.mul(c0, t0))
     );
     return { c0: Fp2.mul(t4, t0), c1: Fp2.mul(t4, t1), c2: Fp2.mul(t4, t2) };
@@ -498,11 +493,11 @@ const Fp12Square = ({ c0, c1 }: Fp12) => {
   }; // AB + AB
 };
 function Fp4Square(a: Fp2, b: Fp2): { first: Fp2; second: Fp2 } {
-  const a2 = Fp2.square(a);
-  const b2 = Fp2.square(b);
+  const a2 = Fp2.sqr(a);
+  const b2 = Fp2.sqr(b);
   return {
     first: Fp2.add(Fp2.mulByNonresidue(b2), a2), // b² * Nonresidue + a²
-    second: Fp2.sub(Fp2.sub(Fp2.square(Fp2.add(a, b)), a2), b2), // (a + b)² - a² - b²
+    second: Fp2.sub(Fp2.sub(Fp2.sqr(Fp2.add(a, b)), a2), b2), // (a + b)² - a² - b²
   };
 }
 type Fp12Utils = {
@@ -525,30 +520,30 @@ const Fp12: mod.Field<Fp12> & Fp12Utils = {
   ONE: { c0: Fp6.ONE, c1: Fp6.ZERO },
   create: (num) => num,
   isValid: ({ c0, c1 }) => Fp6.isValid(c0) && Fp6.isValid(c1),
-  isZero: ({ c0, c1 }) => Fp6.isZero(c0) && Fp6.isZero(c1),
-  negate: ({ c0, c1 }) => ({ c0: Fp6.negate(c0), c1: Fp6.negate(c1) }),
-  equals: ({ c0, c1 }, { c0: r0, c1: r1 }) => Fp6.equals(c0, r0) && Fp6.equals(c1, r1),
+  is0: ({ c0, c1 }) => Fp6.is0(c0) && Fp6.is0(c1),
+  neg: ({ c0, c1 }) => ({ c0: Fp6.neg(c0), c1: Fp6.neg(c1) }),
+  eql: ({ c0, c1 }, { c0: r0, c1: r1 }) => Fp6.eql(c0, r0) && Fp6.eql(c1, r1),
   sqrt: () => {
     throw new Error('Not implemented');
   },
-  invert: ({ c0, c1 }) => {
-    let t = Fp6.invert(Fp6.sub(Fp6.square(c0), Fp6.mulByNonresidue(Fp6.square(c1)))); // 1 / (c0² - c1² * v)
-    return { c0: Fp6.mul(c0, t), c1: Fp6.negate(Fp6.mul(c1, t)) }; // ((C0 * T) * T) + (-C1 * T) * w
+  inv: ({ c0, c1 }) => {
+    let t = Fp6.inv(Fp6.sub(Fp6.sqr(c0), Fp6.mulByNonresidue(Fp6.sqr(c1)))); // 1 / (c0² - c1² * v)
+    return { c0: Fp6.mul(c0, t), c1: Fp6.neg(Fp6.mul(c1, t)) }; // ((C0 * T) * T) + (-C1 * T) * w
   },
   div: (lhs, rhs) =>
-    Fp12.mul(lhs, typeof rhs === 'bigint' ? Fp.invert(Fp.create(rhs)) : Fp12.invert(rhs)),
+    Fp12.mul(lhs, typeof rhs === 'bigint' ? Fp.inv(Fp.create(rhs)) : Fp12.inv(rhs)),
   pow: (num, power) => mod.FpPow(Fp12, num, power),
   invertBatch: (nums) => mod.FpInvertBatch(Fp12, nums),
   // Normalized
   add: Fp12Add,
   sub: Fp12Subtract,
   mul: Fp12Multiply,
-  square: Fp12Square,
+  sqr: Fp12Square,
   // NonNormalized stuff
   addN: Fp12Add,
   subN: Fp12Subtract,
   mulN: Fp12Multiply,
-  squareN: Fp12Square,
+  sqrN: Fp12Square,
 
   // Bytes utils
   fromBytes: (b: Uint8Array): Fp12 => {
@@ -602,7 +597,7 @@ const Fp12: mod.Field<Fp12> & Fp12Utils = {
     c0: Fp6.multiplyByFp2(c0, rhs),
     c1: Fp6.multiplyByFp2(c1, rhs),
   }),
-  conjugate: ({ c0, c1 }): Fp12 => ({ c0, c1: Fp6.negate(c1) }),
+  conjugate: ({ c0, c1 }): Fp12 => ({ c0, c1: Fp6.neg(c1) }),
 
   // A cyclotomic group is a subgroup of Fp^n defined by
   //   GΦₙ(p) = {α ∈ Fpⁿ : α^Φₙ(p) = 1}
@@ -897,7 +892,7 @@ const PSI2_C1 =
   0x1a0111ea397fe699ec02408663d4de85aa0d857d89759ad4897d29650fb85f9b409427eb4f49fffd8bfd00000000aaacn;
 
 function psi2(x: Fp2, y: Fp2): [Fp2, Fp2] {
-  return [Fp2.mul(x, PSI2_C1), Fp2.negate(y)];
+  return [Fp2.mul(x, PSI2_C1), Fp2.neg(y)];
 }
 function G2psi2(c: ProjConstructor<Fp2>, P: ProjPointType<Fp2>) {
   const affine = P.toAffine();
@@ -1031,7 +1026,7 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
         let y = Fp.sqrt(right);
         if (!y) throw new Error('Invalid compressed G1 point');
         const aflag = bitGet(compressedValue, C_BIT_POS);
-        if ((y * 2n) / P !== aflag) y = Fp.negate(y);
+        if ((y * 2n) / P !== aflag) y = Fp.neg(y);
         return { x: Fp.create(x), y: Fp.create(y) };
       } else if (bytes.length === 96) {
         // Check if the infinity flag is set
@@ -1149,7 +1144,7 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
         const right = Fp2.add(Fp2.pow(x, 3n), b); // y² = x³ + 4 * (u+1) = x³ + b
         let y = Fp2.sqrt(right);
         const Y_bit = y.c1 === 0n ? (y.c0 * 2n) / P : (y.c1 * 2n) / P ? 1n : 0n;
-        y = bitS > 0 && Y_bit > 0 ? y : Fp2.negate(y);
+        y = bitS > 0 && Y_bit > 0 ? y : Fp2.neg(y);
         return { x, y };
       } else if (bytes.length === 192 && !bitC) {
         // Check if the infinity flag is set
@@ -1216,7 +1211,7 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
         const aflag1 = bitGet(z1, 381);
         const isGreater = y1 > 0n && (y1 * 2n) / P !== aflag1;
         const isZero = y1 === 0n && (y0 * 2n) / P !== aflag1;
-        if (isGreater || isZero) y = Fp2.negate(y);
+        if (isGreater || isZero) y = Fp2.neg(y);
         const point = bls12_381.G2.ProjectivePoint.fromAffine({ x, y });
         // console.log('Signature.decode', point);
         point.assertValidity();

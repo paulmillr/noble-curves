@@ -17,7 +17,9 @@ export type GroupConstructor<T> = {
   ZERO: T;
 };
 export type Mapper<T> = (i: T[]) => T[];
-// Not big, but pretty complex and it is easy to break stuff. To avoid too much copy paste
+
+// Elliptic curve multiplication of Point by scalar. Complicated and fragile. Uses wNAF method.
+// Windowed method is 10% faster, but takes 2x longer to generate & consumes 2x memory.
 export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number) {
   const constTimeNegate = (condition: boolean, item: T): T => {
     const neg = item.negate();
@@ -129,7 +131,7 @@ export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number) {
 
     wNAFCached(P: T, precomputesMap: Map<T, T[]>, n: bigint, transform: Mapper<T>): { p: T; f: T } {
       // @ts-ignore
-      const W: number = '_WINDOW_SIZE' in P ? P._WINDOW_SIZE : 1;
+      const W: number = P._WINDOW_SIZE || 1;
       // Calculate precomputes on a first run, reuse them after
       let comp = precomputesMap.get(P);
       if (!comp) {

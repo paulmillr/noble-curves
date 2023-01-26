@@ -29,10 +29,7 @@ const _2n = BigInt(2);
 const divNearest = (a: bigint, b: bigint) => (a + b / _2n) / b;
 
 /**
- * Allows to compute square root √y 2x faster.
- * To calculate √y, we need to exponentiate it to a very big number:
- * `y² = x³ + ax + b; y = y² ^ (p+1)/4`
- * We are unwrapping the loop and multiplying it bit-by-bit.
+ * √n = n^((p+1)/4) for fields p = 3 mod 4. We unwrap the loop and multiply bit-by-bit.
  * (P+1n/4n).toString(2) would produce bits [223x 1, 0, 22x 1, 4x 0, 11, 00]
  */
 function sqrtMod(y: bigint): bigint {
@@ -55,7 +52,7 @@ function sqrtMod(y: bigint): bigint {
   const t1 = (pow2(b223, _23n, P) * b22) % P;
   const t2 = (pow2(t1, _6n, P) * b2) % P;
   const root = pow2(t2, _2n, P);
-  if (!Fp.equals(Fp.square(root), y)) throw new Error('Cannot find square root');
+  if (!Fp.eql(Fp.sqr(root), y)) throw new Error('Cannot find square root');
   return root;
 }
 
@@ -108,7 +105,9 @@ export const secp256k1 = createCurve(
   sha256
 );
 
-// Schnorr
+// Schnorr signatures are superior to ECDSA from above.
+// Below is Schnorr-specific code as per BIP0340.
+// https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki
 const _0n = BigInt(0);
 const fe = (x: bigint) => typeof x === 'bigint' && _0n < x && x < secp256k1P;
 const ge = (x: bigint) => typeof x === 'bigint' && _0n < x && x < secp256k1N;
@@ -130,8 +129,6 @@ export function taggedHash(tag: string, ...messages: Uint8Array[]): Uint8Array {
   }
   return sha256(concatBytes(tagP, ...messages));
 }
-// Schnorr signatures are superior to ECDSA from above.
-// Below is Schnorr-specific code as per BIP0340.
 
 const tag = taggedHash;
 const toRawX = (point: PointType<bigint>) => point.toRawBytes(true).slice(1);
@@ -142,21 +139,28 @@ const Gmul = (priv: PrivKey) => _Point.fromPrivateKey(priv);
 const GmulAdd = (Q: PointType<bigint>, a: bigint, b: bigint) =>
   _Point.BASE.multiplyAndAddUnsafe(Q, a, b);
 function schnorrGetScalar(priv: bigint) {
+  // Let d' = int(sk)
+  // Fail if d' = 0 or d' ≥ n
+  // Let P = d'⋅G
+  // Let d = d' if has_even_y(P), otherwise let d = n - d' .
   const point = Gmul(priv);
   const scalar = point.hasEvenY() ? priv : modN(-priv);
   return { point, scalar, x: toRawX(point) };
 }
-function lift_x(x: bigint) {
+function lift_x(x: bigint): PointType<bigint> {
   if (!fe(x)) throw new Error('not fe'); // Fail if x ≥ p.
-  const c = mod(x * x * x + BigInt(7), secp256k1P); // Let c = x3 + 7 mod p.
+  const c = mod(x * x * x + BigInt(7), secp256k1P); // Let c = x³ + 7 mod p.
   let y = sqrtMod(c); // Let y = c^(p+1)/4 mod p.
   if (y % 2n !== 0n) y = mod(-y, secp256k1P); // Return the unique point P such that x(P) = x and
   const p = new _Point(x, y, _1n); // y(P) = y if y mod 2 = 0 or y(P) = p-y otherwise.
   p.assertValidity();
   return p;
 }
-function challenge(...args: Uint8Array[]) {
+function challenge(...args: Uint8Array[]): bigint {
   return modN(bytesToNum(tag(TAGS.challenge, ...args)));
+}
+function schnorrGetPublicKey(privateKey: PrivKey): Uint8Array {
+  return toRawX(Gmul(privateKey)); // Let d' = int(sk). Fail if d' = 0 or d' ≥ n. Return bytes(d'⋅G)
 }
 /**
  * Synchronously creates Schnorr signature. Improved security: verifies itself before
@@ -169,18 +173,20 @@ function schnorrSign(message: Hex, privateKey: Hex, auxRand: Hex = randomBytes(3
   if (message == null) throw new Error(`sign: Expected valid message, not "${message}"`);
   const m = ensureBytes(message);
   // checks for isWithinCurveOrder
+
   const { x: px, scalar: d } = schnorrGetScalar(bytesToNum(ensureBytes(privateKey, 32)));
   const a = ensureBytes(auxRand, 32); // Auxiliary random data a: a 32-byte array
   // TODO: replace with proper xor?
-  const t = numTo32b(d ^ bytesToNum(tag(TAGS.aux, a))); // Let t be the byte-wise xor of bytes(d) and hashBIP0340/aux(a)
-  const rand = tag(TAGS.nonce, t, px, m); // Let rand = hashBIP0340/nonce(t || bytes(P) || m)
+  const t = numTo32b(d ^ bytesToNum(tag(TAGS.aux, a))); // Let t be the byte-wise xor of bytes(d) and hash/aux(a)
+  const rand = tag(TAGS.nonce, t, px, m); // Let rand = hash/nonce(t || bytes(P) || m)
   const k_ = modN(bytesToNum(rand)); // Let k' = int(rand) mod n
   if (k_ === _0n) throw new Error('sign failed: k is zero'); // Fail if k' = 0.
-  const { point: R, x: rx, scalar: k } = schnorrGetScalar(k_);
-  const e = challenge(rx, px, m);
+  const { point: R, x: rx, scalar: k } = schnorrGetScalar(k_); // Let R = k'⋅G.
+  const e = challenge(rx, px, m); // Let e = int(hash/challenge(bytes(R) || bytes(P) || m)) mod n.
   const sig = new Uint8Array(64); // Let sig = bytes(R) || bytes((k + ed) mod n).
   sig.set(numTo32b(R.px), 0);
   sig.set(numTo32b(modN(k + e * d)), 32);
+  // If Verify(bytes(P), m, sig) (see below) returns failure, abort
   if (!schnorrVerify(sig, m, px)) throw new Error('sign: Invalid signature produced');
   return sig;
 }
@@ -200,7 +206,7 @@ function schnorrVerify(signature: Hex, message: Hex, publicKey: Hex): boolean {
     const e = challenge(numTo32b(r), toRawX(P), m); // int(challenge(bytes(r)||bytes(P)||m)) mod n
     const R = GmulAdd(P, s, modN(-e)); // R = s⋅G - e⋅P
     if (!R || !R.hasEvenY() || R.toAffine().x !== r) return false; // -eP == (n-e)P
-    return true;
+    return true; // Fail if is_infinite(R) / not has_even_y(R) / x(R) ≠ r.
   } catch (error) {
     return false;
   }
@@ -208,7 +214,7 @@ function schnorrVerify(signature: Hex, message: Hex, publicKey: Hex): boolean {
 
 export const schnorr = {
   // Schnorr's pubkey is just `x` of Point (BIP340)
-  getPublicKey: (privateKey: PrivKey): Uint8Array => toRawX(Gmul(privateKey)),
+  getPublicKey: schnorrGetPublicKey,
   sign: schnorrSign,
   verify: schnorrVerify,
 };

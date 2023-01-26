@@ -92,7 +92,7 @@ export function tonelliShanks(P: bigint) {
     const p1div4 = (P + _1n) / _4n;
     return function tonelliFast<T>(Fp: Field<T>, n: T) {
       const root = Fp.pow(n, p1div4);
-      if (!Fp.equals(Fp.square(root), n)) throw new Error('Cannot find square root');
+      if (!Fp.eql(Fp.sqr(root), n)) throw new Error('Cannot find square root');
       return root;
     };
   }
@@ -101,24 +101,24 @@ export function tonelliShanks(P: bigint) {
   const Q1div2 = (Q + _1n) / _2n;
   return function tonelliSlow<T>(Fp: Field<T>, n: T): T {
     // Step 0: Check that n is indeed a square: (n | p) should not be ≡ -1
-    if (Fp.pow(n, legendreC) === Fp.negate(Fp.ONE)) throw new Error('Cannot find square root');
+    if (Fp.pow(n, legendreC) === Fp.neg(Fp.ONE)) throw new Error('Cannot find square root');
     let r = S;
     // TODO: will fail at Fp2/etc
     let g = Fp.pow(Fp.mul(Fp.ONE, Z), Q); // will update both x and b
     let x = Fp.pow(n, Q1div2); // first guess at the square root
     let b = Fp.pow(n, Q); // first guess at the fudge factor
 
-    while (!Fp.equals(b, Fp.ONE)) {
-      if (Fp.equals(b, Fp.ZERO)) return Fp.ZERO; // https://en.wikipedia.org/wiki/Tonelli%E2%80%93Shanks_algorithm (4. If t = 0, return r = 0)
+    while (!Fp.eql(b, Fp.ONE)) {
+      if (Fp.eql(b, Fp.ZERO)) return Fp.ZERO; // https://en.wikipedia.org/wiki/Tonelli%E2%80%93Shanks_algorithm (4. If t = 0, return r = 0)
       // Find m such b^(2^m)==1
       let m = 1;
-      for (let t2 = Fp.square(b); m < r; m++) {
-        if (Fp.equals(t2, Fp.ONE)) break;
-        t2 = Fp.square(t2); // t2 *= t2
+      for (let t2 = Fp.sqr(b); m < r; m++) {
+        if (Fp.eql(t2, Fp.ONE)) break;
+        t2 = Fp.sqr(t2); // t2 *= t2
       }
       // NOTE: r-m-1 can be bigger than 32, need to convert to bigint before shift, otherwise there will be overflow
       const ge = Fp.pow(g, _1n << BigInt(r - m - 1)); // ge = 2^(r-m-1)
-      g = Fp.square(ge); // g = ge * ge
+      g = Fp.sqr(ge); // g = ge * ge
       x = Fp.mul(x, ge); // x *= ge
       b = Fp.mul(b, g); // b *= g
       r = m;
@@ -142,7 +142,7 @@ export function FpSqrt(P: bigint) {
     return function sqrt3mod4<T>(Fp: Field<T>, n: T) {
       const root = Fp.pow(n, p1div4);
       // Throw if root**2 != n
-      if (!Fp.equals(Fp.square(root), n)) throw new Error('Cannot find square root');
+      if (!Fp.eql(Fp.sqr(root), n)) throw new Error('Cannot find square root');
       return root;
     };
   }
@@ -156,7 +156,7 @@ export function FpSqrt(P: bigint) {
       const nv = Fp.mul(n, v);
       const i = Fp.mul(Fp.mul(nv, _2n), v);
       const root = Fp.mul(nv, Fp.sub(i, Fp.ONE));
-      if (!Fp.equals(Fp.square(root), n)) throw new Error('Cannot find square root');
+      if (!Fp.eql(Fp.sqr(root), n)) throw new Error('Cannot find square root');
       return root;
     };
   }
@@ -206,13 +206,13 @@ export interface Field<T> {
   // 1-arg
   create: (num: T) => T;
   isValid: (num: T) => boolean;
-  isZero: (num: T) => boolean;
-  negate(num: T): T;
-  invert(num: T): T;
+  is0: (num: T) => boolean;
+  neg(num: T): T;
+  inv(num: T): T;
   sqrt(num: T): T;
-  square(num: T): T;
+  sqr(num: T): T;
   // 2-args
-  equals(lhs: T, rhs: T): boolean;
+  eql(lhs: T, rhs: T): boolean;
   add(lhs: T, rhs: T): T;
   sub(lhs: T, rhs: T): T;
   mul(lhs: T, rhs: T | bigint): T;
@@ -222,13 +222,13 @@ export interface Field<T> {
   addN(lhs: T, rhs: T): T;
   subN(lhs: T, rhs: T): T;
   mulN(lhs: T, rhs: T | bigint): T;
-  squareN(num: T): T;
+  sqrN(num: T): T;
 
   // Optional
   // Should be same as sgn0 function in https://datatracker.ietf.org/doc/draft-irtf-cfrg-hash-to-curve/
   // NOTE: sgn0 is 'negative in LE', which is same as odd. And negative in LE is kinda strange definition anyway.
   isOdd?(num: T): boolean; // Odd instead of even since we have it for Fp2
-  legendre?(num: T): T;
+  // legendre?(num: T): T;
   pow(lhs: T, power: bigint): T;
   invertBatch: (lst: T[]) => T[];
   toBytes(num: T): Uint8Array;
@@ -238,9 +238,9 @@ export interface Field<T> {
 }
 // prettier-ignore
 const FIELD_FIELDS = [
-  'create', 'isValid', 'isZero', 'negate', 'invert', 'sqrt', 'square',
-  'equals', 'add', 'sub', 'mul', 'pow', 'div',
-  'addN', 'subN', 'mulN', 'squareN'
+  'create', 'isValid', 'is0', 'neg', 'inv', 'sqrt', 'sqr',
+  'eql', 'add', 'sub', 'mul', 'pow', 'div',
+  'addN', 'subN', 'mulN', 'sqrN'
 ] as const;
 export function validateField<T>(field: Field<T>) {
   for (const i of ['ORDER', 'MASK'] as const) {
@@ -268,7 +268,7 @@ export function FpPow<T>(f: Field<T>, num: T, power: bigint): T {
   let d = num;
   while (power > _0n) {
     if (power & _1n) p = f.mul(p, d);
-    d = f.square(d);
+    d = f.sqr(d);
     power >>= 1n;
   }
   return p;
@@ -278,15 +278,15 @@ export function FpInvertBatch<T>(f: Field<T>, nums: T[]): T[] {
   const tmp = new Array(nums.length);
   // Walk from first to last, multiply them by each other MOD p
   const lastMultiplied = nums.reduce((acc, num, i) => {
-    if (f.isZero(num)) return acc;
+    if (f.is0(num)) return acc;
     tmp[i] = acc;
     return f.mul(acc, num);
   }, f.ONE);
   // Invert last element
-  const inverted = f.invert(lastMultiplied);
+  const inverted = f.inv(lastMultiplied);
   // Walk from last to first, multiply them by inverted each other MOD p
   nums.reduceRight((acc, num, i) => {
-    if (f.isZero(num)) return acc;
+    if (f.is0(num)) return acc;
     tmp[i] = f.mul(acc, tmp[i]);
     return f.mul(acc, num);
   }, inverted);
@@ -294,7 +294,7 @@ export function FpInvertBatch<T>(f: Field<T>, nums: T[]): T[] {
 }
 
 export function FpDiv<T>(f: Field<T>, lhs: T, rhs: T | bigint): T {
-  return f.mul(lhs, typeof rhs === 'bigint' ? invert(rhs, f.ORDER) : f.invert(rhs));
+  return f.mul(lhs, typeof rhs === 'bigint' ? invert(rhs, f.ORDER) : f.inv(rhs));
 }
 
 // This function returns True whenever the value x is a square in the field F.
@@ -302,7 +302,7 @@ export function FpIsSquare<T>(f: Field<T>) {
   const legendreConst = (f.ORDER - _1n) / _2n; // Integer arithmetic
   return (x: T): boolean => {
     const p = f.pow(x, legendreConst);
-    return f.equals(p, f.ZERO) || f.equals(p, f.ONE);
+    return f.eql(p, f.ZERO) || f.eql(p, f.ONE);
   };
 }
 
@@ -334,12 +334,12 @@ export function Fp(
         throw new Error(`Invalid field element: expected bigint, got ${typeof num}`);
       return _0n <= num && num < ORDER; // 0 is valid element, but it's not invertible
     },
-    isZero: (num) => num === _0n,
+    is0: (num) => num === _0n,
     isOdd: (num) => (num & _1n) === _1n,
-    negate: (num) => mod(-num, ORDER),
-    equals: (lhs, rhs) => lhs === rhs,
+    neg: (num) => mod(-num, ORDER),
+    eql: (lhs, rhs) => lhs === rhs,
 
-    square: (num) => mod(num * num, ORDER),
+    sqr: (num) => mod(num * num, ORDER),
     add: (lhs, rhs) => mod(lhs + rhs, ORDER),
     sub: (lhs, rhs) => mod(lhs - rhs, ORDER),
     mul: (lhs, rhs) => mod(lhs * rhs, ORDER),
@@ -347,12 +347,12 @@ export function Fp(
     div: (lhs, rhs) => mod(lhs * invert(rhs, ORDER), ORDER),
 
     // Same as above, but doesn't normalize
-    squareN: (num) => num * num,
+    sqrN: (num) => num * num,
     addN: (lhs, rhs) => lhs + rhs,
     subN: (lhs, rhs) => lhs - rhs,
     mulN: (lhs, rhs) => lhs * rhs,
 
-    invert: (num) => invert(num, ORDER),
+    inv: (num) => invert(num, ORDER),
     sqrt: redef.sqrt || ((n) => sqrtP(f, n)),
     invertBatch: (lst) => FpInvertBatch(f, lst),
     // TODO: do we really need constant cmov?
@@ -372,11 +372,11 @@ export function Fp(
 export function FpSqrtOdd<T>(Fp: Field<T>, elm: T) {
   if (!Fp.isOdd) throw new Error(`Field doesn't have isOdd`);
   const root = Fp.sqrt(elm);
-  return Fp.isOdd(root) ? root : Fp.negate(root);
+  return Fp.isOdd(root) ? root : Fp.neg(root);
 }
 
 export function FpSqrtEven<T>(Fp: Field<T>, elm: T) {
   if (!Fp.isOdd) throw new Error(`Field doesn't have isOdd`);
   const root = Fp.sqrt(elm);
-  return Fp.isOdd(root) ? Fp.negate(root) : root;
+  return Fp.isOdd(root) ? Fp.neg(root) : root;
 }
