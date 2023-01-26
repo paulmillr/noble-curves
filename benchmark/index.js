@@ -82,7 +82,7 @@ export const CURVES = {
       secp256k1_old: ({ sig, msg, pub }) => {
         return old_secp.verify(new old_secp.Signature(sig.r, sig.s), msg, pub);
       },
-      secp256k1: ({ sig, msg, pub }) => secp256k1.verify(sig.toCompactRawBytes(), msg, pub),
+      secp256k1: ({ sig, msg, pub }) => secp256k1.verify(sig, msg, pub),
     },
     getSharedSecret: {
       samples: 1000,
@@ -152,10 +152,10 @@ export const CURVES = {
       samples: 500,
       noble: ({ sig, msg, pub }) => ed448.verify(sig, msg, pub),
     },
-    hashToCurve: {
-      samples: 500,
-      noble: () => ed448.Point.hashToCurve('abcd'),
-    },
+    // hashToCurve: {
+    //   samples: 500,
+    //   noble: () => ed448.Point.hashToCurve('abcd'),
+    // },
   },
   nist: {
     data: () => {
@@ -179,12 +179,12 @@ export const CURVES = {
       P384: ({ p384: { sig, msg, pub } }) => P384.verify(sig, msg, pub),
       P521: ({ p521: { sig, msg, pub } }) => P521.verify(sig, msg, pub),
     },
-    hashToCurve: {
-      samples: 500,
-      P256: () => P256.Point.hashToCurve('abcd'),
-      P384: () => P384.Point.hashToCurve('abcd'),
-      P521: () => P521.Point.hashToCurve('abcd'),
-    },
+    // hashToCurve: {
+    //   samples: 500,
+    //   P256: () => P256.Point.hashToCurve('abcd'),
+    //   P384: () => P384.Point.hashToCurve('abcd'),
+    //   P521: () => P521.Point.hashToCurve('abcd'),
+    // },
   },
   stark: {
     data: () => {
@@ -330,16 +330,16 @@ export const CURVES = {
       old: () => old_bls.pairing(oldp1, oldp2),
       noble: () => bls.pairing(p1, p2),
     },
-    'hashToCurve/G1': {
-      samples: 500,
-      old: () => old_bls.PointG1.hashToCurve('abcd'),
-      noble: () => bls.hashToCurve.G1.hashToCurve('abcd'),
-    },
-    'hashToCurve/G2': {
-      samples: 200,
-      old: () => old_bls.PointG2.hashToCurve('abcd'),
-      noble: () => bls.hashToCurve.G2.hashToCurve('abcd'),
-    },
+    // 'hashToCurve/G1': {
+    //   samples: 500,
+    //   old: () => old_bls.PointG1.hashToCurve('abcd'),
+    //   noble: () => bls.hashToCurve.G1.hashToCurve('abcd'),
+    // },
+    // 'hashToCurve/G2': {
+    //   samples: 200,
+    //   old: () => old_bls.PointG2.hashToCurve('abcd'),
+    //   noble: () => bls.hashToCurve.G2.hashToCurve('abcd'),
+    // },
     // SLOW PART
     // Requires points which we cannot init before (data fn same for all)
     // await mark('sign/nc', 30, () => bls.sign(msgp, priv));

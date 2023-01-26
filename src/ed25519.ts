@@ -94,6 +94,63 @@ export const ED25519_TORSION_SUBGROUP = [
 
 const Fp = Field(ED25519_P, undefined, true);
 
+const ED25519_DEF = {
+  // Param: a
+  a: BigInt(-1),
+  // Equal to -121665/121666 over finite field.
+  // Negative number is P - number, and division is invert(number, P)
+  d: BigInt('37095705934669439343138083508754565189542113879843219016388785533085940283555'),
+  // Finite field 𝔽p over which we'll do calculations; 2n ** 255n - 19n
+  Fp,
+  // Subgroup order: how many points ed25519 has
+  // 2n ** 252n + 27742317777372353535851937790883648493n;
+  n: BigInt('7237005577332262213973186563042994240857116359379907606001950938285454250989'),
+  // Cofactor
+  h: BigInt(8),
+  // Base point (x, y) aka generator point
+  Gx: BigInt('15112221349535400772501151409588531511454012693041857206046113283949847762202'),
+  Gy: BigInt('46316835694926478169428394003475163141307993866256225615783033603165251855960'),
+  hash: sha512,
+  randomBytes,
+  adjustScalarBytes,
+  // dom2
+  // Ratio of u to v. Allows us to combine inversion and square root. Uses algo from RFC8032 5.1.3.
+  // Constant-time, u/√v
+  uvRatio,
+} as const;
+
+export const ed25519 = twistedEdwards(ED25519_DEF);
+function ed25519_domain(data: Uint8Array, ctx: Uint8Array, phflag: boolean) {
+  if (ctx.length > 255) throw new Error('Context is too big');
+  return concatBytes(
+    utf8ToBytes('SigEd25519 no Ed25519 collisions'),
+    new Uint8Array([phflag ? 1 : 0, ctx.length]),
+    ctx,
+    data
+  );
+}
+export const ed25519ctx = twistedEdwards({ ...ED25519_DEF, domain: ed25519_domain });
+export const ed25519ph = twistedEdwards({
+  ...ED25519_DEF,
+  domain: ed25519_domain,
+  preHash: sha512,
+});
+
+export const x25519 = montgomery({
+  P: ED25519_P,
+  a24: BigInt('121665'),
+  montgomeryBits: 255, // n is 253 bits
+  nByteLength: 32,
+  Gu: '0900000000000000000000000000000000000000000000000000000000000000',
+  powPminus2: (x: bigint): bigint => {
+    const P = ED25519_P;
+    // x^(p-2) aka x^(2^255-21)
+    const { pow_p_5_8, b2 } = ed25519_pow_2_252_3(x);
+    return mod(pow2(pow_p_5_8, BigInt(3), P) * b2, P);
+  },
+  adjustScalarBytes,
+});
+
 // Hash To Curve Elligator2 Map (NOTE: different from ristretto255 elligator)
 // NOTE: very important part is usage of FpSqrtEven for ELL2_C1_EDWARDS, since
 // SageMath returns different root first and everything falls apart
@@ -166,49 +223,6 @@ function map_to_curve_elligator2_edwards25519(u: bigint) {
   const inv = Fp.invertBatch([xd, yd]); // batch division
   return { x: Fp.mul(xn, inv[0]), y: Fp.mul(yn, inv[1]) }; //  13. return (xn, xd, yn, yd)
 }
-
-const ED25519_DEF = {
-  // Param: a
-  a: BigInt(-1),
-  // Equal to -121665/121666 over finite field.
-  // Negative number is P - number, and division is invert(number, P)
-  d: BigInt('37095705934669439343138083508754565189542113879843219016388785533085940283555'),
-  // Finite field 𝔽p over which we'll do calculations; 2n ** 255n - 19n
-  Fp,
-  // Subgroup order: how many points ed25519 has
-  // 2n ** 252n + 27742317777372353535851937790883648493n;
-  n: BigInt('7237005577332262213973186563042994240857116359379907606001950938285454250989'),
-  // Cofactor
-  h: BigInt(8),
-  // Base point (x, y) aka generator point
-  Gx: BigInt('15112221349535400772501151409588531511454012693041857206046113283949847762202'),
-  Gy: BigInt('46316835694926478169428394003475163141307993866256225615783033603165251855960'),
-  hash: sha512,
-  randomBytes,
-  adjustScalarBytes,
-  // dom2
-  // Ratio of u to v. Allows us to combine inversion and square root. Uses algo from RFC8032 5.1.3.
-  // Constant-time, u/√v
-  uvRatio,
-} as const;
-
-export const ed25519 = twistedEdwards(ED25519_DEF);
-function ed25519_domain(data: Uint8Array, ctx: Uint8Array, phflag: boolean) {
-  if (ctx.length > 255) throw new Error('Context is too big');
-  return concatBytes(
-    utf8ToBytes('SigEd25519 no Ed25519 collisions'),
-    new Uint8Array([phflag ? 1 : 0, ctx.length]),
-    ctx,
-    data
-  );
-}
-export const ed25519ctx = twistedEdwards({ ...ED25519_DEF, domain: ed25519_domain });
-export const ed25519ph = twistedEdwards({
-  ...ED25519_DEF,
-  domain: ed25519_domain,
-  preHash: sha512,
-});
-
 const { hashToCurve, encodeToCurve } = htf.hashToCurve(
   ed25519.ExtendedPoint,
   (scalars: bigint[]) => map_to_curve_elligator2_edwards25519(scalars[0]),
@@ -223,21 +237,6 @@ const { hashToCurve, encodeToCurve } = htf.hashToCurve(
   }
 );
 export { hashToCurve, encodeToCurve };
-
-export const x25519 = montgomery({
-  P: ED25519_P,
-  a24: BigInt('121665'),
-  montgomeryBits: 255, // n is 253 bits
-  nByteLength: 32,
-  Gu: '0900000000000000000000000000000000000000000000000000000000000000',
-  powPminus2: (x: bigint): bigint => {
-    const P = ED25519_P;
-    // x^(p-2) aka x^(2^255-21)
-    const { pow_p_5_8, b2 } = ed25519_pow_2_252_3(x);
-    return mod(pow2(pow_p_5_8, BigInt(3), P) * b2, P);
-  },
-  adjustScalarBytes,
-});
 
 function assertRstPoint(other: unknown) {
   if (!(other instanceof RistrettoPoint)) throw new Error('RistrettoPoint expected');

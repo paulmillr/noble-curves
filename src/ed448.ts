@@ -55,6 +55,101 @@ function adjustScalarBytes(bytes: Uint8Array): Uint8Array {
 
 const Fp = Field(ed448P, 456, true);
 
+const ED448_DEF = {
+  // Param: a
+  a: BigInt(1),
+  // -39081. Negative number is P - number
+  d: BigInt(
+    '726838724295606890549323807888004534353641360687318060281490199180612328166730772686396383698676545930088884461843637361053498018326358'
+  ),
+  // Finite field 𝔽p over which we'll do calculations; 2n ** 448n - 2n ** 224n - 1n
+  Fp,
+  // Subgroup order: how many points curve has;
+  // 2n**446n - 13818066809895115352007386748515426880336692474882178609894547503885n
+  n: BigInt(
+    '181709681073901722637330951972001133588410340171829515070372549795146003961539585716195755291692375963310293709091662304773755859649779'
+  ),
+  nBitLength: 456,
+  // Cofactor
+  h: BigInt(4),
+  // Base point (x, y) aka generator point
+  Gx: BigInt(
+    '224580040295924300187604334099896036246789641632564134246125461686950415467406032909029192869357953282578032075146446173674602635247710'
+  ),
+  Gy: BigInt(
+    '298819210078481492676017930443930673437544040154080242095928241372331506189835876003536878655418784733982303233503462500531545062832660'
+  ),
+  // SHAKE256(dom4(phflag,context)||x, 114)
+  hash: shake256_114,
+  randomBytes,
+  adjustScalarBytes,
+  // dom4
+  domain: (data: Uint8Array, ctx: Uint8Array, phflag: boolean) => {
+    if (ctx.length > 255) throw new Error(`Context is too big: ${ctx.length}`);
+    return concatBytes(
+      utf8ToBytes('SigEd448'),
+      new Uint8Array([phflag ? 1 : 0, ctx.length]),
+      ctx,
+      data
+    );
+  },
+
+  // Constant-time ratio of u to v. Allows to combine inversion and square root u/√v.
+  // Uses algo from RFC8032 5.1.3.
+  uvRatio: (u: bigint, v: bigint): { isValid: boolean; value: bigint } => {
+    const P = ed448P;
+    // https://datatracker.ietf.org/doc/html/rfc8032#section-5.2.3
+    // To compute the square root of (u/v), the first step is to compute the
+    //   candidate root x = (u/v)^((p+1)/4).  This can be done using the
+    // following trick, to use a single modular powering for both the
+    // inversion of v and the square root:
+    // x = (u/v)^((p+1)/4)   = u³v(u⁵v³)^((p-3)/4)   (mod p)
+    const u2v = mod(u * u * v, P); // u²v
+    const u3v = mod(u2v * u, P); // u³v
+    const u5v3 = mod(u3v * u2v * v, P); // u⁵v³
+    const root = ed448_pow_Pminus3div4(u5v3);
+    const x = mod(u3v * root, P);
+    // Verify that root is exists
+    const x2 = mod(x * x, P); // x²
+    // If vx² = u, the recovered x-coordinate is x.  Otherwise, no
+    // square root exists, and the decoding fails.
+    return { isValid: mod(x2 * v, P) === u, value: x };
+  },
+} as const;
+
+export const ed448 = twistedEdwards(ED448_DEF);
+// NOTE: there is no ed448ctx, since ed448 supports ctx by default
+export const ed448ph = twistedEdwards({ ...ED448_DEF, preHash: shake256_64 });
+
+export const x448 = montgomery({
+  a24: BigInt(39081),
+  montgomeryBits: 448,
+  nByteLength: 57,
+  P: ed448P,
+  Gu: '0500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
+  powPminus2: (x: bigint): bigint => {
+    const P = ed448P;
+    const Pminus3div4 = ed448_pow_Pminus3div4(x);
+    const Pminus3 = pow2(Pminus3div4, BigInt(2), P);
+    return mod(Pminus3 * x, P); // Pminus3 * x = Pminus2
+  },
+  adjustScalarBytes,
+  // The 4-isogeny maps between the Montgomery curve and this Edwards
+  // curve are:
+  //   (u, v) = (y^2/x^2, (2 - x^2 - y^2)*y/x^3)
+  //   (x, y) = (4*v*(u^2 - 1)/(u^4 - 2*u^2 + 4*v^2 + 1),
+  //             -(u^5 - 2*u^3 - 4*u*v^2 + u)/
+  //             (u^5 - 2*u^2*v^2 - 2*u^3 - 2*v^2 + u))
+  // xyToU: (p: PointType) => {
+  //   const P = ed448P;
+  //   const { x, y } = p;
+  //   if (x === _0n) throw new Error(`Point with x=0 doesn't have mapping`);
+  //   const invX = invert(x * x, P); // x^2
+  //   const u = mod(y * y * invX, P); // (y^2/x^2)
+  //   return numberToBytesLE(u, 56);
+  // },
+});
+
 // Hash To Curve Elligator2 Map
 const ELL2_C1 = (Fp.ORDER - BigInt(3)) / BigInt(4); // 1. c1 = (q - 3) / 4         # Integer arithmetic
 const ELL2_J = BigInt(156326);
@@ -130,72 +225,6 @@ function map_to_curve_elligator2_edwards448(u: bigint) {
   return { x: Fp.mul(xEn, inv[0]), y: Fp.mul(yEn, inv[1]) }; // 38. return (xEn, xEd, yEn, yEd)
 }
 
-const ED448_DEF = {
-  // Param: a
-  a: BigInt(1),
-  // -39081. Negative number is P - number
-  d: BigInt(
-    '726838724295606890549323807888004534353641360687318060281490199180612328166730772686396383698676545930088884461843637361053498018326358'
-  ),
-  // Finite field 𝔽p over which we'll do calculations; 2n ** 448n - 2n ** 224n - 1n
-  Fp,
-  // Subgroup order: how many points curve has;
-  // 2n**446n - 13818066809895115352007386748515426880336692474882178609894547503885n
-  n: BigInt(
-    '181709681073901722637330951972001133588410340171829515070372549795146003961539585716195755291692375963310293709091662304773755859649779'
-  ),
-  nBitLength: 456,
-  // Cofactor
-  h: BigInt(4),
-  // Base point (x, y) aka generator point
-  Gx: BigInt(
-    '224580040295924300187604334099896036246789641632564134246125461686950415467406032909029192869357953282578032075146446173674602635247710'
-  ),
-  Gy: BigInt(
-    '298819210078481492676017930443930673437544040154080242095928241372331506189835876003536878655418784733982303233503462500531545062832660'
-  ),
-  // SHAKE256(dom4(phflag,context)||x, 114)
-  hash: shake256_114,
-  randomBytes,
-  adjustScalarBytes,
-  // dom4
-  domain: (data: Uint8Array, ctx: Uint8Array, phflag: boolean) => {
-    if (ctx.length > 255) throw new Error(`Context is too big: ${ctx.length}`);
-    return concatBytes(
-      utf8ToBytes('SigEd448'),
-      new Uint8Array([phflag ? 1 : 0, ctx.length]),
-      ctx,
-      data
-    );
-  },
-
-  // Constant-time ratio of u to v. Allows to combine inversion and square root u/√v.
-  // Uses algo from RFC8032 5.1.3.
-  uvRatio: (u: bigint, v: bigint): { isValid: boolean; value: bigint } => {
-    const P = ed448P;
-    // https://datatracker.ietf.org/doc/html/rfc8032#section-5.2.3
-    // To compute the square root of (u/v), the first step is to compute the
-    //   candidate root x = (u/v)^((p+1)/4).  This can be done using the
-    // following trick, to use a single modular powering for both the
-    // inversion of v and the square root:
-    // x = (u/v)^((p+1)/4)   = u³v(u⁵v³)^((p-3)/4)   (mod p)
-    const u2v = mod(u * u * v, P); // u²v
-    const u3v = mod(u2v * u, P); // u³v
-    const u5v3 = mod(u3v * u2v * v, P); // u⁵v³
-    const root = ed448_pow_Pminus3div4(u5v3);
-    const x = mod(u3v * root, P);
-    // Verify that root is exists
-    const x2 = mod(x * x, P); // x²
-    // If vx² = u, the recovered x-coordinate is x.  Otherwise, no
-    // square root exists, and the decoding fails.
-    return { isValid: mod(x2 * v, P) === u, value: x };
-  },
-} as const;
-
-export const ed448 = twistedEdwards(ED448_DEF);
-// NOTE: there is no ed448ctx, since ed448 supports ctx by default
-export const ed448ph = twistedEdwards({ ...ED448_DEF, preHash: shake256_64 });
-
 const { hashToCurve, encodeToCurve } = htf.hashToCurve(
   ed448.ExtendedPoint,
   (scalars: bigint[]) => map_to_curve_elligator2_edwards448(scalars[0]),
@@ -210,32 +239,3 @@ const { hashToCurve, encodeToCurve } = htf.hashToCurve(
   }
 );
 export { hashToCurve, encodeToCurve };
-
-export const x448 = montgomery({
-  a24: BigInt(39081),
-  montgomeryBits: 448,
-  nByteLength: 57,
-  P: ed448P,
-  Gu: '0500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
-  powPminus2: (x: bigint): bigint => {
-    const P = ed448P;
-    const Pminus3div4 = ed448_pow_Pminus3div4(x);
-    const Pminus3 = pow2(Pminus3div4, BigInt(2), P);
-    return mod(Pminus3 * x, P); // Pminus3 * x = Pminus2
-  },
-  adjustScalarBytes,
-  // The 4-isogeny maps between the Montgomery curve and this Edwards
-  // curve are:
-  //   (u, v) = (y^2/x^2, (2 - x^2 - y^2)*y/x^3)
-  //   (x, y) = (4*v*(u^2 - 1)/(u^4 - 2*u^2 + 4*v^2 + 1),
-  //             -(u^5 - 2*u^3 - 4*u*v^2 + u)/
-  //             (u^5 - 2*u^2*v^2 - 2*u^3 - 2*v^2 + u))
-  // xyToU: (p: PointType) => {
-  //   const P = ed448P;
-  //   const { x, y } = p;
-  //   if (x === _0n) throw new Error(`Point with x=0 doesn't have mapping`);
-  //   const invX = invert(x * x, P); // x^2
-  //   const u = mod(y * y * invX, P); // (y^2/x^2)
-  //   return numberToBytesLE(u, 56);
-  // },
-});

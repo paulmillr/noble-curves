@@ -604,6 +604,7 @@ export type SignatureConstructor = {
   fromCompact(hex: Hex): SignatureType;
   fromDER(hex: Hex): SignatureType;
 };
+type SignatureLike = { r: bigint; s: bigint };
 
 export type PubKey = Hex | ProjPointType<bigint>;
 
@@ -634,7 +635,7 @@ export type CurveFn = {
   getPublicKey: (privateKey: PrivKey, isCompressed?: boolean) => Uint8Array;
   getSharedSecret: (privateA: PrivKey, publicB: Hex, isCompressed?: boolean) => Uint8Array;
   sign: (msgHash: Hex, privKey: PrivKey, opts?: SignOpts) => SignatureType;
-  verify: (signature: Hex | SignatureType, msgHash: Hex, publicKey: Hex, opts?: VerOpts) => boolean;
+  verify: (signature: Hex | SignatureLike, msgHash: Hex, publicKey: Hex, opts?: VerOpts) => boolean;
   ProjectivePoint: ProjConstructor<bigint>;
   Signature: SignatureConstructor;
   utils: {
@@ -955,6 +956,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     // works with order, can have different size than numToField!
     return ut.numberToBytesBE(num, CURVE.nByteLength);
   }
+
   // Steps A, D of RFC6979 3.2
   // Creates RFC6979 seed; converts msg/privKey to numbers.
   // Used only in sign, not in verify.
@@ -1048,7 +1050,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
    * ```
    */
   function verify(
-    signature: Hex | SignatureType,
+    signature: Hex | { r: bigint; s: bigint },
     msgHash: Hex,
     publicKey: Hex,
     opts = defaultVerOpts
@@ -1057,9 +1059,9 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     let _sig: Signature | undefined = undefined;
     if (publicKey instanceof Point) throw new Error('publicKey must be hex');
     try {
-      if (signature instanceof Signature) {
-        signature.assertValidity();
-        _sig = signature;
+      if (signature && typeof signature === 'object' && !(signature instanceof Uint8Array)) {
+        const { r, s } = signature;
+        _sig = new Signature(r, s); // assertValidity() is executed on creation
       } else {
         // Signature can be represented in 2 ways: compact (2*nByteLength) & DER (variable-length).
         // Since DER can also be 2*nByteLength bytes, we check for it first.
