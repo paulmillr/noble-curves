@@ -193,7 +193,7 @@ export function bls<Fp2, Fp6, Fp12>(
     ) => htf.hash_to_field(msg, count, { ...CURVE.htfDefaults, ...options }),
     expandMessageXMD: (msg: Uint8Array, DST: Uint8Array, lenInBytes: number, H = CURVE.hash) =>
       htf.expand_message_xmd(msg, DST, lenInBytes, H),
-    hashToPrivateKey: (hash: Hex): Uint8Array => Fr.toBytes(ut.hashToPrivateScalar(hash, CURVE.r)),
+    hashToPrivateKey: (hash: Hex): Uint8Array => Fr.toBytes(mod.hashToPrivateScalar(hash, CURVE.r)),
     randomBytes: (bytesLength: number = groupLen): Uint8Array => CURVE.randomBytes(bytesLength),
     randomPrivateKey: (): Uint8Array => utils.hashToPrivateKey(utils.randomBytes(groupLen + 8)),
   };

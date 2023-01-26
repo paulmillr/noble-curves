@@ -1,6 +1,6 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import * as mod from './modular.js';
-import { ensureBytes, numberToBytesLE, bytesToNumberLE, isPositiveInt } from './utils.js';
+import { ensureBytes, numberToBytesLE, bytesToNumberLE } from './utils.js';
 
 const _0n = BigInt(0);
 const _1n = BigInt(1);
@@ -33,7 +33,7 @@ function validateOpts(curve: CurveType) {
   }
   for (const i of ['montgomeryBits', 'nByteLength'] as const) {
     if (curve[i] === undefined) continue; // Optional
-    if (!isPositiveInt(curve[i]))
+    if (!Number.isSafeInteger(curve[i]))
       throw new Error(`Invalid curve param ${i}=${curve[i]} (${typeof curve[i]})`);
   }
   for (const fn of ['adjustScalarBytes', 'domain', 'powPminus2'] as const) {
@@ -46,7 +46,6 @@ function validateOpts(curve: CurveType) {
       throw new Error(`Invalid curve param ${i}=${curve[i]} (${typeof curve[i]})`);
   }
   // Set defaults
-  // ...nLength(curve.n, curve.nBitLength),
   return Object.freeze({ ...curve } as const);
 }
 

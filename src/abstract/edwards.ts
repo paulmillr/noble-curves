@@ -1,9 +1,16 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 // Twisted Edwards curve. The formula is: ax² + y² = 1 + dx²y²
-import * as mod from './modular.js';
-import * as ut from './utils.js';
-import { ensureBytes, Hex } from './utils.js';
-import { Group, GroupConstructor, wNAF } from './group.js';
+import { mod } from './modular.js';
+import {
+  bytesToHex,
+  bytesToNumberLE,
+  concatBytes,
+  ensureBytes,
+  FHash,
+  Hex,
+  numberToBytesLE,
+} from './utils.js';
+import { Group, GroupConstructor, wNAF, BasicCurve, validateBasicCurveOpts } from './curve.js';
 
 // Be friendly to bad ECMAScript parsers by not using bigint literals like 123n
 const _0n = BigInt(0);
@@ -12,20 +19,20 @@ const _2n = BigInt(2);
 const _8n = BigInt(8);
 
 // Edwards curves must declare params a & d.
-export type CurveType = ut.BasicCurve<bigint> & {
+export type CurveType = BasicCurve<bigint> & {
   a: bigint; // curve param a
   d: bigint; // curve param d
-  hash: ut.FHash; // Hashing
+  hash: FHash; // Hashing
   randomBytes: (bytesLength?: number) => Uint8Array; // CSPRNG
   adjustScalarBytes?: (bytes: Uint8Array) => Uint8Array; // clears bits to get valid field elemtn
   domain?: (data: Uint8Array, ctx: Uint8Array, phflag: boolean) => Uint8Array; // Used for hashing
   uvRatio?: (u: bigint, v: bigint) => { isValid: boolean; value: bigint }; // Ratio √(u/v)
-  preHash?: ut.FHash; // RFC 8032 pre-hashing of messages to sign() / verify()
+  preHash?: FHash; // RFC 8032 pre-hashing of messages to sign() / verify()
   mapToCurve?: (scalar: bigint[]) => AffinePoint; // for hash-to-curve standard
 };
 
 function validateOpts(curve: CurveType) {
-  const opts = ut.validateOpts(curve);
+  const opts = validateBasicCurveOpts(curve);
   if (typeof opts.hash !== 'function') throw new Error('Invalid hash function');
   for (const i of ['a', 'd'] as const) {
     const val = opts[i];
@@ -329,7 +336,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       const normed = hex.slice(); // copy again, we'll manipulate it
       const lastByte = hex[len - 1]; // select last byte
       normed[len - 1] = lastByte & ~0x80; // clear last bit
-      const y = ut.bytesToNumberLE(normed);
+      const y = bytesToNumberLE(normed);
       if (y === _0n) {
         // y=0 is allowed
       } else {
@@ -355,20 +362,23 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     }
     toRawBytes(): Uint8Array {
       const { x, y } = this.toAffine();
-      const bytes = ut.numberToBytesLE(y, Fp.BYTES); // each y has 2 x values (x, -y)
+      const bytes = numberToBytesLE(y, Fp.BYTES); // each y has 2 x values (x, -y)
       bytes[bytes.length - 1] |= x & _1n ? 0x80 : 0; // when compressing, it's enough to store y
       return bytes; // and use the last byte to encode sign of x
     }
     toHex(): string {
-      return ut.bytesToHex(this.toRawBytes()); // Same as toRawBytes, but returns string.
+      return bytesToHex(this.toRawBytes()); // Same as toRawBytes, but returns string.
     }
   }
   const { BASE: G, ZERO: I } = Point;
   const wnaf = wNAF(Point, nByteLength * 8);
 
+  function modN(a: bigint) {
+    return mod(a, CURVE_ORDER);
+  }
   // Little-endian SHA512 with modulo n
-  function modnLE(hash: Uint8Array): bigint {
-    return mod.mod(ut.bytesToNumberLE(hash), CURVE_ORDER);
+  function modN_LE(hash: Uint8Array): bigint {
+    return modN(bytesToNumberLE(hash));
   }
   function isHex(item: Hex, err: string) {
     if (typeof item !== 'string' && !(item instanceof Uint8Array))
@@ -384,7 +394,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     const hashed = ensureBytes(cHash(ensureBytes(key, len)), 2 * len);
     const head = adjustScalarBytes(hashed.slice(0, len)); // clear first half bits, produce FE
     const prefix = hashed.slice(len, 2 * len); // second half is called key prefix (5.1.6)
-    const scalar = modnLE(head); // The actual private scalar
+    const scalar = modN_LE(head); // The actual private scalar
     const point = G.multiply(scalar); // Point on Edwards curve aka public key
     const pointBytes = point.toRawBytes(); // Uint8Array representation
     return { head, prefix, scalar, point, pointBytes };
@@ -397,8 +407,8 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
 
   // int('LE', SHA512(dom2(F, C) || msgs)) mod N
   function hashDomainToScalar(context: Hex = new Uint8Array(), ...msgs: Uint8Array[]) {
-    const msg = ut.concatBytes(...msgs);
-    return modnLE(cHash(domain(msg, ensureBytes(context), !!preHash)));
+    const msg = concatBytes(...msgs);
+    return modN_LE(cHash(domain(msg, ensureBytes(context), !!preHash)));
   }
 
   /** Signs message with privateKey. RFC8032 5.1.6 */
@@ -410,9 +420,9 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     const r = hashDomainToScalar(context, prefix, msg); // r = dom2(F, C) || prefix || PH(M)
     const R = G.multiply(r).toRawBytes(); // R = rG
     const k = hashDomainToScalar(context, R, pointBytes, msg); // R || A || PH(M)
-    const s = mod.mod(r + k * scalar, CURVE_ORDER); // S = (r + k * s) mod L
+    const s = modN(r + k * scalar); // S = (r + k * s) mod L
     assertGE0(s); // 0 <= s < l
-    const res = ut.concatBytes(R, ut.numberToBytesLE(s, Fp.BYTES));
+    const res = concatBytes(R, numberToBytesLE(s, Fp.BYTES));
     return ensureBytes(res, nByteLength * 2); // 64-byte signature
   }
 
@@ -425,7 +435,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     if (preHash) msg = preHash(msg); // for ed25519ph, etc
     const A = Point.fromHex(publicKey, false); // Check for s bounds, hex validity
     const R = Point.fromHex(sig.slice(0, len), false); // 0 <= R < 2^256: ZIP215 R can be >= P
-    const s = ut.bytesToNumberLE(sig.slice(len, 2 * len)); // 0 <= s < l
+    const s = bytesToNumberLE(sig.slice(len, 2 * len)); // 0 <= s < l
     const SB = G.multiplyUnsafe(s);
     const k = hashDomainToScalar(context, R.toRawBytes(), A.toRawBytes(), msg);
     const RkA = R.add(A.multiplyUnsafe(k));

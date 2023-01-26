@@ -140,7 +140,6 @@ function testCurve(curve, ro, nu) {
 testCurve(secp256r1, p256_ro, p256_nu);
 testCurve(secp384r1, p384_ro, p384_nu);
 testCurve(secp521r1, p521_ro, p521_nu);
-// TODO: remove same tests from bls12
 testCurve(bls12_381.hashToCurve.G1, g1_ro, g1_nu);
 testCurve(bls12_381.hashToCurve.G2, g2_ro, g2_nu);
 testCurve(secp256k1, secp256k1_ro, secp256k1_nu);

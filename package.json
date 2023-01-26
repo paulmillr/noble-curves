@@ -73,10 +73,10 @@
       "import": "./lib/esm/abstract/hash-to-curve.js",
       "default": "./lib/abstract/hash-to-curve.js"
     },
-    "./abstract/group": {
-      "types": "./lib/abstract/group.d.ts",
-      "import": "./lib/esm/abstract/group.js",
-      "default": "./lib/abstract/group.js"
+    "./abstract/curve": {
+      "types": "./lib/abstract/curve.d.ts",
+      "import": "./lib/esm/abstract/curve.js",
+      "default": "./lib/abstract/curve.js"
     },
     "./abstract/utils": {
       "types": "./lib/abstract/utils.d.ts",

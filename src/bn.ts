@@ -1,6 +1,6 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { weierstrass } from './abstract/weierstrass.js';
 import { sha256 } from '@noble/hashes/sha256';
+import { weierstrass } from './abstract/weierstrass.js';
 import { getHash } from './_shortw_utils.js';
 import { Fp } from './abstract/modular.js';
 /**

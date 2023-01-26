@@ -1,7 +1,13 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-// TODO: remove circular imports
-import * as utils from './utils.js';
 // Utilities for modular arithmetics and finite fields
+import {
+  bitMask,
+  numberToBytesBE,
+  numberToBytesLE,
+  bytesToNumberBE,
+  bytesToNumberLE,
+  ensureBytes,
+} from './utils.js';
 // prettier-ignore
 const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3);
 // prettier-ignore
@@ -306,6 +312,14 @@ export function FpIsSquare<T>(f: Field<T>) {
   };
 }
 
+// CURVE.n lengths
+export function nLength(n: bigint, nBitLength?: number) {
+  // Bit size, byte size of CURVE.n
+  const _nBitLength = nBitLength !== undefined ? nBitLength : n.toString(2).length;
+  const nByteLength = Math.ceil(_nBitLength / 8);
+  return { nBitLength: _nBitLength, nByteLength };
+}
+
 // NOTE: very fragile, always bench. Major performance points:
 // - NonNormalized ops
 // - Object.freeze
@@ -318,14 +332,14 @@ export function Fp(
   redef: Partial<Field<bigint>> = {}
 ): Readonly<FpField> {
   if (ORDER <= _0n) throw new Error(`Expected Fp ORDER > 0, got ${ORDER}`);
-  const { nBitLength: BITS, nByteLength: BYTES } = utils.nLength(ORDER, bitLen);
+  const { nBitLength: BITS, nByteLength: BYTES } = nLength(ORDER, bitLen);
   if (BYTES > 2048) throw new Error('Field lengths over 2048 bytes are not supported');
   const sqrtP = FpSqrt(ORDER);
   const f: Readonly<FpField> = Object.freeze({
     ORDER,
     BITS,
     BYTES,
-    MASK: utils.bitMask(BITS),
+    MASK: bitMask(BITS),
     ZERO: _0n,
     ONE: _1n,
     create: (num) => mod(num, ORDER),
@@ -358,12 +372,11 @@ export function Fp(
     // TODO: do we really need constant cmov?
     // We don't have const-time bigints anyway, so probably will be not very useful
     cmov: (a, b, c) => (c ? b : a),
-    toBytes: (num) =>
-      isLE ? utils.numberToBytesLE(num, BYTES) : utils.numberToBytesBE(num, BYTES),
+    toBytes: (num) => (isLE ? numberToBytesLE(num, BYTES) : numberToBytesBE(num, BYTES)),
     fromBytes: (bytes) => {
       if (bytes.length !== BYTES)
         throw new Error(`Fp.fromBytes: expected ${BYTES}, got ${bytes.length}`);
-      return isLE ? utils.bytesToNumberLE(bytes) : utils.bytesToNumberBE(bytes);
+      return isLE ? bytesToNumberLE(bytes) : bytesToNumberBE(bytes);
     },
   } as FpField);
   return Object.freeze(f);
@@ -379,4 +392,27 @@ export function FpSqrtEven<T>(Fp: Field<T>, elm: T) {
   if (!Fp.isOdd) throw new Error(`Field doesn't have isOdd`);
   const root = Fp.sqrt(elm);
   return Fp.isOdd(root) ? Fp.neg(root) : root;
+}
+
+/**
+ * FIPS 186 B.4.1-compliant "constant-time" private key generation utility.
+ * Can take (n+8) or more bytes of uniform input e.g. from CSPRNG or KDF
+ * and convert them into private scalar, with the modulo bias being neglible.
+ * Needs at least 40 bytes of input for 32-byte private key.
+ * https://research.kudelskisecurity.com/2020/07/28/the-definitive-guide-to-modulo-bias-and-how-to-avoid-it/
+ * @param hash hash output from SHA3 or a similar function
+ * @returns valid private scalar
+ */
+export function hashToPrivateScalar(
+  hash: string | Uint8Array,
+  groupOrder: bigint,
+  isLE = false
+): bigint {
+  hash = ensureBytes(hash);
+  const hashLen = hash.length;
+  const minLen = nLength(groupOrder).nByteLength + 8;
+  if (minLen < 24 || hashLen < minLen || hashLen > 1024)
+    throw new Error(`hashToPrivateScalar: expected ${minLen}-1024 bytes of input, got ${hashLen}`);
+  const num = isLE ? bytesToNumberLE(hash) : bytesToNumberBE(hash);
+  return mod(num, groupOrder - _1n) + _1n;
 }

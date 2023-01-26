@@ -1,3 +1,4 @@
+/*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 // Poseidon Hash (https://eprint.iacr.org/2019/458.pdf)
 // Website: https://www.poseidon-hash.info
 

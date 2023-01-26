@@ -1,5 +1,6 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 // Abelian group utilities
+import { Field, validateField, nLength } from './modular.js';
 const _0n = BigInt(0);
 const _1n = BigInt(1);
 
@@ -143,4 +144,37 @@ export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number) {
       return this.wNAF(W, comp, n);
     },
   };
+}
+
+// Generic BasicCurve interface: works even for polynomial fields (BLS): P, n, h would be ok.
+// Though generator can be different (Fp2 / Fp6 for BLS).
+export type BasicCurve<T> = {
+  Fp: Field<T>; // Field over which we'll do calculations (Fp)
+  n: bigint; // Curve order, total count of valid points in the field
+  nBitLength?: number; // bit length of curve order
+  nByteLength?: number; // byte length of curve order
+  h: bigint; // cofactor. we can assign default=1, but users will just ignore it w/o validation
+  hEff?: bigint; // Number to multiply to clear cofactor
+  Gx: T; // base point X coordinate
+  Gy: T; // base point Y coordinate
+  wrapPrivateKey?: boolean; // bls12-381 requires mod(n) instead of rejecting keys >= n
+  allowInfinityPoint?: boolean; // bls12-381 requires it. ZERO point is valid, but invalid pubkey
+};
+
+export function validateBasicCurveOpts<FP, T>(curve: BasicCurve<FP> & T) {
+  validateField(curve.Fp);
+  for (const i of ['n', 'h'] as const) {
+    const val = curve[i];
+    if (typeof val !== 'bigint') throw new Error(`Invalid curve param ${i}=${val} (${typeof val})`);
+  }
+  if (!curve.Fp.isValid(curve.Gx)) throw new Error('Invalid generator X coordinate Fp element');
+  if (!curve.Fp.isValid(curve.Gy)) throw new Error('Invalid generator Y coordinate Fp element');
+
+  for (const i of ['nBitLength', 'nByteLength'] as const) {
+    const val = curve[i];
+    if (val === undefined) continue; // Optional
+    if (!Number.isSafeInteger(val)) throw new Error(`Invalid param ${i}=${val} (${typeof val})`);
+  }
+  // Set defaults
+  return Object.freeze({ ...nLength(curve.n, curve.nBitLength), ...curve } as const);
 }

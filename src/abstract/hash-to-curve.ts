@@ -1,7 +1,7 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import * as ut from './utils.js';
 import * as mod from './modular.js';
-import type { Group, GroupConstructor } from './group.js';
+import type { Group, GroupConstructor } from './curve.js';
 
 export type Opts = {
   // DST: a domain separation tag
@@ -38,13 +38,16 @@ export function validateOpts(opts: Opts) {
     throw new Error('Invalid htf/hash function');
 }
 
-// UTF8 to ui8a
-// TODO: looks broken, ASCII only, why not TextEncoder/TextDecoder? it is in hashes anyway
-export function stringToBytes(str: string) {
-  // return new TextEncoder().encode(str);
-  const bytes = new Uint8Array(str.length);
-  for (let i = 0; i < str.length; i++) bytes[i] = str.charCodeAt(i);
-  return bytes;
+// Global symbols in both browsers and Node.js since v11
+// See https://github.com/microsoft/TypeScript/issues/31535
+declare const TextEncoder: any;
+declare const TextDecoder: any;
+
+export function stringToBytes(str: string): Uint8Array {
+  if (typeof str !== 'string') {
+    throw new TypeError(`utf8ToBytes expected string, got ${typeof str}`);
+  }
+  return new TextEncoder().encode(str);
 }
 
 // Octet Stream to Integer (bytesToNumberBE)
