@@ -162,7 +162,6 @@ export type AbstractCurve<T> = {
   hEff?: bigint; // Number to multiply to clear cofactor
   Gx: T; // base point X coordinate
   Gy: T; // base point Y coordinate
-  wrapPrivateKey?: boolean; // bls12-381 requires mod(n) instead of rejecting keys >= n
   allowInfinityPoint?: boolean; // bls12-381 requires it. ZERO point is valid, but invalid pubkey
 };
 

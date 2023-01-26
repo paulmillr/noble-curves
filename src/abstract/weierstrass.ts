@@ -24,10 +24,9 @@ export type BasicCurve<T> = AbstractCurve<T> & {
   b: T;
 
   // Optional params
-  // Executed before privkey validation. Useful for P521 with var-length priv key
-  normalizePrivateKey?: (key: PrivKey) => PrivKey;
+  normalizePrivateKey?: (key: PrivKey) => PrivKey; // called before privkey validation. used w p521
   // Whether to execute modular division on a private key, useful for bls curves with cofactor > 1
-  wrapPrivateKey?: boolean;
+  wrapPrivateKey?: boolean; // bls12-381 requires mod(n) instead of rejecting keys >= n
   // Endomorphism options for Koblitz curves
   endo?: EndomorphismOpts;
   // When a cofactor != 1, there can be an effective methods to:
@@ -207,32 +206,19 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
   function assertGE(num: bigint) {
     if (!isWithinCurveOrder(num)) throw new Error('Expected valid bigint: 0 < bigint < curve.n');
   }
-  /**
-   * Validates if a private key is valid and converts it to bigint form.
-   * Supports two options, that are passed when CURVE is initialized:
-   * - `normalizePrivateKey()` executed before all checks
-   * - `wrapPrivateKey` when true, executed after most checks, but before `0 < key < n`
-   */
+  // Validates if priv key is valid and converts it to bigint.
+  // Supports options CURVE.normalizePrivateKey and CURVE.wrapPrivateKey.
   function normalizePrivateKey(key: PrivKey): bigint {
-    const { normalizePrivateKey: custom, nByteLength: groupLen, wrapPrivateKey, n } = CURVE;
-    if (typeof custom === 'function') key = custom(key);
+    const { normalizePrivateKey: custom, nByteLength, wrapPrivateKey, n } = CURVE;
+    if (typeof custom === 'function') key = custom(key); // CURVE.normalizePrivateKey()
     let num: bigint;
-    if (typeof key === 'bigint') {
-      // Curve order check is done below
-      num = key;
-    } else if (typeof key === 'string') {
-      if (key.length !== 2 * groupLen) throw new Error(`must be ${groupLen} bytes`);
-      // Validates individual octets
-      num = ut.bytesToNumberBE(ensureBytes(key));
-    } else if (key instanceof Uint8Array) {
-      if (key.length !== groupLen) throw new Error(`must be ${groupLen} bytes`);
-      num = ut.bytesToNumberBE(key);
-    } else {
-      throw new Error('private key must be bytes, hex or bigint, not ' + typeof key);
+    try {
+      num = typeof key === 'bigint' ? key : ut.bytesToNumberBE(ensureBytes(key, nByteLength));
+    } catch (error) {
+      throw new Error(`private key must be ${nByteLength} bytes, hex or bigint, not ${typeof key}`);
     }
-    // Useful for curves with cofactor != 1
-    if (wrapPrivateKey) num = mod.mod(num, n);
-    assertGE(num);
+    if (wrapPrivateKey) num = mod.mod(num, n); // disabled by default, enabled for BLS
+    assertGE(num); // num in range [1..N-1]
     return num;
   }
 
@@ -967,32 +953,26 @@ export function weierstrass(curveDef: CurveType): CurveFn {
   // NOTE: we cannot assume here that msgHash has same amount of bytes as curve order, this will be wrong at least for P521.
   // Also it can be bigger for P224 + SHA256
   function prepSig(msgHash: Hex, privateKey: PrivKey, opts = defaultSigOpts) {
+    const { hash, randomBytes } = CURVE;
     if (msgHash == null) throw new Error(`sign: expected valid message hash, not "${msgHash}"`);
     if (['recovered', 'canonical'].some((k) => k in opts))
       // Ban legacy options
       throw new Error('sign() legacy options not supported');
     let { lowS, prehash, extraEntropy: ent } = opts; // generates low-s sigs by default
-    if (prehash) msgHash = CURVE.hash(ensureBytes(msgHash));
-    if (lowS == null) lowS = true; // RFC6979 3.2: we skip step A, because
-    // Step A is ignored, since we already provide hash instead of msg
+    if (prehash) msgHash = hash(ensureBytes(msgHash));
+    if (lowS == null) lowS = true; // RFC6979 3.2: we skip step A, because we already provide hash
 
-    // NOTE: instead of bits2int, we calling here truncateHash, since we need
-    // custom truncation for stark. For other curves it is essentially same as calling bits2int + mod
-    // However, we cannot later call bits2octets (which is truncateHash + int2octets), since nested bits2int is broken
-    // for curves where nBitLength % 8 !== 0, so we unwrap it here as int2octets call.
-    // const bits2octets = (bits)=>int2octets(bytesToNumberBE(truncateHash(bits)))
+    // We can't later call bits2octets, since nested bits2int is broken for curves
+    // with nBitLength % 8 !== 0. Because of that, we unwrap it here as int2octets call.
+    // const bits2octets = (bits) => int2octets(bits2int_modN(bits))
     const h1int = bits2int_modN(ensureBytes(msgHash));
-    const h1octets = int2octets(h1int);
-
-    const d = normalizePrivateKey(privateKey);
-    // K = HMAC_K(V || 0x00 || int2octets(x) || bits2octets(h1) || k')
-    const seedArgs = [int2octets(d), h1octets];
+    const d = normalizePrivateKey(privateKey); // validate private key, convert to bigint
+    const seedArgs = [int2octets(d), int2octets(h1int)];
+    // extraEntropy. RFC6979 3.6: additional k' (optional).
     if (ent != null) {
-      // RFC6979 3.6: additional k' (optional)
-      if (ent === true) ent = CURVE.randomBytes(Fp.BYTES);
-      const e = ensureBytes(ent);
-      if (e.length !== Fp.BYTES) throw new Error(`sign: Expected ${Fp.BYTES} bytes of extra data`);
-      seedArgs.push(e);
+      // K = HMAC_K(V || 0x00 || int2octets(x) || bits2octets(h1) || k')
+      // Either pass as-is, or generate random bytes. Then validate for being ui8a of size BYTES
+      seedArgs.push(ensureBytes(ent === true ? randomBytes(Fp.BYTES) : ent, Fp.BYTES));
     }
     const seed = ut.concatBytes(...seedArgs); // Step D of RFC6979 3.2
     const m = h1int; // NOTE: no need to call bits2int second time here, it is inside truncateHash!

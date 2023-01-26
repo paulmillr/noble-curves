@@ -190,12 +190,16 @@ function schnorrSign(message: Hex, privateKey: Hex, auxRand: Hex = randomBytes(3
   return sig;
 }
 
+function pointFromHex(publicKey: Hex) {
+  return lift_x(bytesToNum(ensureBytes(publicKey, 32))); // P = lift_x(int(pk)); fail if that fails
+}
+
 /**
  * Verifies Schnorr signature synchronously.
  */
 function schnorrVerify(signature: Hex, message: Hex, publicKey: Hex): boolean {
   try {
-    const P = lift_x(bytesToNum(ensureBytes(publicKey, 32))); // P = lift_x(int(pk)); fail if that fails
+    const P = pointFromHex(publicKey); // P = lift_x(int(pk)); fail if that fails
     const sig = ensureBytes(signature, 64);
     const r = bytesToNum(sig.subarray(0, 32)); // Let r = int(sig[0:32]); fail if r ≥ p.
     if (!fe(r)) return false;
@@ -216,7 +220,7 @@ export const schnorr = {
   getPublicKey: schnorrGetPublicKey,
   sign: schnorrSign,
   verify: schnorrVerify,
-  utils: { lift_x, int: bytesToNum, taggedHash },
+  utils: { lift_x, pointFromHex, int: bytesToNum, taggedHash, toRawX },
 };
 
 const isoMap = htf.isogenyMap(
