@@ -68,8 +68,8 @@ for (const c in FIELDS) {
           fc.property(FC_BIGINT, (num) => {
             const a = create(num);
             const b = create(num);
-            deepStrictEqual(Fp.equals(a, b), true);
-            deepStrictEqual(Fp.equals(b, a), true);
+            deepStrictEqual(Fp.eql(a, b), true);
+            deepStrictEqual(Fp.eql(b, a), true);
           })
         );
       });
@@ -78,8 +78,8 @@ for (const c in FIELDS) {
           fc.property(FC_BIGINT, FC_BIGINT, (num1, num2) => {
             const a = create(num1);
             const b = create(num2);
-            deepStrictEqual(Fp.equals(a, b), num1 === num2);
-            deepStrictEqual(Fp.equals(b, a), num1 === num2);
+            deepStrictEqual(Fp.eql(a, b), num1 === num2);
+            deepStrictEqual(Fp.eql(b, a), num1 === num2);
           })
         );
       });
@@ -124,8 +124,8 @@ for (const c in FIELDS) {
           fc.property(FC_BIGINT, (num1) => {
             const a = create(num1);
             const b = create(num1);
-            deepStrictEqual(Fp.sub(Fp.ZERO, a), Fp.negate(a));
-            deepStrictEqual(Fp.sub(a, b), Fp.add(a, Fp.negate(b)));
+            deepStrictEqual(Fp.sub(Fp.ZERO, a), Fp.neg(a));
+            deepStrictEqual(Fp.sub(a, b), Fp.add(a, Fp.neg(b)));
             deepStrictEqual(Fp.sub(a, b), Fp.add(a, Fp.mul(b, Fp.create(-1n))));
           })
         );
@@ -134,13 +134,13 @@ for (const c in FIELDS) {
         fc.assert(
           fc.property(FC_BIGINT, (num) => {
             const a = create(num);
-            deepStrictEqual(Fp.negate(a), Fp.sub(Fp.ZERO, a));
-            deepStrictEqual(Fp.negate(a), Fp.mul(a, Fp.create(-1n)));
+            deepStrictEqual(Fp.neg(a), Fp.sub(Fp.ZERO, a));
+            deepStrictEqual(Fp.neg(a), Fp.mul(a, Fp.create(-1n)));
           })
         );
       });
       should('negate(0)', () => {
-        deepStrictEqual(Fp.negate(Fp.ZERO), Fp.ZERO);
+        deepStrictEqual(Fp.neg(Fp.ZERO), Fp.ZERO);
       });
 
       should('multiply/commutativity', () => {
@@ -190,7 +190,7 @@ for (const c in FIELDS) {
         fc.assert(
           fc.property(FC_BIGINT, (num) => {
             const a = create(num);
-            deepStrictEqual(Fp.square(a), Fp.mul(a, a));
+            deepStrictEqual(Fp.sqr(a), Fp.mul(a, a));
           })
         );
       });
@@ -207,18 +207,18 @@ for (const c in FIELDS) {
       });
 
       should('square(0)', () => {
-        deepStrictEqual(Fp.square(Fp.ZERO), Fp.ZERO);
+        deepStrictEqual(Fp.sqr(Fp.ZERO), Fp.ZERO);
         deepStrictEqual(Fp.mul(Fp.ZERO, Fp.ZERO), Fp.ZERO);
       });
 
       should('square(1)', () => {
-        deepStrictEqual(Fp.square(Fp.ONE), Fp.ONE);
+        deepStrictEqual(Fp.sqr(Fp.ONE), Fp.ONE);
         deepStrictEqual(Fp.mul(Fp.ONE, Fp.ONE), Fp.ONE);
       });
 
       should('square(-1)', () => {
-        const minus1 = Fp.negate(Fp.ONE);
-        deepStrictEqual(Fp.square(minus1), Fp.ONE);
+        const minus1 = Fp.neg(Fp.ONE);
+        deepStrictEqual(Fp.sqr(minus1), Fp.ONE);
         deepStrictEqual(Fp.mul(minus1, minus1), Fp.ONE);
       });
 
@@ -237,8 +237,8 @@ for (const c in FIELDS) {
                 return;
               }
               deepStrictEqual(isSquare(a), true);
-              deepStrictEqual(Fp.equals(Fp.square(root), a), true, 'sqrt(a)^2 == a');
-              deepStrictEqual(Fp.equals(Fp.square(Fp.negate(root)), a), true, '(-sqrt(a))^2 == a');
+              deepStrictEqual(Fp.eql(Fp.sqr(root), a), true, 'sqrt(a)^2 == a');
+              deepStrictEqual(Fp.eql(Fp.sqr(Fp.neg(root)), a), true, '(-sqrt(a))^2 == a');
             })
           );
         });
@@ -247,7 +247,7 @@ for (const c in FIELDS) {
           deepStrictEqual(Fp.sqrt(Fp.ZERO), Fp.ZERO);
           const sqrt1 = Fp.sqrt(Fp.ONE);
           deepStrictEqual(
-            Fp.equals(sqrt1, Fp.ONE) || Fp.equals(sqrt1, Fp.negate(Fp.ONE)),
+            Fp.eql(sqrt1, Fp.ONE) || Fp.eql(sqrt1, Fp.neg(Fp.ONE)),
             true,
             'sqrt(1) = 1 or -1'
           );
@@ -258,7 +258,7 @@ for (const c in FIELDS) {
         fc.assert(
           fc.property(FC_BIGINT, (num) => {
             const a = create(num);
-            if (Fp.equals(a, Fp.ZERO)) return; // No division by zero
+            if (Fp.eql(a, Fp.ZERO)) return; // No division by zero
             deepStrictEqual(Fp.div(a, Fp.ONE), a);
             deepStrictEqual(Fp.div(a, a), Fp.ONE);
           })
@@ -287,7 +287,7 @@ for (const c in FIELDS) {
           fc.property(FC_BIGINT, FC_BIGINT, (num1, num2) => {
             const a = create(num1);
             const b = create(num2);
-            deepStrictEqual(Fp.div(a, b), Fp.mul(a, Fp.invert(b)));
+            deepStrictEqual(Fp.div(a, b), Fp.mul(a, Fp.inv(b)));
           })
         );
       });
@@ -347,7 +347,7 @@ for (const name in CURVES) {
     describe(title, () => {
       describe('basic group laws', () => {
         // Here we check basic group laws, to verify that points works as group
-        should('(zero)', () => {
+        should('zero', () => {
           equal(G[0].double(), G[0], '(0*G).double() = 0');
           equal(G[0].add(G[0]), G[0], '0*G + 0*G = 0');
           equal(G[0].subtract(G[0]), G[0], '0*G - 0*G = 0');
@@ -358,34 +358,34 @@ for (const name in CURVES) {
             equal(G[0].multiply(BigInt(i + 1)), G[0], `${i + 1}*0 = 0`);
           }
         });
-        should('(one)', () => {
+        should('one', () => {
           equal(G[1].double(), G[2], '(1*G).double() = 2*G');
           equal(G[1].subtract(G[1]), G[0], '1*G - 1*G = 0');
           equal(G[1].add(G[1]), G[2], '1*G + 1*G = 2*G');
         });
-        should('(sanity tests)', () => {
+        should('sanity tests', () => {
           equal(G[2].double(), G[4], '(2*G).double() = 4*G');
           equal(G[2].add(G[2]), G[4], '2*G + 2*G = 4*G');
           equal(G[7].add(G[3].negate()), G[4], '7*G - 3*G = 4*G');
         });
-        should('(addition commutativity)', () => {
+        should('add commutativity', () => {
           equal(G[4].add(G[3]), G[3].add(G[4]), '4*G + 3*G = 3*G + 4*G');
           equal(G[4].add(G[3]), G[3].add(G[2]).add(G[2]), '4*G + 3*G = 3*G + 2*G + 2*G');
         });
-        should('(double)', () => {
+        should('double', () => {
           equal(G[3].double(), G[6], '(3*G).double() = 6*G');
         });
-        should('(multiply)', () => {
+        should('multiply', () => {
           equal(G[2].multiply(3n), G[6], '(2*G).multiply(3) = 6*G');
         });
-        should('(same point addition)', () => {
+        should('add same-point', () => {
           equal(G[3].add(G[3]), G[6], '3*G + 3*G = 6*G');
         });
-        should('(same point (negative) addition)', () => {
+        should('add same-point negative', () => {
           equal(G[3].add(G[3].negate()), G[0], '3*G + (- 3*G) = 0*G');
           equal(G[3].subtract(G[3]), G[0], '3*G - 3*G = 0*G');
         });
-        should('(curve order)', () => {
+        should('mul by curve order', () => {
           equal(G[1].multiply(CURVE_ORDER - 1n).add(G[1]), G[0], '(N-1)*G + G = 0');
           equal(G[1].multiply(CURVE_ORDER - 1n).add(G[2]), G[1], '(N-1)*G + 2*G = 1*G');
           equal(G[1].multiply(CURVE_ORDER - 2n).add(G[2]), G[0], '(N-2)*G + 2*G = 0');
@@ -393,7 +393,7 @@ for (const name in CURVES) {
           const carry = CURVE_ORDER % 2n === 1n ? G[1] : G[0];
           equal(G[1].multiply(half).double().add(carry), G[0], '((N/2) * G).double() = 0');
         });
-        should('(inversion)', () => {
+        should('inversion', () => {
           const a = 1234n;
           const b = 5678n;
           const c = a * b;
@@ -401,7 +401,7 @@ for (const name in CURVES) {
           const inv = mod.invert(b, CURVE_ORDER);
           equal(G[1].multiply(c).multiply(inv), G[1].multiply(a), 'c*G * (1/b)*G = a*G');
         });
-        should('(multiply, rand)', () =>
+        should('multiply, rand', () =>
           fc.assert(
             fc.property(FC_BIGINT, FC_BIGINT, (a, b) => {
               const c = mod.mod(a + b, CURVE_ORDER);
@@ -415,7 +415,7 @@ for (const name in CURVES) {
             { numRuns: NUM_RUNS }
           )
         );
-        should('(multiply2, rand)', () =>
+        should('multiply2, rand', () =>
           fc.assert(
             fc.property(FC_BIGINT, FC_BIGINT, (a, b) => {
               const c = mod.mod(a * b, CURVE_ORDER);
@@ -524,20 +524,23 @@ for (const name in CURVES) {
   }
   describe(name, () => {
     // Generic complex things (getPublicKey/sign/verify/getSharedSecret)
-    should('getPublicKey type check', () => {
+    should('.getPublicKey() type check', () => {
       throws(() => C.getPublicKey(0), '0');
       throws(() => C.getPublicKey(0n), '0n');
       throws(() => C.getPublicKey(false), 'false');
+      throws(() => C.getPublicKey(123), '123');
       throws(() => C.getPublicKey(123.456), '123.456');
       throws(() => C.getPublicKey(true), 'true');
       throws(() => C.getPublicKey(''), "''");
       // NOTE: passes because of disabled hex padding checks for starknet, maybe enable?
-      //throws(() => C.getPublicKey('1'), "'1'");
+      // throws(() => C.getPublicKey('1'), "'1'");
       throws(() => C.getPublicKey('key'), "'key'");
+      throws(() => C.getPublicKey({}));
       throws(() => C.getPublicKey(new Uint8Array([])));
       throws(() => C.getPublicKey(new Uint8Array([0])));
       throws(() => C.getPublicKey(new Uint8Array([1])));
       throws(() => C.getPublicKey(new Uint8Array(4096).fill(1)));
+      throws(() => C.getPublicKey(Array(32).fill(1)));
     });
     should('.verify() should verify random signatures', () =>
       fc.assert(
@@ -559,13 +562,27 @@ for (const name in CURVES) {
       throws(() => C.sign(''));
     });
 
-    should('.verify() should not verify signature with wrong hash', () => {
-      const MSG = '01'.repeat(32);
-      const PRIV_KEY = 0x2n;
-      const WRONG_MSG = '11'.repeat(32);
-      const signature = C.sign(MSG, PRIV_KEY);
-      const publicKey = C.getPublicKey(PRIV_KEY);
-      deepStrictEqual(C.verify(signature, WRONG_MSG, publicKey), false);
+    describe('verify()', () => {
+      should('true for proper signatures', () => {
+        const msg = '01'.repeat(32);
+        const priv = C.utils.randomPrivateKey();
+        const sig = C.sign(msg, priv);
+        const pub = C.getPublicKey(priv);
+        deepStrictEqual(C.verify(sig, msg, pub), true);
+      });
+      should('false for wrong messages', () => {
+        const msg = '01'.repeat(32);
+        const priv = C.utils.randomPrivateKey();
+        const sig = C.sign(msg, priv);
+        const pub = C.getPublicKey(priv);
+        deepStrictEqual(C.verify(sig, '11'.repeat(32), pub), false);
+      });
+      should('false for wrong keys', () => {
+        const msg = '01'.repeat(32);
+        const priv = C.utils.randomPrivateKey();
+        const sig = C.sign(msg, priv);
+        deepStrictEqual(C.verify(sig, msg, C.getPublicKey(C.utils.randomPrivateKey())), false);
+      });
     });
     // NOTE: fails for ed, because of empty message. Since we convert it to scalar,
     // need to check what other implementations do. Empty message != new Uint8Array([0]), but what scalar should be in that case?
@@ -618,10 +635,10 @@ should('secp224k1 sqrt bug', () => {
     23621584063597419797792593680131996961517196803742576047493035507225n
   );
   deepStrictEqual(
-    Fp.negate(sqrtMinus1),
+    Fp.neg(sqrtMinus1),
     3338362603553219996874421406887633712040719456283732096017030791656n
   );
-  deepStrictEqual(Fp.square(sqrtMinus1), Fp.create(-1n));
+  deepStrictEqual(Fp.sqr(sqrtMinus1), Fp.create(-1n));
 });
 
 // ESM is broken.

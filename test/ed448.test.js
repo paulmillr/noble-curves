@@ -316,14 +316,16 @@ describe('ed448', () => {
     },
   ];
 
-  for (let i = 0; i < VECTORS_RFC8032.length; i++) {
-    const v = VECTORS_RFC8032[i];
-    should(`RFC8032/${i}`, () => {
-      deepStrictEqual(hex(ed.getPublicKey(v.secretKey)), v.publicKey);
-      deepStrictEqual(hex(ed.sign(v.message, v.secretKey)), v.signature);
-      deepStrictEqual(ed.verify(v.signature, v.message, v.publicKey), true);
-    });
-  }
+  describe('RFC8032', () => {
+    for (let i = 0; i < VECTORS_RFC8032.length; i++) {
+      const v = VECTORS_RFC8032[i];
+      should(`${i}`, () => {
+        deepStrictEqual(hex(ed.getPublicKey(v.secretKey)), v.publicKey);
+        deepStrictEqual(hex(ed.sign(v.message, v.secretKey)), v.signature);
+        deepStrictEqual(ed.verify(v.signature, v.message, v.publicKey), true);
+      });
+    }
+  });
 
   should('not accept >57byte private keys', () => {
     const invalidPriv =
@@ -383,7 +385,7 @@ describe('ed448', () => {
       deepStrictEqual(ed.verify(signature, msg, publicKey), true);
     });
     should('not verify signature with wrong public key', () => {
-      const publicKey = ed.getPublicKey(12n);
+      const publicKey = ed.getPublicKey(ed.utils.randomPrivateKey());
       const signature = ed.sign(msg, privKey);
       deepStrictEqual(ed.verify(signature, msg, publicKey), false);
     });
@@ -400,7 +402,7 @@ describe('ed448', () => {
       deepStrictEqual(ed.verify(signature, msg, publicKey), true);
     });
     should('not verify signature with wrong public key', () => {
-      const publicKey = ed.getPublicKey(12n);
+      const publicKey = ed.getPublicKey(ed.utils.randomPrivateKey());
       const signature = ed.sign(msg, privKey);
       deepStrictEqual(ed.verify(signature, msg, publicKey), false);
     });
@@ -437,14 +439,14 @@ describe('ed448', () => {
     }
   });
 
-  {
+  describe('wycheproof', () => {
     for (let g = 0; g < ed448vectors.testGroups.length; g++) {
       const group = ed448vectors.testGroups[g];
       const key = group.key;
-      should(`Wycheproof/ED448(${g}, public)`, () => {
+      should(`ED448(${g}, public)`, () => {
         deepStrictEqual(hex(ed.getPublicKey(key.sk)), key.pk);
       });
-      should(`Wycheproof/ED448`, () => {
+      should(`ED448`, () => {
         for (let i = 0; i < group.tests.length; i++) {
           const v = group.tests[i];
           const index = `${g}/${i} ${v.comment}`;
@@ -463,7 +465,7 @@ describe('ed448', () => {
         }
       });
     }
-  }
+  });
 
   // ECDH
   const rfc7748Mul = [
@@ -482,12 +484,14 @@ describe('ed448', () => {
         '884a02576239ff7a2f2f63b2db6a9ff37047ac13568e1e30fe63c4a7ad1b3ee3a5700df34321d62077e63633c575c1c954514e99da7c179d',
     },
   ];
-  for (let i = 0; i < rfc7748Mul.length; i++) {
-    const v = rfc7748Mul[i];
-    should(`RFC7748: scalarMult (${i})`, () => {
-      deepStrictEqual(hex(x448.scalarMult(v.scalar, v.u)), v.outputU);
-    });
-  }
+  describe('RFC7748', () => {
+    for (let i = 0; i < rfc7748Mul.length; i++) {
+      const v = rfc7748Mul[i];
+      should(`scalarMult (${i})`, () => {
+        deepStrictEqual(hex(x448.scalarMult(v.scalar, v.u)), v.outputU);
+      });
+    }
+  });
 
   const rfc7748Iter = [
     {
@@ -528,9 +532,9 @@ describe('ed448', () => {
     deepStrictEqual(hex(x448.scalarMult(bobPrivate, alicePublic)), shared);
   });
 
-  {
+  describe('wycheproof', () => {
     const group = x448vectors.testGroups[0];
-    should(`Wycheproof/X448`, () => {
+    should(`X448`, () => {
       for (let i = 0; i < group.tests.length; i++) {
         const v = group.tests[i];
         const index = `(${i}, ${v.result}) ${v.comment}`;
@@ -556,7 +560,7 @@ describe('ed448', () => {
         } else throw new Error('unknown test result');
       }
     });
-  }
+  });
 
   // should('X448: should convert base point to montgomery using fromPoint', () => {
   //   deepStrictEqual(

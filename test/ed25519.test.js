@@ -79,6 +79,7 @@ describe('ed25519', () => {
     );
   });
   const privKey = to32Bytes('a665a45920422f9d417e4867ef');
+  const wrongPriv = to32Bytes('a675a45920422f9d417e4867ef');
   const msg = hexToBytes('874f9960c5d2b7a9b5fad383e1ba44719ebb743a');
   const wrongMsg = hexToBytes('589d8c7f1da0a24bc07b7381ad48b1cfc211af1c');
   describe('basic methods', () => {
@@ -86,16 +87,6 @@ describe('ed25519', () => {
       const publicKey = ed.getPublicKey(privKey);
       const signature = ed.sign(msg, privKey);
       deepStrictEqual(ed.verify(signature, msg, publicKey), true);
-    });
-    should('not verify signature with wrong public key', () => {
-      const publicKey = ed.getPublicKey(12n);
-      const signature = ed.sign(msg, privKey);
-      deepStrictEqual(ed.verify(signature, msg, publicKey), false);
-    });
-    should('not verify signature with wrong hash', () => {
-      const publicKey = ed.getPublicKey(privKey);
-      const signature = ed.sign(msg, privKey);
-      deepStrictEqual(ed.verify(signature, wrongMsg, publicKey), false);
     });
   });
   describe('sync methods', () => {
@@ -105,7 +96,7 @@ describe('ed25519', () => {
       deepStrictEqual(ed.verify(signature, msg, publicKey), true);
     });
     should('not verify signature with wrong public key', () => {
-      const publicKey = ed.getPublicKey(12n);
+      const publicKey = ed.getPublicKey(wrongPriv);
       const signature = ed.sign(msg, privKey);
       deepStrictEqual(ed.verify(signature, msg, publicKey), false);
     });
@@ -649,7 +640,7 @@ describe('ed25519', () => {
   should('X25519 base point', () => {
     const { y } = ed25519.ExtendedPoint.BASE;
     const { Fp } = ed25519.CURVE;
-    const u = Fp.create((y + 1n) * Fp.invert(1n - y));
+    const u = Fp.create((y + 1n) * Fp.inv(1n - y));
     deepStrictEqual(hex(numberToBytesLE(u, 32)), x25519.Gu);
   });
 

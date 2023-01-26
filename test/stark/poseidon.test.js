@@ -1,5 +1,5 @@
 import { deepStrictEqual, throws } from 'assert';
-import { should } from 'micro-should';
+import { describe, should } from 'micro-should';
 import * as starknet from '../../lib/esm/stark.js';
 import * as fs from 'fs';
 
@@ -64,10 +64,12 @@ function poseidonTest(name, parsed) {
   });
 }
 
-poseidonTest('poseidon3', parsed.poseidon3);
-poseidonTest('poseidon4', parsed.poseidon4);
-poseidonTest('poseidon5', parsed.poseidon5);
-poseidonTest('poseidon9', parsed.poseidon9);
+describe('poseidon txt vectors', () => {
+  poseidonTest('poseidon3', parsed.poseidon3);
+  poseidonTest('poseidon4', parsed.poseidon4);
+  poseidonTest('poseidon5', parsed.poseidon5);
+  poseidonTest('poseidon9', parsed.poseidon9);
+});
 
 should('Poseidon examples', () => {
   const p3 = mapPoseidon(parsed.poseidon3);

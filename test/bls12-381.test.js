@@ -71,8 +71,8 @@ describe('bls12-381 Fp2', () => {
       fc.property(FC_BIGINT_2, FC_BIGINT_2, (num1, num2) => {
         const a = Fp2.fromBigTuple([num1[0], num1[1]]);
         const b = Fp2.fromBigTuple([num2[0], num2[1]]);
-        deepStrictEqual(Fp2.equals(a, b), num1[0] === num2[0] && num1[1] === num2[1]);
-        deepStrictEqual(Fp2.equals(b, a), num1[0] === num2[0] && num1[1] === num2[1]);
+        deepStrictEqual(Fp2.eql(a, b), num1[0] === num2[0] && num1[1] === num2[1]);
+        deepStrictEqual(Fp2.eql(b, a), num1[0] === num2[0] && num1[1] === num2[1]);
       })
     );
   });
@@ -103,7 +103,7 @@ describe('bls12-381 Fp2', () => {
     ]);
     a = Fp2.frobeniusMap(a, 0);
     deepStrictEqual(
-      Fp2.equals(
+      Fp2.eql(
         a,
         Fp2.fromBigTuple([
           0x00f8d295b2ded9dcccc649c4b9532bf3b966ce3bc2108b138b1a52e0a90f59ed11e59ea221a3b6d22d0078036923ffc7n,
@@ -114,7 +114,7 @@ describe('bls12-381 Fp2', () => {
     );
     a = Fp2.frobeniusMap(a, 1);
     deepStrictEqual(
-      Fp2.equals(
+      Fp2.eql(
         a,
         Fp2.fromBigTuple([
           0x00f8d295b2ded9dcccc649c4b9532bf3b966ce3bc2108b138b1a52e0a90f59ed11e59ea221a3b6d22d0078036923ffc7n,
@@ -125,7 +125,7 @@ describe('bls12-381 Fp2', () => {
     );
     a = Fp2.frobeniusMap(a, 1);
     deepStrictEqual(
-      Fp2.equals(
+      Fp2.eql(
         a,
         Fp2.fromBigTuple([
           0x00f8d295b2ded9dcccc649c4b9532bf3b966ce3bc2108b138b1a52e0a90f59ed11e59ea221a3b6d22d0078036923ffc7n,
@@ -136,7 +136,7 @@ describe('bls12-381 Fp2', () => {
     );
     a = Fp2.frobeniusMap(a, 2);
     deepStrictEqual(
-      Fp2.equals(
+      Fp2.eql(
         a,
         Fp2.fromBigTuple([
           0x00f8d295b2ded9dcccc649c4b9532bf3b966ce3bc2108b138b1a52e0a90f59ed11e59ea221a3b6d22d0078036923ffc7n,

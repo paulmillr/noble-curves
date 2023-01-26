@@ -279,8 +279,8 @@ describe('secp256k1', () => {
     });
     should(' not verify signature with wrong public key', () => {
       const MSG = '01'.repeat(32);
-      const PRIV_KEY = 0x2n;
-      const WRONG_PRIV_KEY = 0x22n;
+      const PRIV_KEY = '01'.repeat(32);
+      const WRONG_PRIV_KEY = '02'.repeat(32);
       const signature = secp.sign(MSG, PRIV_KEY);
       const publicKey = Point.fromPrivateKey(WRONG_PRIV_KEY).toHex();
       deepStrictEqual(publicKey.length, 66);
@@ -469,7 +469,7 @@ describe('secp256k1', () => {
       },
 
       privateNegate: (privateKey) => {
-        return numberToBytesBE(Fn.negate(normal(privateKey)), 32);
+        return numberToBytesBE(Fn.neg(normal(privateKey)), 32);
       },
 
       pointAddScalar: (p, tweak, isCompressed) => {
