@@ -44,9 +44,8 @@ const G2_VECTORS = readFileSync('../test/bls12-381/bls12-381-g2-test-vectors.txt
 let p1, p2, oldp1, oldp2;
 // /BLS
 
-for (let item of [secp256k1, ed25519, ed448, P256, P384, P521, old_secp, noble_ed25519]) {
-  item.utils.precompute(8);
-}
+for (let item of [secp256k1, ed25519, ed448, P256, P384, P521]) item.utils.precompute(8);
+for (let item of [old_secp, noble_ed25519]) item.utils.precompute(8);
 
 const ONLY_NOBLE = process.argv[2] === 'noble';
 
@@ -76,14 +75,14 @@ export const CURVES = {
     sign: {
       samples: 5000,
       secp256k1_old: ({ msg, priv }) => old_secp.signSync(msg, priv),
-      secp256k1: ({ msg, priv }) => secp256k1.sign(msg, priv),
+      secp256k1: ({ msg, priv }) => secp256k1.sign(msg, priv).toCompactRawBytes(),
     },
     verify: {
       samples: 1000,
       secp256k1_old: ({ sig, msg, pub }) => {
         return old_secp.verify(new old_secp.Signature(sig.r, sig.s), msg, pub);
       },
-      secp256k1: ({ sig, msg, pub }) => secp256k1.verify(sig, msg, pub),
+      secp256k1: ({ sig, msg, pub }) => secp256k1.verify(sig.toCompactRawBytes(), msg, pub),
     },
     getSharedSecret: {
       samples: 1000,

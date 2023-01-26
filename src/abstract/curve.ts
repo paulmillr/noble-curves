@@ -148,7 +148,7 @@ export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number) {
 
 // Generic BasicCurve interface: works even for polynomial fields (BLS): P, n, h would be ok.
 // Though generator can be different (Fp2 / Fp6 for BLS).
-export type BasicCurve<T> = {
+export type AbstractCurve<T> = {
   Fp: Field<T>; // Field over which we'll do calculations (Fp)
   n: bigint; // Curve order, total count of valid points in the field
   nBitLength?: number; // bit length of curve order
@@ -161,7 +161,7 @@ export type BasicCurve<T> = {
   allowInfinityPoint?: boolean; // bls12-381 requires it. ZERO point is valid, but invalid pubkey
 };
 
-export function validateBasicCurveOpts<FP, T>(curve: BasicCurve<FP> & T) {
+export function validateAbsOpts<FP, T>(curve: AbstractCurve<FP> & T) {
   validateField(curve.Fp);
   for (const i of ['n', 'h'] as const) {
     const val = curve[i];

@@ -120,7 +120,7 @@ const TAGS = {
 
 /** An object mapping tags to their tagged hash prefix of [SHA256(tag) | SHA256(tag)] */
 const TAGGED_HASH_PREFIXES: { [tag: string]: Uint8Array } = {};
-export function taggedHash(tag: string, ...messages: Uint8Array[]): Uint8Array {
+function taggedHash(tag: string, ...messages: Uint8Array[]): Uint8Array {
   let tagP = TAGGED_HASH_PREFIXES[tag];
   if (tagP === undefined) {
     const tagH = sha256(Uint8Array.from(tag, (c) => c.charCodeAt(0)));
@@ -130,7 +130,6 @@ export function taggedHash(tag: string, ...messages: Uint8Array[]): Uint8Array {
   return sha256(concatBytes(tagP, ...messages));
 }
 
-const tag = taggedHash;
 const toRawX = (point: PointType<bigint>) => point.toRawBytes(true).slice(1);
 const numTo32b = (n: bigint) => numberToBytesBE(n, 32);
 const modN = (x: bigint) => mod(x, secp256k1N);
@@ -148,7 +147,7 @@ function schnorrGetScalar(priv: bigint) {
   return { point, scalar, x: toRawX(point) };
 }
 function lift_x(x: bigint): PointType<bigint> {
-  if (!fe(x)) throw new Error('not fe'); // Fail if x ≥ p.
+  if (!fe(x)) throw new Error('bad x: need 0 < x < p'); // Fail if x ≥ p.
   const c = mod(x * x * x + BigInt(7), secp256k1P); // Let c = x³ + 7 mod p.
   let y = sqrtMod(c); // Let y = c^(p+1)/4 mod p.
   if (y % 2n !== 0n) y = mod(-y, secp256k1P); // Return the unique point P such that x(P) = x and
@@ -157,7 +156,7 @@ function lift_x(x: bigint): PointType<bigint> {
   return p;
 }
 function challenge(...args: Uint8Array[]): bigint {
-  return modN(bytesToNum(tag(TAGS.challenge, ...args)));
+  return modN(bytesToNum(taggedHash(TAGS.challenge, ...args)));
 }
 function schnorrGetPublicKey(privateKey: PrivKey): Uint8Array {
   return toRawX(Gmul(privateKey)); // Let d' = int(sk). Fail if d' = 0 or d' ≥ n. Return bytes(d'⋅G)
@@ -177,8 +176,8 @@ function schnorrSign(message: Hex, privateKey: Hex, auxRand: Hex = randomBytes(3
   const { x: px, scalar: d } = schnorrGetScalar(bytesToNum(ensureBytes(privateKey, 32)));
   const a = ensureBytes(auxRand, 32); // Auxiliary random data a: a 32-byte array
   // TODO: replace with proper xor?
-  const t = numTo32b(d ^ bytesToNum(tag(TAGS.aux, a))); // Let t be the byte-wise xor of bytes(d) and hash/aux(a)
-  const rand = tag(TAGS.nonce, t, px, m); // Let rand = hash/nonce(t || bytes(P) || m)
+  const t = numTo32b(d ^ bytesToNum(taggedHash(TAGS.aux, a))); // Let t be the byte-wise xor of bytes(d) and hash/aux(a)
+  const rand = taggedHash(TAGS.nonce, t, px, m); // Let rand = hash/nonce(t || bytes(P) || m)
   const k_ = modN(bytesToNum(rand)); // Let k' = int(rand) mod n
   if (k_ === _0n) throw new Error('sign failed: k is zero'); // Fail if k' = 0.
   const { point: R, x: rx, scalar: k } = schnorrGetScalar(k_); // Let R = k'⋅G.
@@ -217,6 +216,7 @@ export const schnorr = {
   getPublicKey: schnorrGetPublicKey,
   sign: schnorrSign,
   verify: schnorrVerify,
+  utils: { lift_x, int: bytesToNum, taggedHash },
 };
 
 const isoMap = htf.isogenyMap(

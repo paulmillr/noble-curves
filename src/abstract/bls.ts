@@ -11,10 +11,8 @@
  * We are using Fp for private keys (shorter) and Fp₂ for signatures (longer).
  * Some projects may prefer to swap this relation, it is not supported for now.
  */
-import * as mod from './modular.js';
-import * as ut from './utils.js';
-// Types require separate import
-import { Hex, PrivKey } from './utils.js';
+import { Field, hashToPrivateScalar } from './modular.js';
+import { Hex, PrivKey, CHash, bitLen, bitGet, hexToBytes, bytesToHex } from './utils.js';
 import * as htf from './hash-to-curve.js';
 import {
   CurvePointsType,
@@ -43,32 +41,32 @@ export type CurveType<Fp, Fp2, Fp6, Fp12> = {
     htfDefaults: htf.Opts;
   };
   x: bigint;
-  Fp: mod.Field<Fp>;
-  Fr: mod.Field<bigint>;
-  Fp2: mod.Field<Fp2> & {
+  Fp: Field<Fp>;
+  Fr: Field<bigint>;
+  Fp2: Field<Fp2> & {
     reim: (num: Fp2) => { re: bigint; im: bigint };
     multiplyByB: (num: Fp2) => Fp2;
     frobeniusMap(num: Fp2, power: number): Fp2;
   };
-  Fp6: mod.Field<Fp6>;
-  Fp12: mod.Field<Fp12> & {
+  Fp6: Field<Fp6>;
+  Fp12: Field<Fp12> & {
     frobeniusMap(num: Fp12, power: number): Fp12;
     multiplyBy014(num: Fp12, o0: Fp2, o1: Fp2, o4: Fp2): Fp12;
     conjugate(num: Fp12): Fp12;
     finalExponentiate(num: Fp12): Fp12;
   };
   htfDefaults: htf.Opts;
-  hash: ut.CHash; // Because we need outputLen for DRBG
+  hash: CHash; // Because we need outputLen for DRBG
   randomBytes: (bytesLength?: number) => Uint8Array;
 };
 
 export type CurveFn<Fp, Fp2, Fp6, Fp12> = {
   CURVE: CurveType<Fp, Fp2, Fp6, Fp12>;
-  Fr: mod.Field<bigint>;
-  Fp: mod.Field<Fp>;
-  Fp2: mod.Field<Fp2>;
-  Fp6: mod.Field<Fp6>;
-  Fp12: mod.Field<Fp12>;
+  Fr: Field<bigint>;
+  Fp: Field<Fp>;
+  Fp2: Field<Fp2>;
+  Fp6: Field<Fp6>;
+  Fp12: Field<Fp12>;
   G1: CurvePointsRes<Fp>;
   G2: CurvePointsRes<Fp2>;
   Signature: SignatureCoder<Fp2>;
@@ -115,7 +113,7 @@ export function bls<Fp2, Fp6, Fp12>(
 ): CurveFn<Fp, Fp2, Fp6, Fp12> {
   // Fields looks pretty specific for curve, so for now we need to pass them with options
   const { Fp, Fr, Fp2, Fp6, Fp12 } = CURVE;
-  const BLS_X_LEN = ut.bitLen(CURVE.x);
+  const BLS_X_LEN = bitLen(CURVE.x);
   const groupLen = 32; // TODO: calculate; hardcoded for now
 
   // Pre-compute coefficients for sparse multiplication
@@ -142,7 +140,7 @@ export function bls<Fp2, Fp6, Fp12>(
       Rx = Fp2.div(Fp2.mul(Fp2.mul(Fp2.sub(t0, t3), Rx), Ry), 2n); // ((T0 - T3) * Rx * Ry) / 2
       Ry = Fp2.sub(Fp2.sqr(Fp2.div(Fp2.add(t0, t3), 2n)), Fp2.mul(Fp2.sqr(t2), 3n)); // ((T0 + T3) / 2)² - 3 * T2²
       Rz = Fp2.mul(t0, t4); // T0 * T4
-      if (ut.bitGet(CURVE.x, i)) {
+      if (bitGet(CURVE.x, i)) {
         // Addition
         let t0 = Fp2.sub(Ry, Fp2.mul(Qy, Rz)); // Ry - Qy * Rz
         let t1 = Fp2.sub(Rx, Fp2.mul(Qx, Rz)); // Rx - Qx * Rz
@@ -171,7 +169,7 @@ export function bls<Fp2, Fp6, Fp12>(
     for (let j = 0, i = BLS_X_LEN - 2; i >= 0; i--, j++) {
       const E = ell[j];
       f12 = Fp12.multiplyBy014(f12, E[0], Fp2.mul(E[1], Px), Fp2.mul(E[2], Py));
-      if (ut.bitGet(x, i)) {
+      if (bitGet(x, i)) {
         j += 1;
         const F = ell[j];
         f12 = Fp12.multiplyBy014(f12, F[0], Fp2.mul(F[1], Px), Fp2.mul(F[2], Py));
@@ -182,8 +180,8 @@ export function bls<Fp2, Fp6, Fp12>(
   }
 
   const utils = {
-    hexToBytes: ut.hexToBytes,
-    bytesToHex: ut.bytesToHex,
+    hexToBytes: hexToBytes,
+    bytesToHex: bytesToHex,
     stringToBytes: htf.stringToBytes,
     // TODO: do we need to export it here?
     hashToField: (
@@ -193,7 +191,7 @@ export function bls<Fp2, Fp6, Fp12>(
     ) => htf.hash_to_field(msg, count, { ...CURVE.htfDefaults, ...options }),
     expandMessageXMD: (msg: Uint8Array, DST: Uint8Array, lenInBytes: number, H = CURVE.hash) =>
       htf.expand_message_xmd(msg, DST, lenInBytes, H),
-    hashToPrivateKey: (hash: Hex): Uint8Array => Fr.toBytes(mod.hashToPrivateScalar(hash, CURVE.r)),
+    hashToPrivateKey: (hash: Hex): Uint8Array => Fr.toBytes(hashToPrivateScalar(hash, CURVE.r)),
     randomBytes: (bytesLength: number = groupLen): Uint8Array => CURVE.randomBytes(bytesLength),
     randomPrivateKey: (): Uint8Array => utils.hashToPrivateKey(utils.randomBytes(groupLen + 8)),
   };
@@ -342,7 +340,7 @@ export function bls<Fp2, Fp6, Fp12>(
     htfOpts?: htf.htfBasicOpts
   ): boolean {
     // @ts-ignore
-    // console.log('verifyBatch', ut.bytesToHex(signature as any), messages, publicKeys.map(ut.bytesToHex));
+    // console.log('verifyBatch', bytesToHex(signature as any), messages, publicKeys.map(bytesToHex));
 
     if (!messages.length) throw new Error('Expected non-empty messages array');
     if (publicKeys.length !== messages.length)

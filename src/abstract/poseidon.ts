@@ -1,12 +1,10 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-// Poseidon Hash (https://eprint.iacr.org/2019/458.pdf)
-// Website: https://www.poseidon-hash.info
-
-import * as mod from './modular.js';
-// NOTE: we currently don't provide any constants, since different implementations use diffferent constants
-// For reference constants see './test/poseidon.test.js'
+// Poseidon Hash: https://eprint.iacr.org/2019/458.pdf, https://www.poseidon-hash.info
+import { Field, validateField, FpPow } from './modular.js';
+// We don't provide any constants, since different implementations use different constants.
+// For reference constants see './test/poseidon.test.js'.
 export type PoseidonOpts = {
-  Fp: mod.Field<bigint>;
+  Fp: Field<bigint>;
   t: number;
   roundsFull: number;
   roundsPartial: number;
@@ -18,7 +16,7 @@ export type PoseidonOpts = {
 
 export function validateOpts(opts: PoseidonOpts) {
   const { Fp } = opts;
-  mod.validateField(Fp);
+  validateField(Fp);
   for (const i of ['t', 'roundsFull', 'roundsPartial'] as const) {
     if (typeof opts[i] !== 'number' || !Number.isSafeInteger(opts[i]))
       throw new Error(`Poseidon: invalid param ${i}=${opts[i]} (${typeof opts[i]})`);
@@ -32,7 +30,7 @@ export function validateOpts(opts: PoseidonOpts) {
     throw new Error(`Poseidon wrong sboxPower=${sboxPower}`);
 
   const _sboxPower = BigInt(sboxPower);
-  let sboxFn = (n: bigint) => mod.FpPow(Fp, n, _sboxPower);
+  let sboxFn = (n: bigint) => FpPow(Fp, n, _sboxPower);
   // Unwrapped sbox power for common cases (195->142μs)
   if (sboxPower === 3) sboxFn = (n: bigint) => Fp.mul(Fp.sqrN(n), n);
   else if (sboxPower === 5) sboxFn = (n: bigint) => Fp.mul(Fp.sqrN(Fp.sqrN(n)), n);

@@ -10,7 +10,7 @@ import {
   Hex,
   numberToBytesLE,
 } from './utils.js';
-import { Group, GroupConstructor, wNAF, BasicCurve, validateBasicCurveOpts } from './curve.js';
+import { Group, GroupConstructor, wNAF, AbstractCurve, validateAbsOpts } from './curve.js';
 
 // Be friendly to bad ECMAScript parsers by not using bigint literals like 123n
 const _0n = BigInt(0);
@@ -19,7 +19,7 @@ const _2n = BigInt(2);
 const _8n = BigInt(8);
 
 // Edwards curves must declare params a & d.
-export type CurveType = BasicCurve<bigint> & {
+export type CurveType = AbstractCurve<bigint> & {
   a: bigint; // curve param a
   d: bigint; // curve param d
   hash: FHash; // Hashing
@@ -32,7 +32,7 @@ export type CurveType = BasicCurve<bigint> & {
 };
 
 function validateOpts(curve: CurveType) {
-  const opts = validateBasicCurveOpts(curve);
+  const opts = validateAbsOpts(curve);
   if (typeof opts.hash !== 'function') throw new Error('Invalid hash function');
   for (const i of ['a', 'd'] as const) {
     const val = opts[i];

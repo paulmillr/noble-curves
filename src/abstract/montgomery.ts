@@ -1,5 +1,5 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import * as mod from './modular.js';
+import { mod, pow } from './modular.js';
 import { ensureBytes, numberToBytesLE, bytesToNumberLE } from './utils.js';
 
 const _0n = BigInt(0);
@@ -54,12 +54,12 @@ function validateOpts(curve: CurveType) {
 export function montgomery(curveDef: CurveType): CurveFn {
   const CURVE = validateOpts(curveDef);
   const { P } = CURVE;
-  const modP = (a: bigint) => mod.mod(a, P);
+  const modP = (a: bigint) => mod(a, P);
   const montgomeryBits = CURVE.montgomeryBits;
   const montgomeryBytes = Math.ceil(montgomeryBits / 8);
   const fieldLen = CURVE.nByteLength;
   const adjustScalarBytes = CURVE.adjustScalarBytes || ((bytes: Uint8Array) => bytes);
-  const powPminus2 = CURVE.powPminus2 || ((x: bigint) => mod.pow(x, P - BigInt(2), P));
+  const powPminus2 = CURVE.powPminus2 || ((x: bigint) => pow(x, P - BigInt(2), P));
 
   /**
    * Checks for num to be in range:

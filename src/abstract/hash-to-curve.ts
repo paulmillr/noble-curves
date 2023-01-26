@@ -1,7 +1,7 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import * as ut from './utils.js';
-import * as mod from './modular.js';
 import type { Group, GroupConstructor } from './curve.js';
+import { mod, Field } from './modular.js';
+import { CHash, Hex, concatBytes, ensureBytes } from './utils.js';
 
 export type Opts = {
   // DST: a domain separation tag
@@ -24,7 +24,7 @@ export type Opts = {
   // wide range of hash functions, including SHA-2, SHA-3, BLAKE2, and others.
   // BBS+ uses blake2: https://github.com/hyperledger/aries-framework-go/issues/2247
   // TODO: verify that hash is shake if expand==='xof' via types
-  hash: ut.CHash;
+  hash: CHash;
 };
 
 export function validateOpts(opts: Opts) {
@@ -87,25 +87,25 @@ export function expand_message_xmd(
   msg: Uint8Array,
   DST: Uint8Array,
   lenInBytes: number,
-  H: ut.CHash
+  H: CHash
 ): Uint8Array {
   // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-16#section-5.3.3
-  if (DST.length > 255) DST = H(ut.concatBytes(stringToBytes('H2C-OVERSIZE-DST-'), DST));
+  if (DST.length > 255) DST = H(concatBytes(stringToBytes('H2C-OVERSIZE-DST-'), DST));
   const b_in_bytes = H.outputLen;
   const r_in_bytes = H.blockLen;
   const ell = Math.ceil(lenInBytes / b_in_bytes);
   if (ell > 255) throw new Error('Invalid xmd length');
-  const DST_prime = ut.concatBytes(DST, i2osp(DST.length, 1));
+  const DST_prime = concatBytes(DST, i2osp(DST.length, 1));
   const Z_pad = i2osp(0, r_in_bytes);
   const l_i_b_str = i2osp(lenInBytes, 2);
   const b = new Array<Uint8Array>(ell);
-  const b_0 = H(ut.concatBytes(Z_pad, msg, l_i_b_str, i2osp(0, 1), DST_prime));
-  b[0] = H(ut.concatBytes(b_0, i2osp(1, 1), DST_prime));
+  const b_0 = H(concatBytes(Z_pad, msg, l_i_b_str, i2osp(0, 1), DST_prime));
+  b[0] = H(concatBytes(b_0, i2osp(1, 1), DST_prime));
   for (let i = 1; i <= ell; i++) {
     const args = [strxor(b_0, b[i - 1]), i2osp(i + 1, 1), DST_prime];
-    b[i] = H(ut.concatBytes(...args));
+    b[i] = H(concatBytes(...args));
   }
-  const pseudo_random_bytes = ut.concatBytes(...b);
+  const pseudo_random_bytes = concatBytes(...b);
   return pseudo_random_bytes.slice(0, lenInBytes);
 }
 
@@ -114,7 +114,7 @@ export function expand_message_xof(
   DST: Uint8Array,
   lenInBytes: number,
   k: number,
-  H: ut.CHash
+  H: CHash
 ): Uint8Array {
   // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-16#section-5.3.3
   // DST = H('H2C-OVERSIZE-DST-' || a_very_long_DST, Math.ceil((lenInBytes * k) / 8));
@@ -162,14 +162,14 @@ export function hash_to_field(msg: Uint8Array, count: number, options: Opts): bi
     for (let j = 0; j < options.m; j++) {
       const elm_offset = L * (j + i * options.m);
       const tv = pseudo_random_bytes.subarray(elm_offset, elm_offset + L);
-      e[j] = mod.mod(os2ip(tv), options.p);
+      e[j] = mod(os2ip(tv), options.p);
     }
     u[i] = e;
   }
   return u;
 }
 
-export function isogenyMap<T, F extends mod.Field<T>>(field: F, map: [T[], T[], T[], T[]]) {
+export function isogenyMap<T, F extends Field<T>>(field: F, map: [T[], T[], T[], T[]]) {
   // Make same order as in spec
   const COEFF = map.map((i) => Array.from(i).reverse());
   return (x: T, y: T) => {
@@ -212,9 +212,9 @@ export function hashToCurve<T>(
   return {
     // Encodes byte string to elliptic curve
     // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-3
-    hashToCurve(msg: ut.Hex, options?: htfBasicOpts) {
+    hashToCurve(msg: Hex, options?: htfBasicOpts) {
       if (!mapToCurve) throw new Error('CURVE.mapToCurve() has not been defined');
-      msg = ut.ensureBytes(msg);
+      msg = ensureBytes(msg);
       const u = hash_to_field(msg, 2, { ...def, DST: def.DST, ...options } as Opts);
       return Point.fromAffine(mapToCurve(u[0]))
         .add(Point.fromAffine(mapToCurve(u[1])))
@@ -222,9 +222,9 @@ export function hashToCurve<T>(
     },
 
     // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-16#section-3
-    encodeToCurve(msg: ut.Hex, options?: htfBasicOpts) {
+    encodeToCurve(msg: Hex, options?: htfBasicOpts) {
       if (!mapToCurve) throw new Error('CURVE.mapToCurve() has not been defined');
-      msg = ut.ensureBytes(msg);
+      msg = ensureBytes(msg);
       const u = hash_to_field(msg, 1, { ...def, DST: def.encodeDST, ...options } as Opts);
       return Point.fromAffine(mapToCurve(u[0])).clearCofactor();
     },

@@ -1,34 +1,16 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 // Short Weierstrass curve. The formula is: y² = x³ + ax + b
 import * as mod from './modular.js';
-// import * as ut from './utils.js';
-import {
-  Hex,
-  PrivKey,
-  bytesToHex,
-  bytesToNumberBE,
-  ensureBytes,
-  hexToBytes,
-  concatBytes,
-  bitMask,
-  numberToBytesBE,
-  CHash,
-  numberToHexUnpadded,
-} from './utils.js';
-import {
-  Group,
-  GroupConstructor,
-  wNAF,
-  BasicCurve as CBasicCurve,
-  validateBasicCurveOpts,
-} from './curve.js';
+import * as ut from './utils.js';
+import { Hex, PrivKey, ensureBytes, CHash } from './utils.js';
+import { Group, GroupConstructor, wNAF, AbstractCurve, validateAbsOpts } from './curve.js';
 
 type HmacFnSync = (key: Uint8Array, ...messages: Uint8Array[]) => Uint8Array;
 type EndomorphismOpts = {
   beta: bigint;
   splitScalar: (k: bigint) => { k1neg: boolean; k1: bigint; k2neg: boolean; k2: bigint };
 };
-export type BasicCurve<T> = CBasicCurve<T> & {
+export type BasicCurve<T> = AbstractCurve<T> & {
   // Params: a, b
   a: T;
   b: T;
@@ -45,50 +27,6 @@ export type BasicCurve<T> = CBasicCurve<T> & {
   isTorsionFree?: (c: ProjConstructor<T>, point: ProjPointType<T>) => boolean;
   // 2. Clear torsion component
   clearCofactor?: (c: ProjConstructor<T>, point: ProjPointType<T>) => ProjPointType<T>;
-};
-
-// ASN.1 DER encoding utilities
-class DERError extends Error {
-  constructor(message: string) {
-    super(message);
-  }
-}
-
-const DER = {
-  slice(s: string): string {
-    // Proof: any([(i>=0x80) == (int(hex(i).replace('0x', '').zfill(2)[0], 16)>=8)  for i in range(0, 256)])
-    // Padding done by numberToHex
-    return Number.parseInt(s[0], 16) >= 8 ? '00' + s : s;
-  },
-  parseInt(data: Uint8Array): { data: bigint; left: Uint8Array } {
-    if (data.length < 2 || data[0] !== 0x02) {
-      throw new DERError(`Invalid signature integer tag: ${bytesToHex(data)}`);
-    }
-    const len = data[1];
-    const res = data.subarray(2, len + 2);
-    if (!len || res.length !== len) {
-      throw new DERError(`Invalid signature integer: wrong length`);
-    }
-    // Strange condition, its not about length, but about first bytes of number.
-    if (res[0] === 0x00 && res[1] <= 0x7f) {
-      throw new DERError('Invalid signature integer: trailing length');
-    }
-    return { data: bytesToNumberBE(res), left: data.subarray(len + 2) };
-  },
-  parseSig(data: Uint8Array): { r: bigint; s: bigint } {
-    if (data.length < 2 || data[0] != 0x30) {
-      throw new DERError(`Invalid signature tag: ${bytesToHex(data)}`);
-    }
-    if (data[1] !== data.length - 2) {
-      throw new DERError('Invalid signature: incorrect length');
-    }
-    const { data: r, left: sBytes } = DER.parseInt(data.subarray(2));
-    const { data: s, left: rBytesLeft } = DER.parseInt(sBytes);
-    if (rBytesLeft.length) {
-      throw new DERError(`Invalid signature: left bytes after parsing: ${bytesToHex(rBytesLeft)}`);
-    }
-    return { r, s };
-  },
 };
 
 type Entropy = Hex | true;
@@ -154,7 +92,7 @@ export type CurvePointsType<T> = BasicCurve<T> & {
 };
 
 function validatePointOpts<T>(curve: CurvePointsType<T>) {
-  const opts = validateBasicCurveOpts(curve);
+  const opts = validateAbsOpts(curve);
   const Fp = opts.Fp;
   for (const i of ['a', 'b'] as const) {
     if (!Fp.isValid(curve[i]))
@@ -188,6 +126,55 @@ export type CurvePointsRes<T> = {
   normalizePrivateKey: (key: PrivKey) => bigint;
   weierstrassEquation: (x: T) => T;
   isWithinCurveOrder: (num: bigint) => boolean;
+};
+
+// ASN.1 DER encoding utilities
+const { bytesToNumberBE: b2n, hexToBytes: h2b } = ut;
+const DER = {
+  // asn.1 DER encoding utils
+  Err: class DERErr extends Error {
+    constructor(m = '') {
+      super(m);
+    }
+  },
+  _parseInt(data: Uint8Array): { d: bigint; l: Uint8Array } {
+    const { Err: E } = DER;
+    if (data.length < 2 || data[0] !== 0x02) throw new E('Invalid signature integer tag');
+    const len = data[1];
+    const res = data.subarray(2, len + 2);
+    if (!len || res.length !== len) throw new E('Invalid signature integer: wrong length');
+    if (res[0] === 0x00 && res[1] <= 0x7f)
+      throw new E('Invalid signature integer: trailing length');
+    // ^ Weird condition: not about length, but about first bytes of number.
+    return { d: b2n(res), l: data.subarray(len + 2) }; // d is data, l is left
+  },
+  toSig(hex: string | Uint8Array): { r: bigint; s: bigint } {
+    // parse DER signature
+    const { Err: E } = DER;
+    const data = typeof hex === 'string' ? h2b(hex) : hex;
+    if (!(data instanceof Uint8Array)) throw new Error('ui8a expected');
+    let l = data.length;
+    if (l < 2 || data[0] != 0x30) throw new E('Invalid signature tag');
+    if (data[1] !== l - 2) throw new E('Invalid signature: incorrect length');
+    const { d: r, l: sBytes } = DER._parseInt(data.subarray(2));
+    const { d: s, l: rBytesLeft } = DER._parseInt(sBytes);
+    if (rBytesLeft.length) throw new E('Invalid signature: left bytes after parsing');
+    return { r, s };
+  },
+  hexFromSig(sig: { r: bigint; s: bigint }): string {
+    const slice = (s: string): string => (Number.parseInt(s[0], 16) >= 8 ? '00' + s : s); // slice DER
+    const h = (num: number | bigint) => {
+      const hex = num.toString(16);
+      return hex.length & 1 ? `0${hex}` : hex;
+    };
+    const s = slice(h(sig.s));
+    const r = slice(h(sig.r));
+    const shl = s.length / 2;
+    const rhl = r.length / 2;
+    const sl = h(shl);
+    const rl = h(rhl);
+    return `30${h(rhl + shl + 4)}02${rl}${r}02${sl}${s}`;
+  },
 };
 
 // Be friendly to bad ECMAScript parsers by not using bigint literals like 123n
@@ -232,10 +219,10 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
     } else if (typeof key === 'string') {
       if (key.length !== 2 * groupLen) throw new Error(`must be ${groupLen} bytes`);
       // Validates individual octets
-      num = bytesToNumberBE(ensureBytes(key));
+      num = ut.bytesToNumberBE(ensureBytes(key));
     } else if (key instanceof Uint8Array) {
       if (key.length !== groupLen) throw new Error(`must be ${groupLen} bytes`);
-      num = bytesToNumberBE(key);
+      num = ut.bytesToNumberBE(key);
     } else {
       throw new Error('private key must be bytes, hex or bigint, not ' + typeof key);
     }
@@ -245,18 +232,18 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
     return num;
   }
 
-  const pointPrecomputes = new Map<ProjectivePoint, ProjectivePoint[]>();
+  const pointPrecomputes = new Map<Point, Point[]>();
   function assertPrjPoint(other: unknown) {
-    if (!(other instanceof ProjectivePoint)) throw new Error('ProjectivePoint expected');
+    if (!(other instanceof Point)) throw new Error('ProjectivePoint expected');
   }
   /**
    * Projective Point works in 3d / projective (homogeneous) coordinates: (x, y, z) ∋ (x=x/z, y=y/z)
    * Default Point works in 2d / affine coordinates: (x, y)
    * We're doing calculations in projective, because its operations don't require costly inversion.
    */
-  class ProjectivePoint implements ProjPointType<T> {
-    static readonly BASE = new ProjectivePoint(CURVE.Gx, CURVE.Gy, Fp.ONE);
-    static readonly ZERO = new ProjectivePoint(Fp.ZERO, Fp.ONE, Fp.ZERO);
+  class Point implements ProjPointType<T> {
+    static readonly BASE = new Point(CURVE.Gx, CURVE.Gy, Fp.ONE);
+    static readonly ZERO = new Point(Fp.ZERO, Fp.ONE, Fp.ZERO);
 
     constructor(readonly px: T, readonly py: T, readonly pz: T) {
       if (px == null || !Fp.isValid(px)) throw new Error('x required');
@@ -264,14 +251,14 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
       if (pz == null || !Fp.isValid(pz)) throw new Error('z required');
     }
 
-    static fromAffine(p: AffinePoint<T>): ProjectivePoint {
+    static fromAffine(p: AffinePoint<T>): Point {
       const { x, y } = p || {};
       if (!p || !Fp.isValid(x) || !Fp.isValid(y)) throw new Error('invalid affine point');
-      if (p instanceof ProjectivePoint) throw new Error('projective point not allowed');
+      if (p instanceof Point) throw new Error('projective point not allowed');
       const is0 = (i: T) => Fp.eql(i, Fp.ZERO);
       // fromAffine(x:0, y:0) would produce (x:0, y:0, z:1), but we need (x:0, y:1, z:0)
-      if (is0(x) && is0(y)) return ProjectivePoint.ZERO;
-      return new ProjectivePoint(x, y, Fp.ONE);
+      if (is0(x) && is0(y)) return Point.ZERO;
+      return new Point(x, y, Fp.ONE);
     }
 
     get x(): T {
@@ -287,24 +274,24 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
      * so this improves performance massively.
      * Optimization: converts a list of projective points to a list of identical points with Z=1.
      */
-    static normalizeZ(points: ProjectivePoint[]): ProjectivePoint[] {
+    static normalizeZ(points: Point[]): Point[] {
       const toInv = Fp.invertBatch(points.map((p) => p.pz));
-      return points.map((p, i) => p.toAffine(toInv[i])).map(ProjectivePoint.fromAffine);
+      return points.map((p, i) => p.toAffine(toInv[i])).map(Point.fromAffine);
     }
 
     /**
      * Converts hash string or Uint8Array to Point.
      * @param hex short/long ECDSA hex
      */
-    static fromHex(hex: Hex): ProjectivePoint {
-      const P = ProjectivePoint.fromAffine(CURVE.fromBytes(ensureBytes(hex)));
+    static fromHex(hex: Hex): Point {
+      const P = Point.fromAffine(CURVE.fromBytes(ensureBytes(hex)));
       P.assertValidity();
       return P;
     }
 
     // Multiplies generator point by privateKey.
     static fromPrivateKey(privateKey: PrivKey) {
-      return ProjectivePoint.BASE.multiply(normalizePrivateKey(privateKey));
+      return Point.BASE.multiply(normalizePrivateKey(privateKey));
     }
 
     // We calculate precomputes for elliptic curve point multiplication
@@ -343,7 +330,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
     /**
      * Compare one point to another.
      */
-    equals(other: ProjectivePoint): boolean {
+    equals(other: Point): boolean {
       assertPrjPoint(other);
       const { px: X1, py: Y1, pz: Z1 } = this;
       const { px: X2, py: Y2, pz: Z2 } = other;
@@ -355,8 +342,8 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
     /**
      * Flips point to one corresponding to (x, -y) in Affine coordinates.
      */
-    negate(): ProjectivePoint {
-      return new ProjectivePoint(this.px, Fp.neg(this.py), this.pz);
+    negate(): Point {
+      return new Point(this.px, Fp.neg(this.py), this.pz);
     }
 
     // Renes-Costello-Batina exception-free doubling formula.
@@ -399,14 +386,14 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
       Z3 = Fp.mul(t2, t1);
       Z3 = Fp.add(Z3, Z3); // step 30
       Z3 = Fp.add(Z3, Z3);
-      return new ProjectivePoint(X3, Y3, Z3);
+      return new Point(X3, Y3, Z3);
     }
 
     // Renes-Costello-Batina exception-free addition formula.
     // There is 30% faster Jacobian formula, but it is not complete.
     // https://eprint.iacr.org/2015/1060, algorithm 1
     // Cost: 12M + 0S + 3*a + 3*b3 + 23add.
-    add(other: ProjectivePoint): ProjectivePoint {
+    add(other: Point): Point {
       assertPrjPoint(other);
       const { px: X1, py: Y1, pz: Z1 } = this;
       const { px: X2, py: Y2, pz: Z2 } = other;
@@ -453,20 +440,20 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
       t0 = Fp.mul(t3, t1);
       Z3 = Fp.mul(t5, Z3);
       Z3 = Fp.add(Z3, t0); // step 40
-      return new ProjectivePoint(X3, Y3, Z3);
+      return new Point(X3, Y3, Z3);
     }
 
-    subtract(other: ProjectivePoint) {
+    subtract(other: Point) {
       return this.add(other.negate());
     }
 
     private is0() {
-      return this.equals(ProjectivePoint.ZERO);
+      return this.equals(Point.ZERO);
     }
-    private wNAF(n: bigint): { p: ProjectivePoint; f: ProjectivePoint } {
-      return wnaf.wNAFCached(this, pointPrecomputes, n, (comp: ProjectivePoint[]) => {
+    private wNAF(n: bigint): { p: Point; f: Point } {
+      return wnaf.wNAFCached(this, pointPrecomputes, n, (comp: Point[]) => {
         const toInv = Fp.invertBatch(comp.map((p) => p.pz));
-        return comp.map((p, i) => p.toAffine(toInv[i])).map(ProjectivePoint.fromAffine);
+        return comp.map((p, i) => p.toAffine(toInv[i])).map(Point.fromAffine);
       });
     }
 
@@ -475,8 +462,8 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
      * It's faster, but should only be used when you don't care about
      * an exposed private key e.g. sig verification, which works over *public* keys.
      */
-    multiplyUnsafe(n: bigint): ProjectivePoint {
-      const I = ProjectivePoint.ZERO;
+    multiplyUnsafe(n: bigint): Point {
+      const I = Point.ZERO;
       if (n === _0n) return I;
       assertGE(n); // Will throw on 0
       if (n === _1n) return this;
@@ -487,7 +474,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
       let { k1neg, k1, k2neg, k2 } = endo.splitScalar(n);
       let k1p = I;
       let k2p = I;
-      let d: ProjectivePoint = this;
+      let d: Point = this;
       while (k1 > _0n || k2 > _0n) {
         if (k1 & _1n) k1p = k1p.add(d);
         if (k2 & _1n) k2p = k2p.add(d);
@@ -497,7 +484,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
       }
       if (k1neg) k1p = k1p.negate();
       if (k2neg) k2p = k2p.negate();
-      k2p = new ProjectivePoint(Fp.mul(k2p.px, endo.beta), k2p.py, k2p.pz);
+      k2p = new Point(Fp.mul(k2p.px, endo.beta), k2p.py, k2p.pz);
       return k1p.add(k2p);
     }
 
@@ -509,10 +496,10 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
      * @param affinePoint optional point ot save cached precompute windows on it
      * @returns New point
      */
-    multiply(scalar: bigint): ProjectivePoint {
+    multiply(scalar: bigint): Point {
       assertGE(scalar);
       let n = scalar;
-      let point: ProjectivePoint, fake: ProjectivePoint; // Fake point is used to const-time mult
+      let point: Point, fake: Point; // Fake point is used to const-time mult
       const { endo } = CURVE;
       if (endo) {
         const { k1neg, k1, k2neg, k2 } = endo.splitScalar(n);
@@ -520,7 +507,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
         let { p: k2p, f: f2p } = this.wNAF(k2);
         k1p = wnaf.constTimeNegate(k1neg, k1p);
         k2p = wnaf.constTimeNegate(k2neg, k2p);
-        k2p = new ProjectivePoint(Fp.mul(k2p.px, endo.beta), k2p.py, k2p.pz);
+        k2p = new Point(Fp.mul(k2p.px, endo.beta), k2p.py, k2p.pz);
         point = k1p.add(k2p);
         fake = f1p.add(f2p);
       } else {
@@ -529,17 +516,17 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
         fake = f;
       }
       // Normalize `z` for both points, but return only real one
-      return ProjectivePoint.normalizeZ([point, fake])[0];
+      return Point.normalizeZ([point, fake])[0];
     }
 
     /**
      * Efficiently calculate `aP + bQ`. Unsafe, can expose private key, if used incorrectly.
      * @returns non-zero affine point
      */
-    multiplyAndAddUnsafe(Q: ProjectivePoint, a: bigint, b: bigint): ProjectivePoint | undefined {
-      const G = ProjectivePoint.BASE; // No Strauss-Shamir trick: we have 10% faster G precomputes
+    multiplyAndAddUnsafe(Q: Point, a: bigint, b: bigint): Point | undefined {
+      const G = Point.BASE; // No Strauss-Shamir trick: we have 10% faster G precomputes
       const mul = (
-        P: ProjectivePoint,
+        P: Point,
         a: bigint // Select faster multiply() method
       ) => (a === _0n || a === _1n || !P.equals(G) ? P.multiplyUnsafe(a) : P.multiply(a));
       const sum = mul(this, a).add(mul(Q, b));
@@ -565,30 +552,30 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
     isTorsionFree(): boolean {
       const { h: cofactor, isTorsionFree } = CURVE;
       if (cofactor === _1n) return true; // No subgroups, always torsion-free
-      if (isTorsionFree) return isTorsionFree(ProjectivePoint, this);
+      if (isTorsionFree) return isTorsionFree(Point, this);
       throw new Error('isTorsionFree() has not been declared for the elliptic curve');
     }
-    clearCofactor(): ProjectivePoint {
+    clearCofactor(): Point {
       const { h: cofactor, clearCofactor } = CURVE;
       if (cofactor === _1n) return this; // Fast-path
-      if (clearCofactor) return clearCofactor(ProjectivePoint, this) as ProjectivePoint;
+      if (clearCofactor) return clearCofactor(Point, this) as Point;
       return this.multiplyUnsafe(CURVE.h);
     }
 
     toRawBytes(isCompressed = true): Uint8Array {
       this.assertValidity();
-      return CURVE.toBytes(ProjectivePoint, this, isCompressed);
+      return CURVE.toBytes(Point, this, isCompressed);
     }
 
     toHex(isCompressed = true): string {
-      return bytesToHex(this.toRawBytes(isCompressed));
+      return ut.bytesToHex(this.toRawBytes(isCompressed));
     }
   }
   const _bits = CURVE.nBitLength;
-  const wnaf = wNAF(ProjectivePoint, CURVE.endo ? Math.ceil(_bits / 2) : _bits);
+  const wnaf = wNAF(Point, CURVE.endo ? Math.ceil(_bits / 2) : _bits);
 
   return {
-    ProjectivePoint: ProjectivePoint as ProjConstructor<T>,
+    ProjectivePoint: Point as ProjConstructor<T>,
     normalizePrivateKey,
     weierstrassEquation,
     isWithinCurveOrder,
@@ -605,11 +592,11 @@ export interface SignatureType {
   hasHighS(): boolean;
   normalizeS(): SignatureType;
   recoverPublicKey(msgHash: Hex): ProjPointType<bigint>;
+  toCompactRawBytes(): Uint8Array;
+  toCompactHex(): string;
   // DER-encoded
   toDERRawBytes(isCompressed?: boolean): Uint8Array;
   toDERHex(isCompressed?: boolean): string;
-  toCompactRawBytes(): Uint8Array;
-  toCompactHex(): string;
 }
 // Static methods
 export type SignatureConstructor = {
@@ -633,7 +620,7 @@ export type CurveType = BasicCurve<bigint> & {
 };
 
 function validateOpts(curve: CurveType) {
-  const opts = validateBasicCurveOpts(curve);
+  const opts = validateAbsOpts(curve);
   if (typeof opts.hash !== 'function' || !Number.isSafeInteger(opts.hash.outputLen))
     throw new Error('Invalid hash function');
   if (typeof opts.hmac !== 'function') throw new Error('Invalid hmac function');
@@ -699,7 +686,7 @@ function hmacDrbg<T>(
       out.push(sl);
       len += v.length;
     }
-    return concatBytes(...out);
+    return ut.concatBytes(...out);
   };
   const genUntil = (seed: Uint8Array, pred: Pred<T>): T => {
     reset();
@@ -721,6 +708,12 @@ export function weierstrass(curveDef: CurveType): CurveFn {
   function isValidFieldElement(num: bigint): boolean {
     return _0n < num && num < Fp.ORDER; // 0 is banned since it's not invertible FE
   }
+  function modN(a: bigint) {
+    return mod.mod(a, CURVE_ORDER);
+  }
+  function invN(a: bigint) {
+    return mod.invert(a, CURVE_ORDER);
+  }
 
   const {
     ProjectivePoint: Point,
@@ -732,7 +725,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     toBytes(c, point, isCompressed: boolean): Uint8Array {
       const a = point.toAffine();
       const x = Fp.toBytes(a.x);
-      const cat = concatBytes;
+      const cat = ut.concatBytes;
       if (isCompressed) {
         // TODO: hasEvenY
         return cat(Uint8Array.from([point.hasEvenY() ? 0x02 : 0x03]), x);
@@ -746,7 +739,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       const tail = bytes.subarray(1);
       // this.assertValidity() is done inside of fromHex
       if (len === compressedLen && (head === 0x02 || head === 0x03)) {
-        const x = bytesToNumberBE(tail);
+        const x = ut.bytesToNumberBE(tail);
         if (!isValidFieldElement(x)) throw new Error('Point is not on curve');
         const y2 = weierstrassEquation(x); // y² = x³ + ax + b
         let y = Fp.sqrt(y2); // y = y² ^ (p+1)/4
@@ -767,7 +760,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     },
   });
   const numToNByteStr = (num: bigint): string =>
-    bytesToHex(numberToBytesBE(num, CURVE.nByteLength));
+    ut.bytesToHex(ut.numberToBytesBE(num, CURVE.nByteLength));
 
   function isBiggerThanHalfOrder(number: bigint) {
     const HALF = CURVE_ORDER >> _1n;
@@ -775,10 +768,10 @@ export function weierstrass(curveDef: CurveType): CurveFn {
   }
 
   function normalizeS(s: bigint) {
-    return isBiggerThanHalfOrder(s) ? mod.mod(-s, CURVE_ORDER) : s;
+    return isBiggerThanHalfOrder(s) ? modN(-s) : s;
   }
   // slice bytes num
-  const slcNum = (b: Uint8Array, from: number, to: number) => bytesToNumberBE(b.slice(from, to));
+  const slcNum = (b: Uint8Array, from: number, to: number) => ut.bytesToNumberBE(b.slice(from, to));
 
   /**
    * ECDSA signature with its (r, s) properties. Supports DER & compact representations.
@@ -798,10 +791,9 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     // DER encoded ECDSA signature
     // https://bitcoin.stackexchange.com/questions/57644/what-are-the-parts-of-a-bitcoin-transaction-input-script
     static fromDER(hex: Hex) {
-      const arr = hex instanceof Uint8Array;
-      if (typeof hex !== 'string' && !arr)
+      if (typeof hex !== 'string' && !(hex instanceof Uint8Array))
         throw new Error(`Signature.fromDER: Expected string or Uint8Array`);
-      const { r, s } = DER.parseSig(ensureBytes(hex));
+      const { r, s } = DER.toSig(ensureBytes(hex));
       return new Signature(r, s);
     }
 
@@ -824,10 +816,9 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       if (radj >= Fp.ORDER) throw new Error('recovery id 2 or 3 invalid');
       const prefix = (rec & 1) === 0 ? '02' : '03';
       const R = Point.fromHex(prefix + numToNByteStr(radj));
-      const Fn = mod.Fp(N);
-      const ir = Fn.inv(radj); // r^-1
-      const u1 = Fn.mul(-h, ir); // -hr^-1
-      const u2 = Fn.mul(s, ir); // sr^-1
+      const ir = invN(radj); // r^-1
+      const u1 = modN(-h * ir); // -hr^-1
+      const u2 = modN(s * ir); // sr^-1
       const Q = Point.BASE.multiplyAndAddUnsafe(R, u1, u2); //  (sr^-1)R-(hr^-1)G = -(hr^-1)G + (sr^-1)
       if (!Q) throw new Error('point at infinify'); // unsafe is fine: no priv data leaked
       Q.assertValidity();
@@ -840,38 +831,22 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     }
 
     normalizeS() {
-      return this.hasHighS()
-        ? new Signature(this.r, mod.mod(-this.s, CURVE_ORDER), this.recovery)
-        : this;
+      return this.hasHighS() ? new Signature(this.r, modN(-this.s), this.recovery) : this;
     }
 
     // DER-encoded
     toDERRawBytes() {
-      return hexToBytes(this.toDERHex());
+      return ut.hexToBytes(this.toDERHex());
     }
     toDERHex() {
-      const toHex = numberToHexUnpadded;
-      const sHex = DER.slice(toHex(this.s));
-      const rHex = DER.slice(toHex(this.r));
-      const sHexL = sHex.length / 2;
-      const rHexL = rHex.length / 2;
-      const sLen = toHex(sHexL);
-      const rLen = toHex(rHexL);
-      const length = toHex(rHexL + sHexL + 4);
-      return `30${length}02${rLen}${rHex}02${sLen}${sHex}`;
+      return DER.hexFromSig({ r: this.r, s: this.s });
     }
 
     // padded bytes of r, then padded bytes of s
     toCompactRawBytes() {
-      // const l = CURVE.nByteLength;
-      // const a = new Uint8Array(2 * l);
-      // a.set(numberToBytesBE(this.r, l), 0);
-      // a.set(numberToBytesBE(this.s, l), l);
-      // return a;
-      return hexToBytes(this.toCompactHex());
+      return ut.hexToBytes(this.toCompactHex());
     }
     toCompactHex() {
-      // return bytesToHex(this.toCompactRawBytes());
       return numToNByteStr(this.r) + numToNByteStr(this.s);
     }
   }
@@ -891,7 +866,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
      * Converts some bytes to a valid private key. Needs at least (nBitLength+64) bytes.
      */
     hashToPrivateKey: (hash: Hex): Uint8Array =>
-      numberToBytesBE(mod.hashToPrivateScalar(hash, CURVE_ORDER), CURVE.nByteLength),
+      ut.numberToBytesBE(mod.hashToPrivateScalar(hash, CURVE_ORDER), CURVE.nByteLength),
 
     /**
      * Produces cryptographically secure private key from random of size (nBitLength+64)
@@ -963,22 +938,22 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       // For curves with nBitLength % 8 !== 0: bits2octets(bits2octets(m)) !== bits2octets(m)
       // for some cases, since bytes.length * 8 is not actual bitLength.
       const delta = bytes.length * 8 - CURVE.nBitLength; // truncate to nBitLength leftmost bits
-      const num = bytesToNumberBE(bytes); // check for == u8 done here
+      const num = ut.bytesToNumberBE(bytes); // check for == u8 done here
       return delta > 0 ? num >> BigInt(delta) : num;
     };
   const bits2int_modN =
     CURVE.bits2int_modN ||
     function (bytes: Uint8Array): bigint {
-      return mod.mod(bits2int(bytes), CURVE_ORDER); // can't use bytesToNumberBE here
+      return modN(bits2int(bytes)); // can't use bytesToNumberBE here
     };
   // NOTE: pads output with zero as per spec
-  const ORDER_MASK = bitMask(CURVE.nBitLength);
+  const ORDER_MASK = ut.bitMask(CURVE.nBitLength);
   function int2octets(num: bigint): Uint8Array {
     if (typeof num !== 'bigint') throw new Error('Expected bigint');
     if (!(_0n <= num && num < ORDER_MASK))
       throw new Error(`Expected number < 2^${CURVE.nBitLength}`);
     // works with order, can have different size than numToField!
-    return numberToBytesBE(num, CURVE.nByteLength);
+    return ut.numberToBytesBE(num, CURVE.nByteLength);
   }
   // Steps A, D of RFC6979 3.2
   // Creates RFC6979 seed; converts msg/privKey to numbers.
@@ -1013,31 +988,24 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       if (e.length !== Fp.BYTES) throw new Error(`sign: Expected ${Fp.BYTES} bytes of extra data`);
       seedArgs.push(e);
     }
-    // seed is constructed from private key and message
-    // Step D
-    // V, 0x00 are done in HmacDRBG constructor.
-    const seed = concatBytes(...seedArgs);
+    const seed = ut.concatBytes(...seedArgs); // Step D of RFC6979 3.2
     const m = h1int; // NOTE: no need to call bits2int second time here, it is inside truncateHash!
     // Converts signature params into point w r/s, checks result for validity.
     function k2sig(kBytes: Uint8Array): Signature | undefined {
-      // const { n } = CURVE;
       // RFC 6979 Section 3.2, step 3: k = bits2int(T)
       const k = bits2int(kBytes); // Cannot use fields methods, since it is group element
-      if (!isWithinCurveOrder(k)) return;
-      // Important: all mod() calls in the function must be done over `n`
-      const Fn = mod.Fp(CURVE.n);
-      const ik = Fn.inv(k); // k^-1 mod n
+      if (!isWithinCurveOrder(k)) return; // Important: all mod() calls here must be done over N
+      const ik = invN(k); // k^-1 mod n
       const q = Point.BASE.multiply(k).toAffine(); // q = Gk
-      const r = Fn.create(q.x); // r = q.x mod n
-      if (r === _0n) return; // r=0 invalid
-      const s = Fn.mul(ik, Fn.add(m, Fn.mul(d, r))); // s = k^-1(m + rd) mod n
-      if (s === _0n) return; // s=0 invalid
+      const r = modN(q.x); // r = q.x mod n
+      if (r === _0n) return;
+      const s = modN(ik * modN(m + modN(d * r))); // s = k^-1(m + rd) mod n
+      if (s === _0n) return;
       let recovery = (q.x === r ? 0 : 2) | Number(q.y & _1n); // recovery bit (2 or 3, when q.x > n)
       let normS = s;
       if (lowS && isBiggerThanHalfOrder(s)) {
-        // if lowS was passed, ensure s is always
-        normS = normalizeS(s); // in the bottom half of CURVE.n
-        recovery ^= 1;
+        normS = normalizeS(s); // if lowS was passed, ensure s is always
+        recovery ^= 1; // // in the bottom half of N
       }
       return new Signature(r, normS, recovery); // use normS, not s
     }
@@ -1093,12 +1061,12 @@ export function weierstrass(curveDef: CurveType): CurveFn {
         signature.assertValidity();
         _sig = signature;
       } else {
-        // Signature can be represented in 2 ways: compact (64-byte) & DER (variable-length).
-        // Since DER can also be 64 bytes, we check for it first.
+        // Signature can be represented in 2 ways: compact (2*nByteLength) & DER (variable-length).
+        // Since DER can also be 2*nByteLength bytes, we check for it first.
         try {
           _sig = Signature.fromDER(signature as Hex);
         } catch (derError) {
-          if (!(derError instanceof DERError)) throw derError;
+          if (!(derError instanceof DER.Err)) throw derError;
           _sig = Signature.fromCompact(signature as Hex);
         }
       }
@@ -1109,16 +1077,14 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     }
     if (opts.lowS && _sig.hasHighS()) return false;
     if (opts.prehash) msgHash = CURVE.hash(msgHash);
-    const { n: N } = CURVE;
     const { r, s } = _sig;
     const h = bits2int_modN(msgHash); // Cannot use fields methods, since it is group element
-    const Fn = mod.Fp(N);
-    const is = Fn.inv(s); // s^-1
-    const u1 = Fn.mul(h, is); // u1 = hs^-1 mod n
-    const u2 = Fn.mul(r, is); // u2 = rs^-1 mod n
+    const is = invN(s); // s^-1
+    const u1 = modN(h * is); // u1 = hs^-1 mod n
+    const u2 = modN(r * is); // u2 = rs^-1 mod n
     const R = Point.BASE.multiplyAndAddUnsafe(P, u1, u2)?.toAffine(); // R = u1⋅G + u2⋅P
     if (!R) return false;
-    const v = Fn.create(R.x);
+    const v = modN(R.x);
     return v === r;
   }
   return {
