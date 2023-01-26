@@ -6,7 +6,9 @@ Minimal, auditable JS implementation of elliptic curve cryptography.
 - ECDSA, EdDSA, Schnorr, BLS signature schemes, ECDH key agreement
 - [hash to curve](https://datatracker.ietf.org/doc/draft-irtf-cfrg-hash-to-curve/)
   for encoding or hashing an arbitrary string to a point on an elliptic curve
-- Auditable, [fast](#speed)
+- [Poseidon](https://www.poseidon-hash.info) ZK-friendly hash
+- Auditable
+- 🏎 [Ultra-fast](#speed), hand-optimized for caveats of JS engines
 - 🔍 Unique tests ensure correctness. Wycheproof vectors included
 - 🔻 Tree-shaking-friendly: there is no entry point, which ensures small size of your app
 
@@ -24,7 +26,6 @@ Curves incorporate work from previous noble packages
 [ed25519](https://github.com/paulmillr/noble-ed25519),
 [bls12-381](https://github.com/paulmillr/noble-bls12-381)),
 which had security audits and were developed from 2019 to 2022.
-The goal is to replace them with lean UMD builds based on single-codebase noble-curves.
 
 ### This library belongs to _noble_ crypto
 
@@ -88,6 +89,7 @@ To define a custom curve, check out API below.
 - [abstract/montgomery: Montgomery curve](#abstractmontgomery-montgomery-curve)
 - [abstract/weierstrass: Short Weierstrass curve](#abstractweierstrass-short-weierstrass-curve)
 - [abstract/hash-to-curve: Hashing strings to curve points](#abstracthash-to-curve-hashing-strings-to-curve-points)
+- [abstract/poseidon: Poseidon hash](#abstractposeidon-poseidon-hash)
 - [abstract/modular](#abstractmodular)
 - [abstract/utils](#abstractutils)
 
@@ -368,6 +370,30 @@ hashes arbitrary-length byte strings to a list of one or more elements of a fini
       hash: CHash;
     };
     ```
+
+### abstract/poseidon: Poseidon hash
+
+Implements [Poseidon](https://www.poseidon-hash.info) ZK-friendly hash.
+
+There are many poseidon instances with different constants. We don't provide them,
+but we provide ability to specify them manually. For actual usage, check out
+stark curve source code.
+
+```ts
+import { poseidon } from '@noble/curves/abstract/poseidon';
+
+type PoseidonOpts = {
+  Fp: Field<bigint>;
+  t: number;
+  roundsFull: number;
+  roundsPartial: number;
+  sboxPower?: number;
+  reversePartialPowIdx?: boolean; // Hack for stark
+  mds: bigint[][];
+  roundConstants: bigint[][];
+};
+const instance = poseidon(opts: PoseidonOpts);
+```
 
 ### abstract/modular
 
