@@ -5,7 +5,7 @@ import * as stark from '../lib/stark.js';
 run(async () => {
   const RAM = false;
   if (RAM) utils.logMem();
-  console.log(`\x1b[36msecp256k1\x1b[0m`);
+  console.log(`\x1b[36mstark\x1b[0m`);
   await mark('init', 1, () => stark.utils.precompute(8));
   const d = (() => {
     const priv = '2dccce1da22003777062ee0870e9881b460a8b7eca276870f57c601f182136c';

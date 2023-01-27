@@ -445,43 +445,62 @@ We consider infrastructure attacks like rogue NPM modules very important; that's
 Benchmark results on Apple M2 with node v18.10:
 
 ```
-getPublicKey
-  secp256k1 x 5,241 ops/sec @ 190μs/op
-  P256 x 7,993 ops/sec @ 125μs/op
-  P384 x 3,819 ops/sec @ 261μs/op
-  P521 x 2,074 ops/sec @ 481μs/op
-  ed25519 x 8,390 ops/sec @ 119μs/op
-  ed448 x 3,224 ops/sec @ 310μs/op
-sign
-  secp256k1 x 3,934 ops/sec @ 254μs/op
-  P256 x 5,327 ops/sec @ 187μs/op
-  P384 x 2,728 ops/sec @ 366μs/op
-  P521 x 1,594 ops/sec @ 626μs/op
-  ed25519 x 4,233 ops/sec @ 236μs/op
-  ed448 x 1,561 ops/sec @ 640μs/op
-verify
-  secp256k1 x 731 ops/sec @ 1ms/op
-  P256 x 806 ops/sec @ 1ms/op
-  P384 x 353 ops/sec @ 2ms/op
-  P521 x 171 ops/sec @ 5ms/op
-  ed25519 x 860 ops/sec @ 1ms/op
-  ed448 x 313 ops/sec @ 3ms/op
-getSharedSecret
-  secp256k1 x 445 ops/sec @ 2ms/op
-recoverPublicKey
-  secp256k1 x 732 ops/sec @ 1ms/op
-==== bls12-381 ====
-getPublicKey x 817 ops/sec @ 1ms/op
-sign x 50 ops/sec @ 19ms/op
-verify x 34 ops/sec @ 28ms/op
-pairing x 89 ops/sec @ 11ms/op
-==== stark ====
+secp256k1
+init x 57 ops/sec @ 17ms/op
+getPublicKey x 4,946 ops/sec @ 202μs/op
+sign x 3,914 ops/sec @ 255μs/op
+verify x 682 ops/sec @ 1ms/op
+getSharedSecret x 427 ops/sec @ 2ms/op
+recoverPublicKey x 683 ops/sec @ 1ms/op
+schnorr.sign x 539 ops/sec @ 1ms/op
+schnorr.verify x 716 ops/sec @ 1ms/op
+
+P256
+init x 30 ops/sec @ 32ms/op
+getPublicKey x 5,008 ops/sec @ 199μs/op
+sign x 3,970 ops/sec @ 251μs/op
+verify x 515 ops/sec @ 1ms/op
+
+P384
+init x 14 ops/sec @ 66ms/op
+getPublicKey x 2,434 ops/sec @ 410μs/op
+sign x 1,942 ops/sec @ 514μs/op
+verify x 206 ops/sec @ 4ms/op
+
+P521
+init x 7 ops/sec @ 126ms/op
+getPublicKey x 1,282 ops/sec @ 779μs/op
+sign x 1,077 ops/sec @ 928μs/op
+verify x 110 ops/sec @ 9ms/op
+
+ed25519
+init x 37 ops/sec @ 26ms/op
+getPublicKey x 8,147 ops/sec @ 122μs/op
+sign x 3,979 ops/sec @ 251μs/op
+verify x 848 ops/sec @ 1ms/op
+
+ed448
+init x 17 ops/sec @ 58ms/op
+getPublicKey x 3,083 ops/sec @ 324μs/op
+sign x 1,473 ops/sec @ 678μs/op
+verify x 323 ops/sec @ 3ms/op
+
+bls12-381
+init x 30 ops/sec @ 33ms/op
+getPublicKey x 788 ops/sec @ 1ms/op
+sign x 45 ops/sec @ 21ms/op
+verify x 32 ops/sec @ 30ms/op
+pairing x 88 ops/sec @ 11ms/op
+
+stark
+init x 31 ops/sec @ 31ms/op
 pedersen
-  old x 85 ops/sec @ 11ms/op
-  noble x 1,216 ops/sec @ 822μs/op
+├─old x 84 ops/sec @ 11ms/op
+└─noble x 802 ops/sec @ 1ms/op
+poseidon x 7,466 ops/sec @ 133μs/op
 verify
-  old x 302 ops/sec @ 3ms/op
-  noble x 698 ops/sec @ 1ms/op
+├─old x 300 ops/sec @ 3ms/op
+└─noble x 474 ops/sec @ 2ms/op
 ```
 
 ## Upgrading
