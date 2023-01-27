@@ -436,9 +436,16 @@ for (const name in CURVES) {
             throws(() => G[1][op](0n), '0n');
             G[1][op](G[2]);
             throws(() => G[1][op](CURVE_ORDER), 'CURVE_ORDER');
+            throws(() => G[1][op](-123n), '-123n');
+            throws(() => G[1][op](123), '123');
             throws(() => G[1][op](123.456), '123.456');
             throws(() => G[1][op](true), 'true');
+            throws(() => G[1][op](false), 'false');
+            throws(() => G[1][op](null), 'null');
+            throws(() => G[1][op](undefined), 'undefined');
             throws(() => G[1][op]('1'), "'1'");
+            throws(() => G[1][op]({ x: 1n, y: 1n }), '{ x: 1n, y: 1n }');
+            throws(() => G[1][op]({ x: 1n, y: 1n, z: 1n }), '{ x: 1n, y: 1n, z: 1n }');
             throws(
               () => G[1][op]({ x: 1n, y: 1n, z: 1n, t: 1n }),
               '{ x: 1n, y: 1n, z: 1n, t: 1n }'
@@ -527,10 +534,13 @@ for (const name in CURVES) {
     should('.getPublicKey() type check', () => {
       throws(() => C.getPublicKey(0), '0');
       throws(() => C.getPublicKey(0n), '0n');
-      throws(() => C.getPublicKey(false), 'false');
+      throws(() => C.getPublicKey(-123n), '-123n');
       throws(() => C.getPublicKey(123), '123');
       throws(() => C.getPublicKey(123.456), '123.456');
       throws(() => C.getPublicKey(true), 'true');
+      throws(() => C.getPublicKey(false), 'false');
+      throws(() => C.getPublicKey(null), 'null');
+      throws(() => C.getPublicKey(undefined), 'undefined');
       throws(() => C.getPublicKey(''), "''");
       // NOTE: passes because of disabled hex padding checks for starknet, maybe enable?
       // throws(() => C.getPublicKey('1'), "'1'");
@@ -560,25 +570,25 @@ for (const name in CURVES) {
     should('.sign() edge cases', () => {
       throws(() => C.sign());
       throws(() => C.sign(''));
+      throws(() => C.sign('', ''));
+      throws(() => C.sign(new Uint8Array(), new Uint8Array()));
     });
 
     describe('verify()', () => {
+      const msg = '01'.repeat(32);
       should('true for proper signatures', () => {
-        const msg = '01'.repeat(32);
         const priv = C.utils.randomPrivateKey();
         const sig = C.sign(msg, priv);
         const pub = C.getPublicKey(priv);
         deepStrictEqual(C.verify(sig, msg, pub), true);
       });
       should('false for wrong messages', () => {
-        const msg = '01'.repeat(32);
         const priv = C.utils.randomPrivateKey();
         const sig = C.sign(msg, priv);
         const pub = C.getPublicKey(priv);
         deepStrictEqual(C.verify(sig, '11'.repeat(32), pub), false);
       });
       should('false for wrong keys', () => {
-        const msg = '01'.repeat(32);
         const priv = C.utils.randomPrivateKey();
         const sig = C.sign(msg, priv);
         deepStrictEqual(C.verify(sig, msg, C.getPublicKey(C.utils.randomPrivateKey())), false);

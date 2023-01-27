@@ -24,11 +24,9 @@ export type BasicCurve<T> = AbstractCurve<T> & {
   b: T;
 
   // Optional params
-  normalizePrivateKey?: (key: PrivKey) => PrivKey; // called before privkey validation. used w p521
-  // Whether to execute modular division on a private key, useful for bls curves with cofactor > 1
+  allowedPrivateKeyLengths?: readonly number[]; // for P521
   wrapPrivateKey?: boolean; // bls12-381 requires mod(n) instead of rejecting keys >= n
-  // Endomorphism options for Koblitz curves
-  endo?: EndomorphismOpts;
+  endo?: EndomorphismOpts; // Endomorphism options for Koblitz curves
   // When a cofactor != 1, there can be an effective methods to:
   // 1. Determine whether a point is torsion-free
   isTorsionFree?: (c: ProjConstructor<T>, point: ProjPointType<T>) => boolean;
@@ -100,6 +98,14 @@ function validatePointOpts<T>(curve: CurvePointsType<T>) {
   for (const i of ['a', 'b'] as const) {
     if (!Fp.isValid(curve[i]))
       throw new Error(`Invalid curve param ${i}=${opts[i]} (${typeof opts[i]})`);
+  }
+  for (const i of ['allowedPrivateKeyLengths'] as const) {
+    if (curve[i] === undefined) continue; // Optional
+    if (!Array.isArray(curve[i])) throw new Error(`Invalid ${i} array`);
+  }
+  for (const i of ['wrapPrivateKey'] as const) {
+    if (curve[i] === undefined) continue; // Optional
+    if (typeof curve[i] !== 'boolean') throw new Error(`Invalid ${i} boolean`);
   }
   for (const i of ['isTorsionFree', 'clearCofactor'] as const) {
     if (curve[i] === undefined) continue; // Optional
@@ -209,8 +215,13 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
   // Validates if priv key is valid and converts it to bigint.
   // Supports options CURVE.normalizePrivateKey and CURVE.wrapPrivateKey.
   function normalizePrivateKey(key: PrivKey): bigint {
-    const { normalizePrivateKey: custom, nByteLength, wrapPrivateKey, n } = CURVE;
-    if (typeof custom === 'function') key = custom(key); // CURVE.normalizePrivateKey()
+    const { allowedPrivateKeyLengths: lengths, nByteLength, wrapPrivateKey, n } = CURVE;
+    if (lengths && typeof key !== 'bigint') {
+      if (key instanceof Uint8Array) key = ut.bytesToHex(key);
+      // Normalize to hex string, pad. E.g. P521 would norm 130-132 char hex to 132-char bytes
+      if (typeof key !== 'string' || !lengths.includes(key.length)) throw new Error('Invalid key');
+      key = key.padStart(nByteLength * 2, '0');
+    }
     let num: bigint;
     try {
       num = typeof key === 'bigint' ? key : ut.bytesToNumberBE(ensureBytes(key, nByteLength));

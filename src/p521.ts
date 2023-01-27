@@ -1,7 +1,6 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { createCurve } from './_shortw_utils.js';
 import { sha512 } from '@noble/hashes/sha512';
-import { bytesToHex, PrivKey } from './abstract/utils.js';
 import { Fp as Field } from './abstract/modular.js';
 import { mapToCurveSimpleSWU } from './abstract/weierstrass.js';
 import * as htf from './abstract/hash-to-curve.js';
@@ -38,16 +37,7 @@ export const P521 = createCurve({
   Gy: BigInt('0x011839296a789a3bc0045c8a5fb42c7d1bd998f54449579b446817afbd17273e662c97ee72995ef42640c550b9013fad0761353c7086a272c24088be94769fd16650'),
   h: BigInt(1),
   lowS: false,
-  // P521 keys could be 130, 131, 132 bytes. We normalize to 132 bytes.
-  // Does not replace validation; invalid keys would still be rejected.
-  normalizePrivateKey(key: PrivKey) {
-    if (typeof key === 'bigint') return key;
-    if (key instanceof Uint8Array) key = bytesToHex(key);
-    if (typeof key !== 'string' || !([130, 131, 132].includes(key.length))) {
-      throw new Error('Invalid key');
-    }
-    return key.padStart(66 * 2, '0'); // ensure it's always 132 bytes
-  },
+  allowedPrivateKeyLengths: [130, 131, 132] // P521 keys are variable-length. Normalize to 132b
 } as const, sha512);
 export const secp521r1 = P521;
 
