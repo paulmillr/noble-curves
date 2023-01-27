@@ -6,7 +6,7 @@
     "lib"
   ],
   "scripts": {
-    "bench": "cd benchmark; node index.js",
+    "bench": "cd benchmark; node secp256k1.js; node curves.js; node stark.js; node bls.js",
     "build": "tsc && tsc -p tsconfig.esm.json",
     "build:release": "rollup -c rollup.config.js",
     "lint": "prettier --check 'src/**/*.{js,ts}' 'test/*.js'",
@@ -30,7 +30,7 @@
     "@scure/bip39": "~1.1.0",
     "@types/node": "18.11.3",
     "fast-check": "3.0.0",
-    "micro-bmark": "0.2.0",
+    "micro-bmark": "0.3.0",
     "micro-should": "0.4.0",
     "prettier": "2.8.3",
     "rollup": "2.75.5",

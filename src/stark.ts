@@ -97,7 +97,7 @@ function ensureBytes0x(hex: Hex): Uint8Array {
 function normalizePrivateKey(privKey: Hex) {
   return cutils.bytesToHex(ensureBytes0x(privKey)).padStart(64, '0');
 }
-function getPublicKey0x(privKey: Hex, isCompressed?: boolean) {
+function getPublicKey0x(privKey: Hex, isCompressed = false) {
   return starkCurve.getPublicKey(normalizePrivateKey(privKey), isCompressed);
 }
 function getSharedSecret0x(privKeyA: Hex, pubKeyB: Hex) {
