@@ -86,7 +86,8 @@ describe('wycheproof ECDH', () => {
           try {
             const pub = CURVE.ProjectivePoint.fromHex(test.public);
           } catch (e) {
-            if (e.message.includes('Point.fromHex: received invalid point.')) continue;
+            // Our strict validation filter doesn't let weird-length DER vectors
+            if (e.message.startsWith('Point of length')) continue;
             throw e;
           }
           const shared = CURVE.getSharedSecret(test.private, test.public);
@@ -140,7 +141,8 @@ describe('wycheproof ECDH', () => {
               try {
                 const pub = curve.ProjectivePoint.fromHex(test.public);
               } catch (e) {
-                if (e.message.includes('Point.fromHex: received invalid point.')) continue;
+                // Our strict validation filter doesn't let weird-length DER vectors
+                if (e.message.includes('Point of length')) continue;
                 throw e;
               }
               const shared = curve.getSharedSecret(test.private, test.public);
@@ -194,7 +196,6 @@ const WYCHEPROOF_ECDSA = {
   secp256k1: {
     curve: secp256k1,
     hashes: {
-      // TODO: debug why fails, can be bug
       sha256: {
         hash: sha256,
         tests: [secp256k1_sha256_test],

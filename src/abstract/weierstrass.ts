@@ -2,15 +2,8 @@
 // Short Weierstrass curve. The formula is: y² = x³ + ax + b
 import * as mod from './modular.js';
 import * as ut from './utils.js';
-import { Hex, PrivKey, ensureBytes, CHash } from './utils.js';
-import {
-  Group,
-  GroupConstructor,
-  wNAF,
-  AbstractCurve,
-  validateAbsOpts,
-  AffinePoint,
-} from './curve.js';
+import { CHash, Hex, PrivKey, ensureBytes } from './utils.js';
+import { Group, GroupConstructor, wNAF, BasicCurve, validateBasic, AffinePoint } from './curve.js';
 
 export type { AffinePoint };
 type HmacFnSync = (key: Uint8Array, ...messages: Uint8Array[]) => Uint8Array;
@@ -18,7 +11,7 @@ type EndomorphismOpts = {
   beta: bigint;
   splitScalar: (k: bigint) => { k1neg: boolean; k1: bigint; k2neg: boolean; k2: bigint };
 };
-export type BasicCurve<T> = AbstractCurve<T> & {
+export type BasicWCurve<T> = BasicCurve<T> & {
   // Params: a, b
   a: T;
   b: T;
@@ -86,34 +79,32 @@ export interface ProjConstructor<T> extends GroupConstructor<ProjPointType<T>> {
   normalizeZ(points: ProjPointType<T>[]): ProjPointType<T>[];
 }
 
-export type CurvePointsType<T> = BasicCurve<T> & {
+export type CurvePointsType<T> = BasicWCurve<T> & {
   // Bytes
   fromBytes: (bytes: Uint8Array) => AffinePoint<T>;
   toBytes: (c: ProjConstructor<T>, point: ProjPointType<T>, compressed: boolean) => Uint8Array;
 };
 
 function validatePointOpts<T>(curve: CurvePointsType<T>) {
-  const opts = validateAbsOpts(curve);
-  const Fp = opts.Fp;
-  for (const i of ['a', 'b'] as const) {
-    if (!Fp.isValid(curve[i]))
-      throw new Error(`Invalid curve param ${i}=${opts[i]} (${typeof opts[i]})`);
-  }
-  for (const i of ['allowedPrivateKeyLengths'] as const) {
-    if (curve[i] === undefined) continue; // Optional
-    if (!Array.isArray(curve[i])) throw new Error(`Invalid ${i} array`);
-  }
-  for (const i of ['wrapPrivateKey'] as const) {
-    if (curve[i] === undefined) continue; // Optional
-    if (typeof curve[i] !== 'boolean') throw new Error(`Invalid ${i} boolean`);
-  }
-  for (const i of ['isTorsionFree', 'clearCofactor'] as const) {
-    if (curve[i] === undefined) continue; // Optional
-    if (typeof curve[i] !== 'function') throw new Error(`Invalid ${i} function`);
-  }
-  const endo = opts.endo;
+  const opts = validateBasic(curve);
+  ut.validateObject(
+    opts,
+    {
+      a: 'field',
+      b: 'field',
+      fromBytes: 'function',
+      toBytes: 'function',
+    },
+    {
+      allowedPrivateKeyLengths: 'array',
+      wrapPrivateKey: 'boolean',
+      isTorsionFree: 'function',
+      clearCofactor: 'function',
+    }
+  );
+  const { endo, Fp, a } = opts;
   if (endo) {
-    if (!Fp.eql(opts.a, Fp.ZERO)) {
+    if (!Fp.eql(a, Fp.ZERO)) {
       throw new Error('Endomorphism can only be defined for Koblitz curves that have a=0');
     }
     if (
@@ -124,9 +115,6 @@ function validatePointOpts<T>(curve: CurvePointsType<T>) {
       throw new Error('Expected endomorphism with beta: bigint and splitScalar: function');
     }
   }
-  if (typeof opts.fromBytes !== 'function') throw new Error('Invalid fromBytes function');
-  if (typeof opts.toBytes !== 'function') throw new Error('Invalid fromBytes function');
-  // Set defaults
   return Object.freeze({ ...opts } as const);
 }
 
@@ -609,25 +597,30 @@ type SignatureLike = { r: bigint; s: bigint };
 
 export type PubKey = Hex | ProjPointType<bigint>;
 
-export type CurveType = BasicCurve<bigint> & {
-  // Default options
-  lowS?: boolean;
-  // Hashes
-  hash: CHash; // Because we need outputLen for DRBG
+export type CurveType = BasicWCurve<bigint> & {
+  hash: CHash; // CHash not FHash because we need outputLen for DRBG
   hmac: HmacFnSync;
   randomBytes: (bytesLength?: number) => Uint8Array;
-  // truncateHash?: (hash: Uint8Array, truncateOnly?: boolean) => Uint8Array;
+  lowS?: boolean;
   bits2int?: (bytes: Uint8Array) => bigint;
   bits2int_modN?: (bytes: Uint8Array) => bigint;
 };
 
 function validateOpts(curve: CurveType) {
-  const opts = validateAbsOpts(curve);
-  if (typeof opts.hash !== 'function' || !Number.isSafeInteger(opts.hash.outputLen))
-    throw new Error('Invalid hash function');
-  if (typeof opts.hmac !== 'function') throw new Error('Invalid hmac function');
-  if (typeof opts.randomBytes !== 'function') throw new Error('Invalid randomBytes function');
-  // Set defaults
+  const opts = validateBasic(curve);
+  ut.validateObject(
+    opts,
+    {
+      hash: 'hash',
+      hmac: 'function',
+      randomBytes: 'function',
+    },
+    {
+      bits2int: 'function',
+      bits2int_modN: 'function',
+      lowS: 'boolean',
+    }
+  );
   return Object.freeze({ lowS: true, ...opts } as const);
 }
 
@@ -756,7 +749,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
         return { x, y };
       } else {
         throw new Error(
-          `Point.fromHex: received invalid point. Expected ${compressedLen} compressed bytes or ${uncompressedLen} uncompressed bytes, not ${len}`
+          `Point of length ${len} was invalid. Expected ${compressedLen} compressed bytes or ${uncompressedLen} uncompressed bytes`
         );
       }
     },
@@ -821,7 +814,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       const ir = invN(radj); // r^-1
       const u1 = modN(-h * ir); // -hr^-1
       const u2 = modN(s * ir); // sr^-1
-      const Q = Point.BASE.multiplyAndAddUnsafe(R, u1, u2); //  (sr^-1)R-(hr^-1)G = -(hr^-1)G + (sr^-1)
+      const Q = Point.BASE.multiplyAndAddUnsafe(R, u1, u2); // (sr^-1)R-(hr^-1)G = -(hr^-1)G + (sr^-1)
       if (!Q) throw new Error('point at infinify'); // unsafe is fine: no priv data leaked
       Q.assertValidity();
       return Q;
@@ -951,9 +944,10 @@ export function weierstrass(curveDef: CurveType): CurveFn {
   // NOTE: pads output with zero as per spec
   const ORDER_MASK = ut.bitMask(CURVE.nBitLength);
   function int2octets(num: bigint): Uint8Array {
-    if (typeof num !== 'bigint') throw new Error('Expected bigint');
+    if (typeof num !== 'bigint') throw new Error('bigint expected');
     if (!(_0n <= num && num < ORDER_MASK))
-      throw new Error(`Expected number < 2^${CURVE.nBitLength}`);
+      // n in [0..ORDER_MASK-1]
+      throw new Error(`bigint expected < 2^${CURVE.nBitLength}`);
     // works with order, can have different size than numToField!
     return ut.numberToBytesBE(num, CURVE.nByteLength);
   }
@@ -1045,7 +1039,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
    * ```
    */
   function verify(
-    signature: Hex | { r: bigint; s: bigint },
+    signature: Hex | SignatureLike,
     msgHash: Hex,
     publicKey: Hex,
     opts = defaultVerOpts
@@ -1090,7 +1084,6 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     getSharedSecret,
     sign,
     verify,
-    // Point,
     ProjectivePoint: Point,
     Signature,
     utils,

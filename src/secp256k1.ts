@@ -175,7 +175,6 @@ function schnorrSign(message: Hex, privateKey: Hex, auxRand: Hex = randomBytes(3
 
   const { x: px, scalar: d } = schnorrGetScalar(bytesToNum(ensureBytes(privateKey, 32)));
   const a = ensureBytes(auxRand, 32); // Auxiliary random data a: a 32-byte array
-  // TODO: replace with proper xor?
   const t = numTo32b(d ^ bytesToNum(taggedHash(TAGS.aux, a))); // Let t be the byte-wise xor of bytes(d) and hash/aux(a)
   const rand = taggedHash(TAGS.nonce, t, px, m); // Let rand = hash/nonce(t || bytes(P) || m)
   const k_ = modN(bytesToNum(rand)); // Let k' = int(rand) mod n

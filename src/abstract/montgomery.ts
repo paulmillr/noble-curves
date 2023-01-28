@@ -1,14 +1,13 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { mod, pow } from './modular.js';
-import { ensureBytes, numberToBytesLE, bytesToNumberLE } from './utils.js';
+import { bytesToNumberLE, ensureBytes, numberToBytesLE, validateObject } from './utils.js';
 
 const _0n = BigInt(0);
 const _1n = BigInt(1);
 type Hex = string | Uint8Array;
 
 export type CurveType = {
-  // Field over which we'll do calculations. Verify with:
-  P: bigint;
+  P: bigint; // finite field prime
   nByteLength: number;
   adjustScalarBytes?: (bytes: Uint8Array) => Uint8Array;
   domain?: (data: Uint8Array, ctx: Uint8Array, phflag: boolean) => Uint8Array;
@@ -27,24 +26,20 @@ export type CurveFn = {
 };
 
 function validateOpts(curve: CurveType) {
-  for (const i of ['a24'] as const) {
-    if (typeof curve[i] !== 'bigint')
-      throw new Error(`Invalid curve param ${i}=${curve[i]} (${typeof curve[i]})`);
-  }
-  for (const i of ['montgomeryBits', 'nByteLength'] as const) {
-    if (curve[i] === undefined) continue; // Optional
-    if (!Number.isSafeInteger(curve[i]))
-      throw new Error(`Invalid curve param ${i}=${curve[i]} (${typeof curve[i]})`);
-  }
-  for (const fn of ['adjustScalarBytes', 'domain', 'powPminus2'] as const) {
-    if (curve[fn] === undefined) continue; // Optional
-    if (typeof curve[fn] !== 'function') throw new Error(`Invalid ${fn} function`);
-  }
-  for (const i of ['Gu'] as const) {
-    if (curve[i] === undefined) continue; // Optional
-    if (typeof curve[i] !== 'string')
-      throw new Error(`Invalid curve param ${i}=${curve[i]} (${typeof curve[i]})`);
-  }
+  validateObject(
+    curve,
+    {
+      a24: 'bigint',
+    },
+    {
+      montgomeryBits: 'isSafeInteger',
+      nByteLength: 'isSafeInteger',
+      adjustScalarBytes: 'function',
+      domain: 'function',
+      powPminus2: 'function',
+      Gu: 'string',
+    }
+  );
   // Set defaults
   return Object.freeze({ ...curve } as const);
 }
@@ -61,27 +56,7 @@ export function montgomery(curveDef: CurveType): CurveFn {
   const adjustScalarBytes = CURVE.adjustScalarBytes || ((bytes: Uint8Array) => bytes);
   const powPminus2 = CURVE.powPminus2 || ((x: bigint) => pow(x, P - BigInt(2), P));
 
-  /**
-   * Checks for num to be in range:
-   * For strict == true:  `0 <  num < max`.
-   * For strict == false: `0 <= num < max`.
-   * Converts non-float safe numbers to bigints.
-   */
-  function normalizeScalar(num: bigint, max: bigint, strict = true): bigint {
-    if (!max) throw new TypeError('Specify max value');
-    if (typeof num === 'number' && Number.isSafeInteger(num)) num = BigInt(num);
-    if (typeof num === 'bigint' && num < max) {
-      if (strict) {
-        if (_0n < num) return num;
-      } else {
-        if (_0n <= num) return num;
-      }
-    }
-    throw new TypeError('Expected valid scalar: 0 < scalar < max');
-  }
-
-  // cswap from RFC7748
-  // NOTE: cswap is not from RFC7748!
+  // cswap from RFC7748. But it is not from RFC7748!
   /*
     cswap(swap, x_2, x_3):
          dummy = mask(swap) AND (x_2 XOR x_3)
@@ -98,6 +73,11 @@ export function montgomery(curveDef: CurveType): CurveFn {
     return [x_2, x_3];
   }
 
+  function assertFieldElement(n: bigint): bigint {
+    if (typeof n === 'bigint' && _0n <= n && n < P) return n;
+    throw new Error('Expected valid scalar 0 < scalar < CURVE.P');
+  }
+
   // x25519 from 4
   /**
    *
@@ -106,11 +86,10 @@ export function montgomery(curveDef: CurveType): CurveFn {
    * @returns new Point on Montgomery curve
    */
   function montgomeryLadder(pointU: bigint, scalar: bigint): bigint {
-    const { P } = CURVE;
-    const u = normalizeScalar(pointU, P);
+    const u = assertFieldElement(pointU);
     // Section 5: Implementations MUST accept non-canonical values and process them as
     // if they had been reduced modulo the field prime.
-    const k = normalizeScalar(scalar, P);
+    const k = assertFieldElement(scalar);
     // The constant a24 is (486662 - 2) / 4 = 121665 for curve25519/X25519
     const a24 = CURVE.a24;
     const x_1 = u;
@@ -166,28 +145,20 @@ export function montgomery(curveDef: CurveType): CurveFn {
   }
 
   function decodeUCoordinate(uEnc: Hex): bigint {
-    const u = ensureBytes(uEnc, montgomeryBytes);
     // Section 5: When receiving such an array, implementations of X25519
     // MUST mask the most significant bit in the final byte.
     // This is very ugly way, but it works because fieldLen-1 is outside of bounds for X448, so this becomes NOOP
     // fieldLen - scalaryBytes = 1 for X448 and = 0 for X25519
+    const u = ensureBytes(uEnc, montgomeryBytes);
     u[fieldLen - 1] &= 127; // 0b0111_1111
     return bytesToNumberLE(u);
   }
-
   function decodeScalar(n: Hex): bigint {
     const bytes = ensureBytes(n);
     if (bytes.length !== montgomeryBytes && bytes.length !== fieldLen)
       throw new Error(`Expected ${montgomeryBytes} or ${fieldLen} bytes, got ${bytes.length}`);
     return bytesToNumberLE(adjustScalarBytes(bytes));
   }
-  /**
-   * Computes shared secret between private key "scalar" and public key's "u" (x) coordinate.
-   * We can get 'y' coordinate from 'u',
-   * but Point.fromHex also wants 'x' coordinate oddity flag,
-   * and we cannot get 'x' without knowing 'v'.
-   * Need to add generic conversion between twisted edwards and complimentary curve for JubJub.
-   */
   function scalarMult(scalar: Hex, u: Hex): Uint8Array {
     const pointU = decodeUCoordinate(u);
     const _scalar = decodeScalar(scalar);
@@ -197,12 +168,7 @@ export function montgomery(curveDef: CurveType): CurveFn {
     if (pu === _0n) throw new Error('Invalid private or public key received');
     return encodeUCoordinate(pu);
   }
-  /**
-   * Computes public key from private.
-   * Executes scalar multiplication of curve's base point by scalar.
-   * @param scalar private key
-   * @returns new public key
-   */
+  // Computes public key from private. By doing scalar multiplication of base point.
   function scalarMultBase(scalar: Hex): Uint8Array {
     return scalarMult(scalar, CURVE.Gu);
   }

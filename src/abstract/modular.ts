@@ -7,6 +7,7 @@ import {
   bytesToNumberBE,
   bytesToNumberLE,
   ensureBytes,
+  validateObject,
 } from './utils.js';
 // prettier-ignore
 const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3);
@@ -40,7 +41,6 @@ export function pow(num: bigint, power: bigint, modulo: bigint): bigint {
 }
 
 // Does x ^ (2 ^ power) mod p. pow2(30, 4) == 30 ^ (2 ^ 4)
-// TODO: Fp version?
 export function pow2(x: bigint, power: bigint, modulo: bigint): bigint {
   let res = x;
   while (power-- > _0n) {
@@ -249,18 +249,17 @@ const FIELD_FIELDS = [
   'addN', 'subN', 'mulN', 'sqrN'
 ] as const;
 export function validateField<T>(field: Field<T>) {
-  for (const i of ['ORDER', 'MASK'] as const) {
-    if (typeof field[i] !== 'bigint')
-      throw new Error(`Invalid field param ${i}=${field[i]} (${typeof field[i]})`);
-  }
-  for (const i of ['BYTES', 'BITS'] as const) {
-    if (typeof field[i] !== 'number')
-      throw new Error(`Invalid field param ${i}=${field[i]} (${typeof field[i]})`);
-  }
-  for (const i of FIELD_FIELDS) {
-    if (typeof field[i] !== 'function')
-      throw new Error(`Invalid field param ${i}=${field[i]} (${typeof field[i]})`);
-  }
+  const initial = {
+    ORDER: 'bigint',
+    MASK: 'bigint',
+    BYTES: 'isSafeInteger',
+    BITS: 'isSafeInteger',
+  } as Record<string, string>;
+  const opts = FIELD_FIELDS.reduce((map, val: string) => {
+    map[val] = 'function';
+    return map;
+  }, initial);
+  return validateObject(field, opts);
 }
 
 // Generic field functions

@@ -10,7 +10,7 @@ export const P224 = createCurve(
     // Params: a, b
     a: BigInt('0xfffffffffffffffffffffffffffffffefffffffffffffffffffffffe'),
     b: BigInt('0xb4050a850c04b3abf54132565044b0b7d7bfd8ba270b39432355ffb4'),
-    // Field over which we'll do calculations; 2n**224n - 2n**96n + 1n
+    // Field over which we'll do calculations;
     Fp: Fp(BigInt('0xffffffffffffffffffffffffffffffff000000000000000000000001')),
     // Curve order, total count of valid points in the field
     n: BigInt('0xffffffffffffffffffffffffffff16a2e0b8f03e13dd29455c5c2a3d'),

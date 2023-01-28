@@ -18,7 +18,7 @@ export type FHash = (message: Uint8Array | string) => Uint8Array;
 
 const hexes = Array.from({ length: 256 }, (v, i) => i.toString(16).padStart(2, '0'));
 export function bytesToHex(bytes: Uint8Array): string {
-  if (!u8a(bytes)) throw new Error('Expected Uint8Array');
+  if (!u8a(bytes)) throw new Error('Uint8Array expected');
   // pre-caching improves the speed 6x
   let hex = '';
   for (let i = 0; i < bytes.length; i++) {
@@ -33,21 +33,21 @@ export function numberToHexUnpadded(num: number | bigint): string {
 }
 
 export function hexToNumber(hex: string): bigint {
-  if (typeof hex !== 'string') throw new Error('hexToNumber: expected string, got ' + typeof hex);
+  if (typeof hex !== 'string') throw new Error('string expected, got ' + typeof hex);
   // Big Endian
   return BigInt(`0x${hex}`);
 }
 
 // Caching slows it down 2-3x
 export function hexToBytes(hex: string): Uint8Array {
-  if (typeof hex !== 'string') throw new Error('hexToBytes: expected string, got ' + typeof hex);
-  if (hex.length % 2) throw new Error('hexToBytes: received invalid unpadded hex ' + hex.length);
+  if (typeof hex !== 'string') throw new Error('string expected, got ' + typeof hex);
+  if (hex.length % 2) throw new Error('hex string is invalid: unpadded ' + hex.length);
   const array = new Uint8Array(hex.length / 2);
   for (let i = 0; i < array.length; i++) {
     const j = i * 2;
     const hexByte = hex.slice(j, j + 2);
     const byte = Number.parseInt(hexByte, 16);
-    if (Number.isNaN(byte) || byte < 0) throw new Error('Invalid byte sequence');
+    if (Number.isNaN(byte) || byte < 0) throw new Error('invalid byte sequence');
     array[i] = byte;
   }
   return array;
@@ -58,7 +58,7 @@ export function bytesToNumberBE(bytes: Uint8Array): bigint {
   return hexToNumber(bytesToHex(bytes));
 }
 export function bytesToNumberLE(bytes: Uint8Array): bigint {
-  if (!u8a(bytes)) throw new Error('Expected Uint8Array');
+  if (!u8a(bytes)) throw new Error('Uint8Array expected');
   return hexToNumber(bytesToHex(Uint8Array.from(bytes).reverse()));
 }
 
@@ -66,11 +66,7 @@ export const numberToBytesBE = (n: bigint, len: number) =>
   hexToBytes(n.toString(16).padStart(len * 2, '0'));
 export const numberToBytesLE = (n: bigint, len: number) => numberToBytesBE(n, len).reverse();
 // Returns variable number bytes (minimal bigint encoding?)
-export const numberToVarBytesBE = (n: bigint) => {
-  let hex = n.toString(16);
-  if (hex.length & 1) hex = '0' + hex;
-  return hexToBytes(hex);
-};
+export const numberToVarBytesBE = (n: bigint) => hexToBytes(numberToHexUnpadded(n));
 
 export function ensureBytes(hex: Hex, expectedLength?: number): Uint8Array {
   // Uint8Array.from() instead of hash.slice() because node.js Buffer
@@ -82,17 +78,15 @@ export function ensureBytes(hex: Hex, expectedLength?: number): Uint8Array {
 }
 
 // Copies several Uint8Arrays into one.
-export function concatBytes(...arrays: Uint8Array[]): Uint8Array {
-  if (!arrays.every((b) => u8a(b))) throw new Error('Uint8Array list expected');
-  if (arrays.length === 1) return arrays[0];
-  const length = arrays.reduce((a, arr) => a + arr.length, 0);
-  const result = new Uint8Array(length);
-  for (let i = 0, pad = 0; i < arrays.length; i++) {
-    const arr = arrays[i];
-    result.set(arr, pad);
-    pad += arr.length;
-  }
-  return result;
+export function concatBytes(...arrs: Uint8Array[]): Uint8Array {
+  const r = new Uint8Array(arrs.reduce((sum, a) => sum + a.length, 0));
+  let pad = 0; // walk through each item, ensure they have proper type
+  arrs.forEach((a) => {
+    if (!u8a(a)) throw new Error('Uint8Array expected');
+    r.set(a, pad);
+    pad += a.length;
+  });
+  return r;
 }
 
 export function equalBytes(b1: Uint8Array, b2: Uint8Array) {
@@ -119,3 +113,32 @@ export const bitSet = (n: bigint, pos: number, value: boolean) =>
 // Return mask for N bits (Same as BigInt(`0b${Array(i).fill('1').join('')}`))
 // Not using ** operator with bigints for old engines.
 export const bitMask = (n: number) => (_2n << BigInt(n - 1)) - _1n;
+
+type ValMap = Record<string, string>;
+export function validateObject(object: object, validators: ValMap, optValidators: ValMap = {}) {
+  const validatorFns: Record<string, (val: any) => boolean> = {
+    bigint: (val) => typeof val === 'bigint',
+    function: (val) => typeof val === 'function',
+    boolean: (val) => typeof val === 'boolean',
+    string: (val) => typeof val === 'string',
+    isSafeInteger: (val) => Number.isSafeInteger(val),
+    array: (val) => Array.isArray(val),
+    field: (val) => (object as any).Fp.isValid(val),
+    hash: (val) => typeof val === 'function' && Number.isSafeInteger(val.outputLen),
+  };
+  // type Key = keyof typeof validators;
+  const checkField = (fieldName: string, type: string, isOptional: boolean) => {
+    const checkVal = validatorFns[type];
+    if (typeof checkVal !== 'function')
+      throw new Error(`Invalid validator "${type}", expected function`);
+
+    const val = object[fieldName as keyof typeof object];
+    if (isOptional && val === undefined) return;
+    if (!checkVal(val)) {
+      throw new Error(`Invalid param ${fieldName}=${val} (${typeof val}), expected ${type}`);
+    }
+  };
+  for (let [fieldName, type] of Object.entries(validators)) checkField(fieldName, type, false);
+  for (let [fieldName, type] of Object.entries(optValidators)) checkField(fieldName, type, true);
+  return object;
+}

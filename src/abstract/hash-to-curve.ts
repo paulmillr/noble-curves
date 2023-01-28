@@ -45,7 +45,7 @@ declare const TextDecoder: any;
 
 export function stringToBytes(str: string): Uint8Array {
   if (typeof str !== 'string') {
-    throw new TypeError(`utf8ToBytes expected string, got ${typeof str}`);
+    throw new Error(`utf8ToBytes expected string, got ${typeof str}`);
   }
   return new TextEncoder().encode(str);
 }
