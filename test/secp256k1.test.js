@@ -1,7 +1,7 @@
 import * as fc from 'fast-check';
 import { secp256k1, schnorr } from '../lib/esm/secp256k1.js';
 import { Fp } from '../lib/esm/abstract/modular.js';
-import { bytesToNumberBE, numberToBytesBE } from '../lib/esm/abstract/utils.js';
+import { bytesToNumberBE, ensureBytes, numberToBytesBE } from '../lib/esm/abstract/utils.js';
 import { readFileSync } from 'fs';
 import { default as ecdsa } from './vectors/ecdsa.json' assert { type: 'json' };
 import { default as ecdh } from './vectors/ecdh.json' assert { type: 'json' };
@@ -463,9 +463,7 @@ describe('secp256k1', () => {
     const normal = secp.utils._normalizePrivateKey;
     const tweakUtils = {
       privateAdd: (privateKey, tweak) => {
-        const p = normal(privateKey);
-        const t = normal(tweak);
-        return numberToBytesBE(Fn.create(p + t), 32);
+        return numberToBytesBE(Fn.add(normal(privateKey), normal(tweak)), 32);
       },
 
       privateNegate: (privateKey) => {
@@ -473,18 +471,13 @@ describe('secp256k1', () => {
       },
 
       pointAddScalar: (p, tweak, isCompressed) => {
-        const P = Point.fromHex(p);
-        const t = normal(tweak);
-        const Q = Point.BASE.multiplyAndAddUnsafe(P, t, 1n);
-        if (!Q) throw new Error('Tweaked point at infinity');
-        return Q.toRawBytes(isCompressed);
+        // Will throw if tweaked point is at infinity
+        return Point.fromHex(p).add(Point.fromPrivateKey(tweak)).toRawBytes(isCompressed);
       },
 
       pointMultiply: (p, tweak, isCompressed) => {
-        const P = Point.fromHex(p);
-        const h = typeof tweak === 'string' ? tweak : bytesToHex(tweak);
-        const t = BigInt(`0x${h}`);
-        return P.multiply(t).toRawBytes(isCompressed);
+        const t = bytesToNumberBE(ensureBytes(tweak));
+        return Point.fromHex(p).multiply(t).toRawBytes(isCompressed);
       },
     };
 

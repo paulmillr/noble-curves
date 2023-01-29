@@ -7,7 +7,7 @@ import {
   ensureBytes,
   concatBytes,
   Hex,
-  bytesToNumberBE as bytesToNum,
+  bytesToNumberBE as bytesToInt,
   PrivKey,
   numberToBytesBE,
 } from './abstract/utils.js';
@@ -130,56 +130,53 @@ function taggedHash(tag: string, ...messages: Uint8Array[]): Uint8Array {
   return sha256(concatBytes(tagP, ...messages));
 }
 
-const toRawX = (point: PointType<bigint>) => point.toRawBytes(true).slice(1);
+const pointToBytes = (point: PointType<bigint>) => point.toRawBytes(true).slice(1);
 const numTo32b = (n: bigint) => numberToBytesBE(n, 32);
 const modN = (x: bigint) => mod(x, secp256k1N);
-const _Point = secp256k1.ProjectivePoint;
-const Gmul = (priv: PrivKey) => _Point.fromPrivateKey(priv);
+const Point = secp256k1.ProjectivePoint;
 const GmulAdd = (Q: PointType<bigint>, a: bigint, b: bigint) =>
-  _Point.BASE.multiplyAndAddUnsafe(Q, a, b);
-function schnorrGetScalar(priv: bigint) {
-  // Let d' = int(sk)
-  // Fail if d' = 0 or d' ≥ n
-  // Let P = d'⋅G
-  // Let d = d' if has_even_y(P), otherwise let d = n - d' .
-  const point = Gmul(priv);
-  const scalar = point.hasEvenY() ? priv : modN(-priv);
-  return { point, scalar, x: toRawX(point) };
+  Point.BASE.multiplyAndAddUnsafe(Q, a, b);
+const hex32ToInt = (key: Hex) => bytesToInt(ensureBytes(key, 32));
+function schnorrGetExtPubKey(priv: PrivKey) {
+  let d = typeof priv === 'bigint' ? priv : hex32ToInt(priv);
+  const point = Point.fromPrivateKey(d); // P = d'⋅G; 0 < d' < n check is done inside
+  const scalar = point.hasEvenY() ? d : modN(-d); // d = d' if has_even_y(P), otherwise d = n-d'
+  return { point, scalar, bytes: pointToBytes(point) };
 }
 function lift_x(x: bigint): PointType<bigint> {
   if (!fe(x)) throw new Error('bad x: need 0 < x < p'); // Fail if x ≥ p.
   const c = mod(x * x * x + BigInt(7), secp256k1P); // Let c = x³ + 7 mod p.
   let y = sqrtMod(c); // Let y = c^(p+1)/4 mod p.
   if (y % 2n !== 0n) y = mod(-y, secp256k1P); // Return the unique point P such that x(P) = x and
-  const p = new _Point(x, y, _1n); // y(P) = y if y mod 2 = 0 or y(P) = p-y otherwise.
+  const p = new Point(x, y, _1n); // y(P) = y if y mod 2 = 0 or y(P) = p-y otherwise.
   p.assertValidity();
   return p;
 }
 function challenge(...args: Uint8Array[]): bigint {
-  return modN(bytesToNum(taggedHash(TAGS.challenge, ...args)));
+  return modN(bytesToInt(taggedHash(TAGS.challenge, ...args)));
 }
-function schnorrGetPublicKey(privateKey: PrivKey): Uint8Array {
-  return toRawX(Gmul(privateKey)); // Let d' = int(sk). Fail if d' = 0 or d' ≥ n. Return bytes(d'⋅G)
-}
-/**
- * Synchronously creates Schnorr signature. Improved security: verifies itself before
- * producing an output.
- * @param msg message (not message hash)
- * @param privateKey private key
- * @param auxRand random bytes that would be added to k. Bad RNG won't break it.
- */
-function schnorrSign(message: Hex, privateKey: Hex, auxRand: Hex = randomBytes(32)): Uint8Array {
-  if (message == null) throw new Error(`sign: Expected valid message, not "${message}"`);
-  const m = ensureBytes(message);
-  // checks for isWithinCurveOrder
 
-  const { x: px, scalar: d } = schnorrGetScalar(bytesToNum(ensureBytes(privateKey, 32)));
+// Schnorr's pubkey is just `x` of Point (BIP340)
+function schnorrGetPublicKey(privateKey: Hex): Uint8Array {
+  return schnorrGetExtPubKey(privateKey).bytes; // d'=int(sk). Fail if d'=0 or d'≥n. Ret bytes(d'⋅G)
+}
+
+// Creates Schnorr signature as per BIP340. Verifies itself before returning anything.
+// auxRand is optional and is not the sole source of k generation: bad CSPRNG won't be dangerous
+function schnorrSign(
+  message: Hex,
+  privateKey: PrivKey,
+  auxRand: Hex = randomBytes(32)
+): Uint8Array {
+  if (message == null) throw new Error(`sign: Expected valid message, not "${message}"`);
+  const m = ensureBytes(message); // checks for isWithinCurveOrder
+  const { bytes: px, scalar: d } = schnorrGetExtPubKey(privateKey);
   const a = ensureBytes(auxRand, 32); // Auxiliary random data a: a 32-byte array
-  const t = numTo32b(d ^ bytesToNum(taggedHash(TAGS.aux, a))); // Let t be the byte-wise xor of bytes(d) and hash/aux(a)
+  const t = numTo32b(d ^ bytesToInt(taggedHash(TAGS.aux, a))); // Let t be the byte-wise xor of bytes(d) and hash/aux(a)
   const rand = taggedHash(TAGS.nonce, t, px, m); // Let rand = hash/nonce(t || bytes(P) || m)
-  const k_ = modN(bytesToNum(rand)); // Let k' = int(rand) mod n
+  const k_ = modN(bytesToInt(rand)); // Let k' = int(rand) mod n
   if (k_ === _0n) throw new Error('sign failed: k is zero'); // Fail if k' = 0.
-  const { point: R, x: rx, scalar: k } = schnorrGetScalar(k_); // Let R = k'⋅G.
+  const { point: R, bytes: rx, scalar: k } = schnorrGetExtPubKey(k_); // Let R = k'⋅G.
   const e = challenge(rx, px, m); // Let e = int(hash/challenge(bytes(R) || bytes(P) || m)) mod n.
   const sig = new Uint8Array(64); // Let sig = bytes(R) || bytes((k + ed) mod n).
   sig.set(numTo32b(R.px), 0);
@@ -189,23 +186,19 @@ function schnorrSign(message: Hex, privateKey: Hex, auxRand: Hex = randomBytes(3
   return sig;
 }
 
-function pointFromHex(publicKey: Hex) {
-  return lift_x(bytesToNum(ensureBytes(publicKey, 32))); // P = lift_x(int(pk)); fail if that fails
-}
-
 /**
  * Verifies Schnorr signature synchronously.
  */
 function schnorrVerify(signature: Hex, message: Hex, publicKey: Hex): boolean {
   try {
-    const P = pointFromHex(publicKey); // P = lift_x(int(pk)); fail if that fails
+    const P = lift_x(hex32ToInt(publicKey)); // P = lift_x(int(pk)); fail if that fails
     const sig = ensureBytes(signature, 64);
-    const r = bytesToNum(sig.subarray(0, 32)); // Let r = int(sig[0:32]); fail if r ≥ p.
+    const r = bytesToInt(sig.subarray(0, 32)); // Let r = int(sig[0:32]); fail if r ≥ p.
     if (!fe(r)) return false;
-    const s = bytesToNum(sig.subarray(32, 64)); // Let s = int(sig[32:64]); fail if s ≥ n.
+    const s = bytesToInt(sig.subarray(32, 64)); // Let s = int(sig[32:64]); fail if s ≥ n.
     if (!ge(s)) return false;
     const m = ensureBytes(message);
-    const e = challenge(numTo32b(r), toRawX(P), m); // int(challenge(bytes(r)||bytes(P)||m)) mod n
+    const e = challenge(numTo32b(r), pointToBytes(P), m); // int(challenge(bytes(r)||bytes(P)||m)) mod n
     const R = GmulAdd(P, s, modN(-e)); // R = s⋅G - e⋅P
     if (!R || !R.hasEvenY() || R.toAffine().x !== r) return false; // -eP == (n-e)P
     return true; // Fail if is_infinite(R) / not has_even_y(R) / x(R) ≠ r.
@@ -215,11 +208,18 @@ function schnorrVerify(signature: Hex, message: Hex, publicKey: Hex): boolean {
 }
 
 export const schnorr = {
-  // Schnorr's pubkey is just `x` of Point (BIP340)
   getPublicKey: schnorrGetPublicKey,
   sign: schnorrSign,
   verify: schnorrVerify,
-  utils: { lift_x, pointFromHex, int: bytesToNum, taggedHash, toRawX },
+  utils: {
+    getExtendedPublicKey: schnorrGetExtPubKey,
+    lift_x,
+    pointToBytes,
+    numberToBytesBE,
+    bytesToNumberBE: bytesToInt,
+    taggedHash,
+    mod,
+  },
 };
 
 const isoMap = htf.isogenyMap(

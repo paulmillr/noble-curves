@@ -505,6 +505,9 @@ verify
 
 ## Upgrading
 
+- private keys can be Uint8Array, hex string or bigint. non-bigint `number` is no longer supported
+- no more 3d points
+
 Differences from @noble/secp256k1 1.7:
 
 1. Different double() formula (but same addition)
