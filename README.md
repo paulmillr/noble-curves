@@ -518,7 +518,7 @@ Upgrading from @noble/secp256k1 1.7:
 - `sign()`
     - `der`, `recovered` options were removed
     - `canonical` was renamed to `lowS`
-    - Return type is now `{ r, s, recovery }` Signature instance
+    - Return type is now `{ r: bigint, s: bigint, recovery: number }` instance of `Signature`
 - `verify()`
     - `strict` was renamed to `lowS`
 - `recoverPublicKey()`: moved to sig instance `Signature#recoverPublicKey(msgHash)`
