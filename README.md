@@ -7,12 +7,11 @@ Minimal, auditable JS implementation of elliptic curve cryptography.
 - [hash to curve](https://datatracker.ietf.org/doc/draft-irtf-cfrg-hash-to-curve/)
   for encoding or hashing an arbitrary string to a point on an elliptic curve
 - [Poseidon](https://www.poseidon-hash.info) ZK-friendly hash
-- Auditable
 - 🏎 [Ultra-fast](#speed), hand-optimized for caveats of JS engines
 - 🔍 Unique tests ensure correctness. Wycheproof vectors included
 - 🔻 Tree-shaking-friendly: there is no entry point, which ensures small size of your app
 
-There are two parts of the package:
+Package consists of two parts:
 
 1. `abstract/` directory specifies zero-dependency EC algorithms
 2. root directory utilizes one dependency `@noble/hashes` and provides ready-to-use:
@@ -26,6 +25,7 @@ Curves incorporate work from previous noble packages
 [ed25519](https://github.com/paulmillr/noble-ed25519),
 [bls12-381](https://github.com/paulmillr/noble-bls12-381)),
 which had security audits and were developed from 2019 to 2022.
+Check out [Upgrading](#upgrading) section if you've used them before.
 
 ### This library belongs to _noble_ crypto
 
@@ -505,25 +505,33 @@ verify
 
 ## Upgrading
 
-- private keys can be Uint8Array, hex string or bigint. non-bigint `number` is no longer supported
-- no more 3d points
+If you're coming from single-curve noble packages, the following changes need to be kept in mind:
 
-Differences from @noble/secp256k1 1.7:
+- 2d affine (x, y) points have been removed to reduce complexity and improve speed
+- Removed `number` support as a type for private keys. `bigint` is still supported
+- `mod`, `invert` are no longer present in `utils`. Use `@noble/curves/abstract/modular.js` now.
 
-1. Different double() formula (but same addition)
-2. Different sqrt() function
-3. DRBG supports outputLen bigger than outputLen of hmac
-4. Support for different hash functions
+Upgrading from @noble/secp256k1 1.7:
 
-Differences from @noble/ed25519 1.7:
+- Compressed (33-byte) public keys are now returned by default, instead of uncompressed
+- Methods are now synchronous. Setting `secp.utils.hmacSha256` is no longer required
+- `sign()`
+    - `der`, `recovered` options were removed
+    - `canonical` was renamed to `lowS`
+    - Return type is now `{ r, s, recovery }` Signature instance
+- `verify()`
+    - `strict` was renamed to `lowS`
+- `recoverPublicKey()`: moved to sig instance `Signature#recoverPublicKey(msgHash)`
+- `Point` was removed: use `ProjectivePoint` in xyz coordinates
+- `utils`: Many methods were removed, others were moved to `schnorr` namespace
 
-1. Variable field element lengths between EDDSA/ECDH:
-  EDDSA (RFC8032) is 456 bits / 57 bytes, ECDH (RFC7748) is 448 bits / 56 bytes
-2. Different addition formula (doubling is same)
-3. uvRatio differs between curves (half-expected, not only pow fn changes)
-4. Point decompression code is different (unexpected), now using generalized formula
-5. Domain function was no-op for ed25519, but adds some data even with empty context for ed448
+Upgrading from @noble/ed25519 1.7:
 
+- Methods are now synchronous. Setting `secp.utils.hmacSha256` is no longer required
+- ed25519ph, ed25519ctx
+- `Point` was removed: use `ExtendedPoint` in xyzt coordinates
+- `Signature` was removed
+- `getSharedSecret` was removed: use separate x25519 sub-module
 
 ## Contributing & testing
 
