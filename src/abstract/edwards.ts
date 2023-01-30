@@ -171,8 +171,26 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       this._WINDOW_SIZE = windowSize;
       pointPrecomputes.delete(this);
     }
-
-    assertValidity(): void {}
+    // fromHex and other functions returns valid point, but if point is created by user (fromAffine), it can be off curve
+    assertValidity(): void {
+      const { a, d } = CURVE;
+      if (this.is0()) throw new Error('bad point: ZERO'); // TODO: optimize, with vars below?
+      // Equation in affine coordinates: ax² + y² = 1 + dx²y²
+      // Equation in projective coordinates (X/Z, Y/Z, Z):  (aX² + Y²)Z² = Z⁴ + dX²Y²
+      const { ex: X, ey: Y, ez: Z, et: T } = this;
+      const X2 = modP(X * X); // X²
+      const Y2 = modP(Y * Y); // Y²
+      const Z2 = modP(Z * Z); // Z²
+      const Z4 = modP(Z2 * Z2); // Z⁴
+      const aX2 = modP(X2 * a); // aX²
+      const left = modP(Z2 * modP(aX2 + Y2)); // (aX² + Y²)Z²
+      const right = modP(Z4 * modP(d * X2 * Y2)); // Z⁴ + dX²Y²
+      if (left !== right) throw new Error('bad point: equation left != right (1)');
+      // In Extended coordinates we also have T, which is x*y=T/Z: check X*Y == Z*T
+      const XY = modP(X * Y);
+      const ZT = modP(Z * T);
+      if (XY !== ZT) throw new Error('bad point: equation left != right (2)');
+    }
 
     // Compare one point to another.
     equals(other: Point): boolean {
