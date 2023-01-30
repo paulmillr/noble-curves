@@ -656,6 +656,15 @@ describe('ed25519', () => {
   });
 });
 
+should('ed25519 bug', () => {
+  const t = 81718630521762619991978402609047527194981150691135404693881672112315521837062n;
+  const point = ed25519.ExtendedPoint.fromAffine({ x: t, y: t });
+  throws(() => point.assertValidity());
+  // Otherwise (without assertValidity):
+  // const point2 = point.double();
+  // point2.toAffine(); // crash!
+});
+
 // ESM is broken.
 import url from 'url';
 if (import.meta.url === url.pathToFileURL(process.argv[1]).href) {

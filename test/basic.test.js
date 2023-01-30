@@ -10,7 +10,7 @@ import { secp256r1 } from '../lib/esm/p256.js';
 import { secp384r1 } from '../lib/esm/p384.js';
 import { secp521r1 } from '../lib/esm/p521.js';
 import { secp256k1 } from '../lib/esm/secp256k1.js';
-import { ed25519, ed25519ctx, ed25519ph } from '../lib/esm/ed25519.js';
+import { ed25519, ed25519ctx, ed25519ph, x25519 } from '../lib/esm/ed25519.js';
 import { ed448, ed448ph } from '../lib/esm/ed448.js';
 import { starkCurve } from '../lib/esm/stark.js';
 import { pallas, vesta } from '../lib/esm/pasta.js';
@@ -567,6 +567,17 @@ for (const name in CURVES) {
         { numRuns: NUM_RUNS }
       )
     );
+    should('.verify() should verify empty signatures', () => {
+      const msg = new Uint8Array([]);
+      const priv = C.utils.randomPrivateKey();
+      const pub = C.getPublicKey(priv);
+      const sig = C.sign(msg, priv);
+      deepStrictEqual(
+        C.verify(sig, msg, pub),
+        true,
+        'priv=${toHex(priv)},pub=${toHex(pub)},msg=${msg}'
+      );
+    });
     should('.sign() edge cases', () => {
       throws(() => C.sign());
       throws(() => C.sign(''));
@@ -649,6 +660,16 @@ should('secp224k1 sqrt bug', () => {
     3338362603553219996874421406887633712040719456283732096017030791656n
   );
   deepStrictEqual(Fp.sqr(sqrtMinus1), Fp.create(-1n));
+});
+
+should('bigInt private keys', () => {
+  // Doesn't support bigints anymore
+  throws(() => ed25519.sign('', 123n));
+  throws(() => ed25519.getPublicKey(123n));
+  throws(() => x25519.getPublicKey(123n));
+  // Weierstrass still supports
+  secp256k1.getPublicKey(123n);
+  secp256k1.sign('', 123n);
 });
 
 // ESM is broken.

@@ -100,6 +100,7 @@ function validatePointOpts<T>(curve: CurvePointsType<T>) {
       wrapPrivateKey: 'boolean',
       isTorsionFree: 'function',
       clearCofactor: 'function',
+      allowInfinityPoint: 'boolean',
     }
   );
   const { endo, Fp, a } = opts;
