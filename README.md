@@ -329,47 +329,54 @@ The module allows to hash arbitrary strings to elliptic curve points.
 
 - `expand_message_xmd` [(spec)](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-5.4.1) produces a uniformly random byte string using a cryptographic hash function H that outputs b bits..
 
-    ```ts
-    function expand_message_xmd(
-      msg: Uint8Array, DST: Uint8Array, lenInBytes: number, H: CHash
-    ): Uint8Array;
-    function expand_message_xof(
-      msg: Uint8Array, DST: Uint8Array, lenInBytes: number, k: number, H: CHash
-    ): Uint8Array;
-    ```
+  ```ts
+  function expand_message_xmd(
+    msg: Uint8Array,
+    DST: Uint8Array,
+    lenInBytes: number,
+    H: CHash
+  ): Uint8Array;
+  function expand_message_xof(
+    msg: Uint8Array,
+    DST: Uint8Array,
+    lenInBytes: number,
+    k: number,
+    H: CHash
+  ): Uint8Array;
+  ```
 
 - `hash_to_field(msg, count, options)` [(spec)](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-5.3)
-hashes arbitrary-length byte strings to a list of one or more elements of a finite field F.
-    * `msg` a byte string containing the message to hash
-    * `count` the number of elements of F to output
-    * `options` `{DST: string, p: bigint, m: number, k: number, expand: 'xmd' | 'xof', hash: H}`
-    * Returns `[u_0, ..., u_(count - 1)]`, a list of field elements.
+  hashes arbitrary-length byte strings to a list of one or more elements of a finite field F.
+  _ `msg` a byte string containing the message to hash
+  _ `count` the number of elements of F to output
+  _ `options` `{DST: string, p: bigint, m: number, k: number, expand: 'xmd' | 'xof', hash: H}`
+  _ Returns `[u_0, ..., u_(count - 1)]`, a list of field elements.
 
-    ```ts
-    function hash_to_field(msg: Uint8Array, count: number, options: htfOpts): bigint[][];
-    type htfOpts = {
-      // DST: a domain separation tag
-      // defined in section 2.2.5
-      DST: string;
-      // p: the characteristic of F
-      //    where F is a finite field of characteristic p and order q = p^m
-      p: bigint;
-      // m: the extension degree of F, m >= 1
-      //     where F is a finite field of characteristic p and order q = p^m
-      m: number;
-      // k: the target security level for the suite in bits
-      // defined in section 5.1
-      k: number;
-      // option to use a message that has already been processed by
-      // expand_message_xmd
-      expand?: 'xmd' | 'xof';
-      // Hash functions for: expand_message_xmd is appropriate for use with a
-      // wide range of hash functions, including SHA-2, SHA-3, BLAKE2, and others.
-      // BBS+ uses blake2: https://github.com/hyperledger/aries-framework-go/issues/2247
-      // TODO: verify that hash is shake if expand==='xof' via types
-      hash: CHash;
-    };
-    ```
+      ```ts
+      function hash_to_field(msg: Uint8Array, count: number, options: htfOpts): bigint[][];
+      type htfOpts = {
+        // DST: a domain separation tag
+        // defined in section 2.2.5
+        DST: string;
+        // p: the characteristic of F
+        //    where F is a finite field of characteristic p and order q = p^m
+        p: bigint;
+        // m: the extension degree of F, m >= 1
+        //     where F is a finite field of characteristic p and order q = p^m
+        m: number;
+        // k: the target security level for the suite in bits
+        // defined in section 5.1
+        k: number;
+        // option to use a message that has already been processed by
+        // expand_message_xmd
+        expand?: 'xmd' | 'xof';
+        // Hash functions for: expand_message_xmd is appropriate for use with a
+        // wide range of hash functions, including SHA-2, SHA-3, BLAKE2, and others.
+        // BBS+ uses blake2: https://github.com/hyperledger/aries-framework-go/issues/2247
+        // TODO: verify that hash is shake if expand==='xof' via types
+        hash: CHash;
+      };
+      ```
 
 ### abstract/poseidon: Poseidon hash
 
@@ -516,11 +523,11 @@ Upgrading from @noble/secp256k1 1.7:
 - Compressed (33-byte) public keys are now returned by default, instead of uncompressed
 - Methods are now synchronous. Setting `secp.utils.hmacSha256` is no longer required
 - `sign()`
-    - `der`, `recovered` options were removed
-    - `canonical` was renamed to `lowS`
-    - Return type is now `{ r: bigint, s: bigint, recovery: number }` instance of `Signature`
+  - `der`, `recovered` options were removed
+  - `canonical` was renamed to `lowS`
+  - Return type is now `{ r: bigint, s: bigint, recovery: number }` instance of `Signature`
 - `verify()`
-    - `strict` was renamed to `lowS`
+  - `strict` was renamed to `lowS`
 - `recoverPublicKey()`: moved to sig instance `Signature#recoverPublicKey(msgHash)`
 - `Point` was removed: use `ProjectivePoint` in xyz coordinates
 - `utils`: Many methods were removed, others were moved to `schnorr` namespace
@@ -532,6 +539,7 @@ Upgrading from @noble/ed25519 1.7:
 - `Point` was removed: use `ExtendedPoint` in xyzt coordinates
 - `Signature` was removed
 - `getSharedSecret` was removed: use separate x25519 sub-module
+- `bigint` is no longer allowed in `getPublicKey`, `sign`, `verify`. Reason: ed25519 is LE, can lead to bugs
 
 ## Contributing & testing
 
