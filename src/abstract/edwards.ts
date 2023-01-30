@@ -171,7 +171,8 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       this._WINDOW_SIZE = windowSize;
       pointPrecomputes.delete(this);
     }
-    // fromHex and other functions returns valid point, but if point is created by user (fromAffine), it can be off curve
+    // Not required for fromHex(), which always creates valid points.
+    // Could be useful for fromAffine().
     assertValidity(): void {
       const { a, d } = CURVE;
       if (this.is0()) throw new Error('bad point: ZERO'); // TODO: optimize, with vars below?

@@ -241,6 +241,8 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
       if (pz == null || !Fp.isValid(pz)) throw new Error('z required');
     }
 
+    // Does not validate if the point is on-curve.
+    // Use fromHex instead, or call assertValidity() later.
     static fromAffine(p: AffinePoint<T>): Point {
       const { x, y } = p || {};
       if (!p || !Fp.isValid(x) || !Fp.isValid(y)) throw new Error('invalid affine point');
