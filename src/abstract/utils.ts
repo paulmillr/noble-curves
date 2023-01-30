@@ -35,7 +35,7 @@ export function numberToHexUnpadded(num: number | bigint): string {
 export function hexToNumber(hex: string): bigint {
   if (typeof hex !== 'string') throw new Error('string expected, got ' + typeof hex);
   // Big Endian
-  return BigInt(`0x${hex}`);
+  return BigInt(hex === '' ? '0' : `0x${hex}`);
 }
 
 // Caching slows it down 2-3x
@@ -114,31 +114,47 @@ export const bitSet = (n: bigint, pos: number, value: boolean) =>
 // Not using ** operator with bigints for old engines.
 export const bitMask = (n: number) => (_2n << BigInt(n - 1)) - _1n;
 
-type ValMap = Record<string, string>;
-export function validateObject(object: object, validators: ValMap, optValidators: ValMap = {}) {
-  const validatorFns: Record<string, (val: any) => boolean> = {
-    bigint: (val) => typeof val === 'bigint',
-    function: (val) => typeof val === 'function',
-    boolean: (val) => typeof val === 'boolean',
-    string: (val) => typeof val === 'string',
-    isSafeInteger: (val) => Number.isSafeInteger(val),
-    array: (val) => Array.isArray(val),
-    field: (val) => (object as any).Fp.isValid(val),
-    hash: (val) => typeof val === 'function' && Number.isSafeInteger(val.outputLen),
-  };
-  // type Key = keyof typeof validators;
-  const checkField = (fieldName: string, type: string, isOptional: boolean) => {
+const validatorFns = {
+  bigint: (val: any) => typeof val === 'bigint',
+  function: (val: any) => typeof val === 'function',
+  boolean: (val: any) => typeof val === 'boolean',
+  string: (val: any) => typeof val === 'string',
+  isSafeInteger: (val: any) => Number.isSafeInteger(val),
+  array: (val: any) => Array.isArray(val),
+  field: (val: any, object: any) => (object as any).Fp.isValid(val),
+  hash: (val: any) => typeof val === 'function' && Number.isSafeInteger(val.outputLen),
+} as const;
+type Validator = keyof typeof validatorFns;
+type ValMap<T extends Record<string, any>> = { [K in keyof T]?: Validator };
+// type Record<K extends string | number | symbol, T> = { [P in K]: T; }
+
+export function validateObject<T extends Record<string, any>>(
+  object: T,
+  validators: ValMap<T>,
+  optValidators: ValMap<T> = {}
+) {
+  const checkField = (fieldName: keyof T, type: Validator, isOptional: boolean) => {
     const checkVal = validatorFns[type];
     if (typeof checkVal !== 'function')
       throw new Error(`Invalid validator "${type}", expected function`);
 
     const val = object[fieldName as keyof typeof object];
     if (isOptional && val === undefined) return;
-    if (!checkVal(val)) {
-      throw new Error(`Invalid param ${fieldName}=${val} (${typeof val}), expected ${type}`);
+    if (!checkVal(val, object)) {
+      throw new Error(
+        `Invalid param ${String(fieldName)}=${val} (${typeof val}), expected ${type}`
+      );
     }
   };
-  for (let [fieldName, type] of Object.entries(validators)) checkField(fieldName, type, false);
-  for (let [fieldName, type] of Object.entries(optValidators)) checkField(fieldName, type, true);
+  for (const [fieldName, type] of Object.entries(validators)) checkField(fieldName, type!, false);
+  for (const [fieldName, type] of Object.entries(optValidators)) checkField(fieldName, type!, true);
   return object;
 }
+// validate type tests
+// const o: { a: number; b: number; c: number } = { a: 1, b: 5, c: 6 };
+// const z0 = validateObject(o, { a: 'isSafeInteger' }, { c: 'bigint' }); // Ok!
+// // Should fail type-check
+// const z1 = validateObject(o, { a: 'tmp' }, { c: 'zz' });
+// const z2 = validateObject(o, { a: 'isSafeInteger' }, { c: 'zz' });
+// const z3 = validateObject(o, { test: 'boolean', z: 'bug' });
+// const z4 = validateObject(o, { a: 'boolean', z: 'bug' });
