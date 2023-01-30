@@ -184,7 +184,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       const Z4 = modP(Z2 * Z2); // Z⁴
       const aX2 = modP(X2 * a); // aX²
       const left = modP(Z2 * modP(aX2 + Y2)); // (aX² + Y²)Z²
-      const right = modP(Z4 * modP(d * X2 * Y2)); // Z⁴ + dX²Y²
+      const right = modP(Z4 + modP(d * modP(X2 * Y2))); // Z⁴ + dX²Y²
       if (left !== right) throw new Error('bad point: equation left != right (1)');
       // In Extended coordinates we also have T, which is x*y=T/Z: check X*Y == Z*T
       const XY = modP(X * Y);
