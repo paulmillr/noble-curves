@@ -1,42 +1,21 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import type { Group, GroupConstructor, AffinePoint } from './curve.js';
 import { mod, Field } from './modular.js';
-import { CHash, Hex, concatBytes, ensureBytes } from './utils.js';
+import { CHash, Hex, concatBytes, ensureBytes, validateObject } from './utils.js';
 
 export type Opts = {
-  // DST: a domain separation tag
-  // defined in section 2.2.5
-  DST: string;
+  DST: string; // DST: a domain separation tag, defined in section 2.2.5
   encodeDST: string;
-  // p: the characteristic of F
-  //    where F is a finite field of characteristic p and order q = p^m
-  p: bigint;
-  // m: the extension degree of F, m >= 1
-  //     where F is a finite field of characteristic p and order q = p^m
-  m: number;
-  // k: the target security level for the suite in bits
-  // defined in section 5.1
-  k: number;
-  // option to use a message that has already been processed by
-  // expand_message_xmd
-  expand?: 'xmd' | 'xof';
+  p: bigint; // characteristic of F, where F is a finite field of characteristic p and order q = p^m
+  m: number; // extension degree of F, m >= 1
+  k: number; // k: the target security level for the suite in bits, defined in section 5.1
+  expand?: 'xmd' | 'xof'; // use a message that has already been processed by expand_message_xmd
   // Hash functions for: expand_message_xmd is appropriate for use with a
   // wide range of hash functions, including SHA-2, SHA-3, BLAKE2, and others.
   // BBS+ uses blake2: https://github.com/hyperledger/aries-framework-go/issues/2247
   // TODO: verify that hash is shake if expand==='xof' via types
   hash: CHash;
 };
-
-export function validateOpts(opts: Opts) {
-  if (typeof opts.DST !== 'string') throw new Error('Invalid htf/DST');
-  if (typeof opts.p !== 'bigint') throw new Error('Invalid htf/p');
-  if (typeof opts.m !== 'number') throw new Error('Invalid htf/m');
-  if (typeof opts.k !== 'number') throw new Error('Invalid htf/k');
-  if (opts.expand !== 'xmd' && opts.expand !== 'xof' && opts.expand !== undefined)
-    throw new Error('Invalid htf/expand');
-  if (typeof opts.hash !== 'function' || !Number.isSafeInteger(opts.hash.outputLen))
-    throw new Error('Invalid htf/hash function');
-}
 
 // Global symbols in both browsers and Node.js since v11
 // See https://github.com/microsoft/TypeScript/issues/31535
@@ -195,20 +174,26 @@ export interface H2CPointConstructor<T> extends GroupConstructor<H2CPoint<T>> {
 
 export type MapToCurve<T> = (scalar: bigint[]) => AffinePoint<T>;
 
-// Separated from initialization opts, so users won't accidentally change per-curve parameters (changing DST is ok!)
-export type htfBasicOpts = {
-  DST: string;
-};
+// Separated from initialization opts, so users won't accidentally change per-curve parameters
+// (changing DST is ok!)
+export type htfBasicOpts = { DST: string };
 
 export function hashToCurve<T>(
   Point: H2CPointConstructor<T>,
   mapToCurve: MapToCurve<T>,
   def: Opts
 ) {
-  validateOpts(def);
+  validateObject(def, {
+    DST: 'string',
+    p: 'bigint',
+    m: 'isSafeInteger',
+    k: 'isSafeInteger',
+    hash: 'hash',
+  });
+  if (def.expand !== 'xmd' && def.expand !== 'xof' && def.expand !== undefined)
+    throw new Error('Invalid htf/expand');
   if (typeof mapToCurve !== 'function')
     throw new Error('hashToCurve: mapToCurve() has not been defined');
-
   return {
     // Encodes byte string to elliptic curve
     // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-3
