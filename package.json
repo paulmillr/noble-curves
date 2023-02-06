@@ -21,19 +21,17 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@noble/hashes": "1.1.5"
+    "@noble/hashes": "1.2.0"
   },
   "devDependencies": {
-    "@rollup/plugin-node-resolve": "13.3.0",
     "@scure/base": "~1.1.1",
-    "@scure/bip32": "~1.1.1",
-    "@scure/bip39": "~1.1.0",
+    "@scure/bip32": "~1.1.5",
+    "@scure/bip39": "~1.1.1",
     "@types/node": "18.11.3",
     "fast-check": "3.0.0",
     "micro-bmark": "0.3.0",
     "micro-should": "0.4.0",
     "prettier": "2.8.3",
-    "rollup": "2.75.5",
     "typescript": "4.7.3"
   },
   "main": "index.js",
