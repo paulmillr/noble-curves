@@ -22,8 +22,7 @@ Package consists of two parts:
 
 Curves incorporate work from previous noble packages
 ([secp256k1](https://github.com/paulmillr/noble-secp256k1),
-[ed25519](https://github.com/paulmillr/noble-ed25519),
-[bls12-381](https://github.com/paulmillr/noble-bls12-381)),
+[ed25519](https://github.com/paulmillr/noble-ed25519)),
 which had security audits and were developed from 2019 to 2022.
 Check out [Upgrading](#upgrading) section if you've used them before.
 
@@ -31,14 +30,14 @@ Check out [Upgrading](#upgrading) section if you've used them before.
 
 > **noble-crypto** — high-security, easily auditable set of contained cryptographic libraries and tools.
 
-- Minimal dependencies, small files
+- Protection against supply chain attacks
 - Easily auditable TypeScript/JS code
 - Supported in all major browsers and stable node.js versions
 - All releases are signed with PGP keys
 - Check out [homepage](https://paulmillr.com/noble/) & all libraries:
-  [curves](https://github.com/paulmillr/noble-curves) ([secp256k1](https://github.com/paulmillr/noble-secp256k1),
-  [ed25519](https://github.com/paulmillr/noble-ed25519),
-  [bls12-381](https://github.com/paulmillr/noble-bls12-381)),
+  [curves](https://github.com/paulmillr/noble-curves)
+  ([secp256k1](https://github.com/paulmillr/noble-secp256k1),
+  [ed25519](https://github.com/paulmillr/noble-ed25519)),
   [hashes](https://github.com/paulmillr/noble-hashes)
 
 ## Usage
@@ -48,23 +47,7 @@ Use NPM in node.js / browser, or include single file from
 
 > npm install @noble/curves
 
-The library does not have an entry point. It allows you to select specific primitives and drop everything else. If you only want to use secp256k1, just use the library with rollup or other bundlers. This is done to make your bundles tiny.
-
-```ts
-// Common.js and ECMAScript Modules (ESM)
-import { secp256k1 } from '@noble/curves/secp256k1';
-
-const key = secp256k1.utils.randomPrivateKey();
-const pub = secp256k1.getPublicKey(key);
-const msg = new Uint8Array(32).fill(1);
-const sig = secp256k1.sign(msg, key);
-secp256k1.verify(sig, msg, pub) === true;
-sig.recoverPublicKey(msg) === pub;
-const someonesPub = secp256k1.getPublicKey(secp256k1.utils.randomPrivateKey());
-const shared = secp256k1.getSharedSecret(key, someonesPub);
-```
-
-All curves:
+The library does not have an entry point. It allows you to select specific primitives and drop everything else. If you only want to use secp256k1, just use the library with rollup or other bundlers. This is done to make your bundles tiny. All curves:
 
 ```ts
 import { secp256k1 } from '@noble/curves/secp256k1';
@@ -80,7 +63,25 @@ import { bn254 } from '@noble/curves/bn';
 import { jubjub } from '@noble/curves/jubjub';
 ```
 
-To define a custom curve, check out API below.
+Every curve can be used in the following way:
+
+```ts
+import { secp256k1 } from '@noble/curves/secp256k1'; // Common.js and ECMAScript Modules (ESM)
+
+const key = secp256k1.utils.randomPrivateKey();
+const pub = secp256k1.getPublicKey(key);
+const msg = new Uint8Array(32).fill(1);
+const sig = secp256k1.sign(msg, key);
+// weierstrass curves should use extraEntropy: https://moderncrypto.org/mail-archive/curves/2017/000925.html
+const sigImprovedSecurity = secp256k1.sign(msg, key, { extraEntropy: true });
+secp256k1.verify(sig, msg, pub) === true;
+// secp, p*, pasta curves allow pub recovery
+sig.recoverPublicKey(msg) === pub;
+const someonesPub = secp256k1.getPublicKey(secp256k1.utils.randomPrivateKey());
+const shared = secp256k1.getSharedSecret(key, someonesPub);
+```
+
+To define a custom curve, check out docs below.
 
 ## API
 
@@ -109,17 +110,20 @@ import * as utils from '@noble/curves/abstract/utils';
 They allow to define a new curve in a few lines of code:
 
 ```ts
-import { Fp } from '@noble/curves/abstract/modular';
+import { Field } from '@noble/curves/abstract/modular';
 import { weierstrass } from '@noble/curves/abstract/weierstrass';
 import { hmac } from '@noble/hashes/hmac';
 import { sha256 } from '@noble/hashes/sha256';
 import { concatBytes, randomBytes } from '@noble/hashes/utils';
 
-const secp256k1 = weierstrass({
+// secq (NOT secp) 256k1: cycle of secp256k1 with Fp/N flipped.
+// https://zcash.github.io/halo2/background/curves.html#cycles-of-curves
+// https://personaelabs.org/posts/spartan-ecdsa
+const secq256k1 = weierstrass({
   a: 0n,
   b: 7n,
-  Fp: Fp(2n ** 256n - 2n ** 32n - 2n ** 9n - 2n ** 8n - 2n ** 7n - 2n ** 6n - 2n ** 4n - 1n),
-  n: 2n ** 256n - 432420386565659656852420866394968145599n,
+  Fp: Field(2n ** 256n - 432420386565659656852420866394968145599n),
+  n: 2n ** 256n - 2n ** 32n - 2n ** 9n - 2n ** 8n - 2n ** 7n - 2n ** 6n - 2n ** 4n - 1n,
   Gx: 55066263022277343669578718895168534326250603453777594175500187360389116729240n,
   Gy: 32670510020758816978083085130507043184471273380659243275938904335757337482424n,
   hash: sha256,
