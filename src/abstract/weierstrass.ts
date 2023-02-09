@@ -636,7 +636,7 @@ export type CurveFn = {
   ProjectivePoint: ProjConstructor<bigint>;
   Signature: SignatureConstructor;
   utils: {
-    _normalizePrivateKey: (key: PrivKey) => bigint;
+    normPrivateKeyToScalar: (key: PrivKey) => bigint;
     isValidPrivateKey(privateKey: PrivKey): boolean;
     hashToPrivateKey: (hash: Hex) => Uint8Array;
     randomPrivateKey: () => Uint8Array;
@@ -858,7 +858,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
         return false;
       }
     },
-    _normalizePrivateKey: normalizePrivateKey,
+    normPrivateKeyToScalar: normalizePrivateKey,
 
     /**
      * Converts some bytes to a valid private key. Needs at least (nBitLength+64) bytes.
@@ -993,7 +993,16 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       const q = Point.BASE.multiply(k).toAffine(); // q = Gk
       const r = modN(q.x); // r = q.x mod n
       if (r === _0n) return;
-      const s = modN(ik * modN(m + modN(d * r))); // s = k^-1(m + rd) mod n
+      // X blinding according to https://tches.iacr.org/index.php/TCHES/article/view/7337/6509
+      // b * m + b * r * d ∈ [0,q−1] exposed via side-channel, but d (private scalar) is not.
+      // NOTE: there is still probable some leak in multiplication, since it is not constant-time
+      const b = ut.bytesToNumberBE(utils.randomPrivateKey()); // random scalar, b ∈ [1,q−1]
+      const bi = invN(b); // b^-1
+      const bdr = modN(b * d * r); // b * d * r
+      const bm = modN(b * m); // b * m
+      const mrx = modN(bi * modN(bdr + bm)); // b^-1(bm + bdr) -> m + rd
+
+      const s = modN(ik * mrx); // s = k^-1(m + rd) mod n
       if (s === _0n) return;
       let recovery = (q.x === r ? 0 : 2) | Number(q.y & _1n); // recovery bit (2 or 3, when q.x > n)
       let normS = s;
