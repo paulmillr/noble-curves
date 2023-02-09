@@ -25,8 +25,17 @@ export type GroupConstructor<T> = {
 };
 export type Mapper<T> = (i: T[]) => T[];
 
-// Elliptic curve multiplication of Point by scalar. Complicated and fragile. Uses wNAF method.
-// Windowed method is 10% faster, but takes 2x longer to generate & consumes 2x memory.
+// Elliptic curve multiplication of Point by scalar. Fragile.
+// Scalars should always be less than curve order: this should be checked inside of a curve itself.
+// Creates precomputation tables for fast multiplication:
+// - private scalar is split by fixed size windows of W bits
+// - every window point is collected from window's table & added to accumulator
+// - since windows are different, same point inside tables won't be accessed more than once per calc
+// - each multiplication is 'Math.ceil(CURVE_ORDER / 𝑊) + 1' point additions (fixed for any scalar)
+// - +1 window is neccessary for wNAF
+// - wNAF reduces table size: 2x less memory + 2x faster generation, but 10% slower multiplication
+// TODO: Research returning 2d JS array of windows, instead of a single window. This would allow
+// windows to be in different memory locations
 export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number) {
   const constTimeNegate = (condition: boolean, item: T): T => {
     const neg = item.negate();
@@ -54,8 +63,12 @@ export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number) {
     /**
      * Creates a wNAF precomputation window. Used for caching.
      * Default window size is set by `utils.precompute()` and is equal to 8.
-     * Which means we are caching 65536 points: 256 points for every bit from 0 to 256.
-     * @returns 65K precomputed points, depending on W
+     * Number of precomputed points depends on the curve size:
+     * 2^(𝑊−1) * (Math.ceil(𝑛 / 𝑊) + 1), where:
+     * - 𝑊 is the window size
+     * - 𝑛 is the bitlength of the curve order.
+     * For a 256-bit curve and window size 8, the number of precomputed points is 128 * 33 = 4224.
+     * @returns precomputed point tables flattened to a single array
      */
     precomputeWindow(elm: T, W: number): Group<T>[] {
       const { windows, windowSize } = opts(W);
@@ -76,14 +89,14 @@ export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number) {
     },
 
     /**
-     * Implements w-ary non-adjacent form for calculating ec multiplication.
+     * Implements ec multiplication using precomputed tables and w-ary non-adjacent form.
      * @param W window size
-     * @param affinePoint optional 2d point to save cached precompute windows on it.
-     * @param n bits
+     * @param precomputes precomputed tables
+     * @param n scalar (we don't check here, but should be less than curve order)
      * @returns real and fake (for const-time) points
      */
     wNAF(W: number, precomputes: T[], n: bigint): { p: T; f: T } {
-      // TODO: maybe check that scalar is less than group order? wNAF will fail otherwise
+      // TODO: maybe check that scalar is less than group order? wNAF behavious is undefined otherwise
       // But need to carefully remove other checks before wNAF. ORDER == bits here
       const { windows, windowSize } = opts(W);
 
