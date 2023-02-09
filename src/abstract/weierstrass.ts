@@ -640,6 +640,7 @@ export type CurveFn = {
     isValidPrivateKey(privateKey: PrivKey): boolean;
     hashToPrivateKey: (hash: Hex) => Uint8Array;
     randomPrivateKey: () => Uint8Array;
+    precompute: (windowSize?: number, point?: ProjPointType<bigint>) => ProjPointType<bigint>;
   };
 };
 
