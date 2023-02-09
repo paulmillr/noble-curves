@@ -239,6 +239,11 @@ for (const c in FIELDS) {
               deepStrictEqual(isSquare(a), true);
               deepStrictEqual(Fp.eql(Fp.sqr(root), a), true, 'sqrt(a)^2 == a');
               deepStrictEqual(Fp.eql(Fp.sqr(Fp.neg(root)), a), true, '(-sqrt(a))^2 == a');
+              // Returns odd/even element
+              deepStrictEqual(Fp.isOdd(mod.FpSqrtOdd(Fp, a)), true);
+              deepStrictEqual(Fp.isOdd(mod.FpSqrtEven(Fp, a)), false);
+              deepStrictEqual(Fp.eql(Fp.sqr(mod.FpSqrtOdd(Fp, a)), a), true);
+              deepStrictEqual(Fp.eql(Fp.sqr(mod.FpSqrtEven(Fp, a)), a), true);
             })
           );
         });
@@ -261,6 +266,9 @@ for (const c in FIELDS) {
             if (Fp.eql(a, Fp.ZERO)) return; // No division by zero
             deepStrictEqual(Fp.div(a, Fp.ONE), a);
             deepStrictEqual(Fp.div(a, a), Fp.ONE);
+            // FpDiv tests
+            deepStrictEqual(mod.FpDiv(Fp, a, Fp.ONE), a);
+            deepStrictEqual(mod.FpDiv(Fp, a, a), Fp.ONE);
           })
         );
       });
@@ -269,6 +277,7 @@ for (const c in FIELDS) {
           fc.property(FC_BIGINT, (num) => {
             const a = create(num);
             deepStrictEqual(Fp.div(Fp.ZERO, a), Fp.ZERO);
+            deepStrictEqual(mod.FpDiv(Fp, Fp.ZERO, a), Fp.ZERO);
           })
         );
       });
@@ -279,6 +288,10 @@ for (const c in FIELDS) {
             const b = create(num2);
             const c = create(num3);
             deepStrictEqual(Fp.div(Fp.add(a, b), c), Fp.add(Fp.div(a, c), Fp.div(b, c)));
+            deepStrictEqual(
+              mod.FpDiv(Fp, Fp.add(a, b), c),
+              Fp.add(mod.FpDiv(Fp, a, c), mod.FpDiv(Fp, b, c))
+            );
           })
         );
       });
@@ -521,8 +534,22 @@ for (const name in CURVES) {
         should('fromHex(toHex()) roundtrip', () => {
           fc.assert(
             fc.property(FC_BIGINT, (x) => {
-              const hex = p.BASE.multiply(x).toHex();
+              const point = p.BASE.multiply(x);
+              const hex = point.toHex();
+              const bytes = point.toRawBytes();
               deepStrictEqual(p.fromHex(hex).toHex(), hex);
+              deepStrictEqual(p.fromHex(bytes).toHex(), hex);
+            })
+          );
+        });
+        should('fromHex(toHex(compressed=true)) roundtrip', () => {
+          fc.assert(
+            fc.property(FC_BIGINT, (x) => {
+              const point = p.BASE.multiply(x);
+              const hex = point.toHex(true);
+              const bytes = point.toRawBytes(true);
+              deepStrictEqual(p.fromHex(hex).toHex(true), hex);
+              deepStrictEqual(p.fromHex(bytes).toHex(true), hex);
             })
           );
         });
@@ -561,7 +588,7 @@ for (const name in CURVES) {
           deepStrictEqual(
             C.verify(sig, msg, pub),
             true,
-            'priv=${toHex(priv)},pub=${toHex(pub)},msg=${msg}'
+            `priv=${toHex(priv)},pub=${toHex(pub)},msg=${msg}`
           );
         }),
         { numRuns: NUM_RUNS }
@@ -605,6 +632,52 @@ for (const name in CURVES) {
         deepStrictEqual(C.verify(sig, msg, C.getPublicKey(C.utils.randomPrivateKey())), false);
       });
     });
+    if (C.Signature) {
+      should('Signature serialization roundtrip', () =>
+        fc.assert(
+          fc.property(fc.hexaString({ minLength: 64, maxLength: 64 }), (msg) => {
+            const priv = C.utils.randomPrivateKey();
+            const sig = C.sign(msg, priv);
+            const sigRS = (sig) => ({ s: sig.s, r: sig.r });
+            // Compact
+            deepStrictEqual(sigRS(C.Signature.fromCompact(sig.toCompactHex())), sigRS(sig));
+            deepStrictEqual(sigRS(C.Signature.fromCompact(sig.toCompactRawBytes())), sigRS(sig));
+            // DER
+            deepStrictEqual(sigRS(C.Signature.fromDER(sig.toDERHex())), sigRS(sig));
+            deepStrictEqual(sigRS(C.Signature.fromDER(sig.toDERRawBytes())), sigRS(sig));
+          }),
+          { numRuns: NUM_RUNS }
+        )
+      );
+      should('Signature.addRecoveryBit/Signature.recoveryPublicKey', () =>
+        fc.assert(
+          fc.property(fc.hexaString({ minLength: 64, maxLength: 64 }), (msg) => {
+            const priv = C.utils.randomPrivateKey();
+            const pub = C.getPublicKey(priv);
+            const sig = C.sign(msg, priv);
+            deepStrictEqual(sig.recoverPublicKey(msg).toRawBytes(), pub);
+            const sig2 = C.Signature.fromCompact(sig.toCompactHex());
+            throws(() => sig2.recoverPublicKey(msg));
+            const sig3 = sig2.addRecoveryBit(sig.recovery);
+            deepStrictEqual(sig3.recoverPublicKey(msg).toRawBytes(), pub);
+          }),
+          { numRuns: NUM_RUNS }
+        )
+      );
+      should('Signature.normalizeS', () =>
+        fc.assert(
+          fc.property(fc.hexaString({ minLength: 64, maxLength: 64 }), (msg) => {
+            const priv = C.utils.randomPrivateKey();
+            const pub = C.getPublicKey(priv);
+            const sig = C.sign(msg, priv);
+            const sig2 = sig.normalizeS();
+            deepStrictEqual(sig2.hasHighS(), false);
+          }),
+          { numRuns: NUM_RUNS }
+        )
+      );
+    }
+
     // NOTE: fails for ed, because of empty message. Since we convert it to scalar,
     // need to check what other implementations do. Empty message != new Uint8Array([0]), but what scalar should be in that case?
     // should('should not verify signature with wrong message', () => {
