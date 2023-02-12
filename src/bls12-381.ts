@@ -1,9 +1,43 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 
-// The pairing-friendly Barreto-Lynn-Scott elliptic curve construction allows to:
+// bls12-381 pairing-friendly Barreto-Lynn-Scott elliptic curve construction allows to:
 // - Construct zk-SNARKs at the 128-bit security
-// - Use threshold signatures, which allows a user to sign lots of messages with one signature and verify them swiftly in a batch, using Boneh-Lynn-Shacham signature scheme.
-// Differences from @noble/bls12-381 1.4:
+// - Use threshold signatures, which allows a user to sign lots of messages with one signature and
+//   verify them swiftly in a batch, using Boneh-Lynn-Shacham signature scheme.
+//
+// The library uses G1 for public keys and G2 for signatures. Support for G1 signatures is planned.
+// Compatible with Algorand, Chia, Dfinity, Ethereum, FIL, Zcash. Matches specs
+// [pairing-curves-10](https://tools.ietf.org/html/draft-irtf-cfrg-pairing-friendly-curves-10),
+// [bls-sigs-04](https://tools.ietf.org/html/draft-irtf-cfrg-bls-signature-04),
+// [hash-to-curve-12](https://tools.ietf.org/html/draft-irtf-cfrg-hash-to-curve-12).
+//
+// ### Summary
+// 1. BLS Relies on Bilinear Pairing (expensive)
+// 2. Private Keys: 32 bytes
+// 3. Public Keys: 48 bytes: 381 bit affine x coordinate, encoded into 48 big-endian bytes.
+// 4. Signatures: 96 bytes: two 381 bit integers (affine x coordinate), encoded into two 48 big-endian byte arrays.
+//     - The signature is a point on the G2 subgroup, which is defined over a finite field
+//     with elements twice as big as the G1 curve (G2 is over Fp2 rather than Fp. Fp2 is analogous to the complex numbers).
+// 5. The 12 stands for the Embedding degree.
+//
+// ### Formulas
+// - `P = pk x G` - public keys
+// - `S = pk x H(m)` - signing
+// - `e(P, H(m)) == e(G, S)` - verification using pairings
+// - `e(G, S) = e(G, SUM(n)(Si)) = MUL(n)(e(G, Si))` - signature aggregation
+// Filecoin uses little endian byte arrays for private keys -
+// so ensure to reverse byte order if you'll use it with FIL.
+//
+// ### Resources
+// - [BLS12-381 for the rest of us](https://hackmd.io/@benjaminion/bls12-381)
+// - [Key concepts of pairings](https://medium.com/@alonmuroch_65570/bls-signatures-part-2-key-concepts-of-pairings-27a8a9533d0c)
+// - Pairing over bls12-381:
+//   [part 1](https://research.nccgroup.com/2020/07/06/pairing-over-bls12-381-part-1-fields/),
+//   [part 2](https://research.nccgroup.com/2020/07/13/pairing-over-bls12-381-part-2-curves/),
+//   [part 3](https://research.nccgroup.com/2020/08/13/pairing-over-bls12-381-part-3-pairing/)
+// - [Estimating the bit security of pairing-friendly curves](https://research.nccgroup.com/2022/02/03/estimating-the-bit-security-of-pairing-friendly-curves/)
+//
+// ### Differences from @noble/bls12-381 1.4
 // - PointG1 -> G1.Point
 // - PointG2 -> G2.Point
 // - PointG2.fromSignature -> Signature.decode
