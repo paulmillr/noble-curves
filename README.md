@@ -23,7 +23,7 @@ Package consists of two parts:
 
 Check out [Upgrading](#upgrading) if you've previously used single-feature noble packages
 ([secp256k1](https://github.com/paulmillr/noble-secp256k1), [ed25519](https://github.com/paulmillr/noble-ed25519)).
-See [Examples](#examples) for real-world software that uses curves.
+See [In the wild](#in-the-wild) for real-world software that uses curves.
 
 ### This library belongs to _noble_ crypto
 
@@ -59,10 +59,17 @@ Each curve can be used in the following way:
 import { secp256k1 } from '@noble/curves/secp256k1'; // ECMAScript Modules (ESM) and Common.js
 // import { secp256k1 } from 'npm:@noble/curves@1.2.0/secp256k1'; // Deno
 const priv = secp256k1.utils.randomPrivateKey();
-const pub = secp256k1.getPublicKey(priv); // keys & other inputs can be Uint8Array-s or hex strings
+const pub = secp256k1.getPublicKey(priv);
 const msg = new Uint8Array(32).fill(1);
 const sig = secp256k1.sign(msg, priv);
 secp256k1.verify(sig, msg, pub) === true;
+
+const privHex = '46c930bc7bb4db7f55da20798697421b98c4175a52c630294d75a84b9c126236'
+const pub2 = secp256k1.getPublicKey(privHex); // keys & other inputs can be Uint8Array-s or hex strings
+
+// Follows hash-to-curve specification to encode arbitrary hashes to EC points
+import { hashToCurve, encodeToCurve } from '@noble/curves/secp256k1';
+hashToCurve('0102abcd');
 ```
 
 All curves:
@@ -105,15 +112,38 @@ console.log(isValid);
 ```
 
 ed25519 module has ed25519ctx / ed25519ph variants,
-x25519 ECDH and [ristretto255](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-ristretto255-decaf448):
+x25519 ECDH and [ristretto255](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-ristretto255-decaf448).
+It follows [ZIP215](https://zips.z.cash/zip-0215) and [can be used in consensus-critical applications](https://hdevalence.ca/blog/2020-10-04-its-25519am):
 
 ```ts
 import { ed25519 } from '@noble/curves/ed25519';
-import { ed25519ctx, ed25519ph, x25519, RistrettoPoint } from '@noble/curves/ed25519';
-x25519.getSharedSecret()
 
-const pub = ed25519.curve25519.scalarMultBase(privateKey);
-const shared = ed25519.curve25519.scalarMult(privateKeyA, publicKeyB);
+// Variants from RFC8032: with context, prehashed
+import { ed25519ctx, ed25519ph } from '@noble/curves/ed25519';
+
+// ECDH using curve25519 aka x25519
+import { x25519 } from '@noble/curves/ed25519';
+const priv = 'a546e36bf0527c9d3b16154b82465edd62144c0ac1fc5a18506a2244ba449ac4';
+const pub = 'e6db6867583030db3594c1a424b15f7c726624ec26b3353b10a903a6d0ab1c4c';
+x25519.getSharedSecret(priv, pub) === x25519.scalarMult(priv, pub);
+x25519.getPublicKey(priv) === x25519.scalarMultBase(priv);
+
+// hash-to-curve
+import { hashToCurve, encodeToCurve } from '@noble/curves/ed25519';
+
+import { RistrettoPoint } from '@noble/curves/ed25519';
+const rp = RistrettoPoint.fromHex(
+  '6a493210f7499cd17fecb510ae0cea23a110e8d5b901f8acadd3095c73a3b919'
+);
+RistrettoPoint.hashToCurve('Ristretto is traditionally a short shot of espresso coffee');
+// also has add(), equals(), multiply(), toRawBytes() methods
+```
+
+ed448 module is basically the same:
+
+```ts
+import { ed448, ed448ph, ed448ctx, x448 } from '@noble/curves/ed448';
+import { hashToCurve, encodeToCurve } from '@noble/curves/ed448';
 ```
 
 BLS12-381 pairing-friendly Barreto-Lynn-Scott elliptic curve construction allows to
@@ -135,11 +165,11 @@ console.log({ publicKey, signature, isValid });
 const privateKeys = [
   '18f020b98eb798752a50ed0563b079c125b0db5dd0b1060d1c1b47d4a193e1e4',
   'ed69a8c50cf8c9836be3b67c7eeff416612d45ba39a5c099d48fa668bf558c9c',
-  '16ae669f3be7a2121e17d0c68c05a8f3d6bef21ec0f2315f1d7aec12484e4cf5'
+  '16ae669f3be7a2121e17d0c68c05a8f3d6bef21ec0f2315f1d7aec12484e4cf5',
 ];
 const messages = ['d2', '0d98', '05caf3'];
 const publicKeys = privateKeys.map(bls.getPublicKey);
-const signatures2 = privateKeys.map(p => bls.sign(message, p))
+const signatures2 = privateKeys.map((p) => bls.sign(message, p));
 const aggPubKey2 = bls.aggregatePublicKeys(publicKeys);
 const aggSignature2 = bls.aggregateSignatures(signatures2);
 const isValid2 = bls.verify(aggSignature2, message, aggPubKey2);
@@ -151,7 +181,7 @@ const aggSignature3 = bls.aggregateSignatures(signatures3);
 const isValid3 = bls.verifyBatch(aggSignature3, messages, publicKeys);
 console.log({ publicKeys, signatures3, aggSignature3, isValid3 });
 
-// Pairing API
+// Pairings
 // bls.pairing(PointG1, PointG2)
 ```
 
@@ -159,9 +189,8 @@ console.log({ publicKeys, signatures3, aggSignature3, isValid3 });
 
 Abstract API allows to define custom curves. All arithmetics is done with JS bigints over finite fields,
 which is defined from `modular` sub-module. For scalar multiplication, we use w-ary non-adjacent form (wNAF) method.
-
-Precomputes are enabled for weierstrass and edwards BASE points of a curve. You could precompute
-any other point (e.g. for ECDH) using `utils.precompute()` method.
+Precomputes are enabled for weierstrass and edwards BASE points of a curve. You could precompute any other point (e.g. for ECDH)
+using `utils.precompute()` method.
 
 There are following zero-dependency algorithms:
 
@@ -170,8 +199,8 @@ There are following zero-dependency algorithms:
 - [abstract/montgomery: Montgomery curve](#abstractmontgomery-montgomery-curve)
 - [abstract/hash-to-curve: Hashing strings to curve points](#abstracthash-to-curve-hashing-strings-to-curve-points)
 - [abstract/poseidon: Poseidon hash](#abstractposeidon-poseidon-hash)
-- [abstract/modular](#abstractmodular)
-- [abstract/utils](#abstractutils)
+- [abstract/modular: Modular arithmetics utilities](#abstractmodular-modular-arithmetics-utilities)
+- [abstract/utils: General utilities](#abstractutils-general-utilities)
 
 ### abstract/weierstrass: Short Weierstrass curve
 
@@ -186,14 +215,14 @@ and coordinates `Gx`, `Gy` of generator point.
 For this you will need `hmac` & `hash`, which in our implementations is provided by noble-hashes.
 If you're using different hashing library, make sure to wrap it in the following interface:
 
-  ```ts
-  export type CHash = {
-    (message: Uint8Array): Uint8Array;
-    blockLen: number;
-    outputLen: number;
-    create(): any;
-  };
-  ```
+```ts
+export type CHash = {
+  (message: Uint8Array): Uint8Array;
+  blockLen: number;
+  outputLen: number;
+  create(): any;
+};
+```
 
 **Weierstrass points:**
 
@@ -259,7 +288,8 @@ import { Field } from '@noble/curves/abstract/modular'; // finite field, mod ari
 import { sha256 } from '@noble/hashes/sha256'; // 3rd-party sha256() of type utils.CHash, with blockLen/outputLen
 import { hmac } from '@noble/hashes/hmac'; // 3rd-party hmac() that will accept sha256()
 import { concatBytes, randomBytes } from '@noble/hashes/utils'; // 3rd-party utilities
-const secq256k1 = weierstrass({ // secq256k1: cycle of secp256k1 with Fp/N flipped.
+const secq256k1 = weierstrass({
+  // secq256k1: cycle of secp256k1 with Fp/N flipped.
   a: 0n,
   b: 7n,
   Fp: Field(2n ** 256n - 432420386565659656852420866394968145599n),
@@ -273,18 +303,18 @@ const secq256k1 = weierstrass({ // secq256k1: cycle of secp256k1 with Fp/N flipp
 
 // All curves expose same generic interface.
 const priv = secq256k1.utils.randomPrivateKey();
-secq256k1.getPublicKey(priv);             // Convert private key to public.
-const sig = secq256k1.sign(msg, priv);    // Sign msg with private key.
-secq256k1.verify(sig, msg, priv);         // Verify if sig is correct.
+secq256k1.getPublicKey(priv); // Convert private key to public.
+const sig = secq256k1.sign(msg, priv); // Sign msg with private key.
+secq256k1.verify(sig, msg, priv); // Verify if sig is correct.
 
-const point = secq256k1.Point.BASE;       // Elliptic curve Point class and BASE point static var.
-point.add(point).equals(point.double());  // add(), equals(), double() methods
+const point = secq256k1.Point.BASE; // Elliptic curve Point class and BASE point static var.
+point.add(point).equals(point.double()); // add(), equals(), double() methods
 point.subtract(point).equals(secq256k1.Point.ZERO); // subtract() method, ZERO static var
-point.negate();                           // Flips point over x/y coordinate.
-point.multiply(31415n);                   // Multiplication of Point by scalar.
+point.negate(); // Flips point over x/y coordinate.
+point.multiply(31415n); // Multiplication of Point by scalar.
 
-point.assertValidity();
-point.toAffine(); point.x; point.y;       // Converts to 2d affine xy coordinates
+point.assertValidity(); // Checks for being on-curve
+point.toAffine();  // Converts to 2d affine xy coordinates
 
 secq256k1.CURVE.n;
 secq256k1.CURVE.Fp.mod();
@@ -321,6 +351,41 @@ and coordinates `Gx`, `Gy` of generator point.
 
 For EdDSA signatures, `hash` param required. `adjustScalarBytes` which instructs how to change private scalars could be specified.
 
+**Edwards points:**
+
+1. Exported as `ExtendedPoint`
+2. Represented in extended coordinates: (x, y, z, t) ∋ (x=x/z, y=y/z)
+3. Use complete exception-free formulas for addition and doubling
+4. Can be decoded/encoded from/to Uint8Array / hex strings using `ExtendedPoint.fromHex` and `ExtendedPoint#toRawBytes()`
+5. Have `assertValidity()` which checks for being on-curve
+6. Have `toAffine()` and `x` / `y` getters which convert to 2d xy affine coordinates
+7. Have `isTorsionFree()`, `clearCofactor()` and `isSmallOrder()` utilities to handle torsions
+
+```ts
+export interface ExtPointType extends Group<ExtPointType> {
+  readonly ex: bigint;
+  readonly ey: bigint;
+  readonly ez: bigint;
+  readonly et: bigint;
+  assertValidity(): void;
+  multiply(scalar: bigint): ExtPointType;
+  multiplyUnsafe(scalar: bigint): ExtPointType;
+  isSmallOrder(): boolean;
+  isTorsionFree(): boolean;
+  clearCofactor(): ExtPointType;
+  toAffine(iz?: bigint): AffinePoint<bigint>;
+}
+// Static methods of Extended Point with coordinates in X, Y, Z, T
+export interface ExtPointConstructor extends GroupConstructor<ExtPointType> {
+  new (x: bigint, y: bigint, z: bigint, t: bigint): ExtPointType;
+  fromAffine(p: AffinePoint<bigint>): ExtPointType;
+  fromHex(hex: Hex): ExtPointType;
+  fromPrivateKey(privateKey: Hex): ExtPointType;
+}
+```
+
+Example implementing edwards25519:
+
 ```ts
 import { twistedEdwards } from '@noble/curves/abstract/edwards';
 import { div } from '@noble/curves/abstract/modular';
@@ -353,7 +418,7 @@ export type CurveFn = {
   CURVE: ReturnType<typeof validateOpts>;
   getPublicKey: (privateKey: PrivKey, isCompressed?: boolean) => Uint8Array;
   sign: (message: Hex, privateKey: Hex) => Uint8Array;
-  verify: (sig: SigType, message: Hex, publicKey: PubKey) => boolean;
+  verify: (sig: SigType, message: Hex, publicKey: PubKey, context?: Hex) => boolean;
   ExtendedPoint: ExtendedPointConstructor;
   Signature: SignatureConstructor;
   utils: {
@@ -371,9 +436,7 @@ export type CurveFn = {
 
 ### abstract/montgomery: Montgomery curve
 
-For now the module only contains methods for x-only ECDH on Curve25519 / Curve448 from RFC7748.
-
-Proper Elliptic Curve Points are not implemented yet.
+The module contains methods for x-only ECDH on Curve25519 / Curve448 from RFC7748. Proper Elliptic Curve Points are not implemented yet.
 
 You must specify curve field, `a24` special variable, `montgomeryBits`, `nByteLength`, and coordinate `u` of generator point.
 
@@ -402,32 +465,21 @@ const x25519 = montgomery({
 
 ### abstract/hash-to-curve: Hashing strings to curve points
 
-The module allows to hash arbitrary strings to elliptic curve points.
+The module allows to hash arbitrary strings to elliptic curve points. Implements [hash-to-curve v11](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11).
 
-`expand_message_xmd` [(spec)](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-5.4.1) produces a uniformly random byte string using a cryptographic hash function H that outputs b bits..
+`expand_message_xmd` [(spec)](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-5.4.1) produces a uniformly random byte string using a cryptographic hash function H that outputs b bits.
 
 ```ts
-function expand_message_xmd(
-  msg: Uint8Array,
-  DST: Uint8Array,
-  lenInBytes: number,
-  H: CHash
-): Uint8Array;
-function expand_message_xof(
-  msg: Uint8Array,
-  DST: Uint8Array,
-  lenInBytes: number,
-  k: number,
-  H: CHash
-): Uint8Array;
+function expand_message_xmd(msg: Uint8Array, DST: Uint8Array, lenInBytes: number, H: CHash): Uint8Array;
+function expand_message_xof(msg: Uint8Array, DST: Uint8Array, lenInBytes: number, k: number, H: CHash): Uint8Array;
 ```
 
 `hash_to_field(msg, count, options)` [(spec)](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-5.3)
-  hashes arbitrary-length byte strings to a list of one or more elements of a finite field F.
-  _ `msg` a byte string containing the message to hash
-  _ `count` the number of elements of F to output
-  _ `options` `{DST: string, p: bigint, m: number, k: number, expand: 'xmd' | 'xof', hash: H}`
-  _ Returns `[u_0, ..., u_(count - 1)]`, a list of field elements.
+hashes arbitrary-length byte strings to a list of one or more elements of a finite field F.
+_ `msg` a byte string containing the message to hash
+_ `count` the number of elements of F to output
+_ `options` `{DST: string, p: bigint, m: number, k: number, expand: 'xmd' | 'xof', hash: H}`
+_ Returns `[u_0, ..., u_(count - 1)]`, a list of field elements.
 
 ```ts
 function hash_to_field(msg: Uint8Array, count: number, options: htfOpts): bigint[][];
@@ -478,27 +530,30 @@ const instance = poseidon(opts: PoseidonOpts);
 The module abstracts BLS (Barreto-Lynn-Scott) primitives. In theory you should be able to write BLS12-377, BLS24,
 and others with it.
 
-### abstract/modular
+### abstract/modular: Modular arithmetics utilities
 
-Modular arithmetics utilities.
+The module also contains useful `hashToPrivateScalar` method which allows to create
+scalars (e.g. private keys) with the modulo bias being neglible. It follows
+FIPS 186 B.4.1. Requires at least 40 bytes of input for 32-byte private key.
 
-```typescript
-import { Field, mod, invert, div, invertBatch, sqrt } from '@noble/curves/abstract/modular';
-const fp = Field(2n ** 255n - 19n); // Finite field over 2^255-19
-fp.mul(591n, 932n);
-fp.pow(481n, 11024858120n);
+```ts
+import * as mod from '@noble/curves/abstract/modular';
+const fp = mod.Field(2n ** 255n - 19n); // Finite field over 2^255-19
+fp.mul(591n, 932n); // multiplication
+fp.pow(481n, 11024858120n); // exponentiation
+fp.div(5n, 17n); // division: 5/17 mod 2^255-19 == 5 * invert(17)
+fp.sqrt(21n); // square root
 
 // Generic non-FP utils are also available
-mod(21n, 10n); // 21 mod 10 == 1n; fixed version of 21 % 10
-invert(17n, 10n); // invert(17) mod 10; modular multiplicative inverse
-div(5n, 17n, 10n); // 5/17 mod 10 == 5 * invert(17) mod 10; division
-invertBatch([1n, 2n, 4n], 21n); // => [1n, 11n, 16n] in one inversion
-sqrt(21n, 73n); // √21 mod 73; square root
+mod.mod(21n, 10n); // 21 mod 10 == 1n; fixed version of 21 % 10
+mod.invert(17n, 10n); // invert(17) mod 10; modular multiplicative inverse
+mod.invertBatch([1n, 2n, 4n], 21n); // => [1n, 11n, 16n] in one inversion
+mod.hashToPrivateScalar(sha512_of_something, secp256r1.n);
 ```
 
-### abstract/utils
+### abstract/utils: General utilities
 
-```typescript
+```ts
 import * as utils from '@noble/curves/abstract/utils';
 
 utils.bytesToHex(Uint8Array.from([0xde, 0xad, 0xbe, 0xef]));
@@ -511,7 +566,6 @@ utils.numberToBytesLE(123n);
 utils.numberToHexUnpadded(123n);
 utils.concatBytes(Uint8Array.from([0xde, 0xad]), Uint8Array.from([0xbe, 0xef]));
 utils.nLength(255n);
-utils.hashToPrivateScalar(sha512_of_something, secp256r1.n);
 utils.equalBytes(Uint8Array.from([0xde]), Uint8Array.from([0xde]));
 ```
 
@@ -519,92 +573,95 @@ utils.equalBytes(Uint8Array.from([0xde]), Uint8Array.from([0xde]));
 
 The library had no prior security audit.
 
-[Timing attack](https://en.wikipedia.org/wiki/Timing_attack) considerations: _JIT-compiler_ and _Garbage Collector_ make "constant time" extremely hard to achieve in a scripting language. Which means _any other JS library can't have constant-timeness_. Even statically typed Rust, a language without GC, [makes it harder to achieve constant-time](https://www.chosenplaintext.ca/open-source/rust-timing-shield/security) for some cases. If your goal is absolute security, don't use any JS lib — including bindings to native ones. Use low-level libraries & languages. Nonetheless we're targetting algorithmic constant time.
+[Timing attack](https://en.wikipedia.org/wiki/Timing_attack) considerations: we are using non-CT bigints. However, _JIT-compiler_ and _Garbage Collector_ make "constant time" extremely hard to achieve in a scripting language. Which means _any other JS library can't have constant-timeness_. Even statically typed Rust, a language without GC, [makes it harder to achieve constant-time](https://www.chosenplaintext.ca/open-source/rust-timing-shield/security) for some cases. If your goal is absolute security, don't use any JS lib — including bindings to native ones. Use low-level libraries & languages. Nonetheless we're targetting algorithmic constant time.
 
 We consider infrastructure attacks like rogue NPM modules very important; that's why it's crucial to minimize the amount of 3rd-party dependencies & native bindings. If your app uses 500 dependencies, any dep could get hacked and you'll be downloading malware with every `npm install`. Our goal is to minimize this attack vector.
 
 ## Speed
 
-Benchmark results on Apple M2 with node v18.10:
+Benchmark results on Apple M2 with node v19:
 
 ```
 secp256k1
-init x 57 ops/sec @ 17ms/op
-getPublicKey x 4,946 ops/sec @ 202μs/op
-sign x 3,914 ops/sec @ 255μs/op
-verify x 682 ops/sec @ 1ms/op
-getSharedSecret x 427 ops/sec @ 2ms/op
-recoverPublicKey x 683 ops/sec @ 1ms/op
-schnorr.sign x 539 ops/sec @ 1ms/op
-schnorr.verify x 716 ops/sec @ 1ms/op
+init x 58 ops/sec @ 17ms/op
+getPublicKey x 5,640 ops/sec @ 177μs/op
+sign x 3,909 ops/sec @ 255μs/op
+verify x 780 ops/sec @ 1ms/op
+getSharedSecret x 465 ops/sec @ 2ms/op
+recoverPublicKey x 740 ops/sec @ 1ms/op
+schnorr.sign x 597 ops/sec @ 1ms/op
+schnorr.verify x 775 ops/sec @ 1ms/op
 
 P256
-init x 30 ops/sec @ 32ms/op
-getPublicKey x 5,008 ops/sec @ 199μs/op
-sign x 3,970 ops/sec @ 251μs/op
-verify x 515 ops/sec @ 1ms/op
+init x 31 ops/sec @ 31ms/op
+getPublicKey x 5,607 ops/sec @ 178μs/op
+sign x 3,930 ops/sec @ 254μs/op
+verify x 540 ops/sec @ 1ms/op
 
 P384
-init x 14 ops/sec @ 66ms/op
-getPublicKey x 2,434 ops/sec @ 410μs/op
-sign x 1,942 ops/sec @ 514μs/op
-verify x 206 ops/sec @ 4ms/op
+init x 15 ops/sec @ 63ms/op
+getPublicKey x 2,622 ops/sec @ 381μs/op
+sign x 1,913 ops/sec @ 522μs/op
+verify x 222 ops/sec @ 4ms/op
 
 P521
-init x 7 ops/sec @ 126ms/op
-getPublicKey x 1,282 ops/sec @ 779μs/op
-sign x 1,077 ops/sec @ 928μs/op
-verify x 110 ops/sec @ 9ms/op
+init x 8 ops/sec @ 119ms/op
+getPublicKey x 1,371 ops/sec @ 729μs/op
+sign x 1,090 ops/sec @ 917μs/op
+verify x 118 ops/sec @ 8ms/op
 
 ed25519
-init x 37 ops/sec @ 26ms/op
-getPublicKey x 8,147 ops/sec @ 122μs/op
-sign x 3,979 ops/sec @ 251μs/op
-verify x 848 ops/sec @ 1ms/op
+init x 47 ops/sec @ 20ms/op
+getPublicKey x 9,414 ops/sec @ 106μs/op
+sign x 4,516 ops/sec @ 221μs/op
+verify x 912 ops/sec @ 1ms/op
 
 ed448
-init x 17 ops/sec @ 58ms/op
-getPublicKey x 3,083 ops/sec @ 324μs/op
-sign x 1,473 ops/sec @ 678μs/op
-verify x 323 ops/sec @ 3ms/op
-
-bls12-381
-init x 30 ops/sec @ 33ms/op
-getPublicKey x 788 ops/sec @ 1ms/op
-sign x 45 ops/sec @ 21ms/op
-verify x 32 ops/sec @ 30ms/op
-pairing x 88 ops/sec @ 11ms/op
+init x 17 ops/sec @ 56ms/op
+getPublicKey x 3,363 ops/sec @ 297μs/op
+sign x 1,615 ops/sec @ 619μs/op
+verify x 319 ops/sec @ 3ms/op
 
 stark
-init x 31 ops/sec @ 31ms/op
-pedersen
-├─old x 84 ops/sec @ 11ms/op
-└─noble x 802 ops/sec @ 1ms/op
-poseidon x 7,466 ops/sec @ 133μs/op
-verify
-├─old x 300 ops/sec @ 3ms/op
-└─noble x 474 ops/sec @ 2ms/op
+init x 35 ops/sec @ 28ms/op
+pedersen x 884 ops/sec @ 1ms/op
+poseidon x 8,598 ops/sec @ 116μs/op
+verify x 528 ops/sec @ 1ms/op
+
+bls12-381
+init x 32 ops/sec @ 30ms/op
+getPublicKey 1-bit x 858 ops/sec @ 1ms/op
+getPublicKey x 858 ops/sec @ 1ms/op
+sign x 49 ops/sec @ 20ms/op
+verify x 34 ops/sec @ 28ms/op
+pairing x 94 ops/sec @ 10ms/op
+aggregatePublicKeys/8 x 116 ops/sec @ 8ms/op
+aggregatePublicKeys/32 x 31 ops/sec @ 31ms/op
+aggregatePublicKeys/128 x 7 ops/sec @ 125ms/op
+aggregateSignatures/8 x 45 ops/sec @ 22ms/op
+aggregateSignatures/32 x 11 ops/sec @ 84ms/op
+aggregateSignatures/128 x 3 ops/sec @ 332ms/opp
 ```
 
-## Examples
+## In the wild
 
 Elliptic curve calculator: [paulmillr.com/ecc](https://paulmillr.com/ecc).
 
 - secp256k1
-    - [btc-signer](https://github.com/paulmillr/micro-btc-signer), [eth-signer](https://github.com/paulmillr/micro-eth-signer)
+  - [btc-signer](https://github.com/paulmillr/micro-btc-signer), [eth-signer](https://github.com/paulmillr/micro-eth-signer)
 - ed25519
-    - [sol-signer](https://github.com/paulmillr/micro-sol-signer) for Solana
+  - [sol-signer](https://github.com/paulmillr/micro-sol-signer)
 - BLS12-381
-    - Threshold sigs demo [genthresh.com](https://genthresh.com)
-    - BBS signatures [github.com/Wind4Greg/BBS-Draft-Checks](https://github.com/Wind4Greg/BBS-Draft-Checks) following [draft-irtf-cfrg-bbs-signatures-latest](https://identity.foundation/bbs-signature/draft-irtf-cfrg-bbs-signatures.html)
+  - Threshold sigs demo [genthresh.com](https://genthresh.com)
+  - BBS signatures [github.com/Wind4Greg/BBS-Draft-Checks](https://github.com/Wind4Greg/BBS-Draft-Checks) following [draft-irtf-cfrg-bbs-signatures-latest](https://identity.foundation/bbs-signature/draft-irtf-cfrg-bbs-signatures.html)
 
 ## Upgrading
 
-If you're coming from single-curve noble packages, the following changes need to be kept in mind:
+If you're coming from single-feature noble packages, the following changes need to be kept in mind:
 
 - 2d affine (x, y) points have been removed to reduce complexity and improve speed
-- Removed `number` support as a type for private keys. `bigint` is still supported
-- `mod`, `invert` are no longer present in `utils`. Use `@noble/curves/abstract/modular.js` now.
+- Removed `number` support as a type for private keys, `bigint` is still supported
+- `mod`, `invert` are no longer present in `utils`: use `@noble/curves/abstract/modular`
 
 Upgrading from @noble/secp256k1 1.7:
 
