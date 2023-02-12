@@ -14,18 +14,16 @@ Audited & minimal JS implementation of elliptic curve cryptography.
 
 Package consists of two parts:
 
-1. `abstract/` directory specifies zero-dependency EC algorithms
-2. root directory utilizes one dependency `@noble/hashes` and provides ready-to-use:
+1. [Abstract](#abstract-api), zero-dependency EC algorithms
+2. [Implementations](#implementations), utilizing one dependency `@noble/hashes`, providing ready-to-use:
    - NIST curves secp192r1/P192, secp224r1/P224, secp256r1/P256, secp384r1/P384, secp521r1/P521
    - SECG curve secp256k1
-   - ed25519/curve25519/x25519/ristretto, edwards448/curve448/x448 RFC7748 / RFC8032 / ZIP215 stuff
+   - ed25519/curve25519/x25519/ristretto255, edwards448/curve448/x448 RFC7748 / RFC8032 / ZIP215 stuff
    - pairing-friendly curves bls12-381, bn254
 
-Curves incorporate work from previous noble packages
-([secp256k1](https://github.com/paulmillr/noble-secp256k1),
-[ed25519](https://github.com/paulmillr/noble-ed25519)),
-which were developed from 2019 to 2022.
-Check out [Upgrading](#upgrading) section if you've used them before.
+Check out [Upgrading](#upgrading) if you've previously used single-feature noble packages
+([secp256k1](https://github.com/paulmillr/noble-secp256k1), [ed25519](https://github.com/paulmillr/noble-ed25519)).
+See [Examples](#examples) for real-world software that uses curves.
 
 ### This library belongs to _noble_ crypto
 
@@ -47,14 +45,30 @@ Use NPM for browser / node.js:
 
 > npm install @noble/curves
 
-For [Deno](https://deno.land), use it with npm specifier: `import { secp256k1 } from 'npm:@noble/curves@1.2.0/secp256k1';`.
-In browser, you could also include the single file from
+For [Deno](https://deno.land), use it with npm specifier. In browser, you could also include the single file from
 [GitHub's releases page](https://github.com/paulmillr/noble-curves/releases).
 
-The library does not have an entry point. It allows you to select specific primitives and drop everything else. If you only want to use secp256k1, just use the library with rollup or other bundlers. This is done to make your bundles tiny. All curves:
+The library is tree-shaking-friendly and does not expose root entry point as `import * from '@noble/curves'`.
+Instead, you need to import specific primitives. This is done to ensure small size of your apps.
+
+### Implementations
+
+Each curve can be used in the following way:
+
+```ts
+import { secp256k1 } from '@noble/curves/secp256k1'; // ECMAScript Modules (ESM) and Common.js
+// import { secp256k1 } from 'npm:@noble/curves@1.2.0/secp256k1'; // Deno
+const priv = secp256k1.utils.randomPrivateKey();
+const pub = secp256k1.getPublicKey(priv); // keys & other inputs can be Uint8Array-s or hex strings
+const msg = new Uint8Array(32).fill(1);
+const sig = secp256k1.sign(msg, priv);
+secp256k1.verify(sig, msg, pub) === true;
+```
+
+All curves:
 
 ```typescript
-import { secp256k1 } from '@noble/curves/secp256k1';
+import { secp256k1, schnorr } from '@noble/curves/secp256k1';
 import { ed25519, ed25519ph, ed25519ctx, x25519, RistrettoPoint } from '@noble/curves/ed25519';
 import { ed448, ed448ph, ed448ctx, x448 } from '@noble/curves/ed448';
 import { p256 } from '@noble/curves/p256';
@@ -67,64 +81,185 @@ import { bn254 } from '@noble/curves/bn';
 import { jubjub } from '@noble/curves/jubjub';
 ```
 
-Every curve can be used in the following way:
+Weierstrass curves feature recovering public keys from signatures and ECDH key agreement:
 
 ```ts
-import { secp256k1 } from '@noble/curves/secp256k1'; // Common.js and ECMAScript Modules (ESM)
-
-const key = secp256k1.utils.randomPrivateKey();
-const pub = secp256k1.getPublicKey(key);
-const msg = new Uint8Array(32).fill(1);
-const sig = secp256k1.sign(msg, key);
-// weierstrass curves should use extraEntropy: https://moderncrypto.org/mail-archive/curves/2017/000925.html
-const sigImprovedSecurity = secp256k1.sign(msg, key, { extraEntropy: true });
-secp256k1.verify(sig, msg, pub) === true;
-// secp, p*, pasta curves allow pub recovery
-sig.recoverPublicKey(msg) === pub;
+// extraEntropy https://moderncrypto.org/mail-archive/curves/2017/000925.html
+const sigImprovedSecurity = secp256k1.sign(msg, priv, { extraEntropy: true });
+sig.recoverPublicKey(msg) === pub; // public key recovery
 const someonesPub = secp256k1.getPublicKey(secp256k1.utils.randomPrivateKey());
-const shared = secp256k1.getSharedSecret(key, someonesPub);
+const shared = secp256k1.getSharedSecret(priv, someonesPub); // ECDH (elliptic curve diffie-hellman)
 ```
 
-See [additional examples](#additional-examples) for guides.
+secp256k1 has schnorr signature implementation which follows
+[BIP340](https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki):
 
-## API
+```ts
+import { schnorr } from '@noble/curves/secp256k1';
+const priv = schnorr.utils.randomPrivateKey();
+const pub = schnorr.getPublicKey(priv);
+const msg = new TextEncoder().encode('hello');
+const sig = schnorr.sign(msg, priv);
+const isValid = schnorr.verify(sig, msg, pub);
+console.log(isValid);
+```
 
-- [Overview](#overview)
+ed25519 module has ed25519ctx / ed25519ph variants,
+x25519 ECDH and [ristretto255](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-ristretto255-decaf448):
+
+```ts
+import { ed25519 } from '@noble/curves/ed25519';
+import { ed25519ctx, ed25519ph, x25519, RistrettoPoint } from '@noble/curves/ed25519';
+x25519.getSharedSecret()
+
+const pub = ed25519.curve25519.scalarMultBase(privateKey);
+const shared = ed25519.curve25519.scalarMult(privateKeyA, publicKeyB);
+```
+
+BLS12-381 pairing-friendly Barreto-Lynn-Scott elliptic curve construction allows to
+construct [zk-SNARKs](https://z.cash/technology/zksnarks/) at the 128-bit security
+and use aggregated, batch-verifiable
+[threshold signatures](https://medium.com/snigirev.stepan/bls-signatures-better-than-schnorr-5a7fe30ea716),
+using Boneh-Lynn-Shacham signature scheme.
+
+```ts
+import { bls12_381 as bls } from '@noble/curves/bls12-381';
+const privateKey = '67d53f170b908cabb9eb326c3c337762d59289a8fec79f7bc9254b584b73265c';
+const message = '64726e3da8';
+const publicKey = bls.getPublicKey(privateKey);
+const signature = bls.sign(message, privateKey);
+const isValid = bls.verify(signature, message, publicKey);
+console.log({ publicKey, signature, isValid });
+
+// Sign 1 msg with 3 keys
+const privateKeys = [
+  '18f020b98eb798752a50ed0563b079c125b0db5dd0b1060d1c1b47d4a193e1e4',
+  'ed69a8c50cf8c9836be3b67c7eeff416612d45ba39a5c099d48fa668bf558c9c',
+  '16ae669f3be7a2121e17d0c68c05a8f3d6bef21ec0f2315f1d7aec12484e4cf5'
+];
+const messages = ['d2', '0d98', '05caf3'];
+const publicKeys = privateKeys.map(bls.getPublicKey);
+const signatures2 = privateKeys.map(p => bls.sign(message, p))
+const aggPubKey2 = bls.aggregatePublicKeys(publicKeys);
+const aggSignature2 = bls.aggregateSignatures(signatures2);
+const isValid2 = bls.verify(aggSignature2, message, aggPubKey2);
+console.log({ signatures2, aggSignature2, isValid2 });
+
+// Sign 3 msgs with 3 keys
+const signatures3 = privateKeys.map((p, i) => bls.sign(messages[i], p));
+const aggSignature3 = bls.aggregateSignatures(signatures3);
+const isValid3 = bls.verifyBatch(aggSignature3, messages, publicKeys);
+console.log({ publicKeys, signatures3, aggSignature3, isValid3 });
+
+// Pairing API
+// bls.pairing(PointG1, PointG2)
+```
+
+## Abstract API
+
+Abstract API allows to define custom curves. All arithmetics is done with JS bigints over finite fields,
+which is defined from `modular` sub-module. For scalar multiplication, we use w-ary non-adjacent form (wNAF) method.
+
+Precomputes are enabled for weierstrass and edwards BASE points of a curve. You could precompute
+any other point (e.g. for ECDH) using `utils.precompute()` method.
+
+There are following zero-dependency algorithms:
+
+- [abstract/weierstrass: Short Weierstrass curve](#abstractweierstrass-short-weierstrass-curve)
 - [abstract/edwards: Twisted Edwards curve](#abstractedwards-twisted-edwards-curve)
 - [abstract/montgomery: Montgomery curve](#abstractmontgomery-montgomery-curve)
-- [abstract/weierstrass: Short Weierstrass curve](#abstractweierstrass-short-weierstrass-curve)
 - [abstract/hash-to-curve: Hashing strings to curve points](#abstracthash-to-curve-hashing-strings-to-curve-points)
 - [abstract/poseidon: Poseidon hash](#abstractposeidon-poseidon-hash)
 - [abstract/modular](#abstractmodular)
 - [abstract/utils](#abstractutils)
 
-### Overview
-
-There are following zero-dependency abstract algorithms:
+### abstract/weierstrass: Short Weierstrass curve
 
 ```ts
-import { bls } from '@noble/curves/abstract/bls';
-import { twistedEdwards } from '@noble/curves/abstract/edwards';
-import { montgomery } from '@noble/curves/abstract/montgomery';
 import { weierstrass } from '@noble/curves/abstract/weierstrass';
-import * as curve from '@noble/curves/abstract/curve';
-import * as mod from '@noble/curves/abstract/modular';
-import * as utils from '@noble/curves/abstract/utils';
 ```
 
-They allow to define a new curve in a few lines of code:
+Short Weierstrass curve's formula is `y² = x³ + ax + b`. `weierstrass` expects arguments `a`, `b`, field `Fp`, curve order `n`, cofactor `h`
+and coordinates `Gx`, `Gy` of generator point.
+
+**`k` generation** is done deterministically, following [RFC6979](https://www.rfc-editor.org/rfc/rfc6979).
+For this you will need `hmac` & `hash`, which in our implementations is provided by noble-hashes.
+If you're using different hashing library, make sure to wrap it in the following interface:
+
+  ```ts
+  export type CHash = {
+    (message: Uint8Array): Uint8Array;
+    blockLen: number;
+    outputLen: number;
+    create(): any;
+  };
+  ```
+
+**Weierstrass points:**
+
+1. Exported as `ProjectivePoint`
+2. Represented in projective (homogeneous) coordinates: (x, y, z) ∋ (x=x/z, y=y/z)
+3. Use complete exception-free formulas for addition and doubling
+4. Can be decoded/encoded from/to Uint8Array / hex strings using `ProjectivePoint.fromHex` and `ProjectivePoint#toRawBytes()`
+5. Have `assertValidity()` which checks for being on-curve
+6. Have `toAffine()` and `x` / `y` getters which convert to 2d xy affine coordinates
 
 ```ts
-import { Field } from '@noble/curves/abstract/modular'; // finite field, modulo arithmetics done over it
-import { weierstrass } from '@noble/curves/abstract/weierstrass'; // short weierstrass curve
+// T is usually bigint, but can be something else like complex numbers in BLS curves
+export interface ProjPointType<T> extends Group<ProjPointType<T>> {
+  readonly px: T;
+  readonly py: T;
+  readonly pz: T;
+  multiply(scalar: bigint): ProjPointType<T>;
+  multiplyUnsafe(scalar: bigint): ProjPointType<T>;
+  multiplyAndAddUnsafe(Q: ProjPointType<T>, a: bigint, b: bigint): ProjPointType<T> | undefined;
+  toAffine(iz?: T): AffinePoint<T>;
+  isTorsionFree(): boolean;
+  clearCofactor(): ProjPointType<T>;
+  assertValidity(): void;
+  hasEvenY(): boolean;
+  toRawBytes(isCompressed?: boolean): Uint8Array;
+  toHex(isCompressed?: boolean): string;
+}
+// Static methods for 3d XYZ points
+export interface ProjConstructor<T> extends GroupConstructor<ProjPointType<T>> {
+  new (x: T, y: T, z: T): ProjPointType<T>;
+  fromAffine(p: AffinePoint<T>): ProjPointType<T>;
+  fromHex(hex: Hex): ProjPointType<T>;
+  fromPrivateKey(privateKey: PrivKey): ProjPointType<T>;
+}
+```
+
+**ECDSA signatures** are represented by `Signature` instances and can be described by the interface:
+
+```ts
+export interface SignatureType {
+  readonly r: bigint;
+  readonly s: bigint;
+  readonly recovery?: number;
+  assertValidity(): void;
+  addRecoveryBit(recovery: number): SignatureType;
+  hasHighS(): boolean;
+  normalizeS(): SignatureType;
+  recoverPublicKey(msgHash: Hex): ProjPointType<bigint>;
+  toCompactRawBytes(): Uint8Array;
+  toCompactHex(): string;
+  // DER-encoded
+  toDERRawBytes(isCompressed?: boolean): Uint8Array;
+  toDERHex(isCompressed?: boolean): string;
+}
+```
+
+Example implementing [secq256k1](https://personaelabs.org/posts/spartan-ecdsa) (NOT secp256k1)
+[cycle](https://zcash.github.io/halo2/background/curves.html#cycles-of-curves) of secp256k1 with Fp/N flipped.
+
+```typescript
+import { weierstrass } from '@noble/curves/abstract/weierstrass';
+import { Field } from '@noble/curves/abstract/modular'; // finite field, mod arithmetics done over it
 import { sha256 } from '@noble/hashes/sha256'; // 3rd-party sha256() of type utils.CHash, with blockLen/outputLen
 import { hmac } from '@noble/hashes/hmac'; // 3rd-party hmac() that will accept sha256()
 import { concatBytes, randomBytes } from '@noble/hashes/utils'; // 3rd-party utilities
-
-// secq (NOT secp) 256k1: cycle of secp256k1 with Fp/N flipped.
-// https://zcash.github.io/halo2/background/curves.html#cycles-of-curves
-// https://personaelabs.org/posts/spartan-ecdsa
-const secq256k1 = weierstrass({
+const secq256k1 = weierstrass({ // secq256k1: cycle of secp256k1 with Fp/N flipped.
   a: 0n,
   b: 7n,
   Fp: Field(2n ** 256n - 432420386565659656852420866394968145599n),
@@ -135,40 +270,56 @@ const secq256k1 = weierstrass({
   hmac: (key: Uint8Array, ...msgs: Uint8Array[]) => hmac(sha256, key, concatBytes(...msgs)),
   randomBytes,
 });
+
+// All curves expose same generic interface.
+const priv = secq256k1.utils.randomPrivateKey();
+secq256k1.getPublicKey(priv);             // Convert private key to public.
+const sig = secq256k1.sign(msg, priv);    // Sign msg with private key.
+secq256k1.verify(sig, msg, priv);         // Verify if sig is correct.
+
+const point = secq256k1.Point.BASE;       // Elliptic curve Point class and BASE point static var.
+point.add(point).equals(point.double());  // add(), equals(), double() methods
+point.subtract(point).equals(secq256k1.Point.ZERO); // subtract() method, ZERO static var
+point.negate();                           // Flips point over x/y coordinate.
+point.multiply(31415n);                   // Multiplication of Point by scalar.
+
+point.assertValidity();
+point.toAffine(); point.x; point.y;       // Converts to 2d affine xy coordinates
+
+secq256k1.CURVE.n;
+secq256k1.CURVE.Fp.mod();
+secq256k1.CURVE.hash();
 ```
 
-- To initialize new curve, you must specify its variables, order (number of points on curve), field prime (over which the modular division would be done)
-- All curves expose same generic interface:
-  - `getPublicKey()`, `sign()`, `verify()` functions
-  - `Point` conforming to `Group` interface with add/multiply/double/negate/add/equals methods
-  - `CURVE` object with curve variables like `Gx`, `Gy`, `Fp` (field), `n` (order)
-  - `utils` object with `randomPrivateKey()`, `mod()`, `invert()` methods (`mod CURVE.P`)
-- All arithmetics is done with JS bigints over finite fields, which is defined from `modular` sub-module
-- Many features require hashing, which is not provided. `@noble/hashes` can be used for this purpose.
-  Any other library must conform to the CHash interface:
-  ```ts
-  export type CHash = {
-    (message: Uint8Array): Uint8Array;
-    blockLen: number;
-    outputLen: number;
-    create(): any;
+`weierstrass()` returns `CurveFn`:
+
+```ts
+export type CurveFn = {
+  CURVE: ReturnType<typeof validateOpts>;
+  getPublicKey: (privateKey: PrivKey, isCompressed?: boolean) => Uint8Array;
+  getSharedSecret: (privateA: PrivKey, publicB: Hex, isCompressed?: boolean) => Uint8Array;
+  sign: (msgHash: Hex, privKey: PrivKey, opts?: SignOpts) => SignatureType;
+  verify: (
+    signature: Hex | SignatureType,
+    msgHash: Hex,
+    publicKey: Hex,
+    opts?: { lowS?: boolean; prehash?: boolean }
+  ) => boolean;
+  ProjectivePoint: ProjectivePointConstructor;
+  Signature: SignatureConstructor;
+  utils: {
+    isValidPrivateKey(privateKey: PrivKey): boolean;
+    randomPrivateKey: () => Uint8Array;
   };
-  ```
-- w-ary non-adjacent form (wNAF) method with constant-time adjustments is used for point multiplication.
-  It is possible to enable precomputes for edwards & weierstrass curves.
-  Precomputes are calculated once (takes ~20-40ms), after that most `G` base point multiplications:
-  for example, `getPublicKey()`, `sign()` and similar methods - would be much faster.
-  Use `curve.utils.precompute()` to adjust precomputation window size
-- You could use optional special params to tune performance:
-  - `Field({sqrt})` square root calculation, used for point decompression
-  - `endo` endomorphism options for Koblitz curves
+};
+```
 
 ### abstract/edwards: Twisted Edwards curve
 
-Twisted Edwards curve's formula is: ax² + y² = 1 + dx²y².
+Twisted Edwards curve's formula is `ax² + y² = 1 + dx²y²`. You must specify `a`, `d`, field `Fp`, order `n`, cofactor `h`
+and coordinates `Gx`, `Gy` of generator point.
 
-- You must specify curve params `a`, `d`, field `Fp`, order `n`, cofactor `h` and coordinates `Gx`, `Gy` of generator point
-- For EdDSA signatures, params `hash` is also required. `adjustScalarBytes` which instructs how to change private scalars could be specified
+For EdDSA signatures, `hash` param required. `adjustScalarBytes` which instructs how to change private scalars could be specified.
 
 ```ts
 import { twistedEdwards } from '@noble/curves/abstract/edwards';
@@ -186,18 +337,13 @@ const ed25519 = twistedEdwards({
   hash: sha512,
   randomBytes,
   adjustScalarBytes(bytes) {
-    // optional in general, mandatory in ed25519
+    // optional; but mandatory in ed25519
     bytes[0] &= 248;
     bytes[31] &= 127;
     bytes[31] |= 64;
     return bytes;
   },
 } as const);
-const key = ed25519.utils.randomPrivateKey();
-const pub = ed25519.getPublicKey(key);
-const msg = new TextEncoder().encode('hello world'); // strings not accepted, must be Uint8Array
-const sig = ed25519.sign(msg, key);
-ed25519.verify(sig, msg, pub) === true;
 ```
 
 `twistedEdwards()` returns `CurveFn` of following type:
@@ -208,7 +354,6 @@ export type CurveFn = {
   getPublicKey: (privateKey: PrivKey, isCompressed?: boolean) => Uint8Array;
   sign: (message: Hex, privateKey: Hex) => Uint8Array;
   verify: (sig: SigType, message: Hex, publicKey: PubKey) => boolean;
-  Point: PointConstructor;
   ExtendedPoint: ExtendedPointConstructor;
   Signature: SignatureConstructor;
   utils: {
@@ -255,144 +400,62 @@ const x25519 = montgomery({
 });
 ```
 
-### abstract/weierstrass: Short Weierstrass curve
-
-Short Weierstrass curve's formula is: y² = x³ + ax + b. Uses deterministic ECDSA from RFC6979. You can also specify `extraEntropy` in `sign()`.
-
-- You must specify curve params: `a`, `b`, field `Fp`, order `n`, cofactor `h` and coordinates `Gx`, `Gy` of generator point
-- For ECDSA, you must specify `hash`, `hmac`. It is also possible to recover keys from signatures
-- For ECDH, use `getSharedSecret(privKeyA, pubKeyB)`
-- Optional params are `lowS` (default value) and `endo` (endomorphism)
-
-```typescript
-import { Field } from '@noble/curves/abstract/modular';
-import { weierstrass } from '@noble/curves/abstract/weierstrass'; // Short Weierstrass curve
-import { sha256 } from '@noble/hashes/sha256';
-import { hmac } from '@noble/hashes/hmac';
-import { concatBytes, randomBytes } from '@noble/hashes/utils';
-
-const secp256k1 = weierstrass({
-  a: 0n,
-  b: 7n,
-  Fp: Field(2n ** 256n - 2n ** 32n - 2n ** 9n - 2n ** 8n - 2n ** 7n - 2n ** 6n - 2n ** 4n - 1n),
-  n: 2n ** 256n - 432420386565659656852420866394968145599n,
-  Gx: 55066263022277343669578718895168534326250603453777594175500187360389116729240n,
-  Gy: 32670510020758816978083085130507043184471273380659243275938904335757337482424n,
-  hash: sha256,
-  hmac: (k: Uint8Array, ...msgs: Uint8Array[]) => hmac(sha256, key, concatBytes(...msgs)),
-  randomBytes,
-  h: 1n, // cofactor
-});
-// Optional weierstrass params:
-// lowS: true, // Allow only low-S signatures by default in sign() and verify()
-// endo: {
-//   // Endomorphism options for Koblitz curve
-//   // Beta param
-//   beta: 0x7ae96a2b657c07106e64479eac3434e99cf0497512f58995c1396c28719501een,
-//   // Split scalar k into k1, k2
-//   splitScalar: (k: bigint) => {
-//     // return { k1neg: true, k1: 512n, k2neg: false, k2: 448n };
-//   },
-// },
-
-// Usage
-const key = secp256k1.utils.randomPrivateKey();
-const pub = secp256k1.getPublicKey(key);
-const msg = randomBytes(32);
-const sig = secp256k1.sign(msg, key);
-secp256k1.verify(sig, msg, pub); // true
-sig.recoverPublicKey(msg); // == pub
-const someonesPubkey = secp256k1.getPublicKey(secp256k1.utils.randomPrivateKey());
-const shared = secp256k1.getSharedSecret(key, someonesPubkey);
-```
-
-`weierstrass()` returns `CurveFn`:
-
-```ts
-export type CurveFn = {
-  CURVE: ReturnType<typeof validateOpts>;
-  getPublicKey: (privateKey: PrivKey, isCompressed?: boolean) => Uint8Array;
-  getSharedSecret: (privateA: PrivKey, publicB: Hex, isCompressed?: boolean) => Uint8Array;
-  sign: (msgHash: Hex, privKey: PrivKey, opts?: SignOpts) => SignatureType;
-  verify: (
-    signature: Hex | SignatureType,
-    msgHash: Hex,
-    publicKey: Hex,
-    opts?: { lowS?: boolean }
-  ) => boolean;
-  Point: PointConstructor;
-  ProjectivePoint: ProjectivePointConstructor;
-  Signature: SignatureConstructor;
-  utils: {
-    isValidPrivateKey(privateKey: PrivKey): boolean;
-    hashToPrivateKey: (hash: Hex) => Uint8Array;
-    randomPrivateKey: () => Uint8Array;
-  };
-};
-```
-
 ### abstract/hash-to-curve: Hashing strings to curve points
 
 The module allows to hash arbitrary strings to elliptic curve points.
 
-- `expand_message_xmd` [(spec)](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-5.4.1) produces a uniformly random byte string using a cryptographic hash function H that outputs b bits..
+`expand_message_xmd` [(spec)](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-5.4.1) produces a uniformly random byte string using a cryptographic hash function H that outputs b bits..
 
-  ```ts
-  function expand_message_xmd(
-    msg: Uint8Array,
-    DST: Uint8Array,
-    lenInBytes: number,
-    H: CHash
-  ): Uint8Array;
-  function expand_message_xof(
-    msg: Uint8Array,
-    DST: Uint8Array,
-    lenInBytes: number,
-    k: number,
-    H: CHash
-  ): Uint8Array;
-  ```
+```ts
+function expand_message_xmd(
+  msg: Uint8Array,
+  DST: Uint8Array,
+  lenInBytes: number,
+  H: CHash
+): Uint8Array;
+function expand_message_xof(
+  msg: Uint8Array,
+  DST: Uint8Array,
+  lenInBytes: number,
+  k: number,
+  H: CHash
+): Uint8Array;
+```
 
-- `hash_to_field(msg, count, options)` [(spec)](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-5.3)
+`hash_to_field(msg, count, options)` [(spec)](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-5.3)
   hashes arbitrary-length byte strings to a list of one or more elements of a finite field F.
   _ `msg` a byte string containing the message to hash
   _ `count` the number of elements of F to output
   _ `options` `{DST: string, p: bigint, m: number, k: number, expand: 'xmd' | 'xof', hash: H}`
   _ Returns `[u_0, ..., u_(count - 1)]`, a list of field elements.
 
-      ```ts
-      function hash_to_field(msg: Uint8Array, count: number, options: htfOpts): bigint[][];
-      type htfOpts = {
-        // DST: a domain separation tag
-        // defined in section 2.2.5
-        DST: string;
-        // p: the characteristic of F
-        //    where F is a finite field of characteristic p and order q = p^m
-        p: bigint;
-        // m: the extension degree of F, m >= 1
-        //     where F is a finite field of characteristic p and order q = p^m
-        m: number;
-        // k: the target security level for the suite in bits
-        // defined in section 5.1
-        k: number;
-        // option to use a message that has already been processed by
-        // expand_message_xmd
-        expand?: 'xmd' | 'xof';
-        // Hash functions for: expand_message_xmd is appropriate for use with a
-        // wide range of hash functions, including SHA-2, SHA-3, BLAKE2, and others.
-        // BBS+ uses blake2: https://github.com/hyperledger/aries-framework-go/issues/2247
-        // TODO: verify that hash is shake if expand==='xof' via types
-        hash: CHash;
-      };
-      ```
+```ts
+function hash_to_field(msg: Uint8Array, count: number, options: htfOpts): bigint[][];
+type htfOpts = {
+  DST: string; // a domain separation tag defined in section 2.2.5
+  // p: the characteristic of F
+  //    where F is a finite field of characteristic p and order q = p^m
+  p: bigint;
+  // m: the extension degree of F, m >= 1
+  //     where F is a finite field of characteristic p and order q = p^m
+  m: number;
+  k: number; // the target security level for the suite in bits defined in section 5.1
+  expand?: 'xmd' | 'xof'; // option to use a message that has already been processed by expand_message_xmd
+  // Hash functions for: expand_message_xmd is appropriate for use with a
+  // wide range of hash functions, including SHA-2, SHA-3, BLAKE2, and others.
+  // BBS+ uses blake2: https://github.com/hyperledger/aries-framework-go/issues/2247
+  // TODO: verify that hash is shake if expand==='xof' via types
+  hash: CHash;
+};
+```
 
 ### abstract/poseidon: Poseidon hash
 
 Implements [Poseidon](https://www.poseidon-hash.info) ZK-friendly hash.
 
-There are many poseidon instances with different constants. We don't provide them,
-but we provide ability to specify them manually. For actual usage, check out
-stark curve source code.
+There are many poseidon variants with different constants.
+We don't provide them: you should construct them manually.
+The only variant provided resides in `stark` module: inspect it for proper usage.
 
 ```ts
 import { poseidon } from '@noble/curves/abstract/poseidon';
@@ -412,52 +475,9 @@ const instance = poseidon(opts: PoseidonOpts);
 
 ### abstract/bls
 
-The pairing-friendly Barreto-Lynn-Scott elliptic curve construction allows to:
+The module abstracts BLS (Barreto-Lynn-Scott) primitives. In theory you should be able to write BLS12-377, BLS24,
+and others with it.
 
-- Construct [zk-SNARKs](https://z.cash/technology/zksnarks/) at the 128-bit security
-- Use [threshold signatures](https://medium.com/snigirev.stepan/bls-signatures-better-than-schnorr-5a7fe30ea716),
-  which allows a user to sign lots of messages with one signature and verify them swiftly in a batch,
-  using Boneh-Lynn-Shacham signature scheme.
-
-Compatible with Algorand, Chia, Dfinity, Ethereum, FIL, Zcash. Matches specs [pairing-curves-10](https://tools.ietf.org/html/draft-irtf-cfrg-pairing-friendly-curves-10), [bls-sigs-04](https://tools.ietf.org/html/draft-irtf-cfrg-bls-signature-04), [hash-to-curve-12](https://tools.ietf.org/html/draft-irtf-cfrg-hash-to-curve-12). To learn more about internals, navigate to
-[utilities](#utilities) section.
-
-Resources that help to understand bls12-381:
-
-- [BLS12-381 for the rest of us](https://hackmd.io/@benjaminion/bls12-381)
-- [Key concepts of pairings](https://medium.com/@alonmuroch_65570/bls-signatures-part-2-key-concepts-of-pairings-27a8a9533d0c)
-- Pairing over bls12-381: [part 1](https://research.nccgroup.com/2020/07/06/pairing-over-bls12-381-part-1-fields/),
-  [part 2](https://research.nccgroup.com/2020/07/13/pairing-over-bls12-381-part-2-curves/),
-  [part 3](https://research.nccgroup.com/2020/08/13/pairing-over-bls12-381-part-3-pairing/)
-- [Estimating the bit security of pairing-friendly curves](https://research.nccgroup.com/2022/02/03/estimating-the-bit-security-of-pairing-friendly-curves/)
-- Check out [the online demo](https://paulmillr.com/ecc) and [threshold sigs demo](https://genthresh.com)
-- See [BBS signatures implementation](https://github.com/Wind4Greg/BBS-Draft-Checks) based on the library, following [draft-irtf-cfrg-bbs-signatures-latest](https://identity.foundation/bbs-signature/draft-irtf-cfrg-bbs-signatures.html)
-
-The library uses G1 for public keys and G2 for signatures. Adding support for G1 signatures is planned.
-
-- BLS Relies on Bilinear Pairing (expensive)
-- Private Keys: 32 bytes
-- Public Keys: 48 bytes: 381 bit affine x coordinate, encoded into 48 big-endian bytes.
-- Signatures: 96 bytes: two 381 bit integers (affine x coordinate), encoded into two 48 big-endian byte arrays.
-    - The signature is a point on the G2 subgroup, which is defined over a finite field
-    with elements twice as big as the G1 curve (G2 is over Fp2 rather than Fp. Fp2 is analogous to the complex numbers).
-- The 12 stands for the Embedding degree.
-
-Formulas:
-
-- `P = pk x G` - public keys
-- `S = pk x H(m)` - signing
-- `e(P, H(m)) == e(G, S)` - verification using pairings
-- `e(G, S) = e(G, SUM(n)(Si)) = MUL(n)(e(G, Si))` - signature aggregation
-
-The BLS parameters for the library are:
-
-- `PK_IN` `G1`
-- `HASH_OR_ENCODE` `true`
-- `DST` `BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_NUL_` - use `bls.utils.getDSTLabel()` & `bls.utils.setDSTLabel("...")` to read/change the Domain Separation Tag label
-- `RAND_BITS` `64`
-
-Filecoin uses little endian byte arrays for private keys - so ensure to reverse byte order if you'll use it with FIL.
 ### abstract/modular
 
 Modular arithmetics utilities.
@@ -493,63 +513,6 @@ utils.concatBytes(Uint8Array.from([0xde, 0xad]), Uint8Array.from([0xbe, 0xef]));
 utils.nLength(255n);
 utils.hashToPrivateScalar(sha512_of_something, secp256r1.n);
 utils.equalBytes(Uint8Array.from([0xde]), Uint8Array.from([0xde]));
-```
-
-### Additional examples
-
-secp256k1 schnorr:
-
-```ts
-import { schnorr } from '@noble/curves/secp256k1';
-const priv = schnorr.utils.randomPrivateKey();
-const pub = schnorr.getPublicKey(priv);
-const msg = new TextEncoder().encode('hello');
-const sig = schnorr.sign(msg, priv);
-const isValid = schnorr.verify(sig, msg, pub);
-console.log(isValid);
-```
-
-ed25519, x25519, ristretto255:
-
-```ts
-import { ed25519, ed25519ctx, ed25519ph, x25519, RistrettoPoint } from '@noble/curves/ed25519';
-```
-
-bls12_381
-
-
-```ts
-import { bls12_381 as bls } from '@noble/curves/bls12-381';
-// keys, messages & other inputs can be Uint8Arrays or hex strings
-const privateKey = '67d53f170b908cabb9eb326c3c337762d59289a8fec79f7bc9254b584b73265c';
-const message = '64726e3da8';
-const publicKey = bls.getPublicKey(privateKey);
-const signature = bls.sign(message, privateKey);
-const isValid = bls.verify(signature, message, publicKey);
-console.log({ publicKey, signature, isValid });
-
-// Sign 1 msg with 3 keys
-const privateKeys = [
-  '18f020b98eb798752a50ed0563b079c125b0db5dd0b1060d1c1b47d4a193e1e4',
-  'ed69a8c50cf8c9836be3b67c7eeff416612d45ba39a5c099d48fa668bf558c9c',
-  '16ae669f3be7a2121e17d0c68c05a8f3d6bef21ec0f2315f1d7aec12484e4cf5'
-];
-const messages = ['d2', '0d98', '05caf3'];
-const publicKeys = privateKeys.map(bls.getPublicKey);
-const signatures2 = privateKeys.map(p => bls.sign(message, p))
-const aggPubKey2 = bls.aggregatePublicKeys(publicKeys);
-const aggSignature2 = bls.aggregateSignatures(signatures2);
-const isValid2 = bls.verify(aggSignature2, message, aggPubKey2);
-console.log({ signatures2, aggSignature2, isValid2 });
-
-// Sign 3 msgs with 3 keys
-const signatures3 = privateKeys.map((p, i) => bls.sign(messages[i], p));
-const aggSignature3 = bls.aggregateSignatures(signatures3);
-const isValid3 = bls.verifyBatch(aggSignature3, messages, publicKeys);
-console.log({ publicKeys, signatures3, aggSignature3, isValid3 });
-
-// Pairing API
-// bls.pairing(PointG1, PointG2)
 ```
 
 ## Security
@@ -622,6 +585,18 @@ verify
 ├─old x 300 ops/sec @ 3ms/op
 └─noble x 474 ops/sec @ 2ms/op
 ```
+
+## Examples
+
+Elliptic curve calculator: [paulmillr.com/ecc](https://paulmillr.com/ecc).
+
+- secp256k1
+    - [btc-signer](https://github.com/paulmillr/micro-btc-signer), [eth-signer](https://github.com/paulmillr/micro-eth-signer)
+- ed25519
+    - [sol-signer](https://github.com/paulmillr/micro-sol-signer) for Solana
+- BLS12-381
+    - Threshold sigs demo [genthresh.com](https://genthresh.com)
+    - BBS signatures [github.com/Wind4Greg/BBS-Draft-Checks](https://github.com/Wind4Greg/BBS-Draft-Checks) following [draft-irtf-cfrg-bbs-signatures-latest](https://identity.foundation/bbs-signature/draft-irtf-cfrg-bbs-signatures.html)
 
 ## Upgrading
 
