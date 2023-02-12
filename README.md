@@ -1,12 +1,13 @@
 # noble-curves
 
-Minimal, auditable JS implementation of elliptic curve cryptography.
+Audited & minimal JS implementation of elliptic curve cryptography.
 
+- **noble** family, zero dependencies
 - Short Weierstrass, Edwards, Montgomery curves
 - ECDSA, EdDSA, Schnorr, BLS signature schemes, ECDH key agreement
-- [hash to curve](https://datatracker.ietf.org/doc/draft-irtf-cfrg-hash-to-curve/)
-  for encoding or hashing an arbitrary string to a point on an elliptic curve
-- [Poseidon](https://www.poseidon-hash.info) ZK-friendly hash
+- #️⃣ [hash to curve](https://datatracker.ietf.org/doc/draft-irtf-cfrg-hash-to-curve/)
+  for encoding or hashing an arbitrary string to an elliptic curve point
+- 🧜‍♂️ [Poseidon](https://www.poseidon-hash.info) ZK-friendly hash
 - 🏎 [Ultra-fast](#speed), hand-optimized for caveats of JS engines
 - 🔍 Unique tests ensure correctness. Wycheproof vectors included
 - 🔻 Tree-shaking-friendly: there is no entry point, which ensures small size of your app
@@ -17,20 +18,20 @@ Package consists of two parts:
 2. root directory utilizes one dependency `@noble/hashes` and provides ready-to-use:
    - NIST curves secp192r1/P192, secp224r1/P224, secp256r1/P256, secp384r1/P384, secp521r1/P521
    - SECG curve secp256k1
-   - pairing-friendly curves bls12-381, bn254
    - ed25519/curve25519/x25519/ristretto, edwards448/curve448/x448 RFC7748 / RFC8032 / ZIP215 stuff
+   - pairing-friendly curves bls12-381, bn254
 
 Curves incorporate work from previous noble packages
 ([secp256k1](https://github.com/paulmillr/noble-secp256k1),
 [ed25519](https://github.com/paulmillr/noble-ed25519)),
-which had security audits and were developed from 2019 to 2022.
+which were developed from 2019 to 2022.
 Check out [Upgrading](#upgrading) section if you've used them before.
 
 ### This library belongs to _noble_ crypto
 
 > **noble-crypto** — high-security, easily auditable set of contained cryptographic libraries and tools.
 
-- Protection against supply chain attacks
+- No dependencies, protection against supply chain attacks
 - Easily auditable TypeScript/JS code
 - Supported in all major browsers and stable node.js versions
 - All releases are signed with PGP keys
@@ -42,14 +43,17 @@ Check out [Upgrading](#upgrading) section if you've used them before.
 
 ## Usage
 
-Use NPM in node.js / browser, or include single file from
-[GitHub's releases page](https://github.com/paulmillr/noble-curves/releases):
+Use NPM for browser / node.js:
 
 > npm install @noble/curves
 
+For [Deno](https://deno.land), use it with npm specifier: `import { secp256k1 } from 'npm:@noble/curves@1.2.0/secp256k1';`.
+In browser, you could also include the single file from
+[GitHub's releases page](https://github.com/paulmillr/noble-curves/releases).
+
 The library does not have an entry point. It allows you to select specific primitives and drop everything else. If you only want to use secp256k1, just use the library with rollup or other bundlers. This is done to make your bundles tiny. All curves:
 
-```ts
+```typescript
 import { secp256k1 } from '@noble/curves/secp256k1';
 import { ed25519, ed25519ph, ed25519ctx, x25519, RistrettoPoint } from '@noble/curves/ed25519';
 import { ed448, ed448ph, ed448ctx, x448 } from '@noble/curves/ed448';
@@ -81,7 +85,7 @@ const someonesPub = secp256k1.getPublicKey(secp256k1.utils.randomPrivateKey());
 const shared = secp256k1.getSharedSecret(key, someonesPub);
 ```
 
-To define a custom curve, check out docs below.
+See [additional examples](#additional-examples) for guides.
 
 ## API
 
@@ -103,6 +107,7 @@ import { bls } from '@noble/curves/abstract/bls';
 import { twistedEdwards } from '@noble/curves/abstract/edwards';
 import { montgomery } from '@noble/curves/abstract/montgomery';
 import { weierstrass } from '@noble/curves/abstract/weierstrass';
+import * as curve from '@noble/curves/abstract/curve';
 import * as mod from '@noble/curves/abstract/modular';
 import * as utils from '@noble/curves/abstract/utils';
 ```
@@ -110,11 +115,11 @@ import * as utils from '@noble/curves/abstract/utils';
 They allow to define a new curve in a few lines of code:
 
 ```ts
-import { Field } from '@noble/curves/abstract/modular';
-import { weierstrass } from '@noble/curves/abstract/weierstrass';
-import { hmac } from '@noble/hashes/hmac';
-import { sha256 } from '@noble/hashes/sha256';
-import { concatBytes, randomBytes } from '@noble/hashes/utils';
+import { Field } from '@noble/curves/abstract/modular'; // finite field, modulo arithmetics done over it
+import { weierstrass } from '@noble/curves/abstract/weierstrass'; // short weierstrass curve
+import { sha256 } from '@noble/hashes/sha256'; // 3rd-party sha256() of type utils.CHash, with blockLen/outputLen
+import { hmac } from '@noble/hashes/hmac'; // 3rd-party hmac() that will accept sha256()
+import { concatBytes, randomBytes } from '@noble/hashes/utils'; // 3rd-party utilities
 
 // secq (NOT secp) 256k1: cycle of secp256k1 with Fp/N flipped.
 // https://zcash.github.io/halo2/background/curves.html#cycles-of-curves
@@ -155,7 +160,7 @@ const secq256k1 = weierstrass({
   for example, `getPublicKey()`, `sign()` and similar methods - would be much faster.
   Use `curve.utils.precompute()` to adjust precomputation window size
 - You could use optional special params to tune performance:
-  - `Fp({sqrt})` square root calculation, used for point decompression
+  - `Field({sqrt})` square root calculation, used for point decompression
   - `endo` endomorphism options for Koblitz curves
 
 ### abstract/edwards: Twisted Edwards curve
@@ -165,7 +170,7 @@ Twisted Edwards curve's formula is: ax² + y² = 1 + dx²y².
 - You must specify curve params `a`, `d`, field `Fp`, order `n`, cofactor `h` and coordinates `Gx`, `Gy` of generator point
 - For EdDSA signatures, params `hash` is also required. `adjustScalarBytes` which instructs how to change private scalars could be specified
 
-```typescript
+```ts
 import { twistedEdwards } from '@noble/curves/abstract/edwards';
 import { div } from '@noble/curves/abstract/modular';
 import { sha512 } from '@noble/hashes/sha512';
@@ -260,7 +265,7 @@ Short Weierstrass curve's formula is: y² = x³ + ax + b. Uses deterministic ECD
 - Optional params are `lowS` (default value) and `endo` (endomorphism)
 
 ```typescript
-import { Fp } from '@noble/curves/abstract/modular';
+import { Field } from '@noble/curves/abstract/modular';
 import { weierstrass } from '@noble/curves/abstract/weierstrass'; // Short Weierstrass curve
 import { sha256 } from '@noble/hashes/sha256';
 import { hmac } from '@noble/hashes/hmac';
@@ -269,27 +274,26 @@ import { concatBytes, randomBytes } from '@noble/hashes/utils';
 const secp256k1 = weierstrass({
   a: 0n,
   b: 7n,
-  Fp: Fp(2n ** 256n - 2n ** 32n - 2n ** 9n - 2n ** 8n - 2n ** 7n - 2n ** 6n - 2n ** 4n - 1n),
+  Fp: Field(2n ** 256n - 2n ** 32n - 2n ** 9n - 2n ** 8n - 2n ** 7n - 2n ** 6n - 2n ** 4n - 1n),
   n: 2n ** 256n - 432420386565659656852420866394968145599n,
   Gx: 55066263022277343669578718895168534326250603453777594175500187360389116729240n,
   Gy: 32670510020758816978083085130507043184471273380659243275938904335757337482424n,
   hash: sha256,
   hmac: (k: Uint8Array, ...msgs: Uint8Array[]) => hmac(sha256, key, concatBytes(...msgs)),
   randomBytes,
-
-  // Optional params
-  h: 1n, // Cofactor
-  lowS: true, // Allow only low-S signatures by default in sign() and verify()
-  endo: {
-    // Endomorphism options for Koblitz curve
-    // Beta param
-    beta: 0x7ae96a2b657c07106e64479eac3434e99cf0497512f58995c1396c28719501een,
-    // Split scalar k into k1, k2
-    splitScalar: (k: bigint) => {
-      // return { k1neg: true, k1: 512n, k2neg: false, k2: 448n };
-    },
-  },
+  h: 1n, // cofactor
 });
+// Optional weierstrass params:
+// lowS: true, // Allow only low-S signatures by default in sign() and verify()
+// endo: {
+//   // Endomorphism options for Koblitz curve
+//   // Beta param
+//   beta: 0x7ae96a2b657c07106e64479eac3434e99cf0497512f58995c1396c28719501een,
+//   // Split scalar k into k1, k2
+//   splitScalar: (k: bigint) => {
+//     // return { k1neg: true, k1: 512n, k2neg: false, k2: 448n };
+//   },
+// },
 
 // Usage
 const key = secp256k1.utils.randomPrivateKey();
@@ -406,13 +410,61 @@ type PoseidonOpts = {
 const instance = poseidon(opts: PoseidonOpts);
 ```
 
+### abstract/bls
+
+The pairing-friendly Barreto-Lynn-Scott elliptic curve construction allows to:
+
+- Construct [zk-SNARKs](https://z.cash/technology/zksnarks/) at the 128-bit security
+- Use [threshold signatures](https://medium.com/snigirev.stepan/bls-signatures-better-than-schnorr-5a7fe30ea716),
+  which allows a user to sign lots of messages with one signature and verify them swiftly in a batch,
+  using Boneh-Lynn-Shacham signature scheme.
+
+Compatible with Algorand, Chia, Dfinity, Ethereum, FIL, Zcash. Matches specs [pairing-curves-10](https://tools.ietf.org/html/draft-irtf-cfrg-pairing-friendly-curves-10), [bls-sigs-04](https://tools.ietf.org/html/draft-irtf-cfrg-bls-signature-04), [hash-to-curve-12](https://tools.ietf.org/html/draft-irtf-cfrg-hash-to-curve-12). To learn more about internals, navigate to
+[utilities](#utilities) section.
+
+Resources that help to understand bls12-381:
+
+- [BLS12-381 for the rest of us](https://hackmd.io/@benjaminion/bls12-381)
+- [Key concepts of pairings](https://medium.com/@alonmuroch_65570/bls-signatures-part-2-key-concepts-of-pairings-27a8a9533d0c)
+- Pairing over bls12-381: [part 1](https://research.nccgroup.com/2020/07/06/pairing-over-bls12-381-part-1-fields/),
+  [part 2](https://research.nccgroup.com/2020/07/13/pairing-over-bls12-381-part-2-curves/),
+  [part 3](https://research.nccgroup.com/2020/08/13/pairing-over-bls12-381-part-3-pairing/)
+- [Estimating the bit security of pairing-friendly curves](https://research.nccgroup.com/2022/02/03/estimating-the-bit-security-of-pairing-friendly-curves/)
+- Check out [the online demo](https://paulmillr.com/ecc) and [threshold sigs demo](https://genthresh.com)
+- See [BBS signatures implementation](https://github.com/Wind4Greg/BBS-Draft-Checks) based on the library, following [draft-irtf-cfrg-bbs-signatures-latest](https://identity.foundation/bbs-signature/draft-irtf-cfrg-bbs-signatures.html)
+
+The library uses G1 for public keys and G2 for signatures. Adding support for G1 signatures is planned.
+
+- BLS Relies on Bilinear Pairing (expensive)
+- Private Keys: 32 bytes
+- Public Keys: 48 bytes: 381 bit affine x coordinate, encoded into 48 big-endian bytes.
+- Signatures: 96 bytes: two 381 bit integers (affine x coordinate), encoded into two 48 big-endian byte arrays.
+    - The signature is a point on the G2 subgroup, which is defined over a finite field
+    with elements twice as big as the G1 curve (G2 is over Fp2 rather than Fp. Fp2 is analogous to the complex numbers).
+- The 12 stands for the Embedding degree.
+
+Formulas:
+
+- `P = pk x G` - public keys
+- `S = pk x H(m)` - signing
+- `e(P, H(m)) == e(G, S)` - verification using pairings
+- `e(G, S) = e(G, SUM(n)(Si)) = MUL(n)(e(G, Si))` - signature aggregation
+
+The BLS parameters for the library are:
+
+- `PK_IN` `G1`
+- `HASH_OR_ENCODE` `true`
+- `DST` `BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_NUL_` - use `bls.utils.getDSTLabel()` & `bls.utils.setDSTLabel("...")` to read/change the Domain Separation Tag label
+- `RAND_BITS` `64`
+
+Filecoin uses little endian byte arrays for private keys - so ensure to reverse byte order if you'll use it with FIL.
 ### abstract/modular
 
 Modular arithmetics utilities.
 
 ```typescript
-import { Fp, mod, invert, div, invertBatch, sqrt } from '@noble/curves/abstract/modular';
-const fp = Fp(2n ** 255n - 19n); // Finite field over 2^255-19
+import { Field, mod, invert, div, invertBatch, sqrt } from '@noble/curves/abstract/modular';
+const fp = Field(2n ** 255n - 19n); // Finite field over 2^255-19
 fp.mul(591n, 932n);
 fp.pow(481n, 11024858120n);
 
@@ -441,6 +493,63 @@ utils.concatBytes(Uint8Array.from([0xde, 0xad]), Uint8Array.from([0xbe, 0xef]));
 utils.nLength(255n);
 utils.hashToPrivateScalar(sha512_of_something, secp256r1.n);
 utils.equalBytes(Uint8Array.from([0xde]), Uint8Array.from([0xde]));
+```
+
+### Additional examples
+
+secp256k1 schnorr:
+
+```ts
+import { schnorr } from '@noble/curves/secp256k1';
+const priv = schnorr.utils.randomPrivateKey();
+const pub = schnorr.getPublicKey(priv);
+const msg = new TextEncoder().encode('hello');
+const sig = schnorr.sign(msg, priv);
+const isValid = schnorr.verify(sig, msg, pub);
+console.log(isValid);
+```
+
+ed25519, x25519, ristretto255:
+
+```ts
+import { ed25519, ed25519ctx, ed25519ph, x25519, RistrettoPoint } from '@noble/curves/ed25519';
+```
+
+bls12_381
+
+
+```ts
+import { bls12_381 as bls } from '@noble/curves/bls12-381';
+// keys, messages & other inputs can be Uint8Arrays or hex strings
+const privateKey = '67d53f170b908cabb9eb326c3c337762d59289a8fec79f7bc9254b584b73265c';
+const message = '64726e3da8';
+const publicKey = bls.getPublicKey(privateKey);
+const signature = bls.sign(message, privateKey);
+const isValid = bls.verify(signature, message, publicKey);
+console.log({ publicKey, signature, isValid });
+
+// Sign 1 msg with 3 keys
+const privateKeys = [
+  '18f020b98eb798752a50ed0563b079c125b0db5dd0b1060d1c1b47d4a193e1e4',
+  'ed69a8c50cf8c9836be3b67c7eeff416612d45ba39a5c099d48fa668bf558c9c',
+  '16ae669f3be7a2121e17d0c68c05a8f3d6bef21ec0f2315f1d7aec12484e4cf5'
+];
+const messages = ['d2', '0d98', '05caf3'];
+const publicKeys = privateKeys.map(bls.getPublicKey);
+const signatures2 = privateKeys.map(p => bls.sign(message, p))
+const aggPubKey2 = bls.aggregatePublicKeys(publicKeys);
+const aggSignature2 = bls.aggregateSignatures(signatures2);
+const isValid2 = bls.verify(aggSignature2, message, aggPubKey2);
+console.log({ signatures2, aggSignature2, isValid2 });
+
+// Sign 3 msgs with 3 keys
+const signatures3 = privateKeys.map((p, i) => bls.sign(messages[i], p));
+const aggSignature3 = bls.aggregateSignatures(signatures3);
+const isValid3 = bls.verifyBatch(aggSignature3, messages, publicKeys);
+console.log({ publicKeys, signatures3, aggSignature3, isValid3 });
+
+// Pairing API
+// bls.pairing(PointG1, PointG2)
 ```
 
 ## Security
