@@ -4,6 +4,7 @@ import { concatBytes, randomBytes } from '@noble/hashes/utils';
 import { weierstrass, CurveType } from './abstract/weierstrass.js';
 import { CHash } from './abstract/utils.js';
 
+// connects noble-curves to noble-hashes
 export function getHash(hash: CHash) {
   return {
     hash,
