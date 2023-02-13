@@ -188,9 +188,9 @@ console.log({ publicKeys, signatures3, aggSignature3, isValid3 });
 ## Abstract API
 
 Abstract API allows to define custom curves. All arithmetics is done with JS bigints over finite fields,
-which is defined from `modular` sub-module. For scalar multiplication, we use w-ary non-adjacent form (wNAF) method.
-Precomputes are enabled for weierstrass and edwards BASE points of a curve. You could precompute any other point (e.g. for ECDH)
-using `utils.precompute()` method.
+which is defined from `modular` sub-module. For scalar multiplication, we use [precomputed tables with w-ary non-adjacent form (wNAF)](https://paulmillr.com/posts/noble-secp256k1-fast-ecc/).
+Precomputes are enabled for weierstrass and edwards BASE points of a curve. You could precompute any
+other point (e.g. for ECDH) using `utils.precompute()` method.
 
 There are following zero-dependency algorithms:
 
@@ -575,7 +575,14 @@ The library had no prior security audit.
 
 [Timing attack](https://en.wikipedia.org/wiki/Timing_attack) considerations: we are using non-CT bigints. However, _JIT-compiler_ and _Garbage Collector_ make "constant time" extremely hard to achieve in a scripting language. Which means _any other JS library can't have constant-timeness_. Even statically typed Rust, a language without GC, [makes it harder to achieve constant-time](https://www.chosenplaintext.ca/open-source/rust-timing-shield/security) for some cases. If your goal is absolute security, don't use any JS lib — including bindings to native ones. Use low-level libraries & languages. Nonetheless we're targetting algorithmic constant time.
 
-We consider infrastructure attacks like rogue NPM modules very important; that's why it's crucial to minimize the amount of 3rd-party dependencies & native bindings. If your app uses 500 dependencies, any dep could get hacked and you'll be downloading malware with every `npm install`. Our goal is to minimize this attack vector.
+We consider infrastructure attacks like rogue NPM modules very important; that's why it's crucial to minimize the amount of 3rd-party dependencies & native bindings. If your app uses 500 dependencies, any dep could get hacked and you'll be downloading malware with every `npm install`. Our goal is to minimize this attack vector. As for devDependencies used by the library:
+
+- `@scure` base, bip32, bip39 (used in tests), micro-bmark (benchmark), micro-should (testing) are developed by us
+  and follow the same practices such as: minimal library size, auditability, signed releases
+- prettier (linter), fast-check (property-based testing),
+  typescript versions are locked and rarely updated. Every update is checked with `npm-diff`.
+  The packages are big, which makes it hard to audit their source code thoroughly and fully.
+- They are only used if you clone the git repo and want to add some feature to it. End-users won't use them.
 
 ## Speed
 
