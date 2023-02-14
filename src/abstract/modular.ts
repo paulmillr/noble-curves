@@ -407,7 +407,7 @@ export function hashToPrivateScalar(
   groupOrder: bigint,
   isLE = false
 ): bigint {
-  hash = ensureBytes(hash);
+  hash = ensureBytes('privateHash', hash);
   const hashLen = hash.length;
   const minLen = nLength(groupOrder).nByteLength + 8;
   if (minLen < 24 || hashLen < minLen || hashLen > 1024)

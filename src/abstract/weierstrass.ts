@@ -59,9 +59,6 @@ export interface ProjPointType<T> extends Group<ProjPointType<T>> {
   readonly py: T;
   readonly pz: T;
   multiply(scalar: bigint): ProjPointType<T>;
-  multiplyUnsafe(scalar: bigint): ProjPointType<T>;
-  multiplyAndAddUnsafe(Q: ProjPointType<T>, a: bigint, b: bigint): ProjPointType<T> | undefined;
-  _setWindowSize(windowSize: number): void;
   toAffine(iz?: T): AffinePoint<T>;
   isTorsionFree(): boolean;
   clearCofactor(): ProjPointType<T>;
@@ -69,6 +66,10 @@ export interface ProjPointType<T> extends Group<ProjPointType<T>> {
   hasEvenY(): boolean;
   toRawBytes(isCompressed?: boolean): Uint8Array;
   toHex(isCompressed?: boolean): string;
+
+  multiplyUnsafe(scalar: bigint): ProjPointType<T>;
+  multiplyAndAddUnsafe(Q: ProjPointType<T>, a: bigint, b: bigint): ProjPointType<T> | undefined;
+  _setWindowSize(windowSize: number): void;
 }
 // Static methods for 3d XYZ points
 export interface ProjConstructor<T> extends GroupConstructor<ProjPointType<T>> {
@@ -213,7 +214,10 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
     }
     let num: bigint;
     try {
-      num = typeof key === 'bigint' ? key : ut.bytesToNumberBE(ensureBytes(key, nByteLength));
+      num =
+        typeof key === 'bigint'
+          ? key
+          : ut.bytesToNumberBE(ensureBytes('private key', key, nByteLength));
     } catch (error) {
       throw new Error(`private key must be ${nByteLength} bytes, hex or bigint, not ${typeof key}`);
     }
@@ -276,7 +280,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
      * @param hex short/long ECDSA hex
      */
     static fromHex(hex: Hex): Point {
-      const P = Point.fromAffine(CURVE.fromBytes(ensureBytes(hex)));
+      const P = Point.fromAffine(CURVE.fromBytes(ensureBytes('pointHex', hex)));
       P.assertValidity();
       return P;
     }
@@ -782,24 +786,22 @@ export function weierstrass(curveDef: CurveType): CurveFn {
 
     // pair (bytes of r, bytes of s)
     static fromCompact(hex: Hex) {
-      const gl = CURVE.nByteLength;
-      hex = ensureBytes(hex, gl * 2);
-      return new Signature(slcNum(hex, 0, gl), slcNum(hex, gl, 2 * gl));
+      const l = CURVE.nByteLength;
+      hex = ensureBytes('compactSignature', hex, l * 2);
+      return new Signature(slcNum(hex, 0, l), slcNum(hex, l, 2 * l));
     }
 
     // DER encoded ECDSA signature
     // https://bitcoin.stackexchange.com/questions/57644/what-are-the-parts-of-a-bitcoin-transaction-input-script
     static fromDER(hex: Hex) {
-      if (typeof hex !== 'string' && !(hex instanceof Uint8Array))
-        throw new Error(`Signature.fromDER: Expected string or Uint8Array`);
-      const { r, s } = DER.toSig(ensureBytes(hex));
+      const { r, s } = DER.toSig(ensureBytes('DER', hex));
       return new Signature(r, s);
     }
 
     assertValidity(): void {
       // can use assertGE here
-      if (!isWithinCurveOrder(this.r)) throw new Error('r must be 0 < r < n');
-      if (!isWithinCurveOrder(this.s)) throw new Error('s must be 0 < s < n');
+      if (!isWithinCurveOrder(this.r)) throw new Error('r must be 0 < r < CURVE.n');
+      if (!isWithinCurveOrder(this.s)) throw new Error('s must be 0 < s < CURVE.n');
     }
 
     addRecoveryBit(recovery: number) {
@@ -807,11 +809,10 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     }
 
     recoverPublicKey(msgHash: Hex): typeof Point.BASE {
-      const { n: N } = CURVE; // ECDSA public key recovery secg.org/sec1-v2.pdf 4.1.6
       const { r, s, recovery: rec } = this;
-      const h = bits2int_modN(ensureBytes(msgHash)); // Truncate hash
+      const h = bits2int_modN(ensureBytes('msgHash', msgHash)); // Truncate hash
       if (rec == null || ![0, 1, 2, 3].includes(rec)) throw new Error('recovery id invalid');
-      const radj = rec === 2 || rec === 3 ? r + N : r;
+      const radj = rec === 2 || rec === 3 ? r + CURVE.n : r;
       if (radj >= Fp.ORDER) throw new Error('recovery id 2 or 3 invalid');
       const prefix = (rec & 1) === 0 ? '02' : '03';
       const R = Point.fromHex(prefix + numToNByteStr(radj));
@@ -936,8 +937,8 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     function (bytes: Uint8Array): bigint {
       // For curves with nBitLength % 8 !== 0: bits2octets(bits2octets(m)) !== bits2octets(m)
       // for some cases, since bytes.length * 8 is not actual bitLength.
-      const delta = bytes.length * 8 - CURVE.nBitLength; // truncate to nBitLength leftmost bits
       const num = ut.bytesToNumberBE(bytes); // check for == u8 done here
+      const delta = bytes.length * 8 - CURVE.nBitLength; // truncate to nBitLength leftmost bits
       return delta > 0 ? num >> BigInt(delta) : num;
     };
   const bits2int_modN =
@@ -962,26 +963,25 @@ export function weierstrass(curveDef: CurveType): CurveFn {
   // NOTE: we cannot assume here that msgHash has same amount of bytes as curve order, this will be wrong at least for P521.
   // Also it can be bigger for P224 + SHA256
   function prepSig(msgHash: Hex, privateKey: PrivKey, opts = defaultSigOpts) {
-    const { hash, randomBytes } = CURVE;
-    if (msgHash == null) throw new Error(`sign: expected valid message hash, not "${msgHash}"`);
     if (['recovered', 'canonical'].some((k) => k in opts))
-      // Ban legacy options
       throw new Error('sign() legacy options not supported');
+    const { hash, randomBytes } = CURVE;
     let { lowS, prehash, extraEntropy: ent } = opts; // generates low-s sigs by default
-    if (prehash) msgHash = hash(ensureBytes(msgHash));
     if (lowS == null) lowS = true; // RFC6979 3.2: we skip step A, because we already provide hash
+    msgHash = ensureBytes('msgHash', msgHash);
+    if (prehash) msgHash = ensureBytes('prehashed msgHash', hash(msgHash));
 
     // We can't later call bits2octets, since nested bits2int is broken for curves
     // with nBitLength % 8 !== 0. Because of that, we unwrap it here as int2octets call.
     // const bits2octets = (bits) => int2octets(bits2int_modN(bits))
-    const h1int = bits2int_modN(ensureBytes(msgHash));
+    const h1int = bits2int_modN(msgHash);
     const d = normalizePrivateKey(privateKey); // validate private key, convert to bigint
     const seedArgs = [int2octets(d), int2octets(h1int)];
     // extraEntropy. RFC6979 3.6: additional k' (optional).
     if (ent != null) {
       // K = HMAC_K(V || 0x00 || int2octets(x) || bits2octets(h1) || k')
-      // Either pass as-is, or generate random bytes. Then validate for being ui8a of size BYTES
-      seedArgs.push(ensureBytes(ent === true ? randomBytes(Fp.BYTES) : ent, Fp.BYTES));
+      const e = ent === true ? randomBytes(Fp.BYTES) : ent; // generate random bytes OR pass as-is
+      seedArgs.push(ensureBytes('extraEntropy', e, Fp.BYTES)); // check for being of size BYTES
     }
     const seed = ut.concatBytes(...seedArgs); // Step D of RFC6979 3.2
     const m = h1int; // NOTE: no need to call bits2int second time here, it is inside truncateHash!
@@ -1057,30 +1057,38 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     publicKey: Hex,
     opts = defaultVerOpts
   ): boolean {
-    let P: ProjPointType<bigint>;
+    const sg = signature;
+    msgHash = ensureBytes('msgHash', msgHash);
+    publicKey = ensureBytes('publicKey', publicKey);
+    if ('strict' in opts) throw new Error('options.strict was renamed to lowS');
+    const { lowS, prehash } = opts;
+
     let _sig: Signature | undefined = undefined;
-    if (publicKey instanceof Point) throw new Error('publicKey must be hex');
+    let P: ProjPointType<bigint>;
     try {
-      if (signature && typeof signature === 'object' && !(signature instanceof Uint8Array)) {
-        const { r, s } = signature;
-        _sig = new Signature(r, s); // assertValidity() is executed on creation
-      } else {
+      if (typeof sg === 'string' || sg instanceof Uint8Array) {
         // Signature can be represented in 2 ways: compact (2*nByteLength) & DER (variable-length).
         // Since DER can also be 2*nByteLength bytes, we check for it first.
         try {
-          _sig = Signature.fromDER(signature as Hex);
+          _sig = Signature.fromDER(sg);
         } catch (derError) {
           if (!(derError instanceof DER.Err)) throw derError;
-          _sig = Signature.fromCompact(signature as Hex);
+          _sig = Signature.fromCompact(sg);
         }
+      } else if (typeof sg === 'object' && typeof sg.r === 'bigint' && typeof sg.s === 'bigint') {
+        const { r, s } = sg;
+        _sig = new Signature(r, s);
+      } else {
+        throw new Error('PARSE');
       }
-      msgHash = ensureBytes(msgHash);
       P = Point.fromHex(publicKey);
     } catch (error) {
+      if ((error as Error).message === 'PARSE')
+        throw new Error(`signature must be Signature instance, Uint8Array or hex string`);
       return false;
     }
-    if (opts.lowS && _sig.hasHighS()) return false;
-    if (opts.prehash) msgHash = CURVE.hash(msgHash);
+    if (lowS && _sig.hasHighS()) return false;
+    if (prehash) msgHash = CURVE.hash(msgHash);
     const { r, s } = _sig;
     const h = bits2int_modN(msgHash); // Cannot use fields methods, since it is group element
     const is = invN(s); // s^-1

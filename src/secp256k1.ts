@@ -1,26 +1,12 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha256 } from '@noble/hashes/sha256';
-import { Fp as Field, mod, pow2 } from './abstract/modular.js';
-import { createCurve } from './_shortw_utils.js';
-import { ProjPointType as PointType, mapToCurveSimpleSWU } from './abstract/weierstrass.js';
-import {
-  ensureBytes,
-  concatBytes,
-  Hex,
-  bytesToNumberBE as bytesToInt,
-  PrivKey,
-  numberToBytesBE,
-} from './abstract/utils.js';
 import { randomBytes } from '@noble/hashes/utils';
+import { Fp as Field, mod, pow2 } from './abstract/modular.js';
+import { ProjPointType as PointType, mapToCurveSimpleSWU } from './abstract/weierstrass.js';
+import type { Hex, PrivKey } from './abstract/utils.js';
+import { bytesToNumberBE, concatBytes, ensureBytes, numberToBytesBE } from './abstract/utils.js';
 import * as htf from './abstract/hash-to-curve.js';
-
-/**
- * secp256k1 belongs to Koblitz curves: it has efficiently computable endomorphism.
- * Endomorphism uses 2x less RAM, speeds up precomputation by 2x and ECDH / key recovery by 20%.
- * Should always be used for Projective's double-and-add multiplication.
- * For affines cached multiplication, it trades off 1/2 init time & 1/3 ram for 20% perf hit.
- * https://gist.github.com/paulmillr/eb670806793e84df628a7c434a873066
- */
+import { createCurve } from './_shortw_utils.js';
 
 const secp256k1P = BigInt('0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f');
 const secp256k1N = BigInt('0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141');
@@ -61,23 +47,22 @@ type Fp = bigint;
 
 export const secp256k1 = createCurve(
   {
-    // Params: a, b
-    // Seem to be rigid https://bitcointalk.org/index.php?topic=289795.msg3183975#msg3183975
-    a: BigInt(0),
-    b: BigInt(7),
-    // Field over which we'll do calculations;
-    // 2n**256n - 2n**32n - 2n**9n - 2n**8n - 2n**7n - 2n**6n - 2n**4n - 1n
-    Fp,
-    // Curve order, total count of valid points in the field
-    n: secp256k1N,
+    a: BigInt(0), // equation params: a, b
+    b: BigInt(7), // Seem to be rigid: bitcointalk.org/index.php?topic=289795.msg3183975#msg3183975
+    Fp, // Field's prime: 2n**256n - 2n**32n - 2n**9n - 2n**8n - 2n**7n - 2n**6n - 2n**4n - 1n
+    n: secp256k1N, // Curve order, total count of valid points in the field
     // Base point (x, y) aka generator point
     Gx: BigInt('55066263022277343669578718895168534326250603453777594175500187360389116729240'),
     Gy: BigInt('32670510020758816978083085130507043184471273380659243275938904335757337482424'),
-    h: BigInt(1),
-    // Alllow only low-S signatures by default in sign() and verify()
-    lowS: true,
+    h: BigInt(1), // Cofactor
+    lowS: true, // Allow only low-S signatures by default in sign() and verify()
+    /**
+     * secp256k1 belongs to Koblitz curves: it has efficiently computable endomorphism.
+     * Endomorphism uses 2x less RAM, speeds up precomputation by 2x and ECDH / key recovery by 20%.
+     * For precomputed wNAF it trades off 1/2 init time & 1/3 ram for 20% perf hit.
+     * Explanation: https://gist.github.com/paulmillr/eb670806793e84df628a7c434a873066
+     */
     endo: {
-      // Params taken from https://gist.github.com/paulmillr/eb670806793e84df628a7c434a873066
       beta: BigInt('0x7ae96a2b657c07106e64479eac3434e99cf0497512f58995c1396c28719501ee'),
       splitScalar: (k: bigint) => {
         const n = secp256k1N;
@@ -105,19 +90,11 @@ export const secp256k1 = createCurve(
   sha256
 );
 
-// Schnorr signatures are superior to ECDSA from above.
-// Below is Schnorr-specific code as per BIP0340.
+// Schnorr signatures are superior to ECDSA from above. Below is Schnorr-specific BIP0340 code.
 // https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki
 const _0n = BigInt(0);
 const fe = (x: bigint) => typeof x === 'bigint' && _0n < x && x < secp256k1P;
 const ge = (x: bigint) => typeof x === 'bigint' && _0n < x && x < secp256k1N;
-
-const TAGS = {
-  challenge: 'BIP0340/challenge',
-  aux: 'BIP0340/aux',
-  nonce: 'BIP0340/nonce',
-} as const;
-
 /** An object mapping tags to their tagged hash prefix of [SHA256(tag) | SHA256(tag)] */
 const TAGGED_HASH_PREFIXES: { [tag: string]: Uint8Array } = {};
 function taggedHash(tag: string, ...messages: Uint8Array[]): Uint8Array {
@@ -132,49 +109,53 @@ function taggedHash(tag: string, ...messages: Uint8Array[]): Uint8Array {
 
 const pointToBytes = (point: PointType<bigint>) => point.toRawBytes(true).slice(1);
 const numTo32b = (n: bigint) => numberToBytesBE(n, 32);
+const modP = (x: bigint) => mod(x, secp256k1P);
 const modN = (x: bigint) => mod(x, secp256k1N);
 const Point = secp256k1.ProjectivePoint;
 const GmulAdd = (Q: PointType<bigint>, a: bigint, b: bigint) =>
   Point.BASE.multiplyAndAddUnsafe(Q, a, b);
-const hex32ToInt = (key: Hex) => bytesToInt(ensureBytes(key, 32));
 function schnorrGetExtPubKey(priv: PrivKey) {
-  let d = typeof priv === 'bigint' ? priv : hex32ToInt(priv);
+  const d = secp256k1.utils.normPrivateKeyToScalar(priv);
   const point = Point.fromPrivateKey(d); // P = d'⋅G; 0 < d' < n check is done inside
   const scalar = point.hasEvenY() ? d : modN(-d); // d = d' if has_even_y(P), otherwise d = n-d'
   return { point, scalar, bytes: pointToBytes(point) };
 }
 function lift_x(x: bigint): PointType<bigint> {
   if (!fe(x)) throw new Error('bad x: need 0 < x < p'); // Fail if x ≥ p.
-  const c = mod(x * x * x + BigInt(7), secp256k1P); // Let c = x³ + 7 mod p.
+  const xx = modP(x * x);
+  const c = modP(xx * x + BigInt(7)); // Let c = x³ + 7 mod p.
   let y = sqrtMod(c); // Let y = c^(p+1)/4 mod p.
-  if (y % 2n !== 0n) y = mod(-y, secp256k1P); // Return the unique point P such that x(P) = x and
+  if (y % 2n !== 0n) y = modP(-y); // Return the unique point P such that x(P) = x and
   const p = new Point(x, y, _1n); // y(P) = y if y mod 2 = 0 or y(P) = p-y otherwise.
   p.assertValidity();
   return p;
 }
 function challenge(...args: Uint8Array[]): bigint {
-  return modN(bytesToInt(taggedHash(TAGS.challenge, ...args)));
+  return modN(bytesToNumberBE(taggedHash('BIP0340/challenge', ...args)));
 }
 
-// Schnorr's pubkey is just `x` of Point (BIP340)
+/**
+ * Schnorr public key is just `x` coordinate of Point as per BIP340.
+ */
 function schnorrGetPublicKey(privateKey: Hex): Uint8Array {
   return schnorrGetExtPubKey(privateKey).bytes; // d'=int(sk). Fail if d'=0 or d'≥n. Ret bytes(d'⋅G)
 }
 
-// Creates Schnorr signature as per BIP340. Verifies itself before returning anything.
-// auxRand is optional and is not the sole source of k generation: bad CSPRNG won't be dangerous
+/**
+ * Creates Schnorr signature as per BIP340. Verifies itself before returning anything.
+ * auxRand is optional and is not the sole source of k generation: bad CSPRNG won't be dangerous.
+ */
 function schnorrSign(
   message: Hex,
   privateKey: PrivKey,
   auxRand: Hex = randomBytes(32)
 ): Uint8Array {
-  if (message == null) throw new Error(`sign: Expected valid message, not "${message}"`);
-  const m = ensureBytes(message); // checks for isWithinCurveOrder
-  const { bytes: px, scalar: d } = schnorrGetExtPubKey(privateKey);
-  const a = ensureBytes(auxRand, 32); // Auxiliary random data a: a 32-byte array
-  const t = numTo32b(d ^ bytesToInt(taggedHash(TAGS.aux, a))); // Let t be the byte-wise xor of bytes(d) and hash/aux(a)
-  const rand = taggedHash(TAGS.nonce, t, px, m); // Let rand = hash/nonce(t || bytes(P) || m)
-  const k_ = modN(bytesToInt(rand)); // Let k' = int(rand) mod n
+  const m = ensureBytes('message', message);
+  const { bytes: px, scalar: d } = schnorrGetExtPubKey(privateKey); // checks for isWithinCurveOrder
+  const a = ensureBytes('auxRand', auxRand, 32); // Auxiliary random data a: a 32-byte array
+  const t = numTo32b(d ^ bytesToNumberBE(taggedHash('BIP0340/aux', a))); // Let t be the byte-wise xor of bytes(d) and hash/aux(a)
+  const rand = taggedHash('BIP0340/nonce', t, px, m); // Let rand = hash/nonce(t || bytes(P) || m)
+  const k_ = modN(bytesToNumberBE(rand)); // Let k' = int(rand) mod n
   if (k_ === _0n) throw new Error('sign failed: k is zero'); // Fail if k' = 0.
   const { point: R, bytes: rx, scalar: k } = schnorrGetExtPubKey(k_); // Let R = k'⋅G.
   const e = challenge(rx, px, m); // Let e = int(hash/challenge(bytes(R) || bytes(P) || m)) mod n.
@@ -187,18 +168,19 @@ function schnorrSign(
 }
 
 /**
- * Verifies Schnorr signature synchronously.
+ * Verifies Schnorr signature.
  */
 function schnorrVerify(signature: Hex, message: Hex, publicKey: Hex): boolean {
+  const sig = ensureBytes('signature', signature, 64);
+  const m = ensureBytes('message', message);
+  const pub = ensureBytes('publicKey', publicKey, 32);
   try {
-    const P = lift_x(hex32ToInt(publicKey)); // P = lift_x(int(pk)); fail if that fails
-    const sig = ensureBytes(signature, 64);
-    const r = bytesToInt(sig.subarray(0, 32)); // Let r = int(sig[0:32]); fail if r ≥ p.
+    const P = lift_x(bytesToNumberBE(pub)); // P = lift_x(int(pk)); fail if that fails
+    const r = bytesToNumberBE(sig.subarray(0, 32)); // Let r = int(sig[0:32]); fail if r ≥ p.
     if (!fe(r)) return false;
-    const s = bytesToInt(sig.subarray(32, 64)); // Let s = int(sig[32:64]); fail if s ≥ n.
+    const s = bytesToNumberBE(sig.subarray(32, 64)); // Let s = int(sig[32:64]); fail if s ≥ n.
     if (!ge(s)) return false;
-    const m = ensureBytes(message);
-    const e = challenge(numTo32b(r), pointToBytes(P), m); // int(challenge(bytes(r)||bytes(P)||m)) mod n
+    const e = challenge(numTo32b(r), pointToBytes(P), m); // int(challenge(bytes(r)||bytes(P)||m))%n
     const R = GmulAdd(P, s, modN(-e)); // R = s⋅G - e⋅P
     if (!R || !R.hasEvenY() || R.toAffine().x !== r) return false; // -eP == (n-e)P
     return true; // Fail if is_infinite(R) / not has_even_y(R) / x(R) ≠ r.
@@ -212,11 +194,12 @@ export const schnorr = {
   sign: schnorrSign,
   verify: schnorrVerify,
   utils: {
+    randomPrivateKey: secp256k1.utils.randomPrivateKey,
     getExtendedPublicKey: schnorrGetExtPubKey,
     lift_x,
     pointToBytes,
     numberToBytesBE,
-    bytesToNumberBE: bytesToInt,
+    bytesToNumberBE,
     taggedHash,
     mod,
   },
@@ -259,7 +242,7 @@ const mapSWU = mapToCurveSimpleSWU(Fp, {
   B: BigInt('1771'),
   Z: Fp.create(BigInt('-11')),
 });
-const { hashToCurve, encodeToCurve } = htf.hashToCurve(
+export const { hashToCurve, encodeToCurve } = htf.hashToCurve(
   secp256k1.ProjectivePoint,
   (scalars: bigint[]) => {
     const { x, y } = mapSWU(Fp.create(scalars[0]));
@@ -275,4 +258,3 @@ const { hashToCurve, encodeToCurve } = htf.hashToCurve(
     hash: sha256,
   }
 );
-export { hashToCurve, encodeToCurve };

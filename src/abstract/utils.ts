@@ -33,14 +33,14 @@ export function numberToHexUnpadded(num: number | bigint): string {
 }
 
 export function hexToNumber(hex: string): bigint {
-  if (typeof hex !== 'string') throw new Error('string expected, got ' + typeof hex);
+  if (typeof hex !== 'string') throw new Error('hex string expected, got ' + typeof hex);
   // Big Endian
   return BigInt(hex === '' ? '0' : `0x${hex}`);
 }
 
 // Caching slows it down 2-3x
 export function hexToBytes(hex: string): Uint8Array {
-  if (typeof hex !== 'string') throw new Error('string expected, got ' + typeof hex);
+  if (typeof hex !== 'string') throw new Error('hex string expected, got ' + typeof hex);
   if (hex.length % 2) throw new Error('hex string is invalid: unpadded ' + hex.length);
   const array = new Uint8Array(hex.length / 2);
   for (let i = 0; i < array.length; i++) {
@@ -68,13 +68,25 @@ export const numberToBytesLE = (n: bigint, len: number) => numberToBytesBE(n, le
 // Returns variable number bytes (minimal bigint encoding?)
 export const numberToVarBytesBE = (n: bigint) => hexToBytes(numberToHexUnpadded(n));
 
-export function ensureBytes(hex: Hex, expectedLength?: number): Uint8Array {
-  // Uint8Array.from() instead of hash.slice() because node.js Buffer
-  // is instance of Uint8Array, and its slice() creates **mutable** copy
-  const bytes = u8a(hex) ? Uint8Array.from(hex) : hexToBytes(hex);
-  if (typeof expectedLength === 'number' && bytes.length !== expectedLength)
-    throw new Error(`Expected ${expectedLength} bytes`);
-  return bytes;
+export function ensureBytes(title: string, hex: Hex, expectedLength?: number): Uint8Array {
+  let res: Uint8Array;
+  if (typeof hex === 'string') {
+    try {
+      res = hexToBytes(hex);
+    } catch (e) {
+      throw new Error(`${title} must be valid hex string, got "${hex}". Cause: ${e}`);
+    }
+  } else if (u8a(hex)) {
+    // Uint8Array.from() instead of hash.slice() because node.js Buffer
+    // is instance of Uint8Array, and its slice() creates **mutable** copy
+    res = Uint8Array.from(hex);
+  } else {
+    throw new Error(`${title} must be hex string or Uint8Array`);
+  }
+  const len = res.length;
+  if (typeof expectedLength === 'number' && len !== expectedLength)
+    throw new Error(`${title} expected ${expectedLength} bytes, got ${len}`);
+  return res;
 }
 
 // Copies several Uint8Arrays into one.
@@ -94,6 +106,16 @@ export function equalBytes(b1: Uint8Array, b2: Uint8Array) {
   if (b1.length !== b2.length) return false;
   for (let i = 0; i < b1.length; i++) if (b1[i] !== b2[i]) return false;
   return true;
+}
+
+// Global symbols in both browsers and Node.js since v11
+// See https://github.com/microsoft/TypeScript/issues/31535
+declare const TextEncoder: any;
+export function utf8ToBytes(str: string): Uint8Array {
+  if (typeof str !== 'string') {
+    throw new Error(`utf8ToBytes expected string, got ${typeof str}`);
+  }
+  return new TextEncoder().encode(str);
 }
 
 // Bit operations
