@@ -1,8 +1,8 @@
 build/
 node_modules/
 coverage/
-/lib/**/*.js
-/lib/**/*.ts
-/lib/**/*.map
-/lib/**/*.d.ts.map
+*.js
+*.ts
+*.js.map
+*.d.ts.map
 /curve-definitions/lib

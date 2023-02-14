@@ -3,8 +3,13 @@
   "version": "0.6.4",
   "description": "Minimal, auditable JS implementation of elliptic curve cryptography",
   "files": [
-    "lib",
-    "src"
+    "abstract",
+    "esm",
+    "src",
+    "*.js",
+    "*.js.map",
+    "*.d.ts",
+    "*.d.ts.map"
   ],
   "scripts": {
     "bench": "cd benchmark; node secp256k1.js; node curves.js; node stark.js; node bls.js",
@@ -37,129 +42,129 @@
   "main": "index.js",
   "exports": {
     ".": {
-      "types": "./lib/index.d.ts",
-      "import": "./lib/esm/index.js",
-      "default": "./lib/index.js"
+      "types": "./index.d.ts",
+      "import": "./esm/index.js",
+      "default": "./index.js"
     },
     "./abstract/edwards": {
-      "types": "./lib/abstract/edwards.d.ts",
-      "import": "./lib/esm/abstract/edwards.js",
-      "default": "./lib/abstract/edwards.js"
+      "types": "./abstract/edwards.d.ts",
+      "import": "./esm/abstract/edwards.js",
+      "default": "./abstract/edwards.js"
     },
     "./abstract/modular": {
-      "types": "./lib/abstract/modular.d.ts",
-      "import": "./lib/esm/abstract/modular.js",
-      "default": "./lib/abstract/modular.js"
+      "types": "./abstract/modular.d.ts",
+      "import": "./esm/abstract/modular.js",
+      "default": "./abstract/modular.js"
     },
     "./abstract/montgomery": {
-      "types": "./lib/abstract/montgomery.d.ts",
-      "import": "./lib/esm/abstract/montgomery.js",
-      "default": "./lib/abstract/montgomery.js"
+      "types": "./abstract/montgomery.d.ts",
+      "import": "./esm/abstract/montgomery.js",
+      "default": "./abstract/montgomery.js"
     },
     "./abstract/weierstrass": {
-      "types": "./lib/abstract/weierstrass.d.ts",
-      "import": "./lib/esm/abstract/weierstrass.js",
-      "default": "./lib/abstract/weierstrass.js"
+      "types": "./abstract/weierstrass.d.ts",
+      "import": "./esm/abstract/weierstrass.js",
+      "default": "./abstract/weierstrass.js"
     },
     "./abstract/bls": {
-      "types": "./lib/abstract/bls.d.ts",
-      "import": "./lib/esm/abstract/bls.js",
-      "default": "./lib/abstract/bls.js"
+      "types": "./abstract/bls.d.ts",
+      "import": "./esm/abstract/bls.js",
+      "default": "./abstract/bls.js"
     },
     "./abstract/hash-to-curve": {
-      "types": "./lib/abstract/hash-to-curve.d.ts",
-      "import": "./lib/esm/abstract/hash-to-curve.js",
-      "default": "./lib/abstract/hash-to-curve.js"
+      "types": "./abstract/hash-to-curve.d.ts",
+      "import": "./esm/abstract/hash-to-curve.js",
+      "default": "./abstract/hash-to-curve.js"
     },
     "./abstract/curve": {
-      "types": "./lib/abstract/curve.d.ts",
-      "import": "./lib/esm/abstract/curve.js",
-      "default": "./lib/abstract/curve.js"
+      "types": "./abstract/curve.d.ts",
+      "import": "./esm/abstract/curve.js",
+      "default": "./abstract/curve.js"
     },
     "./abstract/utils": {
-      "types": "./lib/abstract/utils.d.ts",
-      "import": "./lib/esm/abstract/utils.js",
-      "default": "./lib/abstract/utils.js"
+      "types": "./abstract/utils.d.ts",
+      "import": "./esm/abstract/utils.js",
+      "default": "./abstract/utils.js"
     },
     "./abstract/poseidon": {
-      "types": "./lib/abstract/poseidon.d.ts",
-      "import": "./lib/esm/abstract/poseidon.js",
-      "default": "./lib/abstract/poseidon.js"
+      "types": "./abstract/poseidon.d.ts",
+      "import": "./esm/abstract/poseidon.js",
+      "default": "./abstract/poseidon.js"
     },
     "./_shortw_utils": {
-      "types": "./lib/_shortw_utils.d.ts",
-      "import": "./lib/esm/_shortw_utils.js",
-      "default": "./lib/_shortw_utils.js"
+      "types": "./_shortw_utils.d.ts",
+      "import": "./esm/_shortw_utils.js",
+      "default": "./_shortw_utils.js"
     },
     "./bls12-381": {
-      "types": "./lib/bls12-381.d.ts",
-      "import": "./lib/esm/bls12-381.js",
-      "default": "./lib/bls12-381.js"
+      "types": "./bls12-381.d.ts",
+      "import": "./esm/bls12-381.js",
+      "default": "./bls12-381.js"
     },
     "./bn": {
-      "types": "./lib/bn.d.ts",
-      "import": "./lib/esm/bn.js",
-      "default": "./lib/bn.js"
+      "types": "./bn.d.ts",
+      "import": "./esm/bn.js",
+      "default": "./bn.js"
     },
     "./ed25519": {
-      "types": "./lib/ed25519.d.ts",
-      "import": "./lib/esm/ed25519.js",
-      "default": "./lib/ed25519.js"
+      "types": "./ed25519.d.ts",
+      "import": "./esm/ed25519.js",
+      "default": "./ed25519.js"
     },
     "./ed448": {
-      "types": "./lib/ed448.d.ts",
-      "import": "./lib/esm/ed448.js",
-      "default": "./lib/ed448.js"
+      "types": "./ed448.d.ts",
+      "import": "./esm/ed448.js",
+      "default": "./ed448.js"
     },
     "./index": {
-      "types": "./lib/index.d.ts",
-      "import": "./lib/esm/index.js",
-      "default": "./lib/index.js"
+      "types": "./index.d.ts",
+      "import": "./esm/index.js",
+      "default": "./index.js"
     },
     "./jubjub": {
-      "types": "./lib/jubjub.d.ts",
-      "import": "./lib/esm/jubjub.js",
-      "default": "./lib/jubjub.js"
+      "types": "./jubjub.d.ts",
+      "import": "./esm/jubjub.js",
+      "default": "./jubjub.js"
     },
     "./p192": {
-      "types": "./lib/p192.d.ts",
-      "import": "./lib/esm/p192.js",
-      "default": "./lib/p192.js"
+      "types": "./p192.d.ts",
+      "import": "./esm/p192.js",
+      "default": "./p192.js"
     },
     "./p224": {
-      "types": "./lib/p224.d.ts",
-      "import": "./lib/esm/p224.js",
-      "default": "./lib/p224.js"
+      "types": "./p224.d.ts",
+      "import": "./esm/p224.js",
+      "default": "./p224.js"
     },
     "./p256": {
-      "types": "./lib/p256.d.ts",
-      "import": "./lib/esm/p256.js",
-      "default": "./lib/p256.js"
+      "types": "./p256.d.ts",
+      "import": "./esm/p256.js",
+      "default": "./p256.js"
     },
     "./p384": {
-      "types": "./lib/p384.d.ts",
-      "import": "./lib/esm/p384.js",
-      "default": "./lib/p384.js"
+      "types": "./p384.d.ts",
+      "import": "./esm/p384.js",
+      "default": "./p384.js"
     },
     "./p521": {
-      "types": "./lib/p521.d.ts",
-      "import": "./lib/esm/p521.js",
-      "default": "./lib/p521.js"
+      "types": "./p521.d.ts",
+      "import": "./esm/p521.js",
+      "default": "./p521.js"
     },
     "./pasta": {
-      "types": "./lib/pasta.d.ts",
-      "import": "./lib/esm/pasta.js",
-      "default": "./lib/pasta.js"
+      "types": "./pasta.d.ts",
+      "import": "./esm/pasta.js",
+      "default": "./pasta.js"
     },
     "./secp256k1": {
-      "types": "./lib/secp256k1.d.ts",
-      "import": "./lib/esm/secp256k1.js",
-      "default": "./lib/secp256k1.js"
+      "types": "./secp256k1.d.ts",
+      "import": "./esm/secp256k1.js",
+      "default": "./secp256k1.js"
     },
     "./stark": {
-      "types": "./lib/stark.d.ts",
-      "import": "./lib/esm/stark.js",
-      "default": "./lib/stark.js"
+      "types": "./stark.d.ts",
+      "import": "./esm/stark.js",
+      "default": "./stark.js"
     }
   },
   "keywords": [
