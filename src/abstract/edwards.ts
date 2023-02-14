@@ -344,7 +344,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     static fromHex(hex: Hex, strict = true): Point {
       const { d, a } = CURVE;
       const len = Fp.BYTES;
-      hex = ensureBytes(hex, len); // copy hex to a new array
+      hex = ensureBytes('pointHex', hex, len); // copy hex to a new array
       const normed = hex.slice(); // copy again, we'll manipulate it
       const lastByte = hex[len - 1]; // select last byte
       normed[len - 1] = lastByte & ~0x80; // clear last bit
@@ -392,18 +392,14 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
   function modN_LE(hash: Uint8Array): bigint {
     return modN(ut.bytesToNumberLE(hash));
   }
-  function isHex(item: Hex, err: string) {
-    if (typeof item !== 'string' && !(item instanceof Uint8Array))
-      throw new Error(`${err} must be hex string or Uint8Array`);
-  }
 
   /** Convenience method that creates public key and other stuff. RFC8032 5.1.5 */
   function getExtendedPublicKey(key: Hex) {
-    isHex(key, 'private key');
     const len = nByteLength;
+    key = ensureBytes('private key', key, len);
     // Hash private key with curve's hash function to produce uniformingly random input
     // Check byte lengths: ensure(64, h(ensure(32, key)))
-    const hashed = ensureBytes(cHash(ensureBytes(key, len)), 2 * len);
+    const hashed = ensureBytes('hashed private key', cHash(key), 2 * len);
     const head = adjustScalarBytes(hashed.slice(0, len)); // clear first half bits, produce FE
     const prefix = hashed.slice(len, 2 * len); // second half is called key prefix (5.1.6)
     const scalar = modN_LE(head); // The actual private scalar
@@ -420,13 +416,12 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
   // int('LE', SHA512(dom2(F, C) || msgs)) mod N
   function hashDomainToScalar(context: Hex = new Uint8Array(), ...msgs: Uint8Array[]) {
     const msg = ut.concatBytes(...msgs);
-    return modN_LE(cHash(domain(msg, ensureBytes(context), !!preHash)));
+    return modN_LE(cHash(domain(msg, ensureBytes('context', context), !!preHash)));
   }
 
   /** Signs message with privateKey. RFC8032 5.1.6 */
   function sign(msg: Hex, privKey: Hex, context?: Hex): Uint8Array {
-    isHex(msg, 'message');
-    msg = ensureBytes(msg);
+    msg = ensureBytes('message', msg);
     if (preHash) msg = preHash(msg); // for ed25519ph etc.
     const { prefix, scalar, pointBytes } = getExtendedPublicKey(privKey);
     const r = hashDomainToScalar(context, prefix, msg); // r = dom2(F, C) || prefix || PH(M)
@@ -435,15 +430,13 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     const s = modN(r + k * scalar); // S = (r + k * s) mod L
     assertGE0(s); // 0 <= s < l
     const res = ut.concatBytes(R, ut.numberToBytesLE(s, Fp.BYTES));
-    return ensureBytes(res, nByteLength * 2); // 64-byte signature
+    return ensureBytes('result', res, nByteLength * 2); // 64-byte signature
   }
 
   function verify(sig: Hex, msg: Hex, publicKey: Hex, context?: Hex): boolean {
-    isHex(sig, 'sig');
-    isHex(msg, 'message');
     const len = Fp.BYTES; // Verifies EdDSA signature against message and public key. RFC8032 5.1.7.
-    sig = ensureBytes(sig, 2 * len); // An extended group equation is checked.
-    msg = ensureBytes(msg); // ZIP215 compliant, which means not fully RFC8032 compliant.
+    sig = ensureBytes('signature', sig, 2 * len); // An extended group equation is checked.
+    msg = ensureBytes('message', msg); // ZIP215 compliant, which means not fully RFC8032 compliant.
     if (preHash) msg = preHash(msg); // for ed25519ph, etc
     const A = Point.fromHex(publicKey, false); // Check for s bounds, hex validity
     const R = Point.fromHex(sig.slice(0, len), false); // 0 <= R < 2^256: ZIP215 R can be >= P
