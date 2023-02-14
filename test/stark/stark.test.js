@@ -1,6 +1,6 @@
 import { deepStrictEqual, throws } from 'assert';
 import { describe, should } from 'micro-should';
-import { hex, utf8 } from '@scure/base';
+import { utf8ToBytes } from '@noble/hashes/utils.js';
 import * as bip32 from '@scure/bip32';
 import * as bip39 from '@scure/bip39';
 import * as starknet from '../../lib/esm/stark.js';
@@ -9,7 +9,7 @@ import { default as precomputedKeys } from './fixtures/keys_precomputed.json' as
 
 describe('starknet', () => {
   should('custom keccak', () => {
-    const value = starknet.keccak(utf8.decode('hello'));
+    const value = starknet.keccak(utf8ToBytes('hello'));
     deepStrictEqual(value, 0x8aff950685c2ed4bc3174f3472287b56d9517b9c948127319a09a7a36deac8n);
     deepStrictEqual(value < 2n ** 250n, true);
   });
