@@ -467,6 +467,17 @@ const x25519 = montgomery({
 
 The module allows to hash arbitrary strings to elliptic curve points. Implements [hash-to-curve v11](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11).
 
+Every curve has exported `hashToCurve` and `encodeToCurve` methods:
+
+```ts
+import { hashToCurve, encodeToCurve } from '@noble/curves/secp256k1';
+import { randomBytes } from '@noble/hashes/utils';
+console.log(hashToCurve(randomBytes())); // second argument of type htfOpts (see below) is optional
+console.log(encodeToCurve(randomBytes()));
+```
+
+If you need low-level methods from spec:
+
 `expand_message_xmd` [(spec)](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-5.4.1) produces a uniformly random byte string using a cryptographic hash function H that outputs b bits.
 
 ```ts
