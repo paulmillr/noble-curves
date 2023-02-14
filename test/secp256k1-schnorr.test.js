@@ -2,7 +2,7 @@ import { deepStrictEqual, throws } from 'assert';
 import { readFileSync } from 'fs';
 import { should, describe } from 'micro-should';
 import { bytesToHex as hex } from '@noble/hashes/utils';
-import { schnorr } from '../lib/esm/secp256k1.js';
+import { schnorr } from '../esm/secp256k1.js';
 const schCsv = readFileSync('./test/vectors/schnorr.csv', 'utf-8');
 
 describe('schnorr.sign()', () => {

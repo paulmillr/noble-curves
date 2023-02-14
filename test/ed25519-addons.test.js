@@ -2,9 +2,9 @@ import { sha512 } from '@noble/hashes/sha512';
 import { hexToBytes, bytesToHex, randomBytes } from '@noble/hashes/utils';
 import { deepStrictEqual, strictEqual, throws } from 'assert';
 import { describe, should } from 'micro-should';
-import { numberToBytesLE } from '../lib/esm/abstract/utils.js';
+import { numberToBytesLE } from '../esm/abstract/utils.js';
 import { default as x25519vectors } from './wycheproof/x25519_test.json' assert { type: 'json' };
-import { ed25519ctx, ed25519ph, RistrettoPoint, x25519 } from '../lib/esm/ed25519.js';
+import { ed25519ctx, ed25519ph, RistrettoPoint, x25519 } from '../esm/ed25519.js';
 
 // const ed = ed25519;
 const hex = bytesToHex;

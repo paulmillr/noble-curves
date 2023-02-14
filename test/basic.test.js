@@ -1,22 +1,22 @@
 import { deepStrictEqual, throws } from 'assert';
 import { should, describe } from 'micro-should';
 import * as fc from 'fast-check';
-import * as mod from '../lib/esm/abstract/modular.js';
-import { bytesToHex as toHex } from '../lib/esm/abstract/utils.js';
+import * as mod from '../esm/abstract/modular.js';
+import { bytesToHex as toHex } from '../esm/abstract/utils.js';
 // Generic tests for all curves in package
-import { secp192r1 } from '../lib/esm/p192.js';
-import { secp224r1 } from '../lib/esm/p224.js';
-import { secp256r1 } from '../lib/esm/p256.js';
-import { secp384r1 } from '../lib/esm/p384.js';
-import { secp521r1 } from '../lib/esm/p521.js';
-import { secp256k1 } from '../lib/esm/secp256k1.js';
-import { ed25519, ed25519ctx, ed25519ph, x25519 } from '../lib/esm/ed25519.js';
-import { ed448, ed448ph } from '../lib/esm/ed448.js';
-import { starkCurve } from '../lib/esm/stark.js';
-import { pallas, vesta } from '../lib/esm/pasta.js';
-import { bn254 } from '../lib/esm/bn.js';
-import { jubjub } from '../lib/esm/jubjub.js';
-import { bls12_381 } from '../lib/esm/bls12-381.js';
+import { secp192r1 } from '../esm/p192.js';
+import { secp224r1 } from '../esm/p224.js';
+import { secp256r1 } from '../esm/p256.js';
+import { secp384r1 } from '../esm/p384.js';
+import { secp521r1 } from '../esm/p521.js';
+import { secp256k1 } from '../esm/secp256k1.js';
+import { ed25519, ed25519ctx, ed25519ph, x25519 } from '../esm/ed25519.js';
+import { ed448, ed448ph } from '../esm/ed448.js';
+import { starkCurve } from '../esm/stark.js';
+import { pallas, vesta } from '../esm/pasta.js';
+import { bn254 } from '../esm/bn.js';
+import { jubjub } from '../esm/jubjub.js';
+import { bls12_381 } from '../esm/bls12-381.js';
 
 // Fields tests
 const FIELDS = {

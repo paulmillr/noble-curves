@@ -1,6 +1,6 @@
 import { deepStrictEqual, throws } from 'assert';
 import { describe, should } from 'micro-should';
-import * as starknet from '../../lib/esm/stark.js';
+import * as starknet from '../../esm/stark.js';
 import { default as issue2 } from './fixtures/issue2.json' assert { type: 'json' };
 import * as bip32 from '@scure/bip32';
 import * as bip39 from '@scure/bip39';

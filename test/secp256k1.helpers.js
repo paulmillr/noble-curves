@@ -1,8 +1,8 @@
 // @ts-ignore
-export { secp256k1 as secp } from '../lib/esm/secp256k1.js';
-import { secp256k1 as _secp } from '../lib/esm/secp256k1.js';
-export { bytesToNumberBE, numberToBytesBE } from '../lib/esm/abstract/utils.js';
-export { mod } from '../lib/esm/abstract/modular.js';
+export { secp256k1 as secp } from '../esm/secp256k1.js';
+import { secp256k1 as _secp } from '../esm/secp256k1.js';
+export { bytesToNumberBE, numberToBytesBE } from '../esm/abstract/utils.js';
+export { mod } from '../esm/abstract/modular.js';
 export const sigFromDER = (der) => {
   return _secp.Signature.fromDER(der);
 };

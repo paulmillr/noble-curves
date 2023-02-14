@@ -2,10 +2,10 @@ import { deepStrictEqual, notDeepStrictEqual, throws } from 'assert';
 import * as fc from 'fast-check';
 import { readFileSync } from 'fs';
 import { describe, should } from 'micro-should';
-import { wNAF } from '../lib/esm/abstract/curve.js';
-import { bytesToHex, utf8ToBytes } from '../lib/esm/abstract/utils.js';
-import { hash_to_field } from '../lib/esm/abstract/hash-to-curve.js';
-import { bls12_381 as bls } from '../lib/esm/bls12-381.js';
+import { wNAF } from '../esm/abstract/curve.js';
+import { bytesToHex, utf8ToBytes } from '../esm/abstract/utils.js';
+import { hash_to_field } from '../esm/abstract/hash-to-curve.js';
+import { bls12_381 as bls } from '../esm/bls12-381.js';
 
 import zkVectors from './bls12-381/zkcrypto/converted.json' assert { type: 'json' };
 import pairingVectors from './bls12-381/go_pairing_vectors/pairing.json' assert { type: 'json' };

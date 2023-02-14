@@ -1,4 +1,4 @@
-import { jubjub, findGroupHash } from '../lib/esm/jubjub.js';
+import { jubjub, findGroupHash } from '../esm/jubjub.js';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual, throws } from 'assert';
 const Point = jubjub.ExtendedPoint;

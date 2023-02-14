@@ -1,8 +1,8 @@
 import { deepStrictEqual, throws } from 'assert';
 import { should, describe } from 'micro-should';
-import * as poseidon from '../lib/esm/abstract/poseidon.js';
-import * as stark from '../lib/esm/stark.js';
-import * as mod from '../lib/esm/abstract/modular.js';
+import * as poseidon from '../esm/abstract/poseidon.js';
+import * as stark from '../esm/stark.js';
+import * as mod from '../esm/abstract/modular.js';
 import { default as pvectors } from './vectors/poseidon.json' assert { type: 'json' };
 const { st1, st2, st3, st4 } = pvectors;
 
