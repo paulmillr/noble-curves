@@ -12,11 +12,8 @@ import * as ed25519 from '../lib/esm/ed25519.js';
 import * as ed448 from '../lib/esm/ed448.js';
 import * as secp256k1 from '../lib/esm/secp256k1.js';
 import { bls12_381 } from '../lib/esm/bls12-381.js';
-import {
-  stringToBytes,
-  expand_message_xmd,
-  expand_message_xof,
-} from '../lib/esm/abstract/hash-to-curve.js';
+import { expand_message_xmd, expand_message_xof } from '../lib/esm/abstract/hash-to-curve.js';
+import { utf8ToBytes } from '../lib/esm/abstract/utils.js';
 // XMD
 import { default as xmd_sha256_38 } from './hash-to-curve/expand_message_xmd_SHA256_38.json' assert { type: 'json' };
 import { default as xmd_sha256_256 } from './hash-to-curve/expand_message_xmd_SHA256_256.json' assert { type: 'json' };
@@ -56,9 +53,9 @@ function testExpandXMD(hash, vectors) {
       const t = vectors.tests[i];
       should(`${vectors.hash}/${vectors.DST.length}/${i}`, () => {
         const p = expand_message_xmd(
-          stringToBytes(t.msg),
-          stringToBytes(vectors.DST),
-          t.len_in_bytes,
+          utf8ToBytes(t.msg),
+          utf8ToBytes(vectors.DST),
+          Number.parseInt(t.len_in_bytes),
           hash
         );
         deepStrictEqual(bytesToHex(p), t.uniform_bytes);
@@ -79,9 +76,9 @@ function testExpandXOF(hash, vectors) {
       const t = vectors.tests[i];
       should(`${i}`, () => {
         const p = expand_message_xof(
-          stringToBytes(t.msg),
-          stringToBytes(vectors.DST),
-          +t.len_in_bytes,
+          utf8ToBytes(t.msg),
+          utf8ToBytes(vectors.DST),
+          Number.parseInt(t.len_in_bytes),
           vectors.k,
           hash
         );
@@ -112,7 +109,7 @@ function testCurve(curve, ro, nu) {
       const t = ro.vectors[i];
       should(`(${i})`, () => {
         const p = curve
-          .hashToCurve(stringToBytes(t.msg), {
+          .hashToCurve(utf8ToBytes(t.msg), {
             DST: ro.dst,
           })
           .toAffine();
@@ -126,7 +123,7 @@ function testCurve(curve, ro, nu) {
       const t = nu.vectors[i];
       should(`(${i})`, () => {
         const p = curve
-          .encodeToCurve(stringToBytes(t.msg), {
+          .encodeToCurve(utf8ToBytes(t.msg), {
             DST: nu.dst,
           })
           .toAffine();
@@ -140,8 +137,8 @@ function testCurve(curve, ro, nu) {
 testCurve(secp256r1, p256_ro, p256_nu);
 testCurve(secp384r1, p384_ro, p384_nu);
 testCurve(secp521r1, p521_ro, p521_nu);
-testCurve(bls12_381.hashToCurve.G1, g1_ro, g1_nu);
-testCurve(bls12_381.hashToCurve.G2, g2_ro, g2_nu);
+testCurve(bls12_381.G1, g1_ro, g1_nu);
+testCurve(bls12_381.G2, g2_ro, g2_nu);
 testCurve(secp256k1, secp256k1_ro, secp256k1_nu);
 testCurve(ed25519, ed25519_ro, ed25519_nu);
 testCurve(ed448, ed448_ro, ed448_nu);

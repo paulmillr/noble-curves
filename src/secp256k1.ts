@@ -242,7 +242,7 @@ const mapSWU = mapToCurveSimpleSWU(Fp, {
   B: BigInt('1771'),
   Z: Fp.create(BigInt('-11')),
 });
-export const { hashToCurve, encodeToCurve } = htf.hashToCurve(
+export const { hashToCurve, encodeToCurve } = htf.createHasher(
   secp256k1.ProjectivePoint,
   (scalars: bigint[]) => {
     const { x, y } = mapSWU(Fp.create(scalars[0]));

@@ -225,7 +225,7 @@ function map_to_curve_elligator2_edwards448(u: bigint) {
   return { x: Fp.mul(xEn, inv[0]), y: Fp.mul(yEn, inv[1]) }; // 38. return (xEn, xEd, yEn, yEd)
 }
 
-const { hashToCurve, encodeToCurve } = htf.hashToCurve(
+const { hashToCurve, encodeToCurve } = htf.createHasher(
   ed448.ExtendedPoint,
   (scalars: bigint[]) => map_to_curve_elligator2_edwards448(scalars[0]),
   {

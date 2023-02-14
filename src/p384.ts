@@ -41,7 +41,7 @@ export const P384 = createCurve({
 );
 export const secp384r1 = P384;
 
-const { hashToCurve, encodeToCurve } = htf.hashToCurve(
+const { hashToCurve, encodeToCurve } = htf.createHasher(
   secp384r1.ProjectivePoint,
   (scalars: bigint[]) => mapSWU(scalars[0]),
   {

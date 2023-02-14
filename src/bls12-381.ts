@@ -944,7 +944,7 @@ function G2psi2(c: ProjConstructor<Fp2>, P: ProjPointType<Fp2>) {
 // p = 0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab
 // m = 2 (or 1 for G1 see section 8.8.1)
 // k = 128
-const htfDefaults = {
+const htfDefaults = Object.freeze({
   // DST: a domain separation tag
   // defined in section 2.2.5
   // Use utils.getDSTLabel(), utils.setDSTLabel(value)
@@ -966,7 +966,7 @@ const htfDefaults = {
   // wide range of hash functions, including SHA-2, SHA-3, BLAKE2, and others.
   // BBS+ uses blake2: https://github.com/hyperledger/aries-framework-go/issues/2247
   hash: sha256,
-} as const;
+} as const);
 
 // Encoding utils
 // Point on G1 curve: (x, y)
@@ -1220,7 +1220,7 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
     Signature: {
       // TODO: Optimize, it's very slow because of sqrt.
       decode(hex: Hex): ProjPointType<Fp2> {
-        hex = ensureBytes(hex);
+        hex = ensureBytes('signatureHex', hex);
         const P = Fp.ORDER;
         const half = hex.length / 2;
         if (half !== 48 && half !== 96)
@@ -1247,7 +1247,6 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
         const isZero = y1 === 0n && (y0 * 2n) / P !== aflag1;
         if (isGreater || isZero) y = Fp2.neg(y);
         const point = bls12_381.G2.ProjectivePoint.fromAffine({ x, y });
-        // console.log('Signature.decode', point);
         point.assertValidity();
         return point;
       },

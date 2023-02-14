@@ -13,7 +13,7 @@
  */
 import { AffinePoint } from './curve.js';
 import { Field, hashToPrivateScalar } from './modular.js';
-import { Hex, PrivKey, CHash, bitLen, bitGet, hexToBytes, bytesToHex } from './utils.js';
+import { Hex, PrivKey, CHash, bitLen, bitGet, ensureBytes } from './utils.js';
 import * as htf from './hash-to-curve.js';
 import {
   CurvePointsType,
@@ -67,16 +67,11 @@ export type CurveFn<Fp, Fp2, Fp6, Fp12> = {
   Fp2: Field<Fp2>;
   Fp6: Field<Fp6>;
   Fp12: Field<Fp12>;
-  G1: CurvePointsRes<Fp>;
-  G2: CurvePointsRes<Fp2>;
+  G1: CurvePointsRes<Fp> & ReturnType<typeof htf.createHasher<Fp>>;
+  G2: CurvePointsRes<Fp2> & ReturnType<typeof htf.createHasher<Fp2>>;
   Signature: SignatureCoder<Fp2>;
   millerLoop: (ell: [Fp2, Fp2, Fp2][], g1: [Fp, Fp]) => Fp12;
   calcPairingPrecomputes: (p: AffinePoint<Fp2>) => [Fp2, Fp2, Fp2][];
-  // prettier-ignore
-  hashToCurve: {
-    G1: ReturnType<(typeof htf.hashToCurve<Fp>)>,
-    G2: ReturnType<(typeof htf.hashToCurve<Fp2>)>,
-  },
   pairing: (P: ProjPointType<Fp>, Q: ProjPointType<Fp2>, withFinalExponent?: boolean) => Fp12;
   getPublicKey: (privateKey: PrivKey) => Uint8Array;
   sign: {
@@ -102,16 +97,14 @@ export type CurveFn<Fp, Fp2, Fp6, Fp12> = {
     publicKeys: (Hex | ProjPointType<Fp>)[]
   ) => boolean;
   utils: {
-    stringToBytes: typeof htf.stringToBytes;
-    hashToField: typeof htf.hash_to_field;
-    expandMessageXMD: typeof htf.expand_message_xmd;
+    randomPrivateKey: () => Uint8Array;
   };
 };
 
 export function bls<Fp2, Fp6, Fp12>(
   CURVE: CurveType<Fp, Fp2, Fp6, Fp12>
 ): CurveFn<Fp, Fp2, Fp6, Fp12> {
-  // Fields looks pretty specific for curve, so for now we need to pass them with options
+  // Fields looks pretty specific for curve, so for now we need to pass them with opts
   const { Fp, Fr, Fp2, Fp6, Fp12 } = CURVE;
   const BLS_X_LEN = bitLen(CURVE.x);
   const groupLen = 32; // TODO: calculate; hardcoded for now
@@ -180,31 +173,20 @@ export function bls<Fp2, Fp6, Fp12>(
   }
 
   const utils = {
-    hexToBytes: hexToBytes,
-    bytesToHex: bytesToHex,
-    stringToBytes: htf.stringToBytes,
-    // TODO: do we need to export it here?
-    hashToField: (
-      msg: Uint8Array,
-      count: number,
-      options: Partial<typeof CURVE.htfDefaults> = {}
-    ) => htf.hash_to_field(msg, count, { ...CURVE.htfDefaults, ...options }),
-    expandMessageXMD: (msg: Uint8Array, DST: Uint8Array, lenInBytes: number, H = CURVE.hash) =>
-      htf.expand_message_xmd(msg, DST, lenInBytes, H),
-    hashToPrivateKey: (hash: Hex): Uint8Array => Fr.toBytes(hashToPrivateScalar(hash, CURVE.r)),
-    randomBytes: (bytesLength: number = groupLen): Uint8Array => CURVE.randomBytes(bytesLength),
-    randomPrivateKey: (): Uint8Array => utils.hashToPrivateKey(utils.randomBytes(groupLen + 8)),
+    randomPrivateKey: (): Uint8Array => {
+      return Fr.toBytes(hashToPrivateScalar(CURVE.randomBytes(groupLen + 8), CURVE.r));
+    },
   };
 
   // Point on G1 curve: (x, y)
-  const G1 = weierstrassPoints({
-    n: Fr.ORDER,
-    ...CURVE.G1,
-  });
-  const G1HashToCurve = htf.hashToCurve(G1.ProjectivePoint, CURVE.G1.mapToCurve, {
-    ...CURVE.htfDefaults,
-    ...CURVE.G1.htfDefaults,
-  });
+  const G1_ = weierstrassPoints({ n: Fr.ORDER, ...CURVE.G1 });
+  const G1 = Object.assign(
+    G1_,
+    htf.createHasher(G1_.ProjectivePoint, CURVE.G1.mapToCurve, {
+      ...CURVE.htfDefaults,
+      ...CURVE.G1.htfDefaults,
+    })
+  );
 
   // Sparse multiplication against precomputed coefficients
   // TODO: replace with weakmap?
@@ -223,15 +205,14 @@ export function bls<Fp2, Fp6, Fp12>(
   // }
 
   // Point on G2 curve (complex numbers): (x₁, x₂+i), (y₁, y₂+i)
-  const G2 = weierstrassPoints({
-    n: Fr.ORDER,
-    ...CURVE.G2,
-  });
-  const C = G2.ProjectivePoint as htf.H2CPointConstructor<Fp2>; // TODO: fix
-  const G2HashToCurve = htf.hashToCurve(C, CURVE.G2.mapToCurve, {
-    ...CURVE.htfDefaults,
-    ...CURVE.G2.htfDefaults,
-  });
+  const G2_ = weierstrassPoints({ n: Fr.ORDER, ...CURVE.G2 });
+  const G2 = Object.assign(
+    G2_,
+    htf.createHasher(G2_.ProjectivePoint as htf.H2CPointConstructor<Fp2>, CURVE.G2.mapToCurve, {
+      ...CURVE.htfDefaults,
+      ...CURVE.G2.htfDefaults,
+    })
+  );
 
   const { Signature } = CURVE.G2;
 
@@ -260,7 +241,7 @@ export function bls<Fp2, Fp6, Fp12>(
   function normP2Hash(point: G2Hex, htfOpts?: htf.htfBasicOpts): G2 {
     return point instanceof G2.ProjectivePoint
       ? point
-      : (G2HashToCurve.hashToCurve(point, htfOpts) as G2);
+      : (G2.hashToCurve(ensureBytes('point', point), htfOpts) as G2);
   }
 
   // Multiplies generator by private key.
@@ -383,7 +364,6 @@ export function bls<Fp2, Fp6, Fp12>(
     Signature,
     millerLoop,
     calcPairingPrecomputes,
-    hashToCurve: { G1: G1HashToCurve, G2: G2HashToCurve },
     pairing,
     getPublicKey,
     sign,

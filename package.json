@@ -3,7 +3,8 @@
   "version": "0.6.4",
   "description": "Minimal, auditable JS implementation of elliptic curve cryptography",
   "files": [
-    "lib"
+    "lib",
+    "src"
   ],
   "scripts": {
     "bench": "cd benchmark; node secp256k1.js; node curves.js; node stark.js; node bls.js",

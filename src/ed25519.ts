@@ -5,12 +5,12 @@ import { twistedEdwards, ExtPointType } from './abstract/edwards.js';
 import { montgomery } from './abstract/montgomery.js';
 import { mod, pow2, isNegativeLE, Fp as Field, FpSqrtEven } from './abstract/modular.js';
 import {
-  ensureBytes,
   equalBytes,
   bytesToHex,
   bytesToNumberLE,
   numberToBytesLE,
   Hex,
+  ensureBytes,
 } from './abstract/utils.js';
 import * as htf from './abstract/hash-to-curve.js';
 
@@ -223,7 +223,7 @@ function map_to_curve_elligator2_edwards25519(u: bigint) {
   const inv = Fp.invertBatch([xd, yd]); // batch division
   return { x: Fp.mul(xn, inv[0]), y: Fp.mul(yn, inv[1]) }; //  13. return (xn, xd, yn, yd)
 }
-const { hashToCurve, encodeToCurve } = htf.hashToCurve(
+const { hashToCurve, encodeToCurve } = htf.createHasher(
   ed25519.ExtendedPoint,
   (scalars: bigint[]) => map_to_curve_elligator2_edwards25519(scalars[0]),
   {
@@ -316,7 +316,7 @@ export class RistrettoPoint {
    * @param hex 64-bit output of a hash function
    */
   static hashToCurve(hex: Hex): RistrettoPoint {
-    hex = ensureBytes(hex, 64);
+    hex = ensureBytes('ristrettoHash', hex, 64);
     const r1 = bytes255ToNumberLE(hex.slice(0, 32));
     const R1 = calcElligatorRistrettoMap(r1);
     const r2 = bytes255ToNumberLE(hex.slice(32, 64));
@@ -330,7 +330,7 @@ export class RistrettoPoint {
    * @param hex Ristretto-encoded 32 bytes. Not every 32-byte string is valid ristretto encoding
    */
   static fromHex(hex: Hex): RistrettoPoint {
-    hex = ensureBytes(hex, 32);
+    hex = ensureBytes('ristrettoHex', hex, 32);
     const { a, d } = ed25519.CURVE;
     const P = ed25519.CURVE.Fp.ORDER;
     const mod = ed25519.CURVE.Fp.create;

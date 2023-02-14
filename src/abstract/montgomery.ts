@@ -149,13 +149,13 @@ export function montgomery(curveDef: CurveType): CurveFn {
     // MUST mask the most significant bit in the final byte.
     // This is very ugly way, but it works because fieldLen-1 is outside of bounds for X448, so this becomes NOOP
     // fieldLen - scalaryBytes = 1 for X448 and = 0 for X25519
-    const u = ensureBytes(uEnc, montgomeryBytes);
+    const u = ensureBytes('u coordinate', uEnc, montgomeryBytes);
     // u[fieldLen-1] crashes QuickJS (TypeError: out-of-bound numeric index)
     if (fieldLen === montgomeryBytes) u[fieldLen - 1] &= 127; // 0b0111_1111
     return bytesToNumberLE(u);
   }
   function decodeScalar(n: Hex): bigint {
-    const bytes = ensureBytes(n);
+    const bytes = ensureBytes('scalar', n);
     if (bytes.length !== montgomeryBytes && bytes.length !== fieldLen)
       throw new Error(`Expected ${montgomeryBytes} or ${fieldLen} bytes, got ${bytes.length}`);
     return bytesToNumberLE(adjustScalarBytes(bytes));

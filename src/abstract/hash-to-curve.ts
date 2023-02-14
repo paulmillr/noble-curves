@@ -1,7 +1,7 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import type { Group, GroupConstructor, AffinePoint } from './curve.js';
 import { mod, Field } from './modular.js';
-import { CHash, Hex, concatBytes, ensureBytes, validateObject } from './utils.js';
+import { CHash, concatBytes, utf8ToBytes, validateObject } from './utils.js';
 
 export type Opts = {
   DST: string; // DST: a domain separation tag, defined in section 2.2.5
@@ -16,18 +16,6 @@ export type Opts = {
   // TODO: verify that hash is shake if expand==='xof' via types
   hash: CHash;
 };
-
-// Global symbols in both browsers and Node.js since v11
-// See https://github.com/microsoft/TypeScript/issues/31535
-declare const TextEncoder: any;
-declare const TextDecoder: any;
-
-export function stringToBytes(str: string): Uint8Array {
-  if (typeof str !== 'string') {
-    throw new Error(`utf8ToBytes expected string, got ${typeof str}`);
-  }
-  return new TextEncoder().encode(str);
-}
 
 // Octet Stream to Integer (bytesToNumberBE)
 function os2ip(bytes: Uint8Array): bigint {
@@ -60,6 +48,13 @@ function strxor(a: Uint8Array, b: Uint8Array): Uint8Array {
   return arr;
 }
 
+function isBytes(item: unknown): void {
+  if (!(item instanceof Uint8Array)) throw new Error('Uint8Array expected');
+}
+function isNum(item: unknown): void {
+  if (!Number.isSafeInteger(item)) throw new Error('number expected');
+}
+
 // Produces a uniformly random byte string using a cryptographic hash function H that outputs b bits
 // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-5.4.1
 export function expand_message_xmd(
@@ -68,8 +63,11 @@ export function expand_message_xmd(
   lenInBytes: number,
   H: CHash
 ): Uint8Array {
+  isBytes(msg);
+  isBytes(DST);
+  isNum(lenInBytes);
   // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-16#section-5.3.3
-  if (DST.length > 255) DST = H(concatBytes(stringToBytes('H2C-OVERSIZE-DST-'), DST));
+  if (DST.length > 255) DST = H(concatBytes(utf8ToBytes('H2C-OVERSIZE-DST-'), DST));
   const b_in_bytes = H.outputLen;
   const r_in_bytes = H.blockLen;
   const ell = Math.ceil(lenInBytes / b_in_bytes);
@@ -95,11 +93,14 @@ export function expand_message_xof(
   k: number,
   H: CHash
 ): Uint8Array {
+  isBytes(msg);
+  isBytes(DST);
+  isNum(lenInBytes);
   // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-16#section-5.3.3
   // DST = H('H2C-OVERSIZE-DST-' || a_very_long_DST, Math.ceil((lenInBytes * k) / 8));
   if (DST.length > 255) {
     const dkLen = Math.ceil((2 * k) / 8);
-    DST = H.create({ dkLen }).update(stringToBytes('H2C-OVERSIZE-DST-')).update(DST).digest();
+    DST = H.create({ dkLen }).update(utf8ToBytes('H2C-OVERSIZE-DST-')).update(DST).digest();
   }
   if (lenInBytes > 65535 || DST.length > 255)
     throw new Error('expand_message_xof: invalid lenInBytes');
@@ -123,25 +124,27 @@ export function expand_message_xof(
  * @returns [u_0, ..., u_(count - 1)], a list of field elements.
  */
 export function hash_to_field(msg: Uint8Array, count: number, options: Opts): bigint[][] {
-  // if options is provided but incomplete, fill any missing fields with the
-  // value in hftDefaults (ie hash to G2).
-  const log2p = options.p.toString(2).length;
-  const L = Math.ceil((log2p + options.k) / 8); // section 5.1 of ietf draft link above
-  const len_in_bytes = count * options.m * L;
-  const DST = stringToBytes(options.DST);
-  let pseudo_random_bytes = msg;
-  if (options.expand === 'xmd') {
-    pseudo_random_bytes = expand_message_xmd(msg, DST, len_in_bytes, options.hash);
-  } else if (options.expand === 'xof') {
-    pseudo_random_bytes = expand_message_xof(msg, DST, len_in_bytes, options.k, options.hash);
-  }
+  const { p, k, m, hash, expand, DST: _DST } = options;
+  isBytes(msg);
+  isNum(count);
+  if (typeof _DST !== 'string') throw new Error('DST must be valid');
+  const log2p = p.toString(2).length;
+  const L = Math.ceil((log2p + k) / 8); // section 5.1 of ietf draft link above
+  const len_in_bytes = count * m * L;
+  const DST = utf8ToBytes(_DST);
+  const pseudo_random_bytes =
+    expand === 'xmd'
+      ? expand_message_xmd(msg, DST, len_in_bytes, hash)
+      : expand === 'xof'
+      ? expand_message_xof(msg, DST, len_in_bytes, k, hash)
+      : msg;
   const u = new Array(count);
   for (let i = 0; i < count; i++) {
-    const e = new Array(options.m);
-    for (let j = 0; j < options.m; j++) {
-      const elm_offset = L * (j + i * options.m);
+    const e = new Array(m);
+    for (let j = 0; j < m; j++) {
+      const elm_offset = L * (j + i * m);
       const tv = pseudo_random_bytes.subarray(elm_offset, elm_offset + L);
-      e[j] = mod(os2ip(tv), options.p);
+      e[j] = mod(os2ip(tv), p);
     }
     u[i] = e;
   }
@@ -178,7 +181,7 @@ export type MapToCurve<T> = (scalar: bigint[]) => AffinePoint<T>;
 // (changing DST is ok!)
 export type htfBasicOpts = { DST: string };
 
-export function hashToCurve<T>(
+export function createHasher<T>(
   Point: H2CPointConstructor<T>,
   mapToCurve: MapToCurve<T>,
   def: Opts
@@ -197,21 +200,17 @@ export function hashToCurve<T>(
   return {
     // Encodes byte string to elliptic curve
     // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-3
-    hashToCurve(msg: Hex, options?: htfBasicOpts) {
-      if (!mapToCurve) throw new Error('CURVE.mapToCurve() has not been defined');
-      msg = ensureBytes(msg);
+    hashToCurve(msg: Uint8Array, options?: htfBasicOpts) {
       const u = hash_to_field(msg, 2, { ...def, DST: def.DST, ...options } as Opts);
-      const P = Point.fromAffine(mapToCurve(u[0]))
-        .add(Point.fromAffine(mapToCurve(u[1])))
-        .clearCofactor();
+      const u0 = Point.fromAffine(mapToCurve(u[0]));
+      const u1 = Point.fromAffine(mapToCurve(u[1]));
+      const P = u0.add(u1).clearCofactor();
       P.assertValidity();
       return P;
     },
 
     // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-16#section-3
-    encodeToCurve(msg: Hex, options?: htfBasicOpts) {
-      if (!mapToCurve) throw new Error('CURVE.mapToCurve() has not been defined');
-      msg = ensureBytes(msg);
+    encodeToCurve(msg: Uint8Array, options?: htfBasicOpts) {
       const u = hash_to_field(msg, 1, { ...def, DST: def.encodeDST, ...options } as Opts);
       const P = Point.fromAffine(mapToCurve(u[0])).clearCofactor();
       P.assertValidity();
