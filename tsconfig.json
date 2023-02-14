@@ -2,9 +2,11 @@
     "compilerOptions": {
         "strict": true,
         "declaration": true,
+        "declarationMap": true,
         "outDir": "lib",
         "target": "es2020",
         "lib": ["es2020"], // Set explicitly to remove DOM
+        "sourceMap": true,
         "module": "commonjs",
         "moduleResolution": "node",
         "noUnusedLocals": true,
