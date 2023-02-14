@@ -64,7 +64,7 @@ const msg = new Uint8Array(32).fill(1);
 const sig = secp256k1.sign(msg, priv);
 secp256k1.verify(sig, msg, pub) === true;
 
-const privHex = '46c930bc7bb4db7f55da20798697421b98c4175a52c630294d75a84b9c126236'
+const privHex = '46c930bc7bb4db7f55da20798697421b98c4175a52c630294d75a84b9c126236';
 const pub2 = secp256k1.getPublicKey(privHex); // keys & other inputs can be Uint8Array-s or hex strings
 
 // Follows hash-to-curve specification to encode arbitrary hashes to EC points
@@ -314,7 +314,7 @@ point.negate(); // Flips point over x/y coordinate.
 point.multiply(31415n); // Multiplication of Point by scalar.
 
 point.assertValidity(); // Checks for being on-curve
-point.toAffine();  // Converts to 2d affine xy coordinates
+point.toAffine(); // Converts to 2d affine xy coordinates
 
 secq256k1.CURVE.n;
 secq256k1.CURVE.Fp.mod();
@@ -472,7 +472,8 @@ Every curve has exported `hashToCurve` and `encodeToCurve` methods:
 ```ts
 import { hashToCurve, encodeToCurve } from '@noble/curves/secp256k1';
 import { randomBytes } from '@noble/hashes/utils';
-console.log(hashToCurve(randomBytes())); // second argument of type htfOpts (see below) is optional
+console.log(hashToCurve(randomBytes()));
+console.log(hashToCurve(randomBytes(), { DST: 'custom' }));
 console.log(encodeToCurve(randomBytes()));
 ```
 
@@ -481,8 +482,19 @@ If you need low-level methods from spec:
 `expand_message_xmd` [(spec)](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-5.4.1) produces a uniformly random byte string using a cryptographic hash function H that outputs b bits.
 
 ```ts
-function expand_message_xmd(msg: Uint8Array, DST: Uint8Array, lenInBytes: number, H: CHash): Uint8Array;
-function expand_message_xof(msg: Uint8Array, DST: Uint8Array, lenInBytes: number, k: number, H: CHash): Uint8Array;
+function expand_message_xmd(
+  msg: Uint8Array,
+  DST: Uint8Array,
+  lenInBytes: number,
+  H: CHash
+): Uint8Array;
+function expand_message_xof(
+  msg: Uint8Array,
+  DST: Uint8Array,
+  lenInBytes: number,
+  k: number,
+  H: CHash
+): Uint8Array;
 ```
 
 `hash_to_field(msg, count, options)` [(spec)](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-5.3)
@@ -494,22 +506,6 @@ _ Returns `[u_0, ..., u_(count - 1)]`, a list of field elements.
 
 ```ts
 function hash_to_field(msg: Uint8Array, count: number, options: htfOpts): bigint[][];
-type htfOpts = {
-  DST: string; // a domain separation tag defined in section 2.2.5
-  // p: the characteristic of F
-  //    where F is a finite field of characteristic p and order q = p^m
-  p: bigint;
-  // m: the extension degree of F, m >= 1
-  //     where F is a finite field of characteristic p and order q = p^m
-  m: number;
-  k: number; // the target security level for the suite in bits defined in section 5.1
-  expand?: 'xmd' | 'xof'; // option to use a message that has already been processed by expand_message_xmd
-  // Hash functions for: expand_message_xmd is appropriate for use with a
-  // wide range of hash functions, including SHA-2, SHA-3, BLAKE2, and others.
-  // BBS+ uses blake2: https://github.com/hyperledger/aries-framework-go/issues/2247
-  // TODO: verify that hash is shake if expand==='xof' via types
-  hash: CHash;
-};
 ```
 
 ### abstract/poseidon: Poseidon hash
