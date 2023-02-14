@@ -473,8 +473,11 @@ Every curve has exported `hashToCurve` and `encodeToCurve` methods:
 import { hashToCurve, encodeToCurve } from '@noble/curves/secp256k1';
 import { randomBytes } from '@noble/hashes/utils';
 console.log(hashToCurve(randomBytes()));
-console.log(hashToCurve(randomBytes(), { DST: 'custom' }));
 console.log(encodeToCurve(randomBytes()));
+
+import { bls12_381 } from '@noble/curves/bls12-381';
+bls12_381.G1.hashToCurve(randomBytes(), { DST: 'another' });
+bls12_381.G2.hashToCurve(randomBytes(), { DST: 'custom' });
 ```
 
 If you need low-level methods from spec:
