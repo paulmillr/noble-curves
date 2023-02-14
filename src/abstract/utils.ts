@@ -136,6 +136,70 @@ export const bitSet = (n: bigint, pos: number, value: boolean) =>
 // Not using ** operator with bigints for old engines.
 export const bitMask = (n: number) => (_2n << BigInt(n - 1)) - _1n;
 
+// DRBG
+
+const u8n = (data?: any) => new Uint8Array(data); // creates Uint8Array
+const u8fr = (arr: any) => Uint8Array.from(arr); // another shortcut
+type Pred<T> = (v: Uint8Array) => T | undefined;
+/**
+ * Minimal HMAC-DRBG from NIST 800-90 for RFC6979 sigs.
+ * @returns function that will call DRBG until 2nd arg returns something meaningful
+ * @example
+ *   const drbg = createHmacDRBG<Key>(32, 32, hmac);
+ *   drbg(seed, bytesToKey); // bytesToKey must return Key or undefined
+ */
+export function createHmacDrbg<T>(
+  hashLen: number,
+  qByteLen: number,
+  hmacFn: (key: Uint8Array, ...messages: Uint8Array[]) => Uint8Array
+): (seed: Uint8Array, predicate: Pred<T>) => T {
+  if (typeof hashLen !== 'number' || hashLen < 2) throw new Error('hashLen must be a number');
+  if (typeof qByteLen !== 'number' || qByteLen < 2) throw new Error('qByteLen must be a number');
+  if (typeof hmacFn !== 'function') throw new Error('hmacFn must be a function');
+  // Step B, Step C: set hashLen to 8*ceil(hlen/8)
+  let v = u8n(hashLen); // Minimal non-full-spec HMAC-DRBG from NIST 800-90 for RFC6979 sigs.
+  let k = u8n(hashLen); // Steps B and C of RFC6979 3.2: set hashLen, in our case always same
+  let i = 0; // Iterations counter, will throw when over 1000
+  const reset = () => {
+    v.fill(1);
+    k.fill(0);
+    i = 0;
+  };
+  const h = (...b: Uint8Array[]) => hmacFn(k, v, ...b); // hmac(k)(v, ...values)
+  const reseed = (seed = u8n()) => {
+    // HMAC-DRBG reseed() function. Steps D-G
+    k = h(u8fr([0x00]), seed); // k = hmac(k || v || 0x00 || seed)
+    v = h(); // v = hmac(k || v)
+    if (seed.length === 0) return;
+    k = h(u8fr([0x01]), seed); // k = hmac(k || v || 0x01 || seed)
+    v = h(); // v = hmac(k || v)
+  };
+  const gen = () => {
+    // HMAC-DRBG generate() function
+    if (i++ >= 1000) throw new Error('drbg: tried 1000 values');
+    let len = 0;
+    const out: Uint8Array[] = [];
+    while (len < qByteLen) {
+      v = h();
+      const sl = v.slice();
+      out.push(sl);
+      len += v.length;
+    }
+    return concatBytes(...out);
+  };
+  const genUntil = (seed: Uint8Array, pred: Pred<T>): T => {
+    reset();
+    reseed(seed); // Steps D-G
+    let res: T | undefined = undefined; // Step H: grind until k is in [1..n-1]
+    while (!(res = pred(gen()))) reseed();
+    reset();
+    return res;
+  };
+  return genUntil;
+}
+
+// Validating curves and fields
+
 const validatorFns = {
   bigint: (val: any) => typeof val === 'bigint',
   function: (val: any) => typeof val === 'function',
