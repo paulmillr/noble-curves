@@ -642,7 +642,6 @@ export type CurveFn = {
   utils: {
     normPrivateKeyToScalar: (key: PrivKey) => bigint;
     isValidPrivateKey(privateKey: PrivKey): boolean;
-    hashToPrivateKey: (hash: Hex) => Uint8Array;
     randomPrivateKey: () => Uint8Array;
     precompute: (windowSize?: number, point?: ProjPointType<bigint>) => ProjPointType<bigint>;
   };
@@ -677,7 +676,6 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       const x = Fp.toBytes(a.x);
       const cat = ut.concatBytes;
       if (isCompressed) {
-        // TODO: hasEvenY
         return cat(Uint8Array.from([point.hasEvenY() ? 0x02 : 0x03]), x);
       } else {
         return cat(Uint8Array.from([0x04]), x, Fp.toBytes(a.y));
@@ -810,16 +808,14 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     normPrivateKeyToScalar: normalizePrivateKey,
 
     /**
-     * Converts some bytes to a valid private key. Needs at least (nBitLength+64) bytes.
-     */
-    hashToPrivateKey: (hash: Hex): Uint8Array =>
-      ut.numberToBytesBE(mod.hashToPrivateScalar(hash, CURVE_ORDER), CURVE.nByteLength),
-
-    /**
      * Produces cryptographically secure private key from random of size (nBitLength+64)
      * as per FIPS 186 B.4.1 with modulo bias being neglible.
      */
-    randomPrivateKey: (): Uint8Array => utils.hashToPrivateKey(CURVE.randomBytes(Fp.BYTES + 8)),
+    randomPrivateKey: (): Uint8Array => {
+      const rand = CURVE.randomBytes(Fp.BYTES + 8);
+      const num = mod.hashToPrivateScalar(rand, CURVE_ORDER);
+      return ut.numberToBytesBE(num, CURVE.nByteLength);
+    },
 
     /**
      * 1. Returns cached point which you can use to pass to `getSharedSecret` or `#multiply` by it.
@@ -862,7 +858,8 @@ export function weierstrass(curveDef: CurveType): CurveFn {
   /**
    * ECDH (Elliptic Curve Diffie Hellman).
    * Computes shared public key from private key and public key.
-   * Checks: 1) private key validity 2) shared key is on-curve
+   * Checks: 1) private key validity 2) shared key is on-curve.
+   * Does NOT hash the result.
    * @param privateA private key
    * @param publicB different public key
    * @param isCompressed whether to return compact (default), or full key
@@ -895,10 +892,12 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     };
   // NOTE: pads output with zero as per spec
   const ORDER_MASK = ut.bitMask(CURVE.nBitLength);
+  /**
+   * Converts to bytes. Checks if num in `[0..ORDER_MASK-1]` e.g.: `[0..2^256-1]`.
+   */
   function int2octets(num: bigint): Uint8Array {
     if (typeof num !== 'bigint') throw new Error('bigint expected');
     if (!(_0n <= num && num < ORDER_MASK))
-      // n in [0..ORDER_MASK-1]
       throw new Error(`bigint expected < 2^${CURVE.nBitLength}`);
     // works with order, can have different size than numToField!
     return ut.numberToBytesBE(num, CURVE.nByteLength);

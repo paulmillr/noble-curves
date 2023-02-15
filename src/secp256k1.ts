@@ -107,6 +107,7 @@ function taggedHash(tag: string, ...messages: Uint8Array[]): Uint8Array {
   return sha256(concatBytes(tagP, ...messages));
 }
 
+// ECDSA compact points are 33-byte. Schnorr is 32: we strip first byte 0x02 or 0x03
 const pointToBytes = (point: PointType<bigint>) => point.toRawBytes(true).slice(1);
 const numTo32b = (n: bigint) => numberToBytesBE(n, 32);
 const modP = (x: bigint) => mod(x, secp256k1P);
@@ -114,12 +115,17 @@ const modN = (x: bigint) => mod(x, secp256k1N);
 const Point = secp256k1.ProjectivePoint;
 const GmulAdd = (Q: PointType<bigint>, a: bigint, b: bigint) =>
   Point.BASE.multiplyAndAddUnsafe(Q, a, b);
+// Calculate point, scalar and bytes
 function schnorrGetExtPubKey(priv: PrivKey) {
-  const d = secp256k1.utils.normPrivateKeyToScalar(priv);
+  const d = secp256k1.utils.normPrivateKeyToScalar(priv); // same method executed in fromPrivateKey
   const point = Point.fromPrivateKey(d); // P = d'⋅G; 0 < d' < n check is done inside
   const scalar = point.hasEvenY() ? d : modN(-d); // d = d' if has_even_y(P), otherwise d = n-d'
   return { point, scalar, bytes: pointToBytes(point) };
 }
+/**
+ * lift_x from BIP340. Convert 32-byte x coordinate to elliptic curve point.
+ * @returns valid point checked for being on-curve
+ */
 function lift_x(x: bigint): PointType<bigint> {
   if (!fe(x)) throw new Error('bad x: need 0 < x < p'); // Fail if x ≥ p.
   const xx = modP(x * x);
@@ -130,6 +136,9 @@ function lift_x(x: bigint): PointType<bigint> {
   p.assertValidity();
   return p;
 }
+/**
+ * Create tagged hash, convert it to bigint, reduce modulo-n.
+ */
 function challenge(...args: Uint8Array[]): bigint {
   return modN(bytesToNumberBE(taggedHash('BIP0340/challenge', ...args)));
 }
@@ -169,6 +178,7 @@ function schnorrSign(
 
 /**
  * Verifies Schnorr signature.
+ * Will swallow errors & return false except for initial type validation of arguments.
  */
 function schnorrVerify(signature: Hex, message: Hex, publicKey: Hex): boolean {
   const sig = ensureBytes('signature', signature, 64);

@@ -73,6 +73,7 @@ export function montgomery(curveDef: CurveType): CurveFn {
     return [x_2, x_3];
   }
 
+  // Accepts 0 as well
   function assertFieldElement(n: bigint): bigint {
     if (typeof n === 'bigint' && _0n <= n && n < P) return n;
     throw new Error('Expected valid scalar 0 < scalar < CURVE.P');
