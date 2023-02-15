@@ -1,6 +1,6 @@
 import { readFileSync } from 'fs';
 import { mark, run } from 'micro-bmark';
-import { bls12_381 as bls } from '../lib/bls12-381.js';
+import { bls12_381 as bls } from '../bls12-381.js';
 
 const G2_VECTORS = readFileSync('../test/bls12-381/bls12-381-g2-test-vectors.txt', 'utf-8')
   .trim()

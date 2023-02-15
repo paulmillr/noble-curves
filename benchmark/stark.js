@@ -1,6 +1,6 @@
 import { run, mark, compare, utils } from 'micro-bmark';
 import * as starkwareCrypto from '@starkware-industries/starkware-crypto-utils';
-import * as stark from '../lib/stark.js';
+import * as stark from '../stark.js';
 
 run(async () => {
   const RAM = false;

@@ -1,10 +1,10 @@
 import { run, mark, utils } from 'micro-bmark';
 import { generateData } from './_shared.js';
-import { P256 } from '../lib/p256.js';
-import { P384 } from '../lib/p384.js';
-import { P521 } from '../lib/p521.js';
-import { ed25519 } from '../lib/ed25519.js';
-import { ed448 } from '../lib/ed448.js';
+import { P256 } from '../p256.js';
+import { P384 } from '../p384.js';
+import { P521 } from '../p521.js';
+import { ed25519 } from '../ed25519.js';
+import { ed448 } from '../ed448.js';
 
 run(async () => {
   const RAM = false
