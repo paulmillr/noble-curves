@@ -552,10 +552,6 @@ and others with it.
 
 ### abstract/modular: Modular arithmetics utilities
 
-The module also contains useful `hashToPrivateScalar` method which allows to create
-scalars (e.g. private keys) with the modulo bias being neglible. It follows
-FIPS 186 B.4.1. Requires at least 40 bytes of input for 32-byte private key.
-
 ```ts
 import * as mod from '@noble/curves/abstract/modular';
 const fp = mod.Field(2n ** 255n - 19n); // Finite field over 2^255-19
@@ -568,8 +564,31 @@ fp.sqrt(21n); // square root
 mod.mod(21n, 10n); // 21 mod 10 == 1n; fixed version of 21 % 10
 mod.invert(17n, 10n); // invert(17) mod 10; modular multiplicative inverse
 mod.invertBatch([1n, 2n, 4n], 21n); // => [1n, 11n, 16n] in one inversion
-mod.hashToPrivateScalar(sha512_of_something, secp256r1.n);
 ```
+
+#### Creating private keys from hashes
+
+Suppose you have `sha256(something)` and you want to make a private key from it.
+Even though p256 or secp256k1 may have 32-byte private keys,
+and sha256 output is also 32-byte, you can't just use it and reduce it modulo `CURVE.n`.
+
+Doing so will make the result key [biased](https://research.kudelskisecurity.com/2020/07/28/the-definitive-guide-to-modulo-bias-and-how-to-avoid-it/).
+
+To avoid the bias, we implement FIPS 186 B.4.1, which allows to take arbitrary
+byte array and produce valid scalars / private keys with bias being neglible.
+
+Use [hash-to-curve](#abstracthash-to-curve-hashing-strings-to-curve-points) if you need
+hashing to **public keys**; the function in the module instead operates on **private keys**.
+
+```ts
+import { p256 } from '@noble/curves/p256';
+import { sha256 } from '@noble/hashes/sha256';
+import { hkdf } from '@noble/hashes/hkdf';
+const someKey = new Uint8Array(32).fill(2); // Needs to actually be random, not .fill(2)
+const derived = hkdf(sha256, someKey, undefined, 'application', 40); // 40 bytes
+const validPrivateKey = mod.hashToPrivateScalar(derived, p256.CURVE.n);
+```
+
 
 ### abstract/utils: General utilities
 
