@@ -138,10 +138,10 @@ export const ed25519ph = twistedEdwards({
 
 export const x25519 = montgomery({
   P: ED25519_P,
-  a24: BigInt('121665'),
+  a: BigInt(486662),
   montgomeryBits: 255, // n is 253 bits
   nByteLength: 32,
-  Gu: '0900000000000000000000000000000000000000000000000000000000000000',
+  Gu: BigInt(9),
   powPminus2: (x: bigint): bigint => {
     const P = ED25519_P;
     // x^(p-2) aka x^(2^255-21)

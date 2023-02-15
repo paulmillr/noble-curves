@@ -11,25 +11,25 @@ export type CurveType = {
   nByteLength: number;
   adjustScalarBytes?: (bytes: Uint8Array) => Uint8Array;
   domain?: (data: Uint8Array, ctx: Uint8Array, phflag: boolean) => Uint8Array;
-  a24: bigint; // Related to d, but cannot be derived from it
+  a: bigint;
   montgomeryBits: number;
   powPminus2?: (x: bigint) => bigint;
   xyToU?: (x: bigint, y: bigint) => bigint;
-  Gu: string;
+  Gu: bigint;
 };
 export type CurveFn = {
   scalarMult: (scalar: Hex, u: Hex) => Uint8Array;
   scalarMultBase: (scalar: Hex) => Uint8Array;
   getSharedSecret: (privateKeyA: Hex, publicKeyB: Hex) => Uint8Array;
   getPublicKey: (privateKey: Hex) => Uint8Array;
-  Gu: string;
+  GuBytes: Uint8Array;
 };
 
 function validateOpts(curve: CurveType) {
   validateObject(
     curve,
     {
-      a24: 'bigint',
+      a: 'bigint',
     },
     {
       montgomeryBits: 'isSafeInteger',
@@ -37,7 +37,7 @@ function validateOpts(curve: CurveType) {
       adjustScalarBytes: 'function',
       domain: 'function',
       powPminus2: 'function',
-      Gu: 'string',
+      Gu: 'bigint',
     }
   );
   // Set defaults
@@ -49,7 +49,7 @@ function validateOpts(curve: CurveType) {
 export function montgomery(curveDef: CurveType): CurveFn {
   const CURVE = validateOpts(curveDef);
   const { P } = CURVE;
-  const modP = (a: bigint) => mod(a, P);
+  const modP = (n: bigint) => mod(n, P);
   const montgomeryBits = CURVE.montgomeryBits;
   const montgomeryBytes = Math.ceil(montgomeryBits / 8);
   const fieldLen = CURVE.nByteLength;
@@ -79,6 +79,8 @@ export function montgomery(curveDef: CurveType): CurveFn {
   }
 
   // x25519 from 4
+  // The constant a24 is (486662 - 2) / 4 = 121665 for curve25519/X25519
+  const a24 = (CURVE.a - BigInt(2)) / BigInt(4);
   /**
    *
    * @param pointU u coordinate (x) on Montgomery Curve 25519
@@ -90,8 +92,6 @@ export function montgomery(curveDef: CurveType): CurveFn {
     // Section 5: Implementations MUST accept non-canonical values and process them as
     // if they had been reduced modulo the field prime.
     const k = assertFieldElement(scalar);
-    // The constant a24 is (486662 - 2) / 4 = 121665 for curve25519/X25519
-    const a24 = CURVE.a24;
     const x_1 = u;
     let x_2 = _1n;
     let z_2 = _0n;
@@ -170,8 +170,9 @@ export function montgomery(curveDef: CurveType): CurveFn {
     return encodeUCoordinate(pu);
   }
   // Computes public key from private. By doing scalar multiplication of base point.
+  const GuBytes = encodeUCoordinate(CURVE.Gu);
   function scalarMultBase(scalar: Hex): Uint8Array {
-    return scalarMult(scalar, CURVE.Gu);
+    return scalarMult(scalar, GuBytes);
   }
 
   return {
@@ -179,6 +180,6 @@ export function montgomery(curveDef: CurveType): CurveFn {
     scalarMultBase,
     getSharedSecret: (privateKey: Hex, publicKey: Hex) => scalarMult(privateKey, publicKey),
     getPublicKey: (privateKey: Hex): Uint8Array => scalarMultBase(privateKey),
-    Gu: CURVE.Gu,
+    GuBytes: GuBytes,
   };
 }

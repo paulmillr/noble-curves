@@ -122,11 +122,11 @@ export const ed448 = twistedEdwards(ED448_DEF);
 export const ed448ph = twistedEdwards({ ...ED448_DEF, preHash: shake256_64 });
 
 export const x448 = montgomery({
-  a24: BigInt(39081),
+  a: BigInt(156326),
   montgomeryBits: 448,
   nByteLength: 57,
   P: ed448P,
-  Gu: '0500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
+  Gu: BigInt(5),
   powPminus2: (x: bigint): bigint => {
     const P = ed448P;
     const Pminus3div4 = ed448_pow_Pminus3div4(x);

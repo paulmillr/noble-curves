@@ -445,15 +445,11 @@ import { montgomery } from '@noble/curves/abstract/montgomery';
 
 const x25519 = montgomery({
   P: 2n ** 255n - 19n,
-  a24: 121665n, // TODO: change to a
+  a: 486662n,
+  Gu: 9n,
   montgomeryBits: 255,
   nByteLength: 32,
-  Gu: '0900000000000000000000000000000000000000000000000000000000000000',
-
-  // Optional params
-  powPminus2: (x: bigint): bigint => {
-    return mod.pow(x, P - 2, P);
-  },
+  // Optional param
   adjustScalarBytes(bytes) {
     bytes[0] &= 248;
     bytes[31] &= 127;

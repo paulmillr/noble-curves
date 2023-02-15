@@ -97,7 +97,7 @@ should('X25519 base point', () => {
   const { y } = ed25519ph.ExtendedPoint.BASE;
   const { Fp } = ed25519ph.CURVE;
   const u = Fp.create((y + 1n) * Fp.inv(1n - y));
-  deepStrictEqual(hex(numberToBytesLE(u, 32)), x25519.Gu);
+  deepStrictEqual(numberToBytesLE(u, 32), x25519.GuBytes);
 });
 
 describe('RFC7748', () => {
@@ -128,7 +128,7 @@ describe('RFC7748', () => {
   for (let i = 0; i < rfc7748Iter.length; i++) {
     const { scalar, iters } = rfc7748Iter[i];
     should(`scalarMult iteration (${i})`, () => {
-      let k = x25519.Gu;
+      let k = x25519.GuBytes;
       for (let i = 0, u = k; i < iters; i++) [k, u] = [x25519.scalarMult(k, u), k];
       deepStrictEqual(hex(k), scalar);
     });

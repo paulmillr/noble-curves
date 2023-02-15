@@ -509,7 +509,7 @@ describe('ed448', () => {
   for (let i = 0; i < rfc7748Iter.length; i++) {
     const { scalar, iters } = rfc7748Iter[i];
     should(`RFC7748: scalarMult iteration (${i})`, () => {
-      let k = x448.Gu;
+      let k = x448.GuBytes;
       for (let i = 0, u = k; i < iters; i++) [k, u] = [x448.scalarMult(k, u), k];
       deepStrictEqual(hex(k), scalar);
     });
@@ -664,7 +664,7 @@ describe('ed448', () => {
     // const invX = Fp.invert(x * x); // x²
     const u = Fp.div(Fp.create(y * y), Fp.create(x * x)); // (y²/x²)
     // const u = Fp.create(y * y * invX);
-    deepStrictEqual(hex(numberToBytesLE(u, 56)), x448.Gu);
+    deepStrictEqual(numberToBytesLE(u, 56), x448.GuBytes);
   });
 });
 
