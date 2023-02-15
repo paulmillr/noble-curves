@@ -94,19 +94,19 @@ function ensureBytes0x(hex: Hex): Uint8Array {
   return hex instanceof Uint8Array ? Uint8Array.from(hex) : hexToBytes0x(hex);
 }
 
-function normalizePrivateKey(privKey: Hex) {
+function normPrivKey(privKey: Hex) {
   return cutils.bytesToHex(ensureBytes0x(privKey)).padStart(64, '0');
 }
 function getPublicKey0x(privKey: Hex, isCompressed = false) {
-  return starkCurve.getPublicKey(normalizePrivateKey(privKey), isCompressed);
+  return starkCurve.getPublicKey(normPrivKey(privKey), isCompressed);
 }
 function getSharedSecret0x(privKeyA: Hex, pubKeyB: Hex) {
-  return starkCurve.getSharedSecret(normalizePrivateKey(privKeyA), pubKeyB);
+  return starkCurve.getSharedSecret(normPrivKey(privKeyA), pubKeyB);
 }
 
 function sign0x(msgHash: Hex, privKey: Hex, opts?: any) {
   if (typeof privKey === 'string') privKey = strip0x(privKey).padStart(64, '0');
-  return starkCurve.sign(ensureBytes0x(msgHash), normalizePrivateKey(privKey), opts);
+  return starkCurve.sign(ensureBytes0x(msgHash), normPrivKey(privKey), opts);
 }
 function verify0x(signature: Hex, msgHash: Hex, pubKey: Hex) {
   const sig = signature instanceof Signature ? signature : ensureBytes0x(signature);

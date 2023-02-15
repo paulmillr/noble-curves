@@ -257,7 +257,7 @@ export function bls<Fp2, Fp6, Fp12>(
   function sign(message: G2Hex, privateKey: PrivKey, htfOpts?: htf.htfBasicOpts): Uint8Array | G2 {
     const msgPoint = normP2Hash(message, htfOpts);
     msgPoint.assertValidity();
-    const sigPoint = msgPoint.multiply(G1.normalizePrivateKey(privateKey));
+    const sigPoint = msgPoint.multiply(G1.normPrivateKeyToScalar(privateKey));
     if (message instanceof G2.ProjectivePoint) return sigPoint;
     return Signature.encode(sigPoint);
   }
