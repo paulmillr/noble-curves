@@ -351,7 +351,7 @@ type CurveFn = {
   Signature: SignatureConstructor;
   utils: {
     normPrivateKeyToScalar: (key: PrivKey) => bigint;
-    isValidPrivateKey(privateKey: PrivKey): boolean;
+    isValidPrivateKey(key: PrivKey): boolean;
     randomPrivateKey: () => Uint8Array;
     precompute: (windowSize?: number, point?: ProjPointType<bigint>) => ProjPointType<bigint>;
   };

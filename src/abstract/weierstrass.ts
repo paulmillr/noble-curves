@@ -122,7 +122,7 @@ function validatePointOpts<T>(curve: CurvePointsType<T>) {
 
 export type CurvePointsRes<T> = {
   ProjectivePoint: ProjConstructor<T>;
-  normalizePrivateKey: (key: PrivKey) => bigint;
+  normPrivateKeyToScalar: (key: PrivKey) => bigint;
   weierstrassEquation: (x: T) => T;
   isWithinCurveOrder: (num: bigint) => boolean;
 };
@@ -203,8 +203,8 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
     if (!isWithinCurveOrder(num)) throw new Error('Expected valid bigint: 0 < bigint < curve.n');
   }
   // Validates if priv key is valid and converts it to bigint.
-  // Supports options CURVE.normalizePrivateKey and CURVE.wrapPrivateKey.
-  function normalizePrivateKey(key: PrivKey): bigint {
+  // Supports options allowedPrivateKeyLengths and wrapPrivateKey.
+  function normPrivateKeyToScalar(key: PrivKey): bigint {
     const { allowedPrivateKeyLengths: lengths, nByteLength, wrapPrivateKey, n } = CURVE;
     if (lengths && typeof key !== 'bigint') {
       if (key instanceof Uint8Array) key = ut.bytesToHex(key);
@@ -287,7 +287,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
 
     // Multiplies generator point by privateKey.
     static fromPrivateKey(privateKey: PrivKey) {
-      return Point.BASE.multiply(normalizePrivateKey(privateKey));
+      return Point.BASE.multiply(normPrivateKeyToScalar(privateKey));
     }
 
     // We calculate precomputes for elliptic curve point multiplication
@@ -488,8 +488,9 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
      * Constant time multiplication.
      * Uses wNAF method. Windowed method may be 10% faster,
      * but takes 2x longer to generate and consumes 2x memory.
+     * Uses precomputes when available.
+     * Uses endomorphism for Koblitz curves.
      * @param scalar by which the point would be multiplied
-     * @param affinePoint optional point ot save cached precompute windows on it
      * @returns New point
      */
     multiply(scalar: bigint): Point {
@@ -517,6 +518,8 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
 
     /**
      * Efficiently calculate `aP + bQ`. Unsafe, can expose private key, if used incorrectly.
+     * Not using Strauss-Shamir trick: precomputation tables are faster.
+     * The trick could be useful if both P and Q are not G (not in our case).
      * @returns non-zero affine point
      */
     multiplyAndAddUnsafe(Q: Point, a: bigint, b: bigint): Point | undefined {
@@ -572,7 +575,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
 
   return {
     ProjectivePoint: Point as ProjConstructor<T>,
-    normalizePrivateKey,
+    normPrivateKeyToScalar,
     weierstrassEquation,
     isWithinCurveOrder,
   };
@@ -666,7 +669,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
 
   const {
     ProjectivePoint: Point,
-    normalizePrivateKey,
+    normPrivateKeyToScalar,
     weierstrassEquation,
     isWithinCurveOrder,
   } = weierstrassPoints({
@@ -799,13 +802,13 @@ export function weierstrass(curveDef: CurveType): CurveFn {
   const utils = {
     isValidPrivateKey(privateKey: PrivKey) {
       try {
-        normalizePrivateKey(privateKey);
+        normPrivateKeyToScalar(privateKey);
         return true;
       } catch (error) {
         return false;
       }
     },
-    normPrivateKeyToScalar: normalizePrivateKey,
+    normPrivateKeyToScalar: normPrivateKeyToScalar,
 
     /**
      * Produces cryptographically secure private key from random of size (nBitLength+64)
@@ -818,16 +821,16 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     },
 
     /**
-     * 1. Returns cached point which you can use to pass to `getSharedSecret` or `#multiply` by it.
-     * 2. Precomputes point multiplication table. Is done by default on first `getPublicKey()` call.
-     * If you want your first getPublicKey to take 0.16ms instead of 20ms, make sure to call
-     * utils.precompute() somewhere without arguments first.
-     * @param windowSize 2, 4, 8, 16
+     * Creates precompute table for an arbitrary EC point. Makes point "cached".
+     * Allows to massively speed-up `point.multiply(scalar)`.
      * @returns cached point
+     * @example
+     * const fast = utils.precompute(8, ProjectivePoint.fromHex(someonesPubKey));
+     * fast.multiply(privKey); // much faster ECDH now
      */
     precompute(windowSize = 8, point = Point.BASE): typeof Point.BASE {
       point._setWindowSize(windowSize);
-      point.multiply(BigInt(3));
+      point.multiply(BigInt(3)); // 3 is arbitrary, just need any number here
       return point;
     },
   };
@@ -869,7 +872,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     if (isProbPub(privateA)) throw new Error('first arg must be private key');
     if (!isProbPub(publicB)) throw new Error('second arg must be public key');
     const b = Point.fromHex(publicB); // check for being on-curve
-    return b.multiply(normalizePrivateKey(privateA)).toRawBytes(isCompressed);
+    return b.multiply(normPrivateKeyToScalar(privateA)).toRawBytes(isCompressed);
   }
 
   // RFC6979: ensure ECDSA msg is X bytes and < N. RFC suggests optional truncating via bits2octets.
@@ -921,7 +924,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     // with nBitLength % 8 !== 0. Because of that, we unwrap it here as int2octets call.
     // const bits2octets = (bits) => int2octets(bits2int_modN(bits))
     const h1int = bits2int_modN(msgHash);
-    const d = normalizePrivateKey(privateKey); // validate private key, convert to bigint
+    const d = normPrivateKeyToScalar(privateKey); // validate private key, convert to bigint
     const seedArgs = [int2octets(d), int2octets(h1int)];
     // extraEntropy. RFC6979 3.6: additional k' (optional).
     if (ent != null) {
