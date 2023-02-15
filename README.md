@@ -45,7 +45,7 @@ Use NPM for browser / node.js:
 
 > npm install @noble/curves
 
-For [Deno](https://deno.land), use it with npm specifier. In browser, you could also include the single file from
+For [Deno](https://deno.land), use it with [npm specifier](https://deno.land/manual@v1.28.0/node/npm_specifiers). In browser, you could also include the single file from
 [GitHub's releases page](https://github.com/paulmillr/noble-curves/releases).
 
 The library is tree-shaking-friendly and does not expose root entry point as `import * from '@noble/curves'`.
@@ -568,7 +568,7 @@ mod.invertBatch([1n, 2n, 4n], 21n); // => [1n, 11n, 16n] in one inversion
 
 #### Creating private keys from hashes
 
-Suppose you have `sha256(something)` and you want to make a private key from it.
+Suppose you have `sha256(something)` (e.g. from HMAC) and you want to make a private key from it.
 Even though p256 or secp256k1 may have 32-byte private keys,
 and sha256 output is also 32-byte, you can't just use it and reduce it modulo `CURVE.n`.
 
@@ -600,8 +600,8 @@ utils.hexToBytes('deadbeef');
 utils.hexToNumber();
 utils.bytesToNumberBE(Uint8Array.from([0xde, 0xad, 0xbe, 0xef]));
 utils.bytesToNumberLE(Uint8Array.from([0xde, 0xad, 0xbe, 0xef]));
-utils.numberToBytesBE(123n);
-utils.numberToBytesLE(123n);
+utils.numberToBytesBE(123n, 32);
+utils.numberToBytesLE(123n, 64);
 utils.numberToHexUnpadded(123n);
 utils.concatBytes(Uint8Array.from([0xde, 0xad]), Uint8Array.from([0xbe, 0xef]));
 utils.nLength(255n);
