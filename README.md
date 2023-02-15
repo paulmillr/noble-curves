@@ -125,7 +125,7 @@ import { ed25519ctx, ed25519ph } from '@noble/curves/ed25519';
 import { x25519 } from '@noble/curves/ed25519';
 const priv = 'a546e36bf0527c9d3b16154b82465edd62144c0ac1fc5a18506a2244ba449ac4';
 const pub = 'e6db6867583030db3594c1a424b15f7c726624ec26b3353b10a903a6d0ab1c4c';
-x25519.getSharedSecret(priv, pub) === x25519.scalarMult(priv, pub);
+x25519.getSharedSecret(priv, pub) === x25519.scalarMult(priv, pub); // aliases
 x25519.getPublicKey(priv) === x25519.scalarMultBase(priv);
 
 // hash-to-curve
@@ -183,6 +183,7 @@ console.log({ publicKeys, signatures3, aggSignature3, isValid3 });
 
 // Pairings
 // bls.pairing(PointG1, PointG2)
+// Also, check out hash-to-curve examples below.
 ```
 
 ## Abstract API
@@ -216,7 +217,7 @@ For this you will need `hmac` & `hash`, which in our implementations is provided
 If you're using different hashing library, make sure to wrap it in the following interface:
 
 ```ts
-export type CHash = {
+type CHash = {
   (message: Uint8Array): Uint8Array;
   blockLen: number;
   outputLen: number;
@@ -235,7 +236,7 @@ export type CHash = {
 
 ```ts
 // T is usually bigint, but can be something else like complex numbers in BLS curves
-export interface ProjPointType<T> extends Group<ProjPointType<T>> {
+interface ProjPointType<T> extends Group<ProjPointType<T>> {
   readonly px: T;
   readonly py: T;
   readonly pz: T;
@@ -251,7 +252,7 @@ export interface ProjPointType<T> extends Group<ProjPointType<T>> {
   toHex(isCompressed?: boolean): string;
 }
 // Static methods for 3d XYZ points
-export interface ProjConstructor<T> extends GroupConstructor<ProjPointType<T>> {
+interface ProjConstructor<T> extends GroupConstructor<ProjPointType<T>> {
   new (x: T, y: T, z: T): ProjPointType<T>;
   fromAffine(p: AffinePoint<T>): ProjPointType<T>;
   fromHex(hex: Hex): ProjPointType<T>;
@@ -262,7 +263,7 @@ export interface ProjConstructor<T> extends GroupConstructor<ProjPointType<T>> {
 **ECDSA signatures** are represented by `Signature` instances and can be described by the interface:
 
 ```ts
-export interface SignatureType {
+interface SignatureType {
   readonly r: bigint;
   readonly s: bigint;
   readonly recovery?: number;
@@ -274,9 +275,14 @@ export interface SignatureType {
   toCompactRawBytes(): Uint8Array;
   toCompactHex(): string;
   // DER-encoded
-  toDERRawBytes(isCompressed?: boolean): Uint8Array;
-  toDERHex(isCompressed?: boolean): string;
+  toDERRawBytes(): Uint8Array;
+  toDERHex(): string;
 }
+type SignatureConstructor = {
+  new (r: bigint, s: bigint): SignatureType;
+  fromCompact(hex: Hex): SignatureType;
+  fromDER(hex: Hex): SignatureType;
+};
 ```
 
 Example implementing [secq256k1](https://personaelabs.org/posts/spartan-ecdsa) (NOT secp256k1)
@@ -307,9 +313,10 @@ secq256k1.getPublicKey(priv); // Convert private key to public.
 const sig = secq256k1.sign(msg, priv); // Sign msg with private key.
 secq256k1.verify(sig, msg, priv); // Verify if sig is correct.
 
-const point = secq256k1.Point.BASE; // Elliptic curve Point class and BASE point static var.
+const Point = secq256k1.ProjectivePoint;
+const point = Point.BASE; // Elliptic curve Point class and BASE point static var.
 point.add(point).equals(point.double()); // add(), equals(), double() methods
-point.subtract(point).equals(secq256k1.Point.ZERO); // subtract() method, ZERO static var
+point.subtract(point).equals(Point.ZERO); // subtract() method, ZERO static var
 point.negate(); // Flips point over x/y coordinate.
 point.multiply(31415n); // Multiplication of Point by scalar.
 
@@ -319,12 +326,17 @@ point.toAffine(); // Converts to 2d affine xy coordinates
 secq256k1.CURVE.n;
 secq256k1.CURVE.Fp.mod();
 secq256k1.CURVE.hash();
+
+// precomputes
+const fast = secq256k1.utils.precompute(8, Point.fromHex(someonesPubKey));
+fast.multiply(privKey); // much faster ECDH now
 ```
 
 `weierstrass()` returns `CurveFn`:
 
 ```ts
-export type CurveFn = {
+type SignOpts = { lowS?: boolean; prehash?: boolean; extraEntropy: boolean | Uint8Array };
+type CurveFn = {
   CURVE: ReturnType<typeof validateOpts>;
   getPublicKey: (privateKey: PrivKey, isCompressed?: boolean) => Uint8Array;
   getSharedSecret: (privateA: PrivKey, publicB: Hex, isCompressed?: boolean) => Uint8Array;
@@ -338,8 +350,10 @@ export type CurveFn = {
   ProjectivePoint: ProjectivePointConstructor;
   Signature: SignatureConstructor;
   utils: {
+    normPrivateKeyToScalar: (key: PrivKey) => bigint;
     isValidPrivateKey(privateKey: PrivKey): boolean;
     randomPrivateKey: () => Uint8Array;
+    precompute: (windowSize?: number, point?: ProjPointType<bigint>) => ProjPointType<bigint>;
   };
 };
 ```
@@ -362,7 +376,7 @@ For EdDSA signatures, `hash` param required. `adjustScalarBytes` which instructs
 7. Have `isTorsionFree()`, `clearCofactor()` and `isSmallOrder()` utilities to handle torsions
 
 ```ts
-export interface ExtPointType extends Group<ExtPointType> {
+interface ExtPointType extends Group<ExtPointType> {
   readonly ex: bigint;
   readonly ey: bigint;
   readonly ez: bigint;
@@ -376,7 +390,7 @@ export interface ExtPointType extends Group<ExtPointType> {
   toAffine(iz?: bigint): AffinePoint<bigint>;
 }
 // Static methods of Extended Point with coordinates in X, Y, Z, T
-export interface ExtPointConstructor extends GroupConstructor<ExtPointType> {
+interface ExtPointConstructor extends GroupConstructor<ExtPointType> {
   new (x: bigint, y: bigint, z: bigint, t: bigint): ExtPointType;
   fromAffine(p: AffinePoint<bigint>): ExtPointType;
   fromHex(hex: Hex): ExtPointType;
@@ -388,13 +402,14 @@ Example implementing edwards25519:
 
 ```ts
 import { twistedEdwards } from '@noble/curves/abstract/edwards';
-import { div } from '@noble/curves/abstract/modular';
+import { Field, div } from '@noble/curves/abstract/modular';
 import { sha512 } from '@noble/hashes/sha512';
 
+const Fp = Field(2n ** 255n - 19n);
 const ed25519 = twistedEdwards({
   a: -1n,
-  d: div(-121665n, 121666n, 2n ** 255n - 19n), // -121665n/121666n
-  P: 2n ** 255n - 19n,
+  d: Fp.div(-121665n, 121666n), // -121665n/121666n mod p
+  Fp,
   n: 2n ** 252n + 27742317777372353535851937790883648493n,
   h: 8n,
   Gx: 15112221349535400772501151409588531511454012693041857206046113283949847762202n,
@@ -414,13 +429,12 @@ const ed25519 = twistedEdwards({
 `twistedEdwards()` returns `CurveFn` of following type:
 
 ```ts
-export type CurveFn = {
+type CurveFn = {
   CURVE: ReturnType<typeof validateOpts>;
-  getPublicKey: (privateKey: PrivKey, isCompressed?: boolean) => Uint8Array;
-  sign: (message: Hex, privateKey: Hex) => Uint8Array;
-  verify: (sig: SigType, message: Hex, publicKey: PubKey, context?: Hex) => boolean;
-  ExtendedPoint: ExtendedPointConstructor;
-  Signature: SignatureConstructor;
+  getPublicKey: (privateKey: Hex) => Uint8Array;
+  sign: (message: Hex, privateKey: Hex, context?: Hex) => Uint8Array;
+  verify: (sig: SigType, message: Hex, publicKey: Hex, context?: Hex) => boolean;
+  ExtendedPoint: ExtPointConstructor;
   utils: {
     randomPrivateKey: () => Uint8Array;
     getExtendedPublicKey: (key: PrivKey) => {
@@ -438,13 +452,13 @@ export type CurveFn = {
 
 The module contains methods for x-only ECDH on Curve25519 / Curve448 from RFC7748. Proper Elliptic Curve Points are not implemented yet.
 
-You must specify curve field, `a24` special variable, `montgomeryBits`, `nByteLength`, and coordinate `u` of generator point.
+You must specify curve params `Fp`, `a`, `Gu` coordinate of u, `montgomeryBits` and `nByteLength`.
 
 ```typescript
 import { montgomery } from '@noble/curves/abstract/montgomery';
 
 const x25519 = montgomery({
-  P: 2n ** 255n - 19n,
+  Fp: Field(2n ** 255n - 19n),
   a: 486662n,
   Gu: 9n,
   montgomeryBits: 255,
