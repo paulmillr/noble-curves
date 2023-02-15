@@ -23,7 +23,7 @@ Package consists of two parts:
 
 Check out [Upgrading](#upgrading) if you've previously used single-feature noble packages
 ([secp256k1](https://github.com/paulmillr/noble-secp256k1), [ed25519](https://github.com/paulmillr/noble-ed25519)).
-See [In the wild](#in-the-wild) for real-world software that uses curves.
+See [Resources](#resouces) for articles and real-world software that uses curves.
 
 ### This library belongs to _noble_ crypto
 
@@ -191,7 +191,7 @@ console.log({ publicKeys, signatures3, aggSignature3, isValid3 });
 Abstract API allows to define custom curves. All arithmetics is done with JS bigints over finite fields,
 which is defined from `modular` sub-module. For scalar multiplication, we use [precomputed tables with w-ary non-adjacent form (wNAF)](https://paulmillr.com/posts/noble-secp256k1-fast-ecc/).
 Precomputes are enabled for weierstrass and edwards BASE points of a curve. You could precompute any
-other point (e.g. for ECDH) using `utils.precompute()` method.
+other point (e.g. for ECDH) using `utils.precompute()` method: check out examples.
 
 There are following zero-dependency algorithms:
 
@@ -689,15 +689,16 @@ aggregateSignatures/32 x 11 ops/sec @ 84ms/op
 aggregateSignatures/128 x 3 ops/sec @ 332ms/opp
 ```
 
-## In the wild
+## Resources
 
-Elliptic curve calculator: [paulmillr.com/ecc](https://paulmillr.com/ecc).
+Article about some of library's features: [Learning fast elliptic-curve cryptography](https://paulmillr.com/posts/noble-secp256k1-fast-ecc/). Elliptic curve calculator: [paulmillr.com/ecc](https://paulmillr.com/ecc)
 
 - secp256k1
   - [btc-signer](https://github.com/paulmillr/micro-btc-signer), [eth-signer](https://github.com/paulmillr/micro-eth-signer)
 - ed25519
   - [sol-signer](https://github.com/paulmillr/micro-sol-signer)
 - BLS12-381
+  - Check out `bls12-381.ts` for articles about the curve
   - Threshold sigs demo [genthresh.com](https://genthresh.com)
   - BBS signatures [github.com/Wind4Greg/BBS-Draft-Checks](https://github.com/Wind4Greg/BBS-Draft-Checks) following [draft-irtf-cfrg-bbs-signatures-latest](https://identity.foundation/bbs-signature/draft-irtf-cfrg-bbs-signatures.html)
 
