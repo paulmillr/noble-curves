@@ -23,7 +23,7 @@ Package consists of two parts:
 
 Check out [Upgrading](#upgrading) if you've previously used single-feature noble packages
 ([secp256k1](https://github.com/paulmillr/noble-secp256k1), [ed25519](https://github.com/paulmillr/noble-ed25519)).
-See [Resources](#resouces) for articles and real-world software that uses curves.
+See [Resources](#resources) for articles and real-world software that uses curves.
 
 ### This library belongs to _noble_ crypto
 
