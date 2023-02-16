@@ -9,8 +9,7 @@ Audited & minimal JS implementation of elliptic curve cryptography.
   for encoding or hashing an arbitrary string to an elliptic curve point
 - 🧜‍♂️ [Poseidon](https://www.poseidon-hash.info) ZK-friendly hash
 - 🏎 [Ultra-fast](#speed), hand-optimized for caveats of JS engines
-- 🔍 Unique tests ensure correctness. Wycheproof vectors included
-- 🧪 Differential fuzzing ensures even more correctness with [cryptofuzz](https://github.com/guidovranken/cryptofuzz)
+- 🔍 Unique tests ensure correctness with Wycheproof vectors and [cryptofuzz](https://github.com/guidovranken/cryptofuzz) differential fuzzing
 - 🔻 Tree-shaking-friendly: there is no entry point, which ensures small size of your app
 
 Package consists of two parts:
