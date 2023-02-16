@@ -23,7 +23,7 @@ export type CurveFn = {
   scalarMultBase: (scalar: Hex) => Uint8Array;
   getSharedSecret: (privateKeyA: Hex, publicKeyB: Hex) => Uint8Array;
   getPublicKey: (privateKey: Hex) => Uint8Array;
-  utils: { randomPrivateKey: () => Uint8Array; };
+  utils: { randomPrivateKey: () => Uint8Array };
   GuBytes: Uint8Array;
 };
 
