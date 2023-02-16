@@ -66,10 +66,6 @@ secp256k1.verify(sig, msg, pub) === true;
 
 const privHex = '46c930bc7bb4db7f55da20798697421b98c4175a52c630294d75a84b9c126236';
 const pub2 = secp256k1.getPublicKey(privHex); // keys & other inputs can be Uint8Array-s or hex strings
-
-// Follows hash-to-curve specification to encode arbitrary hashes to EC points
-import { hashToCurve, encodeToCurve } from '@noble/curves/secp256k1';
-hashToCurve('0102abcd');
 ```
 
 All curves:
@@ -180,10 +176,9 @@ const signatures3 = privateKeys.map((p, i) => bls.sign(messages[i], p));
 const aggSignature3 = bls.aggregateSignatures(signatures3);
 const isValid3 = bls.verifyBatch(aggSignature3, messages, publicKeys);
 console.log({ publicKeys, signatures3, aggSignature3, isValid3 });
+// bls.pairing(PointG1, PointG2) // pairings
 
-// Pairings
-// bls.pairing(PointG1, PointG2)
-// Also, check out hash-to-curve examples below.
+// hash-to-curve examples can be seen below
 ```
 
 ## Abstract API
@@ -482,8 +477,10 @@ Every curve has exported `hashToCurve` and `encodeToCurve` methods:
 ```ts
 import { hashToCurve, encodeToCurve } from '@noble/curves/secp256k1';
 import { randomBytes } from '@noble/hashes/utils';
+hashToCurve('0102abcd');
 console.log(hashToCurve(randomBytes()));
 console.log(encodeToCurve(randomBytes()));
+
 
 import { bls12_381 } from '@noble/curves/bls12-381';
 bls12_381.G1.hashToCurve(randomBytes(), { DST: 'another' });
@@ -673,6 +670,14 @@ init x 35 ops/sec @ 28ms/op
 pedersen x 884 ops/sec @ 1ms/op
 poseidon x 8,598 ops/sec @ 116μs/op
 verify x 528 ops/sec @ 1ms/op
+
+ecdh
+├─x25519 x 1,337 ops/sec @ 747μs/op
+├─secp256k1 x 461 ops/sec @ 2ms/op
+├─P256 x 441 ops/sec @ 2ms/op
+├─P384 x 179 ops/sec @ 5ms/op
+├─P521 x 93 ops/sec @ 10ms/op
+└─x448 x 496 ops/sec @ 2ms/op
 
 bls12-381
 init x 32 ops/sec @ 30ms/op

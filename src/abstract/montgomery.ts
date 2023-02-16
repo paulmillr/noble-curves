@@ -16,12 +16,14 @@ export type CurveType = {
   powPminus2?: (x: bigint) => bigint;
   xyToU?: (x: bigint, y: bigint) => bigint;
   Gu: bigint;
+  randomBytes?: (bytesLength?: number) => Uint8Array;
 };
 export type CurveFn = {
   scalarMult: (scalar: Hex, u: Hex) => Uint8Array;
   scalarMultBase: (scalar: Hex) => Uint8Array;
   getSharedSecret: (privateKeyA: Hex, publicKeyB: Hex) => Uint8Array;
   getPublicKey: (privateKey: Hex) => Uint8Array;
+  utils: { randomPrivateKey: () => Uint8Array; };
   GuBytes: Uint8Array;
 };
 
@@ -181,6 +183,7 @@ export function montgomery(curveDef: CurveType): CurveFn {
     scalarMultBase,
     getSharedSecret: (privateKey: Hex, publicKey: Hex) => scalarMult(privateKey, publicKey),
     getPublicKey: (privateKey: Hex): Uint8Array => scalarMultBase(privateKey),
+    utils: { randomPrivateKey: () => CURVE.randomBytes!(CURVE.nByteLength) },
     GuBytes: GuBytes,
   };
 }

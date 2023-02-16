@@ -149,6 +149,7 @@ export const x25519 = montgomery({
     return mod(pow2(pow_p_5_8, BigInt(3), P) * b2, P);
   },
   adjustScalarBytes,
+  randomBytes,
 });
 
 // Hash To Curve Elligator2 Map (NOTE: different from ristretto255 elligator)

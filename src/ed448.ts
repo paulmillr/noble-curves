@@ -134,6 +134,7 @@ export const x448 = montgomery({
     return mod(Pminus3 * x, P); // Pminus3 * x = Pminus2
   },
   adjustScalarBytes,
+  randomBytes,
   // The 4-isogeny maps between the Montgomery curve and this Edwards
   // curve are:
   //   (u, v) = (y^2/x^2, (2 - x^2 - y^2)*y/x^3)
