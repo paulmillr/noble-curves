@@ -10,6 +10,7 @@ Audited & minimal JS implementation of elliptic curve cryptography.
 - 🧜‍♂️ [Poseidon](https://www.poseidon-hash.info) ZK-friendly hash
 - 🏎 [Ultra-fast](#speed), hand-optimized for caveats of JS engines
 - 🔍 Unique tests ensure correctness. Wycheproof vectors included
+- 🧪 Differential fuzzing ensures even more correctness with [cryptofuzz](https://github.com/guidovranken/cryptofuzz)
 - 🔻 Tree-shaking-friendly: there is no entry point, which ensures small size of your app
 
 Package consists of two parts:
@@ -607,7 +608,7 @@ utils.equalBytes(Uint8Array.from([0xde]), Uint8Array.from([0xde]));
 
 ## Security
 
-The library had no prior security audit.
+The library had no prior security audit. The library has been fuzzed by [Guido Vranken's cryptofuzz](https://github.com/guidovranken/cryptofuzz): you can run the fuzzer by yourself to check it.
 
 [Timing attack](https://en.wikipedia.org/wiki/Timing_attack) considerations: we are using non-CT bigints. However, _JIT-compiler_ and _Garbage Collector_ make "constant time" extremely hard to achieve in a scripting language. Which means _any other JS library can't have constant-timeness_. Even statically typed Rust, a language without GC, [makes it harder to achieve constant-time](https://www.chosenplaintext.ca/open-source/rust-timing-shield/security) for some cases. If your goal is absolute security, don't use any JS lib — including bindings to native ones. Use low-level libraries & languages. Nonetheless we're targetting algorithmic constant time.
 
