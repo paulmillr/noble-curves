@@ -1,164 +1,126 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { keccak_256 } from '@noble/hashes/sha3';
 import { sha256 } from '@noble/hashes/sha256';
-import { weierstrass, ProjPointType } from './abstract/weierstrass.js';
-import * as cutils from './abstract/utils.js';
-import { Fp, mod, Field, validateField } from './abstract/modular.js';
-import { getHash } from './_shortw_utils.js';
-import * as poseidon from './abstract/poseidon.js';
 import { utf8ToBytes } from '@noble/hashes/utils';
+import { Fp, mod, Field, validateField } from './abstract/modular.js';
+import { poseidon } from './abstract/poseidon.js';
+import { weierstrass, ProjPointType, SignatureType } from './abstract/weierstrass.js';
+import {
+  Hex,
+  bitMask,
+  bytesToHex,
+  bytesToNumberBE,
+  concatBytes,
+  ensureBytes as ensureBytesOrig,
+  hexToBytes,
+  hexToNumber,
+  numberToVarBytesBE,
+} from './abstract/utils.js';
+import { getHash } from './_shortw_utils.js';
 
-type ProjectivePoint = ProjPointType<bigint>;
 // Stark-friendly elliptic curve
 // https://docs.starkware.co/starkex/stark-curve.html
 
-const CURVE_N = BigInt(
+type ProjectivePoint = ProjPointType<bigint>;
+const CURVE_ORDER = BigInt(
   '3618502788666131213697322783095070105526743751716087489154079457884512865583'
 );
 const nBitLength = 252;
-// Copy-pasted from weierstrass.ts
 function bits2int(bytes: Uint8Array): bigint {
+  while (bytes[0] === 0) bytes = bytes.subarray(1); // strip leading 0s
+  // Copy-pasted from weierstrass.ts
   const delta = bytes.length * 8 - nBitLength;
-  const num = cutils.bytesToNumberBE(bytes);
+  const num = bytesToNumberBE(bytes);
   return delta > 0 ? num >> BigInt(delta) : num;
 }
-function bits2int_modN(bytes: Uint8Array): bigint {
-  return mod(bits2int(bytes), CURVE_N);
+function hex0xToBytes(hex: string): Uint8Array {
+  if (typeof hex === 'string') {
+    hex = strip0x(hex); // allow 0x prefix
+    if (hex.length & 1) hex = '0' + hex; // allow unpadded hex
+  }
+  return hexToBytes(hex);
 }
-export const starkCurve = weierstrass({
-  // Params: a, b
-  a: BigInt(1),
+const curve = weierstrass({
+  a: BigInt(1), // Params: a, b
   b: BigInt('3141592653589793238462643383279502884197169399375105820974944592307816406665'),
   // Field over which we'll do calculations; 2n**251n + 17n * 2n**192n + 1n
   // There is no efficient sqrt for field (P%4==1)
   Fp: Fp(BigInt('0x800000000000011000000000000000000000000000000000000000000000001')),
-  // Curve order, total count of valid points in the field.
-  n: CURVE_N,
-  nBitLength: nBitLength, // len(bin(N).replace('0b',''))
+  n: CURVE_ORDER, // Curve order, total count of valid points in the field.
+  nBitLength, // len(bin(N).replace('0b',''))
   // Base point (x, y) aka generator point
   Gx: BigInt('874739451078007766457464989774322083649278607533249481151382481072868806602'),
   Gy: BigInt('152666792071518830868575557812948353041420400780739481342941381225525861407'),
-  h: BigInt(1),
-  // Default options
-  lowS: false,
+  h: BigInt(1), // cofactor
+  lowS: false, // Allow high-s signatures
   ...getHash(sha256),
   // Custom truncation routines for stark curve
-  bits2int: (bytes: Uint8Array): bigint => {
-    while (bytes[0] === 0) bytes = bytes.subarray(1);
-    return bits2int(bytes);
-  },
+  bits2int,
   bits2int_modN: (bytes: Uint8Array): bigint => {
-    let hashS = cutils.bytesToNumberBE(bytes).toString(16);
-    if (hashS.length === 63) {
-      hashS += '0';
-      bytes = hexToBytes0x(hashS);
-    }
-    // Truncate zero bytes on left (compat with elliptic)
-    while (bytes[0] === 0) bytes = bytes.subarray(1);
-    return bits2int_modN(bytes);
+    // 2102820b232636d200cb21f1d330f20d096cae09d1bf3edb1cc333ddee11318 =>
+    // 2102820b232636d200cb21f1d330f20d096cae09d1bf3edb1cc333ddee113180
+    const hex = bytesToNumberBE(bytes).toString(16); // toHex unpadded
+    if (hex.length === 63) bytes = hex0xToBytes(hex + '0'); // append trailing 0
+    return mod(bits2int(bytes), CURVE_ORDER);
   },
 });
+export const _starkCurve = curve;
 
-// Custom Starknet type conversion functions that can handle 0x and unpadded hex
-function hexToBytes0x(hex: string): Uint8Array {
-  if (typeof hex !== 'string') {
-    throw new Error('hexToBytes: expected string, got ' + typeof hex);
-  }
-  hex = strip0x(hex);
-  if (hex.length & 1) hex = '0' + hex; // padding
-  if (hex.length % 2) throw new Error('hexToBytes: received invalid unpadded hex ' + hex.length);
-  const array = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < array.length; i++) {
-    const j = i * 2;
-    const hexByte = hex.slice(j, j + 2);
-    const byte = Number.parseInt(hexByte, 16);
-    if (Number.isNaN(byte) || byte < 0) throw new Error('Invalid byte sequence');
-    array[i] = byte;
-  }
-  return array;
-}
-function hexToNumber0x(hex: string): bigint {
-  if (typeof hex !== 'string') {
-    throw new Error('hexToNumber: expected string, got ' + typeof hex);
-  }
-  // Big Endian
-  // TODO: strip vs no strip?
-  return BigInt(`0x${strip0x(hex)}`);
-}
-function bytesToNumber0x(bytes: Uint8Array): bigint {
-  return hexToNumber0x(cutils.bytesToHex(bytes));
-}
-function ensureBytes0x(hex: Hex): Uint8Array {
-  // Uint8Array.from() instead of hash.slice() because node.js Buffer
-  // is instance of Uint8Array, and its slice() creates **mutable** copy
-  return hex instanceof Uint8Array ? Uint8Array.from(hex) : hexToBytes0x(hex);
+function ensureBytes(hex: Hex): Uint8Array {
+  return ensureBytesOrig('', typeof hex === 'string' ? hex0xToBytes(hex) : hex);
 }
 
-function normPrivKey(privKey: Hex) {
-  return cutils.bytesToHex(ensureBytes0x(privKey)).padStart(64, '0');
+function normPrivKey(privKey: Hex): string {
+  return bytesToHex(ensureBytes(privKey)).padStart(64, '0');
 }
-function getPublicKey0x(privKey: Hex, isCompressed = false) {
-  return starkCurve.getPublicKey(normPrivKey(privKey), isCompressed);
+export function getPublicKey(privKey: Hex, isCompressed = false): Uint8Array {
+  return curve.getPublicKey(normPrivKey(privKey), isCompressed);
 }
-function getSharedSecret0x(privKeyA: Hex, pubKeyB: Hex) {
-  return starkCurve.getSharedSecret(normPrivKey(privKeyA), pubKeyB);
+export function getSharedSecret(privKeyA: Hex, pubKeyB: Hex): Uint8Array {
+  return curve.getSharedSecret(normPrivKey(privKeyA), pubKeyB);
 }
-
-function sign0x(msgHash: Hex, privKey: Hex, opts?: any) {
-  if (typeof privKey === 'string') privKey = strip0x(privKey).padStart(64, '0');
-  return starkCurve.sign(ensureBytes0x(msgHash), normPrivKey(privKey), opts);
+export function sign(msgHash: Hex, privKey: Hex, opts?: any): SignatureType {
+  return curve.sign(ensureBytes(msgHash), normPrivKey(privKey), opts);
 }
-function verify0x(signature: Hex, msgHash: Hex, pubKey: Hex) {
-  const sig = signature instanceof Signature ? signature : ensureBytes0x(signature);
-  return starkCurve.verify(sig, ensureBytes0x(msgHash), ensureBytes0x(pubKey));
+export function verify(signature: SignatureType | Hex, msgHash: Hex, pubKey: Hex) {
+  const sig = signature instanceof Signature ? signature : ensureBytes(signature);
+  return curve.verify(sig, ensureBytes(msgHash), ensureBytes(pubKey));
 }
 
-const { CURVE, ProjectivePoint, Signature } = starkCurve;
-export const utils = starkCurve.utils;
-export {
-  CURVE,
-  Signature,
-  ProjectivePoint,
-  getPublicKey0x as getPublicKey,
-  getSharedSecret0x as getSharedSecret,
-  sign0x as sign,
-  verify0x as verify,
-};
+const { CURVE, ProjectivePoint, Signature, utils } = curve;
+export { CURVE, ProjectivePoint, Signature, utils };
 
-const stripLeadingZeros = (s: string) => s.replace(/^0+/gm, '');
-export const bytesToHexEth = (uint8a: Uint8Array): string =>
-  `0x${stripLeadingZeros(cutils.bytesToHex(uint8a))}`;
-export const strip0x = (hex: string) => hex.replace(/^0x/i, '');
-export const numberToHexEth = (num: bigint | number) => `0x${num.toString(16)}`;
-
-// We accept hex strings besides Uint8Array for simplicity
-type Hex = Uint8Array | string;
-
-// 1. seed generation
-function hashKeyWithIndex(key: Uint8Array, index: number) {
-  let indexHex = cutils.numberToHexUnpadded(index);
-  if (indexHex.length & 1) indexHex = '0' + indexHex;
-  return sha256Num(cutils.concatBytes(key, hexToBytes0x(indexHex)));
+function extractX(bytes: Uint8Array): string {
+  const hex = bytesToHex(bytes.subarray(1));
+  const stripped = hex.replace(/^0+/gm, ''); // strip leading 0s
+  return `0x${stripped}`;
+}
+function strip0x(hex: string) {
+  return hex.replace(/^0x/i, '');
+}
+function numberTo0x16(num: bigint) {
+  // can't use utils.numberToHexUnpadded: adds leading 0 for even byte length
+  return `0x${num.toString(16)}`;
 }
 
+// seed generation
 export function grindKey(seed: Hex) {
-  const _seed = ensureBytes0x(seed);
+  const _seed = ensureBytes(seed);
   const sha256mask = 2n ** 256n;
-
-  const limit = sha256mask - mod(sha256mask, CURVE_N);
+  const limit = sha256mask - mod(sha256mask, CURVE_ORDER);
   for (let i = 0; ; i++) {
-    const key = hashKeyWithIndex(_seed, i);
-    // key should be in [0, limit)
-    if (key < limit) return mod(key, CURVE_N).toString(16);
+    const key = sha256Num(concatBytes(_seed, numberToVarBytesBE(BigInt(i))));
+    if (key < limit) return mod(key, CURVE_ORDER).toString(16); // key should be in [0, limit)
+    if (i === 100000) throw new Error('grindKey is broken: tried 100k vals'); // prevent dos
   }
 }
 
-export function getStarkKey(privateKey: Hex) {
-  return bytesToHexEth(getPublicKey0x(privateKey, true).slice(1));
+export function getStarkKey(privateKey: Hex): string {
+  return extractX(getPublicKey(privateKey, true));
 }
 
-export function ethSigToPrivate(signature: string) {
-  signature = strip0x(signature.replace(/^0x/, ''));
+export function ethSigToPrivate(signature: string): string {
+  signature = strip0x(signature);
   if (signature.length !== 130) throw new Error('Wrong ethereum signature');
   return grindKey(signature.substring(0, 64));
 }
@@ -170,15 +132,15 @@ export function getAccountPath(
   application: string,
   ethereumAddress: string,
   index: number
-) {
+): string {
   const layerNum = int31(sha256Num(layer));
   const applicationNum = int31(sha256Num(application));
-  const eth = hexToNumber0x(ethereumAddress);
+  const eth = hexToNumber(strip0x(ethereumAddress));
   return `m/2645'/${layerNum}'/${applicationNum}'/${int31(eth)}'/${int31(eth >> 31n)}'/${index}`;
 }
 
 // https://docs.starkware.co/starkex/pedersen-hash-function.html
-const PEDERSEN_POINTS_AFFINE = [
+const PEDERSEN_POINTS = [
   new ProjectivePoint(
     2089986280348253421170679821480865132823066470938446095505822317253594081284n,
     1713931329540660377023406109199410414810705867260802078187082345529207694986n,
@@ -205,8 +167,6 @@ const PEDERSEN_POINTS_AFFINE = [
     1n
   ),
 ];
-// for (const p of PEDERSEN_POINTS) p._setWindowSize(8);
-const PEDERSEN_POINTS = PEDERSEN_POINTS_AFFINE;
 
 function pedersenPrecompute(p1: ProjectivePoint, p2: ProjectivePoint): ProjectivePoint[] {
   const out: ProjectivePoint[] = [];
@@ -230,14 +190,16 @@ const PEDERSEN_POINTS2 = pedersenPrecompute(PEDERSEN_POINTS[3], PEDERSEN_POINTS[
 type PedersenArg = Hex | bigint | number;
 function pedersenArg(arg: PedersenArg): bigint {
   let value: bigint;
-  if (typeof arg === 'bigint') value = arg;
-  else if (typeof arg === 'number') {
+  if (typeof arg === 'bigint') {
+    value = arg;
+  } else if (typeof arg === 'number') {
     if (!Number.isSafeInteger(arg)) throw new Error(`Invalid pedersenArg: ${arg}`);
     value = BigInt(arg);
-  } else value = bytesToNumber0x(ensureBytes0x(arg));
-  // [0..Fp)
-  if (!(0n <= value && value < starkCurve.CURVE.Fp.ORDER))
-    throw new Error(`PedersenArg should be 0 <= value < CURVE.P: ${value}`);
+  } else {
+    value = bytesToNumberBE(ensureBytes(arg));
+  }
+  if (!(0n <= value && value < curve.CURVE.Fp.ORDER))
+    throw new Error(`PedersenArg should be 0 <= value < CURVE.P: ${value}`); // [0..Fp)
   return value;
 }
 
@@ -253,17 +215,17 @@ function pedersenSingle(point: ProjectivePoint, value: PedersenArg, constants: P
 }
 
 // shift_point + x_low * P_0 + x_high * P1 + y_low * P2  + y_high * P3
-export function pedersen(x: PedersenArg, y: PedersenArg) {
+export function pedersen(x: PedersenArg, y: PedersenArg): string {
   let point: ProjectivePoint = PEDERSEN_POINTS[0];
   point = pedersenSingle(point, x, PEDERSEN_POINTS1);
   point = pedersenSingle(point, y, PEDERSEN_POINTS2);
-  return bytesToHexEth(point.toRawBytes(true).slice(1));
+  return extractX(point.toRawBytes(true));
 }
 
 export function hashChain(data: PedersenArg[], fn = pedersen) {
   if (!Array.isArray(data) || data.length < 1)
     throw new Error('data should be array of at least 1 element');
-  if (data.length === 1) return numberToHexEth(pedersenArg(data[0]));
+  if (data.length === 1) return numberTo0x16(pedersenArg(data[0]));
   return Array.from(data)
     .reverse()
     .reduce((acc, i) => fn(i, acc));
@@ -272,9 +234,9 @@ export function hashChain(data: PedersenArg[], fn = pedersen) {
 export const computeHashOnElements = (data: PedersenArg[], fn = pedersen) =>
   [0, ...data, data.length].reduce((x, y) => fn(x, y));
 
-const MASK_250 = cutils.bitMask(250);
-export const keccak = (data: Uint8Array): bigint => bytesToNumber0x(keccak_256(data)) & MASK_250;
-const sha256Num = (data: Uint8Array | string): bigint => cutils.bytesToNumberBE(sha256(data));
+const MASK_250 = bitMask(250);
+export const keccak = (data: Uint8Array): bigint => bytesToNumberBE(keccak_256(data)) & MASK_250;
+const sha256Num = (data: Uint8Array | string): bigint => bytesToNumberBE(sha256(data));
 
 // Poseidon hash
 export const Fp253 = Fp(
@@ -330,7 +292,7 @@ export function poseidonBasic(opts: PoseidonOpts, mds: bigint[][]) {
     for (let j = 0; j < m; j++) row.push(poseidonRoundConstant(opts.Fp, 'Hades', m * i + j));
     roundConstants.push(row);
   }
-  return poseidon.poseidon({
+  return poseidon({
     ...opts,
     t: m,
     sboxPower: 3,

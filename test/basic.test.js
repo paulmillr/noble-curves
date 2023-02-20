@@ -12,7 +12,7 @@ import { secp521r1 } from '../esm/p521.js';
 import { secp256k1 } from '../esm/secp256k1.js';
 import { ed25519, ed25519ctx, ed25519ph, x25519 } from '../esm/ed25519.js';
 import { ed448, ed448ph } from '../esm/ed448.js';
-import { starkCurve } from '../esm/stark.js';
+import { _starkCurve as starkCurve } from '../esm/stark.js';
 import { pallas, vesta } from '../esm/pasta.js';
 import { bn254 } from '../esm/bn.js';
 import { jubjub } from '../esm/jubjub.js';
