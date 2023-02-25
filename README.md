@@ -16,9 +16,9 @@ Package consists of two parts:
 
 1. [Abstract](#abstract-api), zero-dependency EC algorithms
 2. [Implementations](#implementations), utilizing one dependency `@noble/hashes`, providing ready-to-use:
-   - NIST curves secp192r1/P192, secp224r1/P224, secp256r1/P256, secp384r1/P384, secp521r1/P521
+   - NIST curves secp256r1/P256, secp384r1/P384, secp521r1/P521
    - SECG curve secp256k1
-   - ed25519/curve25519/x25519/ristretto255, edwards448/curve448/x448 RFC7748 / RFC8032 / ZIP215 stuff
+   - ed25519/curve25519/x25519/ristretto255, edwards448/curve448/x448 [RFC7748](https://www.rfc-editor.org/rfc/rfc7748) / [RFC8032](https://www.rfc-editor.org/rfc/rfc8032) / [ZIP215](https://zips.z.cash/zip-0215) stuff
    - pairing-friendly curves bls12-381, bn254
 
 Check out [Upgrading](#upgrading) if you've previously used single-feature noble packages
