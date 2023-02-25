@@ -1,7 +1,6 @@
-import { deepStrictEqual, throws } from 'assert';
+import { deepStrictEqual } from 'assert';
 import { describe, should } from 'micro-should';
-import { secp192r1, P192 } from '../esm/p192.js';
-import { secp224r1, P224 } from '../esm/p224.js';
+import { secp192r1, secp224r1, P192, P224 } from './_more-curves.helpers.js';
 import { secp256r1, P256 } from '../esm/p256.js';
 import { secp384r1, P384 } from '../esm/p384.js';
 import { secp521r1, P521 } from '../esm/p521.js';

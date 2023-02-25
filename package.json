@@ -126,16 +126,6 @@
       "import": "./esm/jubjub.js",
       "default": "./jubjub.js"
     },
-    "./p192": {
-      "types": "./p192.d.ts",
-      "import": "./esm/p192.js",
-      "default": "./p192.js"
-    },
-    "./p224": {
-      "types": "./p224.d.ts",
-      "import": "./esm/p224.js",
-      "default": "./p224.js"
-    },
     "./p256": {
       "types": "./p256.d.ts",
       "import": "./esm/p256.js",

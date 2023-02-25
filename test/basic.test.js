@@ -4,8 +4,7 @@ import * as fc from 'fast-check';
 import * as mod from '../esm/abstract/modular.js';
 import { bytesToHex as toHex } from '../esm/abstract/utils.js';
 // Generic tests for all curves in package
-import { secp192r1 } from '../esm/p192.js';
-import { secp224r1 } from '../esm/p224.js';
+import { secp192r1, secp224r1 } from './_more-curves.helpers.js';
 import { secp256r1 } from '../esm/p256.js';
 import { secp384r1 } from '../esm/p384.js';
 import { secp521r1 } from '../esm/p521.js';
