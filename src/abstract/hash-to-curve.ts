@@ -1,11 +1,10 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import type { Group, GroupConstructor, AffinePoint } from './curve.js';
 import { mod, Field } from './modular.js';
-import { CHash, concatBytes, utf8ToBytes, validateObject } from './utils.js';
+import { bytesToNumberBE, CHash, concatBytes, utf8ToBytes, validateObject } from './utils.js';
 
 export type Opts = {
-  DST: string; // DST: a domain separation tag, defined in section 2.2.5
-  encodeDST: string;
+  DST: string | Uint8Array; // DST: a domain separation tag, defined in section 2.2.5
   p: bigint; // characteristic of F, where F is a finite field of characteristic p and order q = p^m
   m: number; // extension degree of F, m >= 1
   k: number; // k: the target security level for the suite in bits, defined in section 5.1
@@ -13,21 +12,20 @@ export type Opts = {
   // Hash functions for: expand_message_xmd is appropriate for use with a
   // wide range of hash functions, including SHA-2, SHA-3, BLAKE2, and others.
   // BBS+ uses blake2: https://github.com/hyperledger/aries-framework-go/issues/2247
-  // TODO: verify that hash is shake if expand==='xof' via types
+  // TODO: verify that hash is shake if expand === 'xof' via types
   hash: CHash;
 };
 
-// Octet Stream to Integer (bytesToNumberBE)
-function os2ip(bytes: Uint8Array): bigint {
-  let result = 0n;
-  for (let i = 0; i < bytes.length; i++) {
-    result <<= 8n;
-    result += BigInt(bytes[i]);
-  }
-  return result;
+function validateDST(dst: string | Uint8Array): Uint8Array {
+  if (dst instanceof Uint8Array) return dst;
+  if (typeof dst === 'string') return utf8ToBytes(dst);
+  throw new Error('DST must be Uint8Array or string');
 }
 
-// Integer to Octet Stream
+// Octet Stream to Integer. "spec" implementation of os2ip is 2.5x slower vs bytesToNumberBE.
+const os2ip = bytesToNumberBE;
+
+// Integer to Octet Stream (numberToBytesBE)
 function i2osp(value: number, length: number): Uint8Array {
   if (value < 0 || value >= 1 << (8 * length)) {
     throw new Error(`bad I2OSP call: value=${value} length=${length}`);
@@ -68,13 +66,12 @@ export function expand_message_xmd(
   isNum(lenInBytes);
   // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-16#section-5.3.3
   if (DST.length > 255) DST = H(concatBytes(utf8ToBytes('H2C-OVERSIZE-DST-'), DST));
-  const b_in_bytes = H.outputLen;
-  const r_in_bytes = H.blockLen;
+  const { outputLen: b_in_bytes, blockLen: r_in_bytes } = H;
   const ell = Math.ceil(lenInBytes / b_in_bytes);
   if (ell > 255) throw new Error('Invalid xmd length');
   const DST_prime = concatBytes(DST, i2osp(DST.length, 1));
   const Z_pad = i2osp(0, r_in_bytes);
-  const l_i_b_str = i2osp(lenInBytes, 2);
+  const l_i_b_str = i2osp(lenInBytes, 2); // len_in_bytes_str
   const b = new Array<Uint8Array>(ell);
   const b_0 = H(concatBytes(Z_pad, msg, l_i_b_str, i2osp(0, 1), DST_prime));
   b[0] = H(concatBytes(b_0, i2osp(1, 1), DST_prime));
@@ -118,32 +115,40 @@ export function expand_message_xof(
 /**
  * Hashes arbitrary-length byte strings to a list of one or more elements of a finite field F
  * https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-5.3
+ * As for options:
+ * * `p` is field prime, m=field extension (1 for prime fields)
+ * * `k` is security target in bits (e.g. 128).
+ * * `expand` should be `xmd` for SHA2, SHA3, BLAKE; `xof` for SHAKE, BLAKE-XOF
+ * * `hash` conforming to `utils.CHash` interface, with `outputLen` / `blockLen` props
  * @param msg a byte string containing the message to hash
  * @param count the number of elements of F to output
- * @param options `{DST: string, p: bigint, m: number, k: number, expand: 'xmd' | 'xof', hash: H}`
+ * @param options `{DST: string, p: bigint, m: number, k: number, expand: 'xmd' | 'xof', hash: H}`, see above
  * @returns [u_0, ..., u_(count - 1)], a list of field elements.
  */
 export function hash_to_field(msg: Uint8Array, count: number, options: Opts): bigint[][] {
   const { p, k, m, hash, expand, DST: _DST } = options;
   isBytes(msg);
   isNum(count);
-  if (typeof _DST !== 'string') throw new Error('DST must be valid');
+  const DST = validateDST(_DST);
   const log2p = p.toString(2).length;
   const L = Math.ceil((log2p + k) / 8); // section 5.1 of ietf draft link above
   const len_in_bytes = count * m * L;
-  const DST = utf8ToBytes(_DST);
-  const pseudo_random_bytes =
-    expand === 'xmd'
-      ? expand_message_xmd(msg, DST, len_in_bytes, hash)
-      : expand === 'xof'
-      ? expand_message_xof(msg, DST, len_in_bytes, k, hash)
-      : msg;
+  let prb; // pseudo_random_bytes
+  if (expand === 'xmd') {
+    prb = expand_message_xmd(msg, DST, len_in_bytes, hash);
+  } else if (expand === 'xof') {
+    prb = expand_message_xof(msg, DST, len_in_bytes, k, hash);
+  } else if (expand === undefined) {
+    prb = msg;
+  } else {
+    throw new Error('expand must be "xmd", "xof" or undefined');
+  }
   const u = new Array(count);
   for (let i = 0; i < count; i++) {
     const e = new Array(m);
     for (let j = 0; j < m; j++) {
       const elm_offset = L * (j + i * m);
-      const tv = pseudo_random_bytes.subarray(elm_offset, elm_offset + L);
+      const tv = prb.subarray(elm_offset, elm_offset + L);
       e[j] = mod(os2ip(tv), p);
     }
     u[i] = e;
@@ -184,7 +189,7 @@ export type htfBasicOpts = { DST: string };
 export function createHasher<T>(
   Point: H2CPointConstructor<T>,
   mapToCurve: MapToCurve<T>,
-  def: Opts
+  def: Opts & { encodeDST?: string }
 ) {
   validateObject(def, {
     DST: 'string',
@@ -193,10 +198,7 @@ export function createHasher<T>(
     k: 'isSafeInteger',
     hash: 'hash',
   });
-  if (def.expand !== 'xmd' && def.expand !== 'xof' && def.expand !== undefined)
-    throw new Error('Invalid htf/expand');
-  if (typeof mapToCurve !== 'function')
-    throw new Error('hashToCurve: mapToCurve() has not been defined');
+  if (typeof mapToCurve !== 'function') throw new Error('mapToCurve() must be defined');
   return {
     // Encodes byte string to elliptic curve
     // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-3

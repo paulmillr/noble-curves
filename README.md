@@ -692,6 +692,16 @@ aggregatePublicKeys/128 x 7 ops/sec @ 125ms/op
 aggregateSignatures/8 x 45 ops/sec @ 22ms/op
 aggregateSignatures/32 x 11 ops/sec @ 84ms/op
 aggregateSignatures/128 x 3 ops/sec @ 332ms/opp
+
+hash-to-curve
+hash_to_field x 850,340 ops/sec @ 1μs/op
+hashToCurve
+├─secp256k1 x 1,850 ops/sec @ 540μs/op
+├─P256 x 3,352 ops/sec @ 298μs/op
+├─P384 x 1,367 ops/sec @ 731μs/op
+├─P521 x 691 ops/sec @ 1ms/op
+├─ed25519 x 2,492 ops/sec @ 401μs/op
+└─ed448 x 1,045 ops/sec @ 956μs/op
 ```
 
 ## Resources

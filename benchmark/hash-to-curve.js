@@ -11,6 +11,7 @@ import { hashToCurve as P521 } from '../p521.js';
 import { hashToCurve as ed25519 } from '../ed25519.js';
 import { hashToCurve as ed448 } from '../ed448.js';
 import { utf8ToBytes } from '../abstract/utils.js';
+
 const N = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n;
 run(async () => {
   const rand = randomBytes(40);
