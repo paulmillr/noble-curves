@@ -5,7 +5,7 @@ Audited & minimal JS implementation of elliptic curve cryptography.
 - **noble** family, zero dependencies
 - Short Weierstrass, Edwards, Montgomery curves
 - ECDSA, EdDSA, Schnorr, BLS signature schemes, ECDH key agreement
-- #️⃣ [hash to curve](https://datatracker.ietf.org/doc/draft-irtf-cfrg-hash-to-curve/)
+- #️⃣ [hash to curve](#abstracthash-to-curve-hashing-strings-to-curve-points)
   for encoding or hashing an arbitrary string to an elliptic curve point
 - 🧜‍♂️ [Poseidon](https://www.poseidon-hash.info) ZK-friendly hash
 - 🏎 [Ultra-fast](#speed), hand-optimized for caveats of JS engines
@@ -470,7 +470,7 @@ const x25519 = montgomery({
 
 ### abstract/hash-to-curve: Hashing strings to curve points
 
-The module allows to hash arbitrary strings to elliptic curve points. Implements [hash-to-curve v11](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11).
+The module allows to hash arbitrary strings to elliptic curve points. Implements [hash-to-curve v16](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-16).
 
 Every curve has exported `hashToCurve` and `encodeToCurve` methods:
 
@@ -481,7 +481,6 @@ hashToCurve('0102abcd');
 console.log(hashToCurve(randomBytes()));
 console.log(encodeToCurve(randomBytes()));
 
-
 import { bls12_381 } from '@noble/curves/bls12-381';
 bls12_381.G1.hashToCurve(randomBytes(), { DST: 'another' });
 bls12_381.G2.hashToCurve(randomBytes(), { DST: 'custom' });
@@ -490,6 +489,8 @@ bls12_381.G2.hashToCurve(randomBytes(), { DST: 'custom' });
 If you need low-level methods from spec:
 
 `expand_message_xmd` [(spec)](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-5.4.1) produces a uniformly random byte string using a cryptographic hash function H that outputs b bits.
+
+Hash must conform to `CHash` interface (see [weierstrass section](#abstractweierstrass-short-weierstrass-curve)).
 
 ```ts
 function expand_message_xmd(
@@ -509,13 +510,18 @@ function expand_message_xof(
 
 `hash_to_field(msg, count, options)` [(spec)](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-5.3)
 hashes arbitrary-length byte strings to a list of one or more elements of a finite field F.
-_ `msg` a byte string containing the message to hash
-_ `count` the number of elements of F to output
-_ `options` `{DST: string, p: bigint, m: number, k: number, expand: 'xmd' | 'xof', hash: H}`
-_ Returns `[u_0, ..., u_(count - 1)]`, a list of field elements.
+
+- `msg` a byte string containing the message to hash
+- `count` the number of elements of F to output
+- `options` `{DST: string, p: bigint, m: number, k: number, expand: 'xmd' | 'xof', hash: H}`.
+  - `p` is field prime, m=field extension (1 for prime fields)
+  - `k` is security target in bits (e.g. 128).
+  - `expand` should be `xmd` for SHA2, SHA3, BLAKE; `xof` for SHAKE, BLAKE-XOF
+  - `hash` conforming to `utils.CHash` interface, with `outputLen` / `blockLen` props
+- Returns `[u_0, ..., u_(count - 1)]`, a list of field elements.
 
 ```ts
-function hash_to_field(msg: Uint8Array, count: number, options: htfOpts): bigint[][];
+function hash_to_field(msg: Uint8Array, count: number, options: Opts): bigint[][];
 ```
 
 ### abstract/poseidon: Poseidon hash
@@ -585,7 +591,6 @@ const someKey = new Uint8Array(32).fill(2); // Needs to actually be random, not 
 const derived = hkdf(sha256, someKey, undefined, 'application', 40); // 40 bytes
 const validPrivateKey = mod.hashToPrivateScalar(derived, p256.CURVE.n);
 ```
-
 
 ### abstract/utils: General utilities
 

@@ -3,16 +3,20 @@ import type { Group, GroupConstructor, AffinePoint } from './curve.js';
 import { mod, Field } from './modular.js';
 import { bytesToNumberBE, CHash, concatBytes, utf8ToBytes, validateObject } from './utils.js';
 
+/**
+ * * `DST` is a domain separation tag, defined in section 2.2.5
+ * * `p` characteristic of F, where F is a finite field of characteristic p and order q = p^m
+ * * `m` is extension degree (1 for prime fields)
+ * * `k` is the target security target in bits (e.g. 128), from section 5.1
+ * * `expand` is `xmd` (SHA2, SHA3, BLAKE) or `xof` (SHAKE, BLAKE-XOF)
+ * * `hash` conforming to `utils.CHash` interface, with `outputLen` / `blockLen` props
+ */
 export type Opts = {
-  DST: string | Uint8Array; // DST: a domain separation tag, defined in section 2.2.5
-  p: bigint; // characteristic of F, where F is a finite field of characteristic p and order q = p^m
-  m: number; // extension degree of F, m >= 1
-  k: number; // k: the target security level for the suite in bits, defined in section 5.1
-  expand?: 'xmd' | 'xof'; // use a message that has already been processed by expand_message_xmd
-  // Hash functions for: expand_message_xmd is appropriate for use with a
-  // wide range of hash functions, including SHA-2, SHA-3, BLAKE2, and others.
-  // BBS+ uses blake2: https://github.com/hyperledger/aries-framework-go/issues/2247
-  // TODO: verify that hash is shake if expand === 'xof' via types
+  DST: string | Uint8Array;
+  p: bigint;
+  m: number;
+  k: number;
+  expand?: 'xmd' | 'xof';
   hash: CHash;
 };
 
@@ -115,11 +119,6 @@ export function expand_message_xof(
 /**
  * Hashes arbitrary-length byte strings to a list of one or more elements of a finite field F
  * https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-5.3
- * As for options:
- * * `p` is field prime, m=field extension (1 for prime fields)
- * * `k` is security target in bits (e.g. 128).
- * * `expand` should be `xmd` for SHA2, SHA3, BLAKE; `xof` for SHAKE, BLAKE-XOF
- * * `hash` conforming to `utils.CHash` interface, with `outputLen` / `blockLen` props
  * @param msg a byte string containing the message to hash
  * @param count the number of elements of F to output
  * @param options `{DST: string, p: bigint, m: number, k: number, expand: 'xmd' | 'xof', hash: H}`, see above
