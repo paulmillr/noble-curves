@@ -472,7 +472,7 @@ const x25519 = montgomery({
 
 The module allows to hash arbitrary strings to elliptic curve points. Implements [hash-to-curve v16](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-16).
 
-Every curve has exported `hashToCurve` and `encodeToCurve` methods:
+Every curve has exported `hashToCurve` and `encodeToCurve` methods. You should always prefer `hashToCurve` for security:
 
 ```ts
 import { hashToCurve, encodeToCurve } from '@noble/curves/secp256k1';

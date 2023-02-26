@@ -11,8 +11,9 @@ import { bytesToNumberBE, CHash, concatBytes, utf8ToBytes, validateObject } from
  * * `expand` is `xmd` (SHA2, SHA3, BLAKE) or `xof` (SHAKE, BLAKE-XOF)
  * * `hash` conforming to `utils.CHash` interface, with `outputLen` / `blockLen` props
  */
+type UnicodeOrBytes = string | Uint8Array;
 export type Opts = {
-  DST: string | Uint8Array;
+  DST: UnicodeOrBytes;
   p: bigint;
   m: number;
   k: number;
@@ -20,7 +21,7 @@ export type Opts = {
   hash: CHash;
 };
 
-function validateDST(dst: string | Uint8Array): Uint8Array {
+function validateDST(dst: UnicodeOrBytes): Uint8Array {
   if (dst instanceof Uint8Array) return dst;
   if (typeof dst === 'string') return utf8ToBytes(dst);
   throw new Error('DST must be Uint8Array or string');
@@ -183,12 +184,12 @@ export type MapToCurve<T> = (scalar: bigint[]) => AffinePoint<T>;
 
 // Separated from initialization opts, so users won't accidentally change per-curve parameters
 // (changing DST is ok!)
-export type htfBasicOpts = { DST: string };
+export type htfBasicOpts = { DST: UnicodeOrBytes };
 
 export function createHasher<T>(
   Point: H2CPointConstructor<T>,
   mapToCurve: MapToCurve<T>,
-  def: Opts & { encodeDST?: string }
+  def: Opts & { encodeDST?: UnicodeOrBytes }
 ) {
   validateObject(def, {
     DST: 'string',
@@ -200,7 +201,7 @@ export function createHasher<T>(
   if (typeof mapToCurve !== 'function') throw new Error('mapToCurve() must be defined');
   return {
     // Encodes byte string to elliptic curve
-    // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-3
+    // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-16#section-3
     hashToCurve(msg: Uint8Array, options?: htfBasicOpts) {
       const u = hash_to_field(msg, 2, { ...def, DST: def.DST, ...options } as Opts);
       const u0 = Point.fromAffine(mapToCurve(u[0]));
