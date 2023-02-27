@@ -2,7 +2,7 @@ import { sha512 } from '@noble/hashes/sha512';
 import { hexToBytes, bytesToHex, randomBytes } from '@noble/hashes/utils';
 import { deepStrictEqual, strictEqual, throws } from 'assert';
 import { describe, should } from 'micro-should';
-import { numberToBytesLE } from '../esm/abstract/utils.js';
+import { bytesToNumberLE, numberToBytesLE } from '../esm/abstract/utils.js';
 import { default as x25519vectors } from './wycheproof/x25519_test.json' assert { type: 'json' };
 import { ed25519ctx, ed25519ph, RistrettoPoint, x25519 } from '../esm/ed25519.js';
 
@@ -281,10 +281,23 @@ describe('ristretto255', () => {
       deepStrictEqual(point.toHex(), encodedHashToPoints[i]);
     }
   });
+  should('have proper equality testing', () => {
+    const MAX_255B = BigInt('0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff');
+    const bytes255ToNumberLE = (bytes) =>
+      ed25519ctx.CURVE.Fp.create(bytesToNumberLE(bytes) & MAX_255B);
+
+    const priv = new Uint8Array([
+      198, 101, 65, 165, 93, 120, 37, 238, 16, 133, 10, 35, 253, 243, 161, 246, 229, 135, 12, 137,
+      202, 114, 222, 139, 146, 123, 4, 125, 152, 173, 1, 7,
+    ]);
+    const pub = RistrettoPoint.BASE.multiply(bytes255ToNumberLE(priv));
+    deepStrictEqual(pub.equals(RistrettoPoint.ZERO), false);
+  });
 });
 
 // ESM is broken.
 import url from 'url';
+import { assert } from 'console';
 if (import.meta.url === url.pathToFileURL(process.argv[1]).href) {
   should.run();
 }
