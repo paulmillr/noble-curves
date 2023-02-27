@@ -312,7 +312,7 @@ export class RistrettoPoint {
   constructor(private readonly ep: ExtendedPoint) {}
 
   static fromAffine(ap: AffinePoint<bigint>) {
-    return new RistrettoPoint(ed25519.ExtendedPoint.fromAffine(ap))
+    return new RistrettoPoint(ed25519.ExtendedPoint.fromAffine(ap));
   }
 
   /**
@@ -407,7 +407,7 @@ export class RistrettoPoint {
   equals(other: RistrettoPoint): boolean {
     assertRstPoint(other);
     const { ex: X1, ey: Y1 } = this.ep;
-    const { ex: X2, ey: Y2 } = this.ep;
+    const { ex: X2, ey: Y2 } = other.ep;
     const mod = ed25519.CURVE.Fp.create;
     // (x1 * y2 == y1 * x2) | (y1 * y2 == x1 * x2)
     const one = mod(X1 * Y2) === mod(Y1 * X2);
@@ -440,6 +440,6 @@ export const hash_to_ristretto255 = (msg: Uint8Array, options: htf.htfBasicOpts)
   const d = options.DST;
   const DST = typeof d === 'string' ? utf8ToBytes(d) : d;
   const uniform_bytes = htf.expand_message_xmd(msg, DST, 64, sha512);
-  const P = RistrettoPoint.hashToCurve(uniform_bytes)
+  const P = RistrettoPoint.hashToCurve(uniform_bytes);
   return P;
 };
