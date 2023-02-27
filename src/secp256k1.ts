@@ -117,10 +117,13 @@ const GmulAdd = (Q: PointType<bigint>, a: bigint, b: bigint) =>
   Point.BASE.multiplyAndAddUnsafe(Q, a, b);
 // Calculate point, scalar and bytes
 function schnorrGetExtPubKey(priv: PrivKey) {
-  const d = secp256k1.utils.normPrivateKeyToScalar(priv); // same method executed in fromPrivateKey
-  const point = Point.fromPrivateKey(d); // P = d'⋅G; 0 < d' < n check is done inside
-  const scalar = point.hasEvenY() ? d : modN(-d); // d = d' if has_even_y(P), otherwise d = n-d'
-  return { point, scalar, bytes: pointToBytes(point) };
+  let d = secp256k1.utils.normPrivateKeyToScalar(priv); // same method executed in fromPrivateKey
+  let p = Point.fromPrivateKey(d); // P = d'⋅G; 0 < d' < n check is done inside
+  if (!p.hasEvenY()) {
+    d = modN(-d);
+    p = p.negate();
+  }
+  return { point: p, scalar: d, bytes: pointToBytes(p) };
 }
 /**
  * lift_x from BIP340. Convert 32-byte x coordinate to elliptic curve point.
