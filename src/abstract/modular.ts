@@ -56,6 +56,7 @@ export function invert(number: bigint, modulo: bigint): bigint {
     throw new Error(`invert: expected positive integers, got n=${number} mod=${modulo}`);
   }
   // Eucledian GCD https://brilliant.org/wiki/extended-euclidean-algorithm/
+  // Fermat's little theorem "CT-like" version inv(n) = n^(m-2) mod m is 30x slower.
   let a = mod(number, modulo);
   let b = modulo;
   // prettier-ignore
