@@ -126,6 +126,13 @@ export function expand_message_xof(
  * @returns [u_0, ..., u_(count - 1)], a list of field elements.
  */
 export function hash_to_field(msg: Uint8Array, count: number, options: Opts): bigint[][] {
+  validateObject(options, {
+    DST: 'string',
+    p: 'bigint',
+    m: 'isSafeInteger',
+    k: 'isSafeInteger',
+    hash: 'hash',
+  });
   const { p, k, m, hash, expand, DST: _DST } = options;
   isBytes(msg);
   isNum(count);
@@ -191,13 +198,6 @@ export function createHasher<T>(
   mapToCurve: MapToCurve<T>,
   def: Opts & { encodeDST?: UnicodeOrBytes }
 ) {
-  validateObject(def, {
-    DST: 'string',
-    p: 'bigint',
-    m: 'isSafeInteger',
-    k: 'isSafeInteger',
-    hash: 'hash',
-  });
   if (typeof mapToCurve !== 'function') throw new Error('mapToCurve() must be defined');
   return {
     // Encodes byte string to elliptic curve

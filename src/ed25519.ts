@@ -13,6 +13,7 @@ import {
   ensureBytes,
 } from './abstract/utils.js';
 import * as htf from './abstract/hash-to-curve.js';
+import { AffinePoint } from './abstract/curve.js';
 
 /**
  * ed25519 Twisted Edwards curve with following addons:
@@ -309,6 +310,11 @@ export class RistrettoPoint {
   // Private property to discourage combining ExtendedPoint + RistrettoPoint
   // Always use Ristretto encoding/decoding instead.
   constructor(private readonly ep: ExtendedPoint) {}
+
+  static fromAffine(ap: AffinePoint<bigint>) {
+    return new RistrettoPoint(ed25519.ExtendedPoint.fromAffine(ap))
+  }
+
   /**
    * Takes uniform output of 64-bit hash function like sha512 and converts it to `RistrettoPoint`.
    * The hash-to-group operation applies Elligator twice and adds the results.
@@ -427,3 +433,13 @@ export class RistrettoPoint {
     return new RistrettoPoint(this.ep.multiplyUnsafe(scalar));
   }
 }
+
+// https://datatracker.ietf.org/doc/draft-irtf-cfrg-hash-to-curve/14/
+// Appendix B.  Hashing to ristretto255
+export const hash_to_ristretto255 = (msg: Uint8Array, options: htf.htfBasicOpts) => {
+  const d = options.DST;
+  const DST = typeof d === 'string' ? utf8ToBytes(d) : d;
+  const uniform_bytes = htf.expand_message_xmd(msg, DST, 64, sha512);
+  const P = RistrettoPoint.hashToCurve(uniform_bytes)
+  return P;
+};
