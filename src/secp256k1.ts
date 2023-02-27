@@ -115,15 +115,13 @@ const modN = (x: bigint) => mod(x, secp256k1N);
 const Point = secp256k1.ProjectivePoint;
 const GmulAdd = (Q: PointType<bigint>, a: bigint, b: bigint) =>
   Point.BASE.multiplyAndAddUnsafe(Q, a, b);
+
 // Calculate point, scalar and bytes
 function schnorrGetExtPubKey(priv: PrivKey) {
-  let d = secp256k1.utils.normPrivateKeyToScalar(priv); // same method executed in fromPrivateKey
-  let p = Point.fromPrivateKey(d); // P = d'⋅G; 0 < d' < n check is done inside
-  if (!p.hasEvenY()) {
-    d = modN(-d);
-    p = p.negate();
-  }
-  return { point: p, scalar: d, bytes: pointToBytes(p) };
+  let d_ = secp256k1.utils.normPrivateKeyToScalar(priv); // same method executed in fromPrivateKey
+  let p = Point.fromPrivateKey(d_); // P = d'⋅G; 0 < d' < n check is done inside
+  const scalar = p.hasEvenY() ? d_ : modN(-d_);
+  return { scalar: scalar, bytes: pointToBytes(p) };
 }
 /**
  * lift_x from BIP340. Convert 32-byte x coordinate to elliptic curve point.
@@ -169,10 +167,10 @@ function schnorrSign(
   const rand = taggedHash('BIP0340/nonce', t, px, m); // Let rand = hash/nonce(t || bytes(P) || m)
   const k_ = modN(bytesToNumberBE(rand)); // Let k' = int(rand) mod n
   if (k_ === _0n) throw new Error('sign failed: k is zero'); // Fail if k' = 0.
-  const { point: R, bytes: rx, scalar: k } = schnorrGetExtPubKey(k_); // Let R = k'⋅G.
+  const { bytes: rx, scalar: k } = schnorrGetExtPubKey(k_); // Let R = k'⋅G.
   const e = challenge(rx, px, m); // Let e = int(hash/challenge(bytes(R) || bytes(P) || m)) mod n.
   const sig = new Uint8Array(64); // Let sig = bytes(R) || bytes((k + ed) mod n).
-  sig.set(numTo32b(R.px), 0);
+  sig.set(rx, 0);
   sig.set(numTo32b(modN(k + e * d)), 32);
   // If Verify(bytes(P), m, sig) (see below) returns failure, abort
   if (!schnorrVerify(sig, m, px)) throw new Error('sign: Invalid signature produced');
@@ -208,7 +206,6 @@ export const schnorr = {
   verify: schnorrVerify,
   utils: {
     randomPrivateKey: secp256k1.utils.randomPrivateKey,
-    getExtendedPublicKey: schnorrGetExtPubKey,
     lift_x,
     pointToBytes,
     numberToBytesBE,
