@@ -711,10 +711,14 @@ hashToCurve
 
 ## Resources
 
-Article about some of library's features: [Learning fast elliptic-curve cryptography](https://paulmillr.com/posts/noble-secp256k1-fast-ecc/). Elliptic curve calculator: [paulmillr.com/ecc](https://paulmillr.com/ecc)
+Article about some of library's features: [Learning fast elliptic-curve cryptography](https://paulmillr.com/posts/noble-secp256k1-fast-ecc/)
+
+Demo: Elliptic curve calculator [paulmillr.com/ecc](https://paulmillr.com/ecc).
+
+Projects using the library:
 
 - secp256k1
-  - [btc-signer](https://github.com/paulmillr/micro-btc-signer), [eth-signer](https://github.com/paulmillr/micro-eth-signer)
+  - [btc-signer](https://github.com/paulmillr/scure-btc-signer), [eth-signer](https://github.com/paulmillr/micro-eth-signer)
 - ed25519
   - [sol-signer](https://github.com/paulmillr/micro-sol-signer)
 - BLS12-381
