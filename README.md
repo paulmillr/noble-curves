@@ -56,7 +56,7 @@ Instead, you need to import specific primitives. This is done to ensure small si
 Each curve can be used in the following way:
 
 ```ts
-import { secp256k1 } from '@noble/curves/secp256k1'; // ECMAScript Modules (ESM) and Common.js
+import { secp256k1 } from '@noble/curves/secp256k1'; // ECMAScript Modules (ESM)
 // import { secp256k1 } from 'npm:@noble/curves@1.2.0/secp256k1'; // Deno
 const priv = secp256k1.utils.randomPrivateKey();
 const pub = secp256k1.getPublicKey(priv);
