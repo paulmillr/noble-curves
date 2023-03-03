@@ -1,6 +1,6 @@
 import { deepStrictEqual, throws } from 'assert';
 import { describe, should } from 'micro-should';
-import * as starknet from '../../esm/stark.js';
+import * as starknet from '../../stark.js';
 import { bytesToHex as hex } from '@noble/hashes/utils';
 import * as fs from 'fs';
 

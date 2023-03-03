@@ -1,9 +1,9 @@
 import { deepStrictEqual, throws } from 'assert';
 import { describe, should } from 'micro-should';
 import * as fc from 'fast-check';
-import { ed448, ed448ph, x448 } from '../esm/ed448.js';
+import { ed448, ed448ph, x448 } from '../ed448.js';
 import { hexToBytes, bytesToHex, randomBytes } from '@noble/hashes/utils';
-import { numberToBytesLE } from '../esm/abstract/utils.js';
+import { numberToBytesLE } from '../abstract/utils.js';
 import { default as ed448vectors } from './wycheproof/ed448_test.json' assert { type: 'json' };
 import { default as x448vectors } from './wycheproof/x448_test.json' assert { type: 'json' };
 

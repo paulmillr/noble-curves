@@ -3,7 +3,7 @@ import { describe, should } from 'micro-should';
 import { utf8ToBytes } from '@noble/hashes/utils';
 import * as bip32 from '@scure/bip32';
 import * as bip39 from '@scure/bip39';
-import * as starknet from '../../esm/stark.js';
+import * as starknet from '../../stark.js';
 import { default as sigVec } from './fixtures/rfc6979_signature_test_vector.json' assert { type: 'json' };
 import { default as precomputedKeys } from './fixtures/keys_precomputed.json' assert { type: 'json' };
 

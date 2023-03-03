@@ -1,4 +1,4 @@
-import * as microStark from '../../../esm/stark.js';
+import * as microStark from '../../../stark.js';
 import * as starkwareCrypto from '@starkware-industries/starkware-crypto-utils';
 import * as bench from 'micro-bmark';
 const { run, mark } = bench; // or bench.mark
