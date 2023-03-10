@@ -1,6 +1,6 @@
 # noble-curves
 
-Audited & minimal JS implementation of elliptic curve cryptography.
+[Audited](#security) & minimal JS implementation of elliptic curve cryptography.
 
 - **noble** family, zero dependencies
 - Short Weierstrass, Edwards, Montgomery curves
@@ -612,9 +612,11 @@ utils.equalBytes(Uint8Array.from([0xde]), Uint8Array.from([0xde]));
 
 ## Security
 
-The library had no prior security audit. The library has been fuzzed by [Guido Vranken's cryptofuzz](https://github.com/guidovranken/cryptofuzz): you can run the fuzzer by yourself to check it.
-
-[Timing attack](https://en.wikipedia.org/wiki/Timing_attack) considerations: we are using non-CT bigints. However, _JIT-compiler_ and _Garbage Collector_ make "constant time" extremely hard to achieve in a scripting language. Which means _any other JS library can't have constant-timeness_. Even statically typed Rust, a language without GC, [makes it harder to achieve constant-time](https://www.chosenplaintext.ca/open-source/rust-timing-shield/security) for some cases. If your goal is absolute security, don't use any JS lib — including bindings to native ones. Use low-level libraries & languages. Nonetheless we're targetting algorithmic constant time.
+1. The library has been audited during Jan-Feb 2023 by an independent security firm [Trail of Bits](https://www.trailofbits.com):
+[PDF](https://github.com/trailofbits/publications/blob/master/reviews/2023-01-ryanshea-noblecurveslibrary-securityreview.pdf).
+The audit has been funded by Ryan Shea. Audit scope was abstract modules `curve`, `hash-to-curve`, `modular`, `poseidon`, `utils`, `weierstrass`, and top-level modules `_shortw_utils` and `secp256k1`. See [changes since audit](https://github.com/paulmillr/noble-curves/compare/0.7.3..main).
+2. The library has been fuzzed by [Guido Vranken's cryptofuzz](https://github.com/guidovranken/cryptofuzz). You can run the fuzzer by yourself to check it.
+3. [Timing attack](https://en.wikipedia.org/wiki/Timing_attack) considerations: _JIT-compiler_ and _Garbage Collector_ make "constant time" extremely hard to achieve in a scripting language. Which means _any other JS library can't have constant-timeness_. Even statically typed Rust, a language without GC, [makes it harder to achieve constant-time](https://www.chosenplaintext.ca/open-source/rust-timing-shield/security) for some cases. If your goal is absolute security, don't use any JS lib — including bindings to native ones. Use low-level libraries & languages. Nonetheless we're targetting algorithmic constant time.
 
 We consider infrastructure attacks like rogue NPM modules very important; that's why it's crucial to minimize the amount of 3rd-party dependencies & native bindings. If your app uses 500 dependencies, any dep could get hacked and you'll be downloading malware with every `npm install`. Our goal is to minimize this attack vector. As for devDependencies used by the library:
 
