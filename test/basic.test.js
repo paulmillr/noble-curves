@@ -11,7 +11,6 @@ import { secp521r1 } from '../p521.js';
 import { secp256k1 } from '../secp256k1.js';
 import { ed25519, ed25519ctx, ed25519ph, x25519 } from '../ed25519.js';
 import { ed448, ed448ph } from '../ed448.js';
-import { _starkCurve as starkCurve } from '../stark.js';
 import { pallas, vesta } from '../pasta.js';
 import { bn254 } from '../bn.js';
 import { jubjub } from '../jubjub.js';
@@ -24,7 +23,6 @@ const FIELDS = {
   secp256r1: { Fp: [secp256r1.CURVE.Fp] },
   secp521r1: { Fp: [secp521r1.CURVE.Fp] },
   secp256k1: { Fp: [secp256k1.CURVE.Fp] },
-  stark: { Fp: [starkCurve.CURVE.Fp] },
   jubjub: { Fp: [jubjub.CURVE.Fp] },
   ed25519: { Fp: [ed25519.CURVE.Fp] },
   ed448: { Fp: [ed448.CURVE.Fp] },
@@ -314,7 +312,6 @@ const CURVES = {
   secp256k1,
   ed25519, ed25519ctx, ed25519ph,
   ed448, ed448ph,
-  starkCurve,
   pallas, vesta,
   bn254,
   jubjub,

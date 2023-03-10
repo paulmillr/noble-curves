@@ -16,7 +16,6 @@
   },
   "dependencies": {
     "@noble/hashes": "^1.1.5",
-    "@starkware-industries/starkware-crypto-utils": "^0.0.2",
     "elliptic": "^6.5.4"
   }
 }

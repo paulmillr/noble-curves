@@ -11,7 +11,7 @@
     "*.d.ts.map"
   ],
   "scripts": {
-    "bench": "cd benchmark; node secp256k1.js; node curves.js; node ecdh.js; node stark.js; node bls.js",
+    "bench": "cd benchmark; node secp256k1.js; node curves.js; node ecdh.js; node bls.js",
     "build": "tsc",
     "build:clean": "rm *.{js,d.ts,js.map} esm/*.{js,js.map} 2> /dev/null",
     "build:release": "rollup -c rollup.config.js",
@@ -129,10 +129,6 @@
     "./secp256k1": {
       "types": "./secp256k1.d.ts",
       "default": "./secp256k1.js"
-    },
-    "./stark": {
-      "types": "./stark.d.ts",
-      "default": "./stark.js"
     }
   },
   "keywords": [

@@ -78,7 +78,6 @@ import { p256 } from '@noble/curves/p256';
 import { p384 } from '@noble/curves/p384';
 import { p521 } from '@noble/curves/p521';
 import { pallas, vesta } from '@noble/curves/pasta';
-import * as stark from '@noble/curves/stark';
 import { bls12_381 } from '@noble/curves/bls12-381';
 import { bn254 } from '@noble/curves/bn';
 import { jubjub } from '@noble/curves/jubjub';
@@ -530,7 +529,7 @@ Implements [Poseidon](https://www.poseidon-hash.info) ZK-friendly hash.
 
 There are many poseidon variants with different constants.
 We don't provide them: you should construct them manually.
-The only variant provided resides in `stark` module: inspect it for proper usage.
+Check out [micro-starknet](https://github.com/paulmillr/micro-starknet) package for a proper example.
 
 ```ts
 import { poseidon } from '@noble/curves/abstract/poseidon';
@@ -541,7 +540,7 @@ type PoseidonOpts = {
   roundsFull: number;
   roundsPartial: number;
   sboxPower?: number;
-  reversePartialPowIdx?: boolean; // Hack for stark
+  reversePartialPowIdx?: boolean;
   mds: bigint[][];
   roundConstants: bigint[][];
 };
@@ -672,12 +671,6 @@ getPublicKey x 3,363 ops/sec @ 297μs/op
 sign x 1,615 ops/sec @ 619μs/op
 verify x 319 ops/sec @ 3ms/op
 
-stark
-init x 35 ops/sec @ 28ms/op
-pedersen x 884 ops/sec @ 1ms/op
-poseidon x 8,598 ops/sec @ 116μs/op
-verify x 528 ops/sec @ 1ms/op
-
 ecdh
 ├─x25519 x 1,337 ops/sec @ 747μs/op
 ├─secp256k1 x 461 ops/sec @ 2ms/op
@@ -715,8 +708,6 @@ hashToCurve
 
 Article about some of library's features: [Learning fast elliptic-curve cryptography](https://paulmillr.com/posts/noble-secp256k1-fast-ecc/)
 
-Demo: Elliptic curve calculator [paulmillr.com/ecc](https://paulmillr.com/ecc).
-
 Projects using the library:
 
 - secp256k1
@@ -727,7 +718,9 @@ Projects using the library:
   - Check out `bls12-381.ts` for articles about the curve
   - Threshold sigs demo [genthresh.com](https://genthresh.com)
   - BBS signatures [github.com/Wind4Greg/BBS-Draft-Checks](https://github.com/Wind4Greg/BBS-Draft-Checks) following [draft-irtf-cfrg-bbs-signatures-latest](https://identity.foundation/bbs-signature/draft-irtf-cfrg-bbs-signatures.html)
-
+- Others
+  - All curves demo: Elliptic curve calculator [paulmillr.com/ecc](https://paulmillr.com/ecc)
+  - [micro-starknet](https://github.com/paulmillr/micro-starknet) for stark-friendly elliptic curve.
 ## Upgrading
 
 If you're coming from single-feature noble packages, the following changes need to be kept in mind:
