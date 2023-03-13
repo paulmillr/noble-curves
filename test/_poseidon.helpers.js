@@ -1,9 +1,9 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha256 } from '@noble/hashes/sha256';
 import { utf8ToBytes } from '@noble/hashes/utils';
-import { Fp, validateField } from '../abstract/modular.js';
-import { poseidon } from '../abstract/poseidon.js';
-import * as u from '../abstract/utils.js';
+import { Fp, validateField } from '../esm/abstract/modular.js';
+import { poseidon } from '../esm/abstract/poseidon.js';
+import * as u from '../esm/abstract/utils.js';
 
 // Poseidon hash https://docs.starkware.co/starkex/stark-curve.html
 export const Fp253 = Fp(

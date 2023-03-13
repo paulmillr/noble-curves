@@ -1,20 +1,20 @@
 import { deepStrictEqual, throws } from 'assert';
 import { should, describe } from 'micro-should';
 import * as fc from 'fast-check';
-import * as mod from '../abstract/modular.js';
-import { bytesToHex as toHex } from '../abstract/utils.js';
+import * as mod from '../esm/abstract/modular.js';
+import { bytesToHex as toHex } from '../esm/abstract/utils.js';
 // Generic tests for all curves in package
 import { secp192r1, secp224r1 } from './_more-curves.helpers.js';
-import { secp256r1 } from '../p256.js';
-import { secp384r1 } from '../p384.js';
-import { secp521r1 } from '../p521.js';
-import { secp256k1 } from '../secp256k1.js';
-import { ed25519, ed25519ctx, ed25519ph, x25519 } from '../ed25519.js';
-import { ed448, ed448ph } from '../ed448.js';
-import { pallas, vesta } from '../pasta.js';
-import { bn254 } from '../bn.js';
-import { jubjub } from '../jubjub.js';
-import { bls12_381 } from '../bls12-381.js';
+import { secp256r1 } from '../esm/p256.js';
+import { secp384r1 } from '../esm/p384.js';
+import { secp521r1 } from '../esm/p521.js';
+import { secp256k1 } from '../esm/secp256k1.js';
+import { ed25519, ed25519ctx, ed25519ph, x25519 } from '../esm/ed25519.js';
+import { ed448, ed448ph } from '../esm/ed448.js';
+import { pallas, vesta } from '../esm/pasta.js';
+import { bn254 } from '../esm/bn.js';
+import { jubjub } from '../esm/jubjub.js';
+import { bls12_381 } from '../esm/bls12-381.js';
 
 // Fields tests
 const FIELDS = {
