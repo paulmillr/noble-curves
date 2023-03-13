@@ -12,10 +12,10 @@
     "*.d.ts.map"
   ],
   "scripts": {
-    "bench": "cd benchmark; node secp256k1.js; node curves.js; node ecdh.js; node bls.js",
+    "bench": "cd benchmark; node secp256k1.js; node curves.js; node ecdh.js; node hash-to-curve.js; node modular.js; node bls.js",
     "build": "tsc && tsc -p tsconfig.esm.json",
     "build:release": "rollup -c rollup.config.js",
-    "build:clean": "rm *.{js,d.ts,js.map} esm/*.{js,js.map} 2> /dev/null",
+    "build:clean": "rm *.{js,d.ts,d.ts.map,js.map} esm/*.{js,d.ts,d.ts.map,js.map} 2> /dev/null",
     "lint": "prettier --check 'src/**/*.{js,ts}' 'test/*.js'",
     "format": "prettier --write 'src/**/*.{js,ts}' 'test/*.js'",
     "test": "node test/index.test.js"
