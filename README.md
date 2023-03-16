@@ -216,6 +216,24 @@ There are following zero-dependency algorithms:
 
 ```ts
 import { weierstrass } from '@noble/curves/abstract/weierstrass';
+import { Fp } from '@noble/curves/abstract/modular'; // finite field for mod arithmetics
+import { sha256 } from '@noble/hashes/sha256'; // 3rd-party sha256() of type utils.CHash
+import { hmac } from '@noble/hashes/hmac'; // 3rd-party hmac() that will accept sha256()
+import { concatBytes, randomBytes } from '@noble/hashes/utils'; // 3rd-party utilities
+const secq256k1 = weierstrass({
+  // secq256k1: cycle of secp256k1 with Fp/N flipped.
+  // https://personaelabs.org/posts/spartan-ecdsa
+  // https://zcash.github.io/halo2/background/curves.html#cycles-of-curves
+  a: 0n,
+  b: 7n,
+  Fp: Fp(2n ** 256n - 432420386565659656852420866394968145599n),
+  n: 2n ** 256n - 2n ** 32n - 2n ** 9n - 2n ** 8n - 2n ** 7n - 2n ** 6n - 2n ** 4n - 1n,
+  Gx: 55066263022277343669578718895168534326250603453777594175500187360389116729240n,
+  Gy: 32670510020758816978083085130507043184471273380659243275938904335757337482424n,
+  hash: sha256,
+  hmac: (key: Uint8Array, ...msgs: Uint8Array[]) => hmac(sha256, key, concatBytes(...msgs)),
+  randomBytes,
+});
 ```
 
 Short Weierstrass curve's formula is `y² = x³ + ax + b`. `weierstrass`
@@ -247,6 +265,29 @@ type CHash = {
 6. Have `toAffine()` and `x` / `y` getters which convert to 2d xy affine coordinates
 
 ```ts
+// `weierstrass()` returns `CurveFn`
+type SignOpts = { lowS?: boolean; prehash?: boolean; extraEntropy: boolean | Uint8Array };
+type CurveFn = {
+  CURVE: ReturnType<typeof validateOpts>;
+  getPublicKey: (privateKey: PrivKey, isCompressed?: boolean) => Uint8Array;
+  getSharedSecret: (privateA: PrivKey, publicB: Hex, isCompressed?: boolean) => Uint8Array;
+  sign: (msgHash: Hex, privKey: PrivKey, opts?: SignOpts) => SignatureType;
+  verify: (
+    signature: Hex | SignatureType,
+    msgHash: Hex,
+    publicKey: Hex,
+    opts?: { lowS?: boolean; prehash?: boolean }
+  ) => boolean;
+  ProjectivePoint: ProjectivePointConstructor;
+  Signature: SignatureConstructor;
+  utils: {
+    normPrivateKeyToScalar: (key: PrivKey) => bigint;
+    isValidPrivateKey(key: PrivKey): boolean;
+    randomPrivateKey: () => Uint8Array;
+    precompute: (windowSize?: number, point?: ProjPointType<bigint>) => ProjPointType<bigint>;
+  };
+};
+
 // T is usually bigint, but can be something else like complex numbers in BLS curves
 interface ProjPointType<T> extends Group<ProjPointType<T>> {
   readonly px: T;
@@ -298,29 +339,9 @@ type SignatureConstructor = {
 };
 ```
 
-Example implementing [secq256k1](https://personaelabs.org/posts/spartan-ecdsa)
-[cycle](https://zcash.github.io/halo2/background/curves.html#cycles-of-curves)
-of secp256k1 with Fp/N flipped.
+More examples:
 
 ```typescript
-import { weierstrass } from '@noble/curves/abstract/weierstrass';
-import { Fp } from '@noble/curves/abstract/modular'; // finite field, mod arithmetics done over it
-import { sha256 } from '@noble/hashes/sha256'; // 3rd-party sha256() of type utils.CHash
-import { hmac } from '@noble/hashes/hmac'; // 3rd-party hmac() that will accept sha256()
-import { concatBytes, randomBytes } from '@noble/hashes/utils'; // 3rd-party utilities
-const secq256k1 = weierstrass({
-  // secq256k1: cycle of secp256k1 with Fp/N flipped.
-  a: 0n,
-  b: 7n,
-  Fp: Fp(2n ** 256n - 432420386565659656852420866394968145599n),
-  n: 2n ** 256n - 2n ** 32n - 2n ** 9n - 2n ** 8n - 2n ** 7n - 2n ** 6n - 2n ** 4n - 1n,
-  Gx: 55066263022277343669578718895168534326250603453777594175500187360389116729240n,
-  Gy: 32670510020758816978083085130507043184471273380659243275938904335757337482424n,
-  hash: sha256,
-  hmac: (key: Uint8Array, ...msgs: Uint8Array[]) => hmac(sha256, key, concatBytes(...msgs)),
-  randomBytes,
-});
-
 // All curves expose same generic interface.
 const priv = secq256k1.utils.randomPrivateKey();
 secq256k1.getPublicKey(priv); // Convert private key to public.
@@ -346,78 +367,13 @@ const fast = secq256k1.utils.precompute(8, Point.fromHex(someonesPubKey));
 fast.multiply(privKey); // much faster ECDH now
 ```
 
-`weierstrass()` returns `CurveFn`:
-
-```ts
-type SignOpts = { lowS?: boolean; prehash?: boolean; extraEntropy: boolean | Uint8Array };
-type CurveFn = {
-  CURVE: ReturnType<typeof validateOpts>;
-  getPublicKey: (privateKey: PrivKey, isCompressed?: boolean) => Uint8Array;
-  getSharedSecret: (privateA: PrivKey, publicB: Hex, isCompressed?: boolean) => Uint8Array;
-  sign: (msgHash: Hex, privKey: PrivKey, opts?: SignOpts) => SignatureType;
-  verify: (
-    signature: Hex | SignatureType,
-    msgHash: Hex,
-    publicKey: Hex,
-    opts?: { lowS?: boolean; prehash?: boolean }
-  ) => boolean;
-  ProjectivePoint: ProjectivePointConstructor;
-  Signature: SignatureConstructor;
-  utils: {
-    normPrivateKeyToScalar: (key: PrivKey) => bigint;
-    isValidPrivateKey(key: PrivKey): boolean;
-    randomPrivateKey: () => Uint8Array;
-    precompute: (windowSize?: number, point?: ProjPointType<bigint>) => ProjPointType<bigint>;
-  };
-};
-```
-
 ### abstract/edwards: Twisted Edwards curve
-
-Twisted Edwards curve's formula is `ax² + y² = 1 + dx²y²`. You must specify `a`, `d`, field `Fp`, order `n`, cofactor `h`
-and coordinates `Gx`, `Gy` of generator point.
-
-For EdDSA signatures, `hash` param required. `adjustScalarBytes` which instructs how to change private scalars could be specified.
-
-**Edwards points:**
-
-1. Exported as `ExtendedPoint`
-2. Represented in extended coordinates: (x, y, z, t) ∋ (x=x/z, y=y/z)
-3. Use complete exception-free formulas for addition and doubling
-4. Can be decoded/encoded from/to Uint8Array / hex strings using `ExtendedPoint.fromHex` and `ExtendedPoint#toRawBytes()`
-5. Have `assertValidity()` which checks for being on-curve
-6. Have `toAffine()` and `x` / `y` getters which convert to 2d xy affine coordinates
-7. Have `isTorsionFree()`, `clearCofactor()` and `isSmallOrder()` utilities to handle torsions
-
-```ts
-interface ExtPointType extends Group<ExtPointType> {
-  readonly ex: bigint;
-  readonly ey: bigint;
-  readonly ez: bigint;
-  readonly et: bigint;
-  assertValidity(): void;
-  multiply(scalar: bigint): ExtPointType;
-  multiplyUnsafe(scalar: bigint): ExtPointType;
-  isSmallOrder(): boolean;
-  isTorsionFree(): boolean;
-  clearCofactor(): ExtPointType;
-  toAffine(iz?: bigint): AffinePoint<bigint>;
-}
-// Static methods of Extended Point with coordinates in X, Y, Z, T
-interface ExtPointConstructor extends GroupConstructor<ExtPointType> {
-  new (x: bigint, y: bigint, z: bigint, t: bigint): ExtPointType;
-  fromAffine(p: AffinePoint<bigint>): ExtPointType;
-  fromHex(hex: Hex): ExtPointType;
-  fromPrivateKey(privateKey: Hex): ExtPointType;
-}
-```
-
-Example implementing edwards25519:
 
 ```ts
 import { twistedEdwards } from '@noble/curves/abstract/edwards';
 import { Fp } from '@noble/curves/abstract/modular';
 import { sha512 } from '@noble/hashes/sha512';
+import { randomBytes } from '@noble/hashes/utils';
 
 const fp = Fp(2n ** 255n - 19n);
 const ed25519 = twistedEdwards({
@@ -440,9 +396,23 @@ const ed25519 = twistedEdwards({
 } as const);
 ```
 
-`twistedEdwards()` returns `CurveFn` of following type:
+Twisted Edwards curve's formula is `ax² + y² = 1 + dx²y²`. You must specify `a`, `d`, field `Fp`, order `n`, cofactor `h`
+and coordinates `Gx`, `Gy` of generator point.
+
+For EdDSA signatures, `hash` param required. `adjustScalarBytes` which instructs how to change private scalars could be specified.
+
+**Edwards points:**
+
+1. Exported as `ExtendedPoint`
+2. Represented in extended coordinates: (x, y, z, t) ∋ (x=x/z, y=y/z)
+3. Use complete exception-free formulas for addition and doubling
+4. Can be decoded/encoded from/to Uint8Array / hex strings using `ExtendedPoint.fromHex` and `ExtendedPoint#toRawBytes()`
+5. Have `assertValidity()` which checks for being on-curve
+6. Have `toAffine()` and `x` / `y` getters which convert to 2d xy affine coordinates
+7. Have `isTorsionFree()`, `clearCofactor()` and `isSmallOrder()` utilities to handle torsions
 
 ```ts
+// `twistedEdwards()` returns `CurveFn` of following type:
 type CurveFn = {
   CURVE: ReturnType<typeof validateOpts>;
   getPublicKey: (privateKey: Hex) => Uint8Array;
@@ -460,14 +430,30 @@ type CurveFn = {
     };
   };
 };
+
+interface ExtPointType extends Group<ExtPointType> {
+  readonly ex: bigint;
+  readonly ey: bigint;
+  readonly ez: bigint;
+  readonly et: bigint;
+  assertValidity(): void;
+  multiply(scalar: bigint): ExtPointType;
+  multiplyUnsafe(scalar: bigint): ExtPointType;
+  isSmallOrder(): boolean;
+  isTorsionFree(): boolean;
+  clearCofactor(): ExtPointType;
+  toAffine(iz?: bigint): AffinePoint<bigint>;
+}
+// Static methods of Extended Point with coordinates in X, Y, Z, T
+interface ExtPointConstructor extends GroupConstructor<ExtPointType> {
+  new (x: bigint, y: bigint, z: bigint, t: bigint): ExtPointType;
+  fromAffine(p: AffinePoint<bigint>): ExtPointType;
+  fromHex(hex: Hex): ExtPointType;
+  fromPrivateKey(privateKey: Hex): ExtPointType;
+}
 ```
 
 ### abstract/montgomery: Montgomery curve
-
-The module contains methods for x-only ECDH on Curve25519 / Curve448 from RFC7748.
-Proper Elliptic Curve Points are not implemented yet.
-
-You must specify curve params `Fp`, `a`, `Gu` coordinate of u, `montgomeryBits` and `nByteLength`.
 
 ```typescript
 import { montgomery } from '@noble/curves/abstract/montgomery';
@@ -488,6 +474,11 @@ const x25519 = montgomery({
   },
 });
 ```
+
+The module contains methods for x-only ECDH on Curve25519 / Curve448 from RFC7748.
+Proper Elliptic Curve Points are not implemented yet.
+
+You must specify curve params `Fp`, `a`, `Gu` coordinate of u, `montgomeryBits` and `nByteLength`.
 
 ### abstract/hash-to-curve: Hashing strings to curve points
 
@@ -529,19 +520,37 @@ function expand_message_xof(
 ): Uint8Array;
 ```
 
-`hash_to_field(msg, count, options)` [(spec)](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-5.3)
+`hash_to_field(msg, count, options)`
+[(spec)](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-5.3)
 hashes arbitrary-length byte strings to a list of one or more elements of a finite field F.
 
-- `msg` a byte string containing the message to hash
-- `count` the number of elements of F to output
-- `options` `{DST: string, p: bigint, m: number, k: number, expand: 'xmd' | 'xof', hash: H}`.
-  - `p` is field prime, m=field extension (1 for prime fields)
-  - `k` is security target in bits (e.g. 128).
-  - `expand` should be `xmd` for SHA2, SHA3, BLAKE; `xof` for SHAKE, BLAKE-XOF
-  - `hash` conforming to `utils.CHash` interface, with `outputLen` / `blockLen` props
-- Returns `[u_0, ..., u_(count - 1)]`, a list of field elements.
-
 ```ts
+/**
+ * * `DST` is a domain separation tag, defined in section 2.2.5
+ * * `p` characteristic of F, where F is a finite field of characteristic p and order q = p^m
+ * * `m` is extension degree (1 for prime fields)
+ * * `k` is the target security target in bits (e.g. 128), from section 5.1
+ * * `expand` is `xmd` (SHA2, SHA3, BLAKE) or `xof` (SHAKE, BLAKE-XOF)
+ * * `hash` conforming to `utils.CHash` interface, with `outputLen` / `blockLen` props
+ */
+type UnicodeOrBytes = string | Uint8Array;
+type Opts = {
+    DST: UnicodeOrBytes;
+    p: bigint;
+    m: number;
+    k: number;
+    expand?: 'xmd' | 'xof';
+    hash: CHash;
+};
+
+/**
+ * Hashes arbitrary-length byte strings to a list of one or more elements of a finite field F
+ * https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-5.3
+ * @param msg a byte string containing the message to hash
+ * @param count the number of elements of F to output
+ * @param options `{DST: string, p: bigint, m: number, k: number, expand: 'xmd' | 'xof', hash: H}`, see above
+ * @returns [u_0, ..., u_(count - 1)], a list of field elements.
+ */
 function hash_to_field(msg: Uint8Array, count: number, options: Opts): bigint[][];
 ```
 
