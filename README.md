@@ -9,20 +9,27 @@
   for encoding or hashing an arbitrary string to an elliptic curve point
 - 🧜‍♂️ [Poseidon](https://www.poseidon-hash.info) ZK-friendly hash
 - 🏎 [Ultra-fast](#speed), hand-optimized for caveats of JS engines
-- 🔍 Unique tests ensure correctness with Wycheproof vectors and [cryptofuzz](https://github.com/guidovranken/cryptofuzz) differential fuzzing
+- 🔍 Unique tests ensure correctness with Wycheproof vectors and
+  [cryptofuzz](https://github.com/guidovranken/cryptofuzz) differential fuzzing
 - 🔻 Tree-shaking-friendly: there is no entry point, which ensures small size of your app
 
 Package consists of two parts:
 
 1. [Abstract](#abstract-api), zero-dependency EC algorithms
-2. [Implementations](#implementations), utilizing one dependency `@noble/hashes`, providing ready-to-use:
+2. [Implementations](#implementations), utilizing one dependency `@noble/hashes`,
+   providing ready-to-use:
    - NIST curves secp256r1/P256, secp384r1/P384, secp521r1/P521
    - SECG curve secp256k1
-   - ed25519/curve25519/x25519/ristretto255, edwards448/curve448/x448 [RFC7748](https://www.rfc-editor.org/rfc/rfc7748) / [RFC8032](https://www.rfc-editor.org/rfc/rfc8032) / [ZIP215](https://zips.z.cash/zip-0215) stuff
+   - ed25519/curve25519/x25519/ristretto255, edwards448/curve448/x448
+     implementing
+     [RFC7748](https://www.rfc-editor.org/rfc/rfc7748) /
+     [RFC8032](https://www.rfc-editor.org/rfc/rfc8032) /
+     [ZIP215](https://zips.z.cash/zip-0215) standards
    - pairing-friendly curves bls12-381, bn254
 
-Check out [Upgrading](#upgrading) if you've previously used single-feature noble packages
-([secp256k1](https://github.com/paulmillr/noble-secp256k1), [ed25519](https://github.com/paulmillr/noble-ed25519)).
+Check out [Upgrading](#upgrading) if you've previously used single-feature noble
+packages ([secp256k1](https://github.com/paulmillr/noble-secp256k1),
+[ed25519](https://github.com/paulmillr/noble-ed25519)).
 See [Resources](#resources) for articles and real-world software that uses curves.
 
 ### This library belongs to _noble_ crypto
@@ -41,22 +48,25 @@ See [Resources](#resources) for articles and real-world software that uses curve
 
 ## Usage
 
-Use NPM for browser / node.js:
+Browser, deno and node.js are supported:
 
 > npm install @noble/curves
 
-For [Deno](https://deno.land), use it with [npm specifier](https://deno.land/manual@v1.28.0/node/npm_specifiers). In browser, you could also include the single file from
+For [Deno](https://deno.land), use it with
+[npm specifier](https://deno.land/manual@v1.28.0/node/npm_specifiers).
+In browser, you could also include the single file from
 [GitHub's releases page](https://github.com/paulmillr/noble-curves/releases).
 
-The library is tree-shaking-friendly and does not expose root entry point as `import * from '@noble/curves'`.
-Instead, you need to import specific primitives. This is done to ensure small size of your apps.
+The library is tree-shaking-friendly and does not expose root entry point as
+`import * from '@noble/curves'`. Instead, you need to import specific primitives.
+This is done to ensure small size of your apps.
 
 ### Implementations
 
 Each curve can be used in the following way:
 
 ```ts
-import { secp256k1 } from '@noble/curves/secp256k1'; // ECMAScript Modules (ESM) and Common.js
+import { secp256k1 } from '@noble/curves/secp256k1'; // ESM and Common.js
 // import { secp256k1 } from 'npm:@noble/curves@1.2.0/secp256k1'; // Deno
 const priv = secp256k1.utils.randomPrivateKey();
 const pub = secp256k1.getPublicKey(priv);
@@ -64,8 +74,9 @@ const msg = new Uint8Array(32).fill(1);
 const sig = secp256k1.sign(msg, priv);
 secp256k1.verify(sig, msg, pub) === true;
 
+// hex strings are also supported besides Uint8Arrays:
 const privHex = '46c930bc7bb4db7f55da20798697421b98c4175a52c630294d75a84b9c126236';
-const pub2 = secp256k1.getPublicKey(privHex); // keys & other inputs can be Uint8Array-s or hex strings
+const pub2 = secp256k1.getPublicKey(privHex);
 ```
 
 All curves:
@@ -90,7 +101,7 @@ Weierstrass curves feature recovering public keys from signatures and ECDH key a
 const sigImprovedSecurity = secp256k1.sign(msg, priv, { extraEntropy: true });
 sig.recoverPublicKey(msg) === pub; // public key recovery
 const someonesPub = secp256k1.getPublicKey(secp256k1.utils.randomPrivateKey());
-const shared = secp256k1.getSharedSecret(priv, someonesPub); // ECDH (elliptic curve diffie-hellman)
+const shared = secp256k1.getSharedSecret(priv, someonesPub); // ECDH
 ```
 
 secp256k1 has schnorr signature implementation which follows
@@ -103,7 +114,6 @@ const pub = schnorr.getPublicKey(priv);
 const msg = new TextEncoder().encode('hello');
 const sig = schnorr.sign(msg, priv);
 const isValid = schnorr.verify(sig, msg, pub);
-console.log(isValid);
 ```
 
 ed25519 module has ed25519ctx / ed25519ph variants,
@@ -134,18 +144,20 @@ RistrettoPoint.hashToCurve('Ristretto is traditionally a short shot of espresso 
 // also has add(), equals(), multiply(), toRawBytes() methods
 ```
 
-ed448 module is basically the same:
+ed448 is similar:
 
 ```ts
 import { ed448, ed448ph, ed448ctx, x448 } from '@noble/curves/ed448';
 import { hashToCurve, encodeToCurve } from '@noble/curves/ed448';
+ed448.getPublicKey(ed448.utils.randomPrivateKey());
 ```
 
 BLS12-381 pairing-friendly Barreto-Lynn-Scott elliptic curve construction allows to
 construct [zk-SNARKs](https://z.cash/technology/zksnarks/) at the 128-bit security
 and use aggregated, batch-verifiable
 [threshold signatures](https://medium.com/snigirev.stepan/bls-signatures-better-than-schnorr-5a7fe30ea716),
-using Boneh-Lynn-Shacham signature scheme.
+using Boneh-Lynn-Shacham signature scheme. Compatible with ETH and others,
+just make sure to provide correct DST (domain separation tag argument).
 
 ```ts
 import { bls12_381 as bls } from '@noble/curves/bls12-381';
@@ -182,10 +194,13 @@ console.log({ publicKeys, signatures3, aggSignature3, isValid3 });
 
 ## Abstract API
 
-Abstract API allows to define custom curves. All arithmetics is done with JS bigints over finite fields,
-which is defined from `modular` sub-module. For scalar multiplication, we use [precomputed tables with w-ary non-adjacent form (wNAF)](https://paulmillr.com/posts/noble-secp256k1-fast-ecc/).
-Precomputes are enabled for weierstrass and edwards BASE points of a curve. You could precompute any
-other point (e.g. for ECDH) using `utils.precompute()` method: check out examples.
+Abstract API allows to define custom curves. All arithmetics is done with JS
+bigints over finite fields, which is defined from `modular` sub-module. For
+scalar multiplication, we use
+[precomputed tables with w-ary non-adjacent form (wNAF)](https://paulmillr.com/posts/noble-secp256k1-fast-ecc/).
+Precomputes are enabled for weierstrass and edwards BASE points of a curve. You
+could precompute any other point (e.g. for ECDH) using `utils.precompute()`
+method: check out examples.
 
 There are following zero-dependency algorithms:
 
@@ -203,12 +218,14 @@ There are following zero-dependency algorithms:
 import { weierstrass } from '@noble/curves/abstract/weierstrass';
 ```
 
-Short Weierstrass curve's formula is `y² = x³ + ax + b`. `weierstrass` expects arguments `a`, `b`, field `Fp`, curve order `n`, cofactor `h`
+Short Weierstrass curve's formula is `y² = x³ + ax + b`. `weierstrass`
+expects arguments `a`, `b`, field `Fp`, curve order `n`, cofactor `h`
 and coordinates `Gx`, `Gy` of generator point.
 
-**`k` generation** is done deterministically, following [RFC6979](https://www.rfc-editor.org/rfc/rfc6979).
-For this you will need `hmac` & `hash`, which in our implementations is provided by noble-hashes.
-If you're using different hashing library, make sure to wrap it in the following interface:
+**`k` generation** is done deterministically, following
+[RFC6979](https://www.rfc-editor.org/rfc/rfc6979). For this you will need
+`hmac` & `hash`, which in our implementations is provided by noble-hashes. If
+you're using different hashing library, make sure to wrap it in the following interface:
 
 ```ts
 type CHash = {
@@ -224,7 +241,8 @@ type CHash = {
 1. Exported as `ProjectivePoint`
 2. Represented in projective (homogeneous) coordinates: (x, y, z) ∋ (x=x/z, y=y/z)
 3. Use complete exception-free formulas for addition and doubling
-4. Can be decoded/encoded from/to Uint8Array / hex strings using `ProjectivePoint.fromHex` and `ProjectivePoint#toRawBytes()`
+4. Can be decoded/encoded from/to Uint8Array / hex strings using
+   `ProjectivePoint.fromHex` and `ProjectivePoint#toRawBytes()`
 5. Have `assertValidity()` which checks for being on-curve
 6. Have `toAffine()` and `x` / `y` getters which convert to 2d xy affine coordinates
 
@@ -254,7 +272,8 @@ interface ProjConstructor<T> extends GroupConstructor<ProjPointType<T>> {
 }
 ```
 
-**ECDSA signatures** are represented by `Signature` instances and can be described by the interface:
+**ECDSA signatures** are represented by `Signature` instances and can be
+described by the interface:
 
 ```ts
 interface SignatureType {
@@ -279,20 +298,21 @@ type SignatureConstructor = {
 };
 ```
 
-Example implementing [secq256k1](https://personaelabs.org/posts/spartan-ecdsa) (NOT secp256k1)
-[cycle](https://zcash.github.io/halo2/background/curves.html#cycles-of-curves) of secp256k1 with Fp/N flipped.
+Example implementing [secq256k1](https://personaelabs.org/posts/spartan-ecdsa)
+[cycle](https://zcash.github.io/halo2/background/curves.html#cycles-of-curves)
+of secp256k1 with Fp/N flipped.
 
 ```typescript
 import { weierstrass } from '@noble/curves/abstract/weierstrass';
-import { Field } from '@noble/curves/abstract/modular'; // finite field, mod arithmetics done over it
-import { sha256 } from '@noble/hashes/sha256'; // 3rd-party sha256() of type utils.CHash, with blockLen/outputLen
+import { Fp } from '@noble/curves/abstract/modular'; // finite field, mod arithmetics done over it
+import { sha256 } from '@noble/hashes/sha256'; // 3rd-party sha256() of type utils.CHash
 import { hmac } from '@noble/hashes/hmac'; // 3rd-party hmac() that will accept sha256()
 import { concatBytes, randomBytes } from '@noble/hashes/utils'; // 3rd-party utilities
 const secq256k1 = weierstrass({
   // secq256k1: cycle of secp256k1 with Fp/N flipped.
   a: 0n,
   b: 7n,
-  Fp: Field(2n ** 256n - 432420386565659656852420866394968145599n),
+  Fp: Fp(2n ** 256n - 432420386565659656852420866394968145599n),
   n: 2n ** 256n - 2n ** 32n - 2n ** 9n - 2n ** 8n - 2n ** 7n - 2n ** 6n - 2n ** 4n - 1n,
   Gx: 55066263022277343669578718895168534326250603453777594175500187360389116729240n,
   Gy: 32670510020758816978083085130507043184471273380659243275938904335757337482424n,
@@ -396,14 +416,14 @@ Example implementing edwards25519:
 
 ```ts
 import { twistedEdwards } from '@noble/curves/abstract/edwards';
-import { Field, div } from '@noble/curves/abstract/modular';
+import { Fp } from '@noble/curves/abstract/modular';
 import { sha512 } from '@noble/hashes/sha512';
 
-const Fp = Field(2n ** 255n - 19n);
+const fp = Fp(2n ** 255n - 19n);
 const ed25519 = twistedEdwards({
   a: -1n,
-  d: Fp.div(-121665n, 121666n), // -121665n/121666n mod p
-  Fp,
+  d: fp.div(-121665n, 121666n), // -121665n/121666n mod p
+  Fp: fp,
   n: 2n ** 252n + 27742317777372353535851937790883648493n,
   h: 8n,
   Gx: 15112221349535400772501151409588531511454012693041857206046113283949847762202n,
@@ -444,15 +464,17 @@ type CurveFn = {
 
 ### abstract/montgomery: Montgomery curve
 
-The module contains methods for x-only ECDH on Curve25519 / Curve448 from RFC7748. Proper Elliptic Curve Points are not implemented yet.
+The module contains methods for x-only ECDH on Curve25519 / Curve448 from RFC7748.
+Proper Elliptic Curve Points are not implemented yet.
 
 You must specify curve params `Fp`, `a`, `Gu` coordinate of u, `montgomeryBits` and `nByteLength`.
 
 ```typescript
 import { montgomery } from '@noble/curves/abstract/montgomery';
+import { Fp } from '@noble/curves/abstract/modular';
 
 const x25519 = montgomery({
-  Fp: Field(2n ** 255n - 19n),
+  Fp: Fp(2n ** 255n - 19n),
   a: 486662n,
   Gu: 9n,
   montgomeryBits: 255,
