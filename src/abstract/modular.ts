@@ -280,6 +280,7 @@ export function FpPow<T>(f: IField<T>, num: T, power: bigint): T {
   return p;
 }
 
+// 0 is non-invertible: non-batched version will throw on 0
 export function FpInvertBatch<T>(f: IField<T>, nums: T[]): T[] {
   const tmp = new Array(nums.length);
   // Walk from first to last, multiply them by each other MOD p
