@@ -82,8 +82,8 @@ export interface ProjConstructor<T> extends GroupConstructor<ProjPointType<T>> {
 
 export type CurvePointsType<T> = BasicWCurve<T> & {
   // Bytes
-  fromBytes: (bytes: Uint8Array) => AffinePoint<T>;
-  toBytes: (c: ProjConstructor<T>, point: ProjPointType<T>, compressed: boolean) => Uint8Array;
+  fromBytes?: (bytes: Uint8Array) => AffinePoint<T>;
+  toBytes?: (c: ProjConstructor<T>, point: ProjPointType<T>, isCompressed: boolean) => Uint8Array;
 };
 
 function validatePointOpts<T>(curve: CurvePointsType<T>) {
@@ -93,8 +93,6 @@ function validatePointOpts<T>(curve: CurvePointsType<T>) {
     {
       a: 'field',
       b: 'field',
-      fromBytes: 'function',
-      toBytes: 'function',
     },
     {
       allowedPrivateKeyLengths: 'array',
@@ -102,6 +100,8 @@ function validatePointOpts<T>(curve: CurvePointsType<T>) {
       isTorsionFree: 'function',
       clearCofactor: 'function',
       allowInfinityPoint: 'boolean',
+      fromBytes: 'function',
+      toBytes: 'function',
     }
   );
   const { endo, Fp, a } = opts;
@@ -183,6 +183,23 @@ const _1n = BigInt(1);
 export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
   const CURVE = validatePointOpts(opts);
   const { Fp } = CURVE; // All curves has same field / group length as for now, but they can differ
+
+  const toBytes =
+    CURVE.toBytes ||
+    ((c: ProjConstructor<T>, point: ProjPointType<T>, isCompressed: boolean) => {
+      const a = point.toAffine();
+      return ut.concatBytes(Uint8Array.from([0x04]), Fp.toBytes(a.x), Fp.toBytes(a.y));
+    });
+  const fromBytes =
+    CURVE.fromBytes ||
+    ((bytes: Uint8Array) => {
+      // const head = bytes[0];
+      const tail = bytes.subarray(1);
+      // if (head !== 0x04) throw new Error('Only non-compressed encoding is supported');
+      const x = Fp.fromBytes(tail.subarray(0, Fp.BYTES));
+      const y = Fp.fromBytes(tail.subarray(Fp.BYTES, 2 * Fp.BYTES));
+      return { x, y };
+    });
 
   /**
    * y² = x³ + ax + b: Short weierstrass curve formula
@@ -280,7 +297,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
      * @param hex short/long ECDSA hex
      */
     static fromHex(hex: Hex): Point {
-      const P = Point.fromAffine(CURVE.fromBytes(ensureBytes('pointHex', hex)));
+      const P = Point.fromAffine(fromBytes(ensureBytes('pointHex', hex)));
       P.assertValidity();
       return P;
     }
@@ -563,7 +580,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
 
     toRawBytes(isCompressed = true): Uint8Array {
       this.assertValidity();
-      return CURVE.toBytes(Point, this, isCompressed);
+      return toBytes(Point, this, isCompressed);
     }
 
     toHex(isCompressed = true): string {
@@ -574,6 +591,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
   const wnaf = wNAF(Point, CURVE.endo ? Math.ceil(_bits / 2) : _bits);
 
   return {
+    CURVE,
     ProjectivePoint: Point as ProjConstructor<T>,
     normPrivateKeyToScalar,
     weierstrassEquation,
@@ -1055,7 +1073,6 @@ export function weierstrass(curveDef: CurveType): CurveFn {
 }
 
 // Implementation of the Shallue and van de Woestijne method for any Weierstrass curve
-
 // TODO: check if there is a way to merge this with uvRatio in Edwards && move to modular?
 // b = True and y = sqrt(u / v) if (u / v) is square in F, and
 // b = False and y = sqrt(Z * (u / v)) otherwise.
