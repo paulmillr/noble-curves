@@ -195,5 +195,5 @@ export function validateBasic<FP, T>(curve: BasicCurve<FP> & T) {
     }
   );
   // Set defaults
-  return Object.freeze({ ...nLength(curve.n, curve.nBitLength), ...curve } as const);
+  return Object.freeze({ ...nLength(curve.n, curve.nBitLength), ...curve, ...{p: curve.Fp.ORDER} } as const);
 }

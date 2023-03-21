@@ -152,6 +152,13 @@ import { hashToCurve, encodeToCurve } from '@noble/curves/ed448';
 ed448.getPublicKey(ed448.utils.randomPrivateKey());
 ```
 
+Every curve has params:
+
+```ts
+import { secp256k1 } from '@noble/curves/secp256k1'; // ESM and Common.js
+console.log(secp256k1.CURVE.p, secp256k1.CURVE.n, secp256k1.CURVE.a, secp256k1.CURVE.b);
+```
+
 BLS12-381 pairing-friendly Barreto-Lynn-Scott elliptic curve construction allows to
 construct [zk-SNARKs](https://z.cash/technology/zksnarks/) at the 128-bit security
 and use aggregated, batch-verifiable
@@ -359,6 +366,7 @@ point.assertValidity(); // Checks for being on-curve
 point.toAffine(); // Converts to 2d affine xy coordinates
 
 secq256k1.CURVE.n;
+secq256k1.CURVE.p;
 secq256k1.CURVE.Fp.mod();
 secq256k1.CURVE.hash();
 
