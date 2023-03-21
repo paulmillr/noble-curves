@@ -42,7 +42,7 @@ See [Resources](#resources) for articles and real-world software that uses curve
 - All releases are signed with PGP keys
 - Check out [homepage](https://paulmillr.com/noble/) & all libraries:
   [curves](https://github.com/paulmillr/noble-curves)
-  ([secp256k1](https://github.com/paulmillr/noble-secp256k1),
+  (4kb versions [secp256k1](https://github.com/paulmillr/noble-secp256k1),
   [ed25519](https://github.com/paulmillr/noble-ed25519)),
   [hashes](https://github.com/paulmillr/noble-hashes)
 
@@ -746,6 +746,13 @@ hashToCurve
 └─ed448 x 1,045 ops/sec @ 956μs/op
 ```
 
+## Contributing & testing
+
+1. Clone the repository
+2. `npm install` to install build dependencies like TypeScript
+3. `npm run build` to compile TypeScript code
+4. `npm run test` will execute all main tests
+
 ## Resources
 
 Article about some of library's features: [Learning fast elliptic-curve cryptography](https://paulmillr.com/posts/noble-secp256k1-fast-ecc/)
@@ -763,43 +770,50 @@ Projects using the library:
 - Others
   - All curves demo: Elliptic curve calculator [paulmillr.com/ecc](https://paulmillr.com/ecc)
   - [micro-starknet](https://github.com/paulmillr/micro-starknet) for stark-friendly elliptic curve.
+
 ## Upgrading
 
-If you're coming from single-feature noble packages, the following changes need to be kept in mind:
+Previously, the library was split into single-feature packages
+noble-secp256k1 and noble-ed25519. curves can be thought as a continuation of their
+original work. The libraries now changed their direction towards providing
+minimal 4kb implementations of cryptography and are not as feature-complete.
 
-- 2d affine (x, y) points have been removed to reduce complexity and improve speed
-- Removed `number` support as a type for private keys, `bigint` is still supported
-- `mod`, `invert` are no longer present in `utils`: use `@noble/curves/abstract/modular`
+Upgrading from [@noble/secp256k1](https://github.com/paulmillr/noble-secp256k1) 1.7:
 
-Upgrading from @noble/secp256k1 1.7:
+- `getPublicKey`
+    - now produce 33-byte compressed signatures by default
+    - to use old behavior, which produced 65-byte uncompressed keys, set
+      argument `isCompressed` to `false`: `getPublicKey(priv, false)`
+- `sign`
+    - is now sync; use `signAsync` for async version
+    - now returns `Signature` instance with `{ r, s, recovery }` properties
+    - `canonical` option was renamed to `lowS`
+    - `recovered` option has been removed because recovery bit is always returned now
+    - `der` option has been removed. There are 2 options:
+        1. Use compact encoding: `fromCompact`, `toCompactRawBytes`, `toCompactHex`.
+           Compact encoding is simply a concatenation of 32-byte r and 32-byte s.
+        2. If you must use DER encoding, switch to noble-curves (see above).
+- `verify`
+    - `strict` option was renamed to `lowS`
+- `getSharedSecret`
+    - now produce 33-byte compressed signatures by default
+    - to use old behavior, which produced 65-byte uncompressed keys, set
+      argument `isCompressed` to `false`: `getSharedSecret(a, b, false)`
+- `recoverPublicKey(msg, sig, rec)` was changed to `sig.recoverPublicKey(msg)`
+- `number` type for private keys have been removed: use `bigint` instead
+- `Point` (2d xy) has been changed to `ProjectivePoint` (3d xyz)
+- `utils` were split into `utils` (same api as in noble-curves) and
+  `etc` (`hmacSha256Sync` and others)
 
-- Compressed (33-byte) public keys are now returned by default, instead of uncompressed
-- Methods are now synchronous. Setting `secp.utils.hmacSha256` is no longer required
-- `sign()`
-  - `der`, `recovered` options were removed
-  - `canonical` was renamed to `lowS`
-  - Return type is now `{ r: bigint, s: bigint, recovery: number }` instance of `Signature`
-- `verify()`
-  - `strict` was renamed to `lowS`
-- `recoverPublicKey()`: moved to sig instance `Signature#recoverPublicKey(msgHash)`
-- `Point` was removed: use `ProjectivePoint` in xyz coordinates
-- `utils`: Many methods were removed, others were moved to `schnorr` namespace
+Upgrading from [@noble/ed25519](https://github.com/paulmillr/noble-ed25519) 1.7:
 
-Upgrading from @noble/ed25519 1.7:
-
-- Methods are now synchronous. Setting `secp.utils.hmacSha256` is no longer required
-- ed25519ph, ed25519ctx
-- `Point` was removed: use `ExtendedPoint` in xyzt coordinates
-- `Signature` was removed
-- `getSharedSecret` was removed: use separate x25519 sub-module
+- Methods are now sync by default
 - `bigint` is no longer allowed in `getPublicKey`, `sign`, `verify`. Reason: ed25519 is LE, can lead to bugs
-
-## Contributing & testing
-
-1. Clone the repository
-2. `npm install` to install build dependencies like TypeScript
-3. `npm run build` to compile TypeScript code
-4. `npm run test` will execute all main tests
+- `Point` (2d xy) has been changed to `ExtendedPoint` (xyzt)
+- `Signature` was removed: just use raw bytes or hex now
+- `utils` were split into `utils` (same api as in noble-curves) and
+  `etc` (`sha512Sync` and others)
+- `getSharedSecret` was moved to `x25519` module
 
 ## License
 
