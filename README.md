@@ -1,10 +1,11 @@
 # noble-curves
 
-[Audited](#security) & minimal JS implementation of elliptic curve cryptography.
+Audited & minimal JS implementation of elliptic curve cryptography.
 
 - **noble** family, zero dependencies
 - Short Weierstrass, Edwards, Montgomery curves
 - ECDSA, EdDSA, Schnorr, BLS signature schemes, ECDH key agreement
+- 🔒 [**Audited**](#security) by an independent security firm
 - #️⃣ [hash to curve](#abstracthash-to-curve-hashing-strings-to-curve-points)
   for encoding or hashing an arbitrary string to an elliptic curve point
 - 🧜‍♂️ [Poseidon](https://www.poseidon-hash.info) ZK-friendly hash
