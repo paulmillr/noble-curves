@@ -11,21 +11,7 @@
 - 🏎 [Ultra-fast](#speed), hand-optimized for caveats of JS engines
 - 🔍 Unique tests ensure correctness with Wycheproof vectors and
   [cryptofuzz](https://github.com/guidovranken/cryptofuzz) differential fuzzing
-- 🔻 Tree-shaking-friendly: there is no entry point, which ensures small size of your app
-
-Package consists of two parts:
-
-1. [Abstract](#abstract-api), zero-dependency EC algorithms
-2. [Implementations](#implementations), utilizing one dependency `@noble/hashes`,
-   providing ready-to-use:
-   - NIST curves secp256r1/P256, secp384r1/P384, secp521r1/P521
-   - SECG curve secp256k1
-   - ed25519/curve25519/x25519/ristretto255, edwards448/curve448/x448
-     implementing
-     [RFC7748](https://www.rfc-editor.org/rfc/rfc7748) /
-     [RFC8032](https://www.rfc-editor.org/rfc/rfc8032) /
-     [ZIP215](https://zips.z.cash/zip-0215) standards
-   - pairing-friendly curves bls12-381, bn254
+- 🔻 Tree-shaking-friendly: use only what's necessary, other code won't be included
 
 Check out [Upgrading](#upgrading) if you've previously used single-feature noble
 packages ([secp256k1](https://github.com/paulmillr/noble-secp256k1),
@@ -60,6 +46,20 @@ In browser, you could also include the single file from
 The library is tree-shaking-friendly and does not expose root entry point as
 `import * from '@noble/curves'`. Instead, you need to import specific primitives.
 This is done to ensure small size of your apps.
+
+Package consists of two parts:
+
+1. [Implementations](#implementations), utilizing one dependency `@noble/hashes`,
+   providing ready-to-use:
+   - NIST curves secp256r1/P256, secp384r1/P384, secp521r1/P521
+   - SECG curve secp256k1
+   - ed25519/curve25519/x25519/ristretto255, edwards448/curve448/x448
+     implementing
+     [RFC7748](https://www.rfc-editor.org/rfc/rfc7748) /
+     [RFC8032](https://www.rfc-editor.org/rfc/rfc8032) /
+     [ZIP215](https://zips.z.cash/zip-0215) standards
+   - pairing-friendly curves bls12-381, bn254
+2. [Abstract](#abstract-api), zero-dependency EC algorithms
 
 ### Implementations
 
