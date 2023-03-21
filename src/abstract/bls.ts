@@ -12,7 +12,7 @@
  * Some projects may prefer to swap this relation, it is not supported for now.
  */
 import { AffinePoint } from './curve.js';
-import { Field, hashToPrivateScalar } from './modular.js';
+import { IField, hashToPrivateScalar } from './modular.js';
 import { Hex, PrivKey, CHash, bitLen, bitGet, ensureBytes } from './utils.js';
 import * as htf from './hash-to-curve.js';
 import {
@@ -41,15 +41,15 @@ export type CurveType<Fp, Fp2, Fp6, Fp12> = {
     htfDefaults: htf.Opts;
   };
   x: bigint;
-  Fp: Field<Fp>;
-  Fr: Field<bigint>;
-  Fp2: Field<Fp2> & {
+  Fp: IField<Fp>;
+  Fr: IField<bigint>;
+  Fp2: IField<Fp2> & {
     reim: (num: Fp2) => { re: bigint; im: bigint };
     multiplyByB: (num: Fp2) => Fp2;
     frobeniusMap(num: Fp2, power: number): Fp2;
   };
-  Fp6: Field<Fp6>;
-  Fp12: Field<Fp12> & {
+  Fp6: IField<Fp6>;
+  Fp12: IField<Fp12> & {
     frobeniusMap(num: Fp12, power: number): Fp12;
     multiplyBy014(num: Fp12, o0: Fp2, o1: Fp2, o4: Fp2): Fp12;
     conjugate(num: Fp12): Fp12;
@@ -62,11 +62,11 @@ export type CurveType<Fp, Fp2, Fp6, Fp12> = {
 
 export type CurveFn<Fp, Fp2, Fp6, Fp12> = {
   CURVE: CurveType<Fp, Fp2, Fp6, Fp12>;
-  Fr: Field<bigint>;
-  Fp: Field<Fp>;
-  Fp2: Field<Fp2>;
-  Fp6: Field<Fp6>;
-  Fp12: Field<Fp12>;
+  Fr: IField<bigint>;
+  Fp: IField<Fp>;
+  Fp2: IField<Fp2>;
+  Fp6: IField<Fp6>;
+  Fp12: IField<Fp12>;
   G1: CurvePointsRes<Fp> & ReturnType<typeof htf.createHasher<Fp>>;
   G2: CurvePointsRes<Fp2> & ReturnType<typeof htf.createHasher<Fp2>>;
   Signature: SignatureCoder<Fp2>;

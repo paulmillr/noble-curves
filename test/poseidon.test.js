@@ -132,7 +132,9 @@ describe('Stark', () => {
 // Official vectors: https://extgit.iaik.tugraz.at/krypto/hadeshash/-/blob/master/code/test_vectors.txt
 
 should('poseidonperm_x5_255_3', () => {
-  const Fp = mod.Fp(BigInt('0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001'));
+  const Fp = mod.Field(
+    BigInt('0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001')
+  );
 
   const mds = [
     [
@@ -179,7 +181,7 @@ should('poseidonperm_x5_255_3', () => {
 });
 
 should('poseidonperm_x5_255_5', () => {
-  const Fp = mod.Fp(0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001n);
+  const Fp = mod.Field(0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001n);
   const t = 5;
 
   const mds = [
@@ -250,7 +252,7 @@ should('poseidonperm_x5_255_5', () => {
 });
 
 should('poseidonperm_x5_254_3', () => {
-  const Fp = mod.Fp(0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001n);
+  const Fp = mod.Field(0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001n);
   const t = 3;
 
   const mds = [
@@ -297,7 +299,7 @@ should('poseidonperm_x5_254_3', () => {
 });
 
 should('poseidonperm_x5_254_5', () => {
-  const Fp = mod.Fp(0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001n);
+  const Fp = mod.Field(0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001n);
   const t = 5;
 
   const mds = [

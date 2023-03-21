@@ -3,7 +3,7 @@ import { sha512 } from '@noble/hashes/sha512';
 import { concatBytes, randomBytes, utf8ToBytes } from '@noble/hashes/utils';
 import { twistedEdwards, ExtPointType } from './abstract/edwards.js';
 import { montgomery } from './abstract/montgomery.js';
-import { mod, pow2, isNegativeLE, Fp as Field, FpSqrtEven } from './abstract/modular.js';
+import { mod, pow2, isNegativeLE, Field, FpSqrtEven } from './abstract/modular.js';
 import {
   equalBytes,
   bytesToHex,

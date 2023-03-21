@@ -1,7 +1,7 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha256 } from '@noble/hashes/sha256';
 import { randomBytes } from '@noble/hashes/utils';
-import { Fp as Field, mod, pow2 } from './abstract/modular.js';
+import { Field, mod, pow2 } from './abstract/modular.js';
 import { ProjPointType as PointType, mapToCurveSimpleSWU } from './abstract/weierstrass.js';
 import type { Hex, PrivKey } from './abstract/utils.js';
 import { bytesToNumberBE, concatBytes, ensureBytes, numberToBytesBE } from './abstract/utils.js';
@@ -43,7 +43,6 @@ function sqrtMod(y: bigint): bigint {
 }
 
 const Fp = Field(secp256k1P, undefined, undefined, { sqrt: sqrtMod });
-type Fp = bigint;
 
 export const secp256k1 = createCurve(
   {
@@ -245,7 +244,7 @@ const isoMap = htf.isogenyMap(
       '0x6484aa716545ca2cf3a70c3fa8fe337e0a3d21162f0d6299a7bf8192bfd2a76f',
       '0x0000000000000000000000000000000000000000000000000000000000000001', // LAST 1
     ],
-  ].map((i) => i.map((j) => BigInt(j))) as [Fp[], Fp[], Fp[], Fp[]]
+  ].map((i) => i.map((j) => BigInt(j))) as [bigint[], bigint[], bigint[], bigint[]]
 );
 const mapSWU = mapToCurveSimpleSWU(Fp, {
   A: BigInt('0x3f8731abdd661adca08a5558f0f5d272e953d363cb6f0e5d405447c01a444533'),

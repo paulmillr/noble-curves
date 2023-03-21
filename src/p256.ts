@@ -1,7 +1,7 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { createCurve } from './_shortw_utils.js';
 import { sha256 } from '@noble/hashes/sha256';
-import { Fp as Field } from './abstract/modular.js';
+import { Field } from './abstract/modular.js';
 import { mapToCurveSimpleSWU } from './abstract/weierstrass.js';
 import * as htf from './abstract/hash-to-curve.js';
 

@@ -223,7 +223,7 @@ There are following zero-dependency algorithms:
 
 ```ts
 import { weierstrass } from '@noble/curves/abstract/weierstrass';
-import { Fp } from '@noble/curves/abstract/modular'; // finite field for mod arithmetics
+import { Field } from '@noble/curves/abstract/modular'; // finite field for mod arithmetics
 import { sha256 } from '@noble/hashes/sha256'; // 3rd-party sha256() of type utils.CHash
 import { hmac } from '@noble/hashes/hmac'; // 3rd-party hmac() that will accept sha256()
 import { concatBytes, randomBytes } from '@noble/hashes/utils'; // 3rd-party utilities
@@ -233,7 +233,7 @@ const secq256k1 = weierstrass({
   // https://zcash.github.io/halo2/background/curves.html#cycles-of-curves
   a: 0n,
   b: 7n,
-  Fp: Fp(2n ** 256n - 432420386565659656852420866394968145599n),
+  Fp: Field(2n ** 256n - 432420386565659656852420866394968145599n),
   n: 2n ** 256n - 2n ** 32n - 2n ** 9n - 2n ** 8n - 2n ** 7n - 2n ** 6n - 2n ** 4n - 1n,
   Gx: 55066263022277343669578718895168534326250603453777594175500187360389116729240n,
   Gy: 32670510020758816978083085130507043184471273380659243275938904335757337482424n,
@@ -241,6 +241,8 @@ const secq256k1 = weierstrass({
   hmac: (key: Uint8Array, ...msgs: Uint8Array[]) => hmac(sha256, key, concatBytes(...msgs)),
   randomBytes,
 });
+
+// weierstrassPoints can also be used if you don't need ECDSA, hash, hmac, randomBytes
 ```
 
 Short Weierstrass curve's formula is `y² = x³ + ax + b`. `weierstrass`
@@ -272,6 +274,7 @@ type CHash = {
 6. Have `toAffine()` and `x` / `y` getters which convert to 2d xy affine coordinates
 
 ```ts
+// `weierstrassPoints()` returns `CURVE` and `ProjectivePoint`
 // `weierstrass()` returns `CurveFn`
 type SignOpts = { lowS?: boolean; prehash?: boolean; extraEntropy: boolean | Uint8Array };
 type CurveFn = {
@@ -379,15 +382,15 @@ fast.multiply(privKey); // much faster ECDH now
 
 ```ts
 import { twistedEdwards } from '@noble/curves/abstract/edwards';
-import { Fp } from '@noble/curves/abstract/modular';
+import { Field } from '@noble/curves/abstract/modular';
 import { sha512 } from '@noble/hashes/sha512';
 import { randomBytes } from '@noble/hashes/utils';
 
-const fp = Fp(2n ** 255n - 19n);
+const Fp = Field(2n ** 255n - 19n);
 const ed25519 = twistedEdwards({
   a: -1n,
-  d: fp.div(-121665n, 121666n), // -121665n/121666n mod p
-  Fp: fp,
+  d: Fp.div(-121665n, 121666n), // -121665n/121666n mod p
+  Fp: Fp,
   n: 2n ** 252n + 27742317777372353535851937790883648493n,
   h: 8n,
   Gx: 15112221349535400772501151409588531511454012693041857206046113283949847762202n,
@@ -465,12 +468,12 @@ interface ExtPointConstructor extends GroupConstructor<ExtPointType> {
 
 ```typescript
 import { montgomery } from '@noble/curves/abstract/montgomery';
-import { Fp } from '@noble/curves/abstract/modular';
+import { Field } from '@noble/curves/abstract/modular';
 
 const x25519 = montgomery({
-  Fp: Fp(2n ** 255n - 19n),
   a: 486662n,
   Gu: 9n,
+  Fp: Field(2n ** 255n - 19n),
   montgomeryBits: 255,
   nByteLength: 32,
   // Optional param

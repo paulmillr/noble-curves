@@ -1,6 +1,6 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 // Abelian group utilities
-import { Field, validateField, nLength } from './modular.js';
+import { IField, validateField, nLength } from './modular.js';
 import { validateObject } from './utils.js';
 const _0n = BigInt(0);
 const _1n = BigInt(1);
@@ -168,7 +168,7 @@ export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number) {
 // Generic BasicCurve interface: works even for polynomial fields (BLS): P, n, h would be ok.
 // Though generator can be different (Fp2 / Fp6 for BLS).
 export type BasicCurve<T> = {
-  Fp: Field<T>; // Field over which we'll do calculations (Fp)
+  Fp: IField<T>; // Field over which we'll do calculations (Fp)
   n: bigint; // Curve order, total count of valid points in the field
   nBitLength?: number; // bit length of curve order
   nByteLength?: number; // byte length of curve order
@@ -195,5 +195,9 @@ export function validateBasic<FP, T>(curve: BasicCurve<FP> & T) {
     }
   );
   // Set defaults
-  return Object.freeze({ ...nLength(curve.n, curve.nBitLength), ...curve, ...{p: curve.Fp.ORDER} } as const);
+  return Object.freeze({
+    ...nLength(curve.n, curve.nBitLength),
+    ...curve,
+    ...{ p: curve.Fp.ORDER },
+  } as const);
 }

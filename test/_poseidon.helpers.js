@@ -1,7 +1,7 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha256 } from '@noble/hashes/sha256';
 import { utf8ToBytes } from '@noble/hashes/utils';
-import { Fp, validateField } from '../esm/abstract/modular.js';
+import { Field as Fp, validateField } from '../esm/abstract/modular.js';
 import { poseidon } from '../esm/abstract/poseidon.js';
 import * as u from '../esm/abstract/utils.js';
 

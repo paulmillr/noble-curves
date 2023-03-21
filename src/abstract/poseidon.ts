@@ -1,10 +1,10 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 // Poseidon Hash: https://eprint.iacr.org/2019/458.pdf, https://www.poseidon-hash.info
-import { Field, FpPow, validateField } from './modular.js';
+import { IField, FpPow, validateField } from './modular.js';
 // We don't provide any constants, since different implementations use different constants.
 // For reference constants see './test/poseidon.test.js'.
 export type PoseidonOpts = {
-  Fp: Field<bigint>;
+  Fp: IField<bigint>;
   t: number;
   roundsFull: number;
   roundsPartial: number;

@@ -72,13 +72,13 @@ import { isogenyMap } from './abstract/hash-to-curve.js';
 // CURVE FIELDS
 // Finite field over p.
 const Fp =
-  mod.Fp(
+  mod.Field(
     0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaabn
   );
 type Fp = bigint;
 // Finite field over r.
 // This particular field is not used anywhere in bls12-381, but it is still useful.
-const Fr = mod.Fp(0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001n);
+const Fr = mod.Field(0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001n);
 
 // Fp₂ over complex plane
 type BigintTuple = [bigint, bigint];
@@ -124,7 +124,7 @@ const FP2_ORDER =
   0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaabn **
   2n;
 
-const Fp2: mod.Field<Fp2> & Fp2Utils = {
+const Fp2: mod.IField<Fp2> & Fp2Utils = {
   ORDER: FP2_ORDER,
   BITS: bitLen(FP2_ORDER),
   BYTES: Math.ceil(bitLen(FP2_ORDER) / 8),
@@ -333,7 +333,7 @@ type Fp6Utils = {
   multiplyByFp2(lhs: Fp6, rhs: Fp2): Fp6;
 };
 
-const Fp6: mod.Field<Fp6> & Fp6Utils = {
+const Fp6: mod.IField<Fp6> & Fp6Utils = {
   ORDER: Fp2.ORDER, // TODO: unused, but need to verify
   BITS: 3 * Fp2.BITS,
   BYTES: 3 * Fp2.BYTES,
@@ -545,7 +545,7 @@ type Fp12Utils = {
   _cyclotomicExp(num: Fp12, n: bigint): Fp12;
 };
 
-const Fp12: mod.Field<Fp12> & Fp12Utils = {
+const Fp12: mod.IField<Fp12> & Fp12Utils = {
   ORDER: Fp2.ORDER, // TODO: unused, but need to verify
   BITS: 2 * Fp2.BITS,
   BYTES: 2 * Fp2.BYTES,

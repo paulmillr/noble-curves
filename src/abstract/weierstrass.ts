@@ -670,8 +670,7 @@ export type CurveFn = {
 
 export function weierstrass(curveDef: CurveType): CurveFn {
   const CURVE = validateOpts(curveDef) as ReturnType<typeof validateOpts>;
-  const CURVE_ORDER = CURVE.n;
-  const Fp = CURVE.Fp;
+  const { Fp, n: CURVE_ORDER } = CURVE;
   const compressedLen = Fp.BYTES + 1; // e.g. 33 for 32
   const uncompressedLen = 2 * Fp.BYTES + 1; // e.g. 65 for 32
 
@@ -1076,7 +1075,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
 // TODO: check if there is a way to merge this with uvRatio in Edwards && move to modular?
 // b = True and y = sqrt(u / v) if (u / v) is square in F, and
 // b = False and y = sqrt(Z * (u / v)) otherwise.
-export function SWUFpSqrtRatio<T>(Fp: mod.Field<T>, Z: T) {
+export function SWUFpSqrtRatio<T>(Fp: mod.IField<T>, Z: T) {
   // Generic implementation
   const q = Fp.ORDER;
   let l = 0n;
@@ -1141,7 +1140,7 @@ export function SWUFpSqrtRatio<T>(Fp: mod.Field<T>, Z: T) {
 }
 // From draft-irtf-cfrg-hash-to-curve-16
 export function mapToCurveSimpleSWU<T>(
-  Fp: mod.Field<T>,
+  Fp: mod.IField<T>,
   opts: {
     A: T;
     B: T;

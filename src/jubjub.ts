@@ -3,7 +3,7 @@ import { sha512 } from '@noble/hashes/sha512';
 import { concatBytes, randomBytes, utf8ToBytes } from '@noble/hashes/utils';
 import { twistedEdwards } from './abstract/edwards.js';
 import { blake2s } from '@noble/hashes/blake2s';
-import { Fp } from './abstract/modular.js';
+import { Field } from './abstract/modular.js';
 
 /**
  * jubjub Twisted Edwards curve.
@@ -17,7 +17,7 @@ export const jubjub = twistedEdwards({
   d: BigInt('0x2a9318e74bfa2b48f5fd9207e6bd7fd4292d7f6d37579d2601065fd6d6343eb1'),
   // Finite field 𝔽p over which we'll do calculations
   // Same value as bls12-381 Fr (not Fp)
-  Fp: Fp(BigInt('0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001')),
+  Fp: Field(BigInt('0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001')),
   // Subgroup order: how many points curve has
   n: BigInt('0xe7db4ea6533afa906673b0101343b00a6682093ccc81082d0970e5ed6f72cb7'),
   // Cofactor

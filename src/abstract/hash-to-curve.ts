@@ -1,6 +1,6 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import type { Group, GroupConstructor, AffinePoint } from './curve.js';
-import { mod, Field } from './modular.js';
+import { mod, IField } from './modular.js';
 import { bytesToNumberBE, CHash, concatBytes, utf8ToBytes, validateObject } from './utils.js';
 
 /**
@@ -163,7 +163,7 @@ export function hash_to_field(msg: Uint8Array, count: number, options: Opts): bi
   return u;
 }
 
-export function isogenyMap<T, F extends Field<T>>(field: F, map: [T[], T[], T[], T[]]) {
+export function isogenyMap<T, F extends IField<T>>(field: F, map: [T[], T[], T[], T[]]) {
   // Make same order as in spec
   const COEFF = map.map((i) => Array.from(i).reverse());
   return (x: T, y: T) => {

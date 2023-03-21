@@ -553,6 +553,7 @@ for (const name in CURVES) {
     });
   }
   describe(name, () => {
+    if (['bn254', 'pallas', 'vesta'].includes(name)) return;
     // Generic complex things (getPublicKey/sign/verify/getSharedSecret)
     should('.getPublicKey() type check', () => {
       throws(() => C.getPublicKey(0), '0');

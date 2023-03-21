@@ -97,7 +97,7 @@ export function tonelliShanks(P: bigint) {
   // Fast-path
   if (S === 1) {
     const p1div4 = (P + _1n) / _4n;
-    return function tonelliFast<T>(Fp: Field<T>, n: T) {
+    return function tonelliFast<T>(Fp: IField<T>, n: T) {
       const root = Fp.pow(n, p1div4);
       if (!Fp.eql(Fp.sqr(root), n)) throw new Error('Cannot find square root');
       return root;
@@ -106,7 +106,7 @@ export function tonelliShanks(P: bigint) {
 
   // Slow-path
   const Q1div2 = (Q + _1n) / _2n;
-  return function tonelliSlow<T>(Fp: Field<T>, n: T): T {
+  return function tonelliSlow<T>(Fp: IField<T>, n: T): T {
     // Step 0: Check that n is indeed a square: (n | p) should not be ≡ -1
     if (Fp.pow(n, legendreC) === Fp.neg(Fp.ONE)) throw new Error('Cannot find square root');
     let r = S;
@@ -146,7 +146,7 @@ export function FpSqrt(P: bigint) {
     //   0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaabn;
     // const NUM = 72057594037927816n;
     const p1div4 = (P + _1n) / _4n;
-    return function sqrt3mod4<T>(Fp: Field<T>, n: T) {
+    return function sqrt3mod4<T>(Fp: IField<T>, n: T) {
       const root = Fp.pow(n, p1div4);
       // Throw if root**2 != n
       if (!Fp.eql(Fp.sqr(root), n)) throw new Error('Cannot find square root');
@@ -157,7 +157,7 @@ export function FpSqrt(P: bigint) {
   // Atkin algorithm for q ≡ 5 (mod 8), https://eprint.iacr.org/2012/685.pdf (page 10)
   if (P % _8n === _5n) {
     const c1 = (P - _5n) / _8n;
-    return function sqrt5mod8<T>(Fp: Field<T>, n: T) {
+    return function sqrt5mod8<T>(Fp: IField<T>, n: T) {
       const n2 = Fp.mul(n, _2n);
       const v = Fp.pow(n2, c1);
       const nv = Fp.mul(n, v);
@@ -203,7 +203,7 @@ export const isNegativeLE = (num: bigint, modulo: bigint) => (mod(num, modulo) &
 // - unreadable mess: addition, multiply, square, squareRoot, inversion, divide, power, equals, subtract
 
 // Field is not always over prime, Fp2 for example has ORDER(q)=p^m
-export interface Field<T> {
+export interface IField<T> {
   ORDER: bigint;
   BYTES: number;
   BITS: number;
@@ -249,7 +249,7 @@ const FIELD_FIELDS = [
   'eql', 'add', 'sub', 'mul', 'pow', 'div',
   'addN', 'subN', 'mulN', 'sqrN'
 ] as const;
-export function validateField<T>(field: Field<T>) {
+export function validateField<T>(field: IField<T>) {
   const initial = {
     ORDER: 'bigint',
     MASK: 'bigint',
@@ -264,7 +264,7 @@ export function validateField<T>(field: Field<T>) {
 }
 
 // Generic field functions
-export function FpPow<T>(f: Field<T>, num: T, power: bigint): T {
+export function FpPow<T>(f: IField<T>, num: T, power: bigint): T {
   // Should have same speed as pow for bigints
   // TODO: benchmark!
   if (power < _0n) throw new Error('Expected power > 0');
@@ -280,7 +280,7 @@ export function FpPow<T>(f: Field<T>, num: T, power: bigint): T {
   return p;
 }
 
-export function FpInvertBatch<T>(f: Field<T>, nums: T[]): T[] {
+export function FpInvertBatch<T>(f: IField<T>, nums: T[]): T[] {
   const tmp = new Array(nums.length);
   // Walk from first to last, multiply them by each other MOD p
   const lastMultiplied = nums.reduce((acc, num, i) => {
@@ -299,12 +299,12 @@ export function FpInvertBatch<T>(f: Field<T>, nums: T[]): T[] {
   return tmp;
 }
 
-export function FpDiv<T>(f: Field<T>, lhs: T, rhs: T | bigint): T {
+export function FpDiv<T>(f: IField<T>, lhs: T, rhs: T | bigint): T {
   return f.mul(lhs, typeof rhs === 'bigint' ? invert(rhs, f.ORDER) : f.inv(rhs));
 }
 
 // This function returns True whenever the value x is a square in the field F.
-export function FpIsSquare<T>(f: Field<T>) {
+export function FpIsSquare<T>(f: IField<T>) {
   const legendreConst = (f.ORDER - _1n) / _2n; // Integer arithmetic
   return (x: T): boolean => {
     const p = f.pow(x, legendreConst);
@@ -320,16 +320,24 @@ export function nLength(n: bigint, nBitLength?: number) {
   return { nBitLength: _nBitLength, nByteLength };
 }
 
-// NOTE: very fragile, always bench. Major performance points:
-// - NonNormalized ops
-// - Object.freeze
-// - same shape of object (don't add/remove keys)
-type FpField = Field<bigint> & Required<Pick<Field<bigint>, 'isOdd'>>;
-export function Fp(
+type FpField = IField<bigint> & Required<Pick<IField<bigint>, 'isOdd'>>;
+/**
+ * Initializes a galois field over prime. Non-primes are not supported for now.
+ * Do not init in loop: slow. Very fragile: always run a benchmark on change.
+ * Major performance gains:
+ * a) non-normalized operations like mulN instead of mul
+ * b) `Object.freeze`
+ * c) Same object shape: never add or remove keys
+ * @param ORDER prime positive bigint
+ * @param bitLen how many bits the field consumes
+ * @param isLE (def: false) if encoding / decoding should be in little-endian
+ * @param redef optional faster redefinitions of sqrt and other methods
+ */
+export function Field(
   ORDER: bigint,
   bitLen?: number,
   isLE = false,
-  redef: Partial<Field<bigint>> = {}
+  redef: Partial<IField<bigint>> = {}
 ): Readonly<FpField> {
   if (ORDER <= _0n) throw new Error(`Expected Fp ORDER > 0, got ${ORDER}`);
   const { nBitLength: BITS, nByteLength: BYTES } = nLength(ORDER, bitLen);
@@ -382,13 +390,13 @@ export function Fp(
   return Object.freeze(f);
 }
 
-export function FpSqrtOdd<T>(Fp: Field<T>, elm: T) {
+export function FpSqrtOdd<T>(Fp: IField<T>, elm: T) {
   if (!Fp.isOdd) throw new Error(`Field doesn't have isOdd`);
   const root = Fp.sqrt(elm);
   return Fp.isOdd(root) ? root : Fp.neg(root);
 }
 
-export function FpSqrtEven<T>(Fp: Field<T>, elm: T) {
+export function FpSqrtEven<T>(Fp: IField<T>, elm: T) {
   if (!Fp.isOdd) throw new Error(`Field doesn't have isOdd`);
   const root = Fp.sqrt(elm);
   return Fp.isOdd(root) ? Fp.neg(root) : root;
