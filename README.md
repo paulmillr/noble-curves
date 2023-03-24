@@ -23,7 +23,7 @@ See [Resources](#resources) for articles and real-world software that uses curve
 > **noble-crypto** — high-security, easily auditable set of contained cryptographic libraries and tools.
 
 - No dependencies, protection against supply chain attacks
-- Easily auditable TypeScript/JS code
+- Auditable TypeScript / JS code
 - Supported in all major browsers and stable node.js versions
 - All releases are signed with PGP keys
 - Check out [homepage](https://paulmillr.com/noble/) & all libraries:
@@ -768,7 +768,7 @@ Projects using the library:
   - Threshold sigs demo [genthresh.com](https://genthresh.com)
   - BBS signatures [github.com/Wind4Greg/BBS-Draft-Checks](https://github.com/Wind4Greg/BBS-Draft-Checks) following [draft-irtf-cfrg-bbs-signatures-latest](https://identity.foundation/bbs-signature/draft-irtf-cfrg-bbs-signatures.html)
 - Others
-  - All curves demo: Elliptic curve calculator [paulmillr.com/ecc](https://paulmillr.com/ecc)
+  - All curves demo: Elliptic curve calculator [paulmillr.com/noble](https://paulmillr.com/noble)
   - [micro-starknet](https://github.com/paulmillr/micro-starknet) for stark-friendly elliptic curve.
 
 ## Upgrading
