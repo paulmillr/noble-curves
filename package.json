@@ -1,7 +1,7 @@
 {
   "name": "@noble/curves",
   "version": "0.9.0",
-  "description": "Minimal, auditable JS implementation of elliptic curve cryptography",
+  "description": "Audited & minimal JS implementation of elliptic curve cryptography",
   "files": [
     "abstract",
     "esm",
@@ -171,7 +171,7 @@
     "bn254",
     "pasta",
     "bls",
-    "nist",
+    "noble",
     "ecc",
     "ecdsa",
     "eddsa",
