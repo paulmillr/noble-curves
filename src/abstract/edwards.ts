@@ -58,6 +58,8 @@ export interface ExtPointType extends Group<ExtPointType> {
   isTorsionFree(): boolean;
   clearCofactor(): ExtPointType;
   toAffine(iz?: bigint): AffinePoint<bigint>;
+  toRawBytes(isCompressed?: boolean): Uint8Array;
+  toHex(isCompressed?: boolean): string;
 }
 // Static methods of Extended Point with coordinates in X, Y, Z, T
 export interface ExtPointConstructor extends GroupConstructor<ExtPointType> {
