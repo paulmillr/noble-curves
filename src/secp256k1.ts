@@ -131,7 +131,7 @@ function lift_x(x: bigint): PointType<bigint> {
   const xx = modP(x * x);
   const c = modP(xx * x + BigInt(7)); // Let c = x³ + 7 mod p.
   let y = sqrtMod(c); // Let y = c^(p+1)/4 mod p.
-  if (y % 2n !== 0n) y = modP(-y); // Return the unique point P such that x(P) = x and
+  if (y % _2n !== _0n) y = modP(-y); // Return the unique point P such that x(P) = x and
   const p = new Point(x, y, _1n); // y(P) = y if y mod 2 = 0 or y(P) = p-y otherwise.
   p.assertValidity();
   return p;

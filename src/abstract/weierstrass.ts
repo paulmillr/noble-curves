@@ -176,9 +176,9 @@ const DER = {
   },
 };
 
-// Be friendly to bad ECMAScript parsers by not using bigint literals like 123n
-const _0n = BigInt(0);
-const _1n = BigInt(1);
+// Be friendly to bad ECMAScript parsers by not using bigint literals
+// prettier-ignore
+const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3), _4n = BigInt(4);
 
 export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
   const CURVE = validatePointOpts(opts);
@@ -365,7 +365,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
     // Cost: 8M + 3S + 3*a + 2*b3 + 15add.
     double() {
       const { a, b } = CURVE;
-      const b3 = Fp.mul(b, 3n);
+      const b3 = Fp.mul(b, _3n);
       const { px: X1, py: Y1, pz: Z1 } = this;
       let X3 = Fp.ZERO, Y3 = Fp.ZERO, Z3 = Fp.ZERO; // prettier-ignore
       let t0 = Fp.mul(X1, X1); // step 1
@@ -412,7 +412,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
       const { px: X2, py: Y2, pz: Z2 } = other;
       let X3 = Fp.ZERO, Y3 = Fp.ZERO, Z3 = Fp.ZERO; // prettier-ignore
       const a = CURVE.a;
-      const b3 = Fp.mul(CURVE.b, 3n);
+      const b3 = Fp.mul(CURVE.b, _3n);
       let t0 = Fp.mul(X1, X2); // step 1
       let t1 = Fp.mul(Y1, Y2);
       let t2 = Fp.mul(Z1, Z2);
@@ -1078,15 +1078,15 @@ export function weierstrass(curveDef: CurveType): CurveFn {
 export function SWUFpSqrtRatio<T>(Fp: mod.IField<T>, Z: T) {
   // Generic implementation
   const q = Fp.ORDER;
-  let l = 0n;
-  for (let o = q - 1n; o % 2n === 0n; o /= 2n) l += 1n;
+  let l = _0n;
+  for (let o = q - _1n; o % _2n === _0n; o /= _2n) l += _1n;
   const c1 = l; // 1. c1, the largest integer such that 2^c1 divides q - 1.
-  const c2 = (q - 1n) / 2n ** c1; // 2. c2 = (q - 1) / (2^c1)        # Integer arithmetic
-  const c3 = (c2 - 1n) / 2n; // 3. c3 = (c2 - 1) / 2            # Integer arithmetic
-  const c4 = 2n ** c1 - 1n; // 4. c4 = 2^c1 - 1                # Integer arithmetic
-  const c5 = 2n ** (c1 - 1n); // 5. c5 = 2^(c1 - 1)              # Integer arithmetic
+  const c2 = (q - _1n) / _2n ** c1; // 2. c2 = (q - 1) / (2^c1)        # Integer arithmetic
+  const c3 = (c2 - _1n) / _2n; // 3. c3 = (c2 - 1) / 2            # Integer arithmetic
+  const c4 = _2n ** c1 - _1n; // 4. c4 = 2^c1 - 1                # Integer arithmetic
+  const c5 = _2n ** (c1 - _1n); // 5. c5 = 2^(c1 - 1)              # Integer arithmetic
   const c6 = Fp.pow(Z, c2); // 6. c6 = Z^c2
-  const c7 = Fp.pow(Z, (c2 + 1n) / 2n); // 7. c7 = Z^((c2 + 1) / 2)
+  const c7 = Fp.pow(Z, (c2 + _1n) / _2n); // 7. c7 = Z^((c2 + 1) / 2)
   let sqrtRatio = (u: T, v: T): { isValid: boolean; value: T } => {
     let tv1 = c6; // 1. tv1 = c6
     let tv2 = Fp.pow(v, c4); // 2. tv2 = v^c4
@@ -1106,7 +1106,7 @@ export function SWUFpSqrtRatio<T>(Fp: mod.IField<T>, Z: T) {
     tv4 = Fp.cmov(tv5, tv4, isQR); // 16. tv4 = CMOV(tv5, tv4, isQR)
     // 17. for i in (c1, c1 - 1, ..., 2):
     for (let i = c1; i > 1; i--) {
-      let tv5 = 2n ** (i - 2n); // 18.    tv5 = i - 2;    19.    tv5 = 2^tv5
+      let tv5 = _2n ** (i - _2n); // 18.    tv5 = i - 2;    19.    tv5 = 2^tv5
       let tvv5 = Fp.pow(tv4, tv5); // 20.    tv5 = tv4^tv5
       const e1 = Fp.eql(tvv5, Fp.ONE); // 21.    e1 = tv5 == 1
       tv2 = Fp.mul(tv3, tv1); // 22.    tv2 = tv3 * tv1
@@ -1117,9 +1117,9 @@ export function SWUFpSqrtRatio<T>(Fp: mod.IField<T>, Z: T) {
     }
     return { isValid: isQR, value: tv3 };
   };
-  if (Fp.ORDER % 4n === 3n) {
+  if (Fp.ORDER % _4n === _3n) {
     // sqrt_ratio_3mod4(u, v)
-    const c1 = (Fp.ORDER - 3n) / 4n; // 1. c1 = (q - 3) / 4     # Integer arithmetic
+    const c1 = (Fp.ORDER - _3n) / _4n; // 1. c1 = (q - 3) / 4     # Integer arithmetic
     const c2 = Fp.sqrt(Fp.neg(Z)); // 2. c2 = sqrt(-Z)
     sqrtRatio = (u: T, v: T) => {
       let tv1 = Fp.sqr(v); // 1. tv1 = v^2
@@ -1135,7 +1135,7 @@ export function SWUFpSqrtRatio<T>(Fp: mod.IField<T>, Z: T) {
     };
   }
   // No curves uses that
-  // if (Fp.ORDER % 8n === 5n) // sqrt_ratio_5mod8
+  // if (Fp.ORDER % _8n === _5n) // sqrt_ratio_5mod8
   return sqrtRatio;
 }
 // From draft-irtf-cfrg-hash-to-curve-16

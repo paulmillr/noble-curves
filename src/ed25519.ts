@@ -204,7 +204,7 @@ function map_to_curve_elligator2_curve25519(u: bigint) {
   let y = Fp.cmov(y2, y1, e3);  //  36.   y = CMOV(y2, y1, e3)    # If e3, y = y1, else y = y2
   let e4 = Fp.isOdd(y);         //  37.  e4 = sgn0(y) == 1        # Fix sign of y
   y = Fp.cmov(y, Fp.neg(y), e3 !== e4); //  38.   y = CMOV(y, -y, e3 XOR e4)
-  return { xMn: xn, xMd: xd, yMn: y, yMd: 1n }; //  39. return (xn, xd, y, 1)
+  return { xMn: xn, xMd: xd, yMn: y, yMd: _1n }; //  39. return (xn, xd, y, 1)
 }
 
 const ELL2_C1_EDWARDS = FpSqrtEven(Fp, Fp.neg(BigInt(486664))); // sgn0(c1) MUST equal 0

@@ -54,6 +54,7 @@ function adjustScalarBytes(bytes: Uint8Array): Uint8Array {
 }
 
 const Fp = Field(ed448P, 456, true);
+const _4n = BigInt(4);
 
 const ED448_DEF = {
   // Param: a
@@ -195,10 +196,10 @@ function map_to_curve_elligator2_edwards448(u: bigint) {
   xEn = Fp.mul(xEn, xd2); // 9.  xEn = xEn * xd2
   xEn = Fp.mul(xEn, yd); // 10. xEn = xEn * yd
   xEn = Fp.mul(xEn, yn); // 11. xEn = xEn * yn
-  xEn = Fp.mul(xEn, 4n); // 12. xEn = xEn * 4
+  xEn = Fp.mul(xEn, _4n); // 12. xEn = xEn * 4
   tv2 = Fp.mul(tv2, xn2); // 13. tv2 = tv2 * xn2
   tv2 = Fp.mul(tv2, yd2); // 14. tv2 = tv2 * yd2
-  let tv3 = Fp.mul(yn2, 4n); // 15. tv3 = 4 * yn2
+  let tv3 = Fp.mul(yn2, _4n); // 15. tv3 = 4 * yn2
   let tv1 = Fp.add(tv3, yd2); // 16. tv1 = tv3 + yd2
   tv1 = Fp.mul(tv1, xd4); // 17. tv1 = tv1 * xd4
   let xEd = Fp.add(tv1, tv2); // 18. xEd = tv1 + tv2

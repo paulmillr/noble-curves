@@ -275,7 +275,7 @@ export function FpPow<T>(f: IField<T>, num: T, power: bigint): T {
   while (power > _0n) {
     if (power & _1n) p = f.mul(p, d);
     d = f.sqr(d);
-    power >>= 1n;
+    power >>= _1n;
   }
   return p;
 }

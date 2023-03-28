@@ -5,11 +5,9 @@ import * as ut from './utils.js';
 import { ensureBytes, FHash, Hex } from './utils.js';
 import { Group, GroupConstructor, wNAF, BasicCurve, validateBasic, AffinePoint } from './curve.js';
 
-// Be friendly to bad ECMAScript parsers by not using bigint literals like 123n
-const _0n = BigInt(0);
-const _1n = BigInt(1);
-const _2n = BigInt(2);
-const _8n = BigInt(8);
+// Be friendly to bad ECMAScript parsers by not using bigint literals
+// prettier-ignore
+const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _8n = BigInt(8);
 
 // Edwards curves must declare params a & d.
 export type CurveType = BasicCurve<bigint> & {
@@ -111,7 +109,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       if (ctx.length || phflag) throw new Error('Contexts/pre-hash are not supported');
       return data;
     }); // NOOP
-  const inBig = (n: bigint) => typeof n === 'bigint' && 0n < n; // n in [1..]
+  const inBig = (n: bigint) => typeof n === 'bigint' && _0n < n; // n in [1..]
   const inRange = (n: bigint, max: bigint) => inBig(n) && inBig(max) && n < max; // n in [1..max-1]
   const in0MaskRange = (n: bigint) => n === _0n || inRange(n, MASK); // n in [0..MASK-1]
   function assertInRange(n: bigint, max: bigint) {
