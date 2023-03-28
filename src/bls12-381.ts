@@ -69,16 +69,23 @@ import {
 } from './abstract/weierstrass.js';
 import { isogenyMap } from './abstract/hash-to-curve.js';
 
+// Be friendly to bad ECMAScript parsers by not using bigint literals
+// prettier-ignore
+const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3), _4n = BigInt(4);
+const _8n = BigInt(8),
+  _16n = BigInt(16);
+
 // CURVE FIELDS
 // Finite field over p.
-const Fp =
-  mod.Field(
-    0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaabn
-  );
+const Fp = mod.Field(
+  BigInt(
+    '0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab'
+  )
+);
 type Fp = bigint;
 // Finite field over r.
 // This particular field is not used anywhere in bls12-381, but it is still useful.
-const Fr = mod.Field(0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001n);
+const Fr = mod.Field(BigInt('0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001'));
 
 // Fp₂ over complex plane
 type BigintTuple = [bigint, bigint];
@@ -121,8 +128,9 @@ type Fp2Utils = {
 // h2q
 // NOTE: ORDER was wrong!
 const FP2_ORDER =
-  0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaabn **
-  2n;
+  BigInt(
+    '0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab'
+  ) ** _2n;
 
 const Fp2: mod.IField<Fp2> & Fp2Utils = {
   ORDER: FP2_ORDER,
@@ -175,7 +183,7 @@ const Fp2: mod.IField<Fp2> & Fp2Utils = {
     // https://github.com/zkcrypto/bls12_381/blob/080eaa74ec0e394377caa1ba302c8c121df08b07/src/fp2.rs#L250
     // https://github.com/supranational/blst/blob/aae0c7d70b799ac269ff5edf29d8191dbd357876/src/exp2.c#L1
     // Inspired by https://github.com/dalek-cryptography/curve25519-dalek/blob/17698df9d4c834204f83a3574143abacb4fc81a5/src/field.rs#L99
-    const candidateSqrt = Fp2.pow(num, (Fp2.ORDER + 8n) / 16n);
+    const candidateSqrt = Fp2.pow(num, (Fp2.ORDER + _8n) / _16n);
     const check = Fp2.div(Fp2.sqr(candidateSqrt), num); // candidateSqrt.square().div(this);
     const R = FP2_ROOTS_OF_UNITY;
     const divisor = [R[0], R[2], R[4], R[6]].find((r) => Fp2.eql(r, check));
@@ -193,10 +201,10 @@ const Fp2: mod.IField<Fp2> & Fp2Utils = {
   // Same as sgn0_fp2 in draft-irtf-cfrg-hash-to-curve-16
   isOdd: (x: Fp2) => {
     const { re: x0, im: x1 } = Fp2.reim(x);
-    const sign_0 = x0 % 2n;
-    const zero_0 = x0 === 0n;
-    const sign_1 = x1 % 2n;
-    return BigInt(sign_0 || (zero_0 && sign_1)) == 1n;
+    const sign_0 = x0 % _2n;
+    const zero_0 = x0 === _0n;
+    const sign_1 = x1 % _2n;
+    return BigInt(sign_0 || (zero_0 && sign_1)) == _1n;
   },
   // Bytes util
   fromBytes(b: Uint8Array): Fp2 {
@@ -216,8 +224,8 @@ const Fp2: mod.IField<Fp2> & Fp2Utils = {
   // multiply by u + 1
   mulByNonresidue: ({ c0, c1 }) => ({ c0: Fp.sub(c0, c1), c1: Fp.add(c0, c1) }),
   multiplyByB: ({ c0, c1 }) => {
-    let t0 = Fp.mul(c0, 4n); // 4 * c0
-    let t1 = Fp.mul(c1, 4n); // 4 * c1
+    let t0 = Fp.mul(c0, _4n); // 4 * c0
+    let t1 = Fp.mul(c1, _4n); // 4 * c1
     // (T0-T1) + (T0+T1)*i
     return { c0: Fp.sub(t0, t1), c1: Fp.add(t0, t1) };
   },
@@ -234,33 +242,36 @@ const Fp2: mod.IField<Fp2> & Fp2Utils = {
 // Finite extension field over irreducible polynominal.
 // Fp(u) / (u² - β) where β = -1
 const FP2_FROBENIUS_COEFFICIENTS = [
-  0x1n,
-  0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaaan,
+  BigInt('0x1'),
+  BigInt(
+    '0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaaa'
+  ),
 ].map((item) => Fp.create(item));
 
 // For Fp2 roots of unity.
-const rv1 =
-  0x6af0e0437ff400b6831e36d6bd17ffe48395dabc2d3435e77f76e17009241c5ee67992f72ec05f4c81084fbede3cc09n;
+const rv1 = BigInt(
+  '0x6af0e0437ff400b6831e36d6bd17ffe48395dabc2d3435e77f76e17009241c5ee67992f72ec05f4c81084fbede3cc09'
+);
 // const ev1 =
-//   0x699be3b8c6870965e5bf892ad5d2cc7b0e85a117402dfd83b7f4a947e02d978498255a2aaec0ac627b5afbdf1bf1c90n;
+//   BigInt('0x699be3b8c6870965e5bf892ad5d2cc7b0e85a117402dfd83b7f4a947e02d978498255a2aaec0ac627b5afbdf1bf1c90');
 // const ev2 =
-//   0x8157cd83046453f5dd0972b6e3949e4288020b5b8a9cc99ca07e27089a2ce2436d965026adad3ef7baba37f2183e9b5n;
+//   BigInt('0x8157cd83046453f5dd0972b6e3949e4288020b5b8a9cc99ca07e27089a2ce2436d965026adad3ef7baba37f2183e9b5');
 // const ev3 =
-//   0xab1c2ffdd6c253ca155231eb3e71ba044fd562f6f72bc5bad5ec46a0b7a3b0247cf08ce6c6317f40edbc653a72dee17n;
+//   BigInt('0xab1c2ffdd6c253ca155231eb3e71ba044fd562f6f72bc5bad5ec46a0b7a3b0247cf08ce6c6317f40edbc653a72dee17');
 // const ev4 =
-//   0xaa404866706722864480885d68ad0ccac1967c7544b447873cc37e0181271e006df72162a3d3e0287bf597fbf7f8fc1n;
+//   BigInt('0xaa404866706722864480885d68ad0ccac1967c7544b447873cc37e0181271e006df72162a3d3e0287bf597fbf7f8fc1');
 
 // Eighth roots of unity, used for computing square roots in Fp2.
 // To verify or re-calculate:
 // Array(8).fill(new Fp2([1n, 1n])).map((fp2, k) => fp2.pow(Fp2.ORDER * BigInt(k) / 8n))
 const FP2_ROOTS_OF_UNITY = [
-  [1n, 0n],
+  [_1n, _0n],
   [rv1, -rv1],
-  [0n, 1n],
+  [_0n, _1n],
   [rv1, rv1],
-  [-1n, 0n],
+  [-_1n, _0n],
   [-rv1, rv1],
-  [0n, -1n],
+  [_0n, -_1n],
   [-rv1, -rv1],
 ].map((pair) => Fp2.fromBigTuple(pair));
 // eta values, used for computing sqrt(g(X1(t)))
@@ -314,8 +325,8 @@ const Fp6Multiply = ({ c0, c1, c2 }: Fp6, rhs: Fp6 | bigint) => {
 };
 const Fp6Square = ({ c0, c1, c2 }: Fp6) => {
   let t0 = Fp2.sqr(c0); // c0²
-  let t1 = Fp2.mul(Fp2.mul(c0, c1), 2n); // 2 * c0 * c1
-  let t3 = Fp2.mul(Fp2.mul(c1, c2), 2n); // 2 * c1 * c2
+  let t1 = Fp2.mul(Fp2.mul(c0, c1), _2n); // 2 * c0 * c1
+  let t3 = Fp2.mul(Fp2.mul(c1, c2), _2n); // 2 * c1 * c2
   let t4 = Fp2.sqr(c2); // c2²
   return {
     c0: Fp2.add(Fp2.mulByNonresidue(t3), t0), // T3 * (u + 1) + T0
@@ -440,46 +451,64 @@ const Fp6: mod.IField<Fp6> & Fp6Utils = {
 };
 
 const FP6_FROBENIUS_COEFFICIENTS_1 = [
-  [0x1n, 0x0n],
+  [BigInt('0x1'), BigInt('0x0')],
   [
-    0x0n,
-    0x1a0111ea397fe699ec02408663d4de85aa0d857d89759ad4897d29650fb85f9b409427eb4f49fffd8bfd00000000aaacn,
+    BigInt('0x0'),
+    BigInt(
+      '0x1a0111ea397fe699ec02408663d4de85aa0d857d89759ad4897d29650fb85f9b409427eb4f49fffd8bfd00000000aaac'
+    ),
   ],
   [
-    0x00000000000000005f19672fdf76ce51ba69c6076a0f77eaddb3a93be6f89688de17d813620a00022e01fffffffefffen,
-    0x0n,
+    BigInt(
+      '0x00000000000000005f19672fdf76ce51ba69c6076a0f77eaddb3a93be6f89688de17d813620a00022e01fffffffefffe'
+    ),
+    BigInt('0x0'),
   ],
-  [0x0n, 0x1n],
+  [BigInt('0x0'), BigInt('0x1')],
   [
-    0x1a0111ea397fe699ec02408663d4de85aa0d857d89759ad4897d29650fb85f9b409427eb4f49fffd8bfd00000000aaacn,
-    0x0n,
+    BigInt(
+      '0x1a0111ea397fe699ec02408663d4de85aa0d857d89759ad4897d29650fb85f9b409427eb4f49fffd8bfd00000000aaac'
+    ),
+    BigInt('0x0'),
   ],
   [
-    0x0n,
-    0x00000000000000005f19672fdf76ce51ba69c6076a0f77eaddb3a93be6f89688de17d813620a00022e01fffffffefffen,
+    BigInt('0x0'),
+    BigInt(
+      '0x00000000000000005f19672fdf76ce51ba69c6076a0f77eaddb3a93be6f89688de17d813620a00022e01fffffffefffe'
+    ),
   ],
 ].map((pair) => Fp2.fromBigTuple(pair));
 const FP6_FROBENIUS_COEFFICIENTS_2 = [
-  [0x1n, 0x0n],
+  [BigInt('0x1'), BigInt('0x0')],
   [
-    0x1a0111ea397fe699ec02408663d4de85aa0d857d89759ad4897d29650fb85f9b409427eb4f49fffd8bfd00000000aaadn,
-    0x0n,
+    BigInt(
+      '0x1a0111ea397fe699ec02408663d4de85aa0d857d89759ad4897d29650fb85f9b409427eb4f49fffd8bfd00000000aaad'
+    ),
+    BigInt('0x0'),
   ],
   [
-    0x1a0111ea397fe699ec02408663d4de85aa0d857d89759ad4897d29650fb85f9b409427eb4f49fffd8bfd00000000aaacn,
-    0x0n,
+    BigInt(
+      '0x1a0111ea397fe699ec02408663d4de85aa0d857d89759ad4897d29650fb85f9b409427eb4f49fffd8bfd00000000aaac'
+    ),
+    BigInt('0x0'),
   ],
   [
-    0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaaan,
-    0x0n,
+    BigInt(
+      '0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaaa'
+    ),
+    BigInt('0x0'),
   ],
   [
-    0x00000000000000005f19672fdf76ce51ba69c6076a0f77eaddb3a93be6f89688de17d813620a00022e01fffffffefffen,
-    0x0n,
+    BigInt(
+      '0x00000000000000005f19672fdf76ce51ba69c6076a0f77eaddb3a93be6f89688de17d813620a00022e01fffffffefffe'
+    ),
+    BigInt('0x0'),
   ],
   [
-    0x00000000000000005f19672fdf76ce51ba69c6076a0f77eaddb3a93be6f89688de17d813620a00022e01fffffffeffffn,
-    0x0n,
+    BigInt(
+      '0x00000000000000005f19672fdf76ce51ba69c6076a0f77eaddb3a93be6f89688de17d813620a00022e01fffffffeffff'
+    ),
+    BigInt('0x0'),
   ],
 ].map((pair) => Fp2.fromBigTuple(pair));
 
@@ -488,7 +517,7 @@ const FP6_FROBENIUS_COEFFICIENTS_2 = [
 // Fp₆(w) / (w² - γ) where γ = v
 type Fp12 = { c0: Fp6; c1: Fp6 };
 // The BLS parameter x for BLS12-381
-const BLS_X = 0xd201000000010000n;
+const BLS_X = BigInt('0xd201000000010000');
 const BLS_X_LEN = bitLen(BLS_X);
 
 // prettier-ignore
@@ -646,14 +675,14 @@ const Fp12: mod.IField<Fp12> & Fp12Utils = {
     let t9 = Fp2.mulByNonresidue(t8); // T8 * (u + 1)
     return {
       c0: Fp6.create({
-        c0: Fp2.add(Fp2.mul(Fp2.sub(t3, c0c0), 2n), t3), // 2 * (T3 - c0c0)  + T3
-        c1: Fp2.add(Fp2.mul(Fp2.sub(t5, c0c1), 2n), t5), // 2 * (T5 - c0c1)  + T5
-        c2: Fp2.add(Fp2.mul(Fp2.sub(t7, c0c2), 2n), t7),
+        c0: Fp2.add(Fp2.mul(Fp2.sub(t3, c0c0), _2n), t3), // 2 * (T3 - c0c0)  + T3
+        c1: Fp2.add(Fp2.mul(Fp2.sub(t5, c0c1), _2n), t5), // 2 * (T5 - c0c1)  + T5
+        c2: Fp2.add(Fp2.mul(Fp2.sub(t7, c0c2), _2n), t7),
       }), // 2 * (T7 - c0c2)  + T7
       c1: Fp6.create({
-        c0: Fp2.add(Fp2.mul(Fp2.add(t9, c1c0), 2n), t9), // 2 * (T9 + c1c0) + T9
-        c1: Fp2.add(Fp2.mul(Fp2.add(t4, c1c1), 2n), t4), // 2 * (T4 + c1c1) + T4
-        c2: Fp2.add(Fp2.mul(Fp2.add(t6, c1c2), 2n), t6),
+        c0: Fp2.add(Fp2.mul(Fp2.add(t9, c1c0), _2n), t9), // 2 * (T9 + c1c0) + T9
+        c1: Fp2.add(Fp2.mul(Fp2.add(t4, c1c1), _2n), t4), // 2 * (T4 + c1c1) + T4
+        c2: Fp2.add(Fp2.mul(Fp2.add(t6, c1c2), _2n), t6),
       }),
     }; // 2 * (T6 + c1c2) + T6
   },
@@ -688,50 +717,84 @@ const Fp12: mod.IField<Fp12> & Fp12Utils = {
   },
 };
 const FP12_FROBENIUS_COEFFICIENTS = [
-  [0x1n, 0x0n],
+  [BigInt('0x1'), BigInt('0x0')],
   [
-    0x1904d3bf02bb0667c231beb4202c0d1f0fd603fd3cbd5f4f7b2443d784bab9c4f67ea53d63e7813d8d0775ed92235fb8n,
-    0x00fc3e2b36c4e03288e9e902231f9fb854a14787b6c7b36fec0c8ec971f63c5f282d5ac14d6c7ec22cf78a126ddc4af3n,
+    BigInt(
+      '0x1904d3bf02bb0667c231beb4202c0d1f0fd603fd3cbd5f4f7b2443d784bab9c4f67ea53d63e7813d8d0775ed92235fb8'
+    ),
+    BigInt(
+      '0x00fc3e2b36c4e03288e9e902231f9fb854a14787b6c7b36fec0c8ec971f63c5f282d5ac14d6c7ec22cf78a126ddc4af3'
+    ),
   ],
   [
-    0x00000000000000005f19672fdf76ce51ba69c6076a0f77eaddb3a93be6f89688de17d813620a00022e01fffffffeffffn,
-    0x0n,
+    BigInt(
+      '0x00000000000000005f19672fdf76ce51ba69c6076a0f77eaddb3a93be6f89688de17d813620a00022e01fffffffeffff'
+    ),
+    BigInt('0x0'),
   ],
   [
-    0x135203e60180a68ee2e9c448d77a2cd91c3dedd930b1cf60ef396489f61eb45e304466cf3e67fa0af1ee7b04121bdea2n,
-    0x06af0e0437ff400b6831e36d6bd17ffe48395dabc2d3435e77f76e17009241c5ee67992f72ec05f4c81084fbede3cc09n,
+    BigInt(
+      '0x135203e60180a68ee2e9c448d77a2cd91c3dedd930b1cf60ef396489f61eb45e304466cf3e67fa0af1ee7b04121bdea2'
+    ),
+    BigInt(
+      '0x06af0e0437ff400b6831e36d6bd17ffe48395dabc2d3435e77f76e17009241c5ee67992f72ec05f4c81084fbede3cc09'
+    ),
   ],
   [
-    0x00000000000000005f19672fdf76ce51ba69c6076a0f77eaddb3a93be6f89688de17d813620a00022e01fffffffefffen,
-    0x0n,
+    BigInt(
+      '0x00000000000000005f19672fdf76ce51ba69c6076a0f77eaddb3a93be6f89688de17d813620a00022e01fffffffefffe'
+    ),
+    BigInt('0x0'),
   ],
   [
-    0x144e4211384586c16bd3ad4afa99cc9170df3560e77982d0db45f3536814f0bd5871c1908bd478cd1ee605167ff82995n,
-    0x05b2cfd9013a5fd8df47fa6b48b1e045f39816240c0b8fee8beadf4d8e9c0566c63a3e6e257f87329b18fae980078116n,
+    BigInt(
+      '0x144e4211384586c16bd3ad4afa99cc9170df3560e77982d0db45f3536814f0bd5871c1908bd478cd1ee605167ff82995'
+    ),
+    BigInt(
+      '0x05b2cfd9013a5fd8df47fa6b48b1e045f39816240c0b8fee8beadf4d8e9c0566c63a3e6e257f87329b18fae980078116'
+    ),
   ],
   [
-    0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaaan,
-    0x0n,
+    BigInt(
+      '0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaaa'
+    ),
+    BigInt('0x0'),
   ],
   [
-    0x00fc3e2b36c4e03288e9e902231f9fb854a14787b6c7b36fec0c8ec971f63c5f282d5ac14d6c7ec22cf78a126ddc4af3n,
-    0x1904d3bf02bb0667c231beb4202c0d1f0fd603fd3cbd5f4f7b2443d784bab9c4f67ea53d63e7813d8d0775ed92235fb8n,
+    BigInt(
+      '0x00fc3e2b36c4e03288e9e902231f9fb854a14787b6c7b36fec0c8ec971f63c5f282d5ac14d6c7ec22cf78a126ddc4af3'
+    ),
+    BigInt(
+      '0x1904d3bf02bb0667c231beb4202c0d1f0fd603fd3cbd5f4f7b2443d784bab9c4f67ea53d63e7813d8d0775ed92235fb8'
+    ),
   ],
   [
-    0x1a0111ea397fe699ec02408663d4de85aa0d857d89759ad4897d29650fb85f9b409427eb4f49fffd8bfd00000000aaacn,
-    0x0n,
+    BigInt(
+      '0x1a0111ea397fe699ec02408663d4de85aa0d857d89759ad4897d29650fb85f9b409427eb4f49fffd8bfd00000000aaac'
+    ),
+    BigInt('0x0'),
   ],
   [
-    0x06af0e0437ff400b6831e36d6bd17ffe48395dabc2d3435e77f76e17009241c5ee67992f72ec05f4c81084fbede3cc09n,
-    0x135203e60180a68ee2e9c448d77a2cd91c3dedd930b1cf60ef396489f61eb45e304466cf3e67fa0af1ee7b04121bdea2n,
+    BigInt(
+      '0x06af0e0437ff400b6831e36d6bd17ffe48395dabc2d3435e77f76e17009241c5ee67992f72ec05f4c81084fbede3cc09'
+    ),
+    BigInt(
+      '0x135203e60180a68ee2e9c448d77a2cd91c3dedd930b1cf60ef396489f61eb45e304466cf3e67fa0af1ee7b04121bdea2'
+    ),
   ],
   [
-    0x1a0111ea397fe699ec02408663d4de85aa0d857d89759ad4897d29650fb85f9b409427eb4f49fffd8bfd00000000aaadn,
-    0x0n,
+    BigInt(
+      '0x1a0111ea397fe699ec02408663d4de85aa0d857d89759ad4897d29650fb85f9b409427eb4f49fffd8bfd00000000aaad'
+    ),
+    BigInt('0x0'),
   ],
   [
-    0x05b2cfd9013a5fd8df47fa6b48b1e045f39816240c0b8fee8beadf4d8e9c0566c63a3e6e257f87329b18fae980078116n,
-    0x144e4211384586c16bd3ad4afa99cc9170df3560e77982d0db45f3536814f0bd5871c1908bd478cd1ee605167ff82995n,
+    BigInt(
+      '0x05b2cfd9013a5fd8df47fa6b48b1e045f39816240c0b8fee8beadf4d8e9c0566c63a3e6e257f87329b18fae980078116'
+    ),
+    BigInt(
+      '0x144e4211384586c16bd3ad4afa99cc9170df3560e77982d0db45f3536814f0bd5871c1908bd478cd1ee605167ff82995'
+    ),
   ],
 ].map((n) => Fp2.fromBigTuple(n));
 // END OF CURVE FIELDS
@@ -887,17 +950,21 @@ const isogenyMapG1 = isogenyMap(
 
 // SWU Map - Fp2 to G2': y² = x³ + 240i * x + 1012 + 1012i
 const G2_SWU = mapToCurveSimpleSWU(Fp2, {
-  A: Fp2.create({ c0: Fp.create(0n), c1: Fp.create(240n) }), // A' = 240 * I
+  A: Fp2.create({ c0: Fp.create(_0n), c1: Fp.create(240n) }), // A' = 240 * I
   B: Fp2.create({ c0: Fp.create(1012n), c1: Fp.create(1012n) }), // B' = 1012 * (1 + I)
   Z: Fp2.create({ c0: Fp.create(-2n), c1: Fp.create(-1n) }), // Z: -(2 + I)
 });
 // Optimized SWU Map - Fp to G1
 const G1_SWU = mapToCurveSimpleSWU(Fp, {
   A: Fp.create(
-    0x144698a3b8e9433d693a02c96d4982b0ea985383ee66a8d8e8981aefd881ac98936f8da0e0f97f5cf428082d584c1dn
+    BigInt(
+      '0x144698a3b8e9433d693a02c96d4982b0ea985383ee66a8d8e8981aefd881ac98936f8da0e0f97f5cf428082d584c1d'
+    )
   ),
   B: Fp.create(
-    0x12e2908d11688030018b12e8753eee3b2016c1f0f24f4070a0b9c14fcef35ef55a23215a316ceaa5d1cc48e98e172be0n
+    BigInt(
+      '0x12e2908d11688030018b12e8753eee3b2016c1f0f24f4070a0b9c14fcef35ef55a23215a316ceaa5d1cc48e98e172be0'
+    )
   ),
   Z: Fp.create(11n),
 });
@@ -922,8 +989,9 @@ function G2psi(c: ProjConstructor<Fp2>, P: ProjPointType<Fp2>) {
 }
 // Ψ²(P) endomorphism
 // 1 / F2(2)^((p-1)/3) in GF(p²)
-const PSI2_C1 =
-  0x1a0111ea397fe699ec02408663d4de85aa0d857d89759ad4897d29650fb85f9b409427eb4f49fffd8bfd00000000aaacn;
+const PSI2_C1 = BigInt(
+  '0x1a0111ea397fe699ec02408663d4de85aa0d857d89759ad4897d29650fb85f9b409427eb4f49fffd8bfd00000000aaac'
+);
 
 function psi2(x: Fp2, y: Fp2): [Fp2, Fp2] {
   return [Fp2.mul(x, PSI2_C1), Fp2.neg(y)];
@@ -1000,14 +1068,18 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
   G1: {
     Fp,
     // cofactor; (z - 1)²/3
-    h: 0x396c8c005555e1568c00aaab0000aaabn,
+    h: BigInt('0x396c8c005555e1568c00aaab0000aaab'),
     // generator's coordinates
     // x = 3685416753713387016781088315183077757961620795782546409894578378688607592378376318836054947676345821548104185464507
     // y = 1339506544944476473020471379941921221584933875938349620426543736416511423956333506472724655353366534992391756441569
-    Gx: 0x17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bbn,
-    Gy: 0x08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1n,
+    Gx: BigInt(
+      '0x17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb'
+    ),
+    Gy: BigInt(
+      '0x08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
+    ),
     a: Fp.ZERO,
-    b: 4n,
+    b: _4n,
     htfDefaults: { ...htfDefaults, m: 1 },
     wrapPrivateKey: true,
     allowInfinityPoint: true,
@@ -1017,8 +1089,9 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
     // https://eprint.iacr.org/2021/1130.pdf
     isTorsionFree: (c, point): boolean => {
       // φ endomorphism
-      const cubicRootOfUnityModP =
-        0x5f19672fdf76ce51ba69c6076a0f77eaddb3a93be6f89688de17d813620a00022e01fffffffefffen;
+      const cubicRootOfUnityModP = BigInt(
+        '0x5f19672fdf76ce51ba69c6076a0f77eaddb3a93be6f89688de17d813620a00022e01fffffffefffe'
+      );
       const phi = new c(Fp.mul(point.px, cubicRootOfUnityModP), point.py, point.pz);
 
       // todo: unroll
@@ -1028,7 +1101,7 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
 
       // https://eprint.iacr.org/2019/814.pdf
       // (z² − 1)/3
-      // const c1 = 0x396c8c005555e1560000000055555555n;
+      // const c1 = BigInt('0x396c8c005555e1560000000055555555');
       // const P = this;
       // const S = P.sigma();
       // const Q = S.double();
@@ -1054,13 +1127,13 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
         const compressedValue = bytesToNumberBE(bytes);
         const bflag = bitGet(compressedValue, I_BIT_POS);
         // Zero
-        if (bflag === 1n) return { x: 0n, y: 0n };
+        if (bflag === _1n) return { x: _0n, y: _0n };
         const x = Fp.create(compressedValue & Fp.MASK);
-        const right = Fp.add(Fp.pow(x, 3n), Fp.create(bls12_381.CURVE.G1.b)); // y² = x³ + b
+        const right = Fp.add(Fp.pow(x, _3n), Fp.create(bls12_381.CURVE.G1.b)); // y² = x³ + b
         let y = Fp.sqrt(right);
         if (!y) throw new Error('Invalid compressed G1 point');
         const aflag = bitGet(compressedValue, C_BIT_POS);
-        if ((y * 2n) / P !== aflag) y = Fp.neg(y);
+        if ((y * _2n) / P !== aflag) y = Fp.neg(y);
         return { x: Fp.create(x), y: Fp.create(y) };
       } else if (bytes.length === 96) {
         // Check if the infinity flag is set
@@ -1079,7 +1152,7 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
         if (isZero) return COMPRESSED_ZERO.slice();
         const P = Fp.ORDER;
         let num;
-        num = bitSet(x, C_BIT_POS, Boolean((y * 2n) / P)); // set aflag
+        num = bitSet(x, C_BIT_POS, Boolean((y * _2n) / P)); // set aflag
         num = bitSet(num, S_BIT_POS, true);
         return numberToBytesBE(num, Fp.BYTES);
       } else {
@@ -1100,21 +1173,33 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
   G2: {
     Fp: Fp2,
     // cofactor
-    h: 0x5d543a95414e7f1091d50792876a202cd91de4547085abaa68a205b2e5a7ddfa628f1cb4d9e82ef21537e293a6691ae1616ec6e786f0c70cf1c38e31c7238e5n,
+    h: BigInt(
+      '0x5d543a95414e7f1091d50792876a202cd91de4547085abaa68a205b2e5a7ddfa628f1cb4d9e82ef21537e293a6691ae1616ec6e786f0c70cf1c38e31c7238e5'
+    ),
     Gx: Fp2.fromBigTuple([
-      0x024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb8n,
-      0x13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7en,
+      BigInt(
+        '0x024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb8'
+      ),
+      BigInt(
+        '0x13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e'
+      ),
     ]),
     // y =
     // 927553665492332455747201965776037880757740193453592970025027978793976877002675564980949289727957565575433344219582,
     // 1985150602287291935568054521177171638300868978215655730859378665066344726373823718423869104263333984641494340347905
     Gy: Fp2.fromBigTuple([
-      0x0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801n,
-      0x0606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79ben,
+      BigInt(
+        '0x0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801'
+      ),
+      BigInt(
+        '0x0606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79be'
+      ),
     ]),
     a: Fp2.ZERO,
-    b: Fp2.fromBigTuple([4n, 4n]),
-    hEff: 0xbc69f08f2ee75b3584c6a0ea91b352888e2a8e9145ad7689986ff031508ffe1329c2f178731db956d82bf015d1212b02ec0ec69d7477c1ae954cbc06689f6a359894c0adebbf6b4e8020005aaa95551n,
+    b: Fp2.fromBigTuple([4n, _4n]),
+    hEff: BigInt(
+      '0xbc69f08f2ee75b3584c6a0ea91b352888e2a8e9145ad7689986ff031508ffe1329c2f178731db956d82bf015d1212b02ec0ec69d7477c1ae954cbc06689f6a359894c0adebbf6b4e8020005aaa95551'
+    ),
     htfDefaults: { ...htfDefaults },
     wrapPrivateKey: true,
     allowInfinityPoint: true,
@@ -1175,9 +1260,9 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
         const x_1 = slc(bytes, 0, L);
         const x_0 = slc(bytes, L, 2 * L);
         const x = Fp2.create({ c0: Fp.create(x_0), c1: Fp.create(x_1) });
-        const right = Fp2.add(Fp2.pow(x, 3n), b); // y² = x³ + 4 * (u+1) = x³ + b
+        const right = Fp2.add(Fp2.pow(x, _3n), b); // y² = x³ + 4 * (u+1) = x³ + b
         let y = Fp2.sqrt(right);
-        const Y_bit = y.c1 === 0n ? (y.c0 * 2n) / P : (y.c1 * 2n) / P ? 1n : 0n;
+        const Y_bit = y.c1 === _0n ? (y.c0 * _2n) / P : (y.c1 * _2n) / P ? _1n : _0n;
         y = bitS > 0 && Y_bit > 0 ? y : Fp2.neg(y);
         return { x, y };
       } else if (bytes.length === 192 && !bitC) {
@@ -1200,7 +1285,7 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
       if (isCompressed) {
         const P = Fp.ORDER;
         if (isZero) return concatB(COMPRESSED_ZERO, numberToBytesBE(0n, Fp.BYTES));
-        const flag = Boolean(y.c1 === 0n ? (y.c0 * 2n) / P : (y.c1 * 2n) / P);
+        const flag = Boolean(y.c1 === _0n ? (y.c0 * _2n) / P : (y.c1 * _2n) / P);
         // set compressed & sign bits (looks like different offsets than for G1/Fp?)
         let x_1 = bitSet(x.c1, C_BIT_POS, flag);
         x_1 = bitSet(x_1, S_BIT_POS, true);
@@ -1229,12 +1314,12 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
         const z2 = bytesToNumberBE(hex.slice(half));
         // Indicates the infinity point
         const bflag1 = bitGet(z1, I_BIT_POS);
-        if (bflag1 === 1n) return bls12_381.G2.ProjectivePoint.ZERO;
+        if (bflag1 === _1n) return bls12_381.G2.ProjectivePoint.ZERO;
 
         const x1 = Fp.create(z1 & Fp.MASK);
         const x2 = Fp.create(z2);
         const x = Fp2.create({ c0: x2, c1: x1 });
-        const y2 = Fp2.add(Fp2.pow(x, 3n), bls12_381.CURVE.G2.b); // y² = x³ + 4
+        const y2 = Fp2.add(Fp2.pow(x, _3n), bls12_381.CURVE.G2.b); // y² = x³ + 4
         // The slow part
         let y = Fp2.sqrt(y2);
         if (!y) throw new Error('Failed to find a square root');
@@ -1243,8 +1328,8 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
         // If y1 happens to be zero, then use the bit of y0
         const { re: y0, im: y1 } = Fp2.reim(y);
         const aflag1 = bitGet(z1, 381);
-        const isGreater = y1 > 0n && (y1 * 2n) / P !== aflag1;
-        const isZero = y1 === 0n && (y0 * 2n) / P !== aflag1;
+        const isGreater = y1 > _0n && (y1 * _2n) / P !== aflag1;
+        const isZero = y1 === _0n && (y0 * _2n) / P !== aflag1;
         if (isGreater || isZero) y = Fp2.neg(y);
         const point = bls12_381.G2.ProjectivePoint.fromAffine({ x, y });
         point.assertValidity();
@@ -1258,8 +1343,8 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
         const a = point.toAffine();
         const { re: x0, im: x1 } = Fp2.reim(a.x);
         const { re: y0, im: y1 } = Fp2.reim(a.y);
-        const tmp = y1 > 0n ? y1 * 2n : y0 * 2n;
-        const aflag1 = Boolean((tmp / Fp.ORDER) & 1n);
+        const tmp = y1 > _0n ? y1 * _2n : y0 * _2n;
+        const aflag1 = Boolean((tmp / Fp.ORDER) & _1n);
         const z1 = bitSet(bitSet(x1, 381, aflag1), S_BIT_POS, true);
         const z2 = x0;
         return concatB(numberToBytesBE(z1, Fp.BYTES), numberToBytesBE(z2, Fp.BYTES));
