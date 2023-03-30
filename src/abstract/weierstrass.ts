@@ -58,6 +58,8 @@ export interface ProjPointType<T> extends Group<ProjPointType<T>> {
   readonly px: T;
   readonly py: T;
   readonly pz: T;
+  get x(): T;
+  get y(): T;
   multiply(scalar: bigint): ProjPointType<T>;
   toAffine(iz?: T): AffinePoint<T>;
   isTorsionFree(): boolean;

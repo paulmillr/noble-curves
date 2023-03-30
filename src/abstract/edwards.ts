@@ -49,6 +49,8 @@ export interface ExtPointType extends Group<ExtPointType> {
   readonly ey: bigint;
   readonly ez: bigint;
   readonly et: bigint;
+  get x(): bigint;
+  get y(): bigint;
   assertValidity(): void;
   multiply(scalar: bigint): ExtPointType;
   multiplyUnsafe(scalar: bigint): ExtPointType;
@@ -297,8 +299,9 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     // Non-constant-time multiplication. Uses double-and-add algorithm.
     // It's faster, but should only be used when you don't care about
     // an exposed private key e.g. sig verification.
+    // Does NOT allow scalars higher than CURVE.n.
     multiplyUnsafe(scalar: bigint): Point {
-      let n = assertGE0(scalar);
+      let n = assertGE0(scalar); // 0 <= scalar < CURVE.n
       if (n === _0n) return I;
       if (this.equals(I) || n === _1n) return this;
       if (this.equals(G)) return this.wNAF(n).p;
@@ -440,8 +443,8 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     if (preHash) msg = preHash(msg); // for ed25519ph, etc
     const A = Point.fromHex(publicKey, false); // Check for s bounds, hex validity
     const R = Point.fromHex(sig.slice(0, len), false); // 0 <= R < 2^256: ZIP215 R can be >= P
-    const s = ut.bytesToNumberLE(sig.slice(len, 2 * len)); // 0 <= s < l
-    const SB = G.multiplyUnsafe(s);
+    const s = ut.bytesToNumberLE(sig.slice(len, 2 * len));
+    const SB = G.multiplyUnsafe(s); // 0 <= s < l is done inside
     const k = hashDomainToScalar(context, R.toRawBytes(), A.toRawBytes(), msg);
     const RkA = R.add(A.multiplyUnsafe(k));
     // [8][S]B = [8]R + [8][k]A'
