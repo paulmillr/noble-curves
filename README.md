@@ -53,10 +53,12 @@ Package consists of two parts:
    providing ready-to-use:
    - NIST curves secp256r1/P256, secp384r1/P384, secp521r1/P521
    - SECG curve secp256k1
-   - ed25519/curve25519/x25519/ristretto255, edwards448/curve448/x448
+   - ed25519 / curve25519 / x25519 / ristretto255,
+     edwards448 / curve448 / x448
      implementing
      [RFC7748](https://www.rfc-editor.org/rfc/rfc7748) /
      [RFC8032](https://www.rfc-editor.org/rfc/rfc8032) /
+     [FIPS 186-5](https://csrc.nist.gov/publications/detail/fips/186/5/final) /
      [ZIP215](https://zips.z.cash/zip-0215) standards
    - pairing-friendly curves bls12-381, bn254
 2. [Abstract](#abstract-api), zero-dependency EC algorithms
@@ -118,10 +120,22 @@ const isValid = schnorr.verify(sig, msg, pub);
 
 ed25519 module has ed25519ctx / ed25519ph variants,
 x25519 ECDH and [ristretto255](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-ristretto255-decaf448).
-It follows [ZIP215](https://zips.z.cash/zip-0215) and [can be used in consensus-critical applications](https://hdevalence.ca/blog/2020-10-04-its-25519am):
+
+Default `verify` behavior follows [ZIP215](https://zips.z.cash/zip-0215) and
+[can be used in consensus-critical applications](https://hdevalence.ca/blog/2020-10-04-its-25519am).
+It does not affect security.
+
+There is `zip215: false` option that switches verification criteria to RFC8032 / FIPS 186-5.
 
 ```ts
 import { ed25519 } from '@noble/curves/ed25519';
+
+const priv = ed25519.utils.randomPrivateKey();
+const pub = ed25519.getPublicKey(priv);
+const msg = new TextEncoder().encode('hello');
+const sig = ed25519.sign(msg, priv);
+ed25519.verify(sig, msg, pub); // Default mode: follows ZIP215
+ed25519.verify(sig, msg, pub, { zip215: false }); // RFC8032 / FIPS 186-5
 
 // Variants from RFC8032: with context, prehashed
 import { ed25519ctx, ed25519ph } from '@noble/curves/ed25519';

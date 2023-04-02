@@ -22,6 +22,9 @@ export type CurveType = BasicCurve<bigint> & {
   mapToCurve?: (scalar: bigint[]) => AffinePoint<bigint>; // for hash-to-curve standard
 };
 
+// verification rule is either zip215 or rfc8032 / nist186-5. Consult fromHex:
+const VERIFY_DEFAULT = { zip215: true };
+
 function validateOpts(curve: CurveType) {
   const opts = validateBasic(curve);
   ut.validateObject(
@@ -93,7 +96,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
   const {
     Fp,
     n: CURVE_ORDER,
-    prehash: preHash,
+    prehash: prehash,
     hash: cHash,
     randomBytes,
     nByteLength,
@@ -352,7 +355,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
 
     // Converts hash string or Uint8Array to Point.
     // Uses algo from RFC8032 5.1.3.
-    static fromHex(hex: Hex, strict = true): Point {
+    static fromHex(hex: Hex, zip215 = false): Point {
       const { d, a } = CURVE;
       const len = Fp.BYTES;
       hex = ensureBytes('pointHex', hex, len); // copy hex to a new array
@@ -364,8 +367,8 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
         // y=0 is allowed
       } else {
         // RFC8032 prohibits >= p, but ZIP215 doesn't
-        if (strict) assertInRange(y, Fp.ORDER); // strict=true [1..P-1] (2^255-19-1 for ed25519)
-        else assertInRange(y, MASK); // strict=false [1..MASK-1] (2^256-1 for ed25519)
+        if (zip215) assertInRange(y, MASK); // zip215=true [1..P-1] (2^255-19-1 for ed25519)
+        else assertInRange(y, Fp.ORDER); // zip215=false [1..MASK-1] (2^256-1 for ed25519)
       }
 
       // Ed25519: x² = (y²-1)/(dy²+1) mod p. Ed448: x² = (y²-1)/(dy²-1) mod p. Generic case:
@@ -427,13 +430,13 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
   // int('LE', SHA512(dom2(F, C) || msgs)) mod N
   function hashDomainToScalar(context: Hex = new Uint8Array(), ...msgs: Uint8Array[]) {
     const msg = ut.concatBytes(...msgs);
-    return modN_LE(cHash(domain(msg, ensureBytes('context', context), !!preHash)));
+    return modN_LE(cHash(domain(msg, ensureBytes('context', context), !!prehash)));
   }
 
   /** Signs message with privateKey. RFC8032 5.1.6 */
   function sign(msg: Hex, privKey: Hex, options: { context?: Hex } = {}): Uint8Array {
     msg = ensureBytes('message', msg);
-    if (preHash) msg = preHash(msg); // for ed25519ph etc.
+    if (prehash) msg = prehash(msg); // for ed25519ph etc.
     const { prefix, scalar, pointBytes } = getExtendedPublicKey(privKey);
     const r = hashDomainToScalar(options.context, prefix, msg); // r = dom2(F, C) || prefix || PH(M)
     const R = G.multiply(r).toRawBytes(); // R = rG
@@ -444,17 +447,27 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     return ensureBytes('result', res, nByteLength * 2); // 64-byte signature
   }
 
-  const verifyOpts: { context?: Hex; strict?: boolean } = { strict: false };
+  const verifyOpts: { context?: Hex; zip215?: boolean } = VERIFY_DEFAULT;
   function verify(sig: Hex, msg: Hex, publicKey: Hex, options = verifyOpts): boolean {
+    const { context, zip215 } = options;
     const len = Fp.BYTES; // Verifies EdDSA signature against message and public key. RFC8032 5.1.7.
     sig = ensureBytes('signature', sig, 2 * len); // An extended group equation is checked.
-    msg = ensureBytes('message', msg); // ZIP215 compliant, which means not fully RFC8032 compliant.
-    if (preHash) msg = preHash(msg); // for ed25519ph, etc
-    const A = Point.fromHex(publicKey, false); // Check for s bounds, hex validity
-    const R = Point.fromHex(sig.slice(0, len), options.strict); // R <P (RFC8032) or <2^256 (ZIP215)
+    msg = ensureBytes('message', msg);
+    if (prehash) msg = prehash(msg); // for ed25519ph, etc
+
     const s = ut.bytesToNumberLE(sig.slice(len, 2 * len));
-    const SB = G.multiplyUnsafe(s); // 0 <= s < l is done inside
-    const k = hashDomainToScalar(options.context, R.toRawBytes(), A.toRawBytes(), msg);
+    // zip215: true is good for consensus-critical apps and allows points < 2^256
+    // zip215: false follows RFC8032 / NIST186-5 and restricts points to CURVE.p
+    let A, R, SB;
+    try {
+      A = Point.fromHex(publicKey, zip215);
+      R = Point.fromHex(sig.slice(0, len), zip215);
+      SB = G.multiplyUnsafe(s); // 0 <= s < l is done inside
+    } catch (error) {
+      return false;
+    }
+
+    const k = hashDomainToScalar(context, R.toRawBytes(), A.toRawBytes(), msg);
     const RkA = R.add(A.multiplyUnsafe(k));
     // [8][S]B = [8]R + [8][k]A'
     return RkA.subtract(SB).clearCofactor().equals(Point.ZERO);

@@ -305,23 +305,25 @@ describe('ed25519', () => {
 
   // https://zips.z.cash/zip-0215
   // Vectors from https://gist.github.com/hdevalence/93ed42d17ecab8e42138b213812c8cc7
-  should('ZIP-215 compliance tests/should pass all of them', () => {
-    const str = utf8ToBytes('Zcash');
-    for (let v of zip215) {
-      let noble = false;
-      try {
-        noble = ed.verify(v.sig_bytes, str, v.vk_bytes);
-      } catch (e) {
-        noble = false;
+  describe('ZIP215', () => {
+    should('pass all compliance tests', () => {
+      const str = utf8ToBytes('Zcash');
+      for (let v of zip215) {
+        let noble = false;
+        try {
+          noble = ed.verify(v.sig_bytes, str, v.vk_bytes);
+        } catch (e) {
+          noble = false;
+        }
+        deepStrictEqual(noble, v.valid_zip215, JSON.stringify(v));
       }
-      deepStrictEqual(noble, v.valid_zip215, JSON.stringify(v));
-    }
-  });
-  should('ZIP-215 compliance tests/disallows sig.s >= CURVE.n', () => {
-    // sig.R = BASE, sig.s = N+1
-    const sig =
-      '5866666666666666666666666666666666666666666666666666666666666666eed3f55c1a631258d69cf7a2def9de1400000000000000000000000000000010';
-    throws(() => ed.verify(sig, 'deadbeef', Point.BASE));
+    });
+    should('disallow sig.s >= CURVE.n', () => {
+      // sig.R = BASE, sig.s = N+1
+      const sig =
+        '5866666666666666666666666666666666666666666666666666666666666666eed3f55c1a631258d69cf7a2def9de1400000000000000000000000000000010';
+      deepStrictEqual(ed.verify(sig, 'deadbeef', Point.BASE), false);
+    });
   });
 
   // should('X25519/getSharedSecret() should be commutative', () => {
@@ -403,9 +405,7 @@ describe('ed25519', () => {
     s = numberToBytesLE(s, 32);
 
     const sig_invalid = concatBytes(R, s);
-    throws(() => {
-      ed25519.verify(sig_invalid, message, publicKey);
-    });
+    deepStrictEqual(ed25519.verify(sig_invalid, message, publicKey), false);
   });
 
   should('not accept point without z, t', () => {
