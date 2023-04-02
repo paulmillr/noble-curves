@@ -59,6 +59,7 @@ import {
   bitGet,
   Hex,
   bitMask,
+  bytesToHex,
 } from './abstract/utils.js';
 // Types
 import {
@@ -72,8 +73,8 @@ import { isogenyMap } from './abstract/hash-to-curve.js';
 // Be friendly to bad ECMAScript parsers by not using bigint literals
 // prettier-ignore
 const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3), _4n = BigInt(4);
-const _8n = BigInt(8),
-  _16n = BigInt(16);
+// prettier-ignore
+const _8n = BigInt(8), _16n = BigInt(16);
 
 // CURVE FIELDS
 // Finite field over p.
@@ -950,9 +951,9 @@ const isogenyMapG1 = isogenyMap(
 
 // SWU Map - Fp2 to G2': y² = x³ + 240i * x + 1012 + 1012i
 const G2_SWU = mapToCurveSimpleSWU(Fp2, {
-  A: Fp2.create({ c0: Fp.create(_0n), c1: Fp.create(240n) }), // A' = 240 * I
-  B: Fp2.create({ c0: Fp.create(1012n), c1: Fp.create(1012n) }), // B' = 1012 * (1 + I)
-  Z: Fp2.create({ c0: Fp.create(-2n), c1: Fp.create(-1n) }), // Z: -(2 + I)
+  A: Fp2.create({ c0: Fp.create(_0n), c1: Fp.create(BigInt(240)) }), // A' = 240 * I
+  B: Fp2.create({ c0: Fp.create(BigInt(1012)), c1: Fp.create(BigInt(1012)) }), // B' = 1012 * (1 + I)
+  Z: Fp2.create({ c0: Fp.create(BigInt(-2)), c1: Fp.create(BigInt(-1)) }), // Z: -(2 + I)
 });
 // Optimized SWU Map - Fp to G1
 const G1_SWU = mapToCurveSimpleSWU(Fp, {
@@ -966,7 +967,7 @@ const G1_SWU = mapToCurveSimpleSWU(Fp, {
       '0x12e2908d11688030018b12e8753eee3b2016c1f0f24f4070a0b9c14fcef35ef55a23215a316ceaa5d1cc48e98e172be0'
     )
   ),
-  Z: Fp.create(11n),
+  Z: Fp.create(BigInt(11)),
 });
 
 // Endomorphisms (for fast cofactor clearing)
@@ -1042,7 +1043,23 @@ const C_BIT_POS = Fp.BITS; // C_bit, compression bit for serialization flag
 const I_BIT_POS = Fp.BITS + 1; // I_bit, point-at-infinity bit for serialization flag
 const S_BIT_POS = Fp.BITS + 2; // S_bit, sign bit for serialization flag
 // Compressed point of infinity
-const COMPRESSED_ZERO = Fp.toBytes(bitSet(bitSet(0n, I_BIT_POS, true), S_BIT_POS, true)); // set compressed & point-at-infinity bits
+const COMPRESSED_ZERO = Fp.toBytes(bitSet(bitSet(_0n, I_BIT_POS, true), S_BIT_POS, true)); // set compressed & point-at-infinity bits
+
+function signatureG2ToRawBytes(point: ProjPointType<Fp2>) {
+  // NOTE: by some reasons it was missed in bls12-381, looks like bug
+  point.assertValidity();
+  const len = Fp.BYTES;
+  if (point.equals(bls12_381.G2.ProjectivePoint.ZERO))
+    return concatB(COMPRESSED_ZERO, numberToBytesBE(_0n, len));
+  const { x, y } = point.toAffine();
+  const { re: x0, im: x1 } = Fp2.reim(x);
+  const { re: y0, im: y1 } = Fp2.reim(y);
+  const tmp = y1 > _0n ? y1 * _2n : y0 * _2n;
+  const aflag1 = Boolean((tmp / Fp.ORDER) & _1n);
+  const z1 = bitSet(bitSet(x1, 381, aflag1), S_BIT_POS, true);
+  const z2 = x0;
+  return concatB(numberToBytesBE(z1, len), numberToBytesBE(z2, len));
+}
 
 // To verify curve parameters, see pairing-friendly-curves spec:
 // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-pairing-friendly-curves-09
@@ -1056,13 +1073,13 @@ const COMPRESSED_ZERO = Fp.toBytes(bitSet(bitSet(0n, I_BIT_POS, true), S_BIT_POS
 // Here goes constants && point encoding format
 export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
   // Fields
-  Fr,
-  Fp,
-  Fp2,
-  Fp6,
-  Fp12,
-  // order; z⁴ − z² + 1
-  r: Fr.ORDER, // Same as N in other curves
+  fields: {
+    Fp,
+    Fp2,
+    Fp6,
+    Fp12,
+    Fr,
+  },
   // G1 is the order-q subgroup of E1(Fp) : y² = x³ + 4, #E1(Fp) = h1q, where
   // characteristic; z + (z⁴ - z² + 1)(z - 1)²/3
   G1: {
@@ -1095,8 +1112,8 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
       const phi = new c(Fp.mul(point.px, cubicRootOfUnityModP), point.py, point.pz);
 
       // todo: unroll
-      const xP = point.multiplyUnsafe(bls12_381.CURVE.x).negate(); // [x]P
-      const u2P = xP.multiplyUnsafe(bls12_381.CURVE.x); // [u2]P
+      const xP = point.multiplyUnsafe(bls12_381.params.x).negate(); // [x]P
+      const u2P = xP.multiplyUnsafe(bls12_381.params.x); // [u2]P
       return u2P.equals(phi);
 
       // https://eprint.iacr.org/2019/814.pdf
@@ -1115,21 +1132,23 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
     // https://eprint.iacr.org/2019/403
     clearCofactor: (c, point) => {
       // return this.multiplyUnsafe(CURVE.h);
-      return point.multiplyUnsafe(bls12_381.CURVE.x).add(point); // x*P + P
+      return point.multiplyUnsafe(bls12_381.params.x).add(point); // x*P + P
     },
     mapToCurve: (scalars: bigint[]) => {
       const { x, y } = G1_SWU(Fp.create(scalars[0]));
       return isogenyMapG1(x, y);
     },
     fromBytes: (bytes: Uint8Array): AffinePoint<Fp> => {
+      bytes = bytes.slice();
       if (bytes.length === 48) {
+        // TODO: Fp.bytes
         const P = Fp.ORDER;
         const compressedValue = bytesToNumberBE(bytes);
         const bflag = bitGet(compressedValue, I_BIT_POS);
         // Zero
         if (bflag === _1n) return { x: _0n, y: _0n };
         const x = Fp.create(compressedValue & Fp.MASK);
-        const right = Fp.add(Fp.pow(x, _3n), Fp.create(bls12_381.CURVE.G1.b)); // y² = x³ + b
+        const right = Fp.add(Fp.pow(x, _3n), Fp.create(bls12_381.params.G1b)); // y² = x³ + b
         let y = Fp.sqrt(right);
         if (!y) throw new Error('Invalid compressed G1 point');
         const aflag = bitGet(compressedValue, C_BIT_POS);
@@ -1138,8 +1157,8 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
       } else if (bytes.length === 96) {
         // Check if the infinity flag is set
         if ((bytes[0] & (1 << 6)) !== 0) return bls12_381.G1.ProjectivePoint.ZERO.toAffine();
-        const x = bytesToNumberBE(bytes.slice(0, Fp.BYTES));
-        const y = bytesToNumberBE(bytes.slice(Fp.BYTES));
+        const x = bytesToNumberBE(bytes.subarray(0, Fp.BYTES));
+        const y = bytesToNumberBE(bytes.subarray(Fp.BYTES));
         return { x: Fp.create(x), y: Fp.create(y) };
       } else {
         throw new Error('Invalid point G1, expected 48/96 bytes');
@@ -1212,7 +1231,7 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
     // It returns false for shitty points.
     // https://eprint.iacr.org/2021/1130.pdf
     isTorsionFree: (c, P): boolean => {
-      return P.multiplyUnsafe(bls12_381.CURVE.x).negate().equals(G2psi(c, P)); // ψ(P) == [u](P)
+      return P.multiplyUnsafe(bls12_381.params.x).negate().equals(G2psi(c, P)); // ψ(P) == [u](P)
       // Older version: https://eprint.iacr.org/2019/814.pdf
       // Ψ²(P) => Ψ³(P) => [z]Ψ³(P) where z = -x => [z]Ψ³(P) - Ψ²(P) + P == O
       // return P.psi2().psi().mulNegX().subtract(psi2).add(P).isZero();
@@ -1222,7 +1241,7 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
     // https://eprint.iacr.org/2017/419.pdf
     // prettier-ignore
     clearCofactor: (c, P) => {
-      const { x } = bls12_381.CURVE;
+      const x = bls12_381.params.x;
       let t1 = P.multiplyUnsafe(x).negate();  // [-x]P
       let t2 = G2psi(c, P);                   // Ψ(P)
       let t3 = P.double();                    // 2P
@@ -1236,6 +1255,7 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
       return Q;                               // [x²-x-1]P + [x-1]Ψ(P) + Ψ²(2P)
     },
     fromBytes: (bytes: Uint8Array): AffinePoint<Fp2> => {
+      bytes = bytes.slice();
       const m_byte = bytes[0] & 0xe0;
       if (m_byte === 0x20 || m_byte === 0x60 || m_byte === 0xe0) {
         throw new Error('Invalid encoding flag: ' + m_byte);
@@ -1246,7 +1266,7 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
       const L = Fp.BYTES;
       const slc = (b: Uint8Array, from: number, to?: number) => bytesToNumberBE(b.slice(from, to));
       if (bytes.length === 96 && bitC) {
-        const { b } = bls12_381.CURVE.G2;
+        const b = bls12_381.params.G2b;
         const P = Fp.ORDER;
 
         bytes[0] = bytes[0] & 0x1f; // clear flags
@@ -1280,31 +1300,31 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
       }
     },
     toBytes: (c, point, isCompressed) => {
+      const { BYTES: len, ORDER: P } = Fp;
       const isZero = point.equals(c.ZERO);
       const { x, y } = point.toAffine();
       if (isCompressed) {
-        const P = Fp.ORDER;
-        if (isZero) return concatB(COMPRESSED_ZERO, numberToBytesBE(0n, Fp.BYTES));
+        if (isZero) return concatB(COMPRESSED_ZERO, numberToBytesBE(_0n, len));
         const flag = Boolean(y.c1 === _0n ? (y.c0 * _2n) / P : (y.c1 * _2n) / P);
         // set compressed & sign bits (looks like different offsets than for G1/Fp?)
         let x_1 = bitSet(x.c1, C_BIT_POS, flag);
         x_1 = bitSet(x_1, S_BIT_POS, true);
-        return concatB(numberToBytesBE(x_1, Fp.BYTES), numberToBytesBE(x.c0, Fp.BYTES));
+        return concatB(numberToBytesBE(x_1, len), numberToBytesBE(x.c0, len));
       } else {
-        if (isZero) return concatB(new Uint8Array([0x40]), new Uint8Array(4 * Fp.BYTES - 1)); // bytes[0] |= 1 << 6;
+        if (isZero) return concatB(new Uint8Array([0x40]), new Uint8Array(4 * len - 1)); // bytes[0] |= 1 << 6;
         const { re: x0, im: x1 } = Fp2.reim(x);
         const { re: y0, im: y1 } = Fp2.reim(y);
         return concatB(
-          numberToBytesBE(x1, Fp.BYTES),
-          numberToBytesBE(x0, Fp.BYTES),
-          numberToBytesBE(y1, Fp.BYTES),
-          numberToBytesBE(y0, Fp.BYTES)
+          numberToBytesBE(x1, len),
+          numberToBytesBE(x0, len),
+          numberToBytesBE(y1, len),
+          numberToBytesBE(y0, len)
         );
       }
     },
     Signature: {
       // TODO: Optimize, it's very slow because of sqrt.
-      decode(hex: Hex): ProjPointType<Fp2> {
+      fromHex(hex: Hex): ProjPointType<Fp2> {
         hex = ensureBytes('signatureHex', hex);
         const P = Fp.ORDER;
         const half = hex.length / 2;
@@ -1319,7 +1339,7 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
         const x1 = Fp.create(z1 & Fp.MASK);
         const x2 = Fp.create(z2);
         const x = Fp2.create({ c0: x2, c1: x1 });
-        const y2 = Fp2.add(Fp2.pow(x, _3n), bls12_381.CURVE.G2.b); // y² = x³ + 4
+        const y2 = Fp2.add(Fp2.pow(x, _3n), bls12_381.params.G2b); // y² = x³ + 4
         // The slow part
         let y = Fp2.sqrt(y2);
         if (!y) throw new Error('Failed to find a square root');
@@ -1335,24 +1355,18 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
         point.assertValidity();
         return point;
       },
-      encode(point: ProjPointType<Fp2>) {
-        // NOTE: by some reasons it was missed in bls12-381, looks like bug
-        point.assertValidity();
-        if (point.equals(bls12_381.G2.ProjectivePoint.ZERO))
-          return concatB(COMPRESSED_ZERO, numberToBytesBE(0n, Fp.BYTES));
-        const a = point.toAffine();
-        const { re: x0, im: x1 } = Fp2.reim(a.x);
-        const { re: y0, im: y1 } = Fp2.reim(a.y);
-        const tmp = y1 > _0n ? y1 * _2n : y0 * _2n;
-        const aflag1 = Boolean((tmp / Fp.ORDER) & _1n);
-        const z1 = bitSet(bitSet(x1, 381, aflag1), S_BIT_POS, true);
-        const z2 = x0;
-        return concatB(numberToBytesBE(z1, Fp.BYTES), numberToBytesBE(z2, Fp.BYTES));
+      toRawBytes(point: ProjPointType<Fp2>) {
+        return signatureG2ToRawBytes(point);
+      },
+      toHex(point: ProjPointType<Fp2>) {
+        return bytesToHex(signatureG2ToRawBytes(point));
       },
     },
   },
-  // The BLS parameter x for BLS12-381
-  x: BLS_X,
+  params: {
+    x: BLS_X, // The BLS parameter x for BLS12-381
+    r: Fr.ORDER, // order; z⁴ − z² + 1; CURVE.n from other curves
+  },
   htfDefaults,
   hash: sha256,
   randomBytes,

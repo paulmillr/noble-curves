@@ -24,13 +24,16 @@ import {
 
 type Fp = bigint; // Can be different field?
 
+// prettier-ignore
+const _2n = BigInt(2), _3n = BigInt(3);
+
 export type SignatureCoder<Fp2> = {
-  decode(hex: Hex): ProjPointType<Fp2>;
-  encode(point: ProjPointType<Fp2>): Uint8Array;
+  fromHex(hex: Hex): ProjPointType<Fp2>;
+  toRawBytes(point: ProjPointType<Fp2>): Uint8Array;
+  toHex(point: ProjPointType<Fp2>): string;
 };
 
 export type CurveType<Fp, Fp2, Fp6, Fp12> = {
-  r: bigint;
   G1: Omit<CurvePointsType<Fp>, 'n'> & {
     mapToCurve: htf.MapToCurve<Fp>;
     htfDefaults: htf.Opts;
@@ -40,20 +43,25 @@ export type CurveType<Fp, Fp2, Fp6, Fp12> = {
     mapToCurve: htf.MapToCurve<Fp2>;
     htfDefaults: htf.Opts;
   };
-  x: bigint;
-  Fp: IField<Fp>;
-  Fr: IField<bigint>;
-  Fp2: IField<Fp2> & {
-    reim: (num: Fp2) => { re: bigint; im: bigint };
-    multiplyByB: (num: Fp2) => Fp2;
-    frobeniusMap(num: Fp2, power: number): Fp2;
+  fields: {
+    Fp: IField<Fp>;
+    Fr: IField<bigint>;
+    Fp2: IField<Fp2> & {
+      reim: (num: Fp2) => { re: bigint; im: bigint };
+      multiplyByB: (num: Fp2) => Fp2;
+      frobeniusMap(num: Fp2, power: number): Fp2;
+    };
+    Fp6: IField<Fp6>;
+    Fp12: IField<Fp12> & {
+      frobeniusMap(num: Fp12, power: number): Fp12;
+      multiplyBy014(num: Fp12, o0: Fp2, o1: Fp2, o4: Fp2): Fp12;
+      conjugate(num: Fp12): Fp12;
+      finalExponentiate(num: Fp12): Fp12;
+    };
   };
-  Fp6: IField<Fp6>;
-  Fp12: IField<Fp12> & {
-    frobeniusMap(num: Fp12, power: number): Fp12;
-    multiplyBy014(num: Fp12, o0: Fp2, o1: Fp2, o4: Fp2): Fp12;
-    conjugate(num: Fp12): Fp12;
-    finalExponentiate(num: Fp12): Fp12;
+  params: {
+    x: bigint;
+    r: bigint;
   };
   htfDefaults: htf.Opts;
   hash: CHash; // Because we need outputLen for DRBG
@@ -61,18 +69,6 @@ export type CurveType<Fp, Fp2, Fp6, Fp12> = {
 };
 
 export type CurveFn<Fp, Fp2, Fp6, Fp12> = {
-  CURVE: CurveType<Fp, Fp2, Fp6, Fp12>;
-  Fr: IField<bigint>;
-  Fp: IField<Fp>;
-  Fp2: IField<Fp2>;
-  Fp6: IField<Fp6>;
-  Fp12: IField<Fp12>;
-  G1: CurvePointsRes<Fp> & ReturnType<typeof htf.createHasher<Fp>>;
-  G2: CurvePointsRes<Fp2> & ReturnType<typeof htf.createHasher<Fp2>>;
-  Signature: SignatureCoder<Fp2>;
-  millerLoop: (ell: [Fp2, Fp2, Fp2][], g1: [Fp, Fp]) => Fp12;
-  calcPairingPrecomputes: (p: AffinePoint<Fp2>) => [Fp2, Fp2, Fp2][];
-  pairing: (P: ProjPointType<Fp>, Q: ProjPointType<Fp2>, withFinalExponent?: boolean) => Fp12;
   getPublicKey: (privateKey: PrivKey) => Uint8Array;
   sign: {
     (message: Hex, privateKey: PrivKey): Uint8Array;
@@ -83,6 +79,11 @@ export type CurveFn<Fp, Fp2, Fp6, Fp12> = {
     message: Hex | ProjPointType<Fp2>,
     publicKey: Hex | ProjPointType<Fp>
   ) => boolean;
+  verifyBatch: (
+    signature: Hex | ProjPointType<Fp2>,
+    messages: (Hex | ProjPointType<Fp2>)[],
+    publicKeys: (Hex | ProjPointType<Fp>)[]
+  ) => boolean;
   aggregatePublicKeys: {
     (publicKeys: Hex[]): Uint8Array;
     (publicKeys: ProjPointType<Fp>[]): ProjPointType<Fp>;
@@ -91,22 +92,36 @@ export type CurveFn<Fp, Fp2, Fp6, Fp12> = {
     (signatures: Hex[]): Uint8Array;
     (signatures: ProjPointType<Fp2>[]): ProjPointType<Fp2>;
   };
-  verifyBatch: (
-    signature: Hex | ProjPointType<Fp2>,
-    messages: (Hex | ProjPointType<Fp2>)[],
-    publicKeys: (Hex | ProjPointType<Fp>)[]
-  ) => boolean;
+  millerLoop: (ell: [Fp2, Fp2, Fp2][], g1: [Fp, Fp]) => Fp12;
+  pairing: (P: ProjPointType<Fp>, Q: ProjPointType<Fp2>, withFinalExponent?: boolean) => Fp12;
+  G1: CurvePointsRes<Fp> & ReturnType<typeof htf.createHasher<Fp>>;
+  G2: CurvePointsRes<Fp2> & ReturnType<typeof htf.createHasher<Fp2>>;
+  Signature: SignatureCoder<Fp2>;
+  params: {
+    x: bigint;
+    r: bigint;
+    G1b: bigint;
+    G2b: Fp2;
+  };
+  fields: {
+    Fp: IField<Fp>;
+    Fp2: IField<Fp2>;
+    Fp6: IField<Fp6>;
+    Fp12: IField<Fp12>;
+    Fr: IField<bigint>;
+  };
   utils: {
     randomPrivateKey: () => Uint8Array;
+    calcPairingPrecomputes: (p: AffinePoint<Fp2>) => [Fp2, Fp2, Fp2][];
   };
 };
 
 export function bls<Fp2, Fp6, Fp12>(
   CURVE: CurveType<Fp, Fp2, Fp6, Fp12>
 ): CurveFn<Fp, Fp2, Fp6, Fp12> {
-  // Fields looks pretty specific for curve, so for now we need to pass them with opts
-  const { Fp, Fr, Fp2, Fp6, Fp12 } = CURVE;
-  const BLS_X_LEN = bitLen(CURVE.x);
+  // Fields are specific for curve, so for now we'll need to pass them with opts
+  const { Fp, Fr, Fp2, Fp6, Fp12 } = CURVE.fields;
+  const BLS_X_LEN = bitLen(CURVE.params.x);
   const groupLen = 32; // TODO: calculate; hardcoded for now
 
   // Pre-compute coefficients for sparse multiplication
@@ -122,18 +137,18 @@ export function bls<Fp2, Fp6, Fp12>(
       // Double
       let t0 = Fp2.sqr(Ry); // Ry²
       let t1 = Fp2.sqr(Rz); // Rz²
-      let t2 = Fp2.multiplyByB(Fp2.mul(t1, 3n)); // 3 * T1 * B
-      let t3 = Fp2.mul(t2, 3n); // 3 * T2
+      let t2 = Fp2.multiplyByB(Fp2.mul(t1, _3n)); // 3 * T1 * B
+      let t3 = Fp2.mul(t2, _3n); // 3 * T2
       let t4 = Fp2.sub(Fp2.sub(Fp2.sqr(Fp2.add(Ry, Rz)), t1), t0); // (Ry + Rz)² - T1 - T0
       ell_coeff.push([
         Fp2.sub(t2, t0), // T2 - T0
-        Fp2.mul(Fp2.sqr(Rx), 3n), // 3 * Rx²
+        Fp2.mul(Fp2.sqr(Rx), _3n), // 3 * Rx²
         Fp2.neg(t4), // -T4
       ]);
-      Rx = Fp2.div(Fp2.mul(Fp2.mul(Fp2.sub(t0, t3), Rx), Ry), 2n); // ((T0 - T3) * Rx * Ry) / 2
-      Ry = Fp2.sub(Fp2.sqr(Fp2.div(Fp2.add(t0, t3), 2n)), Fp2.mul(Fp2.sqr(t2), 3n)); // ((T0 + T3) / 2)² - 3 * T2²
+      Rx = Fp2.div(Fp2.mul(Fp2.mul(Fp2.sub(t0, t3), Rx), Ry), _2n); // ((T0 - T3) * Rx * Ry) / 2
+      Ry = Fp2.sub(Fp2.sqr(Fp2.div(Fp2.add(t0, t3), _2n)), Fp2.mul(Fp2.sqr(t2), _3n)); // ((T0 + T3) / 2)² - 3 * T2²
       Rz = Fp2.mul(t0, t4); // T0 * T4
-      if (bitGet(CURVE.x, i)) {
+      if (bitGet(CURVE.params.x, i)) {
         // Addition
         let t0 = Fp2.sub(Ry, Fp2.mul(Qy, Rz)); // Ry - Qy * Rz
         let t1 = Fp2.sub(Rx, Fp2.mul(Qx, Rz)); // Rx - Qx * Rz
@@ -145,7 +160,7 @@ export function bls<Fp2, Fp6, Fp12>(
         let t2 = Fp2.sqr(t1); // T1²
         let t3 = Fp2.mul(t2, t1); // T2 * T1
         let t4 = Fp2.mul(t2, Rx); // T2 * Rx
-        let t5 = Fp2.add(Fp2.sub(t3, Fp2.mul(t4, 2n)), Fp2.mul(Fp2.sqr(t0), Rz)); // T3 - 2 * T4 + T0² * Rz
+        let t5 = Fp2.add(Fp2.sub(t3, Fp2.mul(t4, _2n)), Fp2.mul(Fp2.sqr(t0), Rz)); // T3 - 2 * T4 + T0² * Rz
         Rx = Fp2.mul(t1, t5); // T1 * T5
         Ry = Fp2.sub(Fp2.mul(Fp2.sub(t4, t5), t0), Fp2.mul(t3, Ry)); // (T4 - T5) * T0 - T3 * Ry
         Rz = Fp2.mul(Rz, t3); // Rz * T3
@@ -155,7 +170,7 @@ export function bls<Fp2, Fp6, Fp12>(
   }
 
   function millerLoop(ell: [Fp2, Fp2, Fp2][], g1: [Fp, Fp]): Fp12 {
-    const { x } = CURVE;
+    const { x } = CURVE.params;
     const Px = g1[0];
     const Py = g1[1];
     let f12 = Fp12.ONE;
@@ -174,8 +189,9 @@ export function bls<Fp2, Fp6, Fp12>(
 
   const utils = {
     randomPrivateKey: (): Uint8Array => {
-      return Fr.toBytes(hashToPrivateScalar(CURVE.randomBytes(groupLen + 8), CURVE.r));
+      return Fr.toBytes(hashToPrivateScalar(CURVE.randomBytes(groupLen + 8), CURVE.params.r));
     },
+    calcPairingPrecomputes,
   };
 
   // Point on G1 curve: (x, y)
@@ -236,7 +252,7 @@ export function bls<Fp2, Fp6, Fp12>(
     return point instanceof G1.ProjectivePoint ? (point as G1) : G1.ProjectivePoint.fromHex(point);
   }
   function normP2(point: G2Hex): G2 {
-    return point instanceof G2.ProjectivePoint ? point : Signature.decode(point);
+    return point instanceof G2.ProjectivePoint ? point : Signature.fromHex(point);
   }
   function normP2Hash(point: G2Hex, htfOpts?: htf.htfBasicOpts): G2 {
     return point instanceof G2.ProjectivePoint
@@ -259,7 +275,7 @@ export function bls<Fp2, Fp6, Fp12>(
     msgPoint.assertValidity();
     const sigPoint = msgPoint.multiply(G1.normPrivateKeyToScalar(privateKey));
     if (message instanceof G2.ProjectivePoint) return sigPoint;
-    return Signature.encode(sigPoint);
+    return Signature.toRawBytes(sigPoint);
   }
 
   // Checks if pairing of public key & hash is equal to pairing of generator & signature.
@@ -309,7 +325,7 @@ export function bls<Fp2, Fp6, Fp12>(
       aggAffine.assertValidity();
       return aggAffine;
     }
-    return Signature.encode(aggAffine);
+    return Signature.toRawBytes(aggAffine);
   }
 
   // https://ethresear.ch/t/fast-verification-of-multiple-bls-signatures/5407
@@ -353,24 +369,30 @@ export function bls<Fp2, Fp6, Fp12>(
   G1.ProjectivePoint.BASE._setWindowSize(4);
 
   return {
-    CURVE,
-    Fr,
-    Fp,
-    Fp2,
-    Fp6,
-    Fp12,
-    G1,
-    G2,
-    Signature,
-    millerLoop,
-    calcPairingPrecomputes,
-    pairing,
     getPublicKey,
     sign,
     verify,
+    verifyBatch,
     aggregatePublicKeys,
     aggregateSignatures,
-    verifyBatch,
+    millerLoop,
+    pairing,
+    G1,
+    G2,
+    Signature,
+    fields: {
+      Fr,
+      Fp,
+      Fp2,
+      Fp6,
+      Fp12,
+    },
+    params: {
+      x: CURVE.params.x,
+      r: CURVE.params.r,
+      G1b: CURVE.G1.b,
+      G2b: CURVE.G2.b,
+    },
     utils,
   };
 }

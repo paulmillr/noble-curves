@@ -407,7 +407,7 @@ describe('ed25519', () => {
       ed25519.verify(sig_invalid, message, publicKey);
     });
   });
-  
+
   should('not accept point without z, t', () => {
     const t = 81718630521762619991978402609047527194981150691135404693881672112315521837062n;
     const point = ed25519.ExtendedPoint.fromAffine({ x: t, y: t });

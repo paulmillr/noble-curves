@@ -214,6 +214,7 @@ There are following zero-dependency algorithms:
 - [abstract/weierstrass: Short Weierstrass curve](#abstractweierstrass-short-weierstrass-curve)
 - [abstract/edwards: Twisted Edwards curve](#abstractedwards-twisted-edwards-curve)
 - [abstract/montgomery: Montgomery curve](#abstractmontgomery-montgomery-curve)
+- [abstract/bls: BLS curves](#abstractbls-bls-curves)
 - [abstract/hash-to-curve: Hashing strings to curve points](#abstracthash-to-curve-hashing-strings-to-curve-points)
 - [abstract/poseidon: Poseidon hash](#abstractposeidon-poseidon-hash)
 - [abstract/modular: Modular arithmetics utilities](#abstractmodular-modular-arithmetics-utilities)
@@ -491,6 +492,74 @@ Proper Elliptic Curve Points are not implemented yet.
 
 You must specify curve params `Fp`, `a`, `Gu` coordinate of u, `montgomeryBits` and `nByteLength`.
 
+### abstract/bls: BLS curves
+
+The module abstracts BLS (Barreto-Lynn-Scott) primitives.
+
+Right now we only implement BLS12-381, but in theory defining BLS12-377, BLS24
+should be straightforward.
+
+Main methods and properties are:
+
+- `getPublicKey(privateKey)`
+- `sign(message, privateKey)`
+- `verify(signature, message, publicKey)`
+- `aggregatePublicKeys(publicKeys)`
+- `aggregateSignatures(signatures)`
+- `G1` and `G2` curves containing `CURVE` and `ProjectivePoint`
+- `Signature` property with `fromHex`, `toHex` methods
+- `fields` containing `Fp`, `Fp2`, `Fp6`, `Fp12`, `Fr`
+
+Full types:
+
+```ts
+getPublicKey: (privateKey: PrivKey) => Uint8Array;
+sign: {
+  (message: Hex, privateKey: PrivKey): Uint8Array;
+  (message: ProjPointType<Fp2>, privateKey: PrivKey): ProjPointType<Fp2>;
+};
+verify: (
+  signature: Hex | ProjPointType<Fp2>,
+  message: Hex | ProjPointType<Fp2>,
+  publicKey: Hex | ProjPointType<Fp>
+) => boolean;
+verifyBatch: (
+  signature: Hex | ProjPointType<Fp2>,
+  messages: (Hex | ProjPointType<Fp2>)[],
+  publicKeys: (Hex | ProjPointType<Fp>)[]
+) => boolean;
+aggregatePublicKeys: {
+  (publicKeys: Hex[]): Uint8Array;
+  (publicKeys: ProjPointType<Fp>[]): ProjPointType<Fp>;
+};
+aggregateSignatures: {
+  (signatures: Hex[]): Uint8Array;
+  (signatures: ProjPointType<Fp2>[]): ProjPointType<Fp2>;
+};
+millerLoop: (ell: [Fp2, Fp2, Fp2][], g1: [Fp, Fp]) => Fp12;
+pairing: (P: ProjPointType<Fp>, Q: ProjPointType<Fp2>, withFinalExponent?: boolean) => Fp12;
+G1: CurvePointsRes<Fp> & ReturnType<typeof htf.createHasher<Fp>>;
+G2: CurvePointsRes<Fp2> & ReturnType<typeof htf.createHasher<Fp2>>;  
+Signature: SignatureCoder<Fp2>;
+params: {
+  x: bigint;
+  r: bigint;
+  G1b: bigint;
+  G2b: Fp2;
+};
+fields: {
+  Fp: IField<Fp>;
+  Fp2: IField<Fp2>;
+  Fp6: IField<Fp6>;
+  Fp12: IField<Fp12>;
+  Fr: IField<bigint>;  
+};
+utils: {
+  randomPrivateKey: () => Uint8Array;
+  calcPairingPrecomputes: (p: AffinePoint<Fp2>) => [Fp2, Fp2, Fp2][];
+};
+```
+
 ### abstract/hash-to-curve: Hashing strings to curve points
 
 The module allows to hash arbitrary strings to elliptic curve points. Implements [hash-to-curve v16](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-16).
@@ -588,11 +657,6 @@ type PoseidonOpts = {
 };
 const instance = poseidon(opts: PoseidonOpts);
 ```
-
-### abstract/bls
-
-The module abstracts BLS (Barreto-Lynn-Scott) primitives. In theory you should be able to write BLS12-377, BLS24,
-and others with it.
 
 ### abstract/modular: Modular arithmetics utilities
 

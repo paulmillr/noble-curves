@@ -24,11 +24,10 @@ const SCALAR_VECTORS = readFileSync('./test/bls12-381/bls12-381-scalar-test-vect
 const NUM_RUNS = Number(process.env.RUNS_COUNT || 10); // reduce to 1 to shorten test time
 fc.configureGlobal({ numRuns: NUM_RUNS });
 
-const { Fp2 } = bls;
 const G1Point = bls.G1.ProjectivePoint;
 const G2Point = bls.G2.ProjectivePoint;
 const G1Aff = (x, y) => G1Point.fromAffine({ x, y });
-const CURVE_ORDER = bls.CURVE.r;
+const CURVE_ORDER = bls.params.r;
 
 const FC_MSG = fc.hexaString({ minLength: 64, maxLength: 64 });
 const FC_MSG_5 = fc.array(FC_MSG, { minLength: 5, maxLength: 5 });
@@ -42,10 +41,10 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
 function equal(a, b, comment) {
   deepStrictEqual(a.equals(b), true, `eq(${comment})`);
 }
+const { Fp, Fp2 } = bls.fields;
 
 // Fp
 describe('bls12-381 Fp', () => {
-  const Fp = bls.Fp;
   const FC_BIGINT = fc.bigInt(1n, Fp.ORDER - 1n);
 
   should('multiply/sqrt', () => {
@@ -60,8 +59,7 @@ describe('bls12-381 Fp', () => {
 
 // Fp2
 describe('bls12-381 Fp2', () => {
-  const Fp = bls.Fp;
-  const Fp2 = bls.Fp2;
+  const { Fp, Fp2 } = bls.fields;
   const FC_BIGINT = fc.bigInt(1n, Fp.ORDER - 1n);
   const FC_BIGINT_2 = fc.array(FC_BIGINT, { minLength: 2, maxLength: 2 });
 
@@ -149,7 +147,7 @@ describe('bls12-381 Fp2', () => {
 
 // Point
 describe('bls12-381 Point', () => {
-  const Fp = bls.Fp;
+  const { Fp } = bls.fields;
   const FC_BIGINT = fc.bigInt(1n, Fp.ORDER - 1n);
   const PointG1 = G1Point;
   const PointG2 = G2Point;
@@ -557,9 +555,12 @@ describe('bls12-381 Point', () => {
     ];
     // Use wNAF allow scalars higher than CURVE.r
     const w = wNAF(G2Point, 1);
+    const hEff = BigInt(
+      '0xbc69f08f2ee75b3584c6a0ea91b352888e2a8e9145ad7689986ff031508ffe1329c2f178731db956d82bf015d1212b02ec0ec69d7477c1ae954cbc06689f6a359894c0adebbf6b4e8020005aaa95551'
+    );
     for (let p of points) {
       const ours = p.clearCofactor();
-      const shouldBe = w.unsafeLadder(p, bls.CURVE.G2.hEff);
+      const shouldBe = w.unsafeLadder(p, hEff);
       deepStrictEqual(ours.equals(shouldBe), true, 'clearLast');
     }
   });
@@ -577,12 +578,12 @@ describe('bls12-381/basic', () => {
     deepStrictEqual(g1.x, G1Point.ZERO.x);
     deepStrictEqual(g1.y, G1Point.ZERO.y);
     // Test Non-Zero
-    const x = bls.Fp.create(
+    const x = Fp.create(
       BigInt(
         '0x17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb'
       )
     );
-    const y = bls.Fp.create(
+    const y = Fp.create(
       BigInt(
         '0x08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
       )
@@ -603,12 +604,12 @@ describe('bls12-381/basic', () => {
     deepStrictEqual(g1.x, G1Point.ZERO.x);
     deepStrictEqual(g1.y, G1Point.ZERO.y);
     // Test Non-Zero
-    const x = bls.Fp.create(
+    const x = Fp.create(
       BigInt(
         '0x17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb'
       )
     );
-    const y = bls.Fp.create(
+    const y = Fp.create(
       BigInt(
         '0x08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
       )
@@ -689,12 +690,12 @@ describe('bls12-381/basic', () => {
     // Test Zero
     deepStrictEqual(G1Point.ZERO.toHex(false), B_192_40);
     // Test Non-Zero
-    const x = bls.Fp.create(
+    const x = Fp.create(
       BigInt(
         '0x17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb'
       )
     );
-    const y = bls.Fp.create(
+    const y = Fp.create(
       BigInt(
         '0x08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
       )
@@ -710,12 +711,12 @@ describe('bls12-381/basic', () => {
     // Test Zero
     deepStrictEqual(G1Point.ZERO.toHex(false), B_192_40);
     // Test Non-Zero
-    const x = bls.Fp.create(
+    const x = Fp.create(
       BigInt(
         '0x17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb'
       )
     );
-    const y = bls.Fp.create(
+    const y = Fp.create(
       BigInt(
         '0x08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
       )
@@ -801,32 +802,32 @@ describe('bls12-381/basic', () => {
     throws(() => G2Point.fromPrivateKey(0n));
   });
   const VALID_G1 = new G1Point(
-    bls.Fp.create(
+    Fp.create(
       3609742242174788176010452839163620388872641749536604986743596621604118973777515189035770461528205168143692110933639n
     ),
-    bls.Fp.create(
+    Fp.create(
       1619277690257184054444116778047375363103842303863153349133480657158810226683757397206929105479676799650932070320089n
     ),
-    bls.Fp.create(1n)
+    Fp.create(1n)
   );
   const VALID_G1_2 = new G1Point(
-    bls.Fp.create(
+    Fp.create(
       1206972466279728255044019580914616126536509750250979180256809997983196363639429409634110400978470384566664128085207n
     ),
-    bls.Fp.create(
+    Fp.create(
       2991142246317096160788653339959532007292638191110818490939476869616372888657136539642598243964263069435065725313423n
     ),
-    bls.Fp.create(1n)
+    Fp.create(1n)
   );
 
   const INVALID_G1 = new G1Point(
-    bls.Fp.create(
+    Fp.create(
       499001545268060011619089734015590154568173930614466321429631711131511181286230338880376679848890024401335766847607n
     ),
-    bls.Fp.create(
+    Fp.create(
       3934582309586258715640230772291917282844636728991757779640464479794033391537662970190753981664259511166946374555673n
     ),
-    bls.Fp.create(1n)
+    Fp.create(1n)
   );
 
   should('aggregate pubkeys', () => {
@@ -855,7 +856,7 @@ describe('bls12-381/basic', () => {
   });
   should(`produce correct scalars (${SCALAR_VECTORS.length} vectors)`, () => {
     const options = {
-      p: bls.CURVE.r,
+      p: bls.params.r,
       m: 1,
       expand: undefined,
     };
@@ -863,7 +864,7 @@ describe('bls12-381/basic', () => {
       const [okmAscii, expectedHex] = vector;
       const expected = BigInt('0x' + expectedHex);
       const okm = utf8ToBytes(okmAscii);
-      const scalars = hash_to_field(okm, 1, Object.assign({}, bls.CURVE.htfDefaults, options));
+      const scalars = hash_to_field(okm, 1, Object.assign({}, bls.G2.CURVE.htfDefaults, options));
       deepStrictEqual(scalars[0][0], expected);
     }
   });
@@ -871,7 +872,8 @@ describe('bls12-381/basic', () => {
 
 // Pairing
 describe('pairing', () => {
-  const { pairing, Fp12 } = bls;
+  const { pairing } = bls;
+  const { Fp12 } = bls.fields;
   const G1 = G1Point.BASE;
   const G2 = G2Point.BASE;
 
@@ -1000,7 +1002,7 @@ describe('hash-to-curve', () => {
   ];
   for (let i = 0; i < VECTORS_G1.length; i++) {
     const t = VECTORS_G1[i];
-    should(`hashToCurve/G1 Killic (${i})`, () => {
+    should(`G1 Killic (${i})`, () => {
       const p = bls.G1.hashToCurve(t.msg, {
         DST: 'BLS12381G1_XMD:SHA-256_SSWU_RO_TESTGEN',
       });
@@ -1259,7 +1261,7 @@ describe('bls12-381 deterministic', () => {
       .reverse()
       .reduce((acc, i) => acc + i);
 
-  const Fp12 = bls.Fp12;
+  const { Fp12 } = bls.fields;
 
   should('Killic based/Pairing', () => {
     const t = bls.pairing(G1Point.BASE, G2Point.BASE);

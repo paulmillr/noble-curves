@@ -30,19 +30,19 @@ const FIELDS = {
   pallas: { Fp: [pallas.CURVE.Fp] },
   vesta: { Fp: [vesta.CURVE.Fp] },
   bls12: {
-    Fp: [bls12_381.CURVE.Fp],
+    Fp: [bls12_381.fields.Fp],
     Fp2: [
-      bls12_381.CURVE.Fp2,
-      fc.array(fc.bigInt(1n, bls12_381.CURVE.Fp.ORDER - 1n), {
+      bls12_381.fields.Fp2,
+      fc.array(fc.bigInt(1n, bls12_381.fields.Fp.ORDER - 1n), {
         minLength: 2,
         maxLength: 2,
       }),
       (Fp2, num) => Fp2.fromBigTuple([num[0], num[1]]),
     ],
-    // Fp6: [bls12_381.CURVE.Fp6],
+    // Fp6: [bls12_381.fields.Fp6],
     Fp12: [
-      bls12_381.CURVE.Fp12,
-      fc.array(fc.bigInt(1n, bls12_381.CURVE.Fp.ORDER - 1n), {
+      bls12_381.fields.Fp12,
+      fc.array(fc.bigInt(1n, bls12_381.fields.Fp.ORDER - 1n), {
         minLength: 12,
         maxLength: 12,
       }),
@@ -221,7 +221,7 @@ for (const c in FIELDS) {
 
       const isSquare = mod.FpIsSquare(Fp);
       // Not implemented
-      if (Fp !== bls12_381.CURVE.Fp12) {
+      if (Fp !== bls12_381.fields.Fp12) {
         should('multiply/sqrt', () => {
           fc.assert(
             fc.property(FC_BIGINT, (num) => {

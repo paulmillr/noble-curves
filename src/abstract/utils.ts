@@ -123,12 +123,12 @@ export function utf8ToBytes(str: string): Uint8Array {
 // Amount of bits inside bigint (Same as n.toString(2).length)
 export function bitLen(n: bigint) {
   let len;
-  for (len = 0; n > 0n; n >>= _1n, len += 1);
+  for (len = 0; n > _0n; n >>= _1n, len += 1);
   return len;
 }
 // Gets single bit at position. NOTE: first bit position is 0 (same as arrays)
 // Same as !!+Array.from(n.toString(2)).reverse()[pos]
-export const bitGet = (n: bigint, pos: number) => (n >> BigInt(pos)) & 1n;
+export const bitGet = (n: bigint, pos: number) => (n >> BigInt(pos)) & _1n;
 // Sets single bit at position
 export const bitSet = (n: bigint, pos: number, value: boolean) =>
   n | ((value ? _1n : _0n) << BigInt(pos));
