@@ -264,6 +264,8 @@ interface ProjPointType<T> extends Group<ProjPointType<T>> {
   readonly px: T;
   readonly py: T;
   readonly pz: T;
+  get x(): bigint;
+  get y(): bigint;
   multiply(scalar: bigint): ProjPointType<T>;
   multiplyUnsafe(scalar: bigint): ProjPointType<T>;
   multiplyAndAddUnsafe(Q: ProjPointType<T>, a: bigint, b: bigint): ProjPointType<T> | undefined;
@@ -408,6 +410,8 @@ interface ExtPointType extends Group<ExtPointType> {
   readonly ey: bigint;
   readonly ez: bigint;
   readonly et: bigint;
+  get x(): bigint;
+  get y(): bigint;
   assertValidity(): void;
   multiply(scalar: bigint): ExtPointType;
   multiplyUnsafe(scalar: bigint): ExtPointType;
@@ -415,6 +419,8 @@ interface ExtPointType extends Group<ExtPointType> {
   isTorsionFree(): boolean;
   clearCofactor(): ExtPointType;
   toAffine(iz?: bigint): AffinePoint<bigint>;
+  toRawBytes(isCompressed?: boolean): Uint8Array;
+  toHex(isCompressed?: boolean): string;
 }
 // Static methods of Extended Point with coordinates in X, Y, Z, T
 interface ExtPointConstructor extends GroupConstructor<ExtPointType> {
