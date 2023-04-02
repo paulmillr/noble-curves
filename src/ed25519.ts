@@ -95,7 +95,7 @@ export const ED25519_TORSION_SUBGROUP = [
 
 const Fp = Field(ED25519_P, undefined, true);
 
-const ED25519_DEF = {
+const ed25519Defaults = {
   // Param: a
   a: BigInt(-1),
   // Equal to -121665/121666 over finite field.
@@ -120,7 +120,7 @@ const ED25519_DEF = {
   uvRatio,
 } as const;
 
-export const ed25519 = twistedEdwards(ED25519_DEF);
+export const ed25519 = twistedEdwards(ed25519Defaults);
 function ed25519_domain(data: Uint8Array, ctx: Uint8Array, phflag: boolean) {
   if (ctx.length > 255) throw new Error('Context is too big');
   return concatBytes(
@@ -130,11 +130,11 @@ function ed25519_domain(data: Uint8Array, ctx: Uint8Array, phflag: boolean) {
     data
   );
 }
-export const ed25519ctx = twistedEdwards({ ...ED25519_DEF, domain: ed25519_domain });
+export const ed25519ctx = twistedEdwards({ ...ed25519Defaults, domain: ed25519_domain });
 export const ed25519ph = twistedEdwards({
-  ...ED25519_DEF,
+  ...ed25519Defaults,
   domain: ed25519_domain,
-  preHash: sha512,
+  prehash: sha512,
 });
 
 export const x25519 = montgomery({
@@ -152,6 +152,20 @@ export const x25519 = montgomery({
   adjustScalarBytes,
   randomBytes,
 });
+
+/**
+ * Converts ed25519 public key to x25519 public key. Uses formula:
+ * * `(u, v) = ((1+y)/(1-y), sqrt(-486664)*u/x)`
+ * * `(x, y) = (sqrt(-486664)*u/v, (u-1)/(u+1))`
+ * @example
+ *   const aPub = ed25519.getPublicKey(utils.randomPrivateKey());
+ *   x25519.getSharedSecret(edwardsToMontgomery(aPub), edwardsToMontgomery(someonesPub))
+ */
+export function edwardsToMontgomery(edwardsPub: Hex): Uint8Array {
+  const { y } = ed25519.ExtendedPoint.fromHex(edwardsPub);
+  const _1n = BigInt(1);
+  return Fp.toBytes(Fp.create((y - _1n) * Fp.inv(y + _1n)));
+}
 
 // Hash To Curve Elligator2 Map (NOTE: different from ristretto255 elligator)
 // NOTE: very important part is usage of FpSqrtEven for ELL2_C1_EDWARDS, since

@@ -62,8 +62,14 @@ describe('RFC8032ctx', () => {
     const v = VECTORS_RFC8032_CTX[i];
     should(`${i}`, () => {
       deepStrictEqual(hex(ed25519ctx.getPublicKey(v.secretKey)), v.publicKey);
-      deepStrictEqual(hex(ed25519ctx.sign(v.message, v.secretKey, v.context)), v.signature);
-      deepStrictEqual(ed25519ctx.verify(v.signature, v.message, v.publicKey, v.context), true);
+      deepStrictEqual(
+        hex(ed25519ctx.sign(v.message, v.secretKey, { context: v.context })),
+        v.signature
+      );
+      deepStrictEqual(
+        ed25519ctx.verify(v.signature, v.message, v.publicKey, { context: v.context }),
+        true
+      );
     });
   }
 });
@@ -93,14 +99,7 @@ describe('RFC8032ph', () => {
 });
 
 // x25519
-should('X25519 base point', () => {
-  const { y } = ed25519ph.ExtendedPoint.BASE;
-  const { Fp } = ed25519ph.CURVE;
-  const u = Fp.create((y + 1n) * Fp.inv(1n - y));
-  deepStrictEqual(numberToBytesLE(u, 32), x25519.GuBytes);
-});
-
-describe('RFC7748', () => {
+describe('RFC7748 X25519 ECDH', () => {
   const rfc7748Mul = [
     {
       scalar: 'a546e36bf0527c9d3b16154b82465edd62144c0ac1fc5a18506a2244ba449ac4',
@@ -127,7 +126,7 @@ describe('RFC7748', () => {
   ];
   for (let i = 0; i < rfc7748Iter.length; i++) {
     const { scalar, iters } = rfc7748Iter[i];
-    should(`scalarMult iteration (${i})`, () => {
+    should(`scalarMult iteration x${iters}`, () => {
       let k = x25519.GuBytes;
       for (let i = 0, u = k; i < iters; i++) [k, u] = [x25519.scalarMult(k, u), k];
       deepStrictEqual(hex(k), scalar);
@@ -145,10 +144,16 @@ describe('RFC7748', () => {
     deepStrictEqual(hex(x25519.scalarMult(alicePrivate, bobPublic)), shared);
     deepStrictEqual(hex(x25519.scalarMult(bobPrivate, alicePublic)), shared);
   });
-});
-describe('Wycheproof', () => {
+
+  should('base point', () => {
+    const { y } = ed25519ph.ExtendedPoint.BASE;
+    const { Fp } = ed25519ph.CURVE;
+    const u = Fp.create((y + 1n) * Fp.inv(1n - y));
+    deepStrictEqual(numberToBytesLE(u, 32), x25519.GuBytes);
+  });
+
   const group = x25519vectors.testGroups[0];
-  should(`X25519`, () => {
+  should('wycheproof', () => {
     for (let i = 0; i < group.tests.length; i++) {
       const v = group.tests[i];
       const comment = `(${i}, ${v.result}) ${v.comment}`;

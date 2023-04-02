@@ -513,8 +513,11 @@ describe('ed448', () => {
       const v = VECTORS_RFC8032_CTX[i];
       should(`${i}`, () => {
         deepStrictEqual(hex(ed.getPublicKey(v.secretKey)), v.publicKey);
-        deepStrictEqual(hex(ed.sign(v.message, v.secretKey, v.context)), v.signature);
-        deepStrictEqual(ed.verify(v.signature, v.message, v.publicKey, v.context), true);
+        deepStrictEqual(hex(ed.sign(v.message, v.secretKey, { context: v.context })), v.signature);
+        deepStrictEqual(
+          ed.verify(v.signature, v.message, v.publicKey, { context: v.context }),
+          true
+        );
       });
     }
   });
@@ -559,8 +562,14 @@ describe('ed448', () => {
       const v = VECTORS_RFC8032_PH[i];
       should(`${i}`, () => {
         deepStrictEqual(hex(ed448ph.getPublicKey(v.secretKey)), v.publicKey);
-        deepStrictEqual(hex(ed448ph.sign(v.message, v.secretKey, v.context)), v.signature);
-        deepStrictEqual(ed448ph.verify(v.signature, v.message, v.publicKey, v.context), true);
+        deepStrictEqual(
+          hex(ed448ph.sign(v.message, v.secretKey, { context: v.context })),
+          v.signature
+        );
+        deepStrictEqual(
+          ed448ph.verify(v.signature, v.message, v.publicKey, { context: v.context }),
+          true
+        );
       });
     }
   });
@@ -661,34 +670,32 @@ describe('ed448', () => {
       deepStrictEqual(hex(x448.scalarMult(bobPrivate, alicePublic)), shared);
     });
 
-    describe('wycheproof', () => {
+    should('wycheproof', () => {
       const group = x448vectors.testGroups[0];
-      should(`X448`, () => {
-        for (let i = 0; i < group.tests.length; i++) {
-          const v = group.tests[i];
-          const index = `(${i}, ${v.result}) ${v.comment}`;
-          if (v.result === 'valid' || v.result === 'acceptable') {
-            try {
-              const shared = hex(x448.scalarMult(v.private, v.public));
-              deepStrictEqual(shared, v.shared, index);
-            } catch (e) {
-              // We are more strict
-              if (e.message.includes('Expected valid scalar')) return;
-              if (e.message.includes('Invalid private or public key received')) return;
-              if (e.message.includes('Expected 56 bytes')) return;
-              throw e;
-            }
-          } else if (v.result === 'invalid') {
-            let failed = false;
-            try {
-              x448.scalarMult(v.private, v.public);
-            } catch (error) {
-              failed = true;
-            }
-            deepStrictEqual(failed, true, index);
-          } else throw new Error('unknown test result');
-        }
-      });
+      for (let i = 0; i < group.tests.length; i++) {
+        const v = group.tests[i];
+        const index = `(${i}, ${v.result}) ${v.comment}`;
+        if (v.result === 'valid' || v.result === 'acceptable') {
+          try {
+            const shared = hex(x448.scalarMult(v.private, v.public));
+            deepStrictEqual(shared, v.shared, index);
+          } catch (e) {
+            // We are more strict
+            if (e.message.includes('Expected valid scalar')) return;
+            if (e.message.includes('Invalid private or public key received')) return;
+            if (e.message.includes('Expected 56 bytes')) return;
+            throw e;
+          }
+        } else if (v.result === 'invalid') {
+          let failed = false;
+          try {
+            x448.scalarMult(v.private, v.public);
+          } catch (error) {
+            failed = true;
+          }
+          deepStrictEqual(failed, true, index);
+        } else throw new Error('unknown test result');
+      }
     });
 
     should('have proper base point', () => {

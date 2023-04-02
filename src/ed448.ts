@@ -120,7 +120,7 @@ const ED448_DEF = {
 
 export const ed448 = twistedEdwards(ED448_DEF);
 // NOTE: there is no ed448ctx, since ed448 supports ctx by default
-export const ed448ph = twistedEdwards({ ...ED448_DEF, preHash: shake256_64 });
+export const ed448ph = twistedEdwards({ ...ED448_DEF, prehash: shake256_64 });
 
 export const x448 = montgomery({
   a: BigInt(156326),
@@ -136,21 +136,21 @@ export const x448 = montgomery({
   },
   adjustScalarBytes,
   randomBytes,
-  // The 4-isogeny maps between the Montgomery curve and this Edwards
-  // curve are:
-  //   (u, v) = (y^2/x^2, (2 - x^2 - y^2)*y/x^3)
-  //   (x, y) = (4*v*(u^2 - 1)/(u^4 - 2*u^2 + 4*v^2 + 1),
-  //             -(u^5 - 2*u^3 - 4*u*v^2 + u)/
-  //             (u^5 - 2*u^2*v^2 - 2*u^3 - 2*v^2 + u))
-  // xyToU: (p: PointType) => {
-  //   const P = ed448P;
-  //   const { x, y } = p;
-  //   if (x === _0n) throw new Error(`Point with x=0 doesn't have mapping`);
-  //   const invX = invert(x * x, P); // x^2
-  //   const u = mod(y * y * invX, P); // (y^2/x^2)
-  //   return numberToBytesLE(u, 56);
-  // },
 });
+
+/**
+ * Converts edwards448 public key to x448 public key. Uses formula:
+ * * `(u, v) = ((y-1)/(y+1), sqrt(156324)*u/x)`
+ * * `(x, y) = (sqrt(156324)*u/v, (1+u)/(1-u))`
+ * @example
+ *   const aPub = ed448.getPublicKey(utils.randomPrivateKey());
+ *   x448.getSharedSecret(edwardsToMontgomery(aPub), edwardsToMontgomery(someonesPub))
+ */
+export function edwardsToMontgomery(edwardsPub: string | Uint8Array): Uint8Array {
+  const { y } = ed448.ExtendedPoint.fromHex(edwardsPub);
+  const _1n = BigInt(1);
+  return Fp.toBytes(Fp.create((y - _1n) * Fp.inv(y + _1n)));
+}
 
 // Hash To Curve Elligator2 Map
 const ELL2_C1 = (Fp.ORDER - BigInt(3)) / BigInt(4); // 1. c1 = (q - 3) / 4         # Integer arithmetic

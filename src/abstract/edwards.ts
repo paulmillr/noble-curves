@@ -18,7 +18,7 @@ export type CurveType = BasicCurve<bigint> & {
   adjustScalarBytes?: (bytes: Uint8Array) => Uint8Array; // clears bits to get valid field elemtn
   domain?: (data: Uint8Array, ctx: Uint8Array, phflag: boolean) => Uint8Array; // Used for hashing
   uvRatio?: (u: bigint, v: bigint) => { isValid: boolean; value: bigint }; // Ratio √(u/v)
-  preHash?: FHash; // RFC 8032 pre-hashing of messages to sign() / verify()
+  prehash?: FHash; // RFC 8032 pre-hashing of messages to sign() / verify()
   mapToCurve?: (scalar: bigint[]) => AffinePoint<bigint>; // for hash-to-curve standard
 };
 
@@ -90,7 +90,15 @@ export type CurveFn = {
 // It is not generic twisted curve for now, but ed25519/ed448 generic implementation
 export function twistedEdwards(curveDef: CurveType): CurveFn {
   const CURVE = validateOpts(curveDef) as ReturnType<typeof validateOpts>;
-  const { Fp, n: CURVE_ORDER, preHash, hash: cHash, randomBytes, nByteLength, h: cofactor } = CURVE;
+  const {
+    Fp,
+    n: CURVE_ORDER,
+    prehash: preHash,
+    hash: cHash,
+    randomBytes,
+    nByteLength,
+    h: cofactor,
+  } = CURVE;
   const MASK = _2n ** BigInt(nByteLength * 8);
   const modP = Fp.create; // Function overrides
 
@@ -423,29 +431,30 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
   }
 
   /** Signs message with privateKey. RFC8032 5.1.6 */
-  function sign(msg: Hex, privKey: Hex, context?: Hex): Uint8Array {
+  function sign(msg: Hex, privKey: Hex, options: { context?: Hex } = {}): Uint8Array {
     msg = ensureBytes('message', msg);
     if (preHash) msg = preHash(msg); // for ed25519ph etc.
     const { prefix, scalar, pointBytes } = getExtendedPublicKey(privKey);
-    const r = hashDomainToScalar(context, prefix, msg); // r = dom2(F, C) || prefix || PH(M)
+    const r = hashDomainToScalar(options.context, prefix, msg); // r = dom2(F, C) || prefix || PH(M)
     const R = G.multiply(r).toRawBytes(); // R = rG
-    const k = hashDomainToScalar(context, R, pointBytes, msg); // R || A || PH(M)
+    const k = hashDomainToScalar(options.context, R, pointBytes, msg); // R || A || PH(M)
     const s = modN(r + k * scalar); // S = (r + k * s) mod L
     assertGE0(s); // 0 <= s < l
     const res = ut.concatBytes(R, ut.numberToBytesLE(s, Fp.BYTES));
     return ensureBytes('result', res, nByteLength * 2); // 64-byte signature
   }
 
-  function verify(sig: Hex, msg: Hex, publicKey: Hex, context?: Hex): boolean {
+  const verifyOpts: { context?: Hex; strict?: boolean } = { strict: false };
+  function verify(sig: Hex, msg: Hex, publicKey: Hex, options = verifyOpts): boolean {
     const len = Fp.BYTES; // Verifies EdDSA signature against message and public key. RFC8032 5.1.7.
     sig = ensureBytes('signature', sig, 2 * len); // An extended group equation is checked.
     msg = ensureBytes('message', msg); // ZIP215 compliant, which means not fully RFC8032 compliant.
     if (preHash) msg = preHash(msg); // for ed25519ph, etc
     const A = Point.fromHex(publicKey, false); // Check for s bounds, hex validity
-    const R = Point.fromHex(sig.slice(0, len), false); // 0 <= R < 2^256: ZIP215 R can be >= P
+    const R = Point.fromHex(sig.slice(0, len), options.strict); // R <P (RFC8032) or <2^256 (ZIP215)
     const s = ut.bytesToNumberLE(sig.slice(len, 2 * len));
     const SB = G.multiplyUnsafe(s); // 0 <= s < l is done inside
-    const k = hashDomainToScalar(context, R.toRawBytes(), A.toRawBytes(), msg);
+    const k = hashDomainToScalar(options.context, R.toRawBytes(), A.toRawBytes(), msg);
     const RkA = R.add(A.multiplyUnsafe(k));
     // [8][S]B = [8]R + [8][k]A'
     return RkA.subtract(SB).clearCofactor().equals(Point.ZERO);
