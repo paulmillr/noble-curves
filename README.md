@@ -174,7 +174,7 @@ There are following zero-dependency algorithms:
 - [abstract/weierstrass: Short Weierstrass curve](#abstractweierstrass-short-weierstrass-curve)
 - [abstract/edwards: Twisted Edwards curve](#abstractedwards-twisted-edwards-curve)
 - [abstract/montgomery: Montgomery curve](#abstractmontgomery-montgomery-curve)
-- [abstract/bls: BLS curves](#abstractbls-bls-curves)
+- [abstract/bls: Barreto-Lynn-Scott curves](#abstractbls-barreto-lynn-scott-curves)
 - [abstract/hash-to-curve: Hashing strings to curve points](#abstracthash-to-curve-hashing-strings-to-curve-points)
 - [abstract/poseidon: Poseidon hash](#abstractposeidon-poseidon-hash)
 - [abstract/modular: Modular arithmetics utilities](#abstractmodular-modular-arithmetics-utilities)
@@ -452,7 +452,7 @@ Proper Elliptic Curve Points are not implemented yet.
 
 You must specify curve params `Fp`, `a`, `Gu` coordinate of u, `montgomeryBits` and `nByteLength`.
 
-### abstract/bls: BLS curves
+### abstract/bls: Barreto-Lynn-Scott curves
 
 The module abstracts BLS (Barreto-Lynn-Scott) pairing-friendly elliptic curve construction.
 They allow to construct [zk-SNARKs](https://z.cash/technology/zksnarks/) and
