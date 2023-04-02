@@ -571,21 +571,21 @@ describe('ed448', () => {
       const message = Uint8Array.from([0xab, 0xbc, 0xcd, 0xde]);
       const publicKey = ed448.getPublicKey(privateKey);
       const signature = ed448.sign(message, privateKey);
-  
+
       const R = signature.slice(0, 56);
       let s = signature.slice(56, 112);
-  
+
       s = bytesToHex(s.slice().reverse());
       s = BigInt('0x' + s);
       s = s + ed448.CURVE.n;
       s = numberToBytesLE(s, 56);
-  
+
       const sig_invalid = concatBytes(R, s);
       return { sig_invalid, message, publicKey };
     }
     let sig;
     while (true) {
-      try { 
+      try {
         sig = get56bSig();
         break;
       } catch (error) {
