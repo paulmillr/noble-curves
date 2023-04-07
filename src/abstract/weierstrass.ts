@@ -131,7 +131,7 @@ export type CurvePointsRes<T> = {
 
 // ASN.1 DER encoding utilities
 const { bytesToNumberBE: b2n, hexToBytes: h2b } = ut;
-const DER = {
+export const DER = {
   // asn.1 DER encoding utils
   Err: class DERErr extends Error {
     constructor(m = '') {
@@ -144,9 +144,13 @@ const DER = {
     const len = data[1];
     const res = data.subarray(2, len + 2);
     if (!len || res.length !== len) throw new E('Invalid signature integer: wrong length');
-    if (res[0] === 0x00 && res[1] <= 0x7f)
-      throw new E('Invalid signature integer: trailing length');
-    // ^ Weird condition: not about length, but about first bytes of number.
+    // https://crypto.stackexchange.com/a/57734 Leftmost bit of first byte is 'negative' flag,
+    // since we always use positive integers here. It must always be empty:
+    // - add zero byte if exists
+    // - if next byte doesn't have a flag, leading zero is not allowed (minimal encoding)
+    if (res[0] & 0b10000000) throw new E('Invalid signature integer: negative');
+    if (res[0] === 0x00 && !(res[1] & 0b10000000))
+      throw new E('Invalid signature integer: unnecessary leading zero');
     return { d: b2n(res), l: data.subarray(len + 2) }; // d is data, l is left
   },
   toSig(hex: string | Uint8Array): { r: bigint; s: bigint } {
@@ -163,7 +167,8 @@ const DER = {
     return { r, s };
   },
   hexFromSig(sig: { r: bigint; s: bigint }): string {
-    const slice = (s: string): string => (Number.parseInt(s[0], 16) >= 8 ? '00' + s : s); // slice DER
+    // Add leading zero if first byte has negative bit enabled. More details in '_parseInt'
+    const slice = (s: string): string => (Number.parseInt(s[0], 16) & 0b1000 ? '00' + s : s);
     const h = (num: number | bigint) => {
       const hex = num.toString(16);
       return hex.length & 1 ? `0${hex}` : hex;
@@ -213,6 +218,12 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
     const x3 = Fp.mul(x2, x); // x2 * x
     return Fp.add(Fp.add(x3, Fp.mul(x, a)), b); // x3 + a * x + b
   }
+  // Validate whether the passed curve params are valid.
+  // We check if curve equation works for generator point.
+  // `assertValidity()` won't work: `isTorsionFree()` is not available at this point in bls12-381.
+  // ProjectivePoint class has not been initialized yet.
+  if (!Fp.eql(Fp.sqr(CURVE.Gy), weierstrassEquation(CURVE.Gx)))
+    throw new Error('bad generator point: equation left != right');
 
   // Valid group elements reside in range 1..n-1
   function isWithinCurveOrder(num: bigint): boolean {
@@ -591,7 +602,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
   }
   const _bits = CURVE.nBitLength;
   const wnaf = wNAF(Point, CURVE.endo ? Math.ceil(_bits / 2) : _bits);
-
+  // Validate if generator point is on curve
   return {
     CURVE,
     ProjectivePoint: Point as ProjConstructor<T>,
