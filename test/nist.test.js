@@ -1,6 +1,7 @@
-import { deepStrictEqual } from 'assert';
+import { deepStrictEqual, throws } from 'assert';
 import { describe, should } from 'micro-should';
 import { secp192r1, secp224r1, P192, P224 } from './_more-curves.helpers.js';
+import { DER } from '../esm/abstract/weierstrass.js';
 import { secp256r1, P256 } from '../esm/p256.js';
 import { secp384r1, P384 } from '../esm/p384.js';
 import { secp521r1, P521 } from '../esm/p521.js';
@@ -22,28 +23,49 @@ import { default as secp224r1_sha3_224_test } from './wycheproof/ecdsa_secp224r1
 import { default as secp224r1_sha3_256_test } from './wycheproof/ecdsa_secp224r1_sha3_256_test.json' assert { type: 'json' };
 import { default as secp224r1_sha3_512_test } from './wycheproof/ecdsa_secp224r1_sha3_512_test.json' assert { type: 'json' };
 import { default as secp224r1_sha512_test } from './wycheproof/ecdsa_secp224r1_sha512_test.json' assert { type: 'json' };
+import { default as secp224r1_shake128_test } from './wycheproof/ecdsa_secp224r1_shake128_test.json' assert { type: 'json' };
 
+import { default as secp256k1_sha256_bitcoin_test } from './wycheproof/ecdsa_secp256k1_sha256_bitcoin_test.json' assert { type: 'json' };
 import { default as secp256k1_sha256_test } from './wycheproof/ecdsa_secp256k1_sha256_test.json' assert { type: 'json' };
 import { default as secp256k1_sha3_256_test } from './wycheproof/ecdsa_secp256k1_sha3_256_test.json' assert { type: 'json' };
 import { default as secp256k1_sha3_512_test } from './wycheproof/ecdsa_secp256k1_sha3_512_test.json' assert { type: 'json' };
 import { default as secp256k1_sha512_test } from './wycheproof/ecdsa_secp256k1_sha512_test.json' assert { type: 'json' };
+import { default as secp256k1_shake128_test } from './wycheproof/ecdsa_secp256k1_shake128_test.json' assert { type: 'json' };
+import { default as secp256k1_shake256_test } from './wycheproof/ecdsa_secp256k1_shake256_test.json' assert { type: 'json' };
 
 import { default as secp256r1_sha256_test } from './wycheproof/ecdsa_secp256r1_sha256_test.json' assert { type: 'json' };
 import { default as secp256r1_sha3_256_test } from './wycheproof/ecdsa_secp256r1_sha3_256_test.json' assert { type: 'json' };
 import { default as secp256r1_sha3_512_test } from './wycheproof/ecdsa_secp256r1_sha3_512_test.json' assert { type: 'json' };
 import { default as secp256r1_sha512_test } from './wycheproof/ecdsa_secp256r1_sha512_test.json' assert { type: 'json' };
+import { default as secp256r1_shake128_test } from './wycheproof/ecdsa_secp256r1_shake128_test.json' assert { type: 'json' };
 
 import { default as secp384r1_sha384_test } from './wycheproof/ecdsa_secp384r1_sha384_test.json' assert { type: 'json' };
 import { default as secp384r1_sha3_384_test } from './wycheproof/ecdsa_secp384r1_sha3_384_test.json' assert { type: 'json' };
 import { default as secp384r1_sha3_512_test } from './wycheproof/ecdsa_secp384r1_sha3_512_test.json' assert { type: 'json' };
 import { default as secp384r1_sha512_test } from './wycheproof/ecdsa_secp384r1_sha512_test.json' assert { type: 'json' };
+import { default as secp384r1_shake256_test } from './wycheproof/ecdsa_secp384r1_shake256_test.json' assert { type: 'json' };
 
 import { default as secp521r1_sha3_512_test } from './wycheproof/ecdsa_secp521r1_sha3_512_test.json' assert { type: 'json' };
 import { default as secp521r1_sha512_test } from './wycheproof/ecdsa_secp521r1_sha512_test.json' assert { type: 'json' };
+import { default as secp521r1_shake256_test } from './wycheproof/ecdsa_secp521r1_shake256_test.json' assert { type: 'json' };
 
-import { sha3_224, sha3_256, sha3_384, sha3_512 } from '@noble/hashes/sha3';
+import { sha3_224, sha3_256, sha3_384, sha3_512, shake128, shake256 } from '@noble/hashes/sha3';
 import { sha512, sha384 } from '@noble/hashes/sha512';
 import { sha224, sha256 } from '@noble/hashes/sha256';
+
+// TODO: maybe add to noble-hashes?
+const wrapShake = (shake, dkLen) => {
+  const hashC = (msg) => shake(msg, { dkLen });
+  hashC.outputLen = dkLen;
+  hashC.blockLen = shake.blockLen;
+  hashC.create = () => shake.create({ dkLen });
+  return hashC;
+};
+const shake128_224 = wrapShake(shake128, 224 / 8);
+const shake128_256 = wrapShake(shake128, 256 / 8);
+const shake256_256 = wrapShake(shake256, 256 / 8);
+const shake256_384 = wrapShake(shake256, 384 / 8);
+const shake256_512 = wrapShake(shake256, 512 / 8);
 
 const hex = bytesToHex;
 
@@ -74,9 +96,6 @@ should('fields', () => {
 
 describe('wycheproof ECDH', () => {
   for (const group of ecdh.testGroups) {
-    // // Tested in secp256k1.test.js
-    // if (group.key.curve === 'secp256k1') continue;
-    // We don't have SHA-224
     const CURVE = NIST[group.curve];
     if (!CURVE) continue;
     should(group.curve, () => {
@@ -190,6 +209,10 @@ const WYCHEPROOF_ECDSA = {
         hash: sha512,
         tests: [secp224r1_sha512_test],
       },
+      shake128: {
+        hash: shake128_224,
+        tests: [secp224r1_shake128_test],
+      },
     },
   },
   secp256k1: {
@@ -197,7 +220,7 @@ const WYCHEPROOF_ECDSA = {
     hashes: {
       sha256: {
         hash: sha256,
-        tests: [secp256k1_sha256_test],
+        tests: [secp256k1_sha256_test, secp256k1_sha256_bitcoin_test],
       },
       sha3_256: {
         hash: sha3_256,
@@ -210,6 +233,14 @@ const WYCHEPROOF_ECDSA = {
       sha512: {
         hash: sha512,
         tests: [secp256k1_sha512_test],
+      },
+      shake128: {
+        hash: shake128_256,
+        tests: [secp256k1_shake128_test],
+      },
+      shake256: {
+        hash: shake256_256,
+        tests: [secp256k1_shake256_test],
       },
     },
   },
@@ -232,6 +263,10 @@ const WYCHEPROOF_ECDSA = {
         hash: sha512,
         tests: [secp256r1_sha512_test],
       },
+      shake128: {
+        hash: shake128_256,
+        tests: [secp256r1_shake128_test],
+      },
     },
   },
   P384: {
@@ -253,6 +288,10 @@ const WYCHEPROOF_ECDSA = {
         hash: sha512,
         tests: [secp384r1_sha512_test],
       },
+      shake256: {
+        hash: shake256_384,
+        tests: [secp384r1_shake256_test],
+      },
     },
   },
   P521: {
@@ -266,19 +305,23 @@ const WYCHEPROOF_ECDSA = {
         hash: sha512,
         tests: [secp521r1_sha512_test],
       },
+      shake256: {
+        hash: shake256_512,
+        tests: [secp521r1_shake256_test],
+      },
     },
   },
 };
 
 function runWycheproof(name, CURVE, group, index) {
-  const pubKey = CURVE.ProjectivePoint.fromHex(group.key.uncompressed);
-  deepStrictEqual(pubKey.x, BigInt(`0x${group.key.wx}`));
-  deepStrictEqual(pubKey.y, BigInt(`0x${group.key.wy}`));
+  const key = group.publicKey;
+  const pubKey = CURVE.ProjectivePoint.fromHex(key.uncompressed);
+  deepStrictEqual(pubKey.x, BigInt(`0x${key.wx}`));
+  deepStrictEqual(pubKey.y, BigInt(`0x${key.wy}`));
   const pubR = pubKey.toRawBytes();
   for (const test of group.tests) {
     const m = CURVE.CURVE.hash(hexToBytes(test.msg));
     const { sig } = test;
-
     if (test.result === 'valid' || test.result === 'acceptable') {
       try {
         CURVE.Signature.fromDER(sig);
@@ -310,7 +353,6 @@ describe('wycheproof ECDSA', () => {
   should('generic', () => {
     for (const group of ecdsa.testGroups) {
       // Tested in secp256k1.test.js
-      if (group.key.curve === 'secp256k1') continue;
       let CURVE = NIST[group.key.curve];
       if (!CURVE) continue;
       if (group.key.curve === 'secp224r1' && group.sha !== 'SHA-224') {
@@ -323,6 +365,9 @@ describe('wycheproof ECDSA', () => {
         if (['Hash weaker than DL-group'].includes(test.comment)) {
           continue;
         }
+        // These old Wycheproof vectors which still accept missing zero, new one is not.
+        if (test.flags.includes('MissingZero') && test.result === 'acceptable')
+          test.result = 'invalid';
         const m = CURVE.CURVE.hash(hexToBytes(test.msg));
         if (test.result === 'valid' || test.result === 'acceptable') {
           try {
@@ -333,7 +378,12 @@ describe('wycheproof ECDSA', () => {
             throw e;
           }
           const verified = CURVE.verify(test.sig, m, pubKey.toHex());
-          deepStrictEqual(verified, true, 'valid');
+          if (group.key.curve === 'secp256k1') {
+            // lowS: true for secp256k1
+            deepStrictEqual(verified, !CURVE.Signature.fromDER(test.sig).hasHighS(), `valid`);
+          } else {
+            deepStrictEqual(verified, true, `valid`);
+          }
         } else if (test.result === 'invalid') {
           let failed = false;
           try {
@@ -386,6 +436,33 @@ describe('RFC6979', () => {
       }
     });
   }
+});
+
+should('DER Leading zero', () => {
+  // Valid DER
+  deepStrictEqual(
+    DER.toSig(
+      '303c021c70049af31f8348673d56cece2b27e587a402f2a48f0b21a7911a480a021c2840bf24f6f66be287066b7cbf38788e1b7770b18fd1aa6a26d7c6dc'
+    ),
+    {
+      r: 11796871166002955884468185727465595477481802908758874298363724580874n,
+      s: 4239126896857047637966364941684493209162496401998708914961872570076n,
+    }
+  );
+  // Invalid DER (missing trailing zero)
+  throws(() =>
+    DER.toSig(
+      '303c021c70049af31f8348673d56cece2b27e587a402f2a48f0b21a7911a480a021cd7bf40db0909941d78f9948340c69e14c5417f8c840b7edb35846361'
+    )
+  );
+  // Correctly adds trailing zero
+  deepStrictEqual(
+    DER.hexFromSig({
+      r: 11796871166002955884468185727465595477481802908758874298363724580874n,
+      s: 22720819770293592156700650145335132731295311312425682806720849797985n,
+    }),
+    '303d021c70049af31f8348673d56cece2b27e587a402f2a48f0b21a7911a480a021d00d7bf40db0909941d78f9948340c69e14c5417f8c840b7edb35846361'
+  );
 });
 
 // ESM is broken.

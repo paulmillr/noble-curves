@@ -1,14 +1,10 @@
 import { sha512 } from '@noble/hashes/sha512';
-import { hexToBytes, bytesToHex, randomBytes } from '@noble/hashes/utils';
-import { deepStrictEqual, strictEqual, throws } from 'assert';
+import { hexToBytes, bytesToHex as hex } from '@noble/hashes/utils';
+import { deepStrictEqual, throws } from 'assert';
 import { describe, should } from 'micro-should';
 import { bytesToNumberLE, numberToBytesLE } from '../esm/abstract/utils.js';
 import { default as x25519vectors } from './wycheproof/x25519_test.json' assert { type: 'json' };
 import { ed25519ctx, ed25519ph, RistrettoPoint, x25519 } from '../esm/ed25519.js';
-
-// const ed = ed25519;
-const hex = bytesToHex;
-// const Point = ed.ExtendedPoint;
 
 const VECTORS_RFC8032_CTX = [
   {

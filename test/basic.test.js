@@ -15,6 +15,10 @@ import { pallas, vesta } from '../esm/pasta.js';
 import { bn254 } from '../esm/bn.js';
 import { jubjub } from '../esm/jubjub.js';
 import { bls12_381 } from '../esm/bls12-381.js';
+import { default as wyche_curves } from './wycheproof/ec_prime_order_curves_test.json' assert { type: 'json' };
+import { createCurve } from '../esm/_shortw_utils.js';
+import { Field } from '../esm/abstract/modular.js';
+import { sha256 } from '@noble/hashes/sha256';
 
 // Fields tests
 const FIELDS = {
@@ -740,6 +744,54 @@ should('bigInt private keys', () => {
   // Weierstrass still supports
   secp256k1.getPublicKey(123n);
   secp256k1.sign('', 123n);
+});
+
+describe('wycheproof curve creation', () => {
+  const VECTORS = wyche_curves.testGroups[0].tests;
+  for (const v of VECTORS) {
+    should(`${v.name}`, () => {
+      const CURVE = createCurve(
+        {
+          Fp: Field(BigInt(`0x${v.p}`)),
+          a: BigInt(`0x${v.a}`),
+          b: BigInt(`0x${v.b}`),
+          n: BigInt(`0x${v.n}`),
+          h: BigInt(v.h),
+          Gx: BigInt(`0x${v.gx}`),
+          Gy: BigInt(`0x${v.gy}`),
+        },
+        sha256
+      );
+    });
+    const CURVE = CURVES[v.name];
+    if (!CURVE) continue;
+    should(`${v.name} parms verify`, () => {
+      deepStrictEqual(CURVE.CURVE.Fp.ORDER, BigInt(`0x${v.p}`));
+      deepStrictEqual(CURVE.CURVE.a, BigInt(`0x${v.a}`));
+      deepStrictEqual(CURVE.CURVE.b, BigInt(`0x${v.b}`));
+      deepStrictEqual(CURVE.CURVE.n, BigInt(`0x${v.n}`));
+      deepStrictEqual(CURVE.CURVE.Gx, BigInt(`0x${v.gx}`));
+      deepStrictEqual(CURVE.CURVE.Gy, BigInt(`0x${v.gy}`));
+      deepStrictEqual(CURVE.CURVE.h, BigInt(v.h));
+    });
+  }
+});
+
+should('validate generator point is on curve', () => {
+  throws(() =>
+    createCurve(
+      {
+        Fp: Field(BigInt(`0x00c302f41d932a36cda7a3463093d18db78fce476de1a86297`)),
+        a: BigInt(`0x00c302f41d932a36cda7a3463093d18db78fce476de1a86294`),
+        b: BigInt(`0x13d56ffaec78681e68f9deb43b35bec2fb68542e27897b79`),
+        n: BigInt(`0x00c302f41d932a36cda7a3462f9e9e916b5be8f1029ac4acc1`),
+        h: BigInt(1),
+        Gx: BigInt(`0x3ae9e58c82f63c30282e1fe7bbf43fa72c446af6f4618129`),
+        Gy: BigInt(`0x097e2c5667c2223a902ab5ca449d0084b7e5b3de7ccc01c8`), // last 9 -> 8
+      },
+      sha256
+    )
+  );
 });
 
 // ESM is broken.

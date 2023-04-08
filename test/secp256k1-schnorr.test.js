@@ -3,7 +3,7 @@ import { readFileSync } from 'fs';
 import { should, describe } from 'micro-should';
 import { bytesToHex as hex } from '@noble/hashes/utils';
 import { schnorr } from '../esm/secp256k1.js';
-const schCsv = readFileSync('./test/vectors/schnorr.csv', 'utf-8');
+const schCsv = readFileSync('./test/vectors/secp256k1/schnorr.csv', 'utf-8');
 
 describe('schnorr.sign()', () => {
   // index,secret key,public key,aux_rand,message,signature,verification result,comment

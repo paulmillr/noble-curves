@@ -1,11 +1,11 @@
 {
   "algorithm" : "ECDSA",
-  "schema" : "ecdsa_verify_schema.json",
+  "schema" : "ecdsa_bitcoin_verify_schema.json",
   "generatorVersion" : "0.9rc5",
   "numberOfTests" : 463,
   "header" : [
-    "Test vectors of type EcdsaVerify are meant for the verification",
-    "of ASN encoded ECDSA signatures."
+    "Test vectors of type EcdsaBitcoinVerify are meant for the verification",
+    "of a ECDSA variant used for bitcoin, that add signature non-malleability."
   ],
   "notes" : {
     "ArithmeticError" : {
@@ -62,11 +62,6 @@
         "CVE-2022-21449"
       ]
     },
-    "MissingZero" : {
-      "bugType" : "LEGACY",
-      "description" : "Some implementations of ECDSA and DSA incorrectly encode r and s by not including leading zeros in the ASN encoding of integers when necessary. Hence, some implementations (e.g. jdk) allow signatures with incorrect ASN encodings assuming that the signature is otherwise valid.",
-      "effect" : "While signatures are more malleable if such signatures are accepted, this typically leads to no vulnerability, since a badly encoded signature can be reencoded correctly."
-    },
     "ModifiedInteger" : {
       "bugType" : "CAN_OF_WORMS",
       "description" : "The test vector contains an r and s that has been modified. The goal is to check for arithmetic errors.",
@@ -98,6 +93,15 @@
       "description" : "The test vector contains an r and s that has been modified. By adding or subtracting the order of the group (or other values) the test vector checks whether signature verification verifies the range of r and s.",
       "effect" : "Without further analysis it is unclear if the modification can be used to forge signatures."
     },
+    "SignatureMalleabilityBitcoin" : {
+      "bugType" : "SIGNATURE_MALLEABILITY",
+      "description" : "\"BitCoins\"-curves are curves where signature malleability can be a serious issue. An implementation should only accept a signature s where s < n/2. If an implementation is not meant for uses cases that require signature malleability then this implemenation should be tested with another set of test vectors.",
+      "effect" : "In bitcoin exchanges, it may be used to make a double deposits or double withdrawals",
+      "links" : [
+        "https://en.bitcoin.it/wiki/Transaction_malleability",
+        "https://en.bitcoinwiki.org/wiki/Transaction_Malleability"
+      ]
+    },
     "SmallRandS" : {
       "bugType" : "EDGE_CASE",
       "description" : "The test vectors contains a signature where both r and s are small integers. Some libraries cannot verify such signatures.",
@@ -117,63 +121,7 @@
   },
   "testGroups" : [
     {
-      "type" : "EcdsaVerify",
-      "publicKey" : {
-        "type" : "EcPublicKey",
-        "curve" : "secp256k1",
-        "keySize" : 256,
-        "uncompressed" : "04782c8ed17e3b2a783b5464f33b09652a71c678e05ec51e84e2bcfc663a3de963af9acb4280b8c7f7c42f4ef9aba6245ec1ec1712fd38a0fa96418d8cd6aa6152",
-        "wx" : "782c8ed17e3b2a783b5464f33b09652a71c678e05ec51e84e2bcfc663a3de963",
-        "wy" : "00af9acb4280b8c7f7c42f4ef9aba6245ec1ec1712fd38a0fa96418d8cd6aa6152"
-      },
-      "publicKeyDer" : "3056301006072a8648ce3d020106052b8104000a03420004782c8ed17e3b2a783b5464f33b09652a71c678e05ec51e84e2bcfc663a3de963af9acb4280b8c7f7c42f4ef9aba6245ec1ec1712fd38a0fa96418d8cd6aa6152",
-      "publicKeyPem" : "-----BEGIN PUBLIC KEY-----\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEeCyO0X47Kng7VGTzOwllKnHGeOBexR6E\n4rz8Zjo96WOvmstCgLjH98QvTvmrpiRewewXEv04oPqWQY2M1qphUg==\n-----END PUBLIC KEY-----\n",
-      "sha" : "SHA-256",
-      "tests" : [
-        {
-          "tcId" : 1,
-          "comment" : "pseudorandom signature",
-          "flags" : [
-            "ValidSignature"
-          ],
-          "msg" : "",
-          "sig" : "3046022100f80ae4f96cdbc9d853f83d47aae225bf407d51c56b7776cd67d0dc195d99a9dc022100b303e26be1f73465315221f0b331528807a1a9b6eb068ede6eebeaaa49af8a36",
-          "result" : "valid"
-        },
-        {
-          "tcId" : 2,
-          "comment" : "pseudorandom signature",
-          "flags" : [
-            "ValidSignature"
-          ],
-          "msg" : "4d7367",
-          "sig" : "30450220109cd8ae0374358984a8249c0a843628f2835ffad1df1a9a69aa2fe72355545c022100ac6f00daf53bd8b1e34da329359b6e08019c5b037fed79ee383ae39f85a159c6",
-          "result" : "valid"
-        },
-        {
-          "tcId" : 3,
-          "comment" : "pseudorandom signature",
-          "flags" : [
-            "ValidSignature"
-          ],
-          "msg" : "313233343030",
-          "sig" : "3045022100d035ee1f17fdb0b2681b163e33c359932659990af77dca632012b30b27a057b302201939d9f3b2858bc13e3474cb50e6a82be44faa71940f876c1cba4c3e989202b6",
-          "result" : "valid"
-        },
-        {
-          "tcId" : 4,
-          "comment" : "pseudorandom signature",
-          "flags" : [
-            "ValidSignature"
-          ],
-          "msg" : "0000000000000000000000000000000000000000",
-          "sig" : "304402204f053f563ad34b74fd8c9934ce59e79c2eb8e6eca0fef5b323ca67d5ac7ed23802204d4b05daa0719e773d8617dce5631c5fd6f59c9bdc748e4b55c970040af01be5",
-          "result" : "valid"
-        }
-      ]
-    },
-    {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -187,27 +135,17 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 5,
-          "comment" : "signature malleability",
+          "tcId" : 1,
+          "comment" : "Signature malleability",
           "flags" : [
-            "ValidSignature"
+            "SignatureMalleabilityBitcoin"
           ],
           "msg" : "313233343030",
           "sig" : "3046022100813ef79ccefa9a56f7ba805f0e478584fe5f0dd5f567bc09b5123ccbc9832365022100900e75ad233fcc908509dbff5922647db37c21f4afd3203ae8dc4ae7794b0f87",
-          "result" : "valid"
-        },
-        {
-          "tcId" : 6,
-          "comment" : "Legacy: ASN encoding of r misses leading 0",
-          "flags" : [
-            "MissingZero"
-          ],
-          "msg" : "313233343030",
-          "sig" : "30440220813ef79ccefa9a56f7ba805f0e478584fe5f0dd5f567bc09b5123ccbc983236502206ff18a52dcc0336f7af62400a6dd9b810732baf1ff758000d6f613a556eb31ba",
           "result" : "invalid"
         },
         {
-          "tcId" : 7,
+          "tcId" : 2,
           "comment" : "valid",
           "flags" : [
             "ValidSignature"
@@ -217,7 +155,7 @@
           "result" : "valid"
         },
         {
-          "tcId" : 8,
+          "tcId" : 3,
           "comment" : "length of sequence [r, s] uses long form encoding",
           "flags" : [
             "BerEncodedSignature"
@@ -227,7 +165,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 9,
+          "tcId" : 4,
           "comment" : "length of sequence [r, s] contains a leading 0",
           "flags" : [
             "BerEncodedSignature"
@@ -237,7 +175,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 10,
+          "tcId" : 5,
           "comment" : "length of sequence [r, s] uses 70 instead of 69",
           "flags" : [
             "InvalidEncoding"
@@ -247,7 +185,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 11,
+          "tcId" : 6,
           "comment" : "length of sequence [r, s] uses 68 instead of 69",
           "flags" : [
             "InvalidEncoding"
@@ -257,7 +195,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 12,
+          "tcId" : 7,
           "comment" : "uint32 overflow in length of sequence [r, s]",
           "flags" : [
             "InvalidEncoding"
@@ -267,7 +205,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 13,
+          "tcId" : 8,
           "comment" : "uint64 overflow in length of sequence [r, s]",
           "flags" : [
             "InvalidEncoding"
@@ -277,7 +215,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 14,
+          "tcId" : 9,
           "comment" : "length of sequence [r, s] = 2**31 - 1",
           "flags" : [
             "InvalidEncoding"
@@ -287,7 +225,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 15,
+          "tcId" : 10,
           "comment" : "length of sequence [r, s] = 2**31",
           "flags" : [
             "InvalidEncoding"
@@ -297,7 +235,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 16,
+          "tcId" : 11,
           "comment" : "length of sequence [r, s] = 2**32 - 1",
           "flags" : [
             "InvalidEncoding"
@@ -307,7 +245,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 17,
+          "tcId" : 12,
           "comment" : "length of sequence [r, s] = 2**40 - 1",
           "flags" : [
             "InvalidEncoding"
@@ -317,7 +255,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 18,
+          "tcId" : 13,
           "comment" : "length of sequence [r, s] = 2**64 - 1",
           "flags" : [
             "InvalidEncoding"
@@ -327,7 +265,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 19,
+          "tcId" : 14,
           "comment" : "incorrect length of sequence [r, s]",
           "flags" : [
             "InvalidEncoding"
@@ -337,7 +275,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 20,
+          "tcId" : 15,
           "comment" : "replaced sequence [r, s] by an indefinite length tag without termination",
           "flags" : [
             "InvalidEncoding"
@@ -347,7 +285,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 21,
+          "tcId" : 16,
           "comment" : "removing sequence [r, s]",
           "flags" : [
             "InvalidEncoding"
@@ -357,7 +295,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 22,
+          "tcId" : 17,
           "comment" : "lonely sequence tag",
           "flags" : [
             "InvalidEncoding"
@@ -367,7 +305,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 23,
+          "tcId" : 18,
           "comment" : "appending 0's to sequence [r, s]",
           "flags" : [
             "ModifiedSignature"
@@ -377,7 +315,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 24,
+          "tcId" : 19,
           "comment" : "prepending 0's to sequence [r, s]",
           "flags" : [
             "ModifiedSignature"
@@ -387,7 +325,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 25,
+          "tcId" : 20,
           "comment" : "appending unused 0's to sequence [r, s]",
           "flags" : [
             "InvalidEncoding"
@@ -397,7 +335,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 26,
+          "tcId" : 21,
           "comment" : "appending null value to sequence [r, s]",
           "flags" : [
             "ModifiedSignature"
@@ -407,7 +345,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 27,
+          "tcId" : 22,
           "comment" : "prepending garbage to sequence [r, s]",
           "flags" : [
             "InvalidEncoding"
@@ -417,7 +355,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 28,
+          "tcId" : 23,
           "comment" : "prepending garbage to sequence [r, s]",
           "flags" : [
             "InvalidEncoding"
@@ -427,7 +365,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 29,
+          "tcId" : 24,
           "comment" : "appending garbage to sequence [r, s]",
           "flags" : [
             "InvalidEncoding"
@@ -437,7 +375,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 30,
+          "tcId" : 25,
           "comment" : "including undefined tags",
           "flags" : [
             "ModifiedSignature"
@@ -447,7 +385,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 31,
+          "tcId" : 26,
           "comment" : "including undefined tags",
           "flags" : [
             "InvalidEncoding"
@@ -457,7 +395,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 32,
+          "tcId" : 27,
           "comment" : "including undefined tags",
           "flags" : [
             "InvalidEncoding"
@@ -467,7 +405,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 33,
+          "tcId" : 28,
           "comment" : "truncated length of sequence [r, s]",
           "flags" : [
             "InvalidEncoding"
@@ -477,7 +415,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 34,
+          "tcId" : 29,
           "comment" : "including undefined tags to sequence [r, s]",
           "flags" : [
             "ModifiedSignature"
@@ -487,7 +425,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 35,
+          "tcId" : 30,
           "comment" : "using composition with indefinite length for sequence [r, s]",
           "flags" : [
             "ModifiedSignature"
@@ -497,7 +435,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 36,
+          "tcId" : 31,
           "comment" : "using composition with wrong tag for sequence [r, s]",
           "flags" : [
             "ModifiedSignature"
@@ -507,7 +445,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 37,
+          "tcId" : 32,
           "comment" : "Replacing sequence [r, s] with NULL",
           "flags" : [
             "ModifiedSignature"
@@ -517,7 +455,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 38,
+          "tcId" : 33,
           "comment" : "changing tag value of sequence [r, s]",
           "flags" : [
             "InvalidEncoding"
@@ -527,7 +465,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 39,
+          "tcId" : 34,
           "comment" : "changing tag value of sequence [r, s]",
           "flags" : [
             "InvalidEncoding"
@@ -537,7 +475,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 40,
+          "tcId" : 35,
           "comment" : "changing tag value of sequence [r, s]",
           "flags" : [
             "ModifiedSignature"
@@ -547,7 +485,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 41,
+          "tcId" : 36,
           "comment" : "changing tag value of sequence [r, s]",
           "flags" : [
             "InvalidEncoding"
@@ -557,7 +495,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 42,
+          "tcId" : 37,
           "comment" : "changing tag value of sequence [r, s]",
           "flags" : [
             "InvalidEncoding"
@@ -567,7 +505,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 43,
+          "tcId" : 38,
           "comment" : "dropping value of sequence [r, s]",
           "flags" : [
             "ModifiedSignature"
@@ -577,7 +515,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 44,
+          "tcId" : 39,
           "comment" : "using composition for sequence [r, s]",
           "flags" : [
             "InvalidEncoding"
@@ -587,7 +525,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 45,
+          "tcId" : 40,
           "comment" : "truncated sequence [r, s]",
           "flags" : [
             "InvalidEncoding"
@@ -597,7 +535,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 46,
+          "tcId" : 41,
           "comment" : "truncated sequence [r, s]",
           "flags" : [
             "InvalidEncoding"
@@ -607,7 +545,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 47,
+          "tcId" : 42,
           "comment" : "sequence [r, s] of size 4166 to check for overflows",
           "flags" : [
             "InvalidEncoding"
@@ -617,7 +555,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 48,
+          "tcId" : 43,
           "comment" : "indefinite length",
           "flags" : [
             "BerEncodedSignature"
@@ -627,7 +565,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 49,
+          "tcId" : 44,
           "comment" : "indefinite length with truncated delimiter",
           "flags" : [
             "InvalidEncoding"
@@ -637,7 +575,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 50,
+          "tcId" : 45,
           "comment" : "indefinite length with additional element",
           "flags" : [
             "ModifiedSignature"
@@ -647,7 +585,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 51,
+          "tcId" : 46,
           "comment" : "indefinite length with truncated element",
           "flags" : [
             "InvalidEncoding"
@@ -657,7 +595,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 52,
+          "tcId" : 47,
           "comment" : "indefinite length with garbage",
           "flags" : [
             "InvalidEncoding"
@@ -667,7 +605,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 53,
+          "tcId" : 48,
           "comment" : "indefinite length with nonempty EOC",
           "flags" : [
             "InvalidEncoding"
@@ -677,7 +615,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 54,
+          "tcId" : 49,
           "comment" : "prepend empty sequence",
           "flags" : [
             "ModifiedSignature"
@@ -687,7 +625,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 55,
+          "tcId" : 50,
           "comment" : "append empty sequence",
           "flags" : [
             "ModifiedSignature"
@@ -697,7 +635,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 56,
+          "tcId" : 51,
           "comment" : "append zero",
           "flags" : [
             "ModifiedSignature"
@@ -707,7 +645,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 57,
+          "tcId" : 52,
           "comment" : "append garbage with high tag number",
           "flags" : [
             "ModifiedSignature"
@@ -717,7 +655,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 58,
+          "tcId" : 53,
           "comment" : "append null with explicit tag",
           "flags" : [
             "ModifiedSignature"
@@ -727,7 +665,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 59,
+          "tcId" : 54,
           "comment" : "append null with implicit tag",
           "flags" : [
             "ModifiedSignature"
@@ -737,7 +675,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 60,
+          "tcId" : 55,
           "comment" : "sequence of sequence",
           "flags" : [
             "ModifiedSignature"
@@ -747,7 +685,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 61,
+          "tcId" : 56,
           "comment" : "truncated sequence: removed last 1 elements",
           "flags" : [
             "ModifiedSignature"
@@ -757,7 +695,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 62,
+          "tcId" : 57,
           "comment" : "repeating element in sequence",
           "flags" : [
             "ModifiedSignature"
@@ -767,7 +705,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 63,
+          "tcId" : 58,
           "comment" : "flipped bit 0 in r",
           "flags" : [
             "InvalidEncoding"
@@ -777,7 +715,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 64,
+          "tcId" : 59,
           "comment" : "flipped bit 32 in r",
           "flags" : [
             "InvalidEncoding"
@@ -787,7 +725,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 65,
+          "tcId" : 60,
           "comment" : "flipped bit 48 in r",
           "flags" : [
             "InvalidEncoding"
@@ -797,7 +735,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 66,
+          "tcId" : 61,
           "comment" : "flipped bit 64 in r",
           "flags" : [
             "InvalidEncoding"
@@ -807,7 +745,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 67,
+          "tcId" : 62,
           "comment" : "length of r uses long form encoding",
           "flags" : [
             "BerEncodedSignature"
@@ -817,7 +755,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 68,
+          "tcId" : 63,
           "comment" : "length of r contains a leading 0",
           "flags" : [
             "BerEncodedSignature"
@@ -827,7 +765,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 69,
+          "tcId" : 64,
           "comment" : "length of r uses 34 instead of 33",
           "flags" : [
             "InvalidEncoding"
@@ -837,7 +775,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 70,
+          "tcId" : 65,
           "comment" : "length of r uses 32 instead of 33",
           "flags" : [
             "InvalidEncoding"
@@ -847,7 +785,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 71,
+          "tcId" : 66,
           "comment" : "uint32 overflow in length of r",
           "flags" : [
             "InvalidEncoding"
@@ -857,7 +795,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 72,
+          "tcId" : 67,
           "comment" : "uint64 overflow in length of r",
           "flags" : [
             "InvalidEncoding"
@@ -867,7 +805,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 73,
+          "tcId" : 68,
           "comment" : "length of r = 2**31 - 1",
           "flags" : [
             "InvalidEncoding"
@@ -877,7 +815,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 74,
+          "tcId" : 69,
           "comment" : "length of r = 2**31",
           "flags" : [
             "InvalidEncoding"
@@ -887,7 +825,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 75,
+          "tcId" : 70,
           "comment" : "length of r = 2**32 - 1",
           "flags" : [
             "InvalidEncoding"
@@ -897,7 +835,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 76,
+          "tcId" : 71,
           "comment" : "length of r = 2**40 - 1",
           "flags" : [
             "InvalidEncoding"
@@ -907,7 +845,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 77,
+          "tcId" : 72,
           "comment" : "length of r = 2**64 - 1",
           "flags" : [
             "InvalidEncoding"
@@ -917,7 +855,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 78,
+          "tcId" : 73,
           "comment" : "incorrect length of r",
           "flags" : [
             "InvalidEncoding"
@@ -927,7 +865,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 79,
+          "tcId" : 74,
           "comment" : "replaced r by an indefinite length tag without termination",
           "flags" : [
             "InvalidEncoding"
@@ -937,7 +875,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 80,
+          "tcId" : 75,
           "comment" : "removing r",
           "flags" : [
             "ModifiedSignature"
@@ -947,7 +885,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 81,
+          "tcId" : 76,
           "comment" : "lonely integer tag",
           "flags" : [
             "InvalidEncoding"
@@ -957,7 +895,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 82,
+          "tcId" : 77,
           "comment" : "lonely integer tag",
           "flags" : [
             "InvalidEncoding"
@@ -967,7 +905,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 83,
+          "tcId" : 78,
           "comment" : "appending 0's to r",
           "flags" : [
             "ModifiedSignature"
@@ -977,7 +915,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 84,
+          "tcId" : 79,
           "comment" : "prepending 0's to r",
           "flags" : [
             "InvalidEncoding"
@@ -987,7 +925,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 85,
+          "tcId" : 80,
           "comment" : "appending unused 0's to r",
           "flags" : [
             "ModifiedSignature"
@@ -997,7 +935,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 86,
+          "tcId" : 81,
           "comment" : "appending null value to r",
           "flags" : [
             "ModifiedSignature"
@@ -1007,7 +945,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 87,
+          "tcId" : 82,
           "comment" : "prepending garbage to r",
           "flags" : [
             "InvalidEncoding"
@@ -1017,7 +955,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 88,
+          "tcId" : 83,
           "comment" : "prepending garbage to r",
           "flags" : [
             "InvalidEncoding"
@@ -1027,7 +965,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 89,
+          "tcId" : 84,
           "comment" : "appending garbage to r",
           "flags" : [
             "InvalidEncoding"
@@ -1037,7 +975,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 90,
+          "tcId" : 85,
           "comment" : "truncated length of r",
           "flags" : [
             "InvalidEncoding"
@@ -1047,7 +985,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 91,
+          "tcId" : 86,
           "comment" : "including undefined tags to r",
           "flags" : [
             "InvalidEncoding"
@@ -1057,7 +995,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 92,
+          "tcId" : 87,
           "comment" : "using composition with indefinite length for r",
           "flags" : [
             "InvalidEncoding"
@@ -1067,7 +1005,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 93,
+          "tcId" : 88,
           "comment" : "using composition with wrong tag for r",
           "flags" : [
             "InvalidEncoding"
@@ -1077,7 +1015,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 94,
+          "tcId" : 89,
           "comment" : "Replacing r with NULL",
           "flags" : [
             "ModifiedSignature"
@@ -1087,7 +1025,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 95,
+          "tcId" : 90,
           "comment" : "changing tag value of r",
           "flags" : [
             "ModifiedSignature"
@@ -1097,7 +1035,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 96,
+          "tcId" : 91,
           "comment" : "changing tag value of r",
           "flags" : [
             "InvalidEncoding"
@@ -1107,7 +1045,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 97,
+          "tcId" : 92,
           "comment" : "changing tag value of r",
           "flags" : [
             "ModifiedSignature"
@@ -1117,7 +1055,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 98,
+          "tcId" : 93,
           "comment" : "changing tag value of r",
           "flags" : [
             "ModifiedSignature"
@@ -1127,7 +1065,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 99,
+          "tcId" : 94,
           "comment" : "changing tag value of r",
           "flags" : [
             "InvalidEncoding"
@@ -1137,7 +1075,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 100,
+          "tcId" : 95,
           "comment" : "dropping value of r",
           "flags" : [
             "InvalidEncoding"
@@ -1147,7 +1085,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 101,
+          "tcId" : 96,
           "comment" : "using composition for r",
           "flags" : [
             "InvalidEncoding"
@@ -1157,7 +1095,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 102,
+          "tcId" : 97,
           "comment" : "modifying first byte of r",
           "flags" : [
             "ModifiedSignature"
@@ -1167,7 +1105,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 103,
+          "tcId" : 98,
           "comment" : "modifying last byte of r",
           "flags" : [
             "ModifiedSignature"
@@ -1177,7 +1115,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 104,
+          "tcId" : 99,
           "comment" : "truncated r",
           "flags" : [
             "ModifiedSignature"
@@ -1187,7 +1125,17 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 105,
+          "tcId" : 100,
+          "comment" : "truncated r",
+          "flags" : [
+            "ModifiedSignature"
+          ],
+          "msg" : "313233343030",
+          "sig" : "30440220813ef79ccefa9a56f7ba805f0e478584fe5f0dd5f567bc09b5123ccbc983236502206ff18a52dcc0336f7af62400a6dd9b810732baf1ff758000d6f613a556eb31ba",
+          "result" : "invalid"
+        },
+        {
+          "tcId" : 101,
           "comment" : "r of size 4130 to check for overflows",
           "flags" : [
             "ModifiedSignature"
@@ -1197,7 +1145,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 106,
+          "tcId" : 102,
           "comment" : "leading ff in r",
           "flags" : [
             "ModifiedSignature"
@@ -1207,7 +1155,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 107,
+          "tcId" : 103,
           "comment" : "replaced r by infinity",
           "flags" : [
             "ModifiedSignature"
@@ -1217,7 +1165,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 108,
+          "tcId" : 104,
           "comment" : "replacing r with zero",
           "flags" : [
             "ModifiedSignature"
@@ -1227,7 +1175,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 109,
+          "tcId" : 105,
           "comment" : "flipped bit 0 in s",
           "flags" : [
             "InvalidEncoding"
@@ -1237,7 +1185,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 110,
+          "tcId" : 106,
           "comment" : "flipped bit 32 in s",
           "flags" : [
             "InvalidEncoding"
@@ -1247,7 +1195,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 111,
+          "tcId" : 107,
           "comment" : "flipped bit 48 in s",
           "flags" : [
             "InvalidEncoding"
@@ -1257,7 +1205,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 112,
+          "tcId" : 108,
           "comment" : "flipped bit 64 in s",
           "flags" : [
             "InvalidEncoding"
@@ -1267,7 +1215,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 113,
+          "tcId" : 109,
           "comment" : "length of s uses long form encoding",
           "flags" : [
             "BerEncodedSignature"
@@ -1277,7 +1225,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 114,
+          "tcId" : 110,
           "comment" : "length of s contains a leading 0",
           "flags" : [
             "BerEncodedSignature"
@@ -1287,7 +1235,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 115,
+          "tcId" : 111,
           "comment" : "length of s uses 33 instead of 32",
           "flags" : [
             "InvalidEncoding"
@@ -1297,7 +1245,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 116,
+          "tcId" : 112,
           "comment" : "length of s uses 31 instead of 32",
           "flags" : [
             "InvalidEncoding"
@@ -1307,7 +1255,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 117,
+          "tcId" : 113,
           "comment" : "uint32 overflow in length of s",
           "flags" : [
             "InvalidEncoding"
@@ -1317,7 +1265,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 118,
+          "tcId" : 114,
           "comment" : "uint64 overflow in length of s",
           "flags" : [
             "InvalidEncoding"
@@ -1327,7 +1275,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 119,
+          "tcId" : 115,
           "comment" : "length of s = 2**31 - 1",
           "flags" : [
             "InvalidEncoding"
@@ -1337,7 +1285,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 120,
+          "tcId" : 116,
           "comment" : "length of s = 2**31",
           "flags" : [
             "InvalidEncoding"
@@ -1347,7 +1295,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 121,
+          "tcId" : 117,
           "comment" : "length of s = 2**32 - 1",
           "flags" : [
             "InvalidEncoding"
@@ -1357,7 +1305,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 122,
+          "tcId" : 118,
           "comment" : "length of s = 2**40 - 1",
           "flags" : [
             "InvalidEncoding"
@@ -1367,7 +1315,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 123,
+          "tcId" : 119,
           "comment" : "length of s = 2**64 - 1",
           "flags" : [
             "InvalidEncoding"
@@ -1377,7 +1325,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 124,
+          "tcId" : 120,
           "comment" : "incorrect length of s",
           "flags" : [
             "InvalidEncoding"
@@ -1387,7 +1335,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 125,
+          "tcId" : 121,
           "comment" : "replaced s by an indefinite length tag without termination",
           "flags" : [
             "InvalidEncoding"
@@ -1397,7 +1345,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 126,
+          "tcId" : 122,
           "comment" : "appending 0's to s",
           "flags" : [
             "ModifiedSignature"
@@ -1407,7 +1355,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 127,
+          "tcId" : 123,
           "comment" : "prepending 0's to s",
           "flags" : [
             "InvalidEncoding"
@@ -1417,7 +1365,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 128,
+          "tcId" : 124,
           "comment" : "appending null value to s",
           "flags" : [
             "ModifiedSignature"
@@ -1427,7 +1375,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 129,
+          "tcId" : 125,
           "comment" : "prepending garbage to s",
           "flags" : [
             "InvalidEncoding"
@@ -1437,7 +1385,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 130,
+          "tcId" : 126,
           "comment" : "prepending garbage to s",
           "flags" : [
             "InvalidEncoding"
@@ -1447,7 +1395,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 131,
+          "tcId" : 127,
           "comment" : "appending garbage to s",
           "flags" : [
             "InvalidEncoding"
@@ -1457,7 +1405,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 132,
+          "tcId" : 128,
           "comment" : "truncated length of s",
           "flags" : [
             "InvalidEncoding"
@@ -1467,7 +1415,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 133,
+          "tcId" : 129,
           "comment" : "including undefined tags to s",
           "flags" : [
             "InvalidEncoding"
@@ -1477,7 +1425,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 134,
+          "tcId" : 130,
           "comment" : "using composition with indefinite length for s",
           "flags" : [
             "InvalidEncoding"
@@ -1487,7 +1435,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 135,
+          "tcId" : 131,
           "comment" : "using composition with wrong tag for s",
           "flags" : [
             "InvalidEncoding"
@@ -1497,7 +1445,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 136,
+          "tcId" : 132,
           "comment" : "Replacing s with NULL",
           "flags" : [
             "ModifiedSignature"
@@ -1507,7 +1455,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 137,
+          "tcId" : 133,
           "comment" : "changing tag value of s",
           "flags" : [
             "ModifiedSignature"
@@ -1517,7 +1465,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 138,
+          "tcId" : 134,
           "comment" : "changing tag value of s",
           "flags" : [
             "InvalidEncoding"
@@ -1527,7 +1475,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 139,
+          "tcId" : 135,
           "comment" : "changing tag value of s",
           "flags" : [
             "InvalidEncoding"
@@ -1537,7 +1485,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 140,
+          "tcId" : 136,
           "comment" : "changing tag value of s",
           "flags" : [
             "ModifiedSignature"
@@ -1547,7 +1495,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 141,
+          "tcId" : 137,
           "comment" : "changing tag value of s",
           "flags" : [
             "InvalidEncoding"
@@ -1557,7 +1505,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 142,
+          "tcId" : 138,
           "comment" : "dropping value of s",
           "flags" : [
             "InvalidEncoding"
@@ -1567,7 +1515,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 143,
+          "tcId" : 139,
           "comment" : "using composition for s",
           "flags" : [
             "InvalidEncoding"
@@ -1577,7 +1525,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 144,
+          "tcId" : 140,
           "comment" : "modifying first byte of s",
           "flags" : [
             "ModifiedSignature"
@@ -1587,7 +1535,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 145,
+          "tcId" : 141,
           "comment" : "modifying last byte of s",
           "flags" : [
             "ModifiedSignature"
@@ -1597,7 +1545,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 146,
+          "tcId" : 142,
           "comment" : "truncated s",
           "flags" : [
             "ModifiedSignature"
@@ -1607,7 +1555,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 147,
+          "tcId" : 143,
           "comment" : "truncated s",
           "flags" : [
             "ModifiedSignature"
@@ -1617,7 +1565,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 148,
+          "tcId" : 144,
           "comment" : "s of size 4129 to check for overflows",
           "flags" : [
             "ModifiedSignature"
@@ -1627,7 +1575,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 149,
+          "tcId" : 145,
           "comment" : "leading ff in s",
           "flags" : [
             "ModifiedSignature"
@@ -1637,7 +1585,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 150,
+          "tcId" : 146,
           "comment" : "replaced s by infinity",
           "flags" : [
             "ModifiedSignature"
@@ -1647,7 +1595,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 151,
+          "tcId" : 147,
           "comment" : "replacing s with zero",
           "flags" : [
             "ModifiedSignature"
@@ -1657,7 +1605,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 152,
+          "tcId" : 148,
           "comment" : "replaced r by r + n",
           "flags" : [
             "RangeCheck"
@@ -1667,7 +1615,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 153,
+          "tcId" : 149,
           "comment" : "replaced r by r - n",
           "flags" : [
             "RangeCheck"
@@ -1677,7 +1625,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 154,
+          "tcId" : 150,
           "comment" : "replaced r by r + 256 * n",
           "flags" : [
             "RangeCheck"
@@ -1687,7 +1635,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 155,
+          "tcId" : 151,
           "comment" : "replaced r by -r",
           "flags" : [
             "ModifiedInteger"
@@ -1697,7 +1645,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 156,
+          "tcId" : 152,
           "comment" : "replaced r by n - r",
           "flags" : [
             "ModifiedInteger"
@@ -1707,7 +1655,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 157,
+          "tcId" : 153,
           "comment" : "replaced r by -n - r",
           "flags" : [
             "ModifiedInteger"
@@ -1717,7 +1665,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 158,
+          "tcId" : 154,
           "comment" : "replaced r by r + 2**256",
           "flags" : [
             "IntegerOverflow"
@@ -1727,7 +1675,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 159,
+          "tcId" : 155,
           "comment" : "replaced r by r + 2**320",
           "flags" : [
             "IntegerOverflow"
@@ -1737,7 +1685,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 160,
+          "tcId" : 156,
           "comment" : "replaced s by s + n",
           "flags" : [
             "RangeCheck"
@@ -1747,7 +1695,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 161,
+          "tcId" : 157,
           "comment" : "replaced s by s - n",
           "flags" : [
             "RangeCheck"
@@ -1757,7 +1705,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 162,
+          "tcId" : 158,
           "comment" : "replaced s by s + 256 * n",
           "flags" : [
             "RangeCheck"
@@ -1767,7 +1715,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 163,
+          "tcId" : 159,
           "comment" : "replaced s by -s",
           "flags" : [
             "ModifiedInteger"
@@ -1777,7 +1725,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 164,
+          "tcId" : 160,
           "comment" : "replaced s by -n - s",
           "flags" : [
             "ModifiedInteger"
@@ -1787,7 +1735,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 165,
+          "tcId" : 161,
           "comment" : "replaced s by s + 2**256",
           "flags" : [
             "IntegerOverflow"
@@ -1797,7 +1745,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 166,
+          "tcId" : 162,
           "comment" : "replaced s by s - 2**256",
           "flags" : [
             "IntegerOverflow"
@@ -1807,7 +1755,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 167,
+          "tcId" : 163,
           "comment" : "replaced s by s + 2**320",
           "flags" : [
             "IntegerOverflow"
@@ -1817,7 +1765,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 168,
+          "tcId" : 164,
           "comment" : "Signature with special case values r=0 and s=0",
           "flags" : [
             "InvalidSignature"
@@ -1827,7 +1775,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 169,
+          "tcId" : 165,
           "comment" : "Signature with special case values r=0 and s=1",
           "flags" : [
             "InvalidSignature"
@@ -1837,7 +1785,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 170,
+          "tcId" : 166,
           "comment" : "Signature with special case values r=0 and s=-1",
           "flags" : [
             "InvalidSignature"
@@ -1847,7 +1795,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 171,
+          "tcId" : 167,
           "comment" : "Signature with special case values r=0 and s=n",
           "flags" : [
             "InvalidSignature"
@@ -1857,7 +1805,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 172,
+          "tcId" : 168,
           "comment" : "Signature with special case values r=0 and s=n - 1",
           "flags" : [
             "InvalidSignature"
@@ -1867,7 +1815,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 173,
+          "tcId" : 169,
           "comment" : "Signature with special case values r=0 and s=n + 1",
           "flags" : [
             "InvalidSignature"
@@ -1877,7 +1825,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 174,
+          "tcId" : 170,
           "comment" : "Signature with special case values r=0 and s=p",
           "flags" : [
             "InvalidSignature"
@@ -1887,7 +1835,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 175,
+          "tcId" : 171,
           "comment" : "Signature with special case values r=0 and s=p + 1",
           "flags" : [
             "InvalidSignature"
@@ -1897,7 +1845,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 176,
+          "tcId" : 172,
           "comment" : "Signature with special case values r=1 and s=0",
           "flags" : [
             "InvalidSignature"
@@ -1907,7 +1855,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 177,
+          "tcId" : 173,
           "comment" : "Signature with special case values r=1 and s=1",
           "flags" : [
             "InvalidSignature"
@@ -1917,7 +1865,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 178,
+          "tcId" : 174,
           "comment" : "Signature with special case values r=1 and s=-1",
           "flags" : [
             "InvalidSignature"
@@ -1927,7 +1875,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 179,
+          "tcId" : 175,
           "comment" : "Signature with special case values r=1 and s=n",
           "flags" : [
             "InvalidSignature"
@@ -1937,7 +1885,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 180,
+          "tcId" : 176,
           "comment" : "Signature with special case values r=1 and s=n - 1",
           "flags" : [
             "InvalidSignature"
@@ -1947,7 +1895,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 181,
+          "tcId" : 177,
           "comment" : "Signature with special case values r=1 and s=n + 1",
           "flags" : [
             "InvalidSignature"
@@ -1957,7 +1905,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 182,
+          "tcId" : 178,
           "comment" : "Signature with special case values r=1 and s=p",
           "flags" : [
             "InvalidSignature"
@@ -1967,7 +1915,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 183,
+          "tcId" : 179,
           "comment" : "Signature with special case values r=1 and s=p + 1",
           "flags" : [
             "InvalidSignature"
@@ -1977,7 +1925,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 184,
+          "tcId" : 180,
           "comment" : "Signature with special case values r=-1 and s=0",
           "flags" : [
             "InvalidSignature"
@@ -1987,7 +1935,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 185,
+          "tcId" : 181,
           "comment" : "Signature with special case values r=-1 and s=1",
           "flags" : [
             "InvalidSignature"
@@ -1997,7 +1945,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 186,
+          "tcId" : 182,
           "comment" : "Signature with special case values r=-1 and s=-1",
           "flags" : [
             "InvalidSignature"
@@ -2007,7 +1955,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 187,
+          "tcId" : 183,
           "comment" : "Signature with special case values r=-1 and s=n",
           "flags" : [
             "InvalidSignature"
@@ -2017,7 +1965,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 188,
+          "tcId" : 184,
           "comment" : "Signature with special case values r=-1 and s=n - 1",
           "flags" : [
             "InvalidSignature"
@@ -2027,7 +1975,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 189,
+          "tcId" : 185,
           "comment" : "Signature with special case values r=-1 and s=n + 1",
           "flags" : [
             "InvalidSignature"
@@ -2037,7 +1985,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 190,
+          "tcId" : 186,
           "comment" : "Signature with special case values r=-1 and s=p",
           "flags" : [
             "InvalidSignature"
@@ -2047,7 +1995,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 191,
+          "tcId" : 187,
           "comment" : "Signature with special case values r=-1 and s=p + 1",
           "flags" : [
             "InvalidSignature"
@@ -2057,7 +2005,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 192,
+          "tcId" : 188,
           "comment" : "Signature with special case values r=n and s=0",
           "flags" : [
             "InvalidSignature"
@@ -2067,7 +2015,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 193,
+          "tcId" : 189,
           "comment" : "Signature with special case values r=n and s=1",
           "flags" : [
             "InvalidSignature"
@@ -2077,7 +2025,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 194,
+          "tcId" : 190,
           "comment" : "Signature with special case values r=n and s=-1",
           "flags" : [
             "InvalidSignature"
@@ -2087,7 +2035,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 195,
+          "tcId" : 191,
           "comment" : "Signature with special case values r=n and s=n",
           "flags" : [
             "InvalidSignature"
@@ -2097,7 +2045,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 196,
+          "tcId" : 192,
           "comment" : "Signature with special case values r=n and s=n - 1",
           "flags" : [
             "InvalidSignature"
@@ -2107,7 +2055,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 197,
+          "tcId" : 193,
           "comment" : "Signature with special case values r=n and s=n + 1",
           "flags" : [
             "InvalidSignature"
@@ -2117,7 +2065,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 198,
+          "tcId" : 194,
           "comment" : "Signature with special case values r=n and s=p",
           "flags" : [
             "InvalidSignature"
@@ -2127,7 +2075,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 199,
+          "tcId" : 195,
           "comment" : "Signature with special case values r=n and s=p + 1",
           "flags" : [
             "InvalidSignature"
@@ -2137,7 +2085,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 200,
+          "tcId" : 196,
           "comment" : "Signature with special case values r=n - 1 and s=0",
           "flags" : [
             "InvalidSignature"
@@ -2147,7 +2095,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 201,
+          "tcId" : 197,
           "comment" : "Signature with special case values r=n - 1 and s=1",
           "flags" : [
             "InvalidSignature"
@@ -2157,7 +2105,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 202,
+          "tcId" : 198,
           "comment" : "Signature with special case values r=n - 1 and s=-1",
           "flags" : [
             "InvalidSignature"
@@ -2167,7 +2115,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 203,
+          "tcId" : 199,
           "comment" : "Signature with special case values r=n - 1 and s=n",
           "flags" : [
             "InvalidSignature"
@@ -2177,7 +2125,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 204,
+          "tcId" : 200,
           "comment" : "Signature with special case values r=n - 1 and s=n - 1",
           "flags" : [
             "InvalidSignature"
@@ -2187,7 +2135,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 205,
+          "tcId" : 201,
           "comment" : "Signature with special case values r=n - 1 and s=n + 1",
           "flags" : [
             "InvalidSignature"
@@ -2197,7 +2145,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 206,
+          "tcId" : 202,
           "comment" : "Signature with special case values r=n - 1 and s=p",
           "flags" : [
             "InvalidSignature"
@@ -2207,7 +2155,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 207,
+          "tcId" : 203,
           "comment" : "Signature with special case values r=n - 1 and s=p + 1",
           "flags" : [
             "InvalidSignature"
@@ -2217,7 +2165,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 208,
+          "tcId" : 204,
           "comment" : "Signature with special case values r=n + 1 and s=0",
           "flags" : [
             "InvalidSignature"
@@ -2227,7 +2175,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 209,
+          "tcId" : 205,
           "comment" : "Signature with special case values r=n + 1 and s=1",
           "flags" : [
             "InvalidSignature"
@@ -2237,7 +2185,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 210,
+          "tcId" : 206,
           "comment" : "Signature with special case values r=n + 1 and s=-1",
           "flags" : [
             "InvalidSignature"
@@ -2247,7 +2195,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 211,
+          "tcId" : 207,
           "comment" : "Signature with special case values r=n + 1 and s=n",
           "flags" : [
             "InvalidSignature"
@@ -2257,7 +2205,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 212,
+          "tcId" : 208,
           "comment" : "Signature with special case values r=n + 1 and s=n - 1",
           "flags" : [
             "InvalidSignature"
@@ -2267,7 +2215,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 213,
+          "tcId" : 209,
           "comment" : "Signature with special case values r=n + 1 and s=n + 1",
           "flags" : [
             "InvalidSignature"
@@ -2277,7 +2225,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 214,
+          "tcId" : 210,
           "comment" : "Signature with special case values r=n + 1 and s=p",
           "flags" : [
             "InvalidSignature"
@@ -2287,7 +2235,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 215,
+          "tcId" : 211,
           "comment" : "Signature with special case values r=n + 1 and s=p + 1",
           "flags" : [
             "InvalidSignature"
@@ -2297,7 +2245,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 216,
+          "tcId" : 212,
           "comment" : "Signature with special case values r=p and s=0",
           "flags" : [
             "InvalidSignature"
@@ -2307,7 +2255,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 217,
+          "tcId" : 213,
           "comment" : "Signature with special case values r=p and s=1",
           "flags" : [
             "InvalidSignature"
@@ -2317,7 +2265,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 218,
+          "tcId" : 214,
           "comment" : "Signature with special case values r=p and s=-1",
           "flags" : [
             "InvalidSignature"
@@ -2327,7 +2275,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 219,
+          "tcId" : 215,
           "comment" : "Signature with special case values r=p and s=n",
           "flags" : [
             "InvalidSignature"
@@ -2337,7 +2285,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 220,
+          "tcId" : 216,
           "comment" : "Signature with special case values r=p and s=n - 1",
           "flags" : [
             "InvalidSignature"
@@ -2347,7 +2295,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 221,
+          "tcId" : 217,
           "comment" : "Signature with special case values r=p and s=n + 1",
           "flags" : [
             "InvalidSignature"
@@ -2357,7 +2305,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 222,
+          "tcId" : 218,
           "comment" : "Signature with special case values r=p and s=p",
           "flags" : [
             "InvalidSignature"
@@ -2367,7 +2315,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 223,
+          "tcId" : 219,
           "comment" : "Signature with special case values r=p and s=p + 1",
           "flags" : [
             "InvalidSignature"
@@ -2377,7 +2325,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 224,
+          "tcId" : 220,
           "comment" : "Signature with special case values r=p + 1 and s=0",
           "flags" : [
             "InvalidSignature"
@@ -2387,7 +2335,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 225,
+          "tcId" : 221,
           "comment" : "Signature with special case values r=p + 1 and s=1",
           "flags" : [
             "InvalidSignature"
@@ -2397,7 +2345,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 226,
+          "tcId" : 222,
           "comment" : "Signature with special case values r=p + 1 and s=-1",
           "flags" : [
             "InvalidSignature"
@@ -2407,7 +2355,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 227,
+          "tcId" : 223,
           "comment" : "Signature with special case values r=p + 1 and s=n",
           "flags" : [
             "InvalidSignature"
@@ -2417,7 +2365,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 228,
+          "tcId" : 224,
           "comment" : "Signature with special case values r=p + 1 and s=n - 1",
           "flags" : [
             "InvalidSignature"
@@ -2427,7 +2375,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 229,
+          "tcId" : 225,
           "comment" : "Signature with special case values r=p + 1 and s=n + 1",
           "flags" : [
             "InvalidSignature"
@@ -2437,7 +2385,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 230,
+          "tcId" : 226,
           "comment" : "Signature with special case values r=p + 1 and s=p",
           "flags" : [
             "InvalidSignature"
@@ -2447,7 +2395,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 231,
+          "tcId" : 227,
           "comment" : "Signature with special case values r=p + 1 and s=p + 1",
           "flags" : [
             "InvalidSignature"
@@ -2457,7 +2405,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 232,
+          "tcId" : 228,
           "comment" : "Signature encoding contains incorrect types: r=0, s=0.25",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2467,7 +2415,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 233,
+          "tcId" : 229,
           "comment" : "Signature encoding contains incorrect types: r=0, s=nan",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2477,7 +2425,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 234,
+          "tcId" : 230,
           "comment" : "Signature encoding contains incorrect types: r=0, s=True",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2487,7 +2435,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 235,
+          "tcId" : 231,
           "comment" : "Signature encoding contains incorrect types: r=0, s=False",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2497,7 +2445,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 236,
+          "tcId" : 232,
           "comment" : "Signature encoding contains incorrect types: r=0, s=Null",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2507,7 +2455,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 237,
+          "tcId" : 233,
           "comment" : "Signature encoding contains incorrect types: r=0, s=empyt UTF-8 string",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2517,7 +2465,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 238,
+          "tcId" : 234,
           "comment" : "Signature encoding contains incorrect types: r=0, s=\"0\"",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2527,7 +2475,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 239,
+          "tcId" : 235,
           "comment" : "Signature encoding contains incorrect types: r=0, s=empty list",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2537,7 +2485,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 240,
+          "tcId" : 236,
           "comment" : "Signature encoding contains incorrect types: r=0, s=list containing 0",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2547,7 +2495,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 241,
+          "tcId" : 237,
           "comment" : "Signature encoding contains incorrect types: r=1, s=0.25",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2557,7 +2505,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 242,
+          "tcId" : 238,
           "comment" : "Signature encoding contains incorrect types: r=1, s=nan",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2567,7 +2515,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 243,
+          "tcId" : 239,
           "comment" : "Signature encoding contains incorrect types: r=1, s=True",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2577,7 +2525,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 244,
+          "tcId" : 240,
           "comment" : "Signature encoding contains incorrect types: r=1, s=False",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2587,7 +2535,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 245,
+          "tcId" : 241,
           "comment" : "Signature encoding contains incorrect types: r=1, s=Null",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2597,7 +2545,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 246,
+          "tcId" : 242,
           "comment" : "Signature encoding contains incorrect types: r=1, s=empyt UTF-8 string",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2607,7 +2555,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 247,
+          "tcId" : 243,
           "comment" : "Signature encoding contains incorrect types: r=1, s=\"0\"",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2617,7 +2565,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 248,
+          "tcId" : 244,
           "comment" : "Signature encoding contains incorrect types: r=1, s=empty list",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2627,7 +2575,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 249,
+          "tcId" : 245,
           "comment" : "Signature encoding contains incorrect types: r=1, s=list containing 0",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2637,7 +2585,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 250,
+          "tcId" : 246,
           "comment" : "Signature encoding contains incorrect types: r=-1, s=0.25",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2647,7 +2595,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 251,
+          "tcId" : 247,
           "comment" : "Signature encoding contains incorrect types: r=-1, s=nan",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2657,7 +2605,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 252,
+          "tcId" : 248,
           "comment" : "Signature encoding contains incorrect types: r=-1, s=True",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2667,7 +2615,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 253,
+          "tcId" : 249,
           "comment" : "Signature encoding contains incorrect types: r=-1, s=False",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2677,7 +2625,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 254,
+          "tcId" : 250,
           "comment" : "Signature encoding contains incorrect types: r=-1, s=Null",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2687,7 +2635,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 255,
+          "tcId" : 251,
           "comment" : "Signature encoding contains incorrect types: r=-1, s=empyt UTF-8 string",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2697,7 +2645,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 256,
+          "tcId" : 252,
           "comment" : "Signature encoding contains incorrect types: r=-1, s=\"0\"",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2707,7 +2655,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 257,
+          "tcId" : 253,
           "comment" : "Signature encoding contains incorrect types: r=-1, s=empty list",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2717,7 +2665,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 258,
+          "tcId" : 254,
           "comment" : "Signature encoding contains incorrect types: r=-1, s=list containing 0",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2727,7 +2675,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 259,
+          "tcId" : 255,
           "comment" : "Signature encoding contains incorrect types: r=n, s=0.25",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2737,7 +2685,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 260,
+          "tcId" : 256,
           "comment" : "Signature encoding contains incorrect types: r=n, s=nan",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2747,7 +2695,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 261,
+          "tcId" : 257,
           "comment" : "Signature encoding contains incorrect types: r=n, s=True",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2757,7 +2705,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 262,
+          "tcId" : 258,
           "comment" : "Signature encoding contains incorrect types: r=n, s=False",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2767,7 +2715,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 263,
+          "tcId" : 259,
           "comment" : "Signature encoding contains incorrect types: r=n, s=Null",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2777,7 +2725,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 264,
+          "tcId" : 260,
           "comment" : "Signature encoding contains incorrect types: r=n, s=empyt UTF-8 string",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2787,7 +2735,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 265,
+          "tcId" : 261,
           "comment" : "Signature encoding contains incorrect types: r=n, s=\"0\"",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2797,7 +2745,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 266,
+          "tcId" : 262,
           "comment" : "Signature encoding contains incorrect types: r=n, s=empty list",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2807,7 +2755,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 267,
+          "tcId" : 263,
           "comment" : "Signature encoding contains incorrect types: r=n, s=list containing 0",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2817,7 +2765,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 268,
+          "tcId" : 264,
           "comment" : "Signature encoding contains incorrect types: r=p, s=0.25",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2827,7 +2775,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 269,
+          "tcId" : 265,
           "comment" : "Signature encoding contains incorrect types: r=p, s=nan",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2837,7 +2785,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 270,
+          "tcId" : 266,
           "comment" : "Signature encoding contains incorrect types: r=p, s=True",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2847,7 +2795,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 271,
+          "tcId" : 267,
           "comment" : "Signature encoding contains incorrect types: r=p, s=False",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2857,7 +2805,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 272,
+          "tcId" : 268,
           "comment" : "Signature encoding contains incorrect types: r=p, s=Null",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2867,7 +2815,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 273,
+          "tcId" : 269,
           "comment" : "Signature encoding contains incorrect types: r=p, s=empyt UTF-8 string",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2877,7 +2825,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 274,
+          "tcId" : 270,
           "comment" : "Signature encoding contains incorrect types: r=p, s=\"0\"",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2887,7 +2835,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 275,
+          "tcId" : 271,
           "comment" : "Signature encoding contains incorrect types: r=p, s=empty list",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2897,7 +2845,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 276,
+          "tcId" : 272,
           "comment" : "Signature encoding contains incorrect types: r=p, s=list containing 0",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2907,7 +2855,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 277,
+          "tcId" : 273,
           "comment" : "Signature encoding contains incorrect types: r=0.25, s=0.25",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2917,7 +2865,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 278,
+          "tcId" : 274,
           "comment" : "Signature encoding contains incorrect types: r=nan, s=nan",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2927,7 +2875,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 279,
+          "tcId" : 275,
           "comment" : "Signature encoding contains incorrect types: r=True, s=True",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2937,7 +2885,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 280,
+          "tcId" : 276,
           "comment" : "Signature encoding contains incorrect types: r=False, s=False",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2947,7 +2895,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 281,
+          "tcId" : 277,
           "comment" : "Signature encoding contains incorrect types: r=Null, s=Null",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2957,7 +2905,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 282,
+          "tcId" : 278,
           "comment" : "Signature encoding contains incorrect types: r=empyt UTF-8 string, s=empyt UTF-8 string",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2967,7 +2915,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 283,
+          "tcId" : 279,
           "comment" : "Signature encoding contains incorrect types: r=\"0\", s=\"0\"",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2977,7 +2925,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 284,
+          "tcId" : 280,
           "comment" : "Signature encoding contains incorrect types: r=empty list, s=empty list",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2987,7 +2935,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 285,
+          "tcId" : 281,
           "comment" : "Signature encoding contains incorrect types: r=list containing 0, s=list containing 0",
           "flags" : [
             "InvalidTypesInSignature"
@@ -2997,7 +2945,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 286,
+          "tcId" : 282,
           "comment" : "Signature encoding contains incorrect types: r=0.25, s=0",
           "flags" : [
             "InvalidTypesInSignature"
@@ -3007,7 +2955,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 287,
+          "tcId" : 283,
           "comment" : "Signature encoding contains incorrect types: r=nan, s=0",
           "flags" : [
             "InvalidTypesInSignature"
@@ -3017,7 +2965,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 288,
+          "tcId" : 284,
           "comment" : "Signature encoding contains incorrect types: r=True, s=0",
           "flags" : [
             "InvalidTypesInSignature"
@@ -3027,7 +2975,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 289,
+          "tcId" : 285,
           "comment" : "Signature encoding contains incorrect types: r=False, s=0",
           "flags" : [
             "InvalidTypesInSignature"
@@ -3037,7 +2985,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 290,
+          "tcId" : 286,
           "comment" : "Signature encoding contains incorrect types: r=Null, s=0",
           "flags" : [
             "InvalidTypesInSignature"
@@ -3047,7 +2995,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 291,
+          "tcId" : 287,
           "comment" : "Signature encoding contains incorrect types: r=empyt UTF-8 string, s=0",
           "flags" : [
             "InvalidTypesInSignature"
@@ -3057,7 +3005,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 292,
+          "tcId" : 288,
           "comment" : "Signature encoding contains incorrect types: r=\"0\", s=0",
           "flags" : [
             "InvalidTypesInSignature"
@@ -3067,7 +3015,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 293,
+          "tcId" : 289,
           "comment" : "Signature encoding contains incorrect types: r=empty list, s=0",
           "flags" : [
             "InvalidTypesInSignature"
@@ -3077,7 +3025,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 294,
+          "tcId" : 290,
           "comment" : "Signature encoding contains incorrect types: r=list containing 0, s=0",
           "flags" : [
             "InvalidTypesInSignature"
@@ -3087,7 +3035,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 295,
+          "tcId" : 291,
           "comment" : "Edge case for Shamir multiplication",
           "flags" : [
             "EdgeCaseShamirMultiplication"
@@ -3097,7 +3045,7 @@
           "result" : "valid"
         },
         {
-          "tcId" : 296,
+          "tcId" : 292,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
@@ -3107,37 +3055,37 @@
           "result" : "valid"
         },
         {
-          "tcId" : 297,
+          "tcId" : 293,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
           ],
           "msg" : "37313338363834383931",
-          "sig" : "3045022028f94a894e92024699e345fe66971e3edcd050023386135ab3939d550898fb25022100cd69c1a42be05a6ee1270c821479251e134c21858d800bda6f4e98b37196238e",
+          "sig" : "3044022028f94a894e92024699e345fe66971e3edcd050023386135ab3939d550898fb25022032963e5bd41fa5911ed8f37deb86dae0a762bb6121c894615083c5d95ea01db3",
           "result" : "valid"
         },
         {
-          "tcId" : 298,
+          "tcId" : 294,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
           ],
           "msg" : "3130333539333331363638",
-          "sig" : "3046022100be26b18f9549f89f411a9b52536b15aa270b84548d0e859a1952a27af1a77ac60221008f3e2b05632fc33715572af9124681113f2b84325b80154c044a544dc1a8fa12",
+          "sig" : "3045022100be26b18f9549f89f411a9b52536b15aa270b84548d0e859a1952a27af1a77ac6022070c1d4fa9cd03cc8eaa8d506edb97eed7b8358b453c88aefbb880a3f0e8d472f",
           "result" : "valid"
         },
         {
-          "tcId" : 299,
+          "tcId" : 295,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
           ],
           "msg" : "33393439343031323135",
-          "sig" : "3046022100b1a4b1478e65cc3eafdf225d1298b43f2da19e4bcff7eacc0a2e98cd4b74b114022100e8655ce1cfb33ebd30af8ce8e8ae4d6f7b50cd3e22af51bf69e0a2851760d52b",
+          "sig" : "3045022100b1a4b1478e65cc3eafdf225d1298b43f2da19e4bcff7eacc0a2e98cd4b74b1140220179aa31e304cc142cf5073171751b28f3f5e0fa88c994e7c55f1bc07b8d56c16",
           "result" : "valid"
         },
         {
-          "tcId" : 300,
+          "tcId" : 296,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
@@ -3147,37 +3095,37 @@
           "result" : "valid"
         },
         {
-          "tcId" : 301,
+          "tcId" : 297,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
           ],
           "msg" : "33373036323131373132",
-          "sig" : "3046022100a23ad18d8fc66d81af0903890cbd453a554cb04cdc1a8ca7f7f78e5367ed88a0022100dc1c14d31e3fb158b73c764268c8b55579734a7e2a2c9b5ee5d9d0144ef652eb",
+          "sig" : "3045022100a23ad18d8fc66d81af0903890cbd453a554cb04cdc1a8ca7f7f78e5367ed88a0022023e3eb2ce1c04ea748c389bd97374aa9413b9268851c04dcd9f88e78813fee56",
           "result" : "valid"
         },
         {
-          "tcId" : 302,
+          "tcId" : 298,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
           ],
           "msg" : "333433363838373132",
-          "sig" : "304502202bdea41cda63a2d14bf47353bd20880a690901de7cd6e3cc6d8ed5ba0cdb1091022100c31599433036064073835b1e3eba8335a650c8fd786f94fe235ad7d41dc94c7a",
+          "sig" : "304402202bdea41cda63a2d14bf47353bd20880a690901de7cd6e3cc6d8ed5ba0cdb109102203cea66bccfc9f9bf8c7ca4e1c1457cc9145e13e936d90b3d9c7786b8b26cf4c7",
           "result" : "valid"
         },
         {
-          "tcId" : 303,
+          "tcId" : 299,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
           ],
           "msg" : "31333531353330333730",
-          "sig" : "3046022100d7cd76ec01c1b1079eba9e2aa2a397243c4758c98a1ba0b7404a340b9b00ced6022100ca8affe1e626dd192174c2937b15bc48f77b5bdfe01f073a8aeaf7f24dc6c85b",
+          "sig" : "3045022100d7cd76ec01c1b1079eba9e2aa2a397243c4758c98a1ba0b7404a340b9b00ced602203575001e19d922e6de8b3d6c84ea43b5c3338106cf29990134e7669a826f78e6",
           "result" : "valid"
         },
         {
-          "tcId" : 304,
+          "tcId" : 300,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
@@ -3187,17 +3135,17 @@
           "result" : "valid"
         },
         {
-          "tcId" : 305,
+          "tcId" : 301,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
           ],
           "msg" : "31353634333436363033",
-          "sig" : "30460221009fa9afe07752da10b36d3afcd0fe44bfc40244d75203599cf8f5047fa3453854022100af1f583fec4040ae7e68c968d2bb4b494eec3a33edc7c0ccf95f7f75bc2569c7",
+          "sig" : "30450221009fa9afe07752da10b36d3afcd0fe44bfc40244d75203599cf8f5047fa3453854022050e0a7c013bfbf51819736972d44b4b56bc2a2b2c180df6ec672df171410d77a",
           "result" : "valid"
         },
         {
-          "tcId" : 306,
+          "tcId" : 302,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
@@ -3207,17 +3155,17 @@
           "result" : "valid"
         },
         {
-          "tcId" : 307,
+          "tcId" : 303,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
           ],
           "msg" : "3130393533323631333531",
-          "sig" : "304502202d051f91c5a9d440c5676985710483bc4f1a6c611b10c95a2ff0363d90c2a45802210092206b19045a41a797cc2f3ac30de9518165e96d5b86341ecb3bcff231b3fd65",
+          "sig" : "304402202d051f91c5a9d440c5676985710483bc4f1a6c611b10c95a2ff0363d90c2a45802206ddf94e6fba5be586833d0c53cf216ad3948f37953c26c1cf4968e9a9e8243dc",
           "result" : "valid"
         },
         {
-          "tcId" : 308,
+          "tcId" : 304,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
@@ -3227,37 +3175,37 @@
           "result" : "valid"
         },
         {
-          "tcId" : 309,
+          "tcId" : 305,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
           ],
           "msg" : "33343633303036383738",
-          "sig" : "304602210096447cf68c3ab7266ed7447de3ac52fed7cc08cbdfea391c18a9b8ab370bc913022100f0a1878b2c53f16e70fe377a5e9c6e86f18ae480a22bb499f5b32e7109c07385",
+          "sig" : "304502210096447cf68c3ab7266ed7447de3ac52fed7cc08cbdfea391c18a9b8ab370bc91302200f5e7874d3ac0e918f01c885a1639177c923f8660d1ceba1ca1f301bc675cdbc",
           "result" : "valid"
         },
         {
-          "tcId" : 310,
+          "tcId" : 306,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
           ],
           "msg" : "39383137333230323837",
-          "sig" : "30450220530a0832b691da0b5619a0b11de6877f3c0971baaa68ed122758c29caaf46b7202210093761bb0a14ccf9f15b4b9ce73c6ec700bd015b8cb1cfac56837f4463f53074e",
+          "sig" : "30440220530a0832b691da0b5619a0b11de6877f3c0971baaa68ed122758c29caaf46b7202206c89e44f5eb33060ea4b46318c39138eaedec72de42ba576579a6a4690e339f3",
           "result" : "valid"
         },
         {
-          "tcId" : 311,
+          "tcId" : 307,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
           ],
           "msg" : "33323232303431303436",
-          "sig" : "30460221009c54c25500bde0b92d72d6ec483dc2482f3654294ca74de796b681255ed58a77022100988bac394a90ad89ce360984c0c149dcbd2684bb64498ace90bcf6b6af1c170e",
+          "sig" : "30450221009c54c25500bde0b92d72d6ec483dc2482f3654294ca74de796b681255ed58a770220677453c6b56f527631c9f67b3f3eb621fd88582b4aff156d2f1567d6211a2a33",
           "result" : "valid"
         },
         {
-          "tcId" : 312,
+          "tcId" : 308,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
@@ -3267,17 +3215,17 @@
           "result" : "valid"
         },
         {
-          "tcId" : 313,
+          "tcId" : 309,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
           ],
           "msg" : "31303335393531383938",
-          "sig" : "304502205924873209593135a4c3da7bb381227f8a4b6aa9f34fe5bb7f8fbc131a039ffe022100e0e44ee4bbe370155bf0bbdec265bf9fe31c0746faab446de62e3631eacd111f",
+          "sig" : "304402205924873209593135a4c3da7bb381227f8a4b6aa9f34fe5bb7f8fbc131a039ffe02201f1bb11b441c8feaa40f44213d9a405ed792d59fb49d5bcdd9a4285ae5693022",
           "result" : "valid"
         },
         {
-          "tcId" : 314,
+          "tcId" : 310,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
@@ -3287,7 +3235,7 @@
           "result" : "valid"
         },
         {
-          "tcId" : 315,
+          "tcId" : 311,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
@@ -3297,17 +3245,17 @@
           "result" : "valid"
         },
         {
-          "tcId" : 316,
+          "tcId" : 312,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
           ],
           "msg" : "32363633373834323534",
-          "sig" : "3046022100b5d795cc75cea5c434fa4185180cd6bd21223f3d5a86da6670d71d95680dadbf022100ab1b277ef5ffe134460835e3d1402461ba104cb50b16f397fdc7a9abfefef280",
+          "sig" : "3045022100b5d795cc75cea5c434fa4185180cd6bd21223f3d5a86da6670d71d95680dadbf022054e4d8810a001ecbb9f7ca1c2ebfdb9d009e9031a431aca3c20ab4e0d1374ec1",
           "result" : "valid"
         },
         {
-          "tcId" : 317,
+          "tcId" : 313,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
@@ -3317,17 +3265,17 @@
           "result" : "valid"
         },
         {
-          "tcId" : 318,
+          "tcId" : 314,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
           ],
           "msg" : "35373438303831363936",
-          "sig" : "3046022100ddd20c4a05596ca868b558839fce9f6511ddd83d1ccb53f82e5269d559a01552022100a46e8cb8d626cf6c00ddedc3b5da7e613ac376445ee260743f06f79054c7d42a",
+          "sig" : "3045022100ddd20c4a05596ca868b558839fce9f6511ddd83d1ccb53f82e5269d559a0155202205b91734729d93093ff22123c4a25819d7feb66a250663fc780cb66fc7b6e6d17",
           "result" : "valid"
         },
         {
-          "tcId" : 319,
+          "tcId" : 315,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
@@ -3337,17 +3285,17 @@
           "result" : "valid"
         },
         {
-          "tcId" : 320,
+          "tcId" : 316,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
           ],
           "msg" : "31353431313033353938",
-          "sig" : "3046022100c5771016d0dd6357143c89f684cd740423502554c0c59aa8c99584f1ff38f609022100ab4bfa0bb88ab99791b9b3ab9c4b02bd2a57ae8dde50b9064063fcf85315cfe5",
+          "sig" : "3045022100c5771016d0dd6357143c89f684cd740423502554c0c59aa8c99584f1ff38f609022054b405f4477546686e464c5463b4fd4190572e58d0f7e7357f6e61947d20715c",
           "result" : "valid"
         },
         {
-          "tcId" : 321,
+          "tcId" : 317,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
@@ -3357,47 +3305,47 @@
           "result" : "valid"
         },
         {
-          "tcId" : 322,
+          "tcId" : 318,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
           ],
           "msg" : "3130353336323835353638",
-          "sig" : "304502202557d64a7aee2e0931c012e4fea1cd3a2c334edae68cdeb7158caf21b68e5a2402210080f93244956ffdc568c77d12684f7f004fa92da7e60ae94a1b98c422e23eda34",
+          "sig" : "304402202557d64a7aee2e0931c012e4fea1cd3a2c334edae68cdeb7158caf21b68e5a2402207f06cdbb6a90023a973882ed97b080fe6b05af3ec93db6f1a4399a69edf7670d",
           "result" : "valid"
         },
         {
-          "tcId" : 323,
+          "tcId" : 319,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
           ],
           "msg" : "393533393034313035",
-          "sig" : "3046022100c4f2eccbb6a24350c8466450b9d61b207ee359e037b3dcedb42a3f2e6dd6aeb5022100cd9c394a65d0aa322e391eb76b2a1a687f8620a88adef3a01eb8e4fb05b6477a",
+          "sig" : "3045022100c4f2eccbb6a24350c8466450b9d61b207ee359e037b3dcedb42a3f2e6dd6aeb502203263c6b59a2f55cdd1c6e14894d5e5963b28bc3e2469ac9ba1197991ca7ff9c7",
           "result" : "valid"
         },
         {
-          "tcId" : 324,
+          "tcId" : 320,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
           ],
           "msg" : "393738383438303339",
-          "sig" : "3046022100eff04781c9cbcd162d0a25a6e2ebcca43506c523385cb515d49ea38a1b12fcad022100ea5328ce6b36e56ab87acb0dcfea498bcec1bba86a065268f6eff3c41c4b0c9c",
+          "sig" : "3045022100eff04781c9cbcd162d0a25a6e2ebcca43506c523385cb515d49ea38a1b12fcad022015acd73194c91a95478534f23015b672ebed213e45424dd2c8e26ac8b3eb34a5",
           "result" : "valid"
         },
         {
-          "tcId" : 325,
+          "tcId" : 321,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
           ],
           "msg" : "33363130363732343432",
-          "sig" : "3046022100f58b4e3110a64bf1b5db97639ee0e5a9c8dfa49dc59b679891f520fdf0584c87022100d32701ae777511624c1f8abbf02b248b04e7a9eb27938f524f3e8828ba40164a",
+          "sig" : "3045022100f58b4e3110a64bf1b5db97639ee0e5a9c8dfa49dc59b679891f520fdf0584c8702202cd8fe51888aee9db3e075440fd4db73b5c732fb87b510e97093d66415f62af7",
           "result" : "valid"
         },
         {
-          "tcId" : 326,
+          "tcId" : 322,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
@@ -3407,7 +3355,7 @@
           "result" : "valid"
         },
         {
-          "tcId" : 327,
+          "tcId" : 323,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
@@ -3417,7 +3365,7 @@
           "result" : "valid"
         },
         {
-          "tcId" : 328,
+          "tcId" : 324,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
@@ -3427,7 +3375,7 @@
           "result" : "valid"
         },
         {
-          "tcId" : 329,
+          "tcId" : 325,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
@@ -3437,37 +3385,37 @@
           "result" : "valid"
         },
         {
-          "tcId" : 330,
+          "tcId" : 326,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
           ],
           "msg" : "333638323634333138",
-          "sig" : "3045022000a134b5c6ccbcefd4c882b945baeb4933444172795fa6796aae149067547098022100a991b9efa2db276feae1c115c140770901839d87e60e7ec45a2b81cf3b437be6",
+          "sig" : "3044022000a134b5c6ccbcefd4c882b945baeb4933444172795fa6796aae1490675470980220566e46105d24d890151e3eea3ebf88f5b92b3f5ec93a217765a6dcbd94f2c55b",
           "result" : "valid"
         },
         {
-          "tcId" : 331,
+          "tcId" : 327,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
           ],
           "msg" : "33323631313938363038",
-          "sig" : "304502202e4721363ad3992c139e5a1c26395d2c2d777824aa24fde075e0d7381171309d0221008bf083b6bbe71ecff22baed087d5a77eaeaf726bf14ace2c03fd6e37ba6c26f2",
+          "sig" : "304402202e4721363ad3992c139e5a1c26395d2c2d777824aa24fde075e0d7381171309d0220740f7c494418e1300dd4512f782a58800bff6a7abdfdd20fbbd4f05515ca1a4f",
           "result" : "valid"
         },
         {
-          "tcId" : 332,
+          "tcId" : 328,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
           ],
           "msg" : "39363738373831303934",
-          "sig" : "304502206852e9d3cd9fe373c2d504877967d365ab1456707b6817a042864694e1960ccf022100f9b4d815ebd4cf77847b37952334d05b2045cb398d4c21ba207922a7a4714d84",
+          "sig" : "304402206852e9d3cd9fe373c2d504877967d365ab1456707b6817a042864694e1960ccf0220064b27ea142b30887b84c86adccb2fa39a6911ad21fc7e819f593be52bc4f3bd",
           "result" : "valid"
         },
         {
-          "tcId" : 333,
+          "tcId" : 329,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
@@ -3477,7 +3425,7 @@
           "result" : "valid"
         },
         {
-          "tcId" : 334,
+          "tcId" : 330,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
@@ -3487,17 +3435,17 @@
           "result" : "valid"
         },
         {
-          "tcId" : 335,
+          "tcId" : 331,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
           ],
           "msg" : "3131303230383333373736",
-          "sig" : "3045022007244865b72ff37e62e3146f0dc14682badd7197799135f0b00ade7671742bfe022100f27f3ddc7124b1b58579573a835650e7a8bad5eeb96e9da215cd7bf9a2a039ed",
+          "sig" : "3044022007244865b72ff37e62e3146f0dc14682badd7197799135f0b00ade7671742bfe02200d80c2238edb4e4a7a86a8c57ca9af1711f406f7f5da0299aa04e2932d960754",
           "result" : "valid"
         },
         {
-          "tcId" : 336,
+          "tcId" : 332,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
@@ -3507,17 +3455,17 @@
           "result" : "valid"
         },
         {
-          "tcId" : 337,
+          "tcId" : 333,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
           ],
           "msg" : "333232313434313632",
-          "sig" : "3046022100d3027c656f6d4fdfd8ede22093e3c303b0133c340d615e7756f6253aea927238022100f6510f9f371b31068d68bfeeaa720eb9bbdc8040145fcf88d4e0b58de0777d2a",
+          "sig" : "3045022100d3027c656f6d4fdfd8ede22093e3c303b0133c340d615e7756f6253aea927238022009aef060c8e4cef972974011558df144fed25ca69ae8d0b2eaf1a8feefbec417",
           "result" : "valid"
         },
         {
-          "tcId" : 338,
+          "tcId" : 334,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
@@ -3527,7 +3475,7 @@
           "result" : "valid"
         },
         {
-          "tcId" : 339,
+          "tcId" : 335,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
@@ -3537,7 +3485,7 @@
           "result" : "valid"
         },
         {
-          "tcId" : 340,
+          "tcId" : 336,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
@@ -3547,7 +3495,7 @@
           "result" : "valid"
         },
         {
-          "tcId" : 341,
+          "tcId" : 337,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
@@ -3557,7 +3505,7 @@
           "result" : "valid"
         },
         {
-          "tcId" : 342,
+          "tcId" : 338,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
@@ -3567,7 +3515,7 @@
           "result" : "valid"
         },
         {
-          "tcId" : 343,
+          "tcId" : 339,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
@@ -3577,7 +3525,7 @@
           "result" : "valid"
         },
         {
-          "tcId" : 344,
+          "tcId" : 340,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
@@ -3587,7 +3535,7 @@
           "result" : "valid"
         },
         {
-          "tcId" : 345,
+          "tcId" : 341,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
@@ -3597,7 +3545,7 @@
           "result" : "valid"
         },
         {
-          "tcId" : 346,
+          "tcId" : 342,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
@@ -3607,27 +3555,27 @@
           "result" : "valid"
         },
         {
-          "tcId" : 347,
+          "tcId" : 343,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
           ],
           "msg" : "31363432363235323632",
-          "sig" : "304502205827518344844fd6a7de73cbb0a6befdea7b13d2dee4475317f0f18ffc81524b022100b0a334b1f4b774a5a289f553224d286d239ef8a90929ed2d91423e024eb7fa66",
+          "sig" : "304402205827518344844fd6a7de73cbb0a6befdea7b13d2dee4475317f0f18ffc81524b02204f5ccb4e0b488b5a5d760aacddb2d791970fe43da61eb30e2e90208a817e46db",
           "result" : "valid"
         },
         {
-          "tcId" : 348,
+          "tcId" : 344,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
           ],
           "msg" : "36383234313839343336",
-          "sig" : "304602210097ab19bd139cac319325869218b1bce111875d63fb12098a04b0cd59b6fdd3a3022100bce26315c5dbc7b8cfc31425a9b89bccea7aa9477d711a4d377f833dcc28f820",
+          "sig" : "304502210097ab19bd139cac319325869218b1bce111875d63fb12098a04b0cd59b6fdd3a30220431d9cea3a243847303cebda56476431d034339f31d785ee8852db4f040d4921",
           "result" : "valid"
         },
         {
-          "tcId" : 349,
+          "tcId" : 345,
           "comment" : "special case hash",
           "flags" : [
             "SpecialCaseHash"
@@ -3639,7 +3587,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -3653,29 +3601,29 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 350,
+          "tcId" : 346,
           "comment" : "k*G has a large x-coordinate",
           "flags" : [
             "ArithmeticError"
           ],
           "msg" : "313233343030",
-          "sig" : "30360211014551231950b75fc4402da1722fc9baeb022100fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd036413e",
+          "sig" : "30160211014551231950b75fc4402da1722fc9baeb020103",
           "result" : "valid"
         },
         {
-          "tcId" : 351,
+          "tcId" : 347,
           "comment" : "r too large",
           "flags" : [
             "ArithmeticError"
           ],
           "msg" : "313233343030",
-          "sig" : "3046022100fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2c022100fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd036413e",
+          "sig" : "3026022100fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2c020103",
           "result" : "invalid"
         }
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -3689,19 +3637,19 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 352,
+          "tcId" : 348,
           "comment" : "r,s are large",
           "flags" : [
             "ArithmeticError"
           ],
           "msg" : "313233343030",
-          "sig" : "3046022100fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd036413f022100fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd036413e",
+          "sig" : "3026022100fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd036413f020103",
           "result" : "valid"
         }
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -3715,7 +3663,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 353,
+          "tcId" : 349,
           "comment" : "r and s^-1 have a large Hamming weight",
           "flags" : [
             "ArithmeticError"
@@ -3727,7 +3675,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -3741,7 +3689,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 354,
+          "tcId" : 350,
           "comment" : "r and s^-1 have a large Hamming weight",
           "flags" : [
             "ArithmeticError"
@@ -3753,7 +3701,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -3767,7 +3715,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 355,
+          "tcId" : 351,
           "comment" : "small r and s",
           "flags" : [
             "SmallRandS",
@@ -3780,7 +3728,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -3794,7 +3742,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 356,
+          "tcId" : 352,
           "comment" : "small r and s",
           "flags" : [
             "SmallRandS",
@@ -3807,7 +3755,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -3821,7 +3769,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 357,
+          "tcId" : 353,
           "comment" : "small r and s",
           "flags" : [
             "SmallRandS",
@@ -3834,7 +3782,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -3848,7 +3796,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 358,
+          "tcId" : 354,
           "comment" : "small r and s",
           "flags" : [
             "SmallRandS",
@@ -3861,7 +3809,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -3875,7 +3823,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 359,
+          "tcId" : 355,
           "comment" : "small r and s",
           "flags" : [
             "SmallRandS",
@@ -3888,7 +3836,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -3902,7 +3850,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 360,
+          "tcId" : 356,
           "comment" : "small r and s",
           "flags" : [
             "SmallRandS",
@@ -3913,7 +3861,7 @@
           "result" : "valid"
         },
         {
-          "tcId" : 361,
+          "tcId" : 357,
           "comment" : "r is larger than n",
           "flags" : [
             "ArithmeticError"
@@ -3925,7 +3873,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -3939,19 +3887,19 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 362,
+          "tcId" : 358,
           "comment" : "s is larger than n",
           "flags" : [
             "ArithmeticError"
           ],
           "msg" : "313233343030",
-          "sig" : "3026020102022100fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd04917c8",
+          "sig" : "30080201020203ed2979",
           "result" : "invalid"
         }
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -3965,19 +3913,19 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 363,
+          "tcId" : 359,
           "comment" : "small r and s^-1",
           "flags" : [
             "ArithmeticError"
           ],
           "msg" : "313233343030",
-          "sig" : "302702020101022100c58b162c58b162c58b162c58b162c58a1b242973853e16db75c8a1a71da4d39d",
+          "sig" : "30260202010102203a74e9d3a74e9d3a74e9d3a74e9d3a749f8ab3732a0a89604a09bce5b2916da4",
           "result" : "valid"
         }
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -3991,19 +3939,19 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 364,
+          "tcId" : 360,
           "comment" : "smallish r and s^-1",
           "flags" : [
             "ArithmeticError"
           ],
           "msg" : "313233343030",
-          "sig" : "302c02072d9b4d347952cc022100fcbc5103d0da267477d1791461cf2aa44bf9d43198f79507bd8779d69a13108e",
+          "sig" : "302b02072d9b4d347952cc02200343aefc2f25d98b882e86eb9e30d55a6eb508b516510b34024ae4b6362330b3",
           "result" : "valid"
         }
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -4017,19 +3965,19 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 365,
+          "tcId" : 361,
           "comment" : "100-bit r and small s^-1",
           "flags" : [
             "ArithmeticError"
           ],
           "msg" : "313233343030",
-          "sig" : "3032020d1033e67e37b32b445580bf4efc022100906f906f906f906f906f906f906f906ed8e426f7b1968c35a204236a579723d2",
+          "sig" : "3031020d1033e67e37b32b445580bf4efc02206f906f906f906f906f906f906f906f8fe1cab5eefdb214061dce3b22789f1d6f",
           "result" : "valid"
         }
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -4043,7 +3991,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 366,
+          "tcId" : 362,
           "comment" : "small r and 100 bit s^-1",
           "flags" : [
             "ArithmeticError"
@@ -4055,7 +4003,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -4069,7 +4017,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 367,
+          "tcId" : 363,
           "comment" : "100-bit r and s^-1",
           "flags" : [
             "ArithmeticError"
@@ -4081,7 +4029,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -4095,7 +4043,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 368,
+          "tcId" : 364,
           "comment" : "r and s^-1 are close to n",
           "flags" : [
             "ArithmeticError"
@@ -4107,7 +4055,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -4121,7 +4069,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 369,
+          "tcId" : 365,
           "comment" : "r and s are 64-bit integer",
           "flags" : [
             "ArithmeticError"
@@ -4133,7 +4081,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -4147,7 +4095,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 370,
+          "tcId" : 366,
           "comment" : "r and s are 100-bit integer",
           "flags" : [
             "ArithmeticError"
@@ -4159,7 +4107,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -4173,7 +4121,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 371,
+          "tcId" : 367,
           "comment" : "r and s are 128-bit integer",
           "flags" : [
             "ArithmeticError"
@@ -4185,7 +4133,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -4199,7 +4147,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 372,
+          "tcId" : 368,
           "comment" : "r and s are 160-bit integer",
           "flags" : [
             "ArithmeticError"
@@ -4211,7 +4159,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -4225,7 +4173,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 373,
+          "tcId" : 369,
           "comment" : "s == 1",
           "flags" : [
             "ArithmeticError"
@@ -4235,7 +4183,7 @@
           "result" : "valid"
         },
         {
-          "tcId" : 374,
+          "tcId" : 370,
           "comment" : "s == 0",
           "flags" : [
             "ArithmeticError"
@@ -4247,7 +4195,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -4261,7 +4209,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 375,
+          "tcId" : 371,
           "comment" : "edge case modular inverse",
           "flags" : [
             "ModularInverse",
@@ -4274,7 +4222,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -4288,7 +4236,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 376,
+          "tcId" : 372,
           "comment" : "edge case modular inverse",
           "flags" : [
             "ModularInverse",
@@ -4301,7 +4249,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -4315,7 +4263,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 377,
+          "tcId" : 373,
           "comment" : "edge case modular inverse",
           "flags" : [
             "ModularInverse",
@@ -4328,7 +4276,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -4342,7 +4290,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 378,
+          "tcId" : 374,
           "comment" : "edge case modular inverse",
           "flags" : [
             "ModularInverse",
@@ -4355,7 +4303,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -4369,7 +4317,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 379,
+          "tcId" : 375,
           "comment" : "edge case modular inverse",
           "flags" : [
             "ModularInverse",
@@ -4382,7 +4330,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -4396,7 +4344,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 380,
+          "tcId" : 376,
           "comment" : "edge case modular inverse",
           "flags" : [
             "ModularInverse",
@@ -4409,7 +4357,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -4423,7 +4371,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 381,
+          "tcId" : 377,
           "comment" : "edge case modular inverse",
           "flags" : [
             "ModularInverse",
@@ -4436,7 +4384,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -4450,7 +4398,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 382,
+          "tcId" : 378,
           "comment" : "edge case modular inverse",
           "flags" : [
             "ModularInverse",
@@ -4463,7 +4411,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -4477,7 +4425,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 383,
+          "tcId" : 379,
           "comment" : "edge case modular inverse",
           "flags" : [
             "ModularInverse",
@@ -4490,7 +4438,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -4504,7 +4452,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 384,
+          "tcId" : 380,
           "comment" : "edge case modular inverse",
           "flags" : [
             "ModularInverse",
@@ -4517,7 +4465,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -4531,7 +4479,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 385,
+          "tcId" : 381,
           "comment" : "edge case modular inverse",
           "flags" : [
             "ModularInverse",
@@ -4544,7 +4492,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -4558,7 +4506,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 386,
+          "tcId" : 382,
           "comment" : "edge case modular inverse",
           "flags" : [
             "ModularInverse",
@@ -4571,7 +4519,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -4585,7 +4533,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 387,
+          "tcId" : 383,
           "comment" : "edge case modular inverse",
           "flags" : [
             "ModularInverse",
@@ -4598,7 +4546,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -4612,7 +4560,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 388,
+          "tcId" : 384,
           "comment" : "edge case modular inverse",
           "flags" : [
             "ModularInverse",
@@ -4625,7 +4573,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -4639,7 +4587,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 389,
+          "tcId" : 385,
           "comment" : "edge case modular inverse",
           "flags" : [
             "ModularInverse",
@@ -4652,7 +4600,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -4666,7 +4614,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 390,
+          "tcId" : 386,
           "comment" : "point at infinity during verify",
           "flags" : [
             "PointDuplication",
@@ -4679,7 +4627,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -4693,7 +4641,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 391,
+          "tcId" : 387,
           "comment" : "edge case for signature malleability",
           "flags" : [
             "ArithmeticError"
@@ -4705,7 +4653,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -4719,19 +4667,19 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 392,
+          "tcId" : 388,
           "comment" : "edge case for signature malleability",
           "flags" : [
             "ArithmeticError"
           ],
           "msg" : "313233343030",
           "sig" : "304402207fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a002207fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a1",
-          "result" : "valid"
+          "result" : "invalid"
         }
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -4745,19 +4693,19 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 393,
+          "tcId" : 389,
           "comment" : "u1 == 1",
           "flags" : [
             "ArithmeticError"
           ],
           "msg" : "313233343030",
-          "sig" : "3045022055555555555555555555555555555554e8e4f44ce51835693ff0ca2ef01215b8022100bb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023",
+          "sig" : "3044022055555555555555555555555555555554e8e4f44ce51835693ff0ca2ef01215b8022044a5ad0bd0636d9e12bc9e0a6bdd5e1bba77f523842193b3b82e448e05d5f11e",
           "result" : "valid"
         }
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -4771,7 +4719,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 394,
+          "tcId" : 390,
           "comment" : "u1 == n - 1",
           "flags" : [
             "ArithmeticError"
@@ -4783,7 +4731,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -4797,7 +4745,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 395,
+          "tcId" : 391,
           "comment" : "u2 == 1",
           "flags" : [
             "ArithmeticError"
@@ -4809,7 +4757,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -4823,19 +4771,19 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 396,
+          "tcId" : 392,
           "comment" : "u2 == n - 1",
           "flags" : [
             "ArithmeticError"
           ],
           "msg" : "313233343030",
-          "sig" : "3045022055555555555555555555555555555554e8e4f44ce51835693ff0ca2ef01215b8022100aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa9d1c9e899ca306ad27fe1945de0242b89",
+          "sig" : "3044022055555555555555555555555555555554e8e4f44ce51835693ff0ca2ef01215b8022055555555555555555555555555555554e8e4f44ce51835693ff0ca2ef01215b8",
           "result" : "valid"
         }
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -4849,19 +4797,19 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 397,
+          "tcId" : 393,
           "comment" : "edge case for u1",
           "flags" : [
             "ArithmeticError"
           ],
           "msg" : "313233343030",
-          "sig" : "304502207ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc022100e91e1ba6ba898620a46bcb51dc0b8b4ad1dc35dad892c4552d1847b2ce444637",
+          "sig" : "304402207ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc022016e1e459457679df5b9434ae23f474b3e8d2a70bd6b5dbe692ba16da01f1fb0a",
           "result" : "valid"
         }
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -4875,19 +4823,19 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 398,
+          "tcId" : 394,
           "comment" : "edge case for u1",
           "flags" : [
             "ArithmeticError"
           ],
           "msg" : "313233343030",
-          "sig" : "304502207ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc022100e36bf0cec06d9b841da81332812f74f30bbaec9f202319206c6f0b8a0a400ff7",
+          "sig" : "304402207ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc02201c940f313f92647be257eccd7ed08b0baef3f0478f25871b53635302c5f6314a",
           "result" : "valid"
         }
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -4901,19 +4849,19 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 399,
+          "tcId" : 395,
           "comment" : "edge case for u1",
           "flags" : [
             "ArithmeticError"
           ],
           "msg" : "313233343030",
-          "sig" : "304502207ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc022100ea26b57af884b6c06e348efe139c1e4e9ec9518d60c340f6bac7d278ca08d8a6",
+          "sig" : "304402207ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc022015d94a85077b493f91cb7101ec63e1b01be58b594e855f45050a8c14062d689b",
           "result" : "valid"
         }
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -4927,7 +4875,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 400,
+          "tcId" : 396,
           "comment" : "edge case for u1",
           "flags" : [
             "ArithmeticError"
@@ -4939,7 +4887,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -4953,19 +4901,19 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 401,
+          "tcId" : 397,
           "comment" : "edge case for u1",
           "flags" : [
             "ArithmeticError"
           ],
           "msg" : "313233343030",
-          "sig" : "304502207ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc022100d27a7694c146244a5ad0bd0636d9e12abe687897e8e9998ddbd4e59a78520d0f",
+          "sig" : "304402207ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc02202d85896b3eb9dbb5a52f42f9c9261ed3fc46644ec65f06ade3fd78f257e43432",
           "result" : "valid"
         }
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -4979,19 +4927,19 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 402,
+          "tcId" : 398,
           "comment" : "edge case for u1",
           "flags" : [
             "ArithmeticError"
           ],
           "msg" : "313233343030",
-          "sig" : "304502207ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc022100a4f4ed29828c4894b5a17a0c6db3c256c2221449228a92dff7d76ca8206dd8dd",
+          "sig" : "304402207ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc02205b0b12d67d73b76b4a5e85f3924c3da7f88cc89d8cbe0d5bc7faf1e4afc86864",
           "result" : "valid"
         }
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -5005,7 +4953,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 403,
+          "tcId" : 399,
           "comment" : "edge case for u1",
           "flags" : [
             "ArithmeticError"
@@ -5017,7 +4965,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -5031,7 +4979,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 404,
+          "tcId" : 400,
           "comment" : "edge case for u1",
           "flags" : [
             "ArithmeticError"
@@ -5043,7 +4991,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -5057,7 +5005,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 405,
+          "tcId" : 401,
           "comment" : "edge case for u1",
           "flags" : [
             "ArithmeticError"
@@ -5069,7 +5017,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -5083,19 +5031,19 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 406,
+          "tcId" : 402,
           "comment" : "edge case for u1",
           "flags" : [
             "ArithmeticError"
           ],
           "msg" : "313233343030",
-          "sig" : "304502207ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc0221009be363a286f23f6322c205449d320baad417953ecb70f6214e90d49d7d1f26a8",
+          "sig" : "304402207ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc0220641c9c5d790dc09cdd3dfabb62cdf453e69747a7e3d7aa1a714189ef53171a99",
           "result" : "valid"
         }
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -5109,7 +5057,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 407,
+          "tcId" : 403,
           "comment" : "edge case for u1",
           "flags" : [
             "ArithmeticError"
@@ -5121,7 +5069,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -5135,7 +5083,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 408,
+          "tcId" : 404,
           "comment" : "edge case for u1",
           "flags" : [
             "ArithmeticError"
@@ -5147,7 +5095,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -5161,7 +5109,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 409,
+          "tcId" : 405,
           "comment" : "edge case for u1",
           "flags" : [
             "ArithmeticError"
@@ -5173,7 +5121,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -5187,7 +5135,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 410,
+          "tcId" : 406,
           "comment" : "edge case for u1",
           "flags" : [
             "ArithmeticError"
@@ -5199,7 +5147,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -5213,7 +5161,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 411,
+          "tcId" : 407,
           "comment" : "edge case for u1",
           "flags" : [
             "ArithmeticError"
@@ -5225,7 +5173,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -5239,19 +5187,19 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 412,
+          "tcId" : 408,
           "comment" : "edge case for u2",
           "flags" : [
             "ArithmeticError"
           ],
           "msg" : "313233343030",
-          "sig" : "304502207ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc022100d55555555555555555555555555555547c74934474db157d2a8c3f088aced62a",
+          "sig" : "304402207ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc02202aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa3e3a49a23a6d8abe95461f8445676b17",
           "result" : "valid"
         }
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -5265,19 +5213,19 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 413,
+          "tcId" : 409,
           "comment" : "edge case for u2",
           "flags" : [
             "ArithmeticError"
           ],
           "msg" : "313233343030",
-          "sig" : "304502207ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc022100c1777c8853938e536213c02464a936000ba1e21c0fc62075d46c624e23b52f31",
+          "sig" : "304402207ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc02203e888377ac6c71ac9dec3fdb9b56c9feaf0cfaca9f827fc5eb65fc3eac811210",
           "result" : "valid"
         }
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -5291,7 +5239,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 414,
+          "tcId" : 410,
           "comment" : "edge case for u2",
           "flags" : [
             "ArithmeticError"
@@ -5303,7 +5251,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -5317,7 +5265,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 415,
+          "tcId" : 411,
           "comment" : "edge case for u2",
           "flags" : [
             "ArithmeticError"
@@ -5329,7 +5277,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -5343,7 +5291,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 416,
+          "tcId" : 412,
           "comment" : "edge case for u2",
           "flags" : [
             "ArithmeticError"
@@ -5355,7 +5303,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -5369,19 +5317,19 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 417,
+          "tcId" : 413,
           "comment" : "edge case for u2",
           "flags" : [
             "ArithmeticError"
           ],
           "msg" : "313233343030",
-          "sig" : "304502207ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc022100ffb32ac4589f6ffffffffffffffffffebb107ff56b664ca599b954521f9972fa",
+          "sig" : "304302207ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc021f4cd53ba7608fffffffffffffffffffff9e5cf143e2539626190a3ab09cce47",
           "result" : "valid"
         }
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -5395,7 +5343,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 418,
+          "tcId" : 414,
           "comment" : "edge case for u2",
           "flags" : [
             "ArithmeticError"
@@ -5407,7 +5355,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -5421,7 +5369,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 419,
+          "tcId" : 415,
           "comment" : "edge case for u2",
           "flags" : [
             "ArithmeticError"
@@ -5433,7 +5381,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -5447,7 +5395,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 420,
+          "tcId" : 416,
           "comment" : "edge case for u2",
           "flags" : [
             "ArithmeticError"
@@ -5459,7 +5407,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -5473,19 +5421,19 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 421,
+          "tcId" : 417,
           "comment" : "edge case for u2",
           "flags" : [
             "ArithmeticError"
           ],
           "msg" : "313233343030",
-          "sig" : "304502207ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc022100b777777777777777777777777777777688e6a1fe808a97a348671222ff16b863",
+          "sig" : "304402207ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc02204888888888888888888888888888888831c83ae82ebe0898776b4c69d11f88de",
           "result" : "valid"
         }
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -5499,7 +5447,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 422,
+          "tcId" : 418,
           "comment" : "edge case for u2",
           "flags" : [
             "ArithmeticError"
@@ -5511,7 +5459,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -5525,19 +5473,19 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 423,
+          "tcId" : 419,
           "comment" : "edge case for u2",
           "flags" : [
             "ArithmeticError"
           ],
           "msg" : "313233343030",
-          "sig" : "304502207ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc022100955555555555555555555555555555547c74934474db157d2a8c3f088aced62c",
+          "sig" : "304402207ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc02206aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa3e3a49a23a6d8abe95461f8445676b15",
           "result" : "valid"
         }
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -5551,7 +5499,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 424,
+          "tcId" : 420,
           "comment" : "edge case for u2",
           "flags" : [
             "ArithmeticError"
@@ -5563,7 +5511,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -5577,19 +5525,19 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 425,
+          "tcId" : 421,
           "comment" : "edge case for u2",
           "flags" : [
             "ArithmeticError"
           ],
           "msg" : "313233343030",
-          "sig" : "304502207ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc022100bffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364143",
+          "sig" : "304402207ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc02203ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe",
           "result" : "valid"
         }
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -5603,7 +5551,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 426,
+          "tcId" : 422,
           "comment" : "edge case for u2",
           "flags" : [
             "ArithmeticError"
@@ -5615,7 +5563,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -5629,19 +5577,19 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 427,
+          "tcId" : 423,
           "comment" : "point duplication during verification",
           "flags" : [
             "PointDuplication"
           ],
           "msg" : "313233343030",
-          "sig" : "3045022032b0d10d8d0e04bc8d4d064d270699e87cffc9b49c5c20730e1c26f6105ddcda022100d612c2984c2afa416aa7f2882a486d4a8426cb6cfc91ed5b737278f9fca8be68",
+          "sig" : "3044022032b0d10d8d0e04bc8d4d064d270699e87cffc9b49c5c20730e1c26f6105ddcda022029ed3d67b3d505be95580d77d5b792b436881179b2b6b2e04c5fe592d38d82d9",
           "result" : "valid"
         }
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -5655,19 +5603,19 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 428,
+          "tcId" : 424,
           "comment" : "duplication bug",
           "flags" : [
             "PointDuplication"
           ],
           "msg" : "313233343030",
-          "sig" : "3045022032b0d10d8d0e04bc8d4d064d270699e87cffc9b49c5c20730e1c26f6105ddcda022100d612c2984c2afa416aa7f2882a486d4a8426cb6cfc91ed5b737278f9fca8be68",
+          "sig" : "3044022032b0d10d8d0e04bc8d4d064d270699e87cffc9b49c5c20730e1c26f6105ddcda022029ed3d67b3d505be95580d77d5b792b436881179b2b6b2e04c5fe592d38d82d9",
           "result" : "invalid"
         }
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -5681,7 +5629,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 429,
+          "tcId" : 425,
           "comment" : "comparison with point at infinity ",
           "flags" : [
             "ArithmeticError"
@@ -5693,7 +5641,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -5707,7 +5655,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 430,
+          "tcId" : 426,
           "comment" : "extreme value for k and edgecase s",
           "flags" : [
             "ArithmeticError"
@@ -5719,7 +5667,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -5733,19 +5681,19 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 431,
+          "tcId" : 427,
           "comment" : "extreme value for k and s^-1",
           "flags" : [
             "ArithmeticError"
           ],
           "msg" : "313233343030",
-          "sig" : "3046022100c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5022100b6db6db6db6db6db6db6db6db6db6db5f30f30127d33e02aad96438927022e9c",
+          "sig" : "3045022100c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5022049249249249249249249249249249248c79facd43214c011123c1b03a93412a5",
           "result" : "valid"
         }
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -5759,19 +5707,19 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 432,
+          "tcId" : 428,
           "comment" : "extreme value for k and s^-1",
           "flags" : [
             "ArithmeticError"
           ],
           "msg" : "313233343030",
-          "sig" : "3046022100c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee502210099999999999999999999999999999998d668eaf0cf91f9bd7317d2547ced5a5a",
+          "sig" : "3045022100c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5022066666666666666666666666666666665e445f1f5dfb6a67e4cba8c385348e6e7",
           "result" : "valid"
         }
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -5785,7 +5733,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 433,
+          "tcId" : 429,
           "comment" : "extreme value for k and s^-1",
           "flags" : [
             "ArithmeticError"
@@ -5797,7 +5745,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -5811,7 +5759,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 434,
+          "tcId" : 430,
           "comment" : "extreme value for k and s^-1",
           "flags" : [
             "ArithmeticError"
@@ -5823,7 +5771,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -5837,7 +5785,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 435,
+          "tcId" : 431,
           "comment" : "extreme value for k",
           "flags" : [
             "ArithmeticError"
@@ -5849,7 +5797,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -5863,7 +5811,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 436,
+          "tcId" : 432,
           "comment" : "extreme value for k and edgecase s",
           "flags" : [
             "ArithmeticError"
@@ -5875,7 +5823,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -5889,19 +5837,19 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 437,
+          "tcId" : 433,
           "comment" : "extreme value for k and s^-1",
           "flags" : [
             "ArithmeticError"
           ],
           "msg" : "313233343030",
-          "sig" : "3045022079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798022100b6db6db6db6db6db6db6db6db6db6db5f30f30127d33e02aad96438927022e9c",
+          "sig" : "3044022079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798022049249249249249249249249249249248c79facd43214c011123c1b03a93412a5",
           "result" : "valid"
         }
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -5915,19 +5863,19 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 438,
+          "tcId" : 434,
           "comment" : "extreme value for k and s^-1",
           "flags" : [
             "ArithmeticError"
           ],
           "msg" : "313233343030",
-          "sig" : "3045022079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f8179802210099999999999999999999999999999998d668eaf0cf91f9bd7317d2547ced5a5a",
+          "sig" : "3044022079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798022066666666666666666666666666666665e445f1f5dfb6a67e4cba8c385348e6e7",
           "result" : "valid"
         }
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -5941,7 +5889,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 439,
+          "tcId" : 435,
           "comment" : "extreme value for k and s^-1",
           "flags" : [
             "ArithmeticError"
@@ -5953,7 +5901,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -5967,7 +5915,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 440,
+          "tcId" : 436,
           "comment" : "extreme value for k and s^-1",
           "flags" : [
             "ArithmeticError"
@@ -5979,7 +5927,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -5993,7 +5941,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 441,
+          "tcId" : 437,
           "comment" : "extreme value for k",
           "flags" : [
             "ArithmeticError"
@@ -6005,7 +5953,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -6019,7 +5967,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 442,
+          "tcId" : 438,
           "comment" : "public key shares x-coordinate with generator",
           "flags" : [
             "PointDuplication"
@@ -6029,7 +5977,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 443,
+          "tcId" : 439,
           "comment" : "public key shares x-coordinate with generator",
           "flags" : [
             "PointDuplication"
@@ -6041,7 +5989,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -6055,7 +6003,7 @@
       "sha" : "SHA-256",
       "tests" : [
         {
-          "tcId" : 444,
+          "tcId" : 440,
           "comment" : "public key shares x-coordinate with generator",
           "flags" : [
             "PointDuplication"
@@ -6065,7 +6013,7 @@
           "result" : "invalid"
         },
         {
-          "tcId" : 445,
+          "tcId" : 441,
           "comment" : "public key shares x-coordinate with generator",
           "flags" : [
             "PointDuplication"
@@ -6077,7 +6025,63 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
+      "publicKey" : {
+        "type" : "EcPublicKey",
+        "curve" : "secp256k1",
+        "keySize" : 256,
+        "uncompressed" : "04782c8ed17e3b2a783b5464f33b09652a71c678e05ec51e84e2bcfc663a3de963af9acb4280b8c7f7c42f4ef9aba6245ec1ec1712fd38a0fa96418d8cd6aa6152",
+        "wx" : "782c8ed17e3b2a783b5464f33b09652a71c678e05ec51e84e2bcfc663a3de963",
+        "wy" : "00af9acb4280b8c7f7c42f4ef9aba6245ec1ec1712fd38a0fa96418d8cd6aa6152"
+      },
+      "publicKeyDer" : "3056301006072a8648ce3d020106052b8104000a03420004782c8ed17e3b2a783b5464f33b09652a71c678e05ec51e84e2bcfc663a3de963af9acb4280b8c7f7c42f4ef9aba6245ec1ec1712fd38a0fa96418d8cd6aa6152",
+      "publicKeyPem" : "-----BEGIN PUBLIC KEY-----\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEeCyO0X47Kng7VGTzOwllKnHGeOBexR6E\n4rz8Zjo96WOvmstCgLjH98QvTvmrpiRewewXEv04oPqWQY2M1qphUg==\n-----END PUBLIC KEY-----\n",
+      "sha" : "SHA-256",
+      "tests" : [
+        {
+          "tcId" : 442,
+          "comment" : "pseudorandom signature",
+          "flags" : [
+            "ValidSignature"
+          ],
+          "msg" : "",
+          "sig" : "3045022100f80ae4f96cdbc9d853f83d47aae225bf407d51c56b7776cd67d0dc195d99a9dc02204cfc1d941e08cb9aceadde0f4ccead76b30d332fc442115d50e673e28686b70b",
+          "result" : "valid"
+        },
+        {
+          "tcId" : 443,
+          "comment" : "pseudorandom signature",
+          "flags" : [
+            "ValidSignature"
+          ],
+          "msg" : "4d7367",
+          "sig" : "30440220109cd8ae0374358984a8249c0a843628f2835ffad1df1a9a69aa2fe72355545c02205390ff250ac4274e1cb25cd6ca6491f6b91281e32f5b264d87977aed4a94e77b",
+          "result" : "valid"
+        },
+        {
+          "tcId" : 444,
+          "comment" : "pseudorandom signature",
+          "flags" : [
+            "ValidSignature"
+          ],
+          "msg" : "313233343030",
+          "sig" : "3045022100d035ee1f17fdb0b2681b163e33c359932659990af77dca632012b30b27a057b302201939d9f3b2858bc13e3474cb50e6a82be44faa71940f876c1cba4c3e989202b6",
+          "result" : "valid"
+        },
+        {
+          "tcId" : 445,
+          "comment" : "pseudorandom signature",
+          "flags" : [
+            "ValidSignature"
+          ],
+          "msg" : "0000000000000000000000000000000000000000",
+          "sig" : "304402204f053f563ad34b74fd8c9934ce59e79c2eb8e6eca0fef5b323ca67d5ac7ed23802204d4b05daa0719e773d8617dce5631c5fd6f59c9bdc748e4b55c970040af01be5",
+          "result" : "valid"
+        }
+      ]
+    },
+    {
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -6107,7 +6111,7 @@
             "EdgeCasePublicKey"
           ],
           "msg" : "4d657373616765",
-          "sig" : "3046022100aad503de9b9fd66b948e9acf596f0a0e65e700b28b26ec56e6e45e846489b3c4022100fff223c5d0765447e8447a3f9d31fd0696e89d244422022ff61a110b2a8c2f04",
+          "sig" : "3044022100aad503de9b9fd66b948e9acf596f0a0e65e700b28b26ec56e6e45e846489b3c4021f0ddc3a2f89abb817bb85c062ce02f823c63fc26b269e0bc9b84d81a5aa123d",
           "result" : "valid"
         },
         {
@@ -6117,13 +6121,13 @@
             "EdgeCasePublicKey"
           ],
           "msg" : "4d657373616765",
-          "sig" : "30460221009182cebd3bb8ab572e167174397209ef4b1d439af3b200cdf003620089e43225022100abb88367d15fe62d1efffb6803da03109ee22e90bc9c78e8b4ed23630b82ea9d",
+          "sig" : "30450221009182cebd3bb8ab572e167174397209ef4b1d439af3b200cdf003620089e43225022054477c982ea019d2e1000497fc25fcee1bccae55f2ac27530ae53b29c4b356a4",
           "result" : "valid"
         }
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -6143,7 +6147,7 @@
             "EdgeCasePublicKey"
           ],
           "msg" : "4d657373616765",
-          "sig" : "304502203854a3998aebdf2dbc28adac4181462ccac7873907ab7f212c42db0e69b56ed8022100c12c09475c772fd0c1b2060d5163e42bf71d727e4ae7c03eeba954bf50b43bb3",
+          "sig" : "304402203854a3998aebdf2dbc28adac4181462ccac7873907ab7f212c42db0e69b56ed802203ed3f6b8a388d02f3e4df9f2ae9c1bd2c3916a686460dffcd42909cd7f82058e",
           "result" : "valid"
         },
         {
@@ -6153,7 +6157,7 @@
             "EdgeCasePublicKey"
           ],
           "msg" : "4d657373616765",
-          "sig" : "3046022100e94dbdc38795fe5c904d8f16d969d3b587f0a25d2de90b6d8c5c53ff887e3607022100856b8c963e9b68dade44750bf97ec4d11b1a0a3804f4cb79aa27bdea78ac14e4",
+          "sig" : "3045022100e94dbdc38795fe5c904d8f16d969d3b587f0a25d2de90b6d8c5c53ff887e360702207a947369c164972521bb8af406813b2d9f94d2aeaa53d4c215aaa0a2578a2c5d",
           "result" : "valid"
         },
         {
@@ -6169,7 +6173,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -6189,7 +6193,7 @@
             "EdgeCasePublicKey"
           ],
           "msg" : "4d657373616765",
-          "sig" : "3045022041efa7d3f05a0010675fcb918a45c693da4b348df21a59d6f9cd73e0d831d67a022100bbab52596c1a1d9484296cdc92cbf07e665259a13791a8fe8845e2c07cf3fc67",
+          "sig" : "3044022041efa7d3f05a0010675fcb918a45c693da4b348df21a59d6f9cd73e0d831d67a02204454ada693e5e26b7bd693236d340f80545c834577b6f73d378c7bcc534244da",
           "result" : "valid"
         },
         {
@@ -6199,7 +6203,7 @@
             "EdgeCasePublicKey"
           ],
           "msg" : "4d657373616765",
-          "sig" : "3046022100b615698c358b35920dd883eca625a6c5f7563970cdfc378f8fe0cee17092144c022100da0b84cd94a41e049ef477aeac157b2a9bfa6b7ac8de06ed3858c5eede6ddd6d",
+          "sig" : "3045022100b615698c358b35920dd883eca625a6c5f7563970cdfc378f8fe0cee17092144c022025f47b326b5be1fb610b885153ea84d41eb4716be66a994e8779989df1c863d4",
           "result" : "valid"
         },
         {
@@ -6209,13 +6213,13 @@
             "EdgeCasePublicKey"
           ],
           "msg" : "4d657373616765",
-          "sig" : "304602210087cf8c0eb82d44f69c60a2ff5457d3aaa322e7ec61ae5aecfd678ae1c1932b0e022100c522c4eea7eafb82914cbf5c1ff76760109f55ddddcf58274d41c9bc4311e06e",
+          "sig" : "304502210087cf8c0eb82d44f69c60a2ff5457d3aaa322e7ec61ae5aecfd678ae1c1932b0e02203add3b115815047d6eb340a3e008989eaa0f8708d1794814729094d08d2460d3",
           "result" : "valid"
         }
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -6235,7 +6239,7 @@
             "EdgeCasePublicKey"
           ],
           "msg" : "4d657373616765",
-          "sig" : "3045022062f48ef71ace27bf5a01834de1f7e3f948b9dce1ca1e911d5e13d3b104471d82022100a1570cc0f388768d3ba7df7f212564caa256ff825df997f21f72f5280d53011f",
+          "sig" : "3044022062f48ef71ace27bf5a01834de1f7e3f948b9dce1ca1e911d5e13d3b104471d8202205ea8f33f0c778972c4582080deda9b341857dd64514f0849a05f6964c2e34022",
           "result" : "valid"
         },
         {
@@ -6245,7 +6249,7 @@
             "EdgeCasePublicKey"
           ],
           "msg" : "4d657373616765",
-          "sig" : "3046022100f6b0e2f6fe020cf7c0c20137434344ed7add6c4be51861e2d14cbda472a6ffb40221009be93722c1a3ad7d4cf91723700cb5486de5479d8c1b38ae4e8e5ba1638e9732",
+          "sig" : "3045022100f6b0e2f6fe020cf7c0c20137434344ed7add6c4be51861e2d14cbda472a6ffb402206416c8dd3e5c5282b306e8dc8ff34ab64cc99549232d678d714402eb6ca7aa0f",
           "result" : "valid"
         },
         {
@@ -6261,7 +6265,7 @@
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -6281,7 +6285,7 @@
             "EdgeCasePublicKey"
           ],
           "msg" : "4d657373616765",
-          "sig" : "30450220592c41e16517f12fcabd98267674f974b588e9f35d35406c1a7bb2ed1d19b7b8022100c19a5f942607c3551484ff0dc97281f0cdc82bc48e2205a0645c0cf3d7f59da0",
+          "sig" : "30440220592c41e16517f12fcabd98267674f974b588e9f35d35406c1a7bb2ed1d19b7b802203e65a06bd9f83caaeb7b00f2368d7e0dece6b12221269a9b5b765198f840a3a1",
           "result" : "valid"
         },
         {
@@ -6291,7 +6295,7 @@
             "EdgeCasePublicKey"
           ],
           "msg" : "4d657373616765",
-          "sig" : "3046022100be0d70887d5e40821a61b68047de4ea03debfdf51cdf4d4b195558b959a032b20221008266b4d270e24414ecacb14c091a233134b918d37320c6557d60ad0a63544ac4",
+          "sig" : "3045022100be0d70887d5e40821a61b68047de4ea03debfdf51cdf4d4b195558b959a032b202207d994b2d8f1dbbeb13534eb3f6e5dccd85f5c4133c27d9e64271b1826ce1f67d",
           "result" : "valid"
         },
         {
@@ -6301,13 +6305,13 @@
             "EdgeCasePublicKey"
           ],
           "msg" : "4d657373616765",
-          "sig" : "3046022100fae92dfcb2ee392d270af3a5739faa26d4f97bfd39ed3cbee4d29e26af3b206a02210093645c80605595e02c09a0dc4b17ac2a51846a728b3e8d60442ed6449fd3342b",
+          "sig" : "3045022100fae92dfcb2ee392d270af3a5739faa26d4f97bfd39ed3cbee4d29e26af3b206a02206c9ba37f9faa6a1fd3f65f23b4e853d4692a7274240a12db7ba3884830630d16",
           "result" : "valid"
         }
       ]
     },
     {
-      "type" : "EcdsaVerify",
+      "type" : "EcdsaBitcoinVerify",
       "publicKey" : {
         "type" : "EcPublicKey",
         "curve" : "secp256k1",
@@ -6327,7 +6331,7 @@
             "EdgeCasePublicKey"
           ],
           "msg" : "4d657373616765",
-          "sig" : "30450220176a2557566ffa518b11226694eb9802ed2098bfe278e5570fe1d5d7af18a943022100ed6e2095f12a03f2eaf6718f430ec5fe2829fd1646ab648701656fd31221b97d",
+          "sig" : "30440220176a2557566ffa518b11226694eb9802ed2098bfe278e5570fe1d5d7af18a94302201291df6a0ed5fc0d15098e70bcf13a009284dfd0689d3bb4be6ceeb9be1487c4",
           "result" : "valid"
         },
         {
@@ -6337,7 +6341,7 @@
             "EdgeCasePublicKey"
           ],
           "msg" : "4d657373616765",
-          "sig" : "3045022060be20c3dbc162dd34d26780621c104bbe5dace630171b2daef0d826409ee5c2022100bd8081b27762ab6e8f425956bf604e332fa066a99b59f87e27dc1198b26f5caa",
+          "sig" : "3044022060be20c3dbc162dd34d26780621c104bbe5dace630171b2daef0d826409ee5c20220427f7e4d889d549170bda6a9409fb1cb8b0e763d13eea7bd97f64cf41dc6e497",
           "result" : "valid"
         },
         {
@@ -6347,7 +6351,7 @@
             "EdgeCasePublicKey"
           ],
           "msg" : "4d657373616765",
-          "sig" : "3046022100edf03cf63f658883289a1a593d1007895b9f236d27c9c1f1313089aaed6b16ae022100e5b22903f7eb23adc2e01057e39b0408d495f694c83f306f1216c9bf87506074",
+          "sig" : "3045022100edf03cf63f658883289a1a593d1007895b9f236d27c9c1f1313089aaed6b16ae02201a4dd6fc0814dc523d1fefa81c64fbf5e618e651e7096fccadbb94cd48e5e0cd",
           "result" : "valid"
         }
       ]

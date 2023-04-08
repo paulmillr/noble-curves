@@ -4,7 +4,10 @@ import { bytesToHex, concatBytes, hexToBytes, randomBytes } from '@noble/hashes/
 import * as fc from 'fast-check';
 import { describe, should } from 'micro-should';
 import { ed25519, ED25519_TORSION_SUBGROUP, numberToBytesLE } from './ed25519.helpers.js';
-import { default as ed25519vectors } from './wycheproof/eddsa_test.json' assert { type: 'json' };
+// Old vectors allow to test sign() because they include private key
+import { default as ed25519vectors_OLD } from './ed25519/ed25519_test_OLD.json' assert { type: 'json' };
+import { default as ed25519vectors } from './wycheproof/ed25519_test.json' assert { type: 'json' };
+
 import { default as zip215 } from './ed25519/zip215.json' assert { type: 'json' };
 
 describe('ed25519', () => {
@@ -348,9 +351,9 @@ describe('ed25519', () => {
   //   );
   // });
 
-  should(`wycheproof/ED25519`, () => {
-    for (let g = 0; g < ed25519vectors.testGroups.length; g++) {
-      const group = ed25519vectors.testGroups[g];
+  should(`wycheproof/ED25519 (OLD)`, () => {
+    for (let g = 0; g < ed25519vectors_OLD.testGroups.length; g++) {
+      const group = ed25519vectors_OLD.testGroups[g];
       const key = group.key;
       deepStrictEqual(hex(ed.getPublicKey(key.sk)), key.pk, `(${g}, public)`);
       for (let i = 0; i < group.tests.length; i++) {
@@ -358,6 +361,28 @@ describe('ed25519', () => {
         const comment = `(${g}/${i}, ${v.result}): ${v.comment}`;
         if (v.result === 'valid' || v.result === 'acceptable') {
           deepStrictEqual(hex(ed.sign(v.msg, key.sk)), v.sig, comment);
+          deepStrictEqual(ed.verify(v.sig, v.msg, key.pk), true, comment);
+        } else if (v.result === 'invalid') {
+          let failed = false;
+          try {
+            failed = !ed.verify(v.sig, v.msg, key.pk);
+          } catch (error) {
+            failed = true;
+          }
+          deepStrictEqual(failed, true, comment);
+        } else throw new Error('unknown test result');
+      }
+    }
+  });
+
+  should(`wycheproof/ED25519`, () => {
+    for (let g = 0; g < ed25519vectors.testGroups.length; g++) {
+      const group = ed25519vectors.testGroups[g];
+      const key = group.publicKey;
+      for (let i = 0; i < group.tests.length; i++) {
+        const v = group.tests[i];
+        const comment = `(${g}/${i}, ${v.result}): ${v.comment}`;
+        if (v.result === 'valid' || v.result === 'acceptable') {
           deepStrictEqual(ed.verify(v.sig, v.msg, key.pk), true, comment);
         } else if (v.result === 'invalid') {
           let failed = false;

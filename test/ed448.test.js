@@ -4,6 +4,8 @@ import * as fc from 'fast-check';
 import { ed448, ed448ph, x448 } from '../esm/ed448.js';
 import { bytesToHex, concatBytes, hexToBytes, randomBytes } from '@noble/hashes/utils';
 import { numberToBytesLE } from '../esm/abstract/utils.js';
+// Old vectors allow to test sign() because they include private key
+import { default as ed448vectorsOld } from './ed448/ed448_test_OLD.json' assert { type: 'json' };
 import { default as ed448vectors } from './wycheproof/ed448_test.json' assert { type: 'json' };
 import { default as x448vectors } from './wycheproof/x448_test.json' assert { type: 'json' };
 
@@ -439,9 +441,9 @@ describe('ed448', () => {
     }
   });
 
-  describe('wycheproof', () => {
-    for (let g = 0; g < ed448vectors.testGroups.length; g++) {
-      const group = ed448vectors.testGroups[g];
+  describe('wycheproof (OLD)', () => {
+    for (let g = 0; g < ed448vectorsOld.testGroups.length; g++) {
+      const group = ed448vectorsOld.testGroups[g];
       const key = group.key;
       should(`ED448(${g}, public)`, () => {
         deepStrictEqual(hex(ed.getPublicKey(key.sk)), key.pk);
@@ -467,6 +469,29 @@ describe('ed448', () => {
     }
   });
 
+  describe('wycheproof', () => {
+    for (let g = 0; g < ed448vectors.testGroups.length; g++) {
+      const group = ed448vectors.testGroups[g];
+      const key = group.publicKey;
+      should(`ED448`, () => {
+        for (let i = 0; i < group.tests.length; i++) {
+          const v = group.tests[i];
+          const index = `${g}/${i} ${v.comment}`;
+          if (v.result === 'valid' || v.result === 'acceptable') {
+            deepStrictEqual(ed.verify(v.sig, v.msg, key.pk), true, index);
+          } else if (v.result === 'invalid') {
+            let failed = false;
+            try {
+              failed = !ed.verify(v.sig, v.msg, key.pk);
+            } catch (error) {
+              failed = true;
+            }
+            deepStrictEqual(failed, true, index);
+          } else throw new Error('unknown test result');
+        }
+      });
+    }
+  });
   // should('X448: should convert base point to montgomery using fromPoint', () => {
   //   deepStrictEqual(
   //     hex(ed.montgomeryCurve.UfromPoint(Point.BASE)),

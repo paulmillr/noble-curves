@@ -8,14 +8,14 @@ import {
   secp, sigFromDER, sigToDER, selectHash, normVerifySig, mod, bytesToNumberBE, numberToBytesBE
 } from './secp256k1.helpers.js';
 
-import { default as ecdsa } from './vectors/ecdsa.json' assert { type: 'json' };
-import { default as ecdh } from './vectors/ecdh.json' assert { type: 'json' };
-import { default as privates } from './vectors/privates.json' assert { type: 'json' };
-import { default as points } from './vectors/points.json' assert { type: 'json' };
-import { default as wp } from './vectors/wychenproof.json' assert { type: 'json' };
+import { default as ecdsa } from './vectors/secp256k1/ecdsa.json' assert { type: 'json' };
+import { default as ecdh } from './wycheproof/ecdh_secp256k1_test.json' assert { type: 'json' };
+import { default as privates } from './vectors/secp256k1/privates.json' assert { type: 'json' };
+import { default as points } from './vectors/secp256k1/points.json' assert { type: 'json' };
+import { default as wp } from './wycheproof/ecdsa_secp256k1_sha256_test.json' assert { type: 'json' };
 
 const Point = secp.ProjectivePoint;
-const privatesTxt = readFileSync('./test/vectors/privates-2.txt', 'utf-8');
+const privatesTxt = readFileSync('./test/vectors/secp256k1/privates-2.txt', 'utf-8');
 
 const FC_BIGINT = fc.bigInt(1n + 1n, secp.CURVE.n - 1n);
 // prettier-ignore
@@ -500,14 +500,24 @@ describe('secp256k1', () => {
   should('wycheproof vectors', () => {
     for (let group of wp.testGroups) {
       // const pubKey = Point.fromHex().toRawBytes();
-      const pubKey = group.key.uncompressed;
+      const key = group.publicKey;
+      const pubKey = key.uncompressed;
+
       for (let test of group.tests) {
         const h = selectHash(secp);
 
         const m = h(hexToBytes(test.msg));
         if (test.result === 'valid' || test.result === 'acceptable') {
+          let sig;
+          try {
+            sig = sigFromDER(test.sig);
+          } catch (e) {
+            // These old Wycheproof vectors which allows invalid behaviour of DER parser
+            if (e.message === 'Invalid signature integer: negative') continue;
+            throw e;
+          }
           const verified = secp.verify(normVerifySig(test.sig), m, pubKey);
-          if (sigFromDER(test.sig).hasHighS()) {
+          if (sig.hasHighS()) {
             deepStrictEqual(verified, false);
           } else {
             deepStrictEqual(verified, true);

@@ -970,7 +970,7 @@ describe('pairing', () => {
   });
 });
 // hashToCurve
-describe('hash-to-curve', () => {
+describe('hash-to-curve (against Killic)', () => {
   // Point G1
   const VECTORS_G1 = [
     {
@@ -1000,16 +1000,17 @@ describe('hash-to-curve', () => {
         '047a85d6898416a0899e26219bca7c4f0fa682717199de196b02b95eaf9fb55456ac3b810e78571a1b7f5692b7c58ab6',
     },
   ];
-  for (let i = 0; i < VECTORS_G1.length; i++) {
-    const t = VECTORS_G1[i];
-    should(`G1 Killic (${i})`, () => {
-      const p = bls.G1.hashToCurve(t.msg, {
-        DST: 'BLS12381G1_XMD:SHA-256_SSWU_RO_TESTGEN',
+  describe('hashToCurve G1', () => {
+    for (let i = 0; i < VECTORS_G1.length; i++) {
+      const t = VECTORS_G1[i];
+      should(`${i}`, () => {
+        const p = bls.G1.hashToCurve(t.msg, {
+          DST: 'BLS12381G1_XMD:SHA-256_SSWU_RO_TESTGEN',
+        });
+        deepStrictEqual(p.toHex(false), t.expected);
       });
-      deepStrictEqual(p.toHex(false), t.expected);
-    });
-  }
-
+    }  
+  });
   const VECTORS_ENCODE_G1 = [
     {
       msg: utf8ToBytes(''),
@@ -1038,15 +1039,17 @@ describe('hash-to-curve', () => {
         '094bfdfe3e552447433b5a00967498a3f1314b86ce7a7164c8a8f4131f99333b30a574607e301d5f774172c627fd0bca',
     },
   ];
-  for (let i = 0; i < VECTORS_ENCODE_G1.length; i++) {
-    const t = VECTORS_ENCODE_G1[i];
-    should(`hashToCurve/G1 (Killic, encodeToCurve) (${i})`, () => {
-      const p = bls.G1.encodeToCurve(t.msg, {
-        DST: 'BLS12381G1_XMD:SHA-256_SSWU_NU_TESTGEN',
+  describe('encodeToCurve G1', () => {
+    for (let i = 0; i < VECTORS_ENCODE_G1.length; i++) {
+      const t = VECTORS_ENCODE_G1[i];
+      should(`(${i})`, () => {
+        const p = bls.G1.encodeToCurve(t.msg, {
+          DST: 'BLS12381G1_XMD:SHA-256_SSWU_NU_TESTGEN',
+        });
+        deepStrictEqual(p.toHex(false), t.expected);
       });
-      deepStrictEqual(p.toHex(false), t.expected);
-    });
-  }
+    }  
+  });
   // Point G2
   const VECTORS_G2 = [
     {
@@ -1084,16 +1087,17 @@ describe('hash-to-curve', () => {
         '15c1d4f1a685bb63ee67ca1fd96155e3d091e852a684b78d085fd34f6091e5249ddddbdcf2e7ec82ce6c04c63647eeb7',
     },
   ];
-  for (let i = 0; i < VECTORS_G2.length; i++) {
-    const t = VECTORS_G2[i];
-    should(`hashToCurve/G2 Killic (${i})`, () => {
-      const p = bls.G2.hashToCurve(t.msg, {
-        DST: 'BLS12381G2_XMD:SHA-256_SSWU_RO_TESTGEN',
+  describe('hashToCurve G2', () => {
+    for (let i = 0; i < VECTORS_G2.length; i++) {
+      const t = VECTORS_G2[i];
+      should(`${i}`, () => {
+        const p = bls.G2.hashToCurve(t.msg, {
+          DST: 'BLS12381G2_XMD:SHA-256_SSWU_RO_TESTGEN',
+        });
+        deepStrictEqual(p.toHex(false), t.expected);
       });
-      deepStrictEqual(p.toHex(false), t.expected);
-    });
-  }
-
+    }
+  });
   const VECTORS_ENCODE_G2 = [
     {
       msg: utf8ToBytes(''),
@@ -1130,15 +1134,17 @@ describe('hash-to-curve', () => {
         '09e5c8242dd7281ad32c03fe4af3f19167770016255fb25ad9b67ec51d62fade31a1af101e8f6172ec2ee8857662be3a',
     },
   ];
-  for (let i = 0; i < VECTORS_ENCODE_G2.length; i++) {
-    const t = VECTORS_ENCODE_G2[i];
-    should(`hashToCurve/G2 (Killic, encodeToCurve) (${i})`, () => {
-      const p = bls.G2.encodeToCurve(t.msg, {
-        DST: 'BLS12381G2_XMD:SHA-256_SSWU_NU_TESTGEN',
+  describe('encodeToCurve G2', () => {
+    for (let i = 0; i < VECTORS_ENCODE_G2.length; i++) {
+      const t = VECTORS_ENCODE_G2[i];
+      should(`${i}`, () => {
+        const p = bls.G2.encodeToCurve(t.msg, {
+          DST: 'BLS12381G2_XMD:SHA-256_SSWU_NU_TESTGEN',
+        });
+        deepStrictEqual(p.toHex(false), t.expected);
       });
-      deepStrictEqual(p.toHex(false), t.expected);
-    });
-  }
+    }
+  });
 });
 
 describe('verify()', () => {
