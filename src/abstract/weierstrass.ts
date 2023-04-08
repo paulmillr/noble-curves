@@ -1118,7 +1118,7 @@ export function SWUFpSqrtRatio<T>(Fp: mod.IField<T>, Z: T) {
     tv3 = Fp.cmov(tv2, tv3, isQR); // 15. tv3 = CMOV(tv2, tv3, isQR)
     tv4 = Fp.cmov(tv5, tv4, isQR); // 16. tv4 = CMOV(tv5, tv4, isQR)
     // 17. for i in (c1, c1 - 1, ..., 2):
-    for (let i = c1; i > 1; i--) {
+    for (let i = c1; i > _1n; i--) {
       let tv5 = _2n ** (i - _2n); // 18.    tv5 = i - 2;    19.    tv5 = 2^tv5
       let tvv5 = Fp.pow(tv4, tv5); // 20.    tv5 = tv4^tv5
       const e1 = Fp.eql(tvv5, Fp.ONE); // 21.    e1 = tv5 == 1
