@@ -1009,7 +1009,7 @@ describe('hash-to-curve (against Killic)', () => {
         });
         deepStrictEqual(p.toHex(false), t.expected);
       });
-    }  
+    }
   });
   const VECTORS_ENCODE_G1 = [
     {
@@ -1048,7 +1048,7 @@ describe('hash-to-curve (against Killic)', () => {
         });
         deepStrictEqual(p.toHex(false), t.expected);
       });
-    }  
+    }
   });
   // Point G2
   const VECTORS_G2 = [
