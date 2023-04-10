@@ -9,7 +9,7 @@ import { secp256k1 } from '../esm/secp256k1.js';
 import { hexToBytes, bytesToHex } from '../esm/abstract/utils.js';
 import { default as ecdsa } from './wycheproof/ecdsa_test.json' assert { type: 'json' };
 import { default as ecdh } from './wycheproof/ecdh_test.json' assert { type: 'json' };
-import { default as rfc6979 } from './fixtures/rfc6979.json' assert { type: 'json' };
+import { default as rfc6979 } from './vectors/rfc6979.json' assert { type: 'json' };
 
 import { default as ecdh_secp224r1_test } from './wycheproof/ecdh_secp224r1_test.json' assert { type: 'json' };
 import { default as ecdh_secp256r1_test } from './wycheproof/ecdh_secp256r1_test.json' assert { type: 'json' };
