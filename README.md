@@ -2,21 +2,18 @@
 
 Audited & minimal JS implementation of elliptic curve cryptography.
 
-- Short Weierstrass, Edwards, Montgomery curves
-- ECDSA, EdDSA, Schnorr, BLS signature schemes, ECDH key agreement
 - 🔒 [**Audited**](#security) by an independent security firm
-- #️⃣ [hash to curve](#abstracthash-to-curve-hashing-strings-to-curve-points)
-  for encoding or hashing an arbitrary string to an elliptic curve point
-- 🧜‍♂️ [Poseidon](https://www.poseidon-hash.info) ZK-friendly hash
-- 🏎 [Ultra-fast](#speed), hand-optimized for caveats of JS engines
-- 🔍 Unique tests ensure correctness with Wycheproof vectors and
-  [cryptofuzz](https://github.com/guidovranken/cryptofuzz) differential fuzzing
 - 🔻 Tree-shaking-friendly: use only what's necessary, other code won't be included
+- 🏎 Ultra-fast, hand-optimized for caveats of JS engines
+- 🔍 Unique tests ensure correctness: property-based, cross-library and Wycheproof vectors, fuzzing 
+- ➰ Short Weierstrass, Edwards, Montgomery curves
+- ✍️ ECDSA, EdDSA, Schnorr, BLS signature schemes, ECDH key agreement
+- #️⃣ Hash-to-curve
+  for encoding or hashing an arbitrary string to an elliptic curve point
+- 🧜‍♂️ Poseidon ZK-friendly hash
 
 Check out [Upgrading](#upgrading) if you've previously used single-feature noble
-packages ([secp256k1](https://github.com/paulmillr/noble-secp256k1),
-[ed25519](https://github.com/paulmillr/noble-ed25519)).
-See [Resources](#resources) for articles and real-world software that uses curves.
+packages. See [Resources](#resources) for articles and real-world software that uses curves.
 
 ### This library belongs to _noble_ crypto
 
