@@ -17,7 +17,7 @@ export type Opts = {
   p: bigint;
   m: number;
   k: number;
-  expand?: 'xmd' | 'xof';
+  expand: 'xmd' | 'xof';
   hash: CHash;
 };
 
@@ -145,10 +145,10 @@ export function hash_to_field(msg: Uint8Array, count: number, options: Opts): bi
     prb = expand_message_xmd(msg, DST, len_in_bytes, hash);
   } else if (expand === 'xof') {
     prb = expand_message_xof(msg, DST, len_in_bytes, k, hash);
-  } else if (expand === undefined) {
+  } else if (expand === '_internal_pass') { // for internal tests only
     prb = msg;
   } else {
-    throw new Error('expand must be "xmd", "xof" or undefined');
+    throw new Error('expand must be "xmd" or "xof"');
   }
   const u = new Array(count);
   for (let i = 0; i < count; i++) {

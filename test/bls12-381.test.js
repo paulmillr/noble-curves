@@ -858,7 +858,7 @@ describe('bls12-381/basic', () => {
     const options = {
       p: bls.params.r,
       m: 1,
-      expand: undefined,
+      expand: '_internal_pass',
     };
     for (let vector of SCALAR_VECTORS) {
       const [okmAscii, expectedHex] = vector;
