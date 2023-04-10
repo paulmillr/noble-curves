@@ -760,7 +760,7 @@ Benchmark results on Apple M2 with node v19:
 secp256k1
 init x 58 ops/sec @ 17ms/op
 getPublicKey x 5,640 ops/sec @ 177μs/op
-sign x 3,909 ops/sec @ 255μs/op
+sign x 4,471 ops/sec @ 223μs/op
 verify x 780 ops/sec @ 1ms/op
 getSharedSecret x 465 ops/sec @ 2ms/op
 recoverPublicKey x 740 ops/sec @ 1ms/op
@@ -770,19 +770,19 @@ schnorr.verify x 775 ops/sec @ 1ms/op
 P256
 init x 31 ops/sec @ 31ms/op
 getPublicKey x 5,607 ops/sec @ 178μs/op
-sign x 3,930 ops/sec @ 254μs/op
+sign x 4,583 ops/sec @ 218μs/op
 verify x 540 ops/sec @ 1ms/op
 
 P384
 init x 15 ops/sec @ 63ms/op
 getPublicKey x 2,622 ops/sec @ 381μs/op
-sign x 1,913 ops/sec @ 522μs/op
+sign x 2,106 ops/sec @ 474μs/op
 verify x 222 ops/sec @ 4ms/op
 
 P521
 init x 8 ops/sec @ 119ms/op
 getPublicKey x 1,371 ops/sec @ 729μs/op
-sign x 1,090 ops/sec @ 917μs/op
+sign x 1,164 ops/sec @ 858μs/op
 verify x 118 ops/sec @ 8ms/op
 
 ed25519
@@ -821,13 +821,12 @@ aggregateSignatures/128 x 3 ops/sec @ 332ms/opp
 
 hash-to-curve
 hash_to_field x 850,340 ops/sec @ 1μs/op
-hashToCurve
-├─secp256k1 x 1,850 ops/sec @ 540μs/op
-├─P256 x 3,352 ops/sec @ 298μs/op
-├─P384 x 1,367 ops/sec @ 731μs/op
-├─P521 x 691 ops/sec @ 1ms/op
-├─ed25519 x 2,492 ops/sec @ 401μs/op
-└─ed448 x 1,045 ops/sec @ 956μs/op
+secp256k1 x 2,143 ops/sec @ 466μs/op
+P256 x 3,861 ops/sec @ 258μs/op
+P384 x 1,526 ops/sec @ 655μs/op
+P521 x 748 ops/sec @ 1ms/op
+ed25519 x 2,772 ops/sec @ 360μs/op
+ed448 x 1,146 ops/sec @ 871μs/op
 ```
 
 ## Contributing & testing

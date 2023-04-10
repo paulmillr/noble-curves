@@ -20,7 +20,7 @@ run(async () => {
   // - m, the extension degree of F, m >= 1
   // - L = ceil((ceil(log2(p)) + k) / 8), where k is the security of suite (e.g. 128)
   await mark('hash_to_field', 1000000, () =>
-    hash_to_field(rand, 1, { DST: 'secp256k1', hash: sha256, p: N, m: 1, k: 128 })
+    hash_to_field(rand, 1, { DST: 'secp256k1', hash: sha256, expand: 'xmd', p: N, m: 1, k: 128 })
   );
   const msg = utf8ToBytes('message');
   for (let [title, fn] of Object.entries({ secp256k1, P256, P384, P521, ed25519, ed448 })) {
