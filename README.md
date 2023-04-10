@@ -40,15 +40,15 @@ For [Deno](https://deno.land), use it with
 In browser, you could also include the single file from
 [GitHub's releases page](https://github.com/paulmillr/noble-curves/releases).
 
-The library is tree-shaking-friendly and does not expose root entry point as
-`import * from '@noble/curves'`. Instead, you need to import specific primitives.
+The library is tree-shaking-friendly and does NOT expose root entry point as
+`import c from '@noble/curves'`. Instead, you need to import specific primitives.
 This is done to ensure small size of your apps.
 
 Package consists of two parts:
 
-1. [Implementations](#implementations), utilizing one dependency `@noble/hashes`,
+1. [Implementations](#implementations), utilizing one dependency [noble-hashes](https://github.com/paulmillr/noble-hashes),
    providing ready-to-use:
-   - NIST curves secp256r1/P256, secp384r1/P384, secp521r1/P521
+   - NIST curves secp256r1 / p256, secp384r1 / p384, secp521r1 / p521
    - SECG curve secp256k1
    - ed25519 / curve25519 / x25519 / ristretto255,
      edwards448 / curve448 / x448
@@ -58,6 +58,7 @@ Package consists of two parts:
      [FIPS 186-5](https://csrc.nist.gov/publications/detail/fips/186/5/final) /
      [ZIP215](https://zips.z.cash/zip-0215) standards
    - pairing-friendly curves bls12-381, bn254
+   - [pasta](https://electriccoin.co/blog/the-pasta-curves-for-halo-2-and-beyond/) curves
 2. [Abstract](#abstract-api), zero-dependency EC algorithms
 
 ### Implementations
