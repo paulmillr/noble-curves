@@ -214,7 +214,7 @@ const secq256k1 = weierstrass({
   randomBytes,
 });
 
-// weierstrassPoints can also be used if you don't need ECDSA, hash, hmac, randomBytes
+// Replace weierstrass with weierstrassPoints if you don't need ECDSA, hash, hmac, randomBytes
 ```
 
 Short Weierstrass curve's formula is `y² = x³ + ax + b`. `weierstrass`

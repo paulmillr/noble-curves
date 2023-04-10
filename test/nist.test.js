@@ -1,10 +1,10 @@
 import { deepStrictEqual, throws } from 'assert';
 import { describe, should } from 'micro-should';
-import { secp192r1, secp224r1, P192, P224 } from './_more-curves.helpers.js';
+import { secp192r1, secp224r1, p192, p224 } from './_more-curves.helpers.js';
 import { DER } from '../esm/abstract/weierstrass.js';
-import { secp256r1, P256 } from '../esm/p256.js';
-import { secp384r1, P384 } from '../esm/p384.js';
-import { secp521r1, P521 } from '../esm/p521.js';
+import { secp256r1, p256 } from '../esm/p256.js';
+import { secp384r1, p384 } from '../esm/p384.js';
+import { secp521r1, p521 } from '../esm/p521.js';
 import { secp256k1 } from '../esm/secp256k1.js';
 import { hexToBytes, bytesToHex } from '../esm/abstract/utils.js';
 import { default as ecdsa } from './wycheproof/ecdsa_test.json' assert { type: 'json' };
@@ -71,11 +71,11 @@ const hex = bytesToHex;
 
 // prettier-ignore
 const NIST = {
-  secp192r1, P192,
-  secp224r1, P224,
-  secp256r1, P256,
-  secp384r1, P384,
-  secp521r1, P521,
+  secp192r1, P192: p192,
+  secp224r1, P224: p224,
+  secp256r1, P256: p256,
+  secp384r1, P384: p384,
+  secp521r1, P521: p521,
   secp256k1,
 };
 
@@ -125,24 +125,24 @@ describe('wycheproof ECDH', () => {
 
   // More per curve tests
   const WYCHEPROOF_ECDH = {
-    P224: {
-      curve: P224,
+    p224: {
+      curve: p224,
       tests: [ecdh_secp224r1_test],
     },
-    P256: {
-      curve: P256,
+    p256: {
+      curve: p256,
       tests: [ecdh_secp256r1_test],
     },
     secp256k1: {
       curve: secp256k1,
       tests: [ecdh_secp256k1_test],
     },
-    P384: {
-      curve: P384,
+    p384: {
+      curve: p384,
       tests: [ecdh_secp384r1_test],
     },
-    P521: {
-      curve: P521,
+    p521: {
+      curve: p521,
       tests: [ecdh_secp521r1_test],
     },
   };
@@ -182,8 +182,8 @@ describe('wycheproof ECDH', () => {
 });
 
 const WYCHEPROOF_ECDSA = {
-  P224: {
-    curve: P224,
+  p224: {
+    curve: p224,
     hashes: {
       sha224: {
         hash: sha224,
@@ -244,8 +244,8 @@ const WYCHEPROOF_ECDSA = {
       },
     },
   },
-  P256: {
-    curve: P256,
+  p256: {
+    curve: p256,
     hashes: {
       sha256: {
         hash: sha256,
@@ -269,8 +269,8 @@ const WYCHEPROOF_ECDSA = {
       },
     },
   },
-  P384: {
-    curve: P384,
+  p384: {
+    curve: p384,
     hashes: {
       sha384: {
         hash: sha384,
@@ -294,8 +294,8 @@ const WYCHEPROOF_ECDSA = {
       },
     },
   },
-  P521: {
-    curve: P521,
+  p521: {
+    curve: p521,
     hashes: {
       sha3_512: {
         hash: sha3_512,

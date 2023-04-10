@@ -5,9 +5,9 @@ import { randomBytes } from '@noble/hashes/utils';
 import { sha256 } from '@noble/hashes/sha256';
 // import { generateData } from './_shared.js';
 import { hashToCurve as secp256k1 } from '../secp256k1.js';
-import { hashToCurve as P256 } from '../p256.js';
-import { hashToCurve as P384 } from '../p384.js';
-import { hashToCurve as P521 } from '../p521.js';
+import { hashToCurve as p256 } from '../p256.js';
+import { hashToCurve as p384 } from '../p384.js';
+import { hashToCurve as p521 } from '../p521.js';
 import { hashToCurve as ed25519 } from '../ed25519.js';
 import { hashToCurve as ed448 } from '../ed448.js';
 import { utf8ToBytes } from '../abstract/utils.js';
@@ -23,7 +23,7 @@ run(async () => {
     hash_to_field(rand, 1, { DST: 'secp256k1', hash: sha256, expand: 'xmd', p: N, m: 1, k: 128 })
   );
   const msg = utf8ToBytes('message');
-  for (let [title, fn] of Object.entries({ secp256k1, P256, P384, P521, ed25519, ed448 })) {
+  for (let [title, fn] of Object.entries({ secp256k1, p256, p384, p521, ed25519, ed448 })) {
     await mark(`hashToCurve ${title}`, 1000, () => fn(msg));
   }
 });

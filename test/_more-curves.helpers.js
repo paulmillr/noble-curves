@@ -3,9 +3,9 @@ import { createCurve } from '../esm/_shortw_utils.js';
 import { sha224, sha256 } from '@noble/hashes/sha256';
 import { Field as Fp } from '../esm/abstract/modular.js';
 
-// NIST secp192r1 aka P192
+// NIST secp192r1 aka p192
 // https://www.secg.org/sec2-v2.pdf, https://neuromancer.sk/std/secg/secp192r1
-export const P192 = createCurve(
+export const p192 = createCurve(
   {
     // Params: a, b
     a: BigInt('0xfffffffffffffffffffffffffffffffefffffffffffffffc'),
@@ -22,9 +22,9 @@ export const P192 = createCurve(
   },
   sha256
 );
-export const secp192r1 = P192;
+export const secp192r1 = p192;
 
-export const P224 = createCurve(
+export const p224 = createCurve(
   {
     // Params: a, b
     a: BigInt('0xfffffffffffffffffffffffffffffffefffffffffffffffffffffffe'),
@@ -41,4 +41,4 @@ export const P224 = createCurve(
   },
   sha224
 );
-export const secp224r1 = P224;
+export const secp224r1 = p224;
