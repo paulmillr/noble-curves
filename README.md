@@ -836,21 +836,18 @@ ed448 x 1,146 ops/sec @ 871μs/op
 
 ## Resources
 
-Article about some of library's features: [Learning fast elliptic-curve cryptography](https://paulmillr.com/posts/noble-secp256k1-fast-ecc/)
-
-Projects using the library:
-
-- secp256k1
-  - [btc-signer](https://github.com/paulmillr/scure-btc-signer), [eth-signer](https://github.com/paulmillr/micro-eth-signer)
-- ed25519
-  - [sol-signer](https://github.com/paulmillr/micro-sol-signer)
+- [Learning fast elliptic-curve cryptography](https://paulmillr.com/posts/noble-secp256k1-fast-ecc/) article about the library
+- [Elliptic Curve Calculator](https://paulmillr.com/noble) online demo: add / multiply points, sign messages
+- Signers for web3 projects:
+  [btc-signer](https://github.com/paulmillr/scure-btc-signer), [eth-signer](https://github.com/paulmillr/micro-eth-signer),
+  [sol-signer](https://github.com/paulmillr/micro-sol-signer) for Solana
+- [scure-bip32](https://github.com/paulmillr/scure-bip32) and separate [bip32](https://github.com/bitcoinjs/bip32) HDkey libraries
+- [ed25519-keygen](https://github.com/paulmillr/ed25519-keygen) SSH, PGP, TOR key generation
+- [micro-starknet](https://github.com/paulmillr/micro-starknet) stark-friendly elliptic curve algorithms.
 - BLS12-381
-  - Check out `bls12-381.ts` for articles about the curve
+  - Check out `src/bls12-381.ts` for thorough articles and docs about the curve
   - Threshold sigs demo [genthresh.com](https://genthresh.com)
   - BBS signatures [github.com/Wind4Greg/BBS-Draft-Checks](https://github.com/Wind4Greg/BBS-Draft-Checks) following [draft-irtf-cfrg-bbs-signatures-latest](https://identity.foundation/bbs-signature/draft-irtf-cfrg-bbs-signatures.html)
-- Others
-  - All curves demo: Elliptic curve calculator [paulmillr.com/noble](https://paulmillr.com/noble)
-  - [micro-starknet](https://github.com/paulmillr/micro-starknet) for stark-friendly elliptic curve.
 
 ## Upgrading
 
