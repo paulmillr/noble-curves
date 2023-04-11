@@ -836,6 +836,8 @@ ed448 x 1,146 ops/sec @ 871μs/op
 
 ## Resources
 
+The projects use noble-curves:
+
 - [Learning fast elliptic-curve cryptography](https://paulmillr.com/posts/noble-secp256k1-fast-ecc/) article about the library
 - [Elliptic Curve Calculator](https://paulmillr.com/noble) online demo: add / multiply points, sign messages
 - Signers for web3 projects:
