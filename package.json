@@ -99,10 +99,10 @@
       "import": "./esm/bls12-381.js",
       "default": "./bls12-381.js"
     },
-    "./bn": {
-      "types": "./bn.d.ts",
-      "import": "./esm/bn.js",
-      "default": "./bn.js"
+    "./bn254": {
+      "types": "./bn254.d.ts",
+      "import": "./esm/bn254.js",
+      "default": "./bn254.js"
     },
     "./ed25519": {
       "types": "./ed25519.d.ts",

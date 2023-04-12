@@ -12,7 +12,7 @@ import { secp256k1 } from '../esm/secp256k1.js';
 import { ed25519, ed25519ctx, ed25519ph, x25519 } from '../esm/ed25519.js';
 import { ed448, ed448ph } from '../esm/ed448.js';
 import { pallas, vesta } from '../esm/pasta.js';
-import { bn254 } from '../esm/bn.js';
+import { bn254 } from '../esm/bn254.js';
 import { jubjub } from '../esm/jubjub.js';
 import { bls12_381 } from '../esm/bls12-381.js';
 import { default as wyche_curves } from './wycheproof/ec_prime_order_curves_test.json' assert { type: 'json' };
