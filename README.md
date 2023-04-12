@@ -834,29 +834,14 @@ ed448 x 1,146 ops/sec @ 871μs/op
 3. `npm run build` to compile TypeScript code
 4. `npm run test` will execute all main tests
 
-## Resources
-
-The projects use noble-curves:
-
-- [Learning fast elliptic-curve cryptography](https://paulmillr.com/posts/noble-secp256k1-fast-ecc/) article about the library
-- [Elliptic Curve Calculator](https://paulmillr.com/noble) online demo: add / multiply points, sign messages
-- Signers for web3 projects:
-  [btc-signer](https://github.com/paulmillr/scure-btc-signer), [eth-signer](https://github.com/paulmillr/micro-eth-signer),
-  [sol-signer](https://github.com/paulmillr/micro-sol-signer) for Solana
-- [scure-bip32](https://github.com/paulmillr/scure-bip32) and separate [bip32](https://github.com/bitcoinjs/bip32) HDkey libraries
-- [ed25519-keygen](https://github.com/paulmillr/ed25519-keygen) SSH, PGP, TOR key generation
-- [micro-starknet](https://github.com/paulmillr/micro-starknet) stark-friendly elliptic curve algorithms.
-- BLS12-381
-  - Check out `src/bls12-381.ts` for thorough articles and docs about the curve
-  - Threshold sigs demo [genthresh.com](https://genthresh.com)
-  - BBS signatures [github.com/Wind4Greg/BBS-Draft-Checks](https://github.com/Wind4Greg/BBS-Draft-Checks) following [draft-irtf-cfrg-bbs-signatures-latest](https://identity.foundation/bbs-signature/draft-irtf-cfrg-bbs-signatures.html)
-
 ## Upgrading
 
 Previously, the library was split into single-feature packages
 noble-secp256k1 and noble-ed25519. curves can be thought as a continuation of their
 original work. The libraries now changed their direction towards providing
 minimal 4kb implementations of cryptography and are not as feature-complete.
+
+Upgrading from @noble/secp256k1 2.0 or @noble/ed25519 2.0: no changes, libraries are compatible.
 
 Upgrading from [@noble/secp256k1](https://github.com/paulmillr/noble-secp256k1) 1.7:
 
@@ -894,6 +879,40 @@ Upgrading from [@noble/ed25519](https://github.com/paulmillr/noble-ed25519) 1.7:
 - `utils` were split into `utils` (same api as in noble-curves) and
   `etc` (`sha512Sync` and others)
 - `getSharedSecret` was moved to `x25519` module
+
+Upgrading from [@noble/bls12-381](https://github.com/paulmillr/noble-bls12-381):
+
+- Methods and classes were renamed:
+    - PointG1 -> G1.Point, PointG2 -> G2.Point
+    - PointG2.fromSignature -> Signature.decode, PointG2.toSignature ->  Signature.encode
+- Fp2 ORDER was corrected
+
+
+## Resources
+
+Useful articles about the library or its primitives:
+
+- [Learning fast elliptic-curve cryptography](https://paulmillr.com/posts/noble-secp256k1-fast-ecc/)
+- Pairings and BLS
+    - [BLS12-381 for the rest of us](https://hackmd.io/@benjaminion/bls12-381)
+    - [Key concepts of pairings](https://medium.com/@alonmuroch_65570/bls-signatures-part-2-key-concepts-of-pairings-27a8a9533d0c)
+    - Pairing over bls12-381:
+      [part 1](https://research.nccgroup.com/2020/07/06/pairing-over-bls12-381-part-1-fields/),
+      [part 2](https://research.nccgroup.com/2020/07/13/pairing-over-bls12-381-part-2-curves/),
+      [part 3](https://research.nccgroup.com/2020/08/13/pairing-over-bls12-381-part-3-pairing/)
+    - [Estimating the bit security of pairing-friendly curves](https://research.nccgroup.com/2022/02/03/estimating-the-bit-security-of-pairing-friendly-curves/)
+
+Real-world software that uses curves:
+
+- [Elliptic Curve Calculator](https://paulmillr.com/noble) online demo: add / multiply points, sign messages
+- Signers for web3 projects:
+  [btc-signer](https://github.com/paulmillr/scure-btc-signer), [eth-signer](https://github.com/paulmillr/micro-eth-signer),
+  [sol-signer](https://github.com/paulmillr/micro-sol-signer) for Solana
+- [scure-bip32](https://github.com/paulmillr/scure-bip32) and separate [bip32](https://github.com/bitcoinjs/bip32) HDkey libraries
+- [ed25519-keygen](https://github.com/paulmillr/ed25519-keygen) SSH, PGP, TOR key generation
+- [micro-starknet](https://github.com/paulmillr/micro-starknet) stark-friendly elliptic curve algorithms.
+- BLS threshold sigs demo [genthresh.com](https://genthresh.com)
+- BLS BBS signatures [github.com/Wind4Greg/BBS-Draft-Checks](https://github.com/Wind4Greg/BBS-Draft-Checks) following [draft-irtf-cfrg-bbs-signatures-latest](https://identity.foundation/bbs-signature/draft-irtf-cfrg-bbs-signatures.html)
 
 ## License
 

@@ -7,7 +7,7 @@
 //
 // The library uses G1 for public keys and G2 for signatures. Support for G1 signatures is planned.
 // Compatible with Algorand, Chia, Dfinity, Ethereum, FIL, Zcash. Matches specs
-// [pairing-curves-10](https://tools.ietf.org/html/draft-irtf-cfrg-pairing-friendly-curves-10),
+// [pairing-curves-11](https://tools.ietf.org/html/draft-irtf-cfrg-pairing-friendly-curves-11),
 // [bls-sigs-04](https://tools.ietf.org/html/draft-irtf-cfrg-bls-signature-04),
 // [hash-to-curve-12](https://tools.ietf.org/html/draft-irtf-cfrg-hash-to-curve-12).
 //
@@ -27,24 +27,6 @@
 // - `e(G, S) = e(G, SUM(n)(Si)) = MUL(n)(e(G, Si))` - signature aggregation
 // Filecoin uses little endian byte arrays for private keys -
 // so ensure to reverse byte order if you'll use it with FIL.
-//
-// ### Resources
-// - [BLS12-381 for the rest of us](https://hackmd.io/@benjaminion/bls12-381)
-// - [Key concepts of pairings](https://medium.com/@alonmuroch_65570/bls-signatures-part-2-key-concepts-of-pairings-27a8a9533d0c)
-// - Pairing over bls12-381:
-//   [part 1](https://research.nccgroup.com/2020/07/06/pairing-over-bls12-381-part-1-fields/),
-//   [part 2](https://research.nccgroup.com/2020/07/13/pairing-over-bls12-381-part-2-curves/),
-//   [part 3](https://research.nccgroup.com/2020/08/13/pairing-over-bls12-381-part-3-pairing/)
-// - [Estimating the bit security of pairing-friendly curves](https://research.nccgroup.com/2022/02/03/estimating-the-bit-security-of-pairing-friendly-curves/)
-//
-// ### Differences from @noble/bls12-381 1.4
-// - PointG1 -> G1.Point
-// - PointG2 -> G2.Point
-// - PointG2.fromSignature -> Signature.decode
-// - PointG2.toSignature ->  Signature.encode
-// - Fixed Fp2 ORDER
-// - Points now have only two coordinates
-
 import { sha256 } from '@noble/hashes/sha256';
 import { randomBytes } from '@noble/hashes/utils';
 import { bls, CurveFn } from './abstract/bls.js';
