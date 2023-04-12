@@ -363,7 +363,7 @@ import { randomBytes } from '@noble/hashes/utils';
 
 const Fp = Field(2n ** 255n - 19n);
 const ed25519 = twistedEdwards({
-  a: -1n,
+  a: Fp.create(-1n),
   d: Fp.div(-121665n, 121666n), // -121665n/121666n mod p
   Fp: Fp,
   n: 2n ** 252n + 27742317777372353535851937790883648493n,
@@ -886,7 +886,6 @@ Upgrading from [@noble/bls12-381](https://github.com/paulmillr/noble-bls12-381):
     - PointG1 -> G1.Point, PointG2 -> G2.Point
     - PointG2.fromSignature -> Signature.decode, PointG2.toSignature ->  Signature.encode
 - Fp2 ORDER was corrected
-
 
 ## Resources
 

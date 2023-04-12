@@ -97,13 +97,13 @@ const Fp = Field(ED25519_P, undefined, true);
 
 const ed25519Defaults = {
   // Param: a
-  a: BigInt(-1),
-  // Equal to -121665/121666 over finite field.
+  a: BigInt(-1), // Fp.create(-1) is proper; our way still works and is faster
+  // d is equal to -121665/121666 over finite field.
   // Negative number is P - number, and division is invert(number, P)
   d: BigInt('37095705934669439343138083508754565189542113879843219016388785533085940283555'),
   // Finite field 𝔽p over which we'll do calculations; 2n ** 255n - 19n
   Fp,
-  // Subgroup order: how many points ed25519 has
+  // Subgroup order: how many points curve has
   // 2n ** 252n + 27742317777372353535851937790883648493n;
   n: BigInt('7237005577332262213973186563042994240857116359379907606001950938285454250989'),
   // Cofactor
