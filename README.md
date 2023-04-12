@@ -72,7 +72,7 @@ const priv = secp256k1.utils.randomPrivateKey();
 const pub = secp256k1.getPublicKey(priv);
 const msg = new Uint8Array(32).fill(1);
 const sig = secp256k1.sign(msg, priv);
-secp256k1.verify(sig, msg, pub) === true;
+const isValid = secp256k1.verify(sig, msg, pub) === true;
 
 // hex strings are also supported besides Uint8Arrays:
 const privHex = '46c930bc7bb4db7f55da20798697421b98c4175a52c630294d75a84b9c126236';
@@ -94,7 +94,7 @@ import { bn254 } from '@noble/curves/bn';
 import { jubjub } from '@noble/curves/jubjub';
 ```
 
-Weierstrass curves feature recovering public keys from signatures and ECDH key agreement:
+Recovering public keys from weierstrass ECDSA signatures; using ECDH:
 
 ```ts
 // extraEntropy https://moderncrypto.org/mail-archive/curves/2017/000925.html
@@ -104,7 +104,7 @@ const someonesPub = secp256k1.getPublicKey(secp256k1.utils.randomPrivateKey());
 const shared = secp256k1.getSharedSecret(priv, someonesPub); // ECDH
 ```
 
-secp256k1 has schnorr signature implementation which follows
+Schnorr signatures over secp256k1 following
 [BIP340](https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki):
 
 ```ts
@@ -121,13 +121,10 @@ x25519 ECDH and [ristretto255](https://datatracker.ietf.org/doc/html/draft-irtf-
 
 Default `verify` behavior follows [ZIP215](https://zips.z.cash/zip-0215) and
 [can be used in consensus-critical applications](https://hdevalence.ca/blog/2020-10-04-its-25519am).
-It does not affect security.
-
-There is `zip215: false` option that switches verification criteria to RFC8032 / FIPS 186-5.
+`zip215: false` option switches verification criteria to RFC8032 / FIPS 186-5.
 
 ```ts
 import { ed25519 } from '@noble/curves/ed25519';
-
 const priv = ed25519.utils.randomPrivateKey();
 const pub = ed25519.getPublicKey(priv);
 const msg = new TextEncoder().encode('hello');
@@ -164,7 +161,7 @@ import { hashToCurve, encodeToCurve } from '@noble/curves/ed448';
 ed448.getPublicKey(ed448.utils.randomPrivateKey());
 ```
 
-Every curve has params:
+Every curve has `CURVE` object that contains its parameters, field, and others:
 
 ```ts
 import { secp256k1 } from '@noble/curves/secp256k1'; // ESM and Common.js
@@ -722,12 +719,14 @@ import * as utils from '@noble/curves/abstract/utils';
 
 utils.bytesToHex(Uint8Array.from([0xde, 0xad, 0xbe, 0xef]));
 utils.hexToBytes('deadbeef');
+utils.numberToHexUnpadded(123n);
 utils.hexToNumber();
+
 utils.bytesToNumberBE(Uint8Array.from([0xde, 0xad, 0xbe, 0xef]));
 utils.bytesToNumberLE(Uint8Array.from([0xde, 0xad, 0xbe, 0xef]));
 utils.numberToBytesBE(123n, 32);
 utils.numberToBytesLE(123n, 64);
-utils.numberToHexUnpadded(123n);
+
 utils.concatBytes(Uint8Array.from([0xde, 0xad]), Uint8Array.from([0xbe, 0xef]));
 utils.nLength(255n);
 utils.equalBytes(Uint8Array.from([0xde]), Uint8Array.from([0xde]));
