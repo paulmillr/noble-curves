@@ -911,6 +911,7 @@ Real-world software that uses curves:
 - [micro-starknet](https://github.com/paulmillr/micro-starknet) stark-friendly elliptic curve algorithms.
 - BLS threshold sigs demo [genthresh.com](https://genthresh.com)
 - BLS BBS signatures [github.com/Wind4Greg/BBS-Draft-Checks](https://github.com/Wind4Greg/BBS-Draft-Checks) following [draft-irtf-cfrg-bbs-signatures-latest](https://identity.foundation/bbs-signature/draft-irtf-cfrg-bbs-signatures.html)
+- [KZG trusted setup ceremony](https://github.com/dsrvlabs/czg-keremony)
 
 ## License
 
