@@ -1197,7 +1197,7 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
       ),
     ]),
     a: Fp2.ZERO,
-    b: Fp2.fromBigTuple([4n, _4n]),
+    b: Fp2.fromBigTuple([_4n, _4n]),
     hEff: BigInt(
       '0xbc69f08f2ee75b3584c6a0ea91b352888e2a8e9145ad7689986ff031508ffe1329c2f178731db956d82bf015d1212b02ec0ec69d7477c1ae954cbc06689f6a359894c0adebbf6b4e8020005aaa95551'
     ),
