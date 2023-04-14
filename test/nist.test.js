@@ -10,6 +10,7 @@ import { hexToBytes, bytesToHex } from '../esm/abstract/utils.js';
 import { default as ecdsa } from './wycheproof/ecdsa_test.json' assert { type: 'json' };
 import { default as ecdh } from './wycheproof/ecdh_test.json' assert { type: 'json' };
 import { default as rfc6979 } from './vectors/rfc6979.json' assert { type: 'json' };
+import { default as endoVectors } from './vectors/secp256k1/endomorphism.json' assert { type: 'json' };
 
 import { default as ecdh_secp224r1_test } from './wycheproof/ecdh_secp224r1_test.json' assert { type: 'json' };
 import { default as ecdh_secp256r1_test } from './wycheproof/ecdh_secp256r1_test.json' assert { type: 'json' };
@@ -438,7 +439,7 @@ describe('RFC6979', () => {
   }
 });
 
-should('DER Leading zero', () => {
+should('properly add leading zero to DER', () => {
   // Valid DER
   deepStrictEqual(
     DER.toSig(
@@ -463,6 +464,16 @@ should('DER Leading zero', () => {
     }),
     '303d021c70049af31f8348673d56cece2b27e587a402f2a48f0b21a7911a480a021d00d7bf40db0909941d78f9948340c69e14c5417f8c840b7edb35846361'
   );
+});
+
+should('have proper GLV endomorphism logic in secp256k1', () => {
+  const Point = secp256k1.ProjectivePoint;
+  for (let item of endoVectors) {
+    const point = Point.fromAffine({ x: BigInt(item.ax), y: BigInt(item.ay) });
+    const c = point.multiplyUnsafe(BigInt(item.scalar)).toAffine();
+    deepStrictEqual(c.x, BigInt(item.cx));
+    deepStrictEqual(c.y, BigInt(item.cy));
+  }
 });
 
 // ESM is broken.
