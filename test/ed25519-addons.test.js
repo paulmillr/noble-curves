@@ -1,10 +1,18 @@
 import { sha512 } from '@noble/hashes/sha512';
-import { hexToBytes, bytesToHex as hex } from '@noble/hashes/utils';
+import { bytesToHex as hex, hexToBytes } from '@noble/hashes/utils';
 import { deepStrictEqual, throws } from 'assert';
 import { describe, should } from 'micro-should';
 import { bytesToNumberLE, numberToBytesLE } from '../esm/abstract/utils.js';
 import { default as x25519vectors } from './wycheproof/x25519_test.json' assert { type: 'json' };
-import { ed25519ctx, ed25519ph, RistrettoPoint, x25519 } from '../esm/ed25519.js';
+import {
+  ed25519,
+  ed25519ctx,
+  ed25519ph,
+  edwardsToMontgomery,
+  edwardsToMontgomeryPriv,
+  RistrettoPoint,
+  x25519,
+} from '../esm/ed25519.js';
 
 const VECTORS_RFC8032_CTX = [
   {
@@ -139,6 +147,57 @@ describe('RFC7748 X25519 ECDH', () => {
     deepStrictEqual(bobPublic, hex(x25519.getPublicKey(bobPrivate)));
     deepStrictEqual(hex(x25519.scalarMult(alicePrivate, bobPublic)), shared);
     deepStrictEqual(hex(x25519.scalarMult(bobPrivate, alicePublic)), shared);
+  });
+
+  should('X25519/getSharedSecret() should be commutative', () => {
+    for (let i = 0; i < 512; i++) {
+      const asec = x25519.utils.randomPrivateKey();
+      const apub = x25519.getPublicKey(asec);
+      const bsec = x25519.utils.randomPrivateKey();
+      const bpub = x25519.getPublicKey(bsec);
+      try {
+        deepStrictEqual(x25519.getSharedSecret(asec, bpub), x25519.getSharedSecret(bsec, apub));
+      } catch (error) {
+        console.error('not commutative', { asec, apub, bsec, bpub });
+        throw error;
+      }
+    }
+  });
+
+  should('edwardsToMontgomery should produce correct output', () => {
+    const edSecret = hexToBytes('77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a');
+    const edPublic = ed25519.getPublicKey(edSecret);
+    const xPrivate = edwardsToMontgomeryPriv(edSecret);
+    deepStrictEqual(
+      hex(xPrivate),
+      'a8cd44eb8e93319c0570bc11005c0e0189d34ff02f6c17773411ad191293c94f'
+    );
+    const xPublic = edwardsToMontgomery(edPublic);
+    deepStrictEqual(
+      hex(xPublic),
+      'ed7749b4d989f6957f3bfde6c56767e988e21c9f8784d91d610011cd553f9b06'
+    );
+  });
+
+  should('edwardsToMontgomery should produce correct keyPair', () => {
+    const edSecret = ed25519.utils.randomPrivateKey();
+    const edPublic = ed25519.getPublicKey(edSecret);
+    const hashed = ed25519.CURVE.hash(edSecret.subarray(0, 32));
+    const xSecret = ed25519.CURVE.adjustScalarBytes(hashed.subarray(0, 32));
+    const expectedXPublic = x25519.getPublicKey(xSecret);
+    const xPublic = edwardsToMontgomery(edPublic);
+    deepStrictEqual(xPublic, expectedXPublic);
+  });
+
+  should('ECDH through edwardsToMontgomery should be commutative', () => {
+    const edSecret1 = ed25519.utils.randomPrivateKey();
+    const edPublic1 = ed25519.getPublicKey(edSecret1);
+    const edSecret2 = ed25519.utils.randomPrivateKey();
+    const edPublic2 = ed25519.getPublicKey(edSecret2);
+    deepStrictEqual(
+      x25519.getSharedSecret(edwardsToMontgomeryPriv(edSecret1), edwardsToMontgomery(edPublic2)),
+      x25519.getSharedSecret(edwardsToMontgomeryPriv(edSecret2), edwardsToMontgomery(edPublic1))
+    );
   });
 
   should('base point', () => {
@@ -298,7 +357,7 @@ describe('ristretto255', () => {
 
 // ESM is broken.
 import url from 'url';
-import { assert } from 'console';
+
 if (import.meta.url === url.pathToFileURL(process.argv[1]).href) {
   should.run();
 }
