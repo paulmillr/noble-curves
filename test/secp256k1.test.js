@@ -14,6 +14,9 @@ import { default as privates } from './vectors/secp256k1/privates.json' assert {
 import { default as points } from './vectors/secp256k1/points.json' assert { type: 'json' };
 import { default as wp } from './wycheproof/ecdsa_secp256k1_sha256_test.json' assert { type: 'json' };
 
+// Any changes to the file will need to be aware of the fact
+// the file is shared between noble-curves and noble-secp256k1.
+
 const Point = secp.ProjectivePoint;
 const privatesTxt = readFileSync('./test/vectors/secp256k1/privates-2.txt', 'utf-8');
 

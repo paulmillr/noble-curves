@@ -1,30 +1,24 @@
 import { deepStrictEqual, strictEqual, throws } from 'assert';
 import { readFileSync } from 'fs';
-import { bytesToHex, concatBytes, hexToBytes, randomBytes } from '@noble/hashes/utils';
+import { bytesToHex, concatBytes, hexToBytes, utf8ToBytes, randomBytes } from '@noble/hashes/utils';
 import * as fc from 'fast-check';
 import { describe, should } from 'micro-should';
-import { ed25519, ED25519_TORSION_SUBGROUP, numberToBytesLE } from './ed25519.helpers.js';
+import { ed25519 as ed, ED25519_TORSION_SUBGROUP, numberToBytesLE } from './ed25519.helpers.js';
 // Old vectors allow to test sign() because they include private key
 import { default as ed25519vectors_OLD } from './ed25519/ed25519_test_OLD.json' assert { type: 'json' };
 import { default as ed25519vectors } from './wycheproof/ed25519_test.json' assert { type: 'json' };
-
 import { default as zip215 } from './ed25519/zip215.json' assert { type: 'json' };
 
+// Any changes to the file will need to be aware of the fact
+// the file is shared between noble-curves and noble-ed25519.
+
 describe('ed25519', () => {
-  const ed = ed25519;
   const hex = bytesToHex;
   const Point = ed.ExtendedPoint;
 
   function to32Bytes(numOrStr) {
     let hex = typeof numOrStr === 'string' ? numOrStr : numOrStr.toString(16);
     return hexToBytes(hex.padStart(64, '0'));
-  }
-
-  function utf8ToBytes(str) {
-    if (typeof str !== 'string') {
-      throw new Error(`utf8ToBytes expected string, got ${typeof str}`);
-    }
-    return new TextEncoder().encode(str);
   }
 
   ed.utils.precompute(8);
@@ -416,26 +410,26 @@ describe('ed25519', () => {
   });
 
   should('not verify when sig.s >= CURVE.n', () => {
-    const privateKey = ed25519.utils.randomPrivateKey();
+    const privateKey = ed.utils.randomPrivateKey();
     const message = Uint8Array.from([0xab, 0xbc, 0xcd, 0xde]);
-    const publicKey = ed25519.getPublicKey(privateKey);
-    const signature = ed25519.sign(message, privateKey);
+    const publicKey = ed.getPublicKey(privateKey);
+    const signature = ed.sign(message, privateKey);
 
     const R = signature.slice(0, 32);
     let s = signature.slice(32, 64);
 
     s = bytesToHex(s.slice().reverse());
     s = BigInt('0x' + s);
-    s = s + ed25519.CURVE.n;
+    s = s + ed.CURVE.n;
     s = numberToBytesLE(s, 32);
 
     const sig_invalid = concatBytes(R, s);
-    deepStrictEqual(ed25519.verify(sig_invalid, message, publicKey), false);
+    deepStrictEqual(ed.verify(sig_invalid, message, publicKey), false);
   });
 
   should('not accept point without z, t', () => {
     const t = 81718630521762619991978402609047527194981150691135404693881672112315521837062n;
-    const point = ed25519.ExtendedPoint.fromAffine({ x: t, y: t });
+    const point = Point.fromAffine({ x: t, y: t });
     throws(() => point.assertValidity());
     // Otherwise (without assertValidity):
     // const point2 = point.double();
