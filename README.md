@@ -751,79 +751,83 @@ We consider infrastructure attacks like rogue NPM modules very important; that's
 
 ## Speed
 
-Benchmark results on Apple M2 with node v19:
+Benchmark results on Apple M2 with node v20:
 
 ```
 secp256k1
-init x 58 ops/sec @ 17ms/op
-getPublicKey x 5,640 ops/sec @ 177μs/op
-sign x 4,471 ops/sec @ 223μs/op
-verify x 780 ops/sec @ 1ms/op
-getSharedSecret x 465 ops/sec @ 2ms/op
-recoverPublicKey x 740 ops/sec @ 1ms/op
-schnorr.sign x 597 ops/sec @ 1ms/op
-schnorr.verify x 775 ops/sec @ 1ms/op
+init x 68 ops/sec @ 14ms/op
+getPublicKey x 6,750 ops/sec @ 148μs/op
+sign x 5,206 ops/sec @ 192μs/op
+verify x 880 ops/sec @ 1ms/op
+getSharedSecret x 536 ops/sec @ 1ms/op
+recoverPublicKey x 852 ops/sec @ 1ms/op
+schnorr.sign x 685 ops/sec @ 1ms/op
+schnorr.verify x 908 ops/sec @ 1ms/op
 
-P256
-init x 31 ops/sec @ 31ms/op
-getPublicKey x 5,607 ops/sec @ 178μs/op
-sign x 4,583 ops/sec @ 218μs/op
-verify x 540 ops/sec @ 1ms/op
+p256
+init x 38 ops/sec @ 26ms/op
+getPublicKey x 6,530 ops/sec @ 153μs/op
+sign x 5,074 ops/sec @ 197μs/op
+verify x 626 ops/sec @ 1ms/op
 
-P384
-init x 15 ops/sec @ 63ms/op
-getPublicKey x 2,622 ops/sec @ 381μs/op
-sign x 2,106 ops/sec @ 474μs/op
-verify x 222 ops/sec @ 4ms/op
+p384
+init x 17 ops/sec @ 57ms/op
+getPublicKey x 2,883 ops/sec @ 346μs/op
+sign x 2,358 ops/sec @ 424μs/op
+verify x 245 ops/sec @ 4ms/op
 
-P521
-init x 8 ops/sec @ 119ms/op
-getPublicKey x 1,371 ops/sec @ 729μs/op
-sign x 1,164 ops/sec @ 858μs/op
-verify x 118 ops/sec @ 8ms/op
+p521
+init x 9 ops/sec @ 109ms/op
+getPublicKey x 1,516 ops/sec @ 659μs/op
+sign x 1,271 ops/sec @ 786μs/op
+verify x 123 ops/sec @ 8ms/op
 
 ed25519
-init x 47 ops/sec @ 20ms/op
-getPublicKey x 9,414 ops/sec @ 106μs/op
-sign x 4,516 ops/sec @ 221μs/op
-verify x 912 ops/sec @ 1ms/op
+init x 54 ops/sec @ 18ms/op
+getPublicKey x 10,269 ops/sec @ 97μs/op
+sign x 5,110 ops/sec @ 195μs/op
+verify x 1,049 ops/sec @ 952μs/op
 
 ed448
-init x 17 ops/sec @ 56ms/op
-getPublicKey x 3,363 ops/sec @ 297μs/op
-sign x 1,615 ops/sec @ 619μs/op
-verify x 319 ops/sec @ 3ms/op
+init x 19 ops/sec @ 51ms/op
+getPublicKey x 3,775 ops/sec @ 264μs/op
+sign x 1,771 ops/sec @ 564μs/op
+verify x 351 ops/sec @ 2ms/op
 
 ecdh
-├─x25519 x 1,337 ops/sec @ 747μs/op
-├─secp256k1 x 461 ops/sec @ 2ms/op
-├─P256 x 441 ops/sec @ 2ms/op
-├─P384 x 179 ops/sec @ 5ms/op
-├─P521 x 93 ops/sec @ 10ms/op
-└─x448 x 496 ops/sec @ 2ms/op
+├─x25519 x 1,466 ops/sec @ 682μs/op
+├─secp256k1 x 539 ops/sec @ 1ms/op
+├─p256 x 511 ops/sec @ 1ms/op
+├─p384 x 199 ops/sec @ 5ms/op
+├─p521 x 103 ops/sec @ 9ms/op
+└─x448 x 548 ops/sec @ 1ms/op
 
 bls12-381
-init x 32 ops/sec @ 30ms/op
-getPublicKey 1-bit x 858 ops/sec @ 1ms/op
-getPublicKey x 858 ops/sec @ 1ms/op
-sign x 49 ops/sec @ 20ms/op
-verify x 34 ops/sec @ 28ms/op
-pairing x 94 ops/sec @ 10ms/op
-aggregatePublicKeys/8 x 116 ops/sec @ 8ms/op
-aggregatePublicKeys/32 x 31 ops/sec @ 31ms/op
-aggregatePublicKeys/128 x 7 ops/sec @ 125ms/op
-aggregateSignatures/8 x 45 ops/sec @ 22ms/op
-aggregateSignatures/32 x 11 ops/sec @ 84ms/op
-aggregateSignatures/128 x 3 ops/sec @ 332ms/opp
+init x 36 ops/sec @ 27ms/op
+getPublicKey 1-bit x 973 ops/sec @ 1ms/op
+getPublicKey x 970 ops/sec @ 1ms/op
+sign x 55 ops/sec @ 17ms/op
+verify x 39 ops/sec @ 25ms/op
+pairing x 106 ops/sec @ 9ms/op
+aggregatePublicKeys/8 x 129 ops/sec @ 7ms/op
+aggregatePublicKeys/32 x 34 ops/sec @ 28ms/op
+aggregatePublicKeys/128 x 8 ops/sec @ 112ms/op
+aggregatePublicKeys/512 x 2 ops/sec @ 446ms/op
+aggregatePublicKeys/2048 x 0 ops/sec @ 1778ms/op
+aggregateSignatures/8 x 50 ops/sec @ 19ms/op
+aggregateSignatures/32 x 13 ops/sec @ 74ms/op
+aggregateSignatures/128 x 3 ops/sec @ 296ms/op
+aggregateSignatures/512 x 0 ops/sec @ 1180ms/op
+aggregateSignatures/2048 x 0 ops/sec @ 4715ms/op
 
 hash-to-curve
-hash_to_field x 850,340 ops/sec @ 1μs/op
-secp256k1 x 2,143 ops/sec @ 466μs/op
-P256 x 3,861 ops/sec @ 258μs/op
-P384 x 1,526 ops/sec @ 655μs/op
-P521 x 748 ops/sec @ 1ms/op
-ed25519 x 2,772 ops/sec @ 360μs/op
-ed448 x 1,146 ops/sec @ 871μs/op
+hash_to_field x 91,600 ops/sec @ 10μs/op
+secp256k1 x 2,373 ops/sec @ 421μs/op
+p256 x 4,310 ops/sec @ 231μs/op
+p384 x 1,664 ops/sec @ 600μs/op
+p521 x 807 ops/sec @ 1ms/op
+ed25519 x 3,088 ops/sec @ 323μs/op
+ed448 x 1,247 ops/sec @ 801μs/op
 ```
 
 ## Contributing & testing
