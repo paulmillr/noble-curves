@@ -8,7 +8,7 @@ import {
   ed25519,
   ed25519ctx,
   ed25519ph,
-  edwardsToMontgomery,
+  edwardsToMontgomeryPub,
   edwardsToMontgomeryPriv,
   RistrettoPoint,
   x25519,
@@ -172,7 +172,7 @@ describe('RFC7748 X25519 ECDH', () => {
       hex(xPrivate),
       'a8cd44eb8e93319c0570bc11005c0e0189d34ff02f6c17773411ad191293c94f'
     );
-    const xPublic = edwardsToMontgomery(edPublic);
+    const xPublic = edwardsToMontgomeryPub(edPublic);
     deepStrictEqual(
       hex(xPublic),
       'ed7749b4d989f6957f3bfde6c56767e988e21c9f8784d91d610011cd553f9b06'
@@ -182,10 +182,9 @@ describe('RFC7748 X25519 ECDH', () => {
   should('edwardsToMontgomery should produce correct keyPair', () => {
     const edSecret = ed25519.utils.randomPrivateKey();
     const edPublic = ed25519.getPublicKey(edSecret);
-    const hashed = ed25519.CURVE.hash(edSecret.subarray(0, 32));
-    const xSecret = ed25519.CURVE.adjustScalarBytes(hashed.subarray(0, 32));
+    const xSecret = edwardsToMontgomeryPriv(edSecret);
     const expectedXPublic = x25519.getPublicKey(xSecret);
-    const xPublic = edwardsToMontgomery(edPublic);
+    const xPublic = edwardsToMontgomeryPub(edPublic);
     deepStrictEqual(xPublic, expectedXPublic);
   });
 
@@ -195,8 +194,8 @@ describe('RFC7748 X25519 ECDH', () => {
     const edSecret2 = ed25519.utils.randomPrivateKey();
     const edPublic2 = ed25519.getPublicKey(edSecret2);
     deepStrictEqual(
-      x25519.getSharedSecret(edwardsToMontgomeryPriv(edSecret1), edwardsToMontgomery(edPublic2)),
-      x25519.getSharedSecret(edwardsToMontgomeryPriv(edSecret2), edwardsToMontgomery(edPublic1))
+      x25519.getSharedSecret(edwardsToMontgomeryPriv(edSecret1), edwardsToMontgomeryPub(edPublic2)),
+      x25519.getSharedSecret(edwardsToMontgomeryPriv(edSecret2), edwardsToMontgomeryPub(edPublic1))
     );
   });
 

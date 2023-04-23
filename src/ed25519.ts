@@ -104,10 +104,10 @@ const ed25519Defaults = {
   // d is equal to -121665/121666 over finite field.
   // Negative number is P - number, and division is invert(number, P)
   d: BigInt('37095705934669439343138083508754565189542113879843219016388785533085940283555'),
-  // Finite field 𝔽p over which we'll do calculations; 2n ** 255n - 19n
+  // Finite field 𝔽p over which we'll do calculations; 2n**255n - 19n
   Fp,
   // Subgroup order: how many points curve has
-  // 2n ** 252n + 27742317777372353535851937790883648493n;
+  // 2n**252n + 27742317777372353535851937790883648493n;
   n: BigInt('7237005577332262213973186563042994240857116359379907606001950938285454250989'),
   // Cofactor
   h: BigInt(8),
@@ -165,13 +165,14 @@ export const x25519 = montgomery({
  * @example
  *   const someonesPub = ed25519.getPublicKey(ed25519.utils.randomPrivateKey());
  *   const aPriv = x25519.utils.randomPrivateKey();
- *   x25519.getSharedSecret(aPriv, edwardsToMontgomery(someonesPub))
+ *   x25519.getSharedSecret(aPriv, edwardsToMontgomeryPub(someonesPub))
  */
-export function edwardsToMontgomery(edwardsPub: Hex): Uint8Array {
+export function edwardsToMontgomeryPub(edwardsPub: Hex): Uint8Array {
   const { y } = ed25519.ExtendedPoint.fromHex(edwardsPub);
   const _1n = BigInt(1);
   return Fp.toBytes(Fp.create((_1n + y) * Fp.inv(_1n - y)));
 }
+export const edwardsToMontgomery = edwardsToMontgomeryPub; // deprecated
 
 /**
  * Converts ed25519 secret key to x25519 secret key.
