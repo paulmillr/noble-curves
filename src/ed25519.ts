@@ -1,16 +1,16 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha512 } from '@noble/hashes/sha512';
 import { concatBytes, randomBytes, utf8ToBytes } from '@noble/hashes/utils';
-import { twistedEdwards, ExtPointType } from './abstract/edwards.js';
+import { ExtPointType, twistedEdwards } from './abstract/edwards.js';
 import { montgomery } from './abstract/montgomery.js';
-import { mod, pow2, isNegativeLE, Field, FpSqrtEven } from './abstract/modular.js';
+import { Field, FpSqrtEven, isNegativeLE, mod, pow2 } from './abstract/modular.js';
 import {
-  equalBytes,
   bytesToHex,
   bytesToNumberLE,
-  numberToBytesLE,
-  Hex,
   ensureBytes,
+  equalBytes,
+  Hex,
+  numberToBytesLE,
 } from './abstract/utils.js';
 import * as htf from './abstract/hash-to-curve.js';
 import { AffinePoint } from './abstract/curve.js';
@@ -34,6 +34,7 @@ const ED25519_SQRT_M1 = BigInt(
 const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _5n = BigInt(5);
 // prettier-ignore
 const _10n = BigInt(10), _20n = BigInt(20), _40n = BigInt(40), _80n = BigInt(80);
+
 function ed25519_pow_2_252_3(x: bigint) {
   const P = ED25519_P;
   const x2 = (x * x) % P;
@@ -51,6 +52,7 @@ function ed25519_pow_2_252_3(x: bigint) {
   // ^ To pow to (p+3)/8, multiply it by x.
   return { pow_p_5_8, b2 };
 }
+
 function adjustScalarBytes(bytes: Uint8Array): Uint8Array {
   // Section 5: For X25519, in order to decode 32 random bytes as an integer scalar,
   // set the three least significant bits of the first byte
@@ -61,6 +63,7 @@ function adjustScalarBytes(bytes: Uint8Array): Uint8Array {
   bytes[31] |= 64; // 0b0100_0000
   return bytes;
 }
+
 // sqrt(u/v)
 function uvRatio(u: bigint, v: bigint): { isValid: boolean; value: bigint } {
   const P = ED25519_P;
@@ -121,6 +124,7 @@ const ed25519Defaults = {
 } as const;
 
 export const ed25519 = twistedEdwards(ed25519Defaults);
+
 function ed25519_domain(data: Uint8Array, ctx: Uint8Array, phflag: boolean) {
   if (ctx.length > 255) throw new Error('Context is too big');
   return concatBytes(
@@ -130,6 +134,7 @@ function ed25519_domain(data: Uint8Array, ctx: Uint8Array, phflag: boolean) {
     data
   );
 }
+
 export const ed25519ctx = twistedEdwards({ ...ed25519Defaults, domain: ed25519_domain });
 export const ed25519ph = twistedEdwards({
   ...ed25519Defaults,
@@ -158,13 +163,26 @@ export const x25519 = montgomery({
  * * `(u, v) = ((1+y)/(1-y), sqrt(-486664)*u/x)`
  * * `(x, y) = (sqrt(-486664)*u/v, (u-1)/(u+1))`
  * @example
- *   const aPub = ed25519.getPublicKey(utils.randomPrivateKey());
- *   x25519.getSharedSecret(edwardsToMontgomery(aPub), edwardsToMontgomery(someonesPub))
+ *   const someonesPub = ed25519.getPublicKey(ed25519.utils.randomPrivateKey());
+ *   const aPriv = x25519.utils.randomPrivateKey();
+ *   x25519.getSharedSecret(aPriv, edwardsToMontgomery(someonesPub))
  */
 export function edwardsToMontgomery(edwardsPub: Hex): Uint8Array {
   const { y } = ed25519.ExtendedPoint.fromHex(edwardsPub);
   const _1n = BigInt(1);
-  return Fp.toBytes(Fp.create((y - _1n) * Fp.inv(y + _1n)));
+  return Fp.toBytes(Fp.create((_1n + y) * Fp.inv(_1n - y)));
+}
+
+/**
+ * Converts ed25519 secret key to x25519 secret key.
+ * @example
+ *   const someonesPub = x25519.getPublicKey(x25519.utils.randomPrivateKey());
+ *   const aPriv = ed25519.utils.randomPrivateKey();
+ *   x25519.getSharedSecret(edwardsToMontgomeryPriv(aPriv), someonesPub)
+ */
+export function edwardsToMontgomeryPriv(edwardsPriv: Uint8Array): Uint8Array {
+  const hashed = ed25519Defaults.hash(edwardsPriv.subarray(0, 32));
+  return ed25519Defaults.adjustScalarBytes(hashed).subarray(0, 32);
 }
 
 // Hash To Curve Elligator2 Map (NOTE: different from ristretto255 elligator)
@@ -223,7 +241,8 @@ function map_to_curve_elligator2_curve25519(u: bigint) {
 
 const ELL2_C1_EDWARDS = FpSqrtEven(Fp, Fp.neg(BigInt(486664))); // sgn0(c1) MUST equal 0
 function map_to_curve_elligator2_edwards25519(u: bigint) {
-  const { xMn, xMd, yMn, yMd } = map_to_curve_elligator2_curve25519(u); //  1.  (xMn, xMd, yMn, yMd) = map_to_curve_elligator2_curve25519(u)
+  const { xMn, xMd, yMn, yMd } = map_to_curve_elligator2_curve25519(u); //  1.  (xMn, xMd, yMn, yMd) =
+  // map_to_curve_elligator2_curve25519(u)
   let xn = Fp.mul(xMn, yMd); //  2.  xn = xMn * yMd
   xn = Fp.mul(xn, ELL2_C1_EDWARDS); //  3.  xn = xn * c1
   let xd = Fp.mul(xMd, yMn); //  4.  xd = xMd * yMn    # xn / xd = c1 * xM / yM
@@ -239,6 +258,7 @@ function map_to_curve_elligator2_edwards25519(u: bigint) {
   const inv = Fp.invertBatch([xd, yd]); // batch division
   return { x: Fp.mul(xn, inv[0]), y: Fp.mul(yn, inv[1]) }; //  13. return (xn, xd, yn, yd)
 }
+
 const { hashToCurve, encodeToCurve } = htf.createHasher(
   ed25519.ExtendedPoint,
   (scalars: bigint[]) => map_to_curve_elligator2_edwards25519(scalars[0]),
@@ -257,6 +277,7 @@ export { hashToCurve, encodeToCurve };
 function assertRstPoint(other: unknown) {
   if (!(other instanceof RistrettoPoint)) throw new Error('RistrettoPoint expected');
 }
+
 // √(-1) aka √(a) aka 2^((p-1)/4)
 const SQRT_M1 = BigInt(
   '19681161376707505956807079304988542015446066515923890162744021073123829784752'
