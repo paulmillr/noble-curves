@@ -102,7 +102,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     nByteLength,
     h: cofactor,
   } = CURVE;
-  const MASK = _2n ** BigInt(nByteLength * 8);
+  const MASK = _2n << (BigInt(nByteLength * 8) - _1n);
   const modP = Fp.create; // Function overrides
 
   // sqrt(u/v)
