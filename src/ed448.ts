@@ -63,7 +63,7 @@ const ED448_DEF = {
   d: BigInt(
     '726838724295606890549323807888004534353641360687318060281490199180612328166730772686396383698676545930088884461843637361053498018326358'
   ),
-  // Finite field 𝔽p over which we'll do calculations; 2n ** 448n - 2n ** 224n - 1n
+  // Finite field 𝔽p over which we'll do calculations; 2n**448n - 2n**224n - 1n
   Fp,
   // Subgroup order: how many points curve has;
   // 2n**446n - 13818066809895115352007386748515426880336692474882178609894547503885n
@@ -146,11 +146,12 @@ export const x448 = montgomery({
  *   const aPub = ed448.getPublicKey(utils.randomPrivateKey());
  *   x448.getSharedSecret(edwardsToMontgomery(aPub), edwardsToMontgomery(someonesPub))
  */
-export function edwardsToMontgomery(edwardsPub: string | Uint8Array): Uint8Array {
+export function edwardsToMontgomeryPub(edwardsPub: string | Uint8Array): Uint8Array {
   const { y } = ed448.ExtendedPoint.fromHex(edwardsPub);
   const _1n = BigInt(1);
   return Fp.toBytes(Fp.create((y - _1n) * Fp.inv(y + _1n)));
 }
+export const edwardsToMontgomery = edwardsToMontgomeryPub; // deprecated
 
 // Hash To Curve Elligator2 Map
 const ELL2_C1 = (Fp.ORDER - BigInt(3)) / BigInt(4); // 1. c1 = (q - 3) / 4         # Integer arithmetic
