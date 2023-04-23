@@ -60,11 +60,10 @@ const _8n = BigInt(8), _16n = BigInt(16);
 
 // CURVE FIELDS
 // Finite field over p.
-const Fp = mod.Field(
-  BigInt(
-    '0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab'
-  )
+const Fp_raw = BigInt(
+  '0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab'
 );
+const Fp = mod.Field(Fp_raw);
 type Fp = bigint;
 // Finite field over r.
 // This particular field is not used anywhere in bls12-381, but it is still useful.
@@ -110,10 +109,7 @@ type Fp2Utils = {
 // G² - 1
 // h2q
 // NOTE: ORDER was wrong!
-const FP2_ORDER =
-  BigInt(
-    '0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab'
-  ) ** _2n;
+const FP2_ORDER = Fp_raw * Fp_raw;
 
 const Fp2: mod.IField<Fp2> & Fp2Utils = {
   ORDER: FP2_ORDER,
