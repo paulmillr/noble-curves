@@ -840,9 +840,11 @@ ed448 x 1,247 ops/sec @ 801μs/op
 ## Upgrading
 
 Previously, the library was split into single-feature packages
-noble-secp256k1 and noble-ed25519. curves can be thought as a continuation of their
-original work. The libraries now changed their direction towards providing
-minimal 4kb implementations of cryptography and are not as feature-complete.
+noble-secp256k1, noble-ed25519 and noble-bls12-381.
+
+Curves continue their original work. The single-feature packages changed their
+direction towards providing minimal 4kb implementations of cryptography,
+which means they have less features.
 
 Upgrading from @noble/secp256k1 2.0 or @noble/ed25519 2.0: no changes, libraries are compatible.
 
@@ -882,6 +884,7 @@ Upgrading from [@noble/ed25519](https://github.com/paulmillr/noble-ed25519) 1.7:
 - `utils` were split into `utils` (same api as in noble-curves) and
   `etc` (`sha512Sync` and others)
 - `getSharedSecret` was moved to `x25519` module
+- `toX25519` has been moved to `edwardsToMontgomeryPub` and `edwardsToMontgomeryPriv` methods
 
 Upgrading from [@noble/bls12-381](https://github.com/paulmillr/noble-bls12-381):
 
