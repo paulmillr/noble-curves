@@ -899,6 +899,7 @@ Useful articles about the library or its primitives:
 
 - [Learning fast elliptic-curve cryptography](https://paulmillr.com/posts/noble-secp256k1-fast-ecc/)
 - Pairings and BLS
+    - [BLS signatures for busy people](https://gist.github.com/paulmillr/18b802ad219b1aee34d773d08ec26ca2)
     - [BLS12-381 for the rest of us](https://hackmd.io/@benjaminion/bls12-381)
     - [Key concepts of pairings](https://medium.com/@alonmuroch_65570/bls-signatures-part-2-key-concepts-of-pairings-27a8a9533d0c)
     - Pairing over bls12-381:
