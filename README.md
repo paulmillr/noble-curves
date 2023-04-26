@@ -908,20 +908,22 @@ Useful documentation and articles about the library or its primitives:
       [part 3](https://research.nccgroup.com/2020/08/13/pairing-over-bls12-381-part-3-pairing/)
     - [Estimating the bit security of pairing-friendly curves](https://research.nccgroup.com/2022/02/03/estimating-the-bit-security-of-pairing-friendly-curves/)
 
-There exists
-[secp256k1 compatibility layer](https://github.com/ethereum/js-ethereum-cryptography/blob/2.0.0/src/secp256k1-compat.ts)
-for users who want to switch from secp256k1-node.
+Online demos:
 
-Real-world software that uses curves:
+- [Elliptic Curve Calculator](https://paulmillr.com/noble): add / multiply points, sign messages
+- [BLS threshold signatures](https://genthresh.com)
 
-- [Elliptic Curve Calculator](https://paulmillr.com/noble) online demo: add / multiply points, sign messages
-- Signers for web3 projects:
-  [btc-signer](https://github.com/paulmillr/scure-btc-signer), [eth-signer](https://github.com/paulmillr/micro-eth-signer),
-  [sol-signer](https://github.com/paulmillr/micro-sol-signer) for Solana
+Projects using curves:
+
+- web3 key signers:
+  [scure-btc-signer](https://github.com/paulmillr/scure-btc-signer),
+  [micro-eth-signer](https://github.com/paulmillr/micro-eth-signer),
+  [micro-sol-signer](https://github.com/paulmillr/micro-sol-signer) for Solana
 - [scure-bip32](https://github.com/paulmillr/scure-bip32) and separate [bip32](https://github.com/bitcoinjs/bip32) HDkey libraries
 - [ed25519-keygen](https://github.com/paulmillr/ed25519-keygen) SSH, PGP, TOR key generation
 - [micro-starknet](https://github.com/paulmillr/micro-starknet) stark-friendly elliptic curve algorithms.
-- BLS [threshold signatures online demo](https://genthresh.com)
+- [secp256k1 compatibility layer](https://github.com/ethereum/js-ethereum-cryptography/blob/2.0.0/src/secp256k1-compat.ts)
+for users who want to switch from secp256k1-node or tiny-secp256k1. Allows to see which methods map to corresponding noble code.
 - [BLS BBS signatures](https://github.com/Wind4Greg/BBS-Draft-Checks) following [draft-irtf-cfrg-bbs-signatures-latest](https://identity.foundation/bbs-signature/draft-irtf-cfrg-bbs-signatures.html)
 - [KZG trusted setup ceremony](https://github.com/dsrvlabs/czg-keremony)
 
