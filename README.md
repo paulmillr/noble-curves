@@ -921,8 +921,8 @@ Real-world software that uses curves:
 - [scure-bip32](https://github.com/paulmillr/scure-bip32) and separate [bip32](https://github.com/bitcoinjs/bip32) HDkey libraries
 - [ed25519-keygen](https://github.com/paulmillr/ed25519-keygen) SSH, PGP, TOR key generation
 - [micro-starknet](https://github.com/paulmillr/micro-starknet) stark-friendly elliptic curve algorithms.
-- BLS threshold sigs demo [genthresh.com](https://genthresh.com)
-- BLS BBS signatures [github.com/Wind4Greg/BBS-Draft-Checks](https://github.com/Wind4Greg/BBS-Draft-Checks) following [draft-irtf-cfrg-bbs-signatures-latest](https://identity.foundation/bbs-signature/draft-irtf-cfrg-bbs-signatures.html)
+- BLS [threshold signatures online demo](https://genthresh.com)
+- [BLS BBS signatures](https://github.com/Wind4Greg/BBS-Draft-Checks) following [draft-irtf-cfrg-bbs-signatures-latest](https://identity.foundation/bbs-signature/draft-irtf-cfrg-bbs-signatures.html)
 - [KZG trusted setup ceremony](https://github.com/dsrvlabs/czg-keremony)
 
 ## License
