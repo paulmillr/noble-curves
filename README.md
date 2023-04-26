@@ -895,7 +895,7 @@ Upgrading from [@noble/bls12-381](https://github.com/paulmillr/noble-bls12-381):
 
 ## Resources
 
-Useful articles about the library or its primitives:
+Useful documentation and articles about the library or its primitives:
 
 - [Learning fast elliptic-curve cryptography](https://paulmillr.com/posts/noble-secp256k1-fast-ecc/)
 - Pairings and BLS
@@ -907,6 +907,10 @@ Useful articles about the library or its primitives:
       [part 2](https://research.nccgroup.com/2020/07/13/pairing-over-bls12-381-part-2-curves/),
       [part 3](https://research.nccgroup.com/2020/08/13/pairing-over-bls12-381-part-3-pairing/)
     - [Estimating the bit security of pairing-friendly curves](https://research.nccgroup.com/2022/02/03/estimating-the-bit-security-of-pairing-friendly-curves/)
+
+There exists
+[secp256k1 compatibility layer](https://github.com/ethereum/js-ethereum-cryptography/blob/2.0.0/src/secp256k1-compat.ts)
+for users who want to switch from secp256k1-node.
 
 Real-world software that uses curves:
 
