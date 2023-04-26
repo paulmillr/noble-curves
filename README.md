@@ -915,11 +915,17 @@ Online demos:
 
 Projects using curves:
 
-- web3 key signers:
-  [scure-btc-signer](https://github.com/paulmillr/scure-btc-signer),
-  [micro-eth-signer](https://github.com/paulmillr/micro-eth-signer),
-  [micro-sol-signer](https://github.com/paulmillr/micro-sol-signer) for Solana
 - [scure-bip32](https://github.com/paulmillr/scure-bip32) and separate [bip32](https://github.com/bitcoinjs/bip32) HDkey libraries
+- Ethereum libraries:
+    - [ethereum-cryptography](https://github.com/ethereum/js-ethereum-cryptography)
+    - [@ethereumjs](https://github.com/ethereumjs/ethereumjs-monorepo)
+    - [micro-eth-signer](https://github.com/paulmillr/micro-eth-signer)
+    - [ethers](https://github.com/ethers-io/ethers.js) (old noble-secp256k1 for now)
+    - [viem.sh](https://viem.sh)
+- Bitcoin libraries:
+    - [scure-btc-signer](https://github.com/paulmillr/scure-btc-signer)
+- [micro-sol-signer](https://github.com/paulmillr/micro-sol-signer)
+- [did-jwt](https://github.com/decentralized-identity/did-jwt)
 - [ed25519-keygen](https://github.com/paulmillr/ed25519-keygen) SSH, PGP, TOR key generation
 - [micro-starknet](https://github.com/paulmillr/micro-starknet) stark-friendly elliptic curve algorithms.
 - [secp256k1 compatibility layer](https://github.com/ethereum/js-ethereum-cryptography/blob/2.0.0/src/secp256k1-compat.ts)
