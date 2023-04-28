@@ -922,12 +922,14 @@ Projects using curves:
     - [micro-eth-signer](https://github.com/paulmillr/micro-eth-signer)
     - [ethers](https://github.com/ethers-io/ethers.js) (old noble-secp256k1 for now)
     - [viem.sh](https://viem.sh)
-- Bitcoin libraries:
-    - [scure-btc-signer](https://github.com/paulmillr/scure-btc-signer)
-- [micro-sol-signer](https://github.com/paulmillr/micro-sol-signer)
+    - [metamask's eth-sig-util](https://github.com/MetaMask/eth-sig-util)
+- Bitcoin libraries: [scure-btc-signer](https://github.com/paulmillr/scure-btc-signer)
+- Solana libraries: [micro-sol-signer](https://github.com/paulmillr/micro-sol-signer), [solana-web3.js](https://github.com/solana-labs/solana-web3.js)
+- [polkadot.js](https://github.com/polkadot-js/common)
+- [micro-starknet](https://github.com/paulmillr/micro-starknet) stark-friendly elliptic curve algorithms.
+- [protonmail](https://github.com/ProtonMail/WebClients) (old noble-ed25519 for now)
 - [did-jwt](https://github.com/decentralized-identity/did-jwt)
 - [ed25519-keygen](https://github.com/paulmillr/ed25519-keygen) SSH, PGP, TOR key generation
-- [micro-starknet](https://github.com/paulmillr/micro-starknet) stark-friendly elliptic curve algorithms.
 - [secp256k1 compatibility layer](https://github.com/ethereum/js-ethereum-cryptography/blob/2.0.0/src/secp256k1-compat.ts)
 for users who want to switch from secp256k1-node or tiny-secp256k1. Allows to see which methods map to corresponding noble code.
 - [BLS BBS signatures](https://github.com/Wind4Greg/BBS-Draft-Checks) following [draft-irtf-cfrg-bbs-signatures-latest](https://identity.foundation/bbs-signature/draft-irtf-cfrg-bbs-signatures.html)
