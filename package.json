@@ -11,6 +11,9 @@
     "*.d.ts",
     "*.d.ts.map"
   ],
+  "engines": {
+    "node": "16.x || >= 18.0.0"
+  },
   "scripts": {
     "bench": "cd benchmark; node secp256k1.js; node curves.js; node ecdh.js; node hash-to-curve.js; node modular.js; node bls.js",
     "build": "tsc && tsc -p tsconfig.esm.json",
