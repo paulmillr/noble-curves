@@ -618,7 +618,7 @@ export interface SignatureType {
   readonly s: bigint;
   readonly recovery?: number;
   assertValidity(): void;
-  addRecoveryBit(recovery: number): SignatureType;
+  addRecoveryBit(recovery: number): RecoveredSignatureType;
   hasHighS(): boolean;
   normalizeS(): SignatureType;
   recoverPublicKey(msgHash: Hex): ProjPointType<bigint>;
@@ -628,6 +628,9 @@ export interface SignatureType {
   toDERRawBytes(isCompressed?: boolean): Uint8Array;
   toDERHex(isCompressed?: boolean): string;
 }
+export type RecoveredSignatureType = SignatureType & {
+  readonly recovery: number;
+};
 // Static methods
 export type SignatureConstructor = {
   new (r: bigint, s: bigint): SignatureType;
@@ -669,7 +672,7 @@ export type CurveFn = {
   CURVE: ReturnType<typeof validateOpts>;
   getPublicKey: (privateKey: PrivKey, isCompressed?: boolean) => Uint8Array;
   getSharedSecret: (privateA: PrivKey, publicB: Hex, isCompressed?: boolean) => Uint8Array;
-  sign: (msgHash: Hex, privKey: PrivKey, opts?: SignOpts) => SignatureType;
+  sign: (msgHash: Hex, privKey: PrivKey, opts?: SignOpts) => RecoveredSignatureType;
   verify: (signature: Hex | SignatureLike, msgHash: Hex, publicKey: Hex, opts?: VerOpts) => boolean;
   ProjectivePoint: ProjConstructor<bigint>;
   Signature: SignatureConstructor;
@@ -782,8 +785,8 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       if (!isWithinCurveOrder(this.s)) throw new Error('s must be 0 < s < CURVE.n');
     }
 
-    addRecoveryBit(recovery: number) {
-      return new Signature(this.r, this.s, recovery);
+    addRecoveryBit(recovery: number): RecoveredSignature {
+      return new Signature(this.r, this.s, recovery) as RecoveredSignature;
     }
 
     recoverPublicKey(msgHash: Hex): typeof Point.BASE {
@@ -828,6 +831,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       return numToNByteStr(this.r) + numToNByteStr(this.s);
     }
   }
+  type RecoveredSignature = Signature & { recovery: number };
 
   const utils = {
     isValidPrivateKey(privateKey: PrivKey) {
@@ -965,7 +969,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     const seed = ut.concatBytes(...seedArgs); // Step D of RFC6979 3.2
     const m = h1int; // NOTE: no need to call bits2int second time here, it is inside truncateHash!
     // Converts signature params into point w r/s, checks result for validity.
-    function k2sig(kBytes: Uint8Array): Signature | undefined {
+    function k2sig(kBytes: Uint8Array): RecoveredSignature | undefined {
       // RFC 6979 Section 3.2, step 3: k = bits2int(T)
       const k = bits2int(kBytes); // Cannot use fields methods, since it is group element
       if (!isWithinCurveOrder(k)) return; // Important: all mod() calls here must be done over N
@@ -984,7 +988,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
         normS = normalizeS(s); // if lowS was passed, ensure s is always
         recovery ^= 1; // // in the bottom half of N
       }
-      return new Signature(r, normS, recovery); // use normS, not s
+      return new Signature(r, normS, recovery) as RecoveredSignature; // use normS, not s
     }
     return { seed, k2sig };
   }
@@ -992,18 +996,22 @@ export function weierstrass(curveDef: CurveType): CurveFn {
   const defaultVerOpts: VerOpts = { lowS: CURVE.lowS, prehash: false };
 
   /**
-   * Signs message hash (not message: you need to hash it by yourself).
+   * Signs message hash with a private key.
    * ```
    * sign(m, d, k) where
    *   (x, y) = G × k
    *   r = x mod n
    *   s = (m + dr)/k mod n
    * ```
-   * @param opts `lowS, extraEntropy, prehash`
+   * @param msgHash NOT message. msg needs to be hashed to `msgHash`, or use `prehash`.
+   * @param privKey private key
+   * @param opts lowS for non-malleable sigs. extraEntropy for mixing randomness into k. prehash will hash first arg.
+   * @returns signature with recovery param
    */
-  function sign(msgHash: Hex, privKey: PrivKey, opts = defaultSigOpts): Signature {
+  function sign(msgHash: Hex, privKey: PrivKey, opts = defaultSigOpts): RecoveredSignature {
     const { seed, k2sig } = prepSig(msgHash, privKey, opts); // Steps A, D of RFC6979 3.2.
-    const drbg = ut.createHmacDrbg<Signature>(CURVE.hash.outputLen, CURVE.nByteLength, CURVE.hmac);
+    const C = CURVE;
+    const drbg = ut.createHmacDrbg<RecoveredSignature>(C.hash.outputLen, C.nByteLength, C.hmac);
     return drbg(seed, k2sig); // Steps B, C, D, E, F, G
   }
 
@@ -1084,10 +1092,15 @@ export function weierstrass(curveDef: CurveType): CurveFn {
   };
 }
 
-// Implementation of the Shallue and van de Woestijne method for any Weierstrass curve
-// TODO: check if there is a way to merge this with uvRatio in Edwards && move to modular?
-// b = True and y = sqrt(u / v) if (u / v) is square in F, and
-// b = False and y = sqrt(Z * (u / v)) otherwise.
+/**
+ * Implementation of the Shallue and van de Woestijne method for any weierstrass curve.
+ * TODO: check if there is a way to merge this with uvRatio in Edwards; move to modular.
+ * b = True and y = sqrt(u / v) if (u / v) is square in F, and
+ * b = False and y = sqrt(Z * (u / v)) otherwise.
+ * @param Fp
+ * @param Z
+ * @returns
+ */
 export function SWUFpSqrtRatio<T>(Fp: mod.IField<T>, Z: T) {
   // Generic implementation
   const q = Fp.ORDER;
@@ -1151,7 +1164,9 @@ export function SWUFpSqrtRatio<T>(Fp: mod.IField<T>, Z: T) {
   // if (Fp.ORDER % _8n === _5n) // sqrt_ratio_5mod8
   return sqrtRatio;
 }
-// From draft-irtf-cfrg-hash-to-curve-16
+/**
+ * From draft-irtf-cfrg-hash-to-curve-16
+ */
 export function mapToCurveSimpleSWU<T>(
   Fp: mod.IField<T>,
   opts: {
