@@ -75,8 +75,13 @@ export interface ExtPointConstructor extends GroupConstructor<ExtPointType> {
 export type CurveFn = {
   CURVE: ReturnType<typeof validateOpts>;
   getPublicKey: (privateKey: Hex) => Uint8Array;
-  sign: (message: Hex, privateKey: Hex) => Uint8Array;
-  verify: (sig: Hex, message: Hex, publicKey: Hex) => boolean;
+  sign: (message: Hex, privateKey: Hex, options?: { context?: Hex }) => Uint8Array;
+  verify: (
+    sig: Hex,
+    message: Hex,
+    publicKey: Hex,
+    options?: { context?: Hex; zip215: boolean }
+  ) => boolean;
   ExtendedPoint: ExtPointConstructor;
   utils: {
     randomPrivateKey: () => Uint8Array;
@@ -379,7 +384,10 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       let { isValid, value: x } = uvRatio(u, v); // √(u/v)
       if (!isValid) throw new Error('Point.fromHex: invalid y coordinate');
       const isXOdd = (x & _1n) === _1n; // There are 2 square roots. Use x_0 bit to select proper
-      const isLastByteOdd = (lastByte & 0x80) !== 0; // if x=0 and x_0 = 1, fail
+      const isLastByteOdd = (lastByte & 0x80) !== 0; // x_0, last bit
+      if (!zip215 && x === _0n && isLastByteOdd)
+        // if x=0 and x_0 = 1, fail
+        throw new Error('Point.fromHex: x=0 and x_0=1');
       if (isLastByteOdd !== isXOdd) x = modP(-x); // if x_0 != x mod 2, set x = p-x
       return Point.fromAffine({ x, y });
     }

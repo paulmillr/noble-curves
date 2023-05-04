@@ -8,6 +8,7 @@ import { ed25519 as ed, ED25519_TORSION_SUBGROUP, numberToBytesLE } from './ed25
 import { default as ed25519vectors_OLD } from './ed25519/ed25519_test_OLD.json' assert { type: 'json' };
 import { default as ed25519vectors } from './wycheproof/ed25519_test.json' assert { type: 'json' };
 import { default as zip215 } from './ed25519/zip215.json' assert { type: 'json' };
+import { default as edgeCases } from './ed25519/edge-cases.json' assert { type: 'json' };
 
 // Any changes to the file will need to be aware of the fact
 // the file is shared between noble-curves and noble-ed25519.
@@ -406,6 +407,18 @@ describe('ed25519', () => {
       strictEqual(orig.isTorsionFree(), true, `orig must be torsionFree: ${hex}`);
       strictEqual(dirty.isTorsionFree(), false, `dirty must not be torsionFree: ${hex}`);
       strictEqual(cleared.isTorsionFree(), true, `cleared must be torsionFree: ${hex}`);
+    }
+  });
+
+  should('not verify when x=0 and x_0 = 1 (RFC8032)', () => {
+    const list = [edgeCases[8], edgeCases[10], edgeCases[11]];
+    for (let v of list) {
+      const result = ed.verify(v.signature, v.message, v.pub_key, { zip215: true });
+      strictEqual(result, true, `zip215: true must validate: ${v.signature}`);
+    }
+    for (let v of list) {
+      const result = ed.verify(v.signature, v.message, v.pub_key, { zip215: false });
+      strictEqual(result, false, `zip215: false must not validate: ${v.signature}`);
     }
   });
 
