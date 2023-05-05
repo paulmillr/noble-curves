@@ -410,12 +410,9 @@ describe('ed25519', () => {
     }
   });
 
-  should('not verify when x=0 and x_0 = 1 (RFC8032)', () => {
-    const list = [edgeCases[8], edgeCases[10], edgeCases[11]];
-    for (let v of list) {
-      const result = ed.verify(v.signature, v.message, v.pub_key, { zip215: true });
-      strictEqual(result, true, `zip215: true must validate: ${v.signature}`);
-    }
+  should('have strict SUF-CMA and SBS properties', () => {
+    // https://eprint.iacr.org/2020/1244
+    const list = [0, 1, 6, 7, 8, 9, 10, 11].map((i) => edgeCases[i]);
     for (let v of list) {
       const result = ed.verify(v.signature, v.message, v.pub_key, { zip215: false });
       strictEqual(result, false, `zip215: false must not validate: ${v.signature}`);

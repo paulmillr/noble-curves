@@ -474,6 +474,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     } catch (error) {
       return false;
     }
+    if (!zip215 && A.isSmallOrder()) return false;
 
     const k = hashDomainToScalar(context, R.toRawBytes(), A.toRawBytes(), msg);
     const RkA = R.add(A.multiplyUnsafe(k));

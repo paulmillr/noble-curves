@@ -5,7 +5,7 @@ Audited & minimal JS implementation of elliptic curve cryptography.
 - 🔒 [**Audited**](#security) by an independent security firm
 - 🔻 Tree-shaking-friendly: use only what's necessary, other code won't be included
 - 🏎 Ultra-fast, hand-optimized for caveats of JS engines
-- 🔍 Unique tests ensure correctness: property-based, cross-library and Wycheproof vectors, fuzzing 
+- 🔍 Unique tests ensure correctness: property-based, cross-library and Wycheproof vectors, fuzzing
 - ➰ Short Weierstrass, Edwards, Montgomery curves
 - ✍️ ECDSA, EdDSA, Schnorr, BLS signature schemes, ECDH key agreement
 - #️⃣ Hash-to-curve
@@ -121,7 +121,10 @@ x25519 ECDH and [ristretto255](https://datatracker.ietf.org/doc/html/draft-irtf-
 
 Default `verify` behavior follows [ZIP215](https://zips.z.cash/zip-0215) and
 [can be used in consensus-critical applications](https://hdevalence.ca/blog/2020-10-04-its-25519am).
-`zip215: false` option switches verification criteria to RFC8032 / FIPS 186-5.
+`zip215: false` option switches verification criteria to stricter
+RFC8032 / FIPS 186-5 which is also
+SUF-CMA (strong unforgeability under chosen message attacks) and
+SBS (Strongly Binding signature) as per [eprint 2020/1244](https://eprint.iacr.org/2020/1244).
 
 ```ts
 import { ed25519 } from '@noble/curves/ed25519';
@@ -554,7 +557,7 @@ aggregateSignatures: {
 millerLoop: (ell: [Fp2, Fp2, Fp2][], g1: [Fp, Fp]) => Fp12;
 pairing: (P: ProjPointType<Fp>, Q: ProjPointType<Fp2>, withFinalExponent?: boolean) => Fp12;
 G1: CurvePointsRes<Fp> & ReturnType<typeof htf.createHasher<Fp>>;
-G2: CurvePointsRes<Fp2> & ReturnType<typeof htf.createHasher<Fp2>>;  
+G2: CurvePointsRes<Fp2> & ReturnType<typeof htf.createHasher<Fp2>>;
 Signature: SignatureCoder<Fp2>;
 params: {
   x: bigint;
@@ -567,7 +570,7 @@ fields: {
   Fp2: IField<Fp2>;
   Fp6: IField<Fp6>;
   Fp12: IField<Fp12>;
-  Fr: IField<bigint>;  
+  Fr: IField<bigint>;
 };
 utils: {
   randomPrivateKey: () => Uint8Array;
