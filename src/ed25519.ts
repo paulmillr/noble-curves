@@ -352,11 +352,11 @@ export class RistrettoPoint {
   }
 
   /**
-   * Takes uniform output of 64-bit hash function like sha512 and converts it to `RistrettoPoint`.
+   * Takes uniform output of 64-byte hash function like sha512 and converts it to `RistrettoPoint`.
    * The hash-to-group operation applies Elligator twice and adds the results.
    * **Note:** this is one-way map, there is no conversion from point to hash.
    * https://ristretto.group/formulas/elligator.html
-   * @param hex 64-bit output of a hash function
+   * @param hex 64-byte output of a hash function
    */
   static hashToCurve(hex: Hex): RistrettoPoint {
     hex = ensureBytes('ristrettoHash', hex, 64);
