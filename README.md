@@ -121,10 +121,10 @@ x25519 ECDH and [ristretto255](https://datatracker.ietf.org/doc/html/draft-irtf-
 
 Default `verify` behavior follows [ZIP215](https://zips.z.cash/zip-0215) and
 [can be used in consensus-critical applications](https://hdevalence.ca/blog/2020-10-04-its-25519am).
-`zip215: false` option switches verification criteria to stricter
+`zip215: false` option switches verification criteria to strict
 RFC8032 / FIPS 186-5 which is also
 SUF-CMA (strong unforgeability under chosen message attacks) and
-SBS (Strongly Binding signature) as per [eprint 2020/1244](https://eprint.iacr.org/2020/1244).
+SBS (Strongly Binding Signatures) as per [eprint 2020/1244](https://eprint.iacr.org/2020/1244).
 
 ```ts
 import { ed25519 } from '@noble/curves/ed25519';
@@ -901,6 +901,8 @@ Upgrading from [@noble/bls12-381](https://github.com/paulmillr/noble-bls12-381):
 Useful documentation and articles about the library or its primitives:
 
 - [Learning fast elliptic-curve cryptography](https://paulmillr.com/posts/noble-secp256k1-fast-ecc/)
+- [Taming the many EdDSAs](https://csrc.nist.gov/csrc/media/Presentations/2023/crclub-2023-03-08/images-media/20230308-crypto-club-slides--taming-the-many-EdDSAs.pdf)
+  that describes concepts of Strong UnForgeability under Chosen Message Attacks and Strongly Binding Signatures
 - Pairings and BLS
     - [BLS signatures for busy people](https://gist.github.com/paulmillr/18b802ad219b1aee34d773d08ec26ca2)
     - [BLS12-381 for the rest of us](https://hackmd.io/@benjaminion/bls12-381)
