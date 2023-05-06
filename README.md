@@ -918,7 +918,7 @@ Online demos:
 - [Elliptic Curve Calculator](https://paulmillr.com/noble): add / multiply points, sign messages
 - [BLS threshold signatures](https://genthresh.com)
 
-Projects using curves:
+Projects using noble-curves:
 
 - [scure-bip32](https://github.com/paulmillr/scure-bip32) and separate [bip32](https://github.com/bitcoinjs/bip32) HDkey libraries
 - Ethereum libraries:
@@ -928,10 +928,10 @@ Projects using curves:
     - [ethers](https://github.com/ethers-io/ethers.js) (old noble-secp256k1 for now)
     - [viem.sh](https://viem.sh)
     - [metamask's eth-sig-util](https://github.com/MetaMask/eth-sig-util)
+    - [gridplus lattice sdk](https://github.com/GridPlus/lattice-eth2-utils)
 - Bitcoin libraries: [scure-btc-signer](https://github.com/paulmillr/scure-btc-signer)
 - Solana libraries: [micro-sol-signer](https://github.com/paulmillr/micro-sol-signer), [solana-web3.js](https://github.com/solana-labs/solana-web3.js)
-- [polkadot.js](https://github.com/polkadot-js/common)
-- [micro-starknet](https://github.com/paulmillr/micro-starknet) stark-friendly elliptic curve algorithms.
+- [polkadot.js](https://github.com/polkadot-js/common), [micro-starknet](https://github.com/paulmillr/micro-starknet)
 - [protonmail](https://github.com/ProtonMail/WebClients) (old noble-ed25519 for now)
 - [did-jwt](https://github.com/decentralized-identity/did-jwt)
 - [ed25519-keygen](https://github.com/paulmillr/ed25519-keygen) SSH, PGP, TOR key generation
