@@ -121,10 +121,10 @@ x25519 ECDH and [ristretto255](https://datatracker.ietf.org/doc/html/draft-irtf-
 
 Default `verify` behavior follows [ZIP215](https://zips.z.cash/zip-0215) and
 [can be used in consensus-critical applications](https://hdevalence.ca/blog/2020-10-04-its-25519am).
+It has SUF-CMA (strong unforgeability under chosen message attacks).
 `zip215: false` option switches verification criteria to strict
-RFC8032 / FIPS 186-5 which is also
-SUF-CMA (strong unforgeability under chosen message attacks) and
-SBS (Strongly Binding Signatures) as per [eprint 2020/1244](https://eprint.iacr.org/2020/1244).
+RFC8032 / FIPS 186-5 and provides non-repudiation with
+SBS [(Strongly Binding Signatures)](https://eprint.iacr.org/2020/1244).
 
 ```ts
 import { ed25519 } from '@noble/curves/ed25519';
