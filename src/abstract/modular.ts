@@ -22,10 +22,10 @@ export function mod(a: bigint, b: bigint): bigint {
   return result >= _0n ? result : b + result;
 }
 /**
- * Efficiently exponentiate num to power and do modular division.
+ * Efficiently raise num to power and do modular division.
  * Unsafe in some contexts: uses ladder, so can expose bigint bits.
  * @example
- * powMod(2n, 6n, 11n) // 64n % 11n == 9n
+ * pow(2n, 6n, 11n) // 64n % 11n == 9n
  */
 // TODO: use field version && remove
 export function pow(num: bigint, power: bigint, modulo: bigint): bigint {
@@ -55,7 +55,7 @@ export function invert(number: bigint, modulo: bigint): bigint {
   if (number === _0n || modulo <= _0n) {
     throw new Error(`invert: expected positive integers, got n=${number} mod=${modulo}`);
   }
-  // Eucledian GCD https://brilliant.org/wiki/extended-euclidean-algorithm/
+  // Euclidean GCD https://brilliant.org/wiki/extended-euclidean-algorithm/
   // Fermat's little theorem "CT-like" version inv(n) = n^(m-2) mod m is 30x slower.
   let a = mod(number, modulo);
   let b = modulo;
@@ -197,10 +197,6 @@ export function FpSqrt(P: bigint) {
 
 // Little-endian check for first LE bit (last BE bit);
 export const isNegativeLE = (num: bigint, modulo: bigint) => (mod(num, modulo) & _1n) === _1n;
-
-// Currently completly inconsistent naming:
-// - readable: add, mul, sqr, sqrt, inv, div, pow, eq, sub
-// - unreadable mess: addition, multiply, square, squareRoot, inversion, divide, power, equals, subtract
 
 // Field is not always over prime, Fp2 for example has ORDER(q)=p^m
 export interface IField<T> {
@@ -406,10 +402,12 @@ export function FpSqrtEven<T>(Fp: IField<T>, elm: T) {
 /**
  * FIPS 186 B.4.1-compliant "constant-time" private key generation utility.
  * Can take (n+8) or more bytes of uniform input e.g. from CSPRNG or KDF
- * and convert them into private scalar, with the modulo bias being neglible.
+ * and convert them into private scalar, with the modulo bias being negligible.
  * Needs at least 40 bytes of input for 32-byte private key.
  * https://research.kudelskisecurity.com/2020/07/28/the-definitive-guide-to-modulo-bias-and-how-to-avoid-it/
  * @param hash hash output from SHA3 or a similar function
+ * @param groupOrder size of subgroup - (e.g. curveFn.CURVE.n)
+ * @param isLE interpret hash bytes as LE num
  * @returns valid private scalar
  */
 export function hashToPrivateScalar(
