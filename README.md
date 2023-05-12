@@ -146,10 +146,8 @@ const pub = 'e6db6867583030db3594c1a424b15f7c726624ec26b3353b10a903a6d0ab1c4c';
 x25519.getSharedSecret(priv, pub) === x25519.scalarMult(priv, pub); // aliases
 x25519.getPublicKey(priv) === x25519.scalarMultBase(priv);
 
-// hash-to-curve
-import { hashToCurve, encodeToCurve } from '@noble/curves/ed25519';
-
-import { RistrettoPoint } from '@noble/curves/ed25519';
+// hash-to-curve, ristretto255
+import { hashToCurve, encodeToCurve, RistrettoPoint } from '@noble/curves/ed25519';
 const rp = RistrettoPoint.fromHex(
   '6a493210f7499cd17fecb510ae0cea23a110e8d5b901f8acadd3095c73a3b919'
 );
@@ -160,8 +158,8 @@ RistrettoPoint.hashToCurve('Ristretto is traditionally a short shot of espresso 
 ed448 is similar:
 
 ```ts
-import { ed448, ed448ph, ed448ctx, x448 } from '@noble/curves/ed448';
-import { hashToCurve, encodeToCurve } from '@noble/curves/ed448';
+import { ed448 } from '@noble/curves/ed448';
+import { ed448ph, ed448ctx, x448, hashToCurve, encodeToCurve } from '@noble/curves/ed448';
 ed448.getPublicKey(ed448.utils.randomPrivateKey());
 ```
 
@@ -934,7 +932,7 @@ Projects using noble-curves:
 - Solana libraries: [micro-sol-signer](https://github.com/paulmillr/micro-sol-signer), [solana-web3.js](https://github.com/solana-labs/solana-web3.js)
 - [polkadot.js](https://github.com/polkadot-js/common), [micro-starknet](https://github.com/paulmillr/micro-starknet)
 - [protonmail](https://github.com/ProtonMail/WebClients) (old noble-ed25519 for now)
-- [did-jwt](https://github.com/decentralized-identity/did-jwt)
+- [did-jwt](https://github.com/decentralized-identity/did-jwt), [hpke-js](https://github.com/dajiaji/hpke-js)
 - [ed25519-keygen](https://github.com/paulmillr/ed25519-keygen) SSH, PGP, TOR key generation
 - [secp256k1 compatibility layer](https://github.com/ethereum/js-ethereum-cryptography/blob/2.0.0/src/secp256k1-compat.ts)
 for users who want to switch from secp256k1-node or tiny-secp256k1. Allows to see which methods map to corresponding noble code.
