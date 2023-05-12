@@ -932,7 +932,7 @@ Projects using noble-curves:
 - Solana libraries: [micro-sol-signer](https://github.com/paulmillr/micro-sol-signer), [solana-web3.js](https://github.com/solana-labs/solana-web3.js)
 - [polkadot.js](https://github.com/polkadot-js/common), [micro-starknet](https://github.com/paulmillr/micro-starknet)
 - [protonmail](https://github.com/ProtonMail/WebClients) (old noble-ed25519 for now)
-- [did-jwt](https://github.com/decentralized-identity/did-jwt), [hpke-js](https://github.com/dajiaji/hpke-js)
+- [did-jwt](https://github.com/decentralized-identity/did-jwt), [hpke-js](https://github.com/dajiaji/hpke-js), [nostr-tools](https://github.com/nbd-wtf/nostr-tools)
 - [ed25519-keygen](https://github.com/paulmillr/ed25519-keygen) SSH, PGP, TOR key generation
 - [secp256k1 compatibility layer](https://github.com/ethereum/js-ethereum-cryptography/blob/2.0.0/src/secp256k1-compat.ts)
 for users who want to switch from secp256k1-node or tiny-secp256k1. Allows to see which methods map to corresponding noble code.
