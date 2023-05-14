@@ -64,9 +64,10 @@ Package consists of two parts:
 
 ### Implementations
 
-Each curve can be used in the following way:
+#### Generic example for all curves, secp256k1
 
 ```ts
+// Each curve has similar methods
 import { secp256k1 } from '@noble/curves/secp256k1'; // ESM and Common.js
 // import { secp256k1 } from 'npm:@noble/curves@1.2.0/secp256k1'; // Deno
 const priv = secp256k1.utils.randomPrivateKey();
@@ -80,7 +81,7 @@ const privHex = '46c930bc7bb4db7f55da20798697421b98c4175a52c630294d75a84b9c12623
 const pub2 = secp256k1.getPublicKey(privHex);
 ```
 
-All curves:
+#### All imports
 
 ```typescript
 import { secp256k1, schnorr } from '@noble/curves/secp256k1';
@@ -95,7 +96,7 @@ import { bn254 } from '@noble/curves/bn254';
 import { jubjub } from '@noble/curves/jubjub';
 ```
 
-Recovering public keys from weierstrass ECDSA signatures; using ECDH:
+#### ECDSA public key recovery & ECDH
 
 ```ts
 // extraEntropy https://moderncrypto.org/mail-archive/curves/2017/000925.html
@@ -105,8 +106,7 @@ const someonesPub = secp256k1.getPublicKey(secp256k1.utils.randomPrivateKey());
 const shared = secp256k1.getSharedSecret(priv, someonesPub); // ECDH
 ```
 
-Schnorr signatures over secp256k1 following
-[BIP340](https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki):
+#### Schnorr signatures over secp256k1 (BIP340)
 
 ```ts
 import { schnorr } from '@noble/curves/secp256k1';
@@ -117,15 +117,7 @@ const sig = schnorr.sign(msg, priv);
 const isValid = schnorr.verify(sig, msg, pub);
 ```
 
-ed25519 module has ed25519ctx / ed25519ph variants,
-x25519 ECDH and [ristretto255](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-ristretto255-decaf448).
-
-Default `verify` behavior follows [ZIP215](https://zips.z.cash/zip-0215) and
-[can be used in consensus-critical applications](https://hdevalence.ca/blog/2020-10-04-its-25519am).
-It has SUF-CMA (strong unforgeability under chosen message attacks).
-`zip215: false` option switches verification criteria to strict
-RFC8032 / FIPS 186-5 and provides non-repudiation with
-SBS [(Strongly Binding Signatures)](https://eprint.iacr.org/2020/1244).
+#### ed25519, X25519, ristretto255
 
 ```ts
 import { ed25519 } from '@noble/curves/ed25519';
@@ -135,7 +127,16 @@ const msg = new TextEncoder().encode('hello');
 const sig = ed25519.sign(msg, priv);
 ed25519.verify(sig, msg, pub); // Default mode: follows ZIP215
 ed25519.verify(sig, msg, pub, { zip215: false }); // RFC8032 / FIPS 186-5
+```
 
+Default `verify` behavior follows [ZIP215](https://zips.z.cash/zip-0215) and
+[can be used in consensus-critical applications](https://hdevalence.ca/blog/2020-10-04-its-25519am).
+It has SUF-CMA (strong unforgeability under chosen message attacks).
+`zip215: false` option switches verification criteria to strict
+RFC8032 / FIPS 186-5 and provides non-repudiation with
+SBS [(Strongly Binding Signatures)](https://eprint.iacr.org/2020/1244).
+
+```ts
 // Variants from RFC8032: with context, prehashed
 import { ed25519ctx, ed25519ph } from '@noble/curves/ed25519';
 
@@ -145,8 +146,15 @@ const priv = 'a546e36bf0527c9d3b16154b82465edd62144c0ac1fc5a18506a2244ba449ac4';
 const pub = 'e6db6867583030db3594c1a424b15f7c726624ec26b3353b10a903a6d0ab1c4c';
 x25519.getSharedSecret(priv, pub) === x25519.scalarMult(priv, pub); // aliases
 x25519.getPublicKey(priv) === x25519.scalarMultBase(priv);
+x25519.getPublicKey(x25519.utils.randomPrivateKey());
+
+// ed25519 => x25519 conversion
+import { edwardsToMontgomeryPub, edwardsToMontgomeryPriv } from '@noble/curves/ed25519';
+edwardsToMontgomeryPub(ed25519.getPublicKey(ed25519.utils.randomPrivateKey()));
+edwardsToMontgomeryPriv(ed25519.utils.randomPrivateKey());
 
 // hash-to-curve, ristretto255
+// https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-ristretto255-decaf448
 import { hashToCurve, encodeToCurve, RistrettoPoint } from '@noble/curves/ed25519';
 const rp = RistrettoPoint.fromHex(
   '6a493210f7499cd17fecb510ae0cea23a110e8d5b901f8acadd3095c73a3b919'
@@ -155,19 +163,30 @@ RistrettoPoint.hashToCurve('Ristretto is traditionally a short shot of espresso 
 // also has add(), equals(), multiply(), toRawBytes() methods
 ```
 
-ed448 is similar:
+#### ed448, X448
 
 ```ts
 import { ed448 } from '@noble/curves/ed448';
-import { ed448ph, ed448ctx, x448, hashToCurve, encodeToCurve } from '@noble/curves/ed448';
 ed448.getPublicKey(ed448.utils.randomPrivateKey());
+
+import { ed448ph, ed448ctx, x448, hashToCurve, encodeToCurve } from '@noble/curves/ed448';
+x448.getSharedSecret(priv, pub) === x448.scalarMult(priv, pub); // aliases
+x448.getPublicKey(priv) === x448.scalarMultBase(priv);
 ```
 
-Every curve has `CURVE` object that contains its parameters, field, and others:
+#### bls12-381
+
+See [abstract/bls](#abstractbls-barreto-lynn-scott-curves).
+
+#### Accessing a curve's variables
 
 ```ts
-import { secp256k1 } from '@noble/curves/secp256k1'; // ESM and Common.js
-console.log(secp256k1.CURVE.p, secp256k1.CURVE.n, secp256k1.CURVE.a, secp256k1.CURVE.b);
+import { secp256k1 } from '@noble/curves/secp256k1';
+// Every curve has `CURVE` object that contains its parameters, field, and others
+console.log(secp256k1.CURVE.p); // field modulus
+console.log(secp256k1.CURVE.n); // curve order
+console.log(secp256k1.CURVE.a, secp256k1.CURVE.b); // equation params
+console.log(secp256k1.CURVE.Gx, secp256k1.CURVE.Gy); // base point coordinates
 ```
 
 ## Abstract API
