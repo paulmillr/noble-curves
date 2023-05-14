@@ -41,8 +41,8 @@ For [Deno](https://deno.land), use it with
 In browser, you could also include the single file from
 [GitHub's releases page](https://github.com/paulmillr/noble-curves/releases).
 
-The library is tree-shaking-friendly and does NOT expose root entry point as
-`import c from '@noble/curves'`. Instead, you need to import specific primitives.
+The library is tree-shaking-friendly and does not expose root entry point as
+`@noble/curves`. Instead, you need to import specific primitives.
 This is done to ensure small size of your apps.
 
 Package consists of two parts:
@@ -51,16 +51,10 @@ Package consists of two parts:
    providing ready-to-use:
    - NIST curves secp256r1 / p256, secp384r1 / p384, secp521r1 / p521
    - SECG curve secp256k1
-   - ed25519 / curve25519 / x25519 / ristretto255,
-     edwards448 / curve448 / x448
-     implementing
-     [RFC7748](https://www.rfc-editor.org/rfc/rfc7748) /
-     [RFC8032](https://www.rfc-editor.org/rfc/rfc8032) /
-     [FIPS 186-5](https://csrc.nist.gov/publications/detail/fips/186/5/final) /
-     [ZIP215](https://zips.z.cash/zip-0215) standards
+   - ed25519 / curve25519 / x25519 / ristretto255, edwards448 / curve448 / x448
    - pairing-friendly curves bls12-381, bn254
    - [pasta](https://electriccoin.co/blog/the-pasta-curves-for-halo-2-and-beyond/) curves
-2. [Abstract](#abstract-api), zero-dependency EC algorithms
+2. [Abstract](#abstract-api), zero-dependency elliptic curve algorithms
 
 ### Implementations
 
@@ -133,8 +127,11 @@ Default `verify` behavior follows [ZIP215](https://zips.z.cash/zip-0215) and
 [can be used in consensus-critical applications](https://hdevalence.ca/blog/2020-10-04-its-25519am).
 It has SUF-CMA (strong unforgeability under chosen message attacks).
 `zip215: false` option switches verification criteria to strict
-RFC8032 / FIPS 186-5 and provides non-repudiation with
-SBS [(Strongly Binding Signatures)](https://eprint.iacr.org/2020/1244).
+[RFC8032](https://www.rfc-editor.org/rfc/rfc8032) / [FIPS 186-5](https://csrc.nist.gov/publications/detail/fips/186/5/final)
+and provides non-repudiation with SBS [(Strongly Binding Signatures)](https://eprint.iacr.org/2020/1244).
+
+X25519 follows [RFC7748](https://www.rfc-editor.org/rfc/rfc7748).
+ristretto255 follows [irtf draft](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-ristretto255-decaf448).
 
 ```ts
 // Variants from RFC8032: with context, prehashed
@@ -154,7 +151,6 @@ edwardsToMontgomeryPub(ed25519.getPublicKey(ed25519.utils.randomPrivateKey()));
 edwardsToMontgomeryPriv(ed25519.utils.randomPrivateKey());
 
 // hash-to-curve, ristretto255
-// https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-ristretto255-decaf448
 import { hashToCurve, encodeToCurve, RistrettoPoint } from '@noble/curves/ed25519';
 const rp = RistrettoPoint.fromHex(
   '6a493210f7499cd17fecb510ae0cea23a110e8d5b901f8acadd3095c73a3b919'
@@ -168,11 +164,15 @@ RistrettoPoint.hashToCurve('Ristretto is traditionally a short shot of espresso 
 ```ts
 import { ed448 } from '@noble/curves/ed448';
 ed448.getPublicKey(ed448.utils.randomPrivateKey());
+ed448.sign(new TextEncoder().encode('whatsup'), ed448.utils.randomPrivateKey());
+ed448.verify()
 
 import { ed448ph, ed448ctx, x448, hashToCurve, encodeToCurve } from '@noble/curves/ed448';
 x448.getSharedSecret(priv, pub) === x448.scalarMult(priv, pub); // aliases
 x448.getPublicKey(priv) === x448.scalarMultBase(priv);
 ```
+
+Same RFC7748 / RFC8032 are followed.
 
 #### bls12-381
 
