@@ -128,7 +128,7 @@ Default `verify` behavior follows [ZIP215](https://zips.z.cash/zip-0215) and
 It has SUF-CMA (strong unforgeability under chosen message attacks).
 `zip215: false` option switches verification criteria to strict
 [RFC8032](https://www.rfc-editor.org/rfc/rfc8032) / [FIPS 186-5](https://csrc.nist.gov/publications/detail/fips/186/5/final)
-and provides non-repudiation with SBS [(Strongly Binding Signatures)](https://eprint.iacr.org/2020/1244).
+and additionally provides non-repudiation with SBS [(Strongly Binding Signatures)](https://eprint.iacr.org/2020/1244).
 
 X25519 follows [RFC7748](https://www.rfc-editor.org/rfc/rfc7748).
 ristretto255 follows [irtf draft](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-ristretto255-decaf448).
@@ -163,9 +163,11 @@ RistrettoPoint.hashToCurve('Ristretto is traditionally a short shot of espresso 
 
 ```ts
 import { ed448 } from '@noble/curves/ed448';
-ed448.getPublicKey(ed448.utils.randomPrivateKey());
-ed448.sign(new TextEncoder().encode('whatsup'), ed448.utils.randomPrivateKey());
-ed448.verify()
+const priv = ed448.utils.randomPrivateKey();
+const pub = ed448.getPublicKey(priv);
+const msg = new TextEncoder().encode('whatsup');
+const sig = ed448.sign(msg, priv);
+ed448.verify(sig, msg, pub);
 
 import { ed448ph, ed448ctx, x448, hashToCurve, encodeToCurve } from '@noble/curves/ed448';
 x448.getSharedSecret(priv, pub) === x448.scalarMult(priv, pub); // aliases
