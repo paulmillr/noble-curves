@@ -39,6 +39,21 @@ run(async () => {
   await mark('sign', 50, () => bls.sign('09', priv));
   await mark('verify', 50, () => bls.verify(sig, '09', pub));
   await mark('pairing', 100, () => bls.pairing(p1, p2));
+
+  const scalars1 = Array(4096).fill(0).map(i => 2n ** 235n - BigInt(i));
+  const scalars2 = Array(4096).fill(0).map(i => 2n ** 241n + BigInt(i));
+  const points = scalars1.map(s => bls.G1.ProjectivePoint.BASE.multiply(s));
+  await mark('MSM 4096 scalars x points', 1, () => {
+    // naive approach, not using multi-scalar-multiplication
+    let sum = bls.G1.ProjectivePoint.ZERO;
+    for (let i = 0; i < 4096; i++) {
+      const scalar = scalars2[i];
+      const G1 = points[i];
+      const mutliplied = G1.multiplyUnsafe(scalar);
+      sum = sum.add(mutliplied);
+    }
+  });
+
   await mark('aggregatePublicKeys/8', 100, () => bls.aggregatePublicKeys(pubs.slice(0, 8)));
   await mark('aggregatePublicKeys/32', 50, () => bls.aggregatePublicKeys(pub32));
   await mark('aggregatePublicKeys/128', 20, () => bls.aggregatePublicKeys(pub128));
