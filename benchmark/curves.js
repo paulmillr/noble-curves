@@ -8,7 +8,7 @@ import { ed448 } from '../ed448.js';
 
 run(async () => {
   const RAM = false
-  for (let kv of Object.entries({ p256, p384, p521, ed25519, ed448 })) {
+  for (let kv of Object.entries({ ed25519, ed448, p256, p384, p521 })) {
     const [name, curve] = kv;
     console.log();
     console.log(`\x1b[36m${name}\x1b[0m`);
