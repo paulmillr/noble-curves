@@ -4,7 +4,7 @@ import { concatBytes, randomBytes, utf8ToBytes, wrapConstructor } from '@noble/h
 import { twistedEdwards } from './abstract/edwards.js';
 import { mod, pow2, Field } from './abstract/modular.js';
 import { montgomery } from './abstract/montgomery.js';
-import * as htf from './abstract/hash-to-curve.js';
+import { createHasher } from './abstract/hash-to-curve.js';
 
 /**
  * Edwards448 (not Ed448-Goldilocks) curve with following addons:
@@ -122,21 +122,22 @@ export const ed448 = twistedEdwards(ED448_DEF);
 // NOTE: there is no ed448ctx, since ed448 supports ctx by default
 export const ed448ph = twistedEdwards({ ...ED448_DEF, prehash: shake256_64 });
 
-export const x448 = montgomery({
-  a: BigInt(156326),
-  montgomeryBits: 448,
-  nByteLength: 57,
-  P: ed448P,
-  Gu: BigInt(5),
-  powPminus2: (x: bigint): bigint => {
-    const P = ed448P;
-    const Pminus3div4 = ed448_pow_Pminus3div4(x);
-    const Pminus3 = pow2(Pminus3div4, BigInt(2), P);
-    return mod(Pminus3 * x, P); // Pminus3 * x = Pminus2
-  },
-  adjustScalarBytes,
-  randomBytes,
-});
+export const x448 = /* @__PURE__ */ (() =>
+  montgomery({
+    a: BigInt(156326),
+    montgomeryBits: 448,
+    nByteLength: 57,
+    P: ed448P,
+    Gu: BigInt(5),
+    powPminus2: (x: bigint): bigint => {
+      const P = ed448P;
+      const Pminus3div4 = ed448_pow_Pminus3div4(x);
+      const Pminus3 = pow2(Pminus3div4, BigInt(2), P);
+      return mod(Pminus3 * x, P); // Pminus3 * x = Pminus2
+    },
+    adjustScalarBytes,
+    randomBytes,
+  }))();
 
 /**
  * Converts edwards448 public key to x448 public key. Uses formula:
@@ -228,17 +229,19 @@ function map_to_curve_elligator2_edwards448(u: bigint) {
   return { x: Fp.mul(xEn, inv[0]), y: Fp.mul(yEn, inv[1]) }; // 38. return (xEn, xEd, yEn, yEd)
 }
 
-const { hashToCurve, encodeToCurve } = htf.createHasher(
-  ed448.ExtendedPoint,
-  (scalars: bigint[]) => map_to_curve_elligator2_edwards448(scalars[0]),
-  {
-    DST: 'edwards448_XOF:SHAKE256_ELL2_RO_',
-    encodeDST: 'edwards448_XOF:SHAKE256_ELL2_NU_',
-    p: Fp.ORDER,
-    m: 1,
-    k: 224,
-    expand: 'xof',
-    hash: shake256,
-  }
-);
-export { hashToCurve, encodeToCurve };
+const htf = /* @__PURE__ */ (() =>
+  createHasher(
+    ed448.ExtendedPoint,
+    (scalars: bigint[]) => map_to_curve_elligator2_edwards448(scalars[0]),
+    {
+      DST: 'edwards448_XOF:SHAKE256_ELL2_RO_',
+      encodeDST: 'edwards448_XOF:SHAKE256_ELL2_NU_',
+      p: Fp.ORDER,
+      m: 1,
+      k: 224,
+      expand: 'xof',
+      hash: shake256,
+    }
+  ))();
+export const hashToCurve = /* @__PURE__ */ (() => htf.hashToCurve)();
+export const encodeToCurve = /* @__PURE__ */ (() => htf.encodeToCurve)();

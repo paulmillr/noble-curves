@@ -3,7 +3,7 @@ import { createCurve } from './_shortw_utils.js';
 import { sha384 } from '@noble/hashes/sha512';
 import { Field } from './abstract/modular.js';
 import { mapToCurveSimpleSWU } from './abstract/weierstrass.js';
-import * as htf from './abstract/hash-to-curve.js';
+import { createHasher } from './abstract/hash-to-curve.js';
 
 // NIST secp384r1 aka p384
 // https://www.secg.org/sec2-v2.pdf, https://neuromancer.sk/std/nist/P-384
@@ -31,16 +31,15 @@ export const p384 = createCurve({
 } as const, sha384);
 export const secp384r1 = p384;
 
-const mapSWU = mapToCurveSimpleSWU(Fp, {
-  A: CURVE_A,
-  B: CURVE_B,
-  Z: Fp.create(BigInt('-12')),
-});
+const mapSWU = /* @__PURE__ */ (() =>
+  mapToCurveSimpleSWU(Fp, {
+    A: CURVE_A,
+    B: CURVE_B,
+    Z: Fp.create(BigInt('-12')),
+  }))();
 
-const { hashToCurve, encodeToCurve } = htf.createHasher(
-  secp384r1.ProjectivePoint,
-  (scalars: bigint[]) => mapSWU(scalars[0]),
-  {
+const htf = /* @__PURE__ */ (() =>
+  createHasher(secp384r1.ProjectivePoint, (scalars: bigint[]) => mapSWU(scalars[0]), {
     DST: 'P384_XMD:SHA-384_SSWU_RO_',
     encodeDST: 'P384_XMD:SHA-384_SSWU_NU_',
     p: Fp.ORDER,
@@ -48,6 +47,6 @@ const { hashToCurve, encodeToCurve } = htf.createHasher(
     k: 192,
     expand: 'xmd',
     hash: sha384,
-  }
-);
-export { hashToCurve, encodeToCurve };
+  }))();
+export const hashToCurve = /* @__PURE__ */ (() => htf.hashToCurve)();
+export const encodeToCurve = /* @__PURE__ */ (() => htf.encodeToCurve)();

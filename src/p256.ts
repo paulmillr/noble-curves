@@ -3,7 +3,7 @@ import { createCurve } from './_shortw_utils.js';
 import { sha256 } from '@noble/hashes/sha256';
 import { Field } from './abstract/modular.js';
 import { mapToCurveSimpleSWU } from './abstract/weierstrass.js';
-import * as htf from './abstract/hash-to-curve.js';
+import { createHasher } from './abstract/hash-to-curve.js';
 
 // NIST secp256r1 aka p256
 // https://www.secg.org/sec2-v2.pdf, https://neuromancer.sk/std/nist/P-256
@@ -11,12 +11,6 @@ import * as htf from './abstract/hash-to-curve.js';
 const Fp = Field(BigInt('0xffffffff00000001000000000000000000000000ffffffffffffffffffffffff'));
 const CURVE_A = Fp.create(BigInt('-3'));
 const CURVE_B = BigInt('0x5ac635d8aa3a93e7b3ebbd55769886bc651d06b0cc53b0f63bce3c3e27d2604b');
-
-const mapSWU = mapToCurveSimpleSWU(Fp, {
-  A: CURVE_A,
-  B: CURVE_B,
-  Z: Fp.create(BigInt('-10')),
-});
 
 // prettier-ignore
 export const p256 = createCurve({
@@ -33,10 +27,15 @@ export const p256 = createCurve({
 } as const, sha256);
 export const secp256r1 = p256;
 
-const { hashToCurve, encodeToCurve } = htf.createHasher(
-  secp256r1.ProjectivePoint,
-  (scalars: bigint[]) => mapSWU(scalars[0]),
-  {
+const mapSWU = /* @__PURE__ */ (() =>
+  mapToCurveSimpleSWU(Fp, {
+    A: CURVE_A,
+    B: CURVE_B,
+    Z: Fp.create(BigInt('-10')),
+  }))();
+
+const htf = /* @__PURE__ */ (() =>
+  createHasher(secp256r1.ProjectivePoint, (scalars: bigint[]) => mapSWU(scalars[0]), {
     DST: 'P256_XMD:SHA-256_SSWU_RO_',
     encodeDST: 'P256_XMD:SHA-256_SSWU_NU_',
     p: Fp.ORDER,
@@ -44,6 +43,6 @@ const { hashToCurve, encodeToCurve } = htf.createHasher(
     k: 128,
     expand: 'xmd',
     hash: sha256,
-  }
-);
-export { hashToCurve, encodeToCurve };
+  }))();
+export const hashToCurve = /* @__PURE__ */ (() => htf.hashToCurve)();
+export const encodeToCurve = /* @__PURE__ */ (() => htf.encodeToCurve)();

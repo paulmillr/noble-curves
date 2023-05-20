@@ -12,7 +12,7 @@ import {
   Hex,
   numberToBytesLE,
 } from './abstract/utils.js';
-import * as htf from './abstract/hash-to-curve.js';
+import { createHasher, htfBasicOpts, expand_message_xmd } from './abstract/hash-to-curve.js';
 import { AffinePoint } from './abstract/curve.js';
 
 /**
@@ -142,21 +142,22 @@ export const ed25519ph = twistedEdwards({
   prehash: sha512,
 });
 
-export const x25519 = montgomery({
-  P: ED25519_P,
-  a: BigInt(486662),
-  montgomeryBits: 255, // n is 253 bits
-  nByteLength: 32,
-  Gu: BigInt(9),
-  powPminus2: (x: bigint): bigint => {
-    const P = ED25519_P;
-    // x^(p-2) aka x^(2^255-21)
-    const { pow_p_5_8, b2 } = ed25519_pow_2_252_3(x);
-    return mod(pow2(pow_p_5_8, BigInt(3), P) * b2, P);
-  },
-  adjustScalarBytes,
-  randomBytes,
-});
+export const x25519 = /* @__PURE__ */ (() =>
+  montgomery({
+    P: ED25519_P,
+    a: BigInt(486662),
+    montgomeryBits: 255, // n is 253 bits
+    nByteLength: 32,
+    Gu: BigInt(9),
+    powPminus2: (x: bigint): bigint => {
+      const P = ED25519_P;
+      // x^(p-2) aka x^(2^255-21)
+      const { pow_p_5_8, b2 } = ed25519_pow_2_252_3(x);
+      return mod(pow2(pow_p_5_8, BigInt(3), P) * b2, P);
+    },
+    adjustScalarBytes,
+    randomBytes,
+  }))();
 
 /**
  * Converts ed25519 public key to x25519 public key. Uses formula:
@@ -260,29 +261,29 @@ function map_to_curve_elligator2_edwards25519(u: bigint) {
   return { x: Fp.mul(xn, inv[0]), y: Fp.mul(yn, inv[1]) }; //  13. return (xn, xd, yn, yd)
 }
 
-const { hashToCurve, encodeToCurve } = htf.createHasher(
-  ed25519.ExtendedPoint,
-  (scalars: bigint[]) => map_to_curve_elligator2_edwards25519(scalars[0]),
-  {
-    DST: 'edwards25519_XMD:SHA-512_ELL2_RO_',
-    encodeDST: 'edwards25519_XMD:SHA-512_ELL2_NU_',
-    p: Fp.ORDER,
-    m: 1,
-    k: 128,
-    expand: 'xmd',
-    hash: sha512,
-  }
-);
-export { hashToCurve, encodeToCurve };
+const htf = /* @__PURE__ */ (() =>
+  createHasher(
+    ed25519.ExtendedPoint,
+    (scalars: bigint[]) => map_to_curve_elligator2_edwards25519(scalars[0]),
+    {
+      DST: 'edwards25519_XMD:SHA-512_ELL2_RO_',
+      encodeDST: 'edwards25519_XMD:SHA-512_ELL2_NU_',
+      p: Fp.ORDER,
+      m: 1,
+      k: 128,
+      expand: 'xmd',
+      hash: sha512,
+    }
+  ))();
+export const hashToCurve = /* @__PURE__ */ (() => htf.hashToCurve)();
+export const encodeToCurve = /* @__PURE__ */ (() => htf.encodeToCurve)();
 
 function assertRstPoint(other: unknown) {
-  if (!(other instanceof RistrettoPoint)) throw new Error('RistrettoPoint expected');
+  if (!(other instanceof RistPoint)) throw new Error('RistrettoPoint expected');
 }
 
 // √(-1) aka √(a) aka 2^((p-1)/4)
-const SQRT_M1 = BigInt(
-  '19681161376707505956807079304988542015446066515923890162744021073123829784752'
-);
+const SQRT_M1 = ED25519_SQRT_M1;
 // √(ad - 1)
 const SQRT_AD_MINUS_ONE = BigInt(
   '25063068953384623474111414158702152701244531502492656460079210482610430750235'
@@ -339,16 +340,15 @@ function calcElligatorRistrettoMap(r0: bigint): ExtendedPoint {
  * but it should work in its own namespace: do not combine those two.
  * https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-ristretto255-decaf448
  */
-export class RistrettoPoint {
-  static BASE = new RistrettoPoint(ed25519.ExtendedPoint.BASE);
-  static ZERO = new RistrettoPoint(ed25519.ExtendedPoint.ZERO);
-
+class RistPoint {
+  static BASE: RistPoint;
+  static ZERO: RistPoint;
   // Private property to discourage combining ExtendedPoint + RistrettoPoint
   // Always use Ristretto encoding/decoding instead.
   constructor(private readonly ep: ExtendedPoint) {}
 
   static fromAffine(ap: AffinePoint<bigint>) {
-    return new RistrettoPoint(ed25519.ExtendedPoint.fromAffine(ap));
+    return new RistPoint(ed25519.ExtendedPoint.fromAffine(ap));
   }
 
   /**
@@ -358,13 +358,13 @@ export class RistrettoPoint {
    * https://ristretto.group/formulas/elligator.html
    * @param hex 64-byte output of a hash function
    */
-  static hashToCurve(hex: Hex): RistrettoPoint {
+  static hashToCurve(hex: Hex): RistPoint {
     hex = ensureBytes('ristrettoHash', hex, 64);
     const r1 = bytes255ToNumberLE(hex.slice(0, 32));
     const R1 = calcElligatorRistrettoMap(r1);
     const r2 = bytes255ToNumberLE(hex.slice(32, 64));
     const R2 = calcElligatorRistrettoMap(r2);
-    return new RistrettoPoint(R1.add(R2));
+    return new RistPoint(R1.add(R2));
   }
 
   /**
@@ -372,7 +372,7 @@ export class RistrettoPoint {
    * https://ristretto.group/formulas/decoding.html
    * @param hex Ristretto-encoded 32 bytes. Not every 32-byte string is valid ristretto encoding
    */
-  static fromHex(hex: Hex): RistrettoPoint {
+  static fromHex(hex: Hex): RistPoint {
     hex = ensureBytes('ristrettoHex', hex, 32);
     const { a, d } = ed25519.CURVE;
     const P = ed25519.CURVE.Fp.ORDER;
@@ -396,7 +396,7 @@ export class RistrettoPoint {
     const y = mod(u1 * Dy); // 11
     const t = mod(x * y); // 12
     if (!isValid || isNegativeLE(t, P) || y === _0n) throw new Error(emsg);
-    return new RistrettoPoint(new ed25519.ExtendedPoint(x, y, _1n, t));
+    return new RistPoint(new ed25519.ExtendedPoint(x, y, _1n, t));
   }
 
   /**
@@ -440,7 +440,7 @@ export class RistrettoPoint {
   }
 
   // Compare one point to another.
-  equals(other: RistrettoPoint): boolean {
+  equals(other: RistPoint): boolean {
     assertRstPoint(other);
     const { ex: X1, ey: Y1 } = this.ep;
     const { ex: X2, ey: Y2 } = other.ep;
@@ -451,31 +451,36 @@ export class RistrettoPoint {
     return one || two;
   }
 
-  add(other: RistrettoPoint): RistrettoPoint {
+  add(other: RistPoint): RistPoint {
     assertRstPoint(other);
-    return new RistrettoPoint(this.ep.add(other.ep));
+    return new RistPoint(this.ep.add(other.ep));
   }
 
-  subtract(other: RistrettoPoint): RistrettoPoint {
+  subtract(other: RistPoint): RistPoint {
     assertRstPoint(other);
-    return new RistrettoPoint(this.ep.subtract(other.ep));
+    return new RistPoint(this.ep.subtract(other.ep));
   }
 
-  multiply(scalar: bigint): RistrettoPoint {
-    return new RistrettoPoint(this.ep.multiply(scalar));
+  multiply(scalar: bigint): RistPoint {
+    return new RistPoint(this.ep.multiply(scalar));
   }
 
-  multiplyUnsafe(scalar: bigint): RistrettoPoint {
-    return new RistrettoPoint(this.ep.multiplyUnsafe(scalar));
+  multiplyUnsafe(scalar: bigint): RistPoint {
+    return new RistPoint(this.ep.multiplyUnsafe(scalar));
   }
 }
+export const RistrettoPoint = /* @__PURE__ */ (() => {
+  if (!RistPoint.BASE) RistPoint.BASE = new RistPoint(ed25519.ExtendedPoint.BASE);
+  if (!RistPoint.ZERO) RistPoint.ZERO = new RistPoint(ed25519.ExtendedPoint.ZERO);
+  return RistPoint;
+})();
 
 // https://datatracker.ietf.org/doc/draft-irtf-cfrg-hash-to-curve/14/
 // Appendix B.  Hashing to ristretto255
-export const hash_to_ristretto255 = (msg: Uint8Array, options: htf.htfBasicOpts) => {
+export const hash_to_ristretto255 = (msg: Uint8Array, options: htfBasicOpts) => {
   const d = options.DST;
   const DST = typeof d === 'string' ? utf8ToBytes(d) : d;
-  const uniform_bytes = htf.expand_message_xmd(msg, DST, 64, sha512);
-  const P = RistrettoPoint.hashToCurve(uniform_bytes);
+  const uniform_bytes = expand_message_xmd(msg, DST, 64, sha512);
+  const P = RistPoint.hashToCurve(uniform_bytes);
   return P;
 };

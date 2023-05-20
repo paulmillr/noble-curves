@@ -3,7 +3,7 @@ import { createCurve } from './_shortw_utils.js';
 import { sha512 } from '@noble/hashes/sha512';
 import { Field } from './abstract/modular.js';
 import { mapToCurveSimpleSWU } from './abstract/weierstrass.js';
-import * as htf from './abstract/hash-to-curve.js';
+import { createHasher } from './abstract/hash-to-curve.js';
 
 // NIST secp521r1 aka p521
 // Note that it's 521, which differs from 512 of its hash function.
@@ -47,16 +47,15 @@ export const p521 = createCurve({
 } as const, sha512);
 export const secp521r1 = p521;
 
-const mapSWU = mapToCurveSimpleSWU(Fp, {
-  A: CURVE.a,
-  B: CURVE.b,
-  Z: Fp.create(BigInt('-4')),
-});
+const mapSWU = /* @__PURE__ */ (() =>
+  mapToCurveSimpleSWU(Fp, {
+    A: CURVE.a,
+    B: CURVE.b,
+    Z: Fp.create(BigInt('-4')),
+  }))();
 
-const { hashToCurve, encodeToCurve } = htf.createHasher(
-  secp521r1.ProjectivePoint,
-  (scalars: bigint[]) => mapSWU(scalars[0]),
-  {
+const htf = /* @__PURE__ */ (() =>
+  createHasher(secp521r1.ProjectivePoint, (scalars: bigint[]) => mapSWU(scalars[0]), {
     DST: 'P521_XMD:SHA-512_SSWU_RO_',
     encodeDST: 'P521_XMD:SHA-512_SSWU_NU_',
     p: Fp.ORDER,
@@ -64,6 +63,6 @@ const { hashToCurve, encodeToCurve } = htf.createHasher(
     k: 256,
     expand: 'xmd',
     hash: sha512,
-  }
-);
-export { hashToCurve, encodeToCurve };
+  }))();
+export const hashToCurve = /* @__PURE__ */ (() => htf.hashToCurve)();
+export const encodeToCurve = /* @__PURE__ */ (() => htf.encodeToCurve)();
