@@ -32,14 +32,12 @@ packages. See [Resources](#resources) for articles and real-world software that 
 
 ## Usage
 
-Browser, deno and node.js are supported:
-
 > npm install @noble/curves
 
-For [Deno](https://deno.land), use it with
-[npm specifier](https://deno.land/manual@v1.28.0/node/npm_specifiers).
-In browser, you could also include the single file from
-[GitHub's releases page](https://github.com/paulmillr/noble-curves/releases).
+We support all major platforms and runtimes.
+For [Deno](https://deno.land), ensure to use [npm specifier](https://deno.land/manual@v1.28.0/node/npm_specifiers).
+For React Native, you may need a [polyfill for getRandomValues](https://github.com/LinusU/react-native-get-random-values).
+If you don't like NPM, a standalone [noble-curves.js](https://github.com/paulmillr/noble-curves/releases) is also available.
 
 The library is tree-shaking-friendly and does not expose root entry point as
 `@noble/curves`. Instead, you need to import specific primitives.
