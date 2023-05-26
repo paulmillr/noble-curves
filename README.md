@@ -36,7 +36,7 @@ packages. See [Resources](#resources) for articles and real-world software that 
 
 We support all major platforms and runtimes.
 For [Deno](https://deno.land), ensure to use [npm specifier](https://deno.land/manual@v1.28.0/node/npm_specifiers).
-For React Native, you may need a [polyfill for getRandomValues](https://github.com/LinusU/react-native-get-random-values).
+For React Native, you may need a [polyfill for crypto.getRandomValues](https://github.com/LinusU/react-native-get-random-values).
 If you don't like NPM, a standalone [noble-curves.js](https://github.com/paulmillr/noble-curves/releases) is also available.
 
 The library is tree-shaking-friendly and does not expose root entry point as
@@ -769,6 +769,10 @@ We consider infrastructure attacks like rogue NPM modules very important; that's
   typescript versions are locked and rarely updated. Every update is checked with `npm-diff`.
   The packages are big, which makes it hard to audit their source code thoroughly and fully.
 - They are only used if you clone the git repo and want to add some feature to it. End-users won't use them.
+
+As for key generation, we're deferring to built-in
+[crypto.getRandomValues](https://developer.mozilla.org/en-US/docs/Web/API/Crypto/getRandomValues)
+which is considered cryptographically secure (CSPRNG).
 
 ## Speed
 
