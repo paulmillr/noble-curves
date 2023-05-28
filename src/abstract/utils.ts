@@ -62,11 +62,11 @@ export function bytesToNumberLE(bytes: Uint8Array): bigint {
   return hexToNumber(bytesToHex(Uint8Array.from(bytes).reverse()));
 }
 
-export const numberToBytesBE = (n: bigint, len: number) =>
+export const numberToBytesBE = (n: bigint | number, len: number) =>
   hexToBytes(n.toString(16).padStart(len * 2, '0'));
-export const numberToBytesLE = (n: bigint, len: number) => numberToBytesBE(n, len).reverse();
+export const numberToBytesLE = (n: bigint | number, len: number) => numberToBytesBE(n, len).reverse();
 // Returns variable number bytes (minimal bigint encoding?)
-export const numberToVarBytesBE = (n: bigint) => hexToBytes(numberToHexUnpadded(n));
+export const numberToVarBytesBE = (n: bigint | number) => hexToBytes(numberToHexUnpadded(n));
 
 export function ensureBytes(title: string, hex: Hex, expectedLength?: number): Uint8Array {
   let res: Uint8Array;
