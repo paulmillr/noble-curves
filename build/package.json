@@ -1,0 +1,18 @@
+{
+  "name": "build",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Used to build a single file",
+  "main": "input.js",
+  "keywords": [],
+  "type": "module",
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@noble/curves": "..",
+    "esbuild": "0.17.19"
+  },
+  "scripts": {
+    "build": "npx esbuild --bundle input.js --outfile=noble-curves.js --global-name=nobleCurves"
+  }
+}
