@@ -1,13 +1,14 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
+// 100 lines of code in the file are duplicated from noble-hashes (utils).
+// This is OK: `abstract` directory does not use noble-hashes.
+// User may opt-in into using different hashing library. This way, noble-hashes
+// won't be included into their bundle.
 const _0n = BigInt(0);
 const _1n = BigInt(1);
 const _2n = BigInt(2);
 const u8a = (a: any): a is Uint8Array => a instanceof Uint8Array;
-
-// We accept hex strings besides Uint8Array for simplicity
-export type Hex = Uint8Array | string;
-// Very few implementations accept numbers, we do it to ease learning curve
-export type PrivKey = Hex | bigint;
+export type Hex = Uint8Array | string; // hex strings are accepted for simplicity
+export type PrivKey = Hex | bigint; // bigints are accepted to ease learning curve
 export type CHash = {
   (message: Uint8Array | string): Uint8Array;
   blockLen: number;
@@ -17,6 +18,9 @@ export type CHash = {
 export type FHash = (message: Uint8Array | string) => Uint8Array;
 
 const hexes = Array.from({ length: 256 }, (v, i) => i.toString(16).padStart(2, '0'));
+/**
+ * @example bytesToHex(Uint8Array.from([0xca, 0xfe, 0x01, 0x23])) // 'cafe0123'
+ */
 export function bytesToHex(bytes: Uint8Array): string {
   if (!u8a(bytes)) throw new Error('Uint8Array expected');
   // pre-caching improves the speed 6x
@@ -38,22 +42,25 @@ export function hexToNumber(hex: string): bigint {
   return BigInt(hex === '' ? '0' : `0x${hex}`);
 }
 
-// Caching slows it down 2-3x
+/**
+ * @example hexToBytes('cafe0123') // Uint8Array.from([0xca, 0xfe, 0x01, 0x23])
+ */
 export function hexToBytes(hex: string): Uint8Array {
   if (typeof hex !== 'string') throw new Error('hex string expected, got ' + typeof hex);
-  if (hex.length % 2) throw new Error('hex string is invalid: unpadded ' + hex.length);
-  const array = new Uint8Array(hex.length / 2);
+  const len = hex.length;
+  if (len % 2) throw new Error('padded hex string expected, got unpadded hex of length ' + len);
+  const array = new Uint8Array(len / 2);
   for (let i = 0; i < array.length; i++) {
     const j = i * 2;
     const hexByte = hex.slice(j, j + 2);
     const byte = Number.parseInt(hexByte, 16);
-    if (Number.isNaN(byte) || byte < 0) throw new Error('invalid byte sequence');
+    if (Number.isNaN(byte) || byte < 0) throw new Error('Invalid byte sequence');
     array[i] = byte;
   }
   return array;
 }
 
-// Big Endian
+// BE: Big Endian, LE: Little Endian
 export function bytesToNumberBE(bytes: Uint8Array): bigint {
   return hexToNumber(bytesToHex(bytes));
 }
@@ -62,12 +69,26 @@ export function bytesToNumberLE(bytes: Uint8Array): bigint {
   return hexToNumber(bytesToHex(Uint8Array.from(bytes).reverse()));
 }
 
-export const numberToBytesBE = (n: bigint, len: number) =>
-  hexToBytes(n.toString(16).padStart(len * 2, '0'));
-export const numberToBytesLE = (n: bigint, len: number) => numberToBytesBE(n, len).reverse();
-// Returns variable number bytes (minimal bigint encoding?)
-export const numberToVarBytesBE = (n: bigint) => hexToBytes(numberToHexUnpadded(n));
+export function numberToBytesBE(n: number | bigint, len: number): Uint8Array {
+  return hexToBytes(n.toString(16).padStart(len * 2, '0'));
+}
+export function numberToBytesLE(n: number | bigint, len: number): Uint8Array {
+  return numberToBytesBE(n, len).reverse();
+}
+// Unpadded, rarely used
+export function numberToVarBytesBE(n: number | bigint): Uint8Array {
+  return hexToBytes(numberToHexUnpadded(n));
+}
 
+/**
+ * Takes hex string or Uint8Array, converts to Uint8Array.
+ * Validates output length.
+ * Will throw error for other types.
+ * @param title descriptive title for an error e.g. 'private key'
+ * @param hex hex string or Uint8Array
+ * @param expectedLength optional, will compare to result array's length
+ * @returns
+ */
 export function ensureBytes(title: string, hex: Hex, expectedLength?: number): Uint8Array {
   let res: Uint8Array;
   if (typeof hex === 'string') {
@@ -89,11 +110,13 @@ export function ensureBytes(title: string, hex: Hex, expectedLength?: number): U
   return res;
 }
 
-// Copies several Uint8Arrays into one.
-export function concatBytes(...arrs: Uint8Array[]): Uint8Array {
-  const r = new Uint8Array(arrs.reduce((sum, a) => sum + a.length, 0));
+/**
+ * Copies several Uint8Arrays into one.
+ */
+export function concatBytes(...arrays: Uint8Array[]): Uint8Array {
+  const r = new Uint8Array(arrays.reduce((sum, a) => sum + a.length, 0));
   let pad = 0; // walk through each item, ensure they have proper type
-  arrs.forEach((a) => {
+  arrays.forEach((a) => {
     if (!u8a(a)) throw new Error('Uint8Array expected');
     r.set(a, pad);
     pad += a.length;
@@ -111,29 +134,47 @@ export function equalBytes(b1: Uint8Array, b2: Uint8Array) {
 // Global symbols in both browsers and Node.js since v11
 // See https://github.com/microsoft/TypeScript/issues/31535
 declare const TextEncoder: any;
+
+/**
+ * @example utf8ToBytes('abc') // new Uint8Array([97, 98, 99])
+ */
 export function utf8ToBytes(str: string): Uint8Array {
-  if (typeof str !== 'string') {
-    throw new Error(`utf8ToBytes expected string, got ${typeof str}`);
-  }
+  if (typeof str !== 'string') throw new Error(`utf8ToBytes expected string, got ${typeof str}`);
   return new TextEncoder().encode(str);
 }
 
 // Bit operations
 
-// Amount of bits inside bigint (Same as n.toString(2).length)
+/**
+ * Calculates amount of bits in a bigint.
+ * Same as `n.toString(2).length`
+ */
 export function bitLen(n: bigint) {
   let len;
   for (len = 0; n > _0n; n >>= _1n, len += 1);
   return len;
 }
-// Gets single bit at position. NOTE: first bit position is 0 (same as arrays)
-// Same as !!+Array.from(n.toString(2)).reverse()[pos]
-export const bitGet = (n: bigint, pos: number) => (n >> BigInt(pos)) & _1n;
-// Sets single bit at position
-export const bitSet = (n: bigint, pos: number, value: boolean) =>
-  n | ((value ? _1n : _0n) << BigInt(pos));
-// Return mask for N bits (Same as BigInt(`0b${Array(i).fill('1').join('')}`))
-// Not using ** operator with bigints for old engines.
+
+/**
+ * Gets single bit at position.
+ * NOTE: first bit position is 0 (same as arrays)
+ * Same as `!!+Array.from(n.toString(2)).reverse()[pos]`
+ */
+export function bitGet(n: bigint, pos: number) {
+  return (n >> BigInt(pos)) & _1n;
+}
+
+/**
+ * Sets single bit at position.
+ */
+export const bitSet = (n: bigint, pos: number, value: boolean) => {
+  return n | ((value ? _1n : _0n) << BigInt(pos));
+};
+
+/**
+ * Calculate mask for N bits. Not using ** operator with bigints because of old engines.
+ * Same as BigInt(`0b${Array(i).fill('1').join('')}`)
+ */
 export const bitMask = (n: number) => (_2n << BigInt(n - 1)) - _1n;
 
 // DRBG
