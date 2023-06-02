@@ -140,7 +140,7 @@ declare const TextEncoder: any;
  */
 export function utf8ToBytes(str: string): Uint8Array {
   if (typeof str !== 'string') throw new Error(`utf8ToBytes expected string, got ${typeof str}`);
-  return new TextEncoder().encode(str);
+  return new Uint8Array(new TextEncoder().encode(str)); // https://bugzil.la/1681809
 }
 
 // Bit operations
