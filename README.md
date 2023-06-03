@@ -43,9 +43,9 @@ The library is tree-shaking-friendly and does not expose root entry point as
 `@noble/curves`. Instead, you need to import specific primitives.
 This is done to ensure small size of your apps.
 
-Package consists of two parts:
+The package consists of two parts:
 
-1. [Implementations](#implementations), utilizing one dependency [noble-hashes](https://github.com/paulmillr/noble-hashes),
+* [Implementations](#implementations), utilizing one dependency [noble-hashes](https://github.com/paulmillr/noble-hashes),
    providing ready-to-use:
    - NIST curves secp256r1 / p256, secp384r1 / p384, secp521r1 / p521
    - SECG curve secp256k1
@@ -755,9 +755,9 @@ utils.equalBytes(Uint8Array.from([0xde]), Uint8Array.from([0xde]));
 
 ## Security
 
-1. The library has been audited during Jan-Feb 2023 by an independent security firm [Trail of Bits](https://www.trailofbits.com):
+1. The library has been audited in Feb 2023 by an independent security firm [Trail of Bits](https://www.trailofbits.com):
 [PDF](https://github.com/trailofbits/publications/blob/master/reviews/2023-01-ryanshea-noblecurveslibrary-securityreview.pdf).
-The audit has been funded by Ryan Shea. Audit scope was abstract modules `curve`, `hash-to-curve`, `modular`, `poseidon`, `utils`, `weierstrass`, and top-level modules `_shortw_utils` and `secp256k1`. See [changes since audit](https://github.com/paulmillr/noble-curves/compare/0.7.3..main).
+The audit has been funded by [Ryan Shea](https://www.shea.io). Audit scope was abstract modules `curve`, `hash-to-curve`, `modular`, `poseidon`, `utils`, `weierstrass`, and top-level modules `_shortw_utils` and `secp256k1`. See [changes since audit](https://github.com/paulmillr/noble-curves/compare/0.7.3..main).
 2. The library has been fuzzed by [Guido Vranken's cryptofuzz](https://github.com/guidovranken/cryptofuzz). You can run the fuzzer by yourself to check it.
 3. [Timing attack](https://en.wikipedia.org/wiki/Timing_attack) considerations: _JIT-compiler_ and _Garbage Collector_ make "constant time" extremely hard to achieve in a scripting language. Which means _any other JS library can't have constant-timeness_. Even statically typed Rust, a language without GC, [makes it harder to achieve constant-time](https://www.chosenplaintext.ca/open-source/rust-timing-shield/security) for some cases. If your goal is absolute security, don't use any JS lib — including bindings to native ones. Use low-level libraries & languages. Nonetheless we're targetting algorithmic constant time.
 
