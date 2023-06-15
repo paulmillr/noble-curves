@@ -85,7 +85,7 @@ export type CurveFn = {
   ExtendedPoint: ExtPointConstructor;
   utils: {
     randomPrivateKey: () => Uint8Array;
-    getExtendedPublicKey: (key: Hex) => {
+    getExtendedPublicKey: (key: Hex, noCheckLength?: boolean) => {
       head: Uint8Array;
       prefix: Uint8Array;
       scalar: bigint;
@@ -391,8 +391,8 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       if (isLastByteOdd !== isXOdd) x = modP(-x); // if x_0 != x mod 2, set x = p-x
       return Point.fromAffine({ x, y });
     }
-    static fromPrivateKey(privKey: Hex) {
-      return getExtendedPublicKey(privKey).point;
+    static fromPrivateKey(privKey: Hex, noCheckLength?: boolean) {
+      return getExtendedPublicKey(privKey, noCheckLength).point;
     }
     toRawBytes(): Uint8Array {
       const { x, y } = this.toAffine();
@@ -416,9 +416,9 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
   }
 
   /** Convenience method that creates public key and other stuff. RFC8032 5.1.5 */
-  function getExtendedPublicKey(key: Hex) {
+  function getExtendedPublicKey(key: Hex, noCheckLength: boolean = false) {
     const len = nByteLength;
-    key = ensureBytes('private key', key, len);
+    key = ensureBytes('private key', key, noCheckLength ? undefined : len);
     // Hash private key with curve's hash function to produce uniformingly random input
     // Check byte lengths: ensure(64, h(ensure(32, key)))
     const hashed = ensureBytes('hashed private key', cHash(key), 2 * len);
@@ -431,8 +431,8 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
   }
 
   // Calculates EdDSA pub key. RFC8032 5.1.5. Privkey is hashed. Use first half with 3 bits cleared
-  function getPublicKey(privKey: Hex): Uint8Array {
-    return getExtendedPublicKey(privKey).pointBytes;
+  function getPublicKey(privKey: Hex, noCheckLength?: boolean): Uint8Array {
+    return getExtendedPublicKey(privKey, noCheckLength).pointBytes;
   }
 
   // int('LE', SHA512(dom2(F, C) || msgs)) mod N
@@ -442,10 +442,10 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
   }
 
   /** Signs message with privateKey. RFC8032 5.1.6 */
-  function sign(msg: Hex, privKey: Hex, options: { context?: Hex } = {}): Uint8Array {
+  function sign(msg: Hex, privKey: Hex, options: { context?: Hex, noCheckLength?: boolean } = {}): Uint8Array {
     msg = ensureBytes('message', msg);
     if (prehash) msg = prehash(msg); // for ed25519ph etc.
-    const { prefix, scalar, pointBytes } = getExtendedPublicKey(privKey);
+    const { prefix, scalar, pointBytes } = getExtendedPublicKey(privKey, options.noCheckLength);
     const r = hashDomainToScalar(options.context, prefix, msg); // r = dom2(F, C) || prefix || PH(M)
     const R = G.multiply(r).toRawBytes(); // R = rG
     const k = hashDomainToScalar(options.context, R, pointBytes, msg); // R || A || PH(M)
