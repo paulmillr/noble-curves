@@ -964,7 +964,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     if (ent != null) {
       // K = HMAC_K(V || 0x00 || int2octets(x) || bits2octets(h1) || k')
       const e = ent === true ? randomBytes(Fp.BYTES) : ent; // generate random bytes OR pass as-is
-      seedArgs.push(ensureBytes('extraEntropy', e, Fp.BYTES)); // check for being of size BYTES
+      seedArgs.push(ensureBytes('extraEntropy', e)); // check for being of size BYTES
     }
     const seed = ut.concatBytes(...seedArgs); // Step D of RFC6979 3.2
     const m = h1int; // NOTE: no need to call bits2int second time here, it is inside truncateHash!
