@@ -246,6 +246,7 @@ const validatorFns = {
   function: (val: any) => typeof val === 'function',
   boolean: (val: any) => typeof val === 'boolean',
   string: (val: any) => typeof val === 'string',
+  stringOrUint8Array: (val: any) => typeof val === 'string' || val instanceof Uint8Array,
   isSafeInteger: (val: any) => Number.isSafeInteger(val),
   array: (val: any) => Array.isArray(val),
   field: (val: any, object: any) => (object as any).Fp.isValid(val),
