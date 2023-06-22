@@ -127,7 +127,7 @@ export function expand_message_xof(
  */
 export function hash_to_field(msg: Uint8Array, count: number, options: Opts): bigint[][] {
   validateObject(options, {
-    DST: 'string',
+    DST: 'stringOrUint8Array',
     p: 'bigint',
     m: 'isSafeInteger',
     k: 'isSafeInteger',
