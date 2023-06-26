@@ -52,7 +52,7 @@ The package consists of two parts:
    - ed25519 / curve25519 / x25519 / ristretto255, edwards448 / curve448 / x448
    - pairing-friendly curves bls12-381, bn254
    - [pasta](https://electriccoin.co/blog/the-pasta-curves-for-halo-2-and-beyond/) curves
-2. [Abstract](#abstract-api), zero-dependency elliptic curve algorithms
+* [Abstract](#abstract-api), zero-dependency elliptic curve algorithms
 
 ### Implementations
 
@@ -93,7 +93,7 @@ import { jubjub } from '@noble/curves/jubjub';
 ```ts
 // extraEntropy https://moderncrypto.org/mail-archive/curves/2017/000925.html
 const sigImprovedSecurity = secp256k1.sign(msg, priv, { extraEntropy: true });
-sig.recoverPublicKey(msg) === pub; // public key recovery
+sig.recoverPublicKey(msg).toRawBytes(); // === pub; // public key recovery
 const someonesPub = secp256k1.getPublicKey(secp256k1.utils.randomPrivateKey());
 const shared = secp256k1.getSharedSecret(priv, someonesPub); // ECDH
 ```
