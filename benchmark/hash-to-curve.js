@@ -8,8 +8,8 @@ import { hashToCurve as secp256k1 } from '../secp256k1.js';
 import { hashToCurve as p256 } from '../p256.js';
 import { hashToCurve as p384 } from '../p384.js';
 import { hashToCurve as p521 } from '../p521.js';
-import { hashToCurve as ed25519 } from '../ed25519.js';
-import { hashToCurve as ed448 } from '../ed448.js';
+import { hashToCurve as ed25519, hash_to_ristretto255 } from '../ed25519.js';
+import { hashToCurve as ed448, hash_to_decaf448 } from '../ed448.js';
 import { utf8ToBytes } from '../abstract/utils.js';
 
 const N = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n;
@@ -26,4 +26,7 @@ run(async () => {
   for (let [title, fn] of Object.entries({ secp256k1, p256, p384, p521, ed25519, ed448 })) {
     await mark(`hashToCurve ${title}`, 1000, () => fn(msg));
   }
+
+  await mark('hash_to_ristretto255', 1000, () => hash_to_ristretto255(msg, { DST: 'ristretto255_XMD:SHA-512_R255MAP_RO_' }));
+  await mark('hash_to_decaf448', 1000, () => hash_to_decaf448(msg, { DST: 'decaf448_XOF:SHAKE256_D448MAP_RO_' }));
 });
