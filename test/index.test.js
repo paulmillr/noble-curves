@@ -4,6 +4,7 @@ import { should } from 'micro-should';
 import './basic.test.js';
 import './nist.test.js';
 import './ed448.test.js';
+import './ed448-addons.test.js';
 import './ed25519.test.js';
 import './ed25519-addons.test.js';
 import './secp256k1.test.js';
