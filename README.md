@@ -149,15 +149,25 @@ edwardsToMontgomeryPub(ed25519.getPublicKey(ed25519.utils.randomPrivateKey()));
 edwardsToMontgomeryPriv(ed25519.utils.randomPrivateKey());
 
 // hash-to-curve, ristretto255
-import { hashToCurve, encodeToCurve, RistrettoPoint } from '@noble/curves/ed25519';
+import { utf8ToBytes } from '@noble/hashes/utils';
+import { sha512 } from '@noble/hashes/sha512';
+import { hashToCurve, encodeToCurve, RistrettoPoint, hash_to_ristretto255 } from '@noble/curves/ed25519';
+
+const msg = utf8ToBytes('Ristretto is traditionally a short shot of espresso coffee');
+hashToCurve(msg);
+
 const rp = RistrettoPoint.fromHex(
   '6a493210f7499cd17fecb510ae0cea23a110e8d5b901f8acadd3095c73a3b919'
 );
-RistrettoPoint.hashToCurve('Ristretto is traditionally a short shot of espresso coffee');
-// also has add(), equals(), multiply(), toRawBytes() methods
+RistrettoPoint.BASE.multiply(2n).add(rp).subtract(RistrettoPoint.BASE).toRawBytes();
+RistrettoPoint.ZERO.equals(dp) === false;
+// pre-hashed hash-to-curve
+RistrettoPoint.hashToCurve(sha512(msg));
+// full hash-to-curve including domain separation tag
+hash_to_ristretto255(msg, { DST: 'ristretto255_XMD:SHA-512_R255MAP_RO_' });
 ```
 
-#### ed448, X448
+#### ed448, X448, decaf448
 
 ```ts
 import { ed448 } from '@noble/curves/ed448';
@@ -167,12 +177,38 @@ const msg = new TextEncoder().encode('whatsup');
 const sig = ed448.sign(msg, priv);
 ed448.verify(sig, msg, pub);
 
-import { ed448ph, ed448ctx, x448, hashToCurve, encodeToCurve } from '@noble/curves/ed448';
+// Variants from RFC8032: prehashed
+import { ed448ph } from '@noble/curves/ed448';
+
+// ECDH using curve448 aka x448
+import { x448 } from '@noble/curves/ed448';
 x448.getSharedSecret(priv, pub) === x448.scalarMult(priv, pub); // aliases
 x448.getPublicKey(priv) === x448.scalarMultBase(priv);
+
+// ed448 => x448 conversion
+import { edwardsToMontgomeryPub } from '@noble/curves/ed448';
+edwardsToMontgomeryPub(ed448.getPublicKey(ed448.utils.randomPrivateKey()));
+
+// hash-to-curve, decaf448
+import { utf8ToBytes } from '@noble/hashes/utils';
+import { shake256 } from '@noble/hashes/sha3';
+import { hashToCurve, encodeToCurve, DecafPoint, hash_to_decaf448 } from '@noble/curves/ed448';
+
+const msg = utf8ToBytes('Ristretto is traditionally a short shot of espresso coffee');
+hashToCurve(msg);
+
+const dp = DecafPoint.fromHex(
+  'c898eb4f87f97c564c6fd61fc7e49689314a1f818ec85eeb3bd5514ac816d38778f69ef347a89fca817e66defdedce178c7cc709b2116e75'
+);
+DecafPoint.BASE.multiply(2n).add(dp).subtract(DecafPoint.BASE).toRawBytes();
+DecafPoint.ZERO.equals(dp) === false;
+// pre-hashed hash-to-curve
+DecafPoint.hashToCurve(shake256(msg, { dkLen: 112 }));
+// full hash-to-curve including domain separation tag
+hash_to_decaf448(msg, { DST: 'decaf448_XOF:SHAKE256_D448MAP_RO_' });
 ```
 
-Same RFC7748 / RFC8032 are followed.
+Same RFC7748 / RFC8032 / IRTF draft are followed.
 
 #### bls12-381
 
