@@ -40,10 +40,6 @@ For [Deno](https://deno.land), ensure to use [npm specifier](https://deno.land/m
 For React Native, you may need a [polyfill for crypto.getRandomValues](https://github.com/LinusU/react-native-get-random-values).
 If you don't like NPM, a standalone [noble-curves.js](https://github.com/paulmillr/noble-curves/releases) is also available.
 
-The library is tree-shaking-friendly and does not expose root entry point as
-`@noble/curves`. Instead, you need to import specific primitives.
-This is done to ensure small size of your apps.
-
 The package consists of two parts:
 
 * [Implementations](#implementations), utilizing one dependency [noble-hashes](https://github.com/paulmillr/noble-hashes),
@@ -60,6 +56,8 @@ The package consists of two parts:
 #### Generic example for all curves, secp256k1
 
 ```ts
+// import * from '@noble/curves'; // Error
+// Use sub-imports for tree-shaking, to ensure small size of your apps
 // Each curve has similar methods
 import { secp256k1 } from '@noble/curves/secp256k1'; // ESM and Common.js
 // import { secp256k1 } from 'npm:@noble/curves@1.2.0/secp256k1'; // Deno
