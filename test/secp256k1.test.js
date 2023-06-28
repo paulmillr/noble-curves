@@ -268,6 +268,33 @@ describe('secp256k1', () => {
         deepStrictEqual(sign(ent5), e.extraEntropyMax);
       }
     });
+
+    should('handle one byte {extraData}', () => {
+      const extraEntropy = '01';
+      const privKey = hexToBytes(
+        '0101010101010101010101010101010101010101010101010101010101010101'
+      );
+      const msg = 'd1a9dc8ed4e46a6a3e5e594615ca351d7d7ef44df1e4c94c1802f3592183794b';
+      const res = secp.sign(msg, privKey, { extraEntropy }).toCompactHex();
+      deepStrictEqual(
+        res,
+        'a250ec23a54bfdecf0e924cbf484077c5044410f915cdba86731cb2e4e925aaa5b1e4e3553d88be2c48a9a0d8d849ce2cc5720d25b2f97473e02f2550abe9545'
+      );
+    });
+
+    should('handle 48 bytes {extraData}', () => {
+      const extraEntropy =
+        '000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000001';
+      const privKey = hexToBytes(
+        '0101010101010101010101010101010101010101010101010101010101010101'
+      );
+      const msg = 'd1a9dc8ed4e46a6a3e5e594615ca351d7d7ef44df1e4c94c1802f3592183794b';
+      const res = secp.sign(msg, privKey, { extraEntropy }).toCompactHex();
+      deepStrictEqual(
+        res,
+        '2bdf40f42ac0e42ee12750d03bb12b75306dae58eb3c961c5a80d78efae93e595295b66e8eb28f1eb046bb129a976340312159ec0c20b97342667572e4a8379a'
+      );
+    });
   });
 
   describe('verify()', () => {
