@@ -22,9 +22,10 @@ packages. See [Resources](#resources) for articles and real-world software that 
 
 - No dependencies, protection against supply chain attacks
 - Auditable TypeScript / JS code
-- Supported in all major browsers and stable node.js versions
-- All releases are signed with PGP keys
+- Supported on all major platforms
+- Releases are signed with PGP keys and built transparently with NPM provenance
 - Check out [homepage](https://paulmillr.com/noble/) & all libraries:
+  [ciphers](https://github.com/paulmillr/noble-ciphers),
   [curves](https://github.com/paulmillr/noble-curves)
   (4kb versions [secp256k1](https://github.com/paulmillr/noble-secp256k1),
   [ed25519](https://github.com/paulmillr/noble-ed25519)),
