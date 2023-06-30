@@ -123,7 +123,7 @@ const ed25519Defaults = {
   uvRatio,
 } as const;
 
-export const ed25519 = twistedEdwards(ed25519Defaults);
+export const ed25519 = /* @__PURE__ */ twistedEdwards(ed25519Defaults);
 
 function ed25519_domain(data: Uint8Array, ctx: Uint8Array, phflag: boolean) {
   if (ctx.length > 255) throw new Error('Context is too big');
@@ -135,8 +135,11 @@ function ed25519_domain(data: Uint8Array, ctx: Uint8Array, phflag: boolean) {
   );
 }
 
-export const ed25519ctx = twistedEdwards({ ...ed25519Defaults, domain: ed25519_domain });
-export const ed25519ph = twistedEdwards({
+export const ed25519ctx = /* @__PURE__ */ twistedEdwards({
+  ...ed25519Defaults,
+  domain: ed25519_domain,
+});
+export const ed25519ph = /* @__PURE__ */ twistedEdwards({
   ...ed25519Defaults,
   domain: ed25519_domain,
   prehash: sha512,

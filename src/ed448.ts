@@ -130,9 +130,9 @@ const ED448_DEF = {
   uvRatio,
 } as const;
 
-export const ed448 = twistedEdwards(ED448_DEF);
+export const ed448 = /* @__PURE__ */ twistedEdwards(ED448_DEF);
 // NOTE: there is no ed448ctx, since ed448 supports ctx by default
-export const ed448ph = twistedEdwards({ ...ED448_DEF, prehash: shake256_64 });
+export const ed448ph = /* @__PURE__ */ twistedEdwards({ ...ED448_DEF, prehash: shake256_64 });
 
 export const x448 = /* @__PURE__ */ (() =>
   montgomery({

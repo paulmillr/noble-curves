@@ -11,7 +11,7 @@ import { Field } from './abstract/modular.js';
  * jubjub does not use EdDSA, so `hash`/sha512 params are passed because interface expects them.
  */
 
-export const jubjub = twistedEdwards({
+export const jubjub = /* @__PURE__ */ twistedEdwards({
   // Params: a, d
   a: BigInt('0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000000'),
   d: BigInt('0x2a9318e74bfa2b48f5fd9207e6bd7fd4292d7f6d37579d2601065fd6d6343eb1'),
