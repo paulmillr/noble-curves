@@ -72,7 +72,7 @@ const privHex = '46c930bc7bb4db7f55da20798697421b98c4175a52c630294d75a84b9c12623
 const pub2 = secp256k1.getPublicKey(privHex);
 ```
 
-#### All imports
+#### Everything
 
 ```typescript
 import { secp256k1, schnorr } from '@noble/curves/secp256k1';
@@ -85,6 +85,7 @@ import { pallas, vesta } from '@noble/curves/pasta';
 import { bls12_381 } from '@noble/curves/bls12-381';
 import { bn254 } from '@noble/curves/bn254';
 import { jubjub } from '@noble/curves/jubjub';
+import { bytesToHex, hexToBytes, concatBytes, utf8ToBytes } from '@noble/curves/abstract/utils';
 ```
 
 #### ECDSA public key recovery & ECDH
@@ -574,7 +575,12 @@ const aggSignature3 = bls.aggregateSignatures(signatures3);
 const isValid3 = bls.verifyBatch(aggSignature3, messages, publicKeys);
 console.log({ publicKeys, signatures3, aggSignature3, isValid3 });
 
-// bls.pairing(PointG1, PointG2) // pairings
+// Pairings, with and without final exponentiation
+// bls.pairing(PointG1, PointG2);
+// bls.pairing(PointG1, PointG2, false);
+// bls.fields.Fp12.finalExponentiate(bls.fields.Fp12.mul(eGS, ePHm));
+
+// Others
 // bls.G1.ProjectivePoint.BASE, bls.G2.ProjectivePoint.BASE
 // bls.fields.Fp, bls.fields.Fp2, bls.fields.Fp12, bls.fields.Fr
 
@@ -768,7 +774,7 @@ const derived = hkdf(sha256, someKey, undefined, 'application', 40); // 40 bytes
 const validPrivateKey = mod.hashToPrivateScalar(derived, p256.CURVE.n);
 ```
 
-### abstract/utils: General utilities
+### abstract/utils: Useful utilities
 
 ```ts
 import * as utils from '@noble/curves/abstract/utils';
