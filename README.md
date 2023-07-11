@@ -244,7 +244,7 @@ There are following zero-dependency algorithms:
 - [abstract/hash-to-curve: Hashing strings to curve points](#abstracthash-to-curve-hashing-strings-to-curve-points)
 - [abstract/poseidon: Poseidon hash](#abstractposeidon-poseidon-hash)
 - [abstract/modular: Modular arithmetics utilities](#abstractmodular-modular-arithmetics-utilities)
-- [abstract/utils: General utilities](#abstractutils-general-utilities)
+- [abstract/utils: Useful utilities](#abstractutils-useful-utilities)
 
 ### abstract/weierstrass: Short Weierstrass curve
 
