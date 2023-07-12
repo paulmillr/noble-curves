@@ -1,20 +1,24 @@
 {
-    "compilerOptions": {
-        "strict": true,
-        "outDir": "esm",
-        "target": "es2020",
-        "module": "es6",
-        "moduleResolution": "node16",
-        "noUnusedLocals": true,
-        "sourceMap": true,
-        "baseUrl": ".",
-        "paths": {
-            "@noble/hashes/crypto": [ "src/crypto" ]
-        },
+  "compilerOptions": {
+    "outDir": "esm",
+    "target": "es2020",
+    "module": "es6",
+    "moduleResolution": "node16",
+    "baseUrl": ".",
+    "paths": {
+      "@noble/hashes/crypto": ["src/crypto"]
     },
-    "include": ["src"],
-    "exclude": [
-        "node_modules",
-        "lib",
-    ],
+    "sourceMap": true,
+    "strict": true,
+    "allowSyntheticDefaultImports": false,
+    "allowUnreachableCode": false,
+    "esModuleInterop": false,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitReturns": true,
+    "noUncheckedIndexedAccess": false,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "lib"]
 }

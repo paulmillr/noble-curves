@@ -37,6 +37,7 @@
     "prettier": "2.8.4",
     "typescript": "5.0.2"
   },
+  "sideEffects": false,
   "main": "index.js",
   "exports": {
     ".": {

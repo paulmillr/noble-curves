@@ -1,7 +1,4 @@
 {
   "type": "module",
-  "browser": {
-    "crypto": false,
-    "./crypto": "./esm/crypto.js"
-  }
+  "sideEffects": false
 }
