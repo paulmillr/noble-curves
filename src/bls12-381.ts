@@ -1108,7 +1108,7 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
     },
     // Clear cofactor of G1
     // https://eprint.iacr.org/2019/403
-    clearCofactor: (c, point) => {
+    clearCofactor: (_c, point) => {
       // return this.multiplyUnsafe(CURVE.h);
       return point.multiplyUnsafe(bls12_381.params.x).add(point); // x*P + P
     },

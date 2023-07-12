@@ -193,7 +193,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
 
   const toBytes =
     CURVE.toBytes ||
-    ((c: ProjConstructor<T>, point: ProjPointType<T>, isCompressed: boolean) => {
+    ((_c: ProjConstructor<T>, point: ProjPointType<T>, _isCompressed: boolean) => {
       const a = point.toAffine();
       return ut.concatBytes(Uint8Array.from([0x04]), Fp.toBytes(a.x), Fp.toBytes(a.y));
     });
@@ -707,7 +707,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     isWithinCurveOrder,
   } = weierstrassPoints({
     ...CURVE,
-    toBytes(c, point, isCompressed: boolean): Uint8Array {
+    toBytes(_c, point, isCompressed: boolean): Uint8Array {
       const a = point.toAffine();
       const x = Fp.toBytes(a.x);
       const cat = ut.concatBytes;
