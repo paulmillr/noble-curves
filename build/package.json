@@ -10,7 +10,7 @@
   "license": "MIT",
   "devDependencies": {
     "@noble/curves": "..",
-    "esbuild": "0.17.19"
+    "esbuild": "0.18.11"
   },
   "scripts": {
     "build": "npx esbuild --bundle input.js --outfile=noble-curves.js --global-name=nobleCurves"
