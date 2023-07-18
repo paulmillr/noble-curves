@@ -44,15 +44,14 @@ The package consists of two parts:
 implementations (using [noble-hashes](https://github.com/paulmillr/noble-hashes)), and zero-dep abstract api.
 
 - [Usage](#usage)
-  - [Implementations](#implementations)
-    - [Generic example for all curves, secp256k1](#generic-example-for-all-curves-secp256k1)
-    - [Everything](#everything)
-    - [ECDSA public key recovery & ECDH](#ecdsa-public-key-recovery--ecdh)
-    - [Schnorr signatures over secp256k1 BIP340](#schnorr-signatures-over-secp256k1-bip340)
-    - [ed25519, X25519, ristretto255](#ed25519-x25519-ristretto255)
-    - [ed448, X448, decaf448](#ed448-x448-decaf448)
-    - [bls12-381](#bls12-381)
-    - [Accessing a curve's variables](#accessing-a-curves-variables)
+  - [Generic example for all curves, secp256k1](#generic-example-for-all-curves-secp256k1)
+  - [Everything](#everything)
+  - [ECDSA public key recovery & ECDH](#ecdsa-public-key-recovery--ecdh)
+  - [Schnorr signatures over secp256k1 BIP340](#schnorr-signatures-over-secp256k1-bip340)
+  - [ed25519, X25519, ristretto255](#ed25519-x25519-ristretto255)
+  - [ed448, X448, decaf448](#ed448-x448-decaf448)
+  - [bls12-381](#bls12-381)
+  - [Accessing a curve's variables](#accessing-a-curves-variables)
 - [Abstract API](#abstract-api)
   - [abstract/weierstrass: Short Weierstrass curve](#abstractweierstrass-short-weierstrass-curve)
   - [abstract/edwards: Twisted Edwards curve](#abstractedwards-twisted-edwards-curve)
@@ -69,8 +68,6 @@ implementations (using [noble-hashes](https://github.com/paulmillr/noble-hashes)
 - [Upgrading](#upgrading)
 - [Resources](#resources)
 - [License](#license)
-
-### Implementations
 
 #### Generic example for all curves, secp256k1
 
