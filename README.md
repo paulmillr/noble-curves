@@ -41,15 +41,7 @@ For React Native, you may need a [polyfill for crypto.getRandomValues](https://g
 If you don't like NPM, a standalone [noble-curves.js](https://github.com/paulmillr/noble-curves/releases) is also available.
 
 The package consists of two parts:
-
-* [Implementations](#implementations), utilizing one dependency [noble-hashes](https://github.com/paulmillr/noble-hashes),
-   providing ready-to-use:
-   - NIST curves secp256r1 / p256, secp384r1 / p384, secp521r1 / p521
-   - SECG curve secp256k1
-   - ed25519 / curve25519 / x25519 / ristretto255, edwards448 / curve448 / x448
-   - pairing-friendly curves bls12-381, bn254
-   - [pasta](https://electriccoin.co/blog/the-pasta-curves-for-halo-2-and-beyond/) curves
-* [Abstract](#abstract-api), zero-dependency elliptic curve algorithms
+implementations (using [noble-hashes](https://github.com/paulmillr/noble-hashes)), and zero-dep abstract api.
 
 - [Usage](#usage)
   - [Implementations](#implementations)
