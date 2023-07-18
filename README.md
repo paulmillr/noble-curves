@@ -51,6 +51,33 @@ The package consists of two parts:
    - [pasta](https://electriccoin.co/blog/the-pasta-curves-for-halo-2-and-beyond/) curves
 * [Abstract](#abstract-api), zero-dependency elliptic curve algorithms
 
+- [Usage](#usage)
+  - [Implementations](#implementations)
+    - [Generic example for all curves, secp256k1](#generic-example-for-all-curves-secp256k1)
+    - [Everything](#everything)
+    - [ECDSA public key recovery & ECDH](#ecdsa-public-key-recovery--ecdh)
+    - [Schnorr signatures over secp256k1 BIP340](#schnorr-signatures-over-secp256k1-bip340)
+    - [ed25519, X25519, ristretto255](#ed25519-x25519-ristretto255)
+    - [ed448, X448, decaf448](#ed448-x448-decaf448)
+    - [bls12-381](#bls12-381)
+    - [Accessing a curve's variables](#accessing-a-curves-variables)
+- [Abstract API](#abstract-api)
+  - [abstract/weierstrass: Short Weierstrass curve](#abstractweierstrass-short-weierstrass-curve)
+  - [abstract/edwards: Twisted Edwards curve](#abstractedwards-twisted-edwards-curve)
+  - [abstract/montgomery: Montgomery curve](#abstractmontgomery-montgomery-curve)
+  - [abstract/bls: Barreto-Lynn-Scott curves](#abstractbls-barreto-lynn-scott-curves)
+  - [abstract/hash-to-curve: Hashing strings to curve points](#abstracthash-to-curve-hashing-strings-to-curve-points)
+  - [abstract/poseidon: Poseidon hash](#abstractposeidon-poseidon-hash)
+  - [abstract/modular: Modular arithmetics utilities](#abstractmodular-modular-arithmetics-utilities)
+    - [Creating private keys from hashes](#creating-private-keys-from-hashes)
+  - [abstract/utils: Useful utilities](#abstractutils-useful-utilities)
+- [Security](#security)
+- [Speed](#speed)
+- [Contributing & testing](#contributing--testing)
+- [Upgrading](#upgrading)
+- [Resources](#resources)
+- [License](#license)
+
 ### Implementations
 
 #### Generic example for all curves, secp256k1
@@ -234,17 +261,6 @@ scalar multiplication, we use
 Precomputes are enabled for weierstrass and edwards BASE points of a curve. You
 could precompute any other point (e.g. for ECDH) using `utils.precompute()`
 method: check out examples.
-
-There are following zero-dependency algorithms:
-
-- [abstract/weierstrass: Short Weierstrass curve](#abstractweierstrass-short-weierstrass-curve)
-- [abstract/edwards: Twisted Edwards curve](#abstractedwards-twisted-edwards-curve)
-- [abstract/montgomery: Montgomery curve](#abstractmontgomery-montgomery-curve)
-- [abstract/bls: Barreto-Lynn-Scott curves](#abstractbls-barreto-lynn-scott-curves)
-- [abstract/hash-to-curve: Hashing strings to curve points](#abstracthash-to-curve-hashing-strings-to-curve-points)
-- [abstract/poseidon: Poseidon hash](#abstractposeidon-poseidon-hash)
-- [abstract/modular: Modular arithmetics utilities](#abstractmodular-modular-arithmetics-utilities)
-- [abstract/utils: Useful utilities](#abstractutils-useful-utilities)
 
 ### abstract/weierstrass: Short Weierstrass curve
 
