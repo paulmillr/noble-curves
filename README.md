@@ -53,8 +53,8 @@ import { secp256k1 } from '@noble/curves/secp256k1'; // ESM and Common.js
 // import { secp256k1 } from 'npm:@noble/curves@1.2.0/secp256k1'; // Deno
 const priv = secp256k1.utils.randomPrivateKey();
 const pub = secp256k1.getPublicKey(priv);
-const msg = new Uint8Array(32).fill(1);
-const sig = secp256k1.sign(msg, priv);
+const msg = new Uint8Array(32).fill(1); // message hash (not message) in ecdsa
+const sig = secp256k1.sign(msg, priv); // `{prehash: true}` option is available
 const isValid = secp256k1.verify(sig, msg, pub) === true;
 
 // hex strings are also supported besides Uint8Arrays:
@@ -273,7 +273,7 @@ const secq256k1 = weierstrass({
   randomBytes,
 });
 
-// Replace weierstrass with weierstrassPoints if you don't need ECDSA, hash, hmac, randomBytes
+// Replace weierstrass() with weierstrassPoints() if you don't need ECDSA, hash, hmac, randomBytes
 ```
 
 Short Weierstrass curve's formula is `y² = x³ + ax + b`. `weierstrass`
@@ -293,6 +293,10 @@ type CHash = {
   create(): any;
 };
 ```
+
+**Message hash** is expected instead of message itself:
+    - `.sign(msgHash, privKey)` is default behavior, you need to do `msgHash = hash(msg)` before
+    - `.sign(msg, privKey, {prehash: true})` if you want the library to handle hashing for you
 
 **Weierstrass points:**
 
@@ -389,6 +393,7 @@ More examples:
 const priv = secq256k1.utils.randomPrivateKey();
 secq256k1.getPublicKey(priv); // Convert private key to public.
 const sig = secq256k1.sign(msg, priv); // Sign msg with private key.
+const sig2 = secq256k1.sign(msg, priv, {prehash: true}); // hash(msg)
 secq256k1.verify(sig, msg, priv); // Verify if sig is correct.
 
 const Point = secq256k1.ProjectivePoint;
