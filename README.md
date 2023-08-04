@@ -43,12 +43,10 @@ If you don't like NPM, a standalone [noble-curves.js](https://github.com/paulmil
 The package consists of two parts:
 implementations (using [noble-hashes](https://github.com/paulmillr/noble-hashes)), and zero-dep abstract api.
 
-Generic example for all curves, secp256k1:
+Generic example for all curves, shown with secp256k1:
 
 ```ts
-// import * from '@noble/curves'; // Error
-// Use sub-imports for tree-shaking, to ensure small size of your apps
-// Each curve has similar methods
+// import * from '@noble/curves'; // Error: use sub-imports, to ensure small app size
 import { secp256k1 } from '@noble/curves/secp256k1'; // ESM and Common.js
 // import { secp256k1 } from 'npm:@noble/curves@1.2.0/secp256k1'; // Deno
 const priv = secp256k1.utils.randomPrivateKey();
