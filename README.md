@@ -96,7 +96,7 @@ import { p384 } from '@noble/curves/p384';
 import { p521 } from '@noble/curves/p521';
 import { pallas, vesta } from '@noble/curves/pasta';
 import { bls12_381 } from '@noble/curves/bls12-381';
-import { bn254 } from '@noble/curves/bn254';
+import { bn254 } from '@noble/curves/bn254'; // also known as alt_bn128
 import { jubjub } from '@noble/curves/jubjub';
 import { bytesToHex, hexToBytes, concatBytes, utf8ToBytes } from '@noble/curves/abstract/utils';
 ```
