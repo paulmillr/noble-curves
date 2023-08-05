@@ -40,7 +40,7 @@ const getPubKey = (priv) => bls.getPublicKey(priv);
 function replaceZeroPoint(item) {
   const zeros = '0000000000000000000000000000000000000000000000000000000000000000';
   const ones = '1000000000000000000000000000000000000000000000000000000000000001';
-  return item === zeros ? ones : item
+  return item === zeros ? ones : item;
 }
 
 function equal(a, b, comment) {
