@@ -37,6 +37,11 @@ const B_192_40 = '40'.padEnd(192, '0');
 const B_384_40 = '40'.padEnd(384, '0'); // [0x40, 0, 0...]
 
 const getPubKey = (priv) => bls.getPublicKey(priv);
+function replaceZeroPoint(item) {
+  const zeros = '0000000000000000000000000000000000000000000000000000000000000000';
+  const ones = '1000000000000000000000000000000000000000000000000000000000000001';
+  return item === zeros ? ones : item
+}
 
 function equal(a, b, comment) {
   deepStrictEqual(a.equals(b), true, `eq(${comment})`);
@@ -1234,6 +1239,7 @@ describe('verify()', () => {
     should('verify multi-signature as simple signature', () => {
       fc.assert(
         fc.property(FC_MSG, FC_BIGINT_5, (message, privateKeys) => {
+          message = replaceZeroPoint(message);
           const publicKey = privateKeys.map(getPubKey);
           const signatures = privateKeys.map((privateKey) => bls.sign(message, privateKey));
           const aggregatedSignature = bls.aggregateSignatures(signatures);
@@ -1245,6 +1251,7 @@ describe('verify()', () => {
     should('not verify wrong multi-signature as simple signature', () => {
       fc.assert(
         fc.property(FC_MSG, FC_MSG, FC_BIGINT_5, (message, wrongMessage, privateKeys) => {
+          message = replaceZeroPoint(message);
           const publicKey = privateKeys.map(getPubKey);
           const signatures = privateKeys.map((privateKey) => bls.sign(message, privateKey));
           const aggregatedSignature = bls.aggregateSignatures(signatures);
