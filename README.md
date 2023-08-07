@@ -83,6 +83,8 @@ const pub2 = secp256k1.getPublicKey(privHex);
 - [Contributing & testing](#contributing--testing)
 - [Upgrading](#upgrading)
 - [Resources](#resources)
+  - [Demos](#demos)
+  - [Projects using curves](#projects-using-curves)
 - [License](#license)
 
 #### Everything
@@ -983,14 +985,17 @@ Useful documentation and articles about the library or its primitives:
       [part 3](https://research.nccgroup.com/2020/08/13/pairing-over-bls12-381-part-3-pairing/)
     - [Estimating the bit security of pairing-friendly curves](https://research.nccgroup.com/2022/02/03/estimating-the-bit-security-of-pairing-friendly-curves/)
 
-Online demos:
+### Demos
 
 - [Elliptic Curve Calculator](https://paulmillr.com/noble): add / multiply points, sign messages
 - [BLS threshold signatures](https://genthresh.com)
 
-Projects using noble-curves:
+### Projects using curves
 
 - [scure-bip32](https://github.com/paulmillr/scure-bip32) and separate [bip32](https://github.com/bitcoinjs/bip32) HDkey libraries
+- Social networks:
+    - [nostr](https://github.com/nbd-wtf/nostr-tools)
+    - [bluesky](https://github.com/bluesky-social/atproto)
 - Ethereum libraries:
     - [ethereum-cryptography](https://github.com/ethereum/js-ethereum-cryptography)
     - [@ethereumjs](https://github.com/ethereumjs/ethereumjs-monorepo)
@@ -999,11 +1004,16 @@ Projects using noble-curves:
     - [viem.sh](https://viem.sh)
     - [metamask's eth-sig-util](https://github.com/MetaMask/eth-sig-util)
     - [gridplus lattice sdk](https://github.com/GridPlus/lattice-eth2-utils)
-- Bitcoin libraries: [scure-btc-signer](https://github.com/paulmillr/scure-btc-signer)
+- Bitcoin libraries:
+    - [scure-btc-signer](https://github.com/paulmillr/scure-btc-signer)
+    - [tapscript](https://github.com/cmdruid/tapscript)
 - Solana libraries: [micro-sol-signer](https://github.com/paulmillr/micro-sol-signer), [solana-web3.js](https://github.com/solana-labs/solana-web3.js)
-- [polkadot.js](https://github.com/polkadot-js/common), [micro-starknet](https://github.com/paulmillr/micro-starknet)
+- Other ledgers:
+    - [micro-starknet](https://github.com/paulmillr/micro-starknet)
+    - [polkadot.js](https://github.com/polkadot-js/common), [drand-client](https://github.com/drand/drand-client), [moneroj](https://github.com/beritani/moneroj), [tronlib](https://github.com/CoinSpace/tronlib)
 - [protonmail](https://github.com/ProtonMail/WebClients) (old noble-ed25519 for now)
-- [did-jwt](https://github.com/decentralized-identity/did-jwt), [hpke-js](https://github.com/dajiaji/hpke-js), [nostr-tools](https://github.com/nbd-wtf/nostr-tools)
+- [did-jwt](https://github.com/decentralized-identity/did-jwt), [hpke-js](https://github.com/dajiaji/hpke-js)
+- [js-libp2p](https://github.com/ChainSafe/js-libp2p-noise)
 - [ed25519-keygen](https://github.com/paulmillr/ed25519-keygen) SSH, PGP, TOR key generation
 - [secp256k1 compatibility layer](https://github.com/ethereum/js-ethereum-cryptography/blob/2.0.0/src/secp256k1-compat.ts)
 for users who want to switch from secp256k1-node or tiny-secp256k1. Allows to see which methods map to corresponding noble code.
