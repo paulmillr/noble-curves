@@ -970,19 +970,23 @@ Upgrading from [@noble/bls12-381](https://github.com/paulmillr/noble-bls12-381):
 
 ## Resources
 
-Useful documentation and articles about the library or its primitives:
-
 - [Learning fast elliptic-curve cryptography](https://paulmillr.com/posts/noble-secp256k1-fast-ecc/)
-- [Taming the many EdDSAs](https://csrc.nist.gov/csrc/media/Presentations/2023/crclub-2023-03-08/images-media/20230308-crypto-club-slides--taming-the-many-EdDSAs.pdf)
-  that describes concepts of Strong UnForgeability under Chosen Message Attacks and Strongly Binding Signatures
+- EdDSA
+    - [A Deep dive into Ed25519 Signatures](https://cendyne.dev/posts/2022-03-06-ed25519-signatures.html)
+    - [Ed25519 Deep Dive Addendum](https://cendyne.dev/posts/2022-09-11-ed25519-deep-dive-addendum.html)
+    - [It’s 255:19AM. Do you know what your validation criteria are?](https://hdevalence.ca/blog/2020-10-04-its-25519am)
+    - [Taming the many EdDSAs](https://csrc.nist.gov/csrc/media/Presentations/2023/crclub-2023-03-08/images-media/20230308-crypto-club-slides--taming-the-many-EdDSAs.pdf)
+      that describes concepts of Strong UnForgeability under Chosen Message Attacks and Strongly Binding Signatures
+    - [Cofactor Explained: Clearing Elliptic Curves’ dirty little secret](https://loup-vaillant.fr/tutorials/cofactor)
+    - [Surrounded by Elligators](https://loup-vaillant.fr/articles/implementing-elligator)
 - Pairings and BLS
     - [BLS signatures for busy people](https://gist.github.com/paulmillr/18b802ad219b1aee34d773d08ec26ca2)
     - [BLS12-381 for the rest of us](https://hackmd.io/@benjaminion/bls12-381)
     - [Key concepts of pairings](https://medium.com/@alonmuroch_65570/bls-signatures-part-2-key-concepts-of-pairings-27a8a9533d0c)
     - Pairing over bls12-381:
-      [part 1](https://research.nccgroup.com/2020/07/06/pairing-over-bls12-381-part-1-fields/),
-      [part 2](https://research.nccgroup.com/2020/07/13/pairing-over-bls12-381-part-2-curves/),
-      [part 3](https://research.nccgroup.com/2020/08/13/pairing-over-bls12-381-part-3-pairing/)
+      [fields](https://research.nccgroup.com/2020/07/06/pairing-over-bls12-381-part-1-fields/),
+      [curves](https://research.nccgroup.com/2020/07/13/pairing-over-bls12-381-part-2-curves/),
+      [pairings](https://research.nccgroup.com/2020/08/13/pairing-over-bls12-381-part-3-pairing/)
     - [Estimating the bit security of pairing-friendly curves](https://research.nccgroup.com/2022/02/03/estimating-the-bit-security-of-pairing-friendly-curves/)
 
 ### Demos
@@ -1008,8 +1012,9 @@ Useful documentation and articles about the library or its primitives:
     - [scure-btc-signer](https://github.com/paulmillr/scure-btc-signer)
     - [tapscript](https://github.com/cmdruid/tapscript)
 - Solana libraries: [micro-sol-signer](https://github.com/paulmillr/micro-sol-signer), [solana-web3.js](https://github.com/solana-labs/solana-web3.js)
-- Other ledgers:
+- Other web3 stuff:
     - [micro-starknet](https://github.com/paulmillr/micro-starknet)
+    - [aztec](https://github.com/AztecProtocol/aztec-packages)
     - [polkadot.js](https://github.com/polkadot-js/common), [drand-client](https://github.com/drand/drand-client), [moneroj](https://github.com/beritani/moneroj), [tronlib](https://github.com/CoinSpace/tronlib)
 - [protonmail](https://github.com/ProtonMail/WebClients) (old noble-ed25519 for now)
 - [did-jwt](https://github.com/decentralized-identity/did-jwt), [hpke-js](https://github.com/dajiaji/hpke-js)
@@ -1019,6 +1024,8 @@ Useful documentation and articles about the library or its primitives:
 for users who want to switch from secp256k1-node or tiny-secp256k1. Allows to see which methods map to corresponding noble code.
 - [BLS BBS signatures](https://github.com/Wind4Greg/BBS-Draft-Checks) following [draft-irtf-cfrg-bbs-signatures-latest](https://identity.foundation/bbs-signature/draft-irtf-cfrg-bbs-signatures.html)
 - [KZG trusted setup ceremony](https://github.com/dsrvlabs/czg-keremony)
+
+See [full list on GitHub](https://github.com/paulmillr/noble-curves/network/dependents).
 
 ## License
 
