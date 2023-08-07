@@ -996,7 +996,7 @@ Upgrading from [@noble/bls12-381](https://github.com/paulmillr/noble-bls12-381):
 
 ### Projects using curves
 
-- hdkey libraries: [scure-bip32](https://github.com/paulmillr/scure-bip32), [bip32](https://github.com/bitcoinjs/bip32)
+- HDkey libraries: [scure-bip32](https://github.com/paulmillr/scure-bip32), [bip32](https://github.com/bitcoinjs/bip32)
 - Social networks: [nostr](https://github.com/nbd-wtf/nostr-tools), [bluesky](https://github.com/bluesky-social/atproto)
 - Ethereum libraries:
     - [ethereum-cryptography](https://github.com/ethereum/js-ethereum-cryptography)
@@ -1014,9 +1014,9 @@ Upgrading from [@noble/bls12-381](https://github.com/paulmillr/noble-bls12-381):
     - [micro-starknet](https://github.com/paulmillr/micro-starknet)
     - [aztec](https://github.com/AztecProtocol/aztec-packages)
     - [polkadot.js](https://github.com/polkadot-js/common), [drand-client](https://github.com/drand/drand-client), [moneroj](https://github.com/beritani/moneroj), [tronlib](https://github.com/CoinSpace/tronlib)
-- [protonmail](https://github.com/ProtonMail/WebClients) (old noble-ed25519 for now)
-- [did-jwt](https://github.com/decentralized-identity/did-jwt), [hpke-js](https://github.com/dajiaji/hpke-js)
-- [js-libp2p](https://github.com/ChainSafe/js-libp2p-noise)
+- [protonmail](https://github.com/ProtonMail/WebClients) (old noble for now)
+- [did-jwt](https://github.com/decentralized-identity/did-jwt), [hpke-js](https://github.com/dajiaji/hpke-js),
+  [js-libp2p-noise](https://github.com/ChainSafe/js-libp2p-noise)
 - [ed25519-keygen](https://github.com/paulmillr/ed25519-keygen) SSH, PGP, TOR key generation
 - [secp256k1 compatibility layer](https://github.com/ethereum/js-ethereum-cryptography/blob/2.0.0/src/secp256k1-compat.ts)
 for users who want to switch from secp256k1-node or tiny-secp256k1. Allows to see which methods map to corresponding noble code.
