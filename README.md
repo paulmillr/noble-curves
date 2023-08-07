@@ -996,16 +996,14 @@ Upgrading from [@noble/bls12-381](https://github.com/paulmillr/noble-bls12-381):
 
 ### Projects using curves
 
-- [scure-bip32](https://github.com/paulmillr/scure-bip32) and separate [bip32](https://github.com/bitcoinjs/bip32) HDkey libraries
-- Social networks:
-    - [nostr](https://github.com/nbd-wtf/nostr-tools)
-    - [bluesky](https://github.com/bluesky-social/atproto)
+- hdkey libraries: [scure-bip32](https://github.com/paulmillr/scure-bip32), [bip32](https://github.com/bitcoinjs/bip32)
+- Social networks: [nostr](https://github.com/nbd-wtf/nostr-tools), [bluesky](https://github.com/bluesky-social/atproto)
 - Ethereum libraries:
     - [ethereum-cryptography](https://github.com/ethereum/js-ethereum-cryptography)
-    - [@ethereumjs](https://github.com/ethereumjs/ethereumjs-monorepo)
-    - [micro-eth-signer](https://github.com/paulmillr/micro-eth-signer)
-    - [ethers](https://github.com/ethers-io/ethers.js) (old noble-secp256k1 for now)
-    - [viem.sh](https://viem.sh)
+    - [micro-eth-signer](https://github.com/paulmillr/micro-eth-signer),
+      [ethers](https://github.com/ethers-io/ethers.js) (old noble),
+      [viem.sh](https://viem.sh),
+      [@ethereumjs](https://github.com/ethereumjs/ethereumjs-monorepo)
     - [metamask's eth-sig-util](https://github.com/MetaMask/eth-sig-util)
     - [gridplus lattice sdk](https://github.com/GridPlus/lattice-eth2-utils)
 - Bitcoin libraries:
@@ -1024,8 +1022,7 @@ Upgrading from [@noble/bls12-381](https://github.com/paulmillr/noble-bls12-381):
 for users who want to switch from secp256k1-node or tiny-secp256k1. Allows to see which methods map to corresponding noble code.
 - [BLS BBS signatures](https://github.com/Wind4Greg/BBS-Draft-Checks) following [draft-irtf-cfrg-bbs-signatures-latest](https://identity.foundation/bbs-signature/draft-irtf-cfrg-bbs-signatures.html)
 - [KZG trusted setup ceremony](https://github.com/dsrvlabs/czg-keremony)
-
-See [full list on GitHub](https://github.com/paulmillr/noble-curves/network/dependents).
+- See [full list of projects on GitHub](https://github.com/paulmillr/noble-curves/network/dependents).
 
 ## License
 
