@@ -21,12 +21,13 @@ export function validateOpts(opts: PoseidonOpts) {
     if (typeof opts[i] !== 'number' || !Number.isSafeInteger(opts[i]))
       throw new Error(`Poseidon: invalid param ${i}=${opts[i]} (${typeof opts[i]})`);
   }
-  if (opts.reversePartialPowIdx !== undefined && typeof opts.reversePartialPowIdx !== 'boolean')
-    throw new Error(`Poseidon: invalid param reversePartialPowIdx=${opts.reversePartialPowIdx}`);
-  // Default is 5, but by some reasons stark uses 3
-  let sboxPower = opts.sboxPower;
+  const rev = opts.reversePartialPowIdx;
+  if (rev !== undefined && typeof rev !== 'boolean')
+    throw new Error(`Poseidon: invalid param reversePartialPowIdx=${rev}`);
+  // Default is 5, but for some reasons stark uses 3
+  let { sboxPower } = opts;
   if (sboxPower === undefined) sboxPower = 5;
-  if (typeof sboxPower !== 'number' || !Number.isSafeInteger(sboxPower))
+  if (!([3, 5, 7].includes(sboxPower)))
     throw new Error(`Poseidon wrong sboxPower=${sboxPower}`);
 
   const _sboxPower = BigInt(sboxPower);
