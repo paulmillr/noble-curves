@@ -456,10 +456,11 @@ export const DecafPoint = /* @__PURE__ */ (() => {
 
 // https://datatracker.ietf.org/doc/draft-irtf-cfrg-hash-to-curve/16/
 // Appendix C.  Hashing to decaf448
-export const hash_to_decaf448 = (msg: Uint8Array, options: htfBasicOpts) => {
+export const hashToDecaf448 = (msg: Uint8Array, options: htfBasicOpts) => {
   const d = options.DST;
   const DST = typeof d === 'string' ? utf8ToBytes(d) : d;
   const uniform_bytes = expand_message_xof(msg, DST, 112, 224, shake256);
   const P = DcfPoint.hashToCurve(uniform_bytes);
   return P;
 };
+export const hash_to_decaf448 = hashToDecaf448; // legacy

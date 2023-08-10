@@ -480,10 +480,11 @@ export const RistrettoPoint = /* @__PURE__ */ (() => {
 
 // https://datatracker.ietf.org/doc/draft-irtf-cfrg-hash-to-curve/14/
 // Appendix B.  Hashing to ristretto255
-export const hash_to_ristretto255 = (msg: Uint8Array, options: htfBasicOpts) => {
+export const hashToRistretto255 = (msg: Uint8Array, options: htfBasicOpts) => {
   const d = options.DST;
   const DST = typeof d === 'string' ? utf8ToBytes(d) : d;
   const uniform_bytes = expand_message_xmd(msg, DST, 64, sha512);
   const P = RistPoint.hashToCurve(uniform_bytes);
   return P;
 };
+export const hash_to_ristretto255 = hashToRistretto255; // legacy
