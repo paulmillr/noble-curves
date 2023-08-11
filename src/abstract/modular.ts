@@ -75,9 +75,14 @@ export function invert(number: bigint, modulo: bigint): bigint {
   return mod(x, modulo);
 }
 
-// Tonelli-Shanks algorithm
-// Paper 1: https://eprint.iacr.org/2012/685.pdf (page 12)
-// Paper 2: Square Roots from 1; 24, 51, 10 to Dan Shanks
+/**
+ * Tonelli-Shanks square root search algorithm.
+ * 1. https://eprint.iacr.org/2012/685.pdf (page 12)
+ * 2. Square Roots from 1; 24, 51, 10 to Dan Shanks
+ * Will start an infinite loop if field order P is not prime.
+ * @param P field order
+ * @returns function that takes field Fp (created from P) and number n
+ */
 export function tonelliShanks(P: bigint) {
   // Legendre constant: used to calculate Legendre symbol (a | p),
   // which denotes the value of a^((p-1)/2) (mod p).
@@ -198,7 +203,7 @@ export function FpSqrt(P: bigint) {
 // Little-endian check for first LE bit (last BE bit);
 export const isNegativeLE = (num: bigint, modulo: bigint) => (mod(num, modulo) & _1n) === _1n;
 
-// Field is not always over prime, Fp2 for example has ORDER(q)=p^m
+// Field is not always over prime: for example, Fp2 has ORDER(q)=p^m
 export interface IField<T> {
   ORDER: bigint;
   BYTES: number;
@@ -276,7 +281,10 @@ export function FpPow<T>(f: IField<T>, num: T, power: bigint): T {
   return p;
 }
 
-// 0 is non-invertible: non-batched version will throw on 0
+/**
+ * Efficiently invert an array of Field elements.
+ * `inv(0)` will return `undefined` here: make sure to throw an error.
+ */
 export function FpInvertBatch<T>(f: IField<T>, nums: T[]): T[] {
   const tmp = new Array(nums.length);
   // Walk from first to last, multiply them by each other MOD p
@@ -319,12 +327,12 @@ export function nLength(n: bigint, nBitLength?: number) {
 
 type FpField = IField<bigint> & Required<Pick<IField<bigint>, 'isOdd'>>;
 /**
- * Initializes a galois field over prime. Non-primes are not supported for now.
- * Do not init in loop: slow. Very fragile: always run a benchmark on change.
- * Major performance gains:
- * a) non-normalized operations like mulN instead of mul
- * b) `Object.freeze`
- * c) Same object shape: never add or remove keys
+ * Initializes a finite field over prime. **Non-primes are not supported.**
+ * Do not init in loop: slow. Very fragile: always run a benchmark on a change.
+ * Major performance optimizations:
+ * * a) denormalized operations like mulN instead of mul
+ * * b) same object shape: never add or remove keys
+ * * c) Object.freeze
  * @param ORDER prime positive bigint
  * @param bitLen how many bits the field consumes
  * @param isLE (def: false) if encoding / decoding should be in little-endian
@@ -336,7 +344,7 @@ export function Field(
   isLE = false,
   redef: Partial<IField<bigint>> = {}
 ): Readonly<FpField> {
-  if (ORDER <= _0n) throw new Error(`Expected Fp ORDER > 0, got ${ORDER}`);
+  if (ORDER <= _0n) throw new Error(`Expected Field ORDER > 0, got ${ORDER}`);
   const { nBitLength: BITS, nByteLength: BYTES } = nLength(ORDER, bitLen);
   if (BYTES > 2048) throw new Error('Field lengths over 2048 bytes are not supported');
   const sqrtP = FpSqrt(ORDER);
@@ -400,13 +408,15 @@ export function FpSqrtEven<T>(Fp: IField<T>, elm: T) {
 }
 
 /**
- * FIPS 186 B.4.1-compliant "constant-time" private key generation utility.
- * Can take (n+8) or more bytes of uniform input e.g. from CSPRNG or KDF
+ * "Constant-time" private key generation utility.
+ * Can take (n + 8) or more bytes of uniform input e.g. from CSPRNG or KDF
  * and convert them into private scalar, with the modulo bias being negligible.
  * Needs at least 40 bytes of input for 32-byte private key.
  * https://research.kudelskisecurity.com/2020/07/28/the-definitive-guide-to-modulo-bias-and-how-to-avoid-it/
+ * FIPS 186-5, A.2 https://csrc.nist.gov/publications/detail/fips/186/5/final
+ * hash-to-curve, https://www.ietf.org/archive/id/draft-irtf-cfrg-hash-to-curve-16.html#name-hashing-to-a-finite-field
  * @param hash hash output from SHA3 or a similar function
- * @param groupOrder size of subgroup - (e.g. curveFn.CURVE.n)
+ * @param groupOrder size of subgroup - (e.g. secp256k1.CURVE.n)
  * @param isLE interpret hash bytes as LE num
  * @returns valid private scalar
  */
@@ -417,9 +427,12 @@ export function hashToPrivateScalar(
 ): bigint {
   hash = ensureBytes('privateHash', hash);
   const hashLen = hash.length;
-  const minLen = nLength(groupOrder).nByteLength + 8;
+  const minLen = nLength(groupOrder).nByteLength + 8; // 8b (64 bits) gives 2^-64 bias
+  // Small numbers aren't supported: need to understand their security / bias story first.
+  // Huge numbers aren't supported for security: it's easier to detect timings of their ops in JS.
   if (minLen < 24 || hashLen < minLen || hashLen > 1024)
-    throw new Error(`hashToPrivateScalar: expected ${minLen}-1024 bytes of input, got ${hashLen}`);
+    throw new Error(`expected ${minLen}-1024 bytes of input, got ${hashLen}`);
   const num = isLE ? bytesToNumberLE(hash) : bytesToNumberBE(hash);
+  // `mod(x, 11)` can sometimes produce 0. `mod(x, 10) + 1` is the same, but no 0
   return mod(num, groupOrder - _1n) + _1n;
 }
