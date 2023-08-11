@@ -845,13 +845,15 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     normPrivateKeyToScalar: normPrivateKeyToScalar,
 
     /**
-     * Produces cryptographically secure private key from random of size (nBitLength+64)
-     * as per FIPS 186 B.4.1 with modulo bias being neglible.
+     * Produces cryptographically secure private key from random of size
+     * (groupLen + ceil(groupLen / 2)) with modulo bias being negligible.
      */
     randomPrivateKey: (): Uint8Array => {
-      const rand = CURVE.randomBytes(Fp.BYTES + 8);
+      const groupLen = CURVE.nByteLength;
+      const bytesTaken = groupLen + Math.ceil(groupLen / 2); // e.g. 48b for 32b field
+      const rand = CURVE.randomBytes(bytesTaken);
       const num = mod.hashToPrivateScalar(rand, CURVE_ORDER);
-      return ut.numberToBytesBE(num, CURVE.nByteLength);
+      return ut.numberToBytesBE(num, groupLen);
     },
 
     /**

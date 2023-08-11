@@ -189,7 +189,10 @@ export function bls<Fp2, Fp6, Fp12>(
 
   const utils = {
     randomPrivateKey: (): Uint8Array => {
-      return Fr.toBytes(hashToPrivateScalar(CURVE.randomBytes(groupLen + 8), CURVE.params.r));
+      const bytesTaken = groupLen + Math.ceil(groupLen / 2); // e.g. 48b for 32b field
+      const rand = CURVE.randomBytes(bytesTaken);
+      const num = hashToPrivateScalar(rand, Fr.ORDER);
+      return Fr.toBytes(num);
     },
     calcPairingPrecomputes,
   };
