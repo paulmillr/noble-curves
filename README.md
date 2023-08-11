@@ -166,7 +166,12 @@ edwardsToMontgomeryPriv(ed25519.utils.randomPrivateKey());
 // hash-to-curve, ristretto255
 import { utf8ToBytes } from '@noble/hashes/utils';
 import { sha512 } from '@noble/hashes/sha512';
-import { hashToCurve, encodeToCurve, RistrettoPoint, hash_to_ristretto255 } from '@noble/curves/ed25519';
+import {
+  hashToCurve,
+  encodeToCurve,
+  RistrettoPoint,
+  hashToRistretto255,
+} from '@noble/curves/ed25519';
 
 const msg = utf8ToBytes('Ristretto is traditionally a short shot of espresso coffee');
 hashToCurve(msg);
@@ -179,7 +184,7 @@ RistrettoPoint.ZERO.equals(dp) === false;
 // pre-hashed hash-to-curve
 RistrettoPoint.hashToCurve(sha512(msg));
 // full hash-to-curve including domain separation tag
-hash_to_ristretto255(msg, { DST: 'ristretto255_XMD:SHA-512_R255MAP_RO_' });
+hashToRistretto255(msg, { DST: 'ristretto255_XMD:SHA-512_R255MAP_RO_' });
 ```
 
 #### ed448, X448, decaf448
@@ -207,7 +212,7 @@ edwardsToMontgomeryPub(ed448.getPublicKey(ed448.utils.randomPrivateKey()));
 // hash-to-curve, decaf448
 import { utf8ToBytes } from '@noble/hashes/utils';
 import { shake256 } from '@noble/hashes/sha3';
-import { hashToCurve, encodeToCurve, DecafPoint, hash_to_decaf448 } from '@noble/curves/ed448';
+import { hashToCurve, encodeToCurve, DecafPoint, hashToDecaf448 } from '@noble/curves/ed448';
 
 const msg = utf8ToBytes('Ristretto is traditionally a short shot of espresso coffee');
 hashToCurve(msg);
@@ -220,7 +225,7 @@ DecafPoint.ZERO.equals(dp) === false;
 // pre-hashed hash-to-curve
 DecafPoint.hashToCurve(shake256(msg, { dkLen: 112 }));
 // full hash-to-curve including domain separation tag
-hash_to_decaf448(msg, { DST: 'decaf448_XOF:SHAKE256_D448MAP_RO_' });
+hashToDecaf448(msg, { DST: 'decaf448_XOF:SHAKE256_D448MAP_RO_' });
 ```
 
 Same RFC7748 / RFC8032 / IRTF draft are followed.
@@ -295,8 +300,9 @@ type CHash = {
 ```
 
 **Message hash** is expected instead of message itself:
-    - `.sign(msgHash, privKey)` is default behavior, you need to do `msgHash = hash(msg)` before
-    - `.sign(msg, privKey, {prehash: true})` if you want the library to handle hashing for you
+
+- `sign(msgHash, privKey)` is default behavior, assuming you pre-hash msg with sha2, or other hash
+- `sign(msg, privKey, {prehash: true})` option can be used if you want to pass the message itself
 
 **Weierstrass points:**
 
@@ -393,7 +399,7 @@ More examples:
 const priv = secq256k1.utils.randomPrivateKey();
 secq256k1.getPublicKey(priv); // Convert private key to public.
 const sig = secq256k1.sign(msg, priv); // Sign msg with private key.
-const sig2 = secq256k1.sign(msg, priv, {prehash: true}); // hash(msg)
+const sig2 = secq256k1.sign(msg, priv, { prehash: true }); // hash(msg)
 secq256k1.verify(sig, msg, priv); // Verify if sig is correct.
 
 const Point = secq256k1.ProjectivePoint;
@@ -701,12 +707,12 @@ hashes arbitrary-length byte strings to a list of one or more elements of a fini
  */
 type UnicodeOrBytes = string | Uint8Array;
 type Opts = {
-    DST: UnicodeOrBytes;
-    p: bigint;
-    m: number;
-    k: number;
-    expand?: 'xmd' | 'xof';
-    hash: CHash;
+  DST: UnicodeOrBytes;
+  p: bigint;
+  m: number;
+  k: number;
+  expand?: 'xmd' | 'xof';
+  hash: CHash;
 };
 
 /**
@@ -760,26 +766,39 @@ mod.invert(17n, 10n); // invert(17) mod 10; modular multiplicative inverse
 mod.invertBatch([1n, 2n, 4n], 21n); // => [1n, 11n, 16n] in one inversion
 ```
 
+Field operations are not constant-time: they are using JS bigints, see [security](#security).
+The fact is mostly irrelevant, but the important method to keep in mind is `pow`,
+which may leak exponent bits, when used naïvely.
+
+`mod.Field` is always **field over prime**. Non-prime fields aren't supported for now.
+We don't test for prime-ness for speed and because algorithms are probabilistic anyway.
+Initializing a non-prime field could make your app suspectible to
+DoS (infilite loop) on Tonelli-Shanks square root calculation.
+
+Unlike `mod.invert`, `mod.invertBatch` won't throw on `0`: make sure to throw an error yourself.
+
 #### Creating private keys from hashes
 
-Suppose you have `sha256(something)` (e.g. from HMAC) and you want to make a private key from it.
-Even though p256 or secp256k1 may have 32-byte private keys,
-and sha256 output is also 32-byte, you can't just use it and reduce it modulo `CURVE.n`.
+You can't simply make a 32-byte private key from a 32-byte hash.
+Doing so will make the key [biased](https://research.kudelskisecurity.com/2020/07/28/the-definitive-guide-to-modulo-bias-and-how-to-avoid-it/).
 
-Doing so will make the result key [biased](https://research.kudelskisecurity.com/2020/07/28/the-definitive-guide-to-modulo-bias-and-how-to-avoid-it/).
+It may be tempting to do `sha256(something)` (or pbkdf2 / hmac-sha256),
+convert the result to bigint, and modulo-reduce the result output by `CURVE.n`,
+but you need more bytes for proper security.
 
-To avoid the bias, we implement FIPS 186 B.4.1, which allows to take arbitrary
-byte array and produce valid scalars / private keys with bias being neglible.
+To make the bias negligible, we follow [FIPS 186-5 A.2](https://csrc.nist.gov/publications/detail/fips/186/5/final)
+and [h2c standard](https://www.ietf.org/archive/id/draft-irtf-cfrg-hash-to-curve-16.html#name-hashing-to-a-finite-field).
+This means, for 32-byte key, we would need 48-byte hash to get 2^-128 bias, which matches curve security level.
 
-Use [hash-to-curve](#abstracthash-to-curve-hashing-strings-to-curve-points) if you need
-hashing to **public keys**; the function in the module instead operates on **private keys**.
+Use [abstract/hash-to-curve](#abstracthash-to-curve-hashing-strings-to-curve-points) if you need
+to hash to **public key**. `hashToPrivateScalar()` operates instead on **private keys**.
 
 ```ts
 import { p256 } from '@noble/curves/p256';
 import { sha256 } from '@noble/hashes/sha256';
 import { hkdf } from '@noble/hashes/hkdf';
 const someKey = new Uint8Array(32).fill(2); // Needs to actually be random, not .fill(2)
-const derived = hkdf(sha256, someKey, undefined, 'application', 40); // 40 bytes
+const derived = hkdf(sha256, someKey, undefined, 'application', 48); // 48 bytes for 32-byte priv
 const validPrivateKey = mod.hashToPrivateScalar(derived, p256.CURVE.n);
 ```
 
@@ -805,18 +824,36 @@ utils.equalBytes(Uint8Array.from([0xde]), Uint8Array.from([0xde]));
 
 ## Security
 
-1. The library has been audited in Feb 2023 by an independent security firm [Trail of Bits](https://www.trailofbits.com):
-[PDF](https://github.com/trailofbits/publications/blob/master/reviews/2023-01-ryanshea-noblecurveslibrary-securityreview.pdf).
-The audit has been funded by [Ryan Shea](https://www.shea.io). Audit scope was abstract modules `curve`, `hash-to-curve`, `modular`, `poseidon`, `utils`, `weierstrass`, and top-level modules `_shortw_utils` and `secp256k1`. See [changes since audit](https://github.com/paulmillr/noble-curves/compare/0.7.3..main).
-2. The library has been fuzzed by [Guido Vranken's cryptofuzz](https://github.com/guidovranken/cryptofuzz). You can run the fuzzer by yourself to check it.
-3. [Timing attack](https://en.wikipedia.org/wiki/Timing_attack) considerations: _JIT-compiler_ and _Garbage Collector_ make "constant time" extremely hard to achieve in a scripting language. Which means _any other JS library can't have constant-timeness_. Even statically typed Rust, a language without GC, [makes it harder to achieve constant-time](https://www.chosenplaintext.ca/open-source/rust-timing-shield/security) for some cases. If your goal is absolute security, don't use any JS lib — including bindings to native ones. Use low-level libraries & languages. Nonetheless we're targetting algorithmic constant time.
+1. The library has been independently audited:
 
-We consider infrastructure attacks like rogue NPM modules very important; that's why it's crucial to minimize the amount of 3rd-party dependencies & native bindings. If your app uses 500 dependencies, any dep could get hacked and you'll be downloading malware with every `npm install`. Our goal is to minimize this attack vector. As for devDependencies used by the library:
+- in Feb 2023 by [Trail of Bits](https://www.trailofbits.com):
+  [PDF](https://github.com/trailofbits/publications/blob/master/reviews/2023-01-ryanshea-noblecurveslibrary-securityreview.pdf).
+  The audit has been funded by [Ryan Shea](https://www.shea.io).
+  Audit scope was abstract modules `curve`, `hash-to-curve`, `modular`, `poseidon`, `utils`, `weierstrass`,
+  and top-level modules `_shortw_utils` and `secp256k1`.
+  See [changes since v0.7.3 audit](https://github.com/paulmillr/noble-curves/compare/0.7.3..main).
 
-- `@scure` base, bip32, bip39 (used in tests), micro-bmark (benchmark), micro-should (testing) are developed by us
-  and follow the same practices such as: minimal library size, auditability, signed releases
-- prettier (linter), fast-check (property-based testing),
-  typescript versions are locked and rarely updated. Every update is checked with `npm-diff`.
+2. The library has been fuzzed by [Guido Vranken's cryptofuzz](https://github.com/guidovranken/cryptofuzz).
+   You can run the fuzzer by yourself to check it.
+3. [Timing attack](https://en.wikipedia.org/wiki/Timing_attack) considerations:
+   _JIT-compiler_ and _Garbage Collector_ make "constant time" extremely hard to
+   achieve in a scripting language. Which means _any other JS library can't have
+   constant-timeness_. Even statically typed Rust, a language without GC,
+   [makes it harder to achieve constant-time](https://www.chosenplaintext.ca/open-source/rust-timing-shield/security)
+   for some cases. If your goal is absolute security, don't use any JS lib — including bindings to native ones.
+   Use low-level libraries & languages. Nonetheless we're targetting algorithmic constant time.
+
+We consider infrastructure attacks like rogue NPM modules very important;
+that's why it's crucial to minimize the amount of 3rd-party dependencies & native bindings.
+If your app uses 500 dependencies, any dep could get hacked and you'll be
+downloading malware with every `npm install`. Our goal is to minimize this attack vector.
+As for devDependencies used by the library:
+
+- `@scure` base, bip32, bip39 (used in tests), micro-bmark (benchmark), micro-should (testing)
+  are developed by us and follow the same practices such as: minimal library size, auditability,
+  signed releases
+- prettier (linter), fast-check (property-based testing), typescript versions
+  are locked and rarely updated. Every update is checked with `npm-diff`.
   The packages are big, which makes it hard to audit their source code thoroughly and fully.
 - They are only used if you clone the git repo and want to add some feature to it. End-users won't use them.
 
@@ -926,24 +963,24 @@ Upgrading from @noble/secp256k1 2.0 or @noble/ed25519 2.0: no changes, libraries
 Upgrading from [@noble/secp256k1](https://github.com/paulmillr/noble-secp256k1) 1.7:
 
 - `getPublicKey`
-    - now produce 33-byte compressed signatures by default
-    - to use old behavior, which produced 65-byte uncompressed keys, set
-      argument `isCompressed` to `false`: `getPublicKey(priv, false)`
+  - now produce 33-byte compressed signatures by default
+  - to use old behavior, which produced 65-byte uncompressed keys, set
+    argument `isCompressed` to `false`: `getPublicKey(priv, false)`
 - `sign`
-    - is now sync; use `signAsync` for async version
-    - now returns `Signature` instance with `{ r, s, recovery }` properties
-    - `canonical` option was renamed to `lowS`
-    - `recovered` option has been removed because recovery bit is always returned now
-    - `der` option has been removed. There are 2 options:
-        1. Use compact encoding: `fromCompact`, `toCompactRawBytes`, `toCompactHex`.
-           Compact encoding is simply a concatenation of 32-byte r and 32-byte s.
-        2. If you must use DER encoding, switch to noble-curves (see above).
+  - is now sync; use `signAsync` for async version
+  - now returns `Signature` instance with `{ r, s, recovery }` properties
+  - `canonical` option was renamed to `lowS`
+  - `recovered` option has been removed because recovery bit is always returned now
+  - `der` option has been removed. There are 2 options:
+    1. Use compact encoding: `fromCompact`, `toCompactRawBytes`, `toCompactHex`.
+       Compact encoding is simply a concatenation of 32-byte r and 32-byte s.
+    2. If you must use DER encoding, switch to noble-curves (see above).
 - `verify`
-    - `strict` option was renamed to `lowS`
+  - `strict` option was renamed to `lowS`
 - `getSharedSecret`
-    - now produce 33-byte compressed signatures by default
-    - to use old behavior, which produced 65-byte uncompressed keys, set
-      argument `isCompressed` to `false`: `getSharedSecret(a, b, false)`
+  - now produce 33-byte compressed signatures by default
+  - to use old behavior, which produced 65-byte uncompressed keys, set
+    argument `isCompressed` to `false`: `getSharedSecret(a, b, false)`
 - `recoverPublicKey(msg, sig, rec)` was changed to `sig.recoverPublicKey(msg)`
 - `number` type for private keys have been removed: use `bigint` instead
 - `Point` (2d xy) has been changed to `ProjectivePoint` (3d xyz)
@@ -964,30 +1001,30 @@ Upgrading from [@noble/ed25519](https://github.com/paulmillr/noble-ed25519) 1.7:
 Upgrading from [@noble/bls12-381](https://github.com/paulmillr/noble-bls12-381):
 
 - Methods and classes were renamed:
-    - PointG1 -> G1.Point, PointG2 -> G2.Point
-    - PointG2.fromSignature -> Signature.decode, PointG2.toSignature ->  Signature.encode
+  - PointG1 -> G1.Point, PointG2 -> G2.Point
+  - PointG2.fromSignature -> Signature.decode, PointG2.toSignature -> Signature.encode
 - Fp2 ORDER was corrected
 
 ## Resources
 
 - [Learning fast elliptic-curve cryptography](https://paulmillr.com/posts/noble-secp256k1-fast-ecc/)
 - EdDSA
-    - [A Deep dive into Ed25519 Signatures](https://cendyne.dev/posts/2022-03-06-ed25519-signatures.html)
-    - [Ed25519 Deep Dive Addendum](https://cendyne.dev/posts/2022-09-11-ed25519-deep-dive-addendum.html)
-    - [It’s 255:19AM. Do you know what your validation criteria are?](https://hdevalence.ca/blog/2020-10-04-its-25519am)
-    - [Taming the many EdDSAs](https://csrc.nist.gov/csrc/media/Presentations/2023/crclub-2023-03-08/images-media/20230308-crypto-club-slides--taming-the-many-EdDSAs.pdf)
-      that describes concepts of Strong UnForgeability under Chosen Message Attacks and Strongly Binding Signatures
-    - [Cofactor Explained: Clearing Elliptic Curves’ dirty little secret](https://loup-vaillant.fr/tutorials/cofactor)
-    - [Surrounded by Elligators](https://loup-vaillant.fr/articles/implementing-elligator)
+  - [A Deep dive into Ed25519 Signatures](https://cendyne.dev/posts/2022-03-06-ed25519-signatures.html)
+  - [Ed25519 Deep Dive Addendum](https://cendyne.dev/posts/2022-09-11-ed25519-deep-dive-addendum.html)
+  - [It’s 255:19AM. Do you know what your validation criteria are?](https://hdevalence.ca/blog/2020-10-04-its-25519am)
+  - [Taming the many EdDSAs](https://csrc.nist.gov/csrc/media/Presentations/2023/crclub-2023-03-08/images-media/20230308-crypto-club-slides--taming-the-many-EdDSAs.pdf)
+    that describes concepts of Strong UnForgeability under Chosen Message Attacks and Strongly Binding Signatures
+  - [Cofactor Explained: Clearing Elliptic Curves’ dirty little secret](https://loup-vaillant.fr/tutorials/cofactor)
+  - [Surrounded by Elligators](https://loup-vaillant.fr/articles/implementing-elligator)
 - Pairings and BLS
-    - [BLS signatures for busy people](https://gist.github.com/paulmillr/18b802ad219b1aee34d773d08ec26ca2)
-    - [BLS12-381 for the rest of us](https://hackmd.io/@benjaminion/bls12-381)
-    - [Key concepts of pairings](https://medium.com/@alonmuroch_65570/bls-signatures-part-2-key-concepts-of-pairings-27a8a9533d0c)
-    - Pairing over bls12-381:
-      [fields](https://research.nccgroup.com/2020/07/06/pairing-over-bls12-381-part-1-fields/),
-      [curves](https://research.nccgroup.com/2020/07/13/pairing-over-bls12-381-part-2-curves/),
-      [pairings](https://research.nccgroup.com/2020/08/13/pairing-over-bls12-381-part-3-pairing/)
-    - [Estimating the bit security of pairing-friendly curves](https://research.nccgroup.com/2022/02/03/estimating-the-bit-security-of-pairing-friendly-curves/)
+  - [BLS signatures for busy people](https://gist.github.com/paulmillr/18b802ad219b1aee34d773d08ec26ca2)
+  - [BLS12-381 for the rest of us](https://hackmd.io/@benjaminion/bls12-381)
+  - [Key concepts of pairings](https://medium.com/@alonmuroch_65570/bls-signatures-part-2-key-concepts-of-pairings-27a8a9533d0c)
+  - Pairing over bls12-381:
+    [fields](https://research.nccgroup.com/2020/07/06/pairing-over-bls12-381-part-1-fields/),
+    [curves](https://research.nccgroup.com/2020/07/13/pairing-over-bls12-381-part-2-curves/),
+    [pairings](https://research.nccgroup.com/2020/08/13/pairing-over-bls12-381-part-3-pairing/)
+  - [Estimating the bit security of pairing-friendly curves](https://research.nccgroup.com/2022/02/03/estimating-the-bit-security-of-pairing-friendly-curves/)
 
 ### Demos
 
@@ -999,27 +1036,27 @@ Upgrading from [@noble/bls12-381](https://github.com/paulmillr/noble-bls12-381):
 - HDkey libraries: [scure-bip32](https://github.com/paulmillr/scure-bip32), [bip32](https://github.com/bitcoinjs/bip32)
 - Social networks: [nostr](https://github.com/nbd-wtf/nostr-tools), [bluesky](https://github.com/bluesky-social/atproto)
 - Ethereum libraries:
-    - [ethereum-cryptography](https://github.com/ethereum/js-ethereum-cryptography)
-    - [micro-eth-signer](https://github.com/paulmillr/micro-eth-signer),
-      [ethers](https://github.com/ethers-io/ethers.js) (old noble),
-      [viem.sh](https://viem.sh),
-      [@ethereumjs](https://github.com/ethereumjs/ethereumjs-monorepo)
-    - [metamask's eth-sig-util](https://github.com/MetaMask/eth-sig-util)
-    - [gridplus lattice sdk](https://github.com/GridPlus/lattice-eth2-utils)
+  - [ethereum-cryptography](https://github.com/ethereum/js-ethereum-cryptography)
+  - [micro-eth-signer](https://github.com/paulmillr/micro-eth-signer),
+    [ethers](https://github.com/ethers-io/ethers.js) (old noble),
+    [viem.sh](https://viem.sh),
+    [@ethereumjs](https://github.com/ethereumjs/ethereumjs-monorepo)
+  - [metamask's eth-sig-util](https://github.com/MetaMask/eth-sig-util)
+  - [gridplus lattice sdk](https://github.com/GridPlus/lattice-eth2-utils)
 - Bitcoin libraries:
-    - [scure-btc-signer](https://github.com/paulmillr/scure-btc-signer)
-    - [tapscript](https://github.com/cmdruid/tapscript)
+  - [scure-btc-signer](https://github.com/paulmillr/scure-btc-signer)
+  - [tapscript](https://github.com/cmdruid/tapscript)
 - Solana libraries: [micro-sol-signer](https://github.com/paulmillr/micro-sol-signer), [solana-web3.js](https://github.com/solana-labs/solana-web3.js)
 - Other web3 stuff:
-    - [micro-starknet](https://github.com/paulmillr/micro-starknet)
-    - [aztec](https://github.com/AztecProtocol/aztec-packages)
-    - [polkadot.js](https://github.com/polkadot-js/common), [drand-client](https://github.com/drand/drand-client), [moneroj](https://github.com/beritani/moneroj), [tronlib](https://github.com/CoinSpace/tronlib)
+  - [micro-starknet](https://github.com/paulmillr/micro-starknet)
+  - [aztec](https://github.com/AztecProtocol/aztec-packages)
+  - [polkadot.js](https://github.com/polkadot-js/common), [drand-client](https://github.com/drand/drand-client), [moneroj](https://github.com/beritani/moneroj), [tronlib](https://github.com/CoinSpace/tronlib)
 - [protonmail](https://github.com/ProtonMail/WebClients) (old noble for now)
 - [did-jwt](https://github.com/decentralized-identity/did-jwt), [hpke-js](https://github.com/dajiaji/hpke-js),
   [js-libp2p-noise](https://github.com/ChainSafe/js-libp2p-noise)
 - [ed25519-keygen](https://github.com/paulmillr/ed25519-keygen) SSH, PGP, TOR key generation
 - [secp256k1 compatibility layer](https://github.com/ethereum/js-ethereum-cryptography/blob/2.0.0/src/secp256k1-compat.ts)
-for users who want to switch from secp256k1-node or tiny-secp256k1. Allows to see which methods map to corresponding noble code.
+  for users who want to switch from secp256k1-node or tiny-secp256k1. Allows to see which methods map to corresponding noble code.
 - [BLS BBS signatures](https://github.com/Wind4Greg/BBS-Draft-Checks) following [draft-irtf-cfrg-bbs-signatures-latest](https://identity.foundation/bbs-signature/draft-irtf-cfrg-bbs-signatures.html)
 - [KZG trusted setup ceremony](https://github.com/dsrvlabs/czg-keremony)
 - See [full list of projects on GitHub](https://github.com/paulmillr/noble-curves/network/dependents).
