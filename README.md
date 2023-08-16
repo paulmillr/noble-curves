@@ -40,10 +40,8 @@ For [Deno](https://deno.land), ensure to use [npm specifier](https://deno.land/m
 For React Native, you may need a [polyfill for crypto.getRandomValues](https://github.com/LinusU/react-native-get-random-values).
 If you don't like NPM, a standalone [noble-curves.js](https://github.com/paulmillr/noble-curves/releases) is also available.
 
-The package consists of two parts:
-implementations (using [noble-hashes](https://github.com/paulmillr/noble-hashes)), and zero-dep abstract api.
-
 - [Usage](#usage)
+- [Implementations](#implementations)
   - [ECDSA signature scheme](#ecdsa-signature-scheme)
   - [ECDSA public key recovery & extra entropy](#ecdsa-public-key-recovery--extra-entropy)
   - [ECDH (Elliptic Curve Diffie-Hellman)](#ecdh-elliptic-curve-diffie-hellman)
@@ -71,6 +69,11 @@ implementations (using [noble-hashes](https://github.com/paulmillr/noble-hashes)
   - [Demos](#demos)
   - [Projects using curves](#projects-using-curves)
 - [License](#license)
+
+### Implementations
+
+Implementations are utilizing [noble-hashes](https://github.com/paulmillr/noble-hashes).
+[Abstract API](#abstract-api) doesn't depend on them: you can use a different hashing library.
 
 #### ECDSA signature scheme
 
