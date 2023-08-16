@@ -43,31 +43,15 @@ If you don't like NPM, a standalone [noble-curves.js](https://github.com/paulmil
 The package consists of two parts:
 implementations (using [noble-hashes](https://github.com/paulmillr/noble-hashes)), and zero-dep abstract api.
 
-Generic example for all curves, shown with secp256k1:
-
-```ts
-// import * from '@noble/curves'; // Error: use sub-imports, to ensure small app size
-import { secp256k1 } from '@noble/curves/secp256k1'; // ESM and Common.js
-// import { secp256k1 } from 'npm:@noble/curves@1.2.0/secp256k1'; // Deno
-const priv = secp256k1.utils.randomPrivateKey();
-const pub = secp256k1.getPublicKey(priv);
-const msg = new Uint8Array(32).fill(1); // message hash (not message) in ecdsa
-const sig = secp256k1.sign(msg, priv); // `{prehash: true}` option is available
-const isValid = secp256k1.verify(sig, msg, pub) === true;
-
-// hex strings are also supported besides Uint8Arrays:
-const privHex = '46c930bc7bb4db7f55da20798697421b98c4175a52c630294d75a84b9c126236';
-const pub2 = secp256k1.getPublicKey(privHex);
-```
-
 - [Usage](#usage)
-  - [Everything](#everything)
-  - [ECDH (Elliptic Curve Diffie-Hellman)](#ecdh-elliptic-curve-diffie-hellman)
+  - [ECDSA signature scheme](#ecdsa-signature-scheme)
   - [ECDSA public key recovery & extra entropy](#ecdsa-public-key-recovery--extra-entropy)
+  - [ECDH (Elliptic Curve Diffie-Hellman)](#ecdh-elliptic-curve-diffie-hellman)
   - [Schnorr signatures over secp256k1, BIP340](#schnorr-signatures-over-secp256k1-bip340)
   - [ed25519, X25519, ristretto255](#ed25519-x25519-ristretto255)
   - [ed448, X448, decaf448](#ed448-x448-decaf448)
   - [bls12-381](#bls12-381)
+  - [All available imports](#all-available-imports)
   - [Accessing a curve's variables](#accessing-a-curves-variables)
 - [Abstract API](#abstract-api)
   - [abstract/weierstrass: Short Weierstrass curve](#abstractweierstrass-short-weierstrass-curve)
@@ -88,29 +72,23 @@ const pub2 = secp256k1.getPublicKey(privHex);
   - [Projects using curves](#projects-using-curves)
 - [License](#license)
 
-#### Everything
+#### ECDSA signature scheme
 
-```typescript
-import { secp256k1, schnorr } from '@noble/curves/secp256k1';
-import { ed25519, ed25519ph, ed25519ctx, x25519, RistrettoPoint } from '@noble/curves/ed25519';
-import { ed448, ed448ph, ed448ctx, x448 } from '@noble/curves/ed448';
-import { p256 } from '@noble/curves/p256';
-import { p384 } from '@noble/curves/p384';
-import { p521 } from '@noble/curves/p521';
-import { pallas, vesta } from '@noble/curves/pasta';
-import { bls12_381 } from '@noble/curves/bls12-381';
-import { bn254 } from '@noble/curves/bn254'; // also known as alt_bn128
-import { jubjub } from '@noble/curves/jubjub';
-import { bytesToHex, hexToBytes, concatBytes, utf8ToBytes } from '@noble/curves/abstract/utils';
-```
-
-#### ECDH (Elliptic Curve Diffie-Hellman)
+Generic example that works for all curves, shown for secp256k1:
 
 ```ts
-// 1. The output includes parity byte. Strip it using shared.slice(1)
-// 2. The output is not hashed. More secure way is sha256(shared) or hkdf(shared)
-const someonesPub = secp256k1.getPublicKey(secp256k1.utils.randomPrivateKey());
-const shared = secp256k1.getSharedSecret(priv, someonesPub);
+// import * from '@noble/curves'; // Error: use sub-imports, to ensure small app size
+import { secp256k1 } from '@noble/curves/secp256k1'; // ESM and Common.js
+// import { secp256k1 } from 'npm:@noble/curves@1.2.0/secp256k1'; // Deno
+const priv = secp256k1.utils.randomPrivateKey();
+const pub = secp256k1.getPublicKey(priv);
+const msg = new Uint8Array(32).fill(1); // message hash (not message) in ecdsa
+const sig = secp256k1.sign(msg, priv); // `{prehash: true}` option is available
+const isValid = secp256k1.verify(sig, msg, pub) === true;
+
+// hex strings are also supported besides Uint8Arrays:
+const privHex = '46c930bc7bb4db7f55da20798697421b98c4175a52c630294d75a84b9c126236';
+const pub2 = secp256k1.getPublicKey(privHex);
 ```
 
 #### ECDSA public key recovery & extra entropy
@@ -120,6 +98,15 @@ sig.recoverPublicKey(msg).toRawBytes(); // === pub; // public key recovery
 
 // extraEntropy https://moderncrypto.org/mail-archive/curves/2017/000925.html
 const sigImprovedSecurity = secp256k1.sign(msg, priv, { extraEntropy: true });
+```
+
+#### ECDH (Elliptic Curve Diffie-Hellman)
+
+```ts
+// 1. The output includes parity byte. Strip it using shared.slice(1)
+// 2. The output is not hashed. More secure way is sha256(shared) or hkdf(shared)
+const someonesPub = secp256k1.getPublicKey(secp256k1.utils.randomPrivateKey());
+const shared = secp256k1.getSharedSecret(priv, someonesPub);
 ```
 
 #### Schnorr signatures over secp256k1 (BIP340)
@@ -153,7 +140,6 @@ It has SUF-CMA (strong unforgeability under chosen message attacks).
 and additionally provides non-repudiation with SBS [(Strongly Binding Signatures)](https://eprint.iacr.org/2020/1244).
 
 X25519 follows [RFC7748](https://www.rfc-editor.org/rfc/rfc7748).
-ristretto255 follows [irtf draft](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-ristretto255-decaf448).
 
 ```ts
 // Variants from RFC8032: with context, prehashed
@@ -171,7 +157,11 @@ x25519.getPublicKey(x25519.utils.randomPrivateKey());
 import { edwardsToMontgomeryPub, edwardsToMontgomeryPriv } from '@noble/curves/ed25519';
 edwardsToMontgomeryPub(ed25519.getPublicKey(ed25519.utils.randomPrivateKey()));
 edwardsToMontgomeryPriv(ed25519.utils.randomPrivateKey());
+```
 
+ristretto255 follows [irtf draft](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-ristretto255-decaf448).
+
+```ts
 // hash-to-curve, ristretto255
 import { utf8ToBytes } from '@noble/hashes/utils';
 import { sha512 } from '@noble/hashes/sha512';
@@ -208,8 +198,11 @@ ed448.verify(sig, msg, pub);
 
 // Variants from RFC8032: prehashed
 import { ed448ph } from '@noble/curves/ed448';
+```
 
-// ECDH using curve448 aka x448
+ECDH using Curve448 aka X448, follows [RFC7748](https://www.rfc-editor.org/rfc/rfc7748).
+
+```ts
 import { x448 } from '@noble/curves/ed448';
 x448.getSharedSecret(priv, pub) === x448.scalarMult(priv, pub); // aliases
 x448.getPublicKey(priv) === x448.scalarMultBase(priv);
@@ -217,8 +210,11 @@ x448.getPublicKey(priv) === x448.scalarMultBase(priv);
 // ed448 => x448 conversion
 import { edwardsToMontgomeryPub } from '@noble/curves/ed448';
 edwardsToMontgomeryPub(ed448.getPublicKey(ed448.utils.randomPrivateKey()));
+```
 
-// hash-to-curve, decaf448
+decaf448 follows [irtf draft](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-ristretto255-decaf448).
+
+```ts
 import { utf8ToBytes } from '@noble/hashes/utils';
 import { shake256 } from '@noble/hashes/sha3';
 import { hashToCurve, encodeToCurve, DecafPoint, hashToDecaf448 } from '@noble/curves/ed448';
@@ -242,6 +238,22 @@ Same RFC7748 / RFC8032 / IRTF draft are followed.
 #### bls12-381
 
 See [abstract/bls](#abstractbls-barreto-lynn-scott-curves).
+
+#### All available imports
+
+```typescript
+import { secp256k1, schnorr } from '@noble/curves/secp256k1';
+import { ed25519, ed25519ph, ed25519ctx, x25519, RistrettoPoint } from '@noble/curves/ed25519';
+import { ed448, ed448ph, ed448ctx, x448 } from '@noble/curves/ed448';
+import { p256 } from '@noble/curves/p256';
+import { p384 } from '@noble/curves/p384';
+import { p521 } from '@noble/curves/p521';
+import { pallas, vesta } from '@noble/curves/pasta';
+import { bls12_381 } from '@noble/curves/bls12-381';
+import { bn254 } from '@noble/curves/bn254'; // also known as alt_bn128
+import { jubjub } from '@noble/curves/jubjub';
+import { bytesToHex, hexToBytes, concatBytes, utf8ToBytes } from '@noble/curves/abstract/utils';
+```
 
 #### Accessing a curve's variables
 
