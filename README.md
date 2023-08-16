@@ -62,8 +62,9 @@ const pub2 = secp256k1.getPublicKey(privHex);
 
 - [Usage](#usage)
   - [Everything](#everything)
-  - [ECDSA public key recovery & ECDH](#ecdsa-public-key-recovery--ecdh)
-  - [Schnorr signatures over secp256k1 BIP340](#schnorr-signatures-over-secp256k1-bip340)
+  - [ECDH (Elliptic Curve Diffie-Hellman)](#ecdh-elliptic-curve-diffie-hellman)
+  - [ECDSA public key recovery & extra entropy](#ecdsa-public-key-recovery--extra-entropy)
+  - [Schnorr signatures over secp256k1, BIP340](#schnorr-signatures-over-secp256k1-bip340)
   - [ed25519, X25519, ristretto255](#ed25519-x25519-ristretto255)
   - [ed448, X448, decaf448](#ed448-x448-decaf448)
   - [bls12-381](#bls12-381)
@@ -103,14 +104,22 @@ import { jubjub } from '@noble/curves/jubjub';
 import { bytesToHex, hexToBytes, concatBytes, utf8ToBytes } from '@noble/curves/abstract/utils';
 ```
 
-#### ECDSA public key recovery & ECDH
+#### ECDH (Elliptic Curve Diffie-Hellman)
 
 ```ts
+// 1. The output includes parity byte. Strip it using shared.slice(1)
+// 2. The output is not hashed. More secure way is sha256(shared) or hkdf(shared)
+const someonesPub = secp256k1.getPublicKey(secp256k1.utils.randomPrivateKey());
+const shared = secp256k1.getSharedSecret(priv, someonesPub);
+```
+
+#### ECDSA public key recovery & extra entropy
+
+```ts
+sig.recoverPublicKey(msg).toRawBytes(); // === pub; // public key recovery
+
 // extraEntropy https://moderncrypto.org/mail-archive/curves/2017/000925.html
 const sigImprovedSecurity = secp256k1.sign(msg, priv, { extraEntropy: true });
-sig.recoverPublicKey(msg).toRawBytes(); // === pub; // public key recovery
-const someonesPub = secp256k1.getPublicKey(secp256k1.utils.randomPrivateKey());
-const shared = secp256k1.getSharedSecret(priv, someonesPub); // ECDH
 ```
 
 #### Schnorr signatures over secp256k1 (BIP340)
@@ -547,6 +556,8 @@ use aggregated, batch-verifiable
 [threshold signatures](https://medium.com/snigirev.stepan/bls-signatures-better-than-schnorr-5a7fe30ea716),
 using Boneh-Lynn-Shacham signature scheme.
 
+The module doesn't expose `CURVE` property: use `G1.CURVE`, `G2.CURVE` instead.
+
 Main methods and properties are:
 
 - `getPublicKey(privateKey)`
@@ -782,16 +793,13 @@ Unlike `mod.invert`, `mod.invertBatch` won't throw on `0`: make sure to throw an
 You can't simply make a 32-byte private key from a 32-byte hash.
 Doing so will make the key [biased](https://research.kudelskisecurity.com/2020/07/28/the-definitive-guide-to-modulo-bias-and-how-to-avoid-it/).
 
-It may be tempting to do `sha256(something)` (or pbkdf2 / hmac-sha256),
-convert the result to bigint, and modulo-reduce the result output by `CURVE.n`,
-but you need more bytes for proper security.
-
 To make the bias negligible, we follow [FIPS 186-5 A.2](https://csrc.nist.gov/publications/detail/fips/186/5/final)
 and [h2c standard](https://www.ietf.org/archive/id/draft-irtf-cfrg-hash-to-curve-16.html#name-hashing-to-a-finite-field).
 This means, for 32-byte key, we would need 48-byte hash to get 2^-128 bias, which matches curve security level.
 
-Use [abstract/hash-to-curve](#abstracthash-to-curve-hashing-strings-to-curve-points) if you need
-to hash to **public key**. `hashToPrivateScalar()` operates instead on **private keys**.
+`hashToPrivateScalar()` that hashes to **private key** was created for this purpose.
+Use [abstract/hash-to-curve](#abstracthash-to-curve-hashing-strings-to-curve-points)
+if you need to hash to **public key**.
 
 ```ts
 import { p256 } from '@noble/curves/p256';
