@@ -420,9 +420,9 @@ export function hashToPrivateScalar(
 ): bigint {
   hash = ensureBytes('privateHash', hash);
   const hashLen = hash.length;
-  const minLen = nLength(groupOrder).nByteLength + 8; // 8b (64 bits) gives 2^-64 bias
+  const minLen = nLength(groupOrder).nByteLength + 8;
   if (minLen < 24 || hashLen < minLen || hashLen > 1024)
-    throw new Error(`expected ${minLen}-1024 bytes of input, got ${hashLen}`);
+    throw new Error(`hashToPrivateScalar: expected ${minLen}-1024 bytes of input, got ${hashLen}`);
   const num = isLE ? bytesToNumberLE(hash) : bytesToNumberBE(hash);
   return mod(num, groupOrder - _1n) + _1n;
 }
