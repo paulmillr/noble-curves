@@ -12,7 +12,7 @@
  * Some projects may prefer to swap this relation, it is not supported for now.
  */
 import { AffinePoint } from './curve.js';
-import { IField, hashToPrivateScalar } from './modular.js';
+import { IField, getMinHashLength, mapHashToField } from './modular.js';
 import { Hex, PrivKey, CHash, bitLen, bitGet, ensureBytes } from './utils.js';
 import * as htf from './hash-to-curve.js';
 import {
@@ -189,10 +189,8 @@ export function bls<Fp2, Fp6, Fp12>(
 
   const utils = {
     randomPrivateKey: (): Uint8Array => {
-      const bytesTaken = groupLen + Math.ceil(groupLen / 2); // e.g. 48b for 32b field
-      const rand = CURVE.randomBytes(bytesTaken);
-      const num = hashToPrivateScalar(rand, Fr.ORDER);
-      return Fr.toBytes(num);
+      const length = getMinHashLength(Fr.ORDER);
+      return mapHashToField(CURVE.randomBytes(length), Fr.ORDER);
     },
     calcPairingPrecomputes,
   };

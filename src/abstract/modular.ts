@@ -409,16 +409,9 @@ export function FpSqrtEven<T>(Fp: IField<T>, elm: T) {
 
 /**
  * "Constant-time" private key generation utility.
- * Can take (n + 8) or more bytes of uniform input e.g. from CSPRNG or KDF
- * and convert them into private scalar, with the modulo bias being negligible.
- * Needs at least 40 bytes of input for 32-byte private key.
- * https://research.kudelskisecurity.com/2020/07/28/the-definitive-guide-to-modulo-bias-and-how-to-avoid-it/
- * FIPS 186-5, A.2 https://csrc.nist.gov/publications/detail/fips/186/5/final
- * hash-to-curve, https://www.ietf.org/archive/id/draft-irtf-cfrg-hash-to-curve-16.html#name-hashing-to-a-finite-field
- * @param hash hash output from SHA3 or a similar function
- * @param groupOrder size of subgroup - (e.g. secp256k1.CURVE.n)
- * @param isLE interpret hash bytes as LE num
- * @returns valid private scalar
+ * Same as mapKeyToField, but accepts less bytes (40 instead of 48 for 32-byte field).
+ * Which makes it slightly more biased, less secure.
+ * @deprecated use mapKeyToField instead
  */
 export function hashToPrivateScalar(
   hash: string | Uint8Array,
@@ -428,11 +421,43 @@ export function hashToPrivateScalar(
   hash = ensureBytes('privateHash', hash);
   const hashLen = hash.length;
   const minLen = nLength(groupOrder).nByteLength + 8; // 8b (64 bits) gives 2^-64 bias
-  // Small numbers aren't supported: need to understand their security / bias story first.
-  // Huge numbers aren't supported for security: it's easier to detect timings of their ops in JS.
   if (minLen < 24 || hashLen < minLen || hashLen > 1024)
     throw new Error(`expected ${minLen}-1024 bytes of input, got ${hashLen}`);
   const num = isLE ? bytesToNumberLE(hash) : bytesToNumberBE(hash);
-  // `mod(x, 11)` can sometimes produce 0. `mod(x, 10) + 1` is the same, but no 0
   return mod(num, groupOrder - _1n) + _1n;
+}
+
+export function getFieldBytesLength(fieldOrder: bigint): number {
+  return nLength(fieldOrder).nByteLength;
+}
+
+export function getMinHashLength(fieldOrder: bigint): number {
+  const length = getFieldBytesLength(fieldOrder);
+  return length + Math.ceil(length / 2);
+}
+
+/**
+ * "Constant-time" private key generation utility.
+ * Can take (n + n/2) or more bytes of uniform input e.g. from CSPRNG or KDF
+ * and convert them into private scalar, with the modulo bias being negligible.
+ * Needs at least 48 bytes of input for 32-byte private key.
+ * https://research.kudelskisecurity.com/2020/07/28/the-definitive-guide-to-modulo-bias-and-how-to-avoid-it/
+ * FIPS 186-5, A.2 https://csrc.nist.gov/publications/detail/fips/186/5/final
+ * hash-to-curve, https://www.ietf.org/archive/id/draft-irtf-cfrg-hash-to-curve-16.html#name-hashing-to-a-finite-field
+ * @param hash hash output from SHA3 or a similar function
+ * @param groupOrder size of subgroup - (e.g. secp256k1.CURVE.n)
+ * @param isLE interpret hash bytes as LE num
+ * @returns valid private scalar
+ */
+export function mapHashToField(key: Uint8Array, fieldOrder: bigint, isLE = false): Uint8Array {
+  const len = key.length;
+  const fieldLen = getFieldBytesLength(fieldOrder);
+  const minLen = getMinHashLength(fieldOrder);
+  // No small numbers: need to understand bias story. No huge numbers: easier to detect JS timings.
+  if (len < 16 || len < minLen || len > 1024)
+    throw new Error(`expected ${minLen}-1024 bytes of input, got ${len}`);
+  const num = isLE ? bytesToNumberBE(key) : bytesToNumberLE(key);
+  // `mod(x, 11)` can sometimes produce 0. `mod(x, 10) + 1` is the same, but no 0
+  const reduced = mod(num, fieldOrder - _1n) + _1n;
+  return isLE ? numberToBytesLE(reduced, fieldLen) : numberToBytesBE(reduced, fieldLen)
 }

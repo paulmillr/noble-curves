@@ -13,9 +13,6 @@ Audited & minimal JS implementation of elliptic curve cryptography.
   for encoding or hashing an arbitrary string to an elliptic curve point
 - 🧜‍♂️ Poseidon ZK-friendly hash
 
-Check out [Upgrading](#upgrading) if you've previously used single-feature noble
-packages. See [Resources](#resources) for articles and real-world software that uses curves.
-
 ### This library belongs to _noble_ crypto
 
 > **noble-crypto** — high-security, easily auditable set of contained cryptographic libraries and tools.
@@ -40,7 +37,6 @@ For [Deno](https://deno.land), ensure to use [npm specifier](https://deno.land/m
 For React Native, you may need a [polyfill for crypto.getRandomValues](https://github.com/LinusU/react-native-get-random-values).
 If you don't like NPM, a standalone [noble-curves.js](https://github.com/paulmillr/noble-curves/releases) is also available.
 
-- [Usage](#usage)
 - [Implementations](#implementations)
   - [ECDSA signature scheme](#ecdsa-signature-scheme)
   - [ECDSA public key recovery & extra entropy](#ecdsa-public-key-recovery--extra-entropy)

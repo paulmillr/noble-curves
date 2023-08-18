@@ -849,11 +849,8 @@ export function weierstrass(curveDef: CurveType): CurveFn {
      * (groupLen + ceil(groupLen / 2)) with modulo bias being negligible.
      */
     randomPrivateKey: (): Uint8Array => {
-      const groupLen = CURVE.nByteLength;
-      const bytesTaken = groupLen + Math.ceil(groupLen / 2); // e.g. 48b for 32b field
-      const rand = CURVE.randomBytes(bytesTaken);
-      const num = mod.hashToPrivateScalar(rand, CURVE_ORDER);
-      return ut.numberToBytesBE(num, groupLen);
+      const length = mod.getMinHashLength(CURVE.n);
+      return mod.mapHashToField(CURVE.randomBytes(length), CURVE.n);
     },
 
     /**
