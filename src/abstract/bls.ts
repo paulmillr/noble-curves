@@ -79,6 +79,11 @@ export type CurveFn<Fp, Fp2, Fp6, Fp12> = {
     message: Hex | ProjPointType<Fp2>,
     publicKey: Hex | ProjPointType<Fp>
   ) => boolean;
+  verifyShortSignature: (
+    signature: Hex | ProjPointType<Fp>,
+    message: Hex | ProjPointType<Fp>,
+    publicKey: Hex | ProjPointType<Fp2>
+  ) => boolean;
   verifyBatch: (
     signature: Hex | ProjPointType<Fp2>,
     messages: (Hex | ProjPointType<Fp2>)[],
@@ -254,6 +259,11 @@ export function bls<Fp2, Fp6, Fp12>(
   function normP1(point: G1Hex): G1 {
     return point instanceof G1.ProjectivePoint ? (point as G1) : G1.ProjectivePoint.fromHex(point);
   }
+  function normP1Hash(point: G1Hex, htfOpts?: htf.htfBasicOpts): G1 {
+    return point instanceof G1.ProjectivePoint
+      ? point
+      : (G1.hashToCurve(ensureBytes('point', point), htfOpts) as G1);
+  }
   function normP2(point: G2Hex): G2 {
     return point instanceof G2.ProjectivePoint ? point : Signature.fromHex(point);
   }
@@ -298,6 +308,26 @@ export function bls<Fp2, Fp6, Fp12>(
     const ePHm = pairing(P.negate(), Hm, false);
     const eGS = pairing(G, S, false);
     const exp = Fp12.finalExponentiate(Fp12.mul(eGS, ePHm));
+    return Fp12.eql(exp, Fp12.ONE);
+  }
+
+  // Checks if pairing of public key & hash is equal to pairing of generator & signature.
+  // e(S, G) == e(H(m), P)
+  function verifyShortSignature(
+    signature: G1Hex,
+    message: G1Hex,
+    publicKey: G2Hex,
+    htfOpts?: htf.htfBasicOpts
+  ): boolean {
+    const P = normP2(publicKey);
+    const Hm = normP1Hash(message, htfOpts);
+    const G = G2.ProjectivePoint.BASE;
+    const S = normP1(signature);
+    // Instead of doing 2 exponentiations, we use property of billinear maps
+    // and do one exp after multiplying 2 points.
+    const eHmP = pairing(Hm, P, false);
+    const eSG = pairing(S, G.negate(), false);
+    const exp = Fp12.finalExponentiate(Fp12.mul(eSG, eHmP));
     return Fp12.eql(exp, Fp12.ONE);
   }
 
@@ -376,6 +406,7 @@ export function bls<Fp2, Fp6, Fp12>(
     sign,
     verify,
     verifyBatch,
+    verifyShortSignature,
     aggregatePublicKeys,
     aggregateSignatures,
     millerLoop,
