@@ -459,5 +459,5 @@ export function mapHashToField(key: Uint8Array, fieldOrder: bigint, isLE = false
   const num = isLE ? bytesToNumberBE(key) : bytesToNumberLE(key);
   // `mod(x, 11)` can sometimes produce 0. `mod(x, 10) + 1` is the same, but no 0
   const reduced = mod(num, fieldOrder - _1n) + _1n;
-  return isLE ? numberToBytesLE(reduced, fieldLen) : numberToBytesBE(reduced, fieldLen)
+  return isLE ? numberToBytesLE(reduced, fieldLen) : numberToBytesBE(reduced, fieldLen);
 }

@@ -122,7 +122,6 @@ export function bls<Fp2, Fp6, Fp12>(
   // Fields are specific for curve, so for now we'll need to pass them with opts
   const { Fp, Fr, Fp2, Fp6, Fp12 } = CURVE.fields;
   const BLS_X_LEN = bitLen(CURVE.params.x);
-  const groupLen = 32; // TODO: calculate; hardcoded for now
 
   // Pre-compute coefficients for sparse multiplication
   // Point addition and point double calculations is reused for coefficients
