@@ -333,9 +333,11 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
 
     // A point on curve is valid if it conforms to equation.
     assertValidity(): void {
-      // Zero is valid point too!
       if (this.is0()) {
-        if (CURVE.allowInfinityPoint) return;
+        // (0, 1, 0) aka ZERO is invalid in most contexts.
+        // In BLS, ZERO can be serialized, so we allow it.
+        // (0, 0, 0) is wrong representation of ZERO and is always invalid.
+        if (CURVE.allowInfinityPoint && !Fp.is0(this.py)) return;
         throw new Error('bad point: ZERO');
       }
       // Some 3rd-party test vectors require different wording between here & `fromCompressedHex`
