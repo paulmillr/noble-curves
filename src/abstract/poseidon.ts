@@ -80,18 +80,17 @@ export function splitConstants(rc: bigint[], t: number) {
 }
 
 export function poseidon(opts: PoseidonOpts) {
-  const { t, Fp, rounds, sboxFn, reversePartialPowIdx } = validateOpts(opts);
-  const halfRoundsFull = Math.floor(opts.roundsFull / 2);
-  const partialIdx = reversePartialPowIdx ? t - 1 : 0;
+  const _opts = validateOpts(opts);
+  const { Fp, mds, roundConstants, rounds, roundsPartial, sboxFn, t } = _opts;
+  const halfRoundsFull = _opts.roundsFull / 2;
+  const partialIdx = _opts.reversePartialPowIdx ? t - 1 : 0;
   const poseidonRound = (values: bigint[], isFull: boolean, idx: number) => {
-    values = values.map((i, j) => Fp.add(i, opts.roundConstants[idx][j]));
+    values = values.map((i, j) => Fp.add(i, roundConstants[idx][j]));
 
     if (isFull) values = values.map((i) => sboxFn(i));
     else values[partialIdx] = sboxFn(values[partialIdx]);
     // Matrix multiplication
-    values = opts.mds.map((i) =>
-      i.reduce((acc, i, j) => Fp.add(acc, Fp.mulN(i, values[j])), Fp.ZERO)
-    );
+    values = mds.map((i) => i.reduce((acc, i, j) => Fp.add(acc, Fp.mulN(i, values[j])), Fp.ZERO));
     return values;
   };
   const poseidonHash = function poseidonHash(values: bigint[]) {
@@ -105,7 +104,7 @@ export function poseidon(opts: PoseidonOpts) {
     // Apply r_f/2 full rounds.
     for (let i = 0; i < halfRoundsFull; i++) values = poseidonRound(values, true, round++);
     // Apply r_p partial rounds.
-    for (let i = 0; i < opts.roundsPartial; i++) values = poseidonRound(values, false, round++);
+    for (let i = 0; i < roundsPartial; i++) values = poseidonRound(values, false, round++);
     // Apply r_f/2 full rounds.
     for (let i = 0; i < halfRoundsFull; i++) values = poseidonRound(values, true, round++);
 
@@ -114,6 +113,6 @@ export function poseidon(opts: PoseidonOpts) {
     return values;
   };
   // For verification in tests
-  poseidonHash.roundConstants = opts.roundConstants;
+  poseidonHash.roundConstants = roundConstants;
   return poseidonHash;
 }
