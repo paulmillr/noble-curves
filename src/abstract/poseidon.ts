@@ -24,10 +24,9 @@ export function validateOpts(opts: PoseidonOpts) {
   const rev = opts.reversePartialPowIdx;
   if (rev !== undefined && typeof rev !== 'boolean')
     throw new Error(`Poseidon: invalid param reversePartialPowIdx=${rev}`);
-  // Default is 5, but for some reasons stark uses 3
   let { sboxPower } = opts;
-  if (sboxPower === undefined) sboxPower = 5;
-  if (![3, 5, 7].includes(sboxPower)) throw new Error(`Poseidon wrong sboxPower=${sboxPower}`);
+  if (!sboxPower || ![3, 5, 7].includes(sboxPower))
+    throw new Error(`Poseidon wrong sboxPower=${sboxPower}`);
 
   const _sboxPower = BigInt(sboxPower);
   let sboxFn = (n: bigint) => FpPow(Fp, n, _sboxPower);
