@@ -163,6 +163,7 @@ should('poseidonperm_x5_255_3', () => {
     t,
     roundsFull: 8,
     roundsPartial: 57,
+    sboxPower: 5,
     mds,
     roundConstants,
   });
@@ -229,6 +230,7 @@ should('poseidonperm_x5_255_5', () => {
     t,
     roundsFull: 8,
     roundsPartial: 60,
+    sboxPower: 5,
     mds,
     roundConstants,
   });
@@ -280,6 +282,7 @@ should('poseidonperm_x5_254_3', () => {
     t,
     roundsFull: 8,
     roundsPartial: 57,
+    sboxPower: 5,
     mds,
     roundConstants,
   });
@@ -347,6 +350,7 @@ should('poseidonperm_x5_254_5', () => {
     t,
     roundsFull: 8,
     roundsPartial: 60,
+    sboxPower: 5,
     mds,
     roundConstants,
   });
