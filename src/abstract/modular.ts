@@ -265,6 +265,11 @@ export function validateField<T>(field: IField<T>) {
 }
 
 // Generic field functions
+
+/**
+ * Same as `pow` but for Fp: non-constant-time.
+ * Unsafe in some contexts: uses ladder, so can expose bigint bits.
+ */
 export function FpPow<T>(f: IField<T>, num: T, power: bigint): T {
   // Should have same speed as pow for bigints
   // TODO: benchmark!
