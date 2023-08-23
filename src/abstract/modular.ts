@@ -233,7 +233,8 @@ export interface IField<T> {
   sqrN(num: T): T;
 
   // Optional
-  // Should be same as sgn0 function in https://datatracker.ietf.org/doc/draft-irtf-cfrg-hash-to-curve/
+  // Should be same as sgn0 function in
+  // [RFC9380](https://www.rfc-editor.org/rfc/rfc9380#section-4.1).
   // NOTE: sgn0 is 'negative in LE', which is same as odd. And negative in LE is kinda strange definition anyway.
   isOdd?(num: T): boolean; // Odd instead of even since we have it for Fp2
   // legendre?(num: T): T;
@@ -432,10 +433,25 @@ export function hashToPrivateScalar(
   return mod(num, groupOrder - _1n) + _1n;
 }
 
+/**
+ * Returns total number of bytes consumed by the field element.
+ * For example, 32 bytes for usual 256-bit weierstrass curve.
+ * @param fieldOrder number of field elements, usually CURVE.n
+ * @returns byte length of field
+ */
 export function getFieldBytesLength(fieldOrder: bigint): number {
-  return nLength(fieldOrder).nByteLength;
+  if (typeof fieldOrder !== 'bigint') throw new Error('field order must be bigint');
+  const bitLength = fieldOrder.toString(2).length;
+  return Math.ceil(bitLength / 8);
 }
 
+/**
+ * Returns minimal amount of bytes that can be safely reduced
+ * by field order.
+ * Should be 2^-128 for 128-bit curve such as P256.
+ * @param fieldOrder number of field elements, usually CURVE.n
+ * @returns byte length of target hash
+ */
 export function getMinHashLength(fieldOrder: bigint): number {
   const length = getFieldBytesLength(fieldOrder);
   return length + Math.ceil(length / 2);
@@ -448,7 +464,7 @@ export function getMinHashLength(fieldOrder: bigint): number {
  * Needs at least 48 bytes of input for 32-byte private key.
  * https://research.kudelskisecurity.com/2020/07/28/the-definitive-guide-to-modulo-bias-and-how-to-avoid-it/
  * FIPS 186-5, A.2 https://csrc.nist.gov/publications/detail/fips/186/5/final
- * hash-to-curve, https://www.ietf.org/archive/id/draft-irtf-cfrg-hash-to-curve-16.html#name-hashing-to-a-finite-field
+ * RFC 9380, https://www.rfc-editor.org/rfc/rfc9380#section-5
  * @param hash hash output from SHA3 or a similar function
  * @param groupOrder size of subgroup - (e.g. secp256k1.CURVE.n)
  * @param isLE interpret hash bytes as LE num
