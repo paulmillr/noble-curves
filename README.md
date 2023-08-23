@@ -788,7 +788,7 @@ You can't simply make a 32-byte private key from a 32-byte hash.
 Doing so will make the key [biased](https://research.kudelskisecurity.com/2020/07/28/the-definitive-guide-to-modulo-bias-and-how-to-avoid-it/).
 
 To make the bias negligible, we follow [FIPS 186-5 A.2](https://csrc.nist.gov/publications/detail/fips/186/5/final)
-and [h2c standard](https://www.ietf.org/archive/id/draft-irtf-cfrg-hash-to-curve-16.html#name-hashing-to-a-finite-field).
+and [RFC 9380](https://www.rfc-editor.org/rfc/rfc9380#section-5.2).
 This means, for 32-byte key, we would need 48-byte hash to get 2^-128 bias, which matches curve security level.
 
 `hashToPrivateScalar()` that hashes to **private key** was created for this purpose.
@@ -1050,7 +1050,7 @@ Upgrading from [@noble/bls12-381](https://github.com/paulmillr/noble-bls12-381):
   - [tapscript](https://github.com/cmdruid/tapscript)
 - Solana libraries: [micro-sol-signer](https://github.com/paulmillr/micro-sol-signer), [solana-web3.js](https://github.com/solana-labs/solana-web3.js)
 - Other web3 stuff:
-  - [micro-starknet](https://github.com/paulmillr/micro-starknet)
+  - [scure-starknet](https://github.com/paulmillr/scure-starknet)
   - [aztec](https://github.com/AztecProtocol/aztec-packages)
   - [polkadot.js](https://github.com/polkadot-js/common), [drand-client](https://github.com/drand/drand-client), [moneroj](https://github.com/beritani/moneroj), [tronlib](https://github.com/CoinSpace/tronlib)
 - [protonmail](https://github.com/ProtonMail/WebClients) (old noble for now)
