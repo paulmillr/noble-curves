@@ -478,8 +478,7 @@ export const RistrettoPoint = /* @__PURE__ */ (() => {
   return RistPoint;
 })();
 
-// https://datatracker.ietf.org/doc/draft-irtf-cfrg-hash-to-curve/14/
-// Appendix B.  Hashing to ristretto255
+// Hashing to ristretto255. https://www.rfc-editor.org/rfc/rfc9380#appendix-B
 export const hashToRistretto255 = (msg: Uint8Array, options: htfBasicOpts) => {
   const d = options.DST;
   const DST = typeof d === 'string' ? utf8ToBytes(d) : d;

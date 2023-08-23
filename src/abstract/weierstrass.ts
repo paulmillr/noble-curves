@@ -1171,7 +1171,8 @@ export function SWUFpSqrtRatio<T>(Fp: mod.IField<T>, Z: T) {
   return sqrtRatio;
 }
 /**
- * From draft-irtf-cfrg-hash-to-curve-16
+ * Simplified Shallue-van de Woestijne-Ulas Method
+ * https://www.rfc-editor.org/rfc/rfc9380#section-6.6.2
  */
 export function mapToCurveSimpleSWU<T>(
   Fp: mod.IField<T>,

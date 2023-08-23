@@ -9,8 +9,7 @@ Audited & minimal JS implementation of elliptic curve cryptography.
 - ➰ Short Weierstrass, Edwards, Montgomery curves
 - ✍️ ECDSA, EdDSA, Schnorr, BLS signature schemes, ECDH key agreement
 - 🔖 SUF-CMA and SBS (non-repudiation) for ed25519, ed448 and others
-- #️⃣ Hash-to-curve
-  for encoding or hashing an arbitrary string to an elliptic curve point
+- #️⃣ hash-to-curve for encoding or hashing an arbitrary string to an elliptic curve point
 - 🧜‍♂️ Poseidon ZK-friendly hash
 
 ### This library belongs to _noble_ crypto
@@ -676,7 +675,7 @@ utils: {
 
 ### abstract/hash-to-curve: Hashing strings to curve points
 
-The module allows to hash arbitrary strings to elliptic curve points. Implements [hash-to-curve v16](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-16).
+The module allows to hash arbitrary strings to elliptic curve points. Implements [RFC 9380](https://www.rfc-editor.org/rfc/rfc9380).
 
 Every curve has exported `hashToCurve` and `encodeToCurve` methods. You should always prefer `hashToCurve` for security:
 
@@ -692,19 +691,17 @@ bls12_381.G1.hashToCurve(randomBytes(), { DST: 'another' });
 bls12_381.G2.hashToCurve(randomBytes(), { DST: 'custom' });
 ```
 
-If you need low-level methods from spec:
-
-`expand_message_xmd` [(spec)](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-5.4.1) produces a uniformly random byte string using a cryptographic hash function H that outputs b bits.
-
-Hash must conform to `CHash` interface (see [weierstrass section](#abstractweierstrass-short-weierstrass-curve)).
+Low-level methods from the spec:
 
 ```ts
+// produces a uniformly random byte string using a cryptographic hash function H that outputs b bits.
 function expand_message_xmd(
   msg: Uint8Array,
   DST: Uint8Array,
   lenInBytes: number,
-  H: CHash
+  H: CHash // For CHash see abstract/weierstrass docs section
 ): Uint8Array;
+// produces a uniformly random byte string using an extendable-output function (XOF) H.
 function expand_message_xof(
   msg: Uint8Array,
   DST: Uint8Array,
@@ -712,13 +709,9 @@ function expand_message_xof(
   k: number,
   H: CHash
 ): Uint8Array;
-```
+// Hashes arbitrary-length byte strings to a list of one or more elements of a finite field F
+function hash_to_field(msg: Uint8Array, count: number, options: Opts): bigint[][];
 
-`hash_to_field(msg, count, options)`
-[(spec)](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-5.3)
-hashes arbitrary-length byte strings to a list of one or more elements of a finite field F.
-
-```ts
 /**
  * * `DST` is a domain separation tag, defined in section 2.2.5
  * * `p` characteristic of F, where F is a finite field of characteristic p and order q = p^m
@@ -736,16 +729,6 @@ type Opts = {
   expand?: 'xmd' | 'xof';
   hash: CHash;
 };
-
-/**
- * Hashes arbitrary-length byte strings to a list of one or more elements of a finite field F
- * https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-5.3
- * @param msg a byte string containing the message to hash
- * @param count the number of elements of F to output
- * @param options `{DST: string, p: bigint, m: number, k: number, expand: 'xmd' | 'xof', hash: H}`, see above
- * @returns [u_0, ..., u_(count - 1)], a list of field elements.
- */
-function hash_to_field(msg: Uint8Array, count: number, options: Opts): bigint[][];
 ```
 
 ### abstract/poseidon: Poseidon hash

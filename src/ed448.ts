@@ -69,7 +69,7 @@ function adjustScalarBytes(bytes: Uint8Array): Uint8Array {
 // Uses algo from RFC8032 5.1.3.
 function uvRatio(u: bigint, v: bigint): { isValid: boolean; value: bigint } {
   const P = ed448P;
-  // https://datatracker.ietf.org/doc/html/rfc8032#section-5.2.3
+  // https://www.rfc-editor.org/rfc/rfc8032#section-5.2.3
   // To compute the square root of (u/v), the first step is to compute the
   //   candidate root x = (u/v)^((p+1)/4).  This can be done using the
   // following trick, to use a single modular powering for both the
@@ -454,8 +454,7 @@ export const DecafPoint = /* @__PURE__ */ (() => {
   return DcfPoint;
 })();
 
-// https://datatracker.ietf.org/doc/draft-irtf-cfrg-hash-to-curve/16/
-// Appendix C.  Hashing to decaf448
+// Hashing to decaf448. https://www.rfc-editor.org/rfc/rfc9380#appendix-C
 export const hashToDecaf448 = (msg: Uint8Array, options: htfBasicOpts) => {
   const d = options.DST;
   const DST = typeof d === 'string' ? utf8ToBytes(d) : d;

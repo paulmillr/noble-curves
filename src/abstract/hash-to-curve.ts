@@ -59,7 +59,7 @@ function isNum(item: unknown): void {
 }
 
 // Produces a uniformly random byte string using a cryptographic hash function H that outputs b bits
-// https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-5.4.1
+// https://www.rfc-editor.org/rfc/rfc9380#section-5.3.1
 export function expand_message_xmd(
   msg: Uint8Array,
   DST: Uint8Array,
@@ -69,7 +69,7 @@ export function expand_message_xmd(
   isBytes(msg);
   isBytes(DST);
   isNum(lenInBytes);
-  // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-16#section-5.3.3
+  // https://www.rfc-editor.org/rfc/rfc9380#section-5.3.3
   if (DST.length > 255) DST = H(concatBytes(utf8ToBytes('H2C-OVERSIZE-DST-'), DST));
   const { outputLen: b_in_bytes, blockLen: r_in_bytes } = H;
   const ell = Math.ceil(lenInBytes / b_in_bytes);
@@ -88,6 +88,11 @@ export function expand_message_xmd(
   return pseudo_random_bytes.slice(0, lenInBytes);
 }
 
+// Produces a uniformly random byte string using an extendable-output function (XOF) H.
+// 1. The collision resistance of H MUST be at least k bits.
+// 2. H MUST be an XOF that has been proved indifferentiable from
+//    a random oracle under a reasonable cryptographic assumption.
+// https://www.rfc-editor.org/rfc/rfc9380#section-5.3.2
 export function expand_message_xof(
   msg: Uint8Array,
   DST: Uint8Array,
@@ -98,7 +103,7 @@ export function expand_message_xof(
   isBytes(msg);
   isBytes(DST);
   isNum(lenInBytes);
-  // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-16#section-5.3.3
+  // https://www.rfc-editor.org/rfc/rfc9380#section-5.3.3
   // DST = H('H2C-OVERSIZE-DST-' || a_very_long_DST, Math.ceil((lenInBytes * k) / 8));
   if (DST.length > 255) {
     const dkLen = Math.ceil((2 * k) / 8);
@@ -119,7 +124,7 @@ export function expand_message_xof(
 
 /**
  * Hashes arbitrary-length byte strings to a list of one or more elements of a finite field F
- * https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-5.3
+ * https://www.rfc-editor.org/rfc/rfc9380#section-5.2
  * @param msg a byte string containing the message to hash
  * @param count the number of elements of F to output
  * @param options `{DST: string, p: bigint, m: number, k: number, expand: 'xmd' | 'xof', hash: H}`, see above
@@ -201,8 +206,8 @@ export function createHasher<T>(
 ) {
   if (typeof mapToCurve !== 'function') throw new Error('mapToCurve() must be defined');
   return {
-    // Encodes byte string to elliptic curve
-    // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-16#section-3
+    // Encodes byte string to elliptic curve.
+    // hash_to_curve from https://www.rfc-editor.org/rfc/rfc9380#section-3
     hashToCurve(msg: Uint8Array, options?: htfBasicOpts) {
       const u = hash_to_field(msg, 2, { ...def, DST: def.DST, ...options } as Opts);
       const u0 = Point.fromAffine(mapToCurve(u[0]));
@@ -212,7 +217,8 @@ export function createHasher<T>(
       return P;
     },
 
-    // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-16#section-3
+    // Encodes byte string to elliptic curve.
+    // encode_to_curve from https://www.rfc-editor.org/rfc/rfc9380#section-3
     encodeToCurve(msg: Uint8Array, options?: htfBasicOpts) {
       const u = hash_to_field(msg, 1, { ...def, DST: def.encodeDST, ...options } as Opts);
       const P = Point.fromAffine(mapToCurve(u[0])).clearCofactor();

@@ -8,8 +8,8 @@
 // The library uses G1 for public keys and G2 for signatures. Support for G1 signatures is planned.
 // Compatible with Algorand, Chia, Dfinity, Ethereum, FIL, Zcash. Matches specs
 // [pairing-curves-11](https://tools.ietf.org/html/draft-irtf-cfrg-pairing-friendly-curves-11),
-// [bls-sigs-04](https://tools.ietf.org/html/draft-irtf-cfrg-bls-signature-04),
-// [hash-to-curve-12](https://tools.ietf.org/html/draft-irtf-cfrg-hash-to-curve-12).
+// [bls-sigs-04](https:/cfrg-hash-to/tools.ietf.org/html/draft-irtf-cfrg-bls-signature-04),
+// [hash-to-curve-12](https://tools.ietf.org/html/draft-irtf--curve-12).
 //
 // ### Summary
 // 1. BLS Relies on Bilinear Pairing (expensive)
@@ -177,7 +177,7 @@ const Fp2: mod.IField<Fp2> & Fp2Utils = {
     if (im1 > im2 || (im1 === im2 && re1 > re2)) return x1;
     return x2;
   },
-  // Same as sgn0_fp2 in draft-irtf-cfrg-hash-to-curve-16
+  // Same as sgn0_m_eq_2 in RFC 9380
   isOdd: (x: Fp2) => {
     const { re: x0, im: x1 } = Fp2.reim(x);
     const sign_0 = x0 % _2n;
@@ -780,8 +780,7 @@ const FP12_FROBENIUS_COEFFICIENTS = [
 
 // HashToCurve
 
-// 3-isogeny map from E' to E
-// https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#appendix-E.3
+// 3-isogeny map from E' to E https://www.rfc-editor.org/rfc/rfc9380#appendix-E.3
 const isogenyMapG2 = isogenyMap(
   Fp2,
   [
@@ -985,7 +984,7 @@ function G2psi2(c: ProjConstructor<Fp2>, P: ProjPointType<Fp2>) {
 //
 // Parameter definitions are in section 5.3 of the spec unless otherwise noted.
 // Parameter values come from section 8.8.2 of the spec.
-// https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-8.8.2
+// https://www.rfc-editor.org/rfc/rfc9380#section-8.8.2
 //
 // Base field F is GF(p^m)
 // p = 0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab
@@ -1040,7 +1039,7 @@ function signatureG2ToRawBytes(point: ProjPointType<Fp2>) {
 }
 
 // To verify curve parameters, see pairing-friendly-curves spec:
-// https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-pairing-friendly-curves-09
+// https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-pairing-friendly-curves-11
 // Basic math is done over finite fields over p.
 // More complicated math is done over polynominal extension fields.
 // To simplify calculations in Fp12, we construct extension tower:
