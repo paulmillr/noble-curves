@@ -954,15 +954,17 @@ ed448 x 1,247 ops/sec @ 801μs/op
 ## Upgrading
 
 Previously, the library was split into single-feature packages
-noble-secp256k1, noble-ed25519 and noble-bls12-381.
+[noble-secp256k1](https://github.com/paulmillr/noble-secp256k1),
+[noble-ed25519](https://github.com/paulmillr/noble-ed25519) and
+[noble-bls12-381](https://github.com/paulmillr/noble-bls12-381).
 
 Curves continue their original work. The single-feature packages changed their
 direction towards providing minimal 4kb implementations of cryptography,
 which means they have less features.
 
-Upgrading from @noble/secp256k1 2.0 or @noble/ed25519 2.0: no changes, libraries are compatible.
+Upgrading from noble-secp256k1 2.0 or noble-ed25519 2.0: no changes, libraries are compatible.
 
-Upgrading from [@noble/secp256k1](https://github.com/paulmillr/noble-secp256k1) 1.7:
+Upgrading from noble-secp256k1 1.7:
 
 - `getPublicKey`
   - now produce 33-byte compressed signatures by default
