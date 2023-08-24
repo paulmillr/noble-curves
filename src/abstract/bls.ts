@@ -27,6 +27,12 @@ type Fp = bigint; // Can be different field?
 // prettier-ignore
 const _2n = BigInt(2), _3n = BigInt(3);
 
+export type ShortSignatureCoder<Fp> = {
+  fromHex(hex: Hex): ProjPointType<Fp>;
+  toRawBytes(point: ProjPointType<Fp>): Uint8Array;
+  toHex(point: ProjPointType<Fp>): string;
+};
+
 export type SignatureCoder<Fp2> = {
   fromHex(hex: Hex): ProjPointType<Fp2>;
   toRawBytes(point: ProjPointType<Fp2>): Uint8Array;
@@ -35,6 +41,7 @@ export type SignatureCoder<Fp2> = {
 
 export type CurveType<Fp, Fp2, Fp6, Fp12> = {
   G1: Omit<CurvePointsType<Fp>, 'n'> & {
+    ShortSignature: SignatureCoder<Fp>;
     mapToCurve: htf.MapToCurve<Fp>;
     htfDefaults: htf.Opts;
   };
@@ -70,9 +77,14 @@ export type CurveType<Fp, Fp2, Fp6, Fp12> = {
 
 export type CurveFn<Fp, Fp2, Fp6, Fp12> = {
   getPublicKey: (privateKey: PrivKey) => Uint8Array;
+  getPublicKeyForShortSignatures: (privateKey: PrivKey) => Uint8Array;
   sign: {
     (message: Hex, privateKey: PrivKey): Uint8Array;
     (message: ProjPointType<Fp2>, privateKey: PrivKey): ProjPointType<Fp2>;
+  };
+  signShortSignature: {
+    (message: Hex, privateKey: PrivKey): Uint8Array;
+    (message: ProjPointType<Fp>, privateKey: PrivKey): ProjPointType<Fp>;
   };
   verify: (
     signature: Hex | ProjPointType<Fp2>,
@@ -97,11 +109,16 @@ export type CurveFn<Fp, Fp2, Fp6, Fp12> = {
     (signatures: Hex[]): Uint8Array;
     (signatures: ProjPointType<Fp2>[]): ProjPointType<Fp2>;
   };
+  aggregateShortSignatures: {
+    (signatures: Hex[]): Uint8Array;
+    (signatures: ProjPointType<Fp>[]): ProjPointType<Fp>;
+  };
   millerLoop: (ell: [Fp2, Fp2, Fp2][], g1: [Fp, Fp]) => Fp12;
   pairing: (P: ProjPointType<Fp>, Q: ProjPointType<Fp2>, withFinalExponent?: boolean) => Fp12;
   G1: CurvePointsRes<Fp> & ReturnType<typeof htf.createHasher<Fp>>;
   G2: CurvePointsRes<Fp2> & ReturnType<typeof htf.createHasher<Fp2>>;
   Signature: SignatureCoder<Fp2>;
+  ShortSignature: ShortSignatureCoder<Fp>;
   params: {
     x: bigint;
     r: bigint;
@@ -238,6 +255,7 @@ export function bls<Fp2, Fp6, Fp12>(
     })
   );
 
+  const { ShortSignature } = CURVE.G1;
   const { Signature } = CURVE.G2;
 
   // Calculates bilinear pairing
@@ -273,10 +291,16 @@ export function bls<Fp2, Fp6, Fp12>(
       : (G2.hashToCurve(ensureBytes('point', point), htfOpts) as G2);
   }
 
-  // Multiplies generator by private key.
+  // Multiplies generator (G1) by private key.
   // P = pk x G
   function getPublicKey(privateKey: PrivKey): Uint8Array {
     return G1.ProjectivePoint.fromPrivateKey(privateKey).toRawBytes(true);
+  }
+
+  // Multiplies generator (G2) by private key.
+  // P = pk x G
+  function getPublicKeyForShortSignatures(privateKey: PrivKey): Uint8Array {
+    return G2.ProjectivePoint.fromPrivateKey(privateKey).toRawBytes(true);
   }
 
   // Executes `hashToCurve` on the message and then multiplies the result by private key.
@@ -289,6 +313,24 @@ export function bls<Fp2, Fp6, Fp12>(
     const sigPoint = msgPoint.multiply(G1.normPrivateKeyToScalar(privateKey));
     if (message instanceof G2.ProjectivePoint) return sigPoint;
     return Signature.toRawBytes(sigPoint);
+  }
+
+  function signShortSignature(
+    message: Hex,
+    privateKey: PrivKey,
+    htfOpts?: htf.htfBasicOpts
+  ): Uint8Array;
+  function signShortSignature(message: G1, privateKey: PrivKey, htfOpts?: htf.htfBasicOpts): G1;
+  function signShortSignature(
+    message: G1Hex,
+    privateKey: PrivKey,
+    htfOpts?: htf.htfBasicOpts
+  ): Uint8Array | G1 {
+    const msgPoint = normP1Hash(message, htfOpts);
+    msgPoint.assertValidity();
+    const sigPoint = msgPoint.multiply(G1.normPrivateKeyToScalar(privateKey));
+    if (message instanceof G1.ProjectivePoint) return sigPoint;
+    return ShortSignature.toRawBytes(sigPoint);
   }
 
   // Checks if pairing of public key & hash is equal to pairing of generator & signature.
@@ -361,6 +403,20 @@ export function bls<Fp2, Fp6, Fp12>(
     return Signature.toRawBytes(aggAffine);
   }
 
+  // Adds a bunch of signature points together.
+  function aggregateShortSignatures(signatures: Hex[]): Uint8Array;
+  function aggregateShortSignatures(signatures: G1[]): G1;
+  function aggregateShortSignatures(signatures: G1Hex[]): Uint8Array | G1 {
+    if (!signatures.length) throw new Error('Expected non-empty array');
+    const agg = signatures.map(normP1).reduce((sum, s) => sum.add(s), G1.ProjectivePoint.ZERO);
+    const aggAffine = agg; //.toAffine();
+    if (signatures[0] instanceof G1.ProjectivePoint) {
+      aggAffine.assertValidity();
+      return aggAffine;
+    }
+    return ShortSignature.toRawBytes(aggAffine);
+  }
+
   // https://ethresear.ch/t/fast-verification-of-multiple-bls-signatures/5407
   // e(G, S) = e(G, SUM(n)(Si)) = MUL(n)(e(G, Si))
   function verifyBatch(
@@ -403,17 +459,21 @@ export function bls<Fp2, Fp6, Fp12>(
 
   return {
     getPublicKey,
+    getPublicKeyForShortSignatures,
     sign,
+    signShortSignature,
     verify,
     verifyBatch,
     verifyShortSignature,
     aggregatePublicKeys,
     aggregateSignatures,
+    aggregateShortSignatures,
     millerLoop,
     pairing,
     G1,
     G2,
     Signature,
+    ShortSignature,
     fields: {
       Fr,
       Fp,
