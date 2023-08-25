@@ -1022,6 +1022,18 @@ const S_BIT_POS = Fp.BITS + 2; // S_bit, sign bit for serialization flag
 // Compressed point of infinity
 const COMPRESSED_ZERO = Fp.toBytes(bitSet(bitSet(_0n, I_BIT_POS, true), S_BIT_POS, true)); // set compressed & point-at-infinity bits
 
+function signatureG1ToRawBytes(point: ProjPointType<Fp>) {
+  point.assertValidity();
+  const isZero = point.equals(bls12_381.G1.ProjectivePoint.ZERO);
+  const { x, y } = point.toAffine();
+  if (isZero) return COMPRESSED_ZERO.slice();
+  const P = Fp.ORDER;
+  let num;
+  num = bitSet(x, C_BIT_POS, Boolean((y * _2n) / P)); // set aflag
+  num = bitSet(num, S_BIT_POS, true);
+  return numberToBytesBE(num, Fp.BYTES);
+}
+
 function signatureG2ToRawBytes(point: ProjPointType<Fp2>) {
   // NOTE: by some reasons it was missed in bls12-381, looks like bug
   point.assertValidity();
@@ -1074,7 +1086,7 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
     ),
     a: Fp.ZERO,
     b: _4n,
-    htfDefaults: { ...htfDefaults, m: 1 },
+    htfDefaults: { ...htfDefaults, m: 1, DST: 'BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_' },
     wrapPrivateKey: true,
     allowInfinityPoint: true,
     // Checks is the point resides in prime-order subgroup.
@@ -1160,6 +1172,30 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
           return concatB(numberToBytesBE(x, Fp.BYTES), numberToBytesBE(y, Fp.BYTES));
         }
       }
+    },
+    ShortSignature: {
+      fromHex(hex: Hex): ProjPointType<Fp> {
+        const bytes = ensureBytes('signatureHex', hex, 48);
+
+        const P = Fp.ORDER;
+        const compressedValue = bytesToNumberBE(bytes);
+        const bflag = bitGet(compressedValue, I_BIT_POS);
+        // Zero
+        if (bflag === _1n) return bls12_381.G1.ProjectivePoint.ZERO;
+        const x = Fp.create(compressedValue & Fp.MASK);
+        const right = Fp.add(Fp.pow(x, _3n), Fp.create(bls12_381.params.G1b)); // y² = x³ + b
+        let y = Fp.sqrt(right);
+        if (!y) throw new Error('Invalid compressed G1 point');
+        const aflag = bitGet(compressedValue, C_BIT_POS);
+        if ((y * _2n) / P !== aflag) y = Fp.neg(y);
+        return bls12_381.G1.ProjectivePoint.fromAffine({ x, y });
+      },
+      toRawBytes(point: ProjPointType<Fp>) {
+        return signatureG1ToRawBytes(point);
+      },
+      toHex(point: ProjPointType<Fp>) {
+        return bytesToHex(signatureG1ToRawBytes(point));
+      },
     },
   },
   // G2 is the order-q subgroup of E2(Fp²) : y² = x³+4(1+√−1),

@@ -9,6 +9,10 @@ import { bls12_381 as bls } from '../esm/bls12-381.js';
 
 import zkVectors from './bls12-381/zkcrypto/converted.json' assert { type: 'json' };
 import pairingVectors from './bls12-381/go_pairing_vectors/pairing.json' assert { type: 'json' };
+const G1_VECTORS = readFileSync('./test/bls12-381/bls12-381-g1-test-vectors.txt', 'utf-8')
+  .trim()
+  .split('\n')
+  .map((l) => l.split(':'));
 const G2_VECTORS = readFileSync('./test/bls12-381/bls12-381-g2-test-vectors.txt', 'utf-8')
   .trim()
   .split('\n')
@@ -852,6 +856,13 @@ describe('bls12-381/basic', () => {
   });
   // should aggregate signatures
 
+  should(`produce correct short signatures (${G1_VECTORS.length} vectors)`, () => {
+    for (let vector of G1_VECTORS) {
+      const [priv, msg, expected] = vector;
+      const sig = bls.signShortSignature(msg, priv);
+      deepStrictEqual(bytesToHex(sig), expected);
+    }
+  });
   should(`produce correct signatures (${G2_VECTORS.length} vectors)`, () => {
     for (let vector of G2_VECTORS) {
       const [priv, msg, expected] = vector;
@@ -1179,6 +1190,35 @@ describe('verify()', () => {
       const invPriv = G2_VECTORS[i + 1][1].padStart(64, '0');
       const invPub = bls.getPublicKey(invPriv);
       const res = bls.verify(sig, msg, invPub);
+      deepStrictEqual(res, false);
+    }
+  });
+  should('verify signed message (short signatures)', () => {
+    for (let i = 0; i < NUM_RUNS; i++) {
+      const [priv, msg] = G1_VECTORS[i];
+      const sig = bls.signShortSignature(msg, priv);
+      const pub = bls.getPublicKeyForShortSignatures(priv);
+      const res = bls.verifyShortSignature(sig, msg, pub);
+      deepStrictEqual(res, true, `${priv}-${msg}`);
+    }
+  });
+  should('not verify signature with wrong message (short signatures)', () => {
+    for (let i = 0; i < NUM_RUNS; i++) {
+      const [priv, msg] = G1_VECTORS[i];
+      const invMsg = G1_VECTORS[i + 1][1];
+      const sig = bls.signShortSignature(msg, priv);
+      const pub = bls.getPublicKeyForShortSignatures(priv);
+      const res = bls.verifyShortSignature(sig, invMsg, pub);
+      deepStrictEqual(res, false);
+    }
+  });
+  should('not verify signature with wrong key', () => {
+    for (let i = 0; i < NUM_RUNS; i++) {
+      const [priv, msg] = G1_VECTORS[i];
+      const sig = bls.signShortSignature(msg, priv);
+      const invPriv = G1_VECTORS[i + 1][1].padStart(64, '0');
+      const invPub = bls.getPublicKeyForShortSignatures(invPriv);
+      const res = bls.verifyShortSignature(sig, msg, invPub);
       deepStrictEqual(res, false);
     }
   });
