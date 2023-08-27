@@ -165,6 +165,7 @@ export function edwardsToMontgomeryPub(edwardsPub: string | Uint8Array): Uint8Ar
   return Fp.toBytes(Fp.create((y - _1n) * Fp.inv(y + _1n)));
 }
 export const edwardsToMontgomery = edwardsToMontgomeryPub; // deprecated
+// TODO: add edwardsToMontgomeryPriv, similar to ed25519 version
 
 // Hash To Curve Elligator2 Map
 const ELL2_C1 = (Fp.ORDER - BigInt(3)) / BigInt(4); // 1. c1 = (q - 3) / 4         # Integer arithmetic
