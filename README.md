@@ -579,6 +579,14 @@ Main methods and properties are:
 - `Signature` property with `fromHex`, `toHex` methods
 - `fields` containing `Fp`, `Fp2`, `Fp6`, `Fp12`, `Fr`
 
+The default BLS uses short public keys (with public keys in G1 and signatures in G2).
+Short signatures (public keys in G2 and signatures in G1) is also supported, using:
+
+- `getPublicKeyForShortSignatures(privateKey)`
+- `signShortSignature(message, privateKey)`
+- `verifyShortSignature(signature, message, publicKey)`
+- `aggregateShortSignatures(signatures)`
+
 Right now we only implement BLS12-381 (compatible with ETH and others),
 but in theory defining BLS12-377, BLS24 should be straightforward. An example:
 
@@ -627,14 +635,24 @@ Full types:
 
 ```ts
 getPublicKey: (privateKey: PrivKey) => Uint8Array;
+getPublicKeyForShortSignatures: (privateKey: PrivKey) => Uint8Array;
 sign: {
   (message: Hex, privateKey: PrivKey): Uint8Array;
   (message: ProjPointType<Fp2>, privateKey: PrivKey): ProjPointType<Fp2>;
+};
+signShortSignature: {
+  (message: Hex, privateKey: PrivKey): Uint8Array;
+  (message: ProjPointType<Fp>, privateKey: PrivKey): ProjPointType<Fp>;
 };
 verify: (
   signature: Hex | ProjPointType<Fp2>,
   message: Hex | ProjPointType<Fp2>,
   publicKey: Hex | ProjPointType<Fp>
+) => boolean;
+verifyShortSignature: (
+  signature: Hex | ProjPointType<Fp>,
+  message: Hex | ProjPointType<Fp>,
+  publicKey: Hex | ProjPointType<Fp2>
 ) => boolean;
 verifyBatch: (
   signature: Hex | ProjPointType<Fp2>,
@@ -648,6 +666,10 @@ aggregatePublicKeys: {
 aggregateSignatures: {
   (signatures: Hex[]): Uint8Array;
   (signatures: ProjPointType<Fp2>[]): ProjPointType<Fp2>;
+};
+aggregateShortSignatures: {
+  (signatures: Hex[]): Uint8Array;
+  (signatures: ProjPointType<Fp>[]): ProjPointType<Fp>;
 };
 millerLoop: (ell: [Fp2, Fp2, Fp2][], g1: [Fp, Fp]) => Fp12;
 pairing: (P: ProjPointType<Fp>, Q: ProjPointType<Fp2>, withFinalExponent?: boolean) => Fp12;
