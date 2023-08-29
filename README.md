@@ -848,7 +848,7 @@ utils.equalBytes(Uint8Array.from([0xde]), Uint8Array.from([0xde]));
 
 ## Security
 
-1. The library has been independently audited:
+The library has been independently audited:
 
 - in Feb 2023 by [Trail of Bits](https://www.trailofbits.com):
   [PDF](https://github.com/trailofbits/publications/blob/master/reviews/2023-01-ryanshea-noblecurveslibrary-securityreview.pdf).
@@ -857,33 +857,55 @@ utils.equalBytes(Uint8Array.from([0xde]), Uint8Array.from([0xde]));
   and top-level modules `_shortw_utils` and `secp256k1`.
   See [changes since v0.7.3 audit](https://github.com/paulmillr/noble-curves/compare/0.7.3..main).
 
-2. The library has been fuzzed by [Guido Vranken's cryptofuzz](https://github.com/guidovranken/cryptofuzz).
-   You can run the fuzzer by yourself to check it.
-3. [Timing attack](https://en.wikipedia.org/wiki/Timing_attack) considerations:
-   _JIT-compiler_ and _Garbage Collector_ make "constant time" extremely hard to
-   achieve in a scripting language. Which means _any other JS library can't have
-   constant-timeness_. Even statically typed Rust, a language without GC,
-   [makes it harder to achieve constant-time](https://www.chosenplaintext.ca/open-source/rust-timing-shield/security)
-   for some cases. If your goal is absolute security, don't use any JS lib — including bindings to native ones.
-   Use low-level libraries & languages. Nonetheless we're targetting algorithmic constant time.
+It is tested against property-based, cross-library and Wycheproof vectors,
+and has fuzzing by [Guido Vranken's cryptofuzz](https://github.com/guidovranken/cryptofuzz).
+
+### Constant-timeness
+
+_JIT-compiler_ and _Garbage Collector_ make "constant time" extremely hard to
+achieve [timing attack](https://en.wikipedia.org/wiki/Timing_attack) resistance
+in a scripting language. Which means _any other JS library can't have
+constant-timeness_. Even statically typed Rust, a language without GC,
+[makes it harder to achieve constant-time](https://www.chosenplaintext.ca/open-source/rust-timing-shield/security)
+for some cases. If your goal is absolute security, don't use any JS lib — including bindings to native ones.
+Use low-level libraries & languages. Nonetheless we're targetting algorithmic constant time.
+
+### Supply chain security
+
+1. Commits are signed with PGP keys, to prevent forgery. Make sure to verify commit signatures.
+2. Releases are [transparently built](https://docs.npmjs.com/generating-provenance-statements)
+   on GitHub CI. Make sure to verify provenance logs.
+3. Releasing itself is rare, on purpose.
+   The less often package is updated, the less code dependents would need to audit.
+4. Dependency count is minimal and updates are rare:
+
+    a. All deps are prevented from automatic updates and have locked-down version ranges. Every update is checked with `npm-diff`
+    b. Dependency updates are rare, to ensure rogue updates are not catched accidentally
+    c. One dependency [noble-hashes](https://github.com/paulmillr/noble-hashes) is used, by the same author,
+       to provide hashing functionality.
+
+5. devDependencies are only used if you want to contribute to the repo. They are disabled for end-users:
+
+    a. scure-base, scure-bip32, scure-bip39, micro-bmark and micro-should are
+       developed the same author and follow the same security practices.
+    b. prettier (linter), fast-check (property-based testing) and typescript
+       are used for code quality, vector generation and ts compilation.
+       The packages are big, which makes it hard to audit their source code thoroughly and fully.
 
 We consider infrastructure attacks like rogue NPM modules very important;
 that's why it's crucial to minimize the amount of 3rd-party dependencies & native bindings.
 If your app uses 500 dependencies, any dep could get hacked and you'll be
 downloading malware with every `npm install`. Our goal is to minimize this attack vector.
-As for devDependencies used by the library:
 
-- `@scure` base, bip32, bip39 (used in tests), micro-bmark (benchmark), micro-should (testing)
-  are developed by us and follow the same practices such as: minimal library size, auditability,
-  signed releases
-- prettier (linter), fast-check (property-based testing), typescript versions
-  are locked and rarely updated. Every update is checked with `npm-diff`.
-  The packages are big, which makes it hard to audit their source code thoroughly and fully.
-- They are only used if you clone the git repo and want to add some feature to it. End-users won't use them.
+If you see anything unusual: investigate and report.
 
-As for key generation, we're deferring to built-in
+### Randomness
+
+We're deferring to built-in
 [crypto.getRandomValues](https://developer.mozilla.org/en-US/docs/Web/API/Crypto/getRandomValues)
 which is considered cryptographically secure (CSPRNG).
+
+In the past, browsers had bugs that made it weak: it may happen again.
 
 ## Speed
 
