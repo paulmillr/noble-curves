@@ -1,5 +1,7 @@
 # Security Policy
 
+See [README's Security section](./README.md#security) for detailed description of internal security practices.
+
 ## Supported Versions
 
 | Version | Supported          |
