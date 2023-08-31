@@ -1188,7 +1188,9 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
         if (!y) throw new Error('Invalid compressed G1 point');
         const aflag = bitGet(compressedValue, C_BIT_POS);
         if ((y * _2n) / P !== aflag) y = Fp.neg(y);
-        return bls12_381.G1.ProjectivePoint.fromAffine({ x, y });
+        const point = bls12_381.G1.ProjectivePoint.fromAffine({ x, y });
+        point.assertValidity();
+        return point;
       },
       toRawBytes(point: ProjPointType<Fp>) {
         return signatureG1ToRawBytes(point);
