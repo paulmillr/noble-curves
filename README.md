@@ -1008,7 +1008,7 @@ Upgrading from noble-secp256k1 1.7:
   - to use old behavior, which produced 65-byte uncompressed keys, set
     argument `isCompressed` to `false`: `getPublicKey(priv, false)`
 - `sign`
-  - is now sync; use `signAsync` for async version
+  - is now sync
   - now returns `Signature` instance with `{ r, s, recovery }` properties
   - `canonical` option was renamed to `lowS`
   - `recovered` option has been removed because recovery bit is always returned now
@@ -1017,6 +1017,7 @@ Upgrading from noble-secp256k1 1.7:
        Compact encoding is simply a concatenation of 32-byte r and 32-byte s.
     2. If you must use DER encoding, switch to noble-curves (see above).
 - `verify`
+  - is now sync
   - `strict` option was renamed to `lowS`
 - `getSharedSecret`
   - now produce 33-byte compressed signatures by default
