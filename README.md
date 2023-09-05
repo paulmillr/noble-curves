@@ -850,10 +850,16 @@ utils.equalBytes(Uint8Array.from([0xde]), Uint8Array.from([0xde]));
 
 The library has been independently audited:
 
+- at version 1.2.0, in Sep 2023, by [Kudelski Security](https://kudelskisecurity.com)
+  - PDFs: [offline](./audit/2023-09-kudelski-audit-starknet.pdf)
+  - [Changes since audit](https://github.com/paulmillr/noble-curves/compare/1.2.0..main)
+  - Scope: [scure-starknet](https://github.com/paulmillr/scure-starknet) and its related
+    abstract modules of noble-curves: `curve`, `modular`, `poseidon`, `weierstrass`
+  - The audit has been funded by [Starkware](https://starkware.co)
 - at version 0.7.3, in Feb 2023, by [Trail of Bits](https://www.trailofbits.com)
   - PDFs: [online](https://github.com/trailofbits/publications/blob/master/reviews/2023-01-ryanshea-noblecurveslibrary-securityreview.pdf),
     [offline](./audit/2023-01-trailofbits-audit-curves.pdf)
-  - [Changes since audit](https://github.com/paulmillr/noble-curves/compare/0.7.3..main).
+  - [Changes since audit](https://github.com/paulmillr/noble-curves/compare/0.7.3..main)
   - Scope: abstract modules `curve`, `hash-to-curve`, `modular`, `poseidon`, `utils`, `weierstrass` and
     top-level modules `_shortw_utils` and `secp256k1`
   - The audit has been funded by [Ryan Shea](https://www.shea.io)
