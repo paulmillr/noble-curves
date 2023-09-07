@@ -315,6 +315,10 @@ type CHash = {
   outputLen: number;
   create(): any;
 };
+
+// example
+function sha256(message: Uint8Array) { return _internal_lowlvl(message) }
+sha256.outputLen = 32; // 32 bytes of output for sha2-256
 ```
 
 **Message hash** is expected instead of message itself:
