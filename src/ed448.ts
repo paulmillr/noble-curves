@@ -103,6 +103,7 @@ const ED448_DEF = {
   n: BigInt(
     '181709681073901722637330951972001133588410340171829515070372549795146003961539585716195755291692375963310293709091662304773755859649779'
   ),
+  // RFC 7748 has 56-byte keys, RFC 8032 has 57-byte keys
   nBitLength: 456,
   // Cofactor
   h: BigInt(4),
@@ -137,6 +138,7 @@ export const ed448ph = /* @__PURE__ */ twistedEdwards({ ...ED448_DEF, prehash: s
 export const x448 = /* @__PURE__ */ (() =>
   montgomery({
     a: BigInt(156326),
+    // RFC 7748 has 56-byte keys, RFC 8032 has 57-byte keys
     montgomeryBits: 448,
     nByteLength: 57,
     P: ed448P,
