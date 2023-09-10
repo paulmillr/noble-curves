@@ -1105,6 +1105,7 @@ Upgrading from [@noble/bls12-381](https://github.com/paulmillr/noble-bls12-381):
 - [protonmail](https://github.com/ProtonMail/WebClients) (old noble for now)
 - [did-jwt](https://github.com/decentralized-identity/did-jwt), [hpke-js](https://github.com/dajiaji/hpke-js),
   [js-libp2p-noise](https://github.com/ChainSafe/js-libp2p-noise)
+- [crystals-kyber-js](https://github.com/dajiaji/crystals-kyber-js), a post-quantum cryptography algorithm
 - [ed25519-keygen](https://github.com/paulmillr/ed25519-keygen) SSH, PGP, TOR key generation
 - [secp256k1 compatibility layer](https://github.com/ethereum/js-ethereum-cryptography/blob/2.0.0/src/secp256k1-compat.ts)
   for users who want to switch from secp256k1-node or tiny-secp256k1. Allows to see which methods map to corresponding noble code.
