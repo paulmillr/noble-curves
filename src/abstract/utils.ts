@@ -44,6 +44,23 @@ export function hexToNumber(hex: string): bigint {
   return BigInt(hex === '' ? '0' : `0x${hex}`);
 }
 
+// We use very optimized technique to convert hex string to byte array
+const enum HexC {
+  ZERO = 48, // 0
+  NINE = 57, // 9
+  A_UP = 65, // A
+  F_UP = 70, // F
+  A_LO = 97, // a
+  F_LO = 102, // f
+}
+
+function charCodeToBase16(char: number) {
+  if (char >= HexC.ZERO && char <= HexC.NINE) return char - HexC.ZERO;
+  else if (char >= HexC.A_UP && char <= HexC.F_UP) return char - (HexC.A_UP - 10);
+  else if (char >= HexC.A_LO && char <= HexC.F_LO) return char - (HexC.A_LO - 10);
+  throw new Error('Invalid byte sequence');
+}
+
 /**
  * @example hexToBytes('cafe0123') // Uint8Array.from([0xca, 0xfe, 0x01, 0x23])
  */
@@ -51,13 +68,12 @@ export function hexToBytes(hex: string): Uint8Array {
   if (typeof hex !== 'string') throw new Error('hex string expected, got ' + typeof hex);
   const len = hex.length;
   if (len % 2) throw new Error('padded hex string expected, got unpadded hex of length ' + len);
-  const array = new Uint8Array(len / 2);
-  for (let i = 0; i < array.length; i++) {
-    const j = i * 2;
-    const hexByte = hex.slice(j, j + 2);
-    const byte = Number.parseInt(hexByte, 16);
-    if (Number.isNaN(byte) || byte < 0) throw new Error('Invalid byte sequence');
-    array[i] = byte;
+  const al = len / 2;
+  const array = new Uint8Array(al);
+  for (let i = 0, j = 0; i < al; i++) {
+    const n1 = charCodeToBase16(hex.charCodeAt(j++));
+    const n2 = charCodeToBase16(hex.charCodeAt(j++));
+    array[i] = n1 * 16 + n2;
   }
   return array;
 }
