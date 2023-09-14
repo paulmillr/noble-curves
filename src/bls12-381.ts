@@ -1,15 +1,9 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 
-// bls12-381 pairing-friendly Barreto-Lynn-Scott elliptic curve construction allows to:
-// - Construct zk-SNARKs at the 128-bit security
-// - Use threshold signatures, which allows a user to sign lots of messages with one signature and
-//   verify them swiftly in a batch, using Boneh-Lynn-Shacham signature scheme.
-//
-// The library uses G1 for public keys and G2 for signatures. Support for G1 signatures is planned.
-// Compatible with Algorand, Chia, Dfinity, Ethereum, FIL, Zcash. Matches specs
-// [pairing-curves-11](https://tools.ietf.org/html/draft-irtf-cfrg-pairing-friendly-curves-11),
-// [bls-sigs-04](https:/cfrg-hash-to/tools.ietf.org/html/draft-irtf-cfrg-bls-signature-04),
-// [hash-to-curve-12](https://tools.ietf.org/html/draft-irtf--curve-12).
+// bls12-381 is pairing-friendly Barreto-Lynn-Scott elliptic curve construction allowing to:
+// - Construct zk-SNARKs at the 120-bit security
+// - Efficiently verify N aggregate signatures with 1 pairing and N ec additions:
+//   the Boneh-Lynn-Shacham signature scheme is orders of magnitude more efficient than Schnorr
 //
 // ### Summary
 // 1. BLS Relies on Bilinear Pairing (expensive)
@@ -25,8 +19,17 @@
 // - `S = pk x H(m)` - signing
 // - `e(P, H(m)) == e(G, S)` - verification using pairings
 // - `e(G, S) = e(G, SUM(n)(Si)) = MUL(n)(e(G, Si))` - signature aggregation
-// Filecoin uses little endian byte arrays for private keys -
-// so ensure to reverse byte order if you'll use it with FIL.
+//
+// ### Compatibility and notes
+// 1. It is compatible with Algorand, Chia, Dfinity, Ethereum, Filecoin, ZEC
+//    Filecoin uses little endian byte arrays for private keys - make sure to reverse byte order.
+// 2. Some projects use G2 for public keys and G1 for signatures. It's called "short signature"
+// 3. Curve security level is about 120 bits as per Barbulescu-Duquesne 2017
+//    https://hal.science/hal-01534101/file/main.pdf
+// 4. Compatible with specs:
+// [cfrg-pairing-friendly-curves-11](https://tools.ietf.org/html/draft-irtf-cfrg-pairing-friendly-curves-11),
+// [cfrg-bls-signature-05](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-bls-signature-05),
+// [RFC 9380](https://www.rfc-editor.org/rfc/rfc9380).
 import { sha256 } from '@noble/hashes/sha256';
 import { randomBytes } from '@noble/hashes/utils';
 import { bls, CurveFn } from './abstract/bls.js';

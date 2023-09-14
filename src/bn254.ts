@@ -6,8 +6,9 @@ import { Field } from './abstract/modular.js';
 /**
  * bn254 pairing-friendly curve.
  * Previously known as alt_bn_128, when it had 128-bit security.
- * Recent research shown it's weaker, the naming has been adjusted to its prime bit count.
- * https://github.com/zcash/zcash/issues/2502
+ * Barbulescu-Duquesne 2017 shown it's weaker: just about 100 bits,
+ * so the naming has been adjusted to its prime bit count
+ * https://hal.science/hal-01534101/file/main.pdf
  */
 export const bn254 = weierstrass({
   a: BigInt(0),
