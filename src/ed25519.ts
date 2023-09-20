@@ -13,7 +13,7 @@ import {
   numberToBytesLE,
 } from './abstract/utils.js';
 import { createHasher, htfBasicOpts, expand_message_xmd } from './abstract/hash-to-curve.js';
-import { AffinePoint } from './abstract/curve.js';
+import { AffinePoint, Group } from './abstract/curve.js';
 
 /**
  * ed25519 Twisted Edwards curve with following addons:
@@ -343,7 +343,7 @@ function calcElligatorRistrettoMap(r0: bigint): ExtendedPoint {
  * but it should work in its own namespace: do not combine those two.
  * https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-ristretto255-decaf448
  */
-class RistPoint {
+class RistPoint implements Group<RistPoint> {
   static BASE: RistPoint;
   static ZERO: RistPoint;
   // Private property to discourage combining ExtendedPoint + RistrettoPoint
@@ -470,6 +470,14 @@ class RistPoint {
 
   multiplyUnsafe(scalar: bigint): RistPoint {
     return new RistPoint(this.ep.multiplyUnsafe(scalar));
+  }
+
+  double(): RistPoint {
+    return new RistPoint(this.ep.double());
+  }
+
+  negate(): RistPoint {
+    return new RistPoint(this.ep.negate());
   }
 }
 export const RistrettoPoint = /* @__PURE__ */ (() => {
