@@ -13,7 +13,7 @@ import {
   Hex,
   numberToBytesLE,
 } from './abstract/utils.js';
-import { AffinePoint } from './abstract/curve.js';
+import { AffinePoint, Group } from './abstract/curve.js';
 
 /**
  * Edwards448 (not Ed448-Goldilocks) curve with following addons:
@@ -166,12 +166,14 @@ export function edwardsToMontgomeryPub(edwardsPub: string | Uint8Array): Uint8Ar
   const _1n = BigInt(1);
   return Fp.toBytes(Fp.create((y - _1n) * Fp.inv(y + _1n)));
 }
+
 export const edwardsToMontgomery = edwardsToMontgomeryPub; // deprecated
 // TODO: add edwardsToMontgomeryPriv, similar to ed25519 version
 
 // Hash To Curve Elligator2 Map
 const ELL2_C1 = (Fp.ORDER - BigInt(3)) / BigInt(4); // 1. c1 = (q - 3) / 4         # Integer arithmetic
 const ELL2_J = BigInt(156326);
+
 function map_to_curve_elligator2_curve448(u: bigint) {
   let tv1 = Fp.sqr(u); // 1.  tv1 = u^2
   let e1 = Fp.eql(tv1, Fp.ONE); // 2.   e1 = tv1 == 1
@@ -201,6 +203,7 @@ function map_to_curve_elligator2_curve448(u: bigint) {
   y = Fp.cmov(y, Fp.neg(y), e2 !== e3); // 26.   y = CMOV(y, -y, e2 XOR e3)
   return { xn, xd, yn: y, yd: Fp.ONE }; // 27. return (xn, xd, y, 1)
 }
+
 function map_to_curve_elligator2_edwards448(u: bigint) {
   let { xn, xd, yn, yd } = map_to_curve_elligator2_curve448(u); // 1. (xn, xd, yn, yd) = map_to_curve_elligator2_curve448(u)
   let xn2 = Fp.sqr(xn); // 2.  xn2 = xn^2
@@ -326,7 +329,7 @@ function calcElligatorDecafMap(r0: bigint): ExtendedPoint {
  * but it should work in its own namespace: do not combine those two.
  * https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-ristretto255-decaf448
  */
-class DcfPoint {
+class DcfPoint implements Group<DcfPoint> {
   static BASE: DcfPoint;
   static ZERO: DcfPoint;
   // Private property to discourage combining ExtendedPoint + DecafPoint
@@ -448,7 +451,16 @@ class DcfPoint {
   multiplyUnsafe(scalar: bigint): DcfPoint {
     return new DcfPoint(this.ep.multiplyUnsafe(scalar));
   }
+
+  double(): DcfPoint {
+    return new DcfPoint(this.ep.double());
+  }
+
+  negate(): DcfPoint {
+    return new DcfPoint(this.ep.negate());
+  }
 }
+
 export const DecafPoint = /* @__PURE__ */ (() => {
   // decaf448 base point is ed448 base x 2
   // https://github.com/dalek-cryptography/curve25519-dalek/blob/59837c6ecff02b77b9d5ff84dbc239d0cf33ef90/vendor/ristretto.sage#L699
