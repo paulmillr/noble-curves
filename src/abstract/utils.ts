@@ -58,19 +58,18 @@ function asciiToBase16(char: number): number | undefined {
  */
 export function hexToBytes(hex: string): Uint8Array {
   if (typeof hex !== 'string') throw new Error('hex string expected, got ' + typeof hex);
-  const len = hex.length;
-  if (len % 2) throw new Error('padded hex string expected, got unpadded hex of length ' + len);
-  const al = len / 2;
+  const hl = hex.length;
+  const al = hl / 2;
+  if (hl % 2) throw new Error('padded hex string expected, got unpadded hex of length ' + hl);
   const array = new Uint8Array(al);
-  for (let i = 0, j = 0; i < al; i++) {
-    const n1 = asciiToBase16(hex.charCodeAt(j++));
-    const n2 = asciiToBase16(hex.charCodeAt(j++));
+  for (let ai = 0, hi = 0; ai < al; ai++, hi += 2) {
+    const n1 = asciiToBase16(hex.charCodeAt(hi));
+    const n2 = asciiToBase16(hex.charCodeAt(hi + 1));
     if (n1 === undefined || n2 === undefined) {
-      const index = j - 2;
-      const chr = hex[index] + hex[index + 1];
-      throw new Error('hex string expected, got non-hex character "' + chr + '" at index ' + index);
+      const char = hex[hi] + hex[hi + 1];
+      throw new Error('hex string expected, got non-hex character "' + char + '" at index ' + hi);
     }
-    array[i] = n1 * 16 + n2;
+    array[ai] = n1 * 16 + n2;
   }
   return array;
 }
