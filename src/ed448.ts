@@ -140,7 +140,7 @@ export const x448 = /* @__PURE__ */ (() =>
     a: BigInt(156326),
     // RFC 7748 has 56-byte keys, RFC 8032 has 57-byte keys
     montgomeryBits: 448,
-    nByteLength: 57,
+    nByteLength: 56,
     P: ed448P,
     Gu: BigInt(5),
     powPminus2: (x: bigint): bigint => {
