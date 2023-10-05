@@ -91,7 +91,8 @@ const pub2 = secp256k1.getPublicKey(privHex);
 #### ECDSA public key recovery & extra entropy
 
 ```ts
-// const sig = secp256k1.Signature.fromCompact(sigHex); // or .fromDER(sigDERHex)
+// let sig = secp256k1.Signature.fromCompact(sigHex); // or .fromDER(sigDERHex)
+// sig = sig.addRecoveryBit(bit); // bit is not serialized into compact / der format
 sig.recoverPublicKey(msg).toRawBytes(); // === pub; // public key recovery
 
 // extraEntropy https://moderncrypto.org/mail-archive/curves/2017/000925.html
