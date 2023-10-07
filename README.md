@@ -19,12 +19,14 @@ Audited & minimal JS implementation of elliptic curve cryptography.
 - Zero or minimal dependencies
 - Highly readable TypeScript / JS code
 - PGP-signed releases and transparent NPM builds with provenance
-- Check out [homepage](https://paulmillr.com/noble/) & all libraries:
+- All libraries:
   [ciphers](https://github.com/paulmillr/noble-ciphers),
   [curves](https://github.com/paulmillr/noble-curves),
   [hashes](https://github.com/paulmillr/noble-hashes),
   4kb [secp256k1](https://github.com/paulmillr/noble-secp256k1) /
   [ed25519](https://github.com/paulmillr/noble-ed25519)
+- [Check out homepage](https://paulmillr.com/noble/)
+  for reading resources, documentation and apps built with noble
 
 ## Usage
 
@@ -32,8 +34,8 @@ Audited & minimal JS implementation of elliptic curve cryptography.
 
 We support all major platforms and runtimes.
 For [Deno](https://deno.land), ensure to use [npm specifier](https://deno.land/manual@v1.28.0/node/npm_specifiers).
-For React Native, you may need a [polyfill for crypto.getRandomValues](https://github.com/LinusU/react-native-get-random-values).
-If you don't like NPM, a standalone [noble-curves.js](https://github.com/paulmillr/noble-curves/releases) is also available.
+For React Native, you may need a [polyfill for getRandomValues](https://github.com/LinusU/react-native-get-random-values).
+A standalone file [noble-curves.js](https://github.com/paulmillr/noble-curves/releases) is also available.
 
 - [Implementations](#implementations)
   - [ECDSA signature scheme](#ecdsa-signature-scheme)
