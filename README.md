@@ -829,8 +829,7 @@ Use low-level libraries & languages. Nonetheless we're targetting algorithmic co
    - scure-base, scure-bip32, scure-bip39, micro-bmark and micro-should are developed by the same author and follow identical security practices
    - prettier (linter), fast-check (property-based testing) and typescript are used for code quality, vector generation and ts compilation. The packages are big, which makes it hard to audit their source code thoroughly and fully
 
-We consider infrastructure attacks like rogue NPM modules very important;
-that's why it's crucial to minimize the amount of 3rd-party dependencies & native bindings.
+It's crucial to minimize the amount of 3rd-party dependencies & native bindings.
 If your app uses 500 dependencies, any dep could get hacked and you'll be
 downloading malware with every install. Our goal is to minimize this attack vector.
 
