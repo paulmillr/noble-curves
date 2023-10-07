@@ -57,8 +57,9 @@ If you don't like NPM, a standalone [noble-curves.js](https://github.com/paulmil
   - [utils: Useful utilities](#abstractutils-useful-utilities)
 - [Security](#security)
 - [Speed](#speed)
-- [Contributing & testing](#contributing--testing)
 - [Upgrading](#upgrading)
+- [Contributing & testing](#contributing--testing)
+- [Resources](#resources)
 
 ### Implementations
 
@@ -829,9 +830,9 @@ Use low-level libraries & languages. Nonetheless we're targetting algorithmic co
    - scure-base, scure-bip32, scure-bip39, micro-bmark and micro-should are developed by the same author and follow identical security practices
    - prettier (linter), fast-check (property-based testing) and typescript are used for code quality, vector generation and ts compilation. The packages are big, which makes it hard to audit their source code thoroughly and fully
 
-It's crucial to minimize the amount of 3rd-party dependencies & native bindings.
+Our goal is to minimize the amount of 3rd-party dependencies & native bindings.
 If your app uses 500 dependencies, any dep could get hacked and you'll be
-downloading malware with every install. Our goal is to minimize this attack vector.
+downloading malware with every install.
 
 ### Randomness
 
@@ -921,13 +922,6 @@ ed25519 x 3,088 ops/sec @ 323μs/op
 ed448 x 1,247 ops/sec @ 801μs/op
 ```
 
-## Contributing & testing
-
-1. Clone the repository
-2. `npm install` to install build dependencies like TypeScript
-3. `npm run build` to compile TypeScript code
-4. `npm run test` will execute all main tests
-
 ## Upgrading
 
 Previously, the library was split into single-feature packages
@@ -986,6 +980,13 @@ Upgrading from [@noble/bls12-381](https://github.com/paulmillr/noble-bls12-381):
   - PointG1 -> G1.Point, PointG2 -> G2.Point
   - PointG2.fromSignature -> Signature.decode, PointG2.toSignature -> Signature.encode
 - Fp2 ORDER was corrected
+
+## Contributing & testing
+
+1. Clone the repository
+2. `npm install` to install build dependencies like TypeScript
+3. `npm run build` to compile TypeScript code
+4. `npm run test` will execute all main tests
 
 ## Resources
 
