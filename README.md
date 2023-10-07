@@ -804,6 +804,8 @@ The library has been independently audited:
 It is tested against property-based, cross-library and Wycheproof vectors,
 and has fuzzing by [Guido Vranken's cryptofuzz](https://github.com/guidovranken/cryptofuzz).
 
+If you see anything unusual: investigate and report.
+
 ### Constant-timeness
 
 _JIT-compiler_ and _Garbage Collector_ make "constant time" extremely hard to
@@ -818,8 +820,7 @@ Use low-level libraries & languages. Nonetheless we're targetting algorithmic co
 
 * **Commits** are signed with PGP keys, to prevent forgery. Make sure to verify commit signatures.
 * **Releases** are transparent and built on GitHub CI. Make sure to verify [provenance](https://docs.npmjs.com/generating-provenance-statements) logs
-* **Rare releasing** is followed.
-   The less often it is done, the less code dependents would need to audit
+* **Rare releasing** is followed to ensure less re-audit need for end-users
 * **Dependencies** are minimal:
    - All deps are prevented from automatic updates and have locked-down version ranges. Every update is checked with `npm-diff`
    - Updates themselves are rare, to ensure rogue updates are not catched accidentally
@@ -833,14 +834,11 @@ that's why it's crucial to minimize the amount of 3rd-party dependencies & nativ
 If your app uses 500 dependencies, any dep could get hacked and you'll be
 downloading malware with every install. Our goal is to minimize this attack vector.
 
-If you see anything unusual: investigate and report.
-
 ### Randomness
 
 We're deferring to built-in
 [crypto.getRandomValues](https://developer.mozilla.org/en-US/docs/Web/API/Crypto/getRandomValues)
 which is considered cryptographically secure (CSPRNG).
-
 In the past, browsers had bugs that made it weak: it may happen again.
 
 ## Speed
