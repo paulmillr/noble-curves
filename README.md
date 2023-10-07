@@ -46,23 +46,19 @@ If you don't like NPM, a standalone [noble-curves.js](https://github.com/paulmil
   - [All available imports](#all-available-imports)
   - [Accessing a curve's variables](#accessing-a-curves-variables)
 - [Abstract API](#abstract-api)
-  - [abstract/weierstrass: Short Weierstrass curve](#abstractweierstrass-short-weierstrass-curve)
-  - [abstract/edwards: Twisted Edwards curve](#abstractedwards-twisted-edwards-curve)
-  - [abstract/montgomery: Montgomery curve](#abstractmontgomery-montgomery-curve)
-  - [abstract/bls: Barreto-Lynn-Scott curves](#abstractbls-barreto-lynn-scott-curves)
-  - [abstract/hash-to-curve: Hashing strings to curve points](#abstracthash-to-curve-hashing-strings-to-curve-points)
-  - [abstract/poseidon: Poseidon hash](#abstractposeidon-poseidon-hash)
-  - [abstract/modular: Modular arithmetics utilities](#abstractmodular-modular-arithmetics-utilities)
+  - [weierstrass: Short Weierstrass curve](#abstractweierstrass-short-weierstrass-curve)
+  - [edwards: Twisted Edwards curve](#abstractedwards-twisted-edwards-curve)
+  - [montgomery: Montgomery curve](#abstractmontgomery-montgomery-curve)
+  - [bls: Barreto-Lynn-Scott curves](#abstractbls-barreto-lynn-scott-curves)
+  - [hash-to-curve: Hashing strings to curve points](#abstracthash-to-curve-hashing-strings-to-curve-points)
+  - [poseidon: Poseidon hash](#abstractposeidon-poseidon-hash)
+  - [modular: Modular arithmetics utilities](#abstractmodular-modular-arithmetics-utilities)
     - [Creating private keys from hashes](#creating-private-keys-from-hashes)
-  - [abstract/utils: Useful utilities](#abstractutils-useful-utilities)
+  - [utils: Useful utilities](#abstractutils-useful-utilities)
 - [Security](#security)
 - [Speed](#speed)
 - [Contributing & testing](#contributing--testing)
 - [Upgrading](#upgrading)
-- [Resources](#resources)
-  - [Demos](#demos)
-  - [Projects using curves](#projects-using-curves)
-- [License](#license)
 
 ### Implementations
 
@@ -572,6 +568,8 @@ use aggregated, batch-verifiable
 using Boneh-Lynn-Shacham signature scheme.
 
 The module doesn't expose `CURVE` property: use `G1.CURVE`, `G2.CURVE` instead.
+Only BLS12-381 is implemented currently.
+Defining BLS12-377 and BLS24 should be straightforward.
 
 Main methods and properties are:
 
@@ -591,9 +589,6 @@ Short signatures (public keys in G2 and signatures in G1) is also supported, usi
 - `signShortSignature(message, privateKey)`
 - `verifyShortSignature(signature, message, publicKey)`
 - `aggregateShortSignatures(signatures)`
-
-Right now we only implement BLS12-381 (compatible with ETH and others),
-but in theory defining BLS12-377, BLS24 should be straightforward. An example:
 
 ```ts
 import { bls12_381 as bls } from '@noble/curves/bls12-381';
@@ -625,79 +620,16 @@ const isValid3 = bls.verifyBatch(aggSignature3, messages, publicKeys);
 console.log({ publicKeys, signatures3, aggSignature3, isValid3 });
 
 // Pairings, with and without final exponentiation
-// bls.pairing(PointG1, PointG2);
-// bls.pairing(PointG1, PointG2, false);
-// bls.fields.Fp12.finalExponentiate(bls.fields.Fp12.mul(eGS, ePHm));
+bls.pairing(PointG1, PointG2);
+bls.pairing(PointG1, PointG2, false);
+bls.fields.Fp12.finalExponentiate(bls.fields.Fp12.mul(PointG1, PointG2));
 
 // Others
-// bls.G1.ProjectivePoint.BASE, bls.G2.ProjectivePoint.BASE
-// bls.fields.Fp, bls.fields.Fp2, bls.fields.Fp12, bls.fields.Fr
+bls.G1.ProjectivePoint.BASE, bls.G2.ProjectivePoint.BASE
+bls.fields.Fp, bls.fields.Fp2, bls.fields.Fp12, bls.fields.Fr
+bls.params.x, bls.params.r, bls.params.G1b, bls.params.G2b
 
 // hash-to-curve examples can be seen below
-```
-
-Full types:
-
-```ts
-getPublicKey: (privateKey: PrivKey) => Uint8Array;
-getPublicKeyForShortSignatures: (privateKey: PrivKey) => Uint8Array;
-sign: {
-  (message: Hex, privateKey: PrivKey): Uint8Array;
-  (message: ProjPointType<Fp2>, privateKey: PrivKey): ProjPointType<Fp2>;
-};
-signShortSignature: {
-  (message: Hex, privateKey: PrivKey): Uint8Array;
-  (message: ProjPointType<Fp>, privateKey: PrivKey): ProjPointType<Fp>;
-};
-verify: (
-  signature: Hex | ProjPointType<Fp2>,
-  message: Hex | ProjPointType<Fp2>,
-  publicKey: Hex | ProjPointType<Fp>
-) => boolean;
-verifyShortSignature: (
-  signature: Hex | ProjPointType<Fp>,
-  message: Hex | ProjPointType<Fp>,
-  publicKey: Hex | ProjPointType<Fp2>
-) => boolean;
-verifyBatch: (
-  signature: Hex | ProjPointType<Fp2>,
-  messages: (Hex | ProjPointType<Fp2>)[],
-  publicKeys: (Hex | ProjPointType<Fp>)[]
-) => boolean;
-aggregatePublicKeys: {
-  (publicKeys: Hex[]): Uint8Array;
-  (publicKeys: ProjPointType<Fp>[]): ProjPointType<Fp>;
-};
-aggregateSignatures: {
-  (signatures: Hex[]): Uint8Array;
-  (signatures: ProjPointType<Fp2>[]): ProjPointType<Fp2>;
-};
-aggregateShortSignatures: {
-  (signatures: Hex[]): Uint8Array;
-  (signatures: ProjPointType<Fp>[]): ProjPointType<Fp>;
-};
-millerLoop: (ell: [Fp2, Fp2, Fp2][], g1: [Fp, Fp]) => Fp12;
-pairing: (P: ProjPointType<Fp>, Q: ProjPointType<Fp2>, withFinalExponent?: boolean) => Fp12;
-G1: CurvePointsRes<Fp> & ReturnType<typeof htf.createHasher<Fp>>;
-G2: CurvePointsRes<Fp2> & ReturnType<typeof htf.createHasher<Fp2>>;
-Signature: SignatureCoder<Fp2>;
-params: {
-  x: bigint;
-  r: bigint;
-  G1b: bigint;
-  G2b: Fp2;
-};
-fields: {
-  Fp: IField<Fp>;
-  Fp2: IField<Fp2>;
-  Fp6: IField<Fp6>;
-  Fp12: IField<Fp12>;
-  Fr: IField<bigint>;
-};
-utils: {
-  randomPrivateKey: () => Uint8Array;
-  calcPairingPrecomputes: (p: AffinePoint<Fp2>) => [Fp2, Fp2, Fp2][];
-};
 ```
 
 ### abstract/hash-to-curve: Hashing strings to curve points
@@ -1060,60 +992,9 @@ Upgrading from [@noble/bls12-381](https://github.com/paulmillr/noble-bls12-381):
 
 ## Resources
 
-- [Learning fast elliptic-curve cryptography](https://paulmillr.com/posts/noble-secp256k1-fast-ecc/)
-- EdDSA
-  - [A Deep dive into Ed25519 Signatures](https://cendyne.dev/posts/2022-03-06-ed25519-signatures.html)
-  - [Ed25519 Deep Dive Addendum](https://cendyne.dev/posts/2022-09-11-ed25519-deep-dive-addendum.html)
-  - [It’s 255:19AM. Do you know what your validation criteria are?](https://hdevalence.ca/blog/2020-10-04-its-25519am)
-  - [Taming the many EdDSAs](https://csrc.nist.gov/csrc/media/Presentations/2023/crclub-2023-03-08/images-media/20230308-crypto-club-slides--taming-the-many-EdDSAs.pdf)
-    that describes concepts of Strong UnForgeability under Chosen Message Attacks and Strongly Binding Signatures
-  - [Cofactor Explained: Clearing Elliptic Curves’ dirty little secret](https://loup-vaillant.fr/tutorials/cofactor)
-  - [Surrounded by Elligators](https://loup-vaillant.fr/articles/implementing-elligator)
-- Pairings and BLS
-  - [BLS signatures for busy people](https://gist.github.com/paulmillr/18b802ad219b1aee34d773d08ec26ca2)
-  - [BLS12-381 for the rest of us](https://hackmd.io/@benjaminion/bls12-381)
-  - [Key concepts of pairings](https://medium.com/@alonmuroch_65570/bls-signatures-part-2-key-concepts-of-pairings-27a8a9533d0c)
-  - Pairing over bls12-381:
-    [fields](https://research.nccgroup.com/2020/07/06/pairing-over-bls12-381-part-1-fields/),
-    [curves](https://research.nccgroup.com/2020/07/13/pairing-over-bls12-381-part-2-curves/),
-    [pairings](https://research.nccgroup.com/2020/08/13/pairing-over-bls12-381-part-3-pairing/)
-  - [Estimating the bit security of pairing-friendly curves](https://research.nccgroup.com/2022/02/03/estimating-the-bit-security-of-pairing-friendly-curves/)
-
-### Demos
-
-- [Elliptic Curve Calculator](https://paulmillr.com/noble): add / multiply points, sign messages
-- [BLS threshold signatures](https://genthresh.com)
-
-### Projects using curves
-
-- HDkey libraries: [scure-bip32](https://github.com/paulmillr/scure-bip32), [bip32](https://github.com/bitcoinjs/bip32)
-- Social networks: [nostr](https://github.com/nbd-wtf/nostr-tools), [bluesky](https://github.com/bluesky-social/atproto)
-- Ethereum libraries:
-  - [ethereum-cryptography](https://github.com/ethereum/js-ethereum-cryptography)
-  - [micro-eth-signer](https://github.com/paulmillr/micro-eth-signer),
-    [ethers](https://github.com/ethers-io/ethers.js) (old noble),
-    [viem.sh](https://viem.sh),
-    [@ethereumjs](https://github.com/ethereumjs/ethereumjs-monorepo)
-  - [metamask's eth-sig-util](https://github.com/MetaMask/eth-sig-util)
-  - [gridplus lattice sdk](https://github.com/GridPlus/lattice-eth2-utils)
-- Bitcoin libraries:
-  - [scure-btc-signer](https://github.com/paulmillr/scure-btc-signer)
-  - [tapscript](https://github.com/cmdruid/tapscript)
-- Solana libraries: [micro-sol-signer](https://github.com/paulmillr/micro-sol-signer), [solana-web3.js](https://github.com/solana-labs/solana-web3.js)
-- Other web3 stuff:
-  - [scure-starknet](https://github.com/paulmillr/scure-starknet)
-  - [aztec](https://github.com/AztecProtocol/aztec-packages)
-  - [polkadot.js](https://github.com/polkadot-js/common), [drand-client](https://github.com/drand/drand-client), [moneroj](https://github.com/beritani/moneroj), [tronlib](https://github.com/CoinSpace/tronlib)
-- [protonmail](https://github.com/ProtonMail/WebClients) (old noble for now)
-- [did-jwt](https://github.com/decentralized-identity/did-jwt), [hpke-js](https://github.com/dajiaji/hpke-js),
-  [js-libp2p-noise](https://github.com/ChainSafe/js-libp2p-noise)
-- [crystals-kyber-js](https://github.com/dajiaji/crystals-kyber-js), a post-quantum cryptography algorithm
-- [ed25519-keygen](https://github.com/paulmillr/ed25519-keygen) SSH, PGP, TOR key generation
-- [secp256k1 compatibility layer](https://github.com/ethereum/js-ethereum-cryptography/blob/2.0.0/src/secp256k1-compat.ts)
-  for users who want to switch from secp256k1-node or tiny-secp256k1. Allows to see which methods map to corresponding noble code.
-- [BLS BBS signatures](https://github.com/Wind4Greg/BBS-Draft-Checks) following [draft-irtf-cfrg-bbs-signatures-latest](https://identity.foundation/bbs-signature/draft-irtf-cfrg-bbs-signatures.html)
-- [KZG trusted setup ceremony](https://github.com/dsrvlabs/czg-keremony)
-- See [full list of projects on GitHub](https://github.com/paulmillr/noble-curves/network/dependents).
+Check out [paulmillr.com/noble](https://paulmillr.com/noble/)
+for useful resources, articles, documentation and demos
+related to the library.
 
 ## License
 
