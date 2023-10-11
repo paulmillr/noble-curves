@@ -123,6 +123,7 @@ function validatePointOpts<T>(curve: CurvePointsType<T>) {
 }
 
 export type CurvePointsRes<T> = {
+  CURVE: ReturnType<typeof validatePointOpts<T>>;
   ProjectivePoint: ProjConstructor<T>;
   normPrivateKeyToScalar: (key: PrivKey) => bigint;
   weierstrassEquation: (x: T) => T;
