@@ -123,6 +123,7 @@ function validatePointOpts<T>(curve: CurvePointsType<T>) {
 }
 
 export type CurvePointsRes<T> = {
+  CURVE: ReturnType<typeof validatePointOpts<T>>;
   ProjectivePoint: ProjConstructor<T>;
   normPrivateKeyToScalar: (key: PrivKey) => bigint;
   weierstrassEquation: (x: T) => T;
@@ -187,7 +188,7 @@ export const DER = {
 // prettier-ignore
 const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3), _4n = BigInt(4);
 
-export function weierstrassPoints<T>(opts: CurvePointsType<T>) {
+export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T> {
   const CURVE = validatePointOpts(opts);
   const { Fp } = CURVE; // All curves has same field / group length as for now, but they can differ
 
