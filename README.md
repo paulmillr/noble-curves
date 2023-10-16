@@ -761,6 +761,7 @@ if you need to hash to **public key**.
 import { p256 } from '@noble/curves/p256';
 import { sha256 } from '@noble/hashes/sha256';
 import { hkdf } from '@noble/hashes/hkdf';
+import * as mod from '@noble/curves/abstract/modular';
 const someKey = new Uint8Array(32).fill(2); // Needs to actually be random, not .fill(2)
 const derived = hkdf(sha256, someKey, undefined, 'application', 48); // 48 bytes for 32-byte priv
 const validPrivateKey = mod.hashToPrivateScalar(derived, p256.CURVE.n);
