@@ -839,7 +839,10 @@ Use low-level libraries & languages. Nonetheless we're targetting algorithmic co
 We're deferring to built-in
 [crypto.getRandomValues](https://developer.mozilla.org/en-US/docs/Web/API/Crypto/getRandomValues)
 which is considered cryptographically secure (CSPRNG).
+
 In the past, browsers had bugs that made it weak: it may happen again.
+Implementing a userspace CSPRNG to get resilient to the weakness
+is even worse: there is no reliable userspace source of quality entropy.
 
 ## Speed
 
