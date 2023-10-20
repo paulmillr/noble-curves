@@ -35,10 +35,16 @@ For [Deno](https://deno.land), ensure to use [npm specifier](https://deno.land/m
 For React Native, you may need a [polyfill for getRandomValues](https://github.com/LinusU/react-native-get-random-values).
 A standalone file [noble-curves.js](https://github.com/paulmillr/noble-curves/releases) is also available.
 
+```js
+// import * from '@noble/curves'; // Error: use sub-imports, to ensure small app size
+import { secp256k1 } from '@noble/curves/secp256k1'; // ESM and Common.js
+// import { secp256k1 } from 'npm:@noble/curves@1.2.0/secp256k1'; // Deno
+```
+
 - [Implementations](#implementations)
   - [ECDSA signature scheme](#ecdsa-signature-scheme)
   - [ECDSA public key recovery & extra entropy](#ecdsa-public-key-recovery--extra-entropy)
-  - [ECDH (Elliptic Curve Diffie-Hellman)](#ecdh-elliptic-curve-diffie-hellman)
+  - [ECDH: Elliptic Curve Diffie-Hellman](#ecdh-elliptic-curve-diffie-hellman)
   - [Schnorr signatures over secp256k1, BIP340](#schnorr-signatures-over-secp256k1-bip340)
   - [ed25519, X25519, ristretto255](#ed25519-x25519-ristretto255)
   - [ed448, X448, decaf448](#ed448-x448-decaf448)
@@ -46,15 +52,15 @@ A standalone file [noble-curves.js](https://github.com/paulmillr/noble-curves/re
   - [All available imports](#all-available-imports)
   - [Accessing a curve's variables](#accessing-a-curves-variables)
 - [Abstract API](#abstract-api)
-  - [weierstrass: Short Weierstrass curve](#abstractweierstrass-short-weierstrass-curve)
-  - [edwards: Twisted Edwards curve](#abstractedwards-twisted-edwards-curve)
-  - [montgomery: Montgomery curve](#abstractmontgomery-montgomery-curve)
-  - [bls: Barreto-Lynn-Scott curves](#abstractbls-barreto-lynn-scott-curves)
-  - [hash-to-curve: Hashing strings to curve points](#abstracthash-to-curve-hashing-strings-to-curve-points)
-  - [poseidon: Poseidon hash](#abstractposeidon-poseidon-hash)
-  - [modular: Modular arithmetics utilities](#abstractmodular-modular-arithmetics-utilities)
+  - [weierstrass: Short Weierstrass curve](#weierstrass-short-weierstrass-curve)
+  - [edwards: Twisted Edwards curve](#edwards-twisted-edwards-curve)
+  - [montgomery: Montgomery curve](#montgomery-montgomery-curve)
+  - [bls: Barreto-Lynn-Scott curves](#bls-barreto-lynn-scott-curves)
+  - [hash-to-curve: Hashing strings to curve points](#hash-to-curve-hashing-strings-to-curve-points)
+  - [poseidon: Poseidon hash](#poseidon-poseidon-hash)
+  - [modular: Modular arithmetics utilities](#modular-modular-arithmetics-utilities)
     - [Creating private keys from hashes](#creating-private-keys-from-hashes)
-  - [utils: Useful utilities](#abstractutils-useful-utilities)
+  - [utils: Useful utilities](#utils-useful-utilities)
 - [Security](#security)
 - [Speed](#speed)
 - [Upgrading](#upgrading)
@@ -71,9 +77,7 @@ Implementations are utilizing [noble-hashes](https://github.com/paulmillr/noble-
 Generic example that works for all curves, shown for secp256k1:
 
 ```ts
-// import * from '@noble/curves'; // Error: use sub-imports, to ensure small app size
-import { secp256k1 } from '@noble/curves/secp256k1'; // ESM and Common.js
-// import { secp256k1 } from 'npm:@noble/curves@1.2.0/secp256k1'; // Deno
+import { secp256k1 } from '@noble/curves/secp256k1';
 const priv = secp256k1.utils.randomPrivateKey();
 const pub = secp256k1.getPublicKey(priv);
 const msg = new Uint8Array(32).fill(1); // message hash (not message) in ecdsa
@@ -96,7 +100,7 @@ sig.recoverPublicKey(msg).toRawBytes(); // === pub; // public key recovery
 const sigImprovedSecurity = secp256k1.sign(msg, priv, { extraEntropy: true });
 ```
 
-#### ECDH (Elliptic Curve Diffie-Hellman)
+#### ECDH: Elliptic Curve Diffie-Hellman
 
 ```ts
 // 1. The output includes parity byte. Strip it using shared.slice(1)
@@ -272,7 +276,7 @@ Precomputes are enabled for weierstrass and edwards BASE points of a curve. You
 could precompute any other point (e.g. for ECDH) using `utils.precompute()`
 method: check out examples.
 
-### abstract/weierstrass: Short Weierstrass curve
+### weierstrass: Short Weierstrass curve
 
 ```ts
 import { weierstrass } from '@noble/curves/abstract/weierstrass';
@@ -443,7 +447,7 @@ const fast = secq256k1.utils.precompute(8, Point.fromHex(someonesPubKey));
 fast.multiply(privKey); // much faster ECDH now
 ```
 
-### abstract/edwards: Twisted Edwards curve
+### edwards: Twisted Edwards curve
 
 ```ts
 import { twistedEdwards } from '@noble/curves/abstract/edwards';
@@ -533,7 +537,7 @@ interface ExtPointConstructor extends GroupConstructor<ExtPointType> {
 }
 ```
 
-### abstract/montgomery: Montgomery curve
+### montgomery: Montgomery curve
 
 ```typescript
 import { montgomery } from '@noble/curves/abstract/montgomery';
@@ -560,7 +564,7 @@ Proper Elliptic Curve Points are not implemented yet.
 
 You must specify curve params `Fp`, `a`, `Gu` coordinate of u, `montgomeryBits` and `nByteLength`.
 
-### abstract/bls: Barreto-Lynn-Scott curves
+### bls: Barreto-Lynn-Scott curves
 
 The module abstracts BLS (Barreto-Lynn-Scott) pairing-friendly elliptic curve construction.
 They allow to construct [zk-SNARKs](https://z.cash/technology/zksnarks/) and
@@ -633,7 +637,7 @@ bls.params.x, bls.params.r, bls.params.G1b, bls.params.G2b
 // hash-to-curve examples can be seen below
 ```
 
-### abstract/hash-to-curve: Hashing strings to curve points
+### hash-to-curve: Hashing strings to curve points
 
 The module allows to hash arbitrary strings to elliptic curve points. Implements [RFC 9380](https://www.rfc-editor.org/rfc/rfc9380).
 
@@ -691,7 +695,7 @@ type Opts = {
 };
 ```
 
-### abstract/poseidon: Poseidon hash
+### poseidon: Poseidon hash
 
 Implements [Poseidon](https://www.poseidon-hash.info) ZK-friendly hash.
 
@@ -715,7 +719,7 @@ type PoseidonOpts = {
 const instance = poseidon(opts: PoseidonOpts);
 ```
 
-### abstract/modular: Modular arithmetics utilities
+### modular: Modular arithmetics utilities
 
 ```ts
 import * as mod from '@noble/curves/abstract/modular';
@@ -765,7 +769,7 @@ const derived = hkdf(sha256, someKey, undefined, 'application', 48); // 48 bytes
 const validPrivateKey = mod.hashToPrivateScalar(derived, p256.CURVE.n);
 ```
 
-### abstract/utils: Useful utilities
+### utils: Useful utilities
 
 ```ts
 import * as utils from '@noble/curves/abstract/utils';
