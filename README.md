@@ -18,13 +18,11 @@ Audited & minimal JS implementation of elliptic curve cryptography.
 
 - Zero or minimal dependencies
 - Highly readable TypeScript / JS code
-- PGP-signed releases and transparent NPM builds with provenance
+- PGP-signed releases and transparent NPM builds
 - All libraries:
   [ciphers](https://github.com/paulmillr/noble-ciphers),
   [curves](https://github.com/paulmillr/noble-curves),
-  [hashes](https://github.com/paulmillr/noble-hashes),
-  4kb [secp256k1](https://github.com/paulmillr/noble-secp256k1) /
-  [ed25519](https://github.com/paulmillr/noble-ed25519)
+  [hashes](https://github.com/paulmillr/noble-hashes)
 - [Check out homepage](https://paulmillr.com/noble/)
   for reading resources, documentation and apps built with noble
 
