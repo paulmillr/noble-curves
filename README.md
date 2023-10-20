@@ -69,8 +69,8 @@ import { secp256k1 } from '@noble/curves/secp256k1'; // ESM and Common.js
 
 ### Implementations
 
-Implementations are utilizing [noble-hashes](https://github.com/paulmillr/noble-hashes).
-[Abstract API](#abstract-api) doesn't depend on them: you can use a different hashing library.
+Implementations use [noble-hashes](https://github.com/paulmillr/noble-hashes).
+If you want to use a different hashing library, [abstract API](#abstract-api) doesn't depend on them.
 
 #### ECDSA signature scheme
 
