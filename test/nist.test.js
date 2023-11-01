@@ -95,31 +95,42 @@ should('fields', () => {
   for (const n in vectors) deepStrictEqual(NIST[n].CURVE.Fp.ORDER, vectors[n]);
 });
 
+// 1. We don't support ASN.1 encoding of points, so we ignore these vectors
+// 2. Overall our parser is very strict, so we ignore padded (invalid) private keys, etc.
+function verifyECDHVector(test, curve) {
+  if (test.flags.includes('InvalidAsn')) return; // Ignore invalid ASN
+  if (test.result === 'valid' || test.result === 'acceptable') {
+    const fpLen = curve.CURVE.Fp.BYTES; // 32 for P256
+    const encodedHexLen = fpLen * 2 * 2 + 2; // 130 (65 * 2) for P256
+    const privA = test.private;
+    const pubB = test.public.slice(-encodedHexLen); // slice(-130) for P256
+    if (!curve.utils.isValidPrivateKey(privA)) return; // Ignore invalid private key size
+    try {
+      curve.ProjectivePoint.fromHex(pubB);
+    } catch (e) {
+      if (e.message.startsWith('Point of length')) return; // Ignore
+      throw e;
+    }
+    const shared = curve.getSharedSecret(privA, pubB).subarray(1);
+    deepStrictEqual(hex(shared), test.shared, 'valid');
+  } else if (test.result === 'invalid') {
+    let failed = false;
+    try {
+      curve.getSharedSecret(test.private, test.public);
+    } catch (error) {
+      failed = true;
+    }
+    deepStrictEqual(failed, true, 'invalid');
+  } else throw new Error('unknown test result');
+}
+
 describe('wycheproof ECDH', () => {
   for (const group of ecdh.testGroups) {
-    const CURVE = NIST[group.curve];
-    if (!CURVE) continue;
+    const curve = NIST[group.curve];
+    if (!curve) continue;
     should(group.curve, () => {
       for (const test of group.tests) {
-        if (test.result === 'valid' || test.result === 'acceptable') {
-          try {
-            const pub = CURVE.ProjectivePoint.fromHex(test.public);
-          } catch (e) {
-            // Our strict validation filter doesn't let weird-length DER vectors
-            if (e.message.startsWith('Point of length')) continue;
-            throw e;
-          }
-          const shared = CURVE.getSharedSecret(test.private, test.public);
-          deepStrictEqual(shared, test.shared, 'valid');
-        } else if (test.result === 'invalid') {
-          let failed = false;
-          try {
-            CURVE.getSharedSecret(test.private, test.public);
-          } catch (error) {
-            failed = true;
-          }
-          deepStrictEqual(failed, true, 'invalid');
-        } else throw new Error('unknown test result');
+        verifyECDHVector(test, curve);
       }
     });
   }
@@ -151,30 +162,12 @@ describe('wycheproof ECDH', () => {
   for (const name in WYCHEPROOF_ECDH) {
     const { curve, tests } = WYCHEPROOF_ECDH[name];
     for (let i = 0; i < tests.length; i++) {
-      const test = tests[i];
-      for (let j = 0; j < test.testGroups.length; j++) {
-        const group = test.testGroups[j];
-        should(`additional ${name} (${i}/${j})`, () => {
+      const curveTests = tests[i];
+      for (let j = 0; j < curveTests.testGroups.length; j++) {
+        const group = curveTests.testGroups[j];
+        should(`additional ${name} (${group.tests.length})`, () => {
           for (const test of group.tests) {
-            if (test.result === 'valid' || test.result === 'acceptable') {
-              try {
-                const pub = curve.ProjectivePoint.fromHex(test.public);
-              } catch (e) {
-                // Our strict validation filter doesn't let weird-length DER vectors
-                if (e.message.includes('Point of length')) continue;
-                throw e;
-              }
-              const shared = curve.getSharedSecret(test.private, test.public);
-              deepStrictEqual(hex(shared), test.shared, 'valid');
-            } else if (test.result === 'invalid') {
-              let failed = false;
-              try {
-                curve.getSharedSecret(test.private, test.public);
-              } catch (error) {
-                failed = true;
-              }
-              deepStrictEqual(failed, true, 'invalid');
-            } else throw new Error('unknown test result');
+            verifyECDHVector(test, curve);
           }
         });
       }
