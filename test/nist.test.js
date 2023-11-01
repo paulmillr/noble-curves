@@ -100,10 +100,18 @@ should('fields', () => {
 function verifyECDHVector(test, curve) {
   if (test.flags.includes('InvalidAsn')) return; // Ignore invalid ASN
   if (test.result === 'valid' || test.result === 'acceptable') {
+    const fnLen = curve.CURVE.nByteLength; // 32 for P256
     const fpLen = curve.CURVE.Fp.BYTES; // 32 for P256
     const encodedHexLen = fpLen * 2 * 2 + 2; // 130 (65 * 2) for P256
-    const privA = test.private;
     const pubB = test.public.slice(-encodedHexLen); // slice(-130) for P256
+    let privA = test.private;
+
+    // Some wycheproof vectors are padded with 00:
+    // 00c6cafb74e2a50c83b3d232c4585237f44d4c5433c4b3f50ce978e6aeda3a4f5d
+    // instead of
+    // c6cafb74e2a50c83b3d232c4585237f44d4c5433c4b3f50ce978e6aeda3a4f5d
+    if (privA.length / 2 === fnLen + 1 && privA.startsWith('00')) privA = privA.slice(2);
+
     if (!curve.utils.isValidPrivateKey(privA)) return; // Ignore invalid private key size
     try {
       curve.ProjectivePoint.fromHex(pubB);
