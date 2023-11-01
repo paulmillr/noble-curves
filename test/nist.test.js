@@ -95,8 +95,9 @@ should('fields', () => {
   for (const n in vectors) deepStrictEqual(NIST[n].CURVE.Fp.ORDER, vectors[n]);
 });
 
-// 1. We don't support ASN.1 encoding of points, so we ignore these vectors
-// 2. Overall our parser is very strict, so we ignore padded (invalid) private keys, etc.
+// We don't support ASN.1 encoding of points. For tests we've implemented quick
+// and dirty parser: take X last bytes of ASN.1 encoded sequence.
+// If that doesn't work, we ignore such vector.
 function verifyECDHVector(test, curve) {
   if (test.flags.includes('InvalidAsn')) return; // Ignore invalid ASN
   if (test.result === 'valid' || test.result === 'acceptable') {
