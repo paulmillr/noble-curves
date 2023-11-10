@@ -5,7 +5,9 @@ import { describe, should } from 'micro-should';
 import { wNAF } from '../esm/abstract/curve.js';
 import { bytesToHex, utf8ToBytes } from '../esm/abstract/utils.js';
 import { hash_to_field } from '../esm/abstract/hash-to-curve.js';
-import { bls12_381 as bls } from '../esm/bls12-381.js';
+import { bls12_381 as bls, bls12_381 } from '../esm/bls12-381.js';
+
+import * as utils from '../esm/abstract/utils.js';
 
 import zkVectors from './bls12-381/zkcrypto/converted.json' assert { type: 'json' };
 import pairingVectors from './bls12-381/go_pairing_vectors/pairing.json' assert { type: 'json' };
@@ -1414,6 +1416,37 @@ describe('bls12-381 deterministic', () => {
         deepStrictEqual(G2Point.BASE.multiply(BigInt(i)).toHex(false), t);
       }
     }
+  });
+  should(`zkcrypt/G1 & G2 encoding edge cases`, () => {
+    const Fp = bls12_381.fields.Fp;
+    const S_BIT_POS = Fp.BITS; // C_bit, compression bit for serialization flag
+    const I_BIT_POS = Fp.BITS + 1; // I_bit, point-at-infinity bit for serialization flag
+    const C_BIT_POS = Fp.BITS + 2; // S_bit, sort bit for serialization flag
+    const VECTORS = [
+      { pos: C_BIT_POS, shift: 7 }, // compression_flag_set = Choice::from((bytes[0] >> 7) & 1);
+      { pos: I_BIT_POS, shift: 6 }, // infinity_flag_set = Choice::from((bytes[0] >> 6) & 1)
+      { pos: S_BIT_POS, shift: 5 }, // sort_flag_set = Choice::from((bytes[0] >> 5) & 1)
+    ];
+    for (const { pos, shift } of VECTORS) {
+      const d = utils.numberToBytesBE(utils.bitSet(0n, pos, Boolean(true)), Fp.BYTES);
+      deepStrictEqual((d[0] >> shift) & 1, 1, `${pos}`);
+    }
+    const baseC = G1Point.BASE.toRawBytes();
+    deepStrictEqual(baseC.length, 48);
+    const baseU = G1Point.BASE.toRawBytes(false);
+    deepStrictEqual(baseU.length, 96);
+    const compressedBit = baseU.slice();
+    compressedBit[0] |= 0b1000_0000; // add compression bit
+    throws(() => G1Point.fromHex(compressedBit), 'compressed bit'); // uncompressed point with compressed length
+    const uncompressedBit = baseC.slice();
+    uncompressedBit[0] &= 0b0111_1111; // remove compression bit
+    throws(() => G1Point.fromHex(uncompressedBit), 'uncompressed bit');
+    const infinityUncompressed = baseU.slice();
+    infinityUncompressed[0] |= 0b0100_0000;
+    throws(() => G1Point.fromHex(compressedBit), 'infinity uncompressed');
+    const infinityCompressed = baseC.slice();
+    infinityCompressed[0] |= 0b0100_0000;
+    throws(() => G1Point.fromHex(compressedBit), 'infinity compressed');
   });
 });
 
