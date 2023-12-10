@@ -3,7 +3,7 @@
     "outDir": "esm",
     "target": "es2020",
     "module": "es6",
-    "moduleResolution": "node16",
+    "moduleResolution": "bundler",
     "baseUrl": ".",
     "paths": {
       "@noble/hashes/crypto": ["src/crypto"]
