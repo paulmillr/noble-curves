@@ -16,8 +16,11 @@ export type CHash = {
 };
 export type FHash = (message: Uint8Array | string) => Uint8Array;
 
-export function isBytes(a: any): a is Uint8Array {
-  return a instanceof Uint8Array || a.constructor.name === 'Uint8Array';
+export function isBytes(a: unknown): a is Uint8Array {
+  return (
+    a instanceof Uint8Array ||
+    (a != null && typeof a === 'object' && a.constructor.name === 'Uint8Array')
+  );
 }
 
 // Array where index 0xf0 (240) is mapped to string 'f0'
