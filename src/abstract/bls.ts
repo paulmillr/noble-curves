@@ -14,7 +14,11 @@
 import { AffinePoint } from './curve.js';
 import { IField, getMinHashLength, mapHashToField } from './modular.js';
 import { Hex, PrivKey, CHash, bitLen, bitGet, ensureBytes } from './utils.js';
-import * as htf from './hash-to-curve.js';
+// prettier-ignore
+import {
+  MapToCurve, Opts as HTFOpts, H2CPointConstructor, htfBasicOpts,
+  createHasher
+} from './hash-to-curve.js';
 import {
   CurvePointsType,
   ProjPointType as ProjPointType,
@@ -42,13 +46,13 @@ export type SignatureCoder<Fp2> = {
 export type CurveType<Fp, Fp2, Fp6, Fp12> = {
   G1: Omit<CurvePointsType<Fp>, 'n'> & {
     ShortSignature: SignatureCoder<Fp>;
-    mapToCurve: htf.MapToCurve<Fp>;
-    htfDefaults: htf.Opts;
+    mapToCurve: MapToCurve<Fp>;
+    htfDefaults: HTFOpts;
   };
   G2: Omit<CurvePointsType<Fp2>, 'n'> & {
     Signature: SignatureCoder<Fp2>;
-    mapToCurve: htf.MapToCurve<Fp2>;
-    htfDefaults: htf.Opts;
+    mapToCurve: MapToCurve<Fp2>;
+    htfDefaults: HTFOpts;
   };
   fields: {
     Fp: IField<Fp>;
@@ -70,7 +74,7 @@ export type CurveType<Fp, Fp2, Fp6, Fp12> = {
     x: bigint;
     r: bigint;
   };
-  htfDefaults: htf.Opts;
+  htfDefaults: HTFOpts;
   hash: CHash; // Because we need outputLen for DRBG
   randomBytes: (bytesLength?: number) => Uint8Array;
 };
@@ -89,17 +93,20 @@ export type CurveFn<Fp, Fp2, Fp6, Fp12> = {
   verify: (
     signature: Hex | ProjPointType<Fp2>,
     message: Hex | ProjPointType<Fp2>,
-    publicKey: Hex | ProjPointType<Fp>
+    publicKey: Hex | ProjPointType<Fp>,
+    htfOpts?: htfBasicOpts
   ) => boolean;
   verifyShortSignature: (
     signature: Hex | ProjPointType<Fp>,
     message: Hex | ProjPointType<Fp>,
-    publicKey: Hex | ProjPointType<Fp2>
+    publicKey: Hex | ProjPointType<Fp2>,
+    htfOpts?: htfBasicOpts
   ) => boolean;
   verifyBatch: (
     signature: Hex | ProjPointType<Fp2>,
     messages: (Hex | ProjPointType<Fp2>)[],
-    publicKeys: (Hex | ProjPointType<Fp>)[]
+    publicKeys: (Hex | ProjPointType<Fp>)[],
+    htfOpts?: htfBasicOpts
   ) => boolean;
   aggregatePublicKeys: {
     (publicKeys: Hex[]): Uint8Array;
@@ -115,8 +122,8 @@ export type CurveFn<Fp, Fp2, Fp6, Fp12> = {
   };
   millerLoop: (ell: [Fp2, Fp2, Fp2][], g1: [Fp, Fp]) => Fp12;
   pairing: (P: ProjPointType<Fp>, Q: ProjPointType<Fp2>, withFinalExponent?: boolean) => Fp12;
-  G1: CurvePointsRes<Fp> & ReturnType<typeof htf.createHasher<Fp>>;
-  G2: CurvePointsRes<Fp2> & ReturnType<typeof htf.createHasher<Fp2>>;
+  G1: CurvePointsRes<Fp> & ReturnType<typeof createHasher<Fp>>;
+  G2: CurvePointsRes<Fp2> & ReturnType<typeof createHasher<Fp2>>;
   Signature: SignatureCoder<Fp2>;
   ShortSignature: ShortSignatureCoder<Fp>;
   params: {
@@ -220,7 +227,7 @@ export function bls<Fp2, Fp6, Fp12>(
   const G1_ = weierstrassPoints({ n: Fr.ORDER, ...CURVE.G1 });
   const G1 = Object.assign(
     G1_,
-    htf.createHasher(G1_.ProjectivePoint, CURVE.G1.mapToCurve, {
+    createHasher(G1_.ProjectivePoint, CURVE.G1.mapToCurve, {
       ...CURVE.htfDefaults,
       ...CURVE.G1.htfDefaults,
     })
@@ -246,7 +253,7 @@ export function bls<Fp2, Fp6, Fp12>(
   const G2_ = weierstrassPoints({ n: Fr.ORDER, ...CURVE.G2 });
   const G2 = Object.assign(
     G2_,
-    htf.createHasher(G2_.ProjectivePoint as htf.H2CPointConstructor<Fp2>, CURVE.G2.mapToCurve, {
+    createHasher(G2_.ProjectivePoint as H2CPointConstructor<Fp2>, CURVE.G2.mapToCurve, {
       ...CURVE.htfDefaults,
       ...CURVE.G2.htfDefaults,
     })
@@ -274,7 +281,7 @@ export function bls<Fp2, Fp6, Fp12>(
   function normP1(point: G1Hex): G1 {
     return point instanceof G1.ProjectivePoint ? (point as G1) : G1.ProjectivePoint.fromHex(point);
   }
-  function normP1Hash(point: G1Hex, htfOpts?: htf.htfBasicOpts): G1 {
+  function normP1Hash(point: G1Hex, htfOpts?: htfBasicOpts): G1 {
     return point instanceof G1.ProjectivePoint
       ? point
       : (G1.hashToCurve(ensureBytes('point', point), htfOpts) as G1);
@@ -282,7 +289,7 @@ export function bls<Fp2, Fp6, Fp12>(
   function normP2(point: G2Hex): G2 {
     return point instanceof G2.ProjectivePoint ? point : Signature.fromHex(point);
   }
-  function normP2Hash(point: G2Hex, htfOpts?: htf.htfBasicOpts): G2 {
+  function normP2Hash(point: G2Hex, htfOpts?: htfBasicOpts): G2 {
     return point instanceof G2.ProjectivePoint
       ? point
       : (G2.hashToCurve(ensureBytes('point', point), htfOpts) as G2);
@@ -302,9 +309,9 @@ export function bls<Fp2, Fp6, Fp12>(
 
   // Executes `hashToCurve` on the message and then multiplies the result by private key.
   // S = pk x H(m)
-  function sign(message: Hex, privateKey: PrivKey, htfOpts?: htf.htfBasicOpts): Uint8Array;
-  function sign(message: G2, privateKey: PrivKey, htfOpts?: htf.htfBasicOpts): G2;
-  function sign(message: G2Hex, privateKey: PrivKey, htfOpts?: htf.htfBasicOpts): Uint8Array | G2 {
+  function sign(message: Hex, privateKey: PrivKey, htfOpts?: htfBasicOpts): Uint8Array;
+  function sign(message: G2, privateKey: PrivKey, htfOpts?: htfBasicOpts): G2;
+  function sign(message: G2Hex, privateKey: PrivKey, htfOpts?: htfBasicOpts): Uint8Array | G2 {
     const msgPoint = normP2Hash(message, htfOpts);
     msgPoint.assertValidity();
     const sigPoint = msgPoint.multiply(G1.normPrivateKeyToScalar(privateKey));
@@ -315,13 +322,13 @@ export function bls<Fp2, Fp6, Fp12>(
   function signShortSignature(
     message: Hex,
     privateKey: PrivKey,
-    htfOpts?: htf.htfBasicOpts
+    htfOpts?: htfBasicOpts
   ): Uint8Array;
-  function signShortSignature(message: G1, privateKey: PrivKey, htfOpts?: htf.htfBasicOpts): G1;
+  function signShortSignature(message: G1, privateKey: PrivKey, htfOpts?: htfBasicOpts): G1;
   function signShortSignature(
     message: G1Hex,
     privateKey: PrivKey,
-    htfOpts?: htf.htfBasicOpts
+    htfOpts?: htfBasicOpts
   ): Uint8Array | G1 {
     const msgPoint = normP1Hash(message, htfOpts);
     msgPoint.assertValidity();
@@ -336,7 +343,7 @@ export function bls<Fp2, Fp6, Fp12>(
     signature: G2Hex,
     message: G2Hex,
     publicKey: G1Hex,
-    htfOpts?: htf.htfBasicOpts
+    htfOpts?: htfBasicOpts
   ): boolean {
     const P = normP1(publicKey);
     const Hm = normP2Hash(message, htfOpts);
@@ -356,7 +363,7 @@ export function bls<Fp2, Fp6, Fp12>(
     signature: G1Hex,
     message: G1Hex,
     publicKey: G2Hex,
-    htfOpts?: htf.htfBasicOpts
+    htfOpts?: htfBasicOpts
   ): boolean {
     const P = normP2(publicKey);
     const Hm = normP1Hash(message, htfOpts);
@@ -420,7 +427,7 @@ export function bls<Fp2, Fp6, Fp12>(
     signature: G2Hex,
     messages: G2Hex[],
     publicKeys: G1Hex[],
-    htfOpts?: htf.htfBasicOpts
+    htfOpts?: htfBasicOpts
   ): boolean {
     // @ts-ignore
     // console.log('verifyBatch', bytesToHex(signature as any), messages, publicKeys.map(bytesToHex));
