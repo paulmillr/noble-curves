@@ -34,8 +34,8 @@
     "fast-check": "3.0.0",
     "micro-bmark": "0.3.1",
     "micro-should": "0.4.0",
-    "prettier": "2.8.4",
-    "typescript": "5.0.2"
+    "prettier": "3.1.1",
+    "typescript": "5.3.2"
   },
   "sideEffects": false,
   "main": "index.js",
