@@ -6,7 +6,6 @@
 const _0n = BigInt(0);
 const _1n = BigInt(1);
 const _2n = BigInt(2);
-const u8a = (a: any): a is Uint8Array => a instanceof Uint8Array;
 export type Hex = Uint8Array | string; // hex strings are accepted for simplicity
 export type PrivKey = Hex | bigint; // bigints are accepted to ease learning curve
 export type CHash = {
@@ -17,6 +16,10 @@ export type CHash = {
 };
 export type FHash = (message: Uint8Array | string) => Uint8Array;
 
+function isBytes(a: any): a is Uint8Array {
+  return a instanceof Uint8Array || a.constructor.name === 'Uint8Array';
+}
+
 const hexes = /* @__PURE__ */ Array.from({ length: 256 }, (_, i) =>
   i.toString(16).padStart(2, '0')
 );
@@ -24,7 +27,7 @@ const hexes = /* @__PURE__ */ Array.from({ length: 256 }, (_, i) =>
  * @example bytesToHex(Uint8Array.from([0xca, 0xfe, 0x01, 0x23])) // 'cafe0123'
  */
 export function bytesToHex(bytes: Uint8Array): string {
-  if (!u8a(bytes)) throw new Error('Uint8Array expected');
+  if (!isBytes(bytes)) throw new Error('Uint8Array expected');
   // pre-caching improves the speed 6x
   let hex = '';
   for (let i = 0; i < bytes.length; i++) {
@@ -79,7 +82,7 @@ export function bytesToNumberBE(bytes: Uint8Array): bigint {
   return hexToNumber(bytesToHex(bytes));
 }
 export function bytesToNumberLE(bytes: Uint8Array): bigint {
-  if (!u8a(bytes)) throw new Error('Uint8Array expected');
+  if (!isBytes(bytes)) throw new Error('Uint8Array expected');
   return hexToNumber(bytesToHex(Uint8Array.from(bytes).reverse()));
 }
 
@@ -111,7 +114,7 @@ export function ensureBytes(title: string, hex: Hex, expectedLength?: number): U
     } catch (e) {
       throw new Error(`${title} must be valid hex string, got "${hex}". Cause: ${e}`);
     }
-  } else if (u8a(hex)) {
+  } else if (isBytes(hex)) {
     // Uint8Array.from() instead of hash.slice() because node.js Buffer
     // is instance of Uint8Array, and its slice() creates **mutable** copy
     res = Uint8Array.from(hex);
@@ -128,14 +131,20 @@ export function ensureBytes(title: string, hex: Hex, expectedLength?: number): U
  * Copies several Uint8Arrays into one.
  */
 export function concatBytes(...arrays: Uint8Array[]): Uint8Array {
-  const r = new Uint8Array(arrays.reduce((sum, a) => sum + a.length, 0));
-  let pad = 0; // walk through each item, ensure they have proper type
-  arrays.forEach((a) => {
-    if (!u8a(a)) throw new Error('Uint8Array expected');
-    r.set(a, pad);
+  let sum = 0;
+  for (let i = 0; i < arrays.length; i++) {
+    const a = arrays[i];
+    if (!isBytes(a)) throw new Error('Uint8Array expected');
+    sum += a.length;
+  }
+  let res = new Uint8Array(sum);
+  let pad = 0;
+  for (let i = 0; i < arrays.length; i++) {
+    const a = arrays[i];
+    res.set(a, pad);
     pad += a.length;
-  });
-  return r;
+  }
+  return res;
 }
 
 export function equalBytes(b1: Uint8Array, b2: Uint8Array) {
