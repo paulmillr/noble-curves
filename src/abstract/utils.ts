@@ -16,7 +16,7 @@ export type CHash = {
 };
 export type FHash = (message: Uint8Array | string) => Uint8Array;
 
-function isBytes(a: any): a is Uint8Array {
+export function isBytes(a: any): a is Uint8Array {
   return a instanceof Uint8Array || a.constructor.name === 'Uint8Array';
 }
 
@@ -271,7 +271,7 @@ const validatorFns = {
   function: (val: any) => typeof val === 'function',
   boolean: (val: any) => typeof val === 'boolean',
   string: (val: any) => typeof val === 'string',
-  stringOrUint8Array: (val: any) => typeof val === 'string' || val instanceof Uint8Array,
+  stringOrUint8Array: (val: any) => typeof val === 'string' || isBytes(val),
   isSafeInteger: (val: any) => Number.isSafeInteger(val),
   array: (val: any) => Array.isArray(val),
   field: (val: any, object: any) => (object as any).Fp.isValid(val),
