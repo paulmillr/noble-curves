@@ -158,7 +158,7 @@ export const DER = {
     // parse DER signature
     const { Err: E } = DER;
     const data = typeof hex === 'string' ? h2b(hex) : hex;
-    if (!(data instanceof Uint8Array)) throw new Error('ui8a expected');
+    if (!ut.isBytes(data)) throw new Error('ui8a expected');
     let l = data.length;
     if (l < 2 || data[0] != 0x30) throw new E('Invalid signature tag');
     if (data[1] !== l - 2) throw new E('Invalid signature: incorrect length');
@@ -238,7 +238,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
   function normPrivateKeyToScalar(key: PrivKey): bigint {
     const { allowedPrivateKeyLengths: lengths, nByteLength, wrapPrivateKey, n } = CURVE;
     if (lengths && typeof key !== 'bigint') {
-      if (key instanceof Uint8Array) key = ut.bytesToHex(key);
+      if (ut.isBytes(key)) key = ut.bytesToHex(key);
       // Normalize to hex string, pad. E.g. P521 would norm 130-132 char hex to 132-char bytes
       if (typeof key !== 'string' || !lengths.includes(key.length)) throw new Error('Invalid key');
       key = key.padStart(nByteLength * 2, '0');
@@ -893,7 +893,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
    * Quick and dirty check for item being public key. Does not validate hex, or being on-curve.
    */
   function isProbPub(item: PrivKey | PubKey): boolean {
-    const arr = item instanceof Uint8Array;
+    const arr = ut.isBytes(item);
     const str = typeof item === 'string';
     const len = (arr || str) && (item as Hex).length;
     if (arr) return len === compressedLen || len === uncompressedLen;
@@ -1057,7 +1057,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     let _sig: Signature | undefined = undefined;
     let P: ProjPointType<bigint>;
     try {
-      if (typeof sg === 'string' || sg instanceof Uint8Array) {
+      if (typeof sg === 'string' || ut.isBytes(sg)) {
         // Signature can be represented in 2 ways: compact (2*nByteLength) & DER (variable-length).
         // Since DER can also be 2*nByteLength bytes, we check for it first.
         try {

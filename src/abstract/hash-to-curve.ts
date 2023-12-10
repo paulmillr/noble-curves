@@ -1,7 +1,8 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import type { Group, GroupConstructor, AffinePoint } from './curve.js';
 import { mod, IField } from './modular.js';
-import { bytesToNumberBE, CHash, concatBytes, utf8ToBytes, validateObject } from './utils.js';
+import type { CHash } from './utils.js';
+import { bytesToNumberBE, isBytes, concatBytes, utf8ToBytes, validateObject } from './utils.js';
 
 /**
  * * `DST` is a domain separation tag, defined in section 2.2.5
@@ -22,7 +23,7 @@ export type Opts = {
 };
 
 function validateDST(dst: UnicodeOrBytes): Uint8Array {
-  if (dst instanceof Uint8Array) return dst;
+  if (isBytes(dst)) return dst;
   if (typeof dst === 'string') return utf8ToBytes(dst);
   throw new Error('DST must be Uint8Array or string');
 }
@@ -51,8 +52,8 @@ function strxor(a: Uint8Array, b: Uint8Array): Uint8Array {
   return arr;
 }
 
-function isBytes(item: unknown): void {
-  if (!(item instanceof Uint8Array)) throw new Error('Uint8Array expected');
+function abytes(item: unknown): void {
+  if (!isBytes(item)) throw new Error('Uint8Array expected');
 }
 function isNum(item: unknown): void {
   if (!Number.isSafeInteger(item)) throw new Error('number expected');
@@ -66,8 +67,8 @@ export function expand_message_xmd(
   lenInBytes: number,
   H: CHash
 ): Uint8Array {
-  isBytes(msg);
-  isBytes(DST);
+  abytes(msg);
+  abytes(DST);
   isNum(lenInBytes);
   // https://www.rfc-editor.org/rfc/rfc9380#section-5.3.3
   if (DST.length > 255) DST = H(concatBytes(utf8ToBytes('H2C-OVERSIZE-DST-'), DST));
@@ -100,8 +101,8 @@ export function expand_message_xof(
   k: number,
   H: CHash
 ): Uint8Array {
-  isBytes(msg);
-  isBytes(DST);
+  abytes(msg);
+  abytes(DST);
   isNum(lenInBytes);
   // https://www.rfc-editor.org/rfc/rfc9380#section-5.3.3
   // DST = H('H2C-OVERSIZE-DST-' || a_very_long_DST, Math.ceil((lenInBytes * k) / 8));
@@ -139,7 +140,7 @@ export function hash_to_field(msg: Uint8Array, count: number, options: Opts): bi
     hash: 'hash',
   });
   const { p, k, m, hash, expand, DST: _DST } = options;
-  isBytes(msg);
+  abytes(msg);
   isNum(count);
   const DST = validateDST(_DST);
   const log2p = p.toString(2).length;
