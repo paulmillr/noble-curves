@@ -270,7 +270,11 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
     static readonly BASE = new Point(CURVE.Gx, CURVE.Gy, Fp.ONE);
     static readonly ZERO = new Point(Fp.ZERO, Fp.ONE, Fp.ZERO);
 
-    constructor(readonly px: T, readonly py: T, readonly pz: T) {
+    constructor(
+      readonly px: T,
+      readonly py: T,
+      readonly pz: T
+    ) {
       if (px == null || !Fp.isValid(px)) throw new Error('x required');
       if (py == null || !Fp.isValid(py)) throw new Error('y required');
       if (pz == null || !Fp.isValid(pz)) throw new Error('z required');
@@ -764,7 +768,11 @@ export function weierstrass(curveDef: CurveType): CurveFn {
    * ECDSA signature with its (r, s) properties. Supports DER & compact representations.
    */
   class Signature implements SignatureType {
-    constructor(readonly r: bigint, readonly s: bigint, readonly recovery?: number) {
+    constructor(
+      readonly r: bigint,
+      readonly s: bigint,
+      readonly recovery?: number
+    ) {
       this.assertValidity();
     }
 
