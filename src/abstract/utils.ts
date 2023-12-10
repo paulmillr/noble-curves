@@ -20,6 +20,7 @@ function isBytes(a: any): a is Uint8Array {
   return a instanceof Uint8Array || a.constructor.name === 'Uint8Array';
 }
 
+// Array where index 0xf0 (240) is mapped to string 'f0'
 const hexes = /* @__PURE__ */ Array.from({ length: 256 }, (_, i) =>
   i.toString(16).padStart(2, '0')
 );
@@ -147,11 +148,12 @@ export function concatBytes(...arrays: Uint8Array[]): Uint8Array {
   return res;
 }
 
-export function equalBytes(b1: Uint8Array, b2: Uint8Array) {
-  // We don't care about timing attacks here
-  if (b1.length !== b2.length) return false;
-  for (let i = 0; i < b1.length; i++) if (b1[i] !== b2[i]) return false;
-  return true;
+// Compares 2 u8a-s in kinda constant time
+export function equalBytes(a: Uint8Array, b: Uint8Array) {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
+  return diff === 0;
 }
 
 // Global symbols in both browsers and Node.js since v11
