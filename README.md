@@ -8,7 +8,7 @@ Audited & minimal JS implementation of elliptic curve cryptography.
 - 🔍 Unique tests ensure correctness: property-based, cross-library and Wycheproof vectors, fuzzing
 - ➰ Short Weierstrass, Edwards, Montgomery curves
 - ✍️ ECDSA, EdDSA, Schnorr, BLS signature schemes, ECDH key agreement
-- 🔖 SUF-CMA, SBS (non-repudiation), ZIP215 (consensus friendliness) ed25519 features
+- 🔖 SUF-CMA, SBS (non-repudiation), ZIP215 (consensus friendliness) features for ed25519
 - #️⃣ hash-to-curve for encoding or hashing an arbitrary string to an elliptic curve point
 - 🧜‍♂️ Poseidon ZK-friendly hash
 
