@@ -733,7 +733,13 @@ export function weierstrass(curveDef: CurveType): CurveFn {
         const x = ut.bytesToNumberBE(tail);
         if (!isValidFieldElement(x)) throw new Error('Point is not on curve');
         const y2 = weierstrassEquation(x); // y² = x³ + ax + b
-        let y = Fp.sqrt(y2); // y = y² ^ (p+1)/4
+        let y: bigint;
+        try {
+          y = Fp.sqrt(y2); // y = y² ^ (p+1)/4
+        } catch (sqrtError) {
+          const suffix = sqrtError instanceof Error ? ': ' + sqrtError.message : '';
+          throw new Error('Point is not on curve' + suffix);
+        }
         const isYOdd = (y & _1n) === _1n;
         // ECDSA
         const isHeadOdd = (head & 1) === 1;
