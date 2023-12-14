@@ -89,6 +89,8 @@ const privHex = '46c930bc7bb4db7f55da20798697421b98c4175a52c630294d75a84b9c12623
 const pub2 = secp256k1.getPublicKey(privHex);
 ```
 
+We support P256 (secp256r1), P384 (secp384r1), P521 (secp521r1).
+
 #### ECDSA public key recovery & extra entropy
 
 ```ts
