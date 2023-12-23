@@ -24,7 +24,7 @@
   "homepage": "https://paulmillr.com/noble/",
   "repository": {
     "type": "git",
-    "url": "https://github.com/paulmillr/noble-curves.git"
+    "url": "git+https://github.com/paulmillr/noble-curves.git"
   },
   "license": "MIT",
   "dependencies": {
