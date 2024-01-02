@@ -141,9 +141,8 @@ export function concatBytes(...arrays: Uint8Array[]): Uint8Array {
     if (!isBytes(a)) throw new Error('Uint8Array expected');
     sum += a.length;
   }
-  let res = new Uint8Array(sum);
-  let pad = 0;
-  for (let i = 0; i < arrays.length; i++) {
+  const res = new Uint8Array(sum);
+  for (let i = 0, pad = 0; i < arrays.length; i++) {
     const a = arrays[i];
     res.set(a, pad);
     pad += a.length;
