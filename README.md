@@ -239,7 +239,7 @@ Same RFC7748 / RFC8032 / IRTF draft are followed.
 
 #### bls12-381
 
-See [abstract/bls](#abstractbls-barreto-lynn-scott-curves).
+See [abstract/bls](#bls-barreto-lynn-scott-curves).
 
 #### All available imports
 
@@ -758,7 +758,7 @@ and [RFC 9380](https://www.rfc-editor.org/rfc/rfc9380#section-5.2).
 This means, for 32-byte key, we would need 48-byte hash to get 2^-128 bias, which matches curve security level.
 
 `hashToPrivateScalar()` that hashes to **private key** was created for this purpose.
-Use [abstract/hash-to-curve](#abstracthash-to-curve-hashing-strings-to-curve-points)
+Use [abstract/hash-to-curve](#hash-to-curve-hashing-strings-to-curve-points)
 if you need to hash to **public key**.
 
 ```ts
