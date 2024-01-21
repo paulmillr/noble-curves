@@ -7,10 +7,10 @@ Audited & minimal JS implementation of elliptic curve cryptography.
 - 🏎 Ultra-fast, hand-optimized for caveats of JS engines
 - 🔍 Unique tests ensure correctness: property-based, cross-library and Wycheproof vectors, fuzzing
 - ➰ Short Weierstrass, Edwards, Montgomery curves
-- ✍️ ECDSA, EdDSA, Schnorr, BLS signature schemes, ECDH key agreement
+- ✍️ ECDSA, EdDSA, Schnorr, BLS signature schemes, ECDH key agreement, hashing to curves
 - 🔖 SUF-CMA, SBS (non-repudiation), ZIP215 (consensus friendliness) features for ed25519
-- #️⃣ hash-to-curve for encoding or hashing an arbitrary string to an elliptic curve point
 - 🧜‍♂️ Poseidon ZK-friendly hash
+- 🪶 178KB for everything, 25KB for single-curve build
 
 ### This library belongs to _noble_ crypto
 
