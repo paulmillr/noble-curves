@@ -385,7 +385,12 @@ export const elligatorSwift = /* @__PURE__ */ {
     return numberToBytesBE(point.multiply(d).x, 32);
   },
   // BIP324 shared secret
-  getSharedSecretBip324: (privateKeyOurs: Hex, publicKeyTheirs: Hex, publicKeyOurs: Hex, initiating: boolean) => {
+  getSharedSecretBip324: (
+    privateKeyOurs: Hex,
+    publicKeyTheirs: Hex,
+    publicKeyOurs: Hex,
+    initiating: boolean
+  ) => {
     const ours = ensureBytes('publicKeyOurs', publicKeyOurs);
     const theirs = ensureBytes('publicKeyTheirs', publicKeyTheirs);
     const ecdhPoint = elligatorSwift.getSharedSecret(privateKeyOurs, theirs);
