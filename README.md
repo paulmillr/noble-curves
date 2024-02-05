@@ -12,9 +12,13 @@ Audited & minimal JS implementation of elliptic curve cryptography.
 - 🧜‍♂️ Poseidon ZK-friendly hash
 - 🪶 178KB for everything, 25KB for single-curve build
 
-### This library belongs to _noble_ crypto
+For discussions, questions and support, visit
+[GitHub Discussions](https://github.com/paulmillr/noble-curves/discussions)
+section of the repository.
 
-> **noble-crypto** — high-security, easily auditable set of contained cryptographic libraries and tools.
+### This library belongs to _noble_ cryptography
+
+> **noble cryptography** — high-security, easily auditable set of contained cryptographic libraries and tools.
 
 - Zero or minimal dependencies
 - Highly readable TypeScript / JS code
