@@ -14,11 +14,11 @@
     "noUnusedParameters": true,
     "baseUrl": ".",
     "paths": {
-      "@noble/hashes/crypto": ["src/crypto"]
+      "@noble/hashes/crypto": ["src/crypto.ts"]
     },
-    "module": "es2020",
+    "module": "Node16",
     "outDir": "esm",
-    "moduleResolution": "bundler"
+    "moduleResolution": "Node16"
   },
   "include": ["src"],
   "exclude": ["node_modules", "lib"]
