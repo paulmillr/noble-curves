@@ -83,12 +83,12 @@ export type CurveFn<Fp, Fp2, Fp6, Fp12> = {
   getPublicKey: (privateKey: PrivKey) => Uint8Array;
   getPublicKeyForShortSignatures: (privateKey: PrivKey) => Uint8Array;
   sign: {
-    (message: Hex, privateKey: PrivKey): Uint8Array;
-    (message: ProjPointType<Fp2>, privateKey: PrivKey): ProjPointType<Fp2>;
+    (message: Hex, privateKey: PrivKey, htfOpts?: htfBasicOpts): Uint8Array;
+    (message: ProjPointType<Fp2>, privateKey: PrivKey, htfOpts?: htfBasicOpts): ProjPointType<Fp2>;
   };
   signShortSignature: {
-    (message: Hex, privateKey: PrivKey): Uint8Array;
-    (message: ProjPointType<Fp>, privateKey: PrivKey): ProjPointType<Fp>;
+    (message: Hex, privateKey: PrivKey, htfOpts?: htfBasicOpts): Uint8Array;
+    (message: ProjPointType<Fp>, privateKey: PrivKey, htfOpts?: htfBasicOpts): ProjPointType<Fp>;
   };
   verify: (
     signature: Hex | ProjPointType<Fp2>,
