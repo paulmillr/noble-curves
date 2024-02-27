@@ -26,7 +26,9 @@ section of the repository.
 - All libraries:
   [ciphers](https://github.com/paulmillr/noble-ciphers),
   [curves](https://github.com/paulmillr/noble-curves),
-  [hashes](https://github.com/paulmillr/noble-hashes)
+  [hashes](https://github.com/paulmillr/noble-hashes),
+  4kb [secp256k1](https://github.com/paulmillr/noble-secp256k1) /
+  [ed25519](https://github.com/paulmillr/noble-ed25519)
 - [Check out homepage](https://paulmillr.com/noble/)
   for reading resources, documentation and apps built with noble
 
