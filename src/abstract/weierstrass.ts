@@ -27,7 +27,7 @@ export type BasicWCurve<T> = BasicCurve<T> & {
   clearCofactor?: (c: ProjConstructor<T>, point: ProjPointType<T>) => ProjPointType<T>;
 };
 
-type Entropy = Hex | true;
+type Entropy = Hex | boolean;
 export type SignOpts = { lowS?: boolean; extraEntropy?: Entropy; prehash?: boolean };
 export type VerOpts = { lowS?: boolean; prehash?: boolean };
 
@@ -158,7 +158,7 @@ export const DER = {
     // parse DER signature
     const { Err: E } = DER;
     const data = typeof hex === 'string' ? h2b(hex) : hex;
-    if (!ut.isBytes(data)) throw new Error('ui8a expected');
+    ut.abytes(data);
     let l = data.length;
     if (l < 2 || data[0] != 0x30) throw new E('Invalid signature tag');
     if (data[1] !== l - 2) throw new E('Invalid signature: incorrect length');
@@ -977,7 +977,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     const d = normPrivateKeyToScalar(privateKey); // validate private key, convert to bigint
     const seedArgs = [int2octets(d), int2octets(h1int)];
     // extraEntropy. RFC6979 3.6: additional k' (optional).
-    if (ent != null) {
+    if (ent != null && ent !== false) {
       // K = HMAC_K(V || 0x00 || int2octets(x) || bits2octets(h1) || k')
       const e = ent === true ? randomBytes(Fp.BYTES) : ent; // generate random bytes OR pass as-is
       seedArgs.push(ensureBytes('extraEntropy', e)); // check for being bytes
