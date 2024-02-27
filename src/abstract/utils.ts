@@ -200,7 +200,7 @@ export function bitGet(n: bigint, pos: number) {
  */
 export function bitSet(n: bigint, pos: number, value: boolean) {
   return n | ((value ? _1n : _0n) << BigInt(pos));
-};
+}
 
 /**
  * Calculate mask for N bits. Not using ** operator with bigints because of old engines.

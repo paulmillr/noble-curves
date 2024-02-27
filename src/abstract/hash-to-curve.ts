@@ -2,7 +2,7 @@
 import type { Group, GroupConstructor, AffinePoint } from './curve.js';
 import { mod, IField } from './modular.js';
 import type { CHash } from './utils.js';
-import { bytesToNumberBE, abytes, isBytes, concatBytes, utf8ToBytes, validateObject } from './utils.js';
+import { bytesToNumberBE, abytes, concatBytes, utf8ToBytes, validateObject } from './utils.js';
 
 /**
  * * `DST` is a domain separation tag, defined in section 2.2.5
@@ -21,12 +21,6 @@ export type Opts = {
   expand: 'xmd' | 'xof';
   hash: CHash;
 };
-
-function validateDST(dst: UnicodeOrBytes): Uint8Array {
-  if (isBytes(dst)) return dst;
-  if (typeof dst === 'string') return utf8ToBytes(dst);
-  throw new Error('DST must be Uint8Array or string');
-}
 
 // Octet Stream to Integer. "spec" implementation of os2ip is 2.5x slower vs bytesToNumberBE.
 const os2ip = bytesToNumberBE;
@@ -51,7 +45,6 @@ function strxor(a: Uint8Array, b: Uint8Array): Uint8Array {
   }
   return arr;
 }
-
 
 function anum(item: unknown): void {
   if (!Number.isSafeInteger(item)) throw new Error('number expected');
@@ -140,7 +133,7 @@ export function hash_to_field(msg: Uint8Array, count: number, options: Opts): bi
   const { p, k, m, hash, expand, DST: _DST } = options;
   abytes(msg);
   anum(count);
-  const DST = validateDST(_DST);
+  const DST = typeof _DST === 'string' ? utf8ToBytes(_DST) : _DST;
   const log2p = p.toString(2).length;
   const L = Math.ceil((log2p + k) / 8); // section 5.1 of ietf draft link above
   const len_in_bytes = count * m * L;
