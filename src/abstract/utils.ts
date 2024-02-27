@@ -23,6 +23,10 @@ export function isBytes(a: unknown): a is Uint8Array {
   );
 }
 
+export function abytes(item: unknown): void {
+  if (!isBytes(item)) throw new Error('Uint8Array expected');
+}
+
 // Array where index 0xf0 (240) is mapped to string 'f0'
 const hexes = /* @__PURE__ */ Array.from({ length: 256 }, (_, i) =>
   i.toString(16).padStart(2, '0')
@@ -31,7 +35,7 @@ const hexes = /* @__PURE__ */ Array.from({ length: 256 }, (_, i) =>
  * @example bytesToHex(Uint8Array.from([0xca, 0xfe, 0x01, 0x23])) // 'cafe0123'
  */
 export function bytesToHex(bytes: Uint8Array): string {
-  if (!isBytes(bytes)) throw new Error('Uint8Array expected');
+  abytes(bytes);
   // pre-caching improves the speed 6x
   let hex = '';
   for (let i = 0; i < bytes.length; i++) {
@@ -86,7 +90,7 @@ export function bytesToNumberBE(bytes: Uint8Array): bigint {
   return hexToNumber(bytesToHex(bytes));
 }
 export function bytesToNumberLE(bytes: Uint8Array): bigint {
-  if (!isBytes(bytes)) throw new Error('Uint8Array expected');
+  abytes(bytes);
   return hexToNumber(bytesToHex(Uint8Array.from(bytes).reverse()));
 }
 
@@ -138,7 +142,7 @@ export function concatBytes(...arrays: Uint8Array[]): Uint8Array {
   let sum = 0;
   for (let i = 0; i < arrays.length; i++) {
     const a = arrays[i];
-    if (!isBytes(a)) throw new Error('Uint8Array expected');
+    abytes(a);
     sum += a.length;
   }
   const res = new Uint8Array(sum);
@@ -194,7 +198,7 @@ export function bitGet(n: bigint, pos: number) {
 /**
  * Sets single bit at position.
  */
-export const bitSet = (n: bigint, pos: number, value: boolean) => {
+export function bitSet(n: bigint, pos: number, value: boolean) {
   return n | ((value ? _1n : _0n) << BigInt(pos));
 };
 

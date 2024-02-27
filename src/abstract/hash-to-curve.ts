@@ -2,7 +2,7 @@
 import type { Group, GroupConstructor, AffinePoint } from './curve.js';
 import { mod, IField } from './modular.js';
 import type { CHash } from './utils.js';
-import { bytesToNumberBE, isBytes, concatBytes, utf8ToBytes, validateObject } from './utils.js';
+import { bytesToNumberBE, abytes, isBytes, concatBytes, utf8ToBytes, validateObject } from './utils.js';
 
 /**
  * * `DST` is a domain separation tag, defined in section 2.2.5
@@ -52,10 +52,8 @@ function strxor(a: Uint8Array, b: Uint8Array): Uint8Array {
   return arr;
 }
 
-function abytes(item: unknown): void {
-  if (!isBytes(item)) throw new Error('Uint8Array expected');
-}
-function isNum(item: unknown): void {
+
+function anum(item: unknown): void {
   if (!Number.isSafeInteger(item)) throw new Error('number expected');
 }
 
@@ -69,7 +67,7 @@ export function expand_message_xmd(
 ): Uint8Array {
   abytes(msg);
   abytes(DST);
-  isNum(lenInBytes);
+  anum(lenInBytes);
   // https://www.rfc-editor.org/rfc/rfc9380#section-5.3.3
   if (DST.length > 255) DST = H(concatBytes(utf8ToBytes('H2C-OVERSIZE-DST-'), DST));
   const { outputLen: b_in_bytes, blockLen: r_in_bytes } = H;
@@ -103,7 +101,7 @@ export function expand_message_xof(
 ): Uint8Array {
   abytes(msg);
   abytes(DST);
-  isNum(lenInBytes);
+  anum(lenInBytes);
   // https://www.rfc-editor.org/rfc/rfc9380#section-5.3.3
   // DST = H('H2C-OVERSIZE-DST-' || a_very_long_DST, Math.ceil((lenInBytes * k) / 8));
   if (DST.length > 255) {
@@ -141,7 +139,7 @@ export function hash_to_field(msg: Uint8Array, count: number, options: Opts): bi
   });
   const { p, k, m, hash, expand, DST: _DST } = options;
   abytes(msg);
-  isNum(count);
+  anum(count);
   const DST = validateDST(_DST);
   const log2p = p.toString(2).length;
   const L = Math.ceil((log2p + k) / 8); // section 5.1 of ietf draft link above
