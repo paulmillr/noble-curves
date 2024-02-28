@@ -1,4 +1,4 @@
-import { bytesToHex, concatBytes, hexToBytes } from '@noble/curves/abstract/utils';
+import { bytesToHex, concatBytes, hexToBytes, utf8ToBytes } from '@noble/curves/abstract/utils';
 
 export { secp256k1, schnorr as secp256k1_schnorr } from '@noble/curves/secp256k1';
 export {
@@ -17,4 +17,4 @@ export { p384 } from '@noble/curves/p384';
 export { p521 } from '@noble/curves/p521';
 export { bls12_381 } from '@noble/curves/bls12-381';
 
-export const utils = { bytesToHex, concatBytes, hexToBytes };
+export const utils = { bytesToHex, concatBytes, hexToBytes, utf8ToBytes };
