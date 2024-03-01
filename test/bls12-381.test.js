@@ -1173,6 +1173,8 @@ describe('verify()', () => {
       const pub = bls.getPublicKey(priv);
       const res = bls.verify(sig, msg, pub);
       deepStrictEqual(res, true, `${priv}-${msg}`);
+      const resHex = bls.verify(bytesToHex(sig), msg, pub);
+      deepStrictEqual(resHex, true, `${priv}-${msg}-hex`);
     }
   });
   should('not verify signature with wrong message', () => {
@@ -1193,6 +1195,8 @@ describe('verify()', () => {
       const invPub = bls.getPublicKey(invPriv);
       const res = bls.verify(sig, msg, invPub);
       deepStrictEqual(res, false);
+      const resHex = bls.verify(bytesToHex(sig), msg, invPub);
+      deepStrictEqual(resHex, false);
     }
   });
   should('verify signed message (short signatures)', () => {
@@ -1202,6 +1206,8 @@ describe('verify()', () => {
       const pub = bls.getPublicKeyForShortSignatures(priv);
       const res = bls.verifyShortSignature(sig, msg, pub);
       deepStrictEqual(res, true, `${priv}-${msg}`);
+      const resHex = bls.verifyShortSignature(bytesToHex(sig), msg, pub);
+      deepStrictEqual(resHex, true, `${priv}-${msg}`);
     }
   });
   should('not verify signature with wrong message (short signatures)', () => {
@@ -1212,6 +1218,8 @@ describe('verify()', () => {
       const pub = bls.getPublicKeyForShortSignatures(priv);
       const res = bls.verifyShortSignature(sig, invMsg, pub);
       deepStrictEqual(res, false);
+      const resHex = bls.verifyShortSignature(bytesToHex(sig), invMsg, pub);
+      deepStrictEqual(resHex, false);
     }
   });
   should('not verify signature with wrong key', () => {
@@ -1222,6 +1230,8 @@ describe('verify()', () => {
       const invPub = bls.getPublicKeyForShortSignatures(invPriv);
       const res = bls.verifyShortSignature(sig, msg, invPub);
       deepStrictEqual(res, false);
+      const resHex = bls.verifyShortSignature(bytesToHex(sig), msg, invPub);
+      deepStrictEqual(resHex, false);
     }
   });
   describe('batch', () => {
@@ -1234,6 +1244,10 @@ describe('verify()', () => {
           const signatures = messages.map((message, i) => bls.sign(message, privateKeys[i]));
           const aggregatedSignature = bls.aggregateSignatures(signatures);
           deepStrictEqual(bls.verifyBatch(aggregatedSignature, messages, publicKey), true);
+          deepStrictEqual(
+            bls.verifyBatch(bytesToHex(aggregatedSignature), messages, publicKey),
+            true
+          );
         })
       );
     });
@@ -1250,6 +1264,10 @@ describe('verify()', () => {
           const aggregatedSignature = bls.aggregateSignatures(signatures);
           deepStrictEqual(
             bls.verifyBatch(aggregatedSignature, wrongMessages, publicKey),
+            messages.every((m, i) => m === wrongMessages[i])
+          );
+          deepStrictEqual(
+            bls.verifyBatch(bytesToHex(aggregatedSignature), wrongMessages, publicKey),
             messages.every((m, i) => m === wrongMessages[i])
           );
         })
@@ -1274,6 +1292,10 @@ describe('verify()', () => {
               bls.verifyBatch(aggregatedSignature, messages, wrongPublicKeys),
               wrongPrivateKeys.every((p, i) => p === privateKeys[i])
             );
+            deepStrictEqual(
+              bls.verifyBatch(bytesToHex(aggregatedSignature), messages, wrongPublicKeys),
+              wrongPrivateKeys.every((p, i) => p === privateKeys[i])
+            );
           }
         )
       );
@@ -1287,6 +1309,10 @@ describe('verify()', () => {
           const aggregatedSignature = bls.aggregateSignatures(signatures);
           const aggregatedPublicKey = bls.aggregatePublicKeys(publicKey);
           deepStrictEqual(bls.verify(aggregatedSignature, message, aggregatedPublicKey), true);
+          deepStrictEqual(
+            bls.verify(bytesToHex(aggregatedSignature), message, aggregatedPublicKey),
+            true
+          );
         })
       );
     });
@@ -1300,6 +1326,10 @@ describe('verify()', () => {
           const aggregatedPublicKey = bls.aggregatePublicKeys(publicKey);
           deepStrictEqual(
             bls.verify(aggregatedSignature, wrongMessage, aggregatedPublicKey),
+            message === wrongMessage
+          );
+          deepStrictEqual(
+            bls.verify(bytesToHex(aggregatedSignature), wrongMessage, aggregatedPublicKey),
             message === wrongMessage
           );
         })

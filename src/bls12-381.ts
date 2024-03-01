@@ -1364,7 +1364,7 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
       fromHex(hex: Hex): ProjPointType<Fp2> {
         const { infinity, sort, value } = parseMask(ensureBytes('signatureHex', hex));
         const P = Fp.ORDER;
-        const half = hex.length / 2;
+        const half = value.length / 2;
         if (half !== 48 && half !== 96)
           throw new Error('Invalid compressed signature length, must be 96 or 192');
         const z1 = bytesToNumberBE(value.slice(0, half));
