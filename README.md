@@ -613,6 +613,12 @@ const signature = bls.sign(message, privateKey);
 const isValid = bls.verify(signature, message, publicKey);
 console.log({ publicKey, signature, isValid });
 
+// Use custom DST, e.g. for Ethereum consensus layer
+const htfEthereum = {DST: 'BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_'};
+const signatureEth = bls.sign(message, privateKey, htfEthereum);
+const isValidEth = bls.verify(signature, message, publicKey, htfEthereum);
+console.log({ signatureEth, isValidEth });
+
 // Sign 1 msg with 3 keys
 const privateKeys = [
   '18f020b98eb798752a50ed0563b079c125b0db5dd0b1060d1c1b47d4a193e1e4',
