@@ -45,7 +45,7 @@ A standalone file [noble-curves.js](https://github.com/paulmillr/noble-curves/re
 ```js
 // import * from '@noble/curves'; // Error: use sub-imports, to ensure small app size
 import { secp256k1 } from '@noble/curves/secp256k1'; // ESM and Common.js
-// import { secp256k1 } from 'npm:@noble/curves@1.2.0/secp256k1'; // Deno
+// import { secp256k1 } from 'npm:@noble/curves@1.4.0/secp256k1'; // Deno
 ```
 
 - [Implementations](#implementations)
