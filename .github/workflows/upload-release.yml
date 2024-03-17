@@ -15,13 +15,14 @@ jobs:
           node-version: 20
           registry-url: 'https://registry.npmjs.org'
           cache: npm
+      - run: npm install -g npm
+      - run: npm ci
+      - run: npm run build
       - run: |
-          npm install -g npm
-          npm ci
-          npm run build
           cd build
           npm ci
-          npm run build
-          gh release upload ${{ github.event.release.tag_name }} noble-curves.js
+          npm run build:release
+          cd ..
+      - run: gh release upload ${{ github.event.release.tag_name }} build/`npx jsbt outfile`
         env:
           GH_TOKEN: ${{ github.token }}
