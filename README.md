@@ -555,7 +555,7 @@ import { Field } from '@noble/curves/abstract/modular';
 const x25519 = montgomery({
   a: 486662n,
   Gu: 9n,
-  Fp: Field(2n ** 255n - 19n),
+  P: 2n ** 255n - 19n,
   montgomeryBits: 255,
   nByteLength: 32,
   // Optional param
