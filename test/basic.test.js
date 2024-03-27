@@ -2,7 +2,7 @@ import { deepStrictEqual, throws } from 'assert';
 import { should, describe } from 'micro-should';
 import * as fc from 'fast-check';
 import * as mod from '../esm/abstract/modular.js';
-import { bytesToHex as toHex } from '../esm/abstract/utils.js';
+import { bytesToHex, isBytes, bytesToHex as toHex } from '../esm/abstract/utils.js';
 // Generic tests for all curves in package
 import { secp192r1, secp224r1 } from './_more-curves.helpers.js';
 import { secp256r1 } from '../esm/p256.js';
@@ -591,6 +591,18 @@ for (const name in CURVES) {
             true,
             `priv=${toHex(priv)},pub=${toHex(pub)},msg=${msg}`
           );
+        }),
+        { numRuns: NUM_RUNS }
+      )
+    );
+    should('.verify() should verify random signatures in hex', () =>
+      fc.assert(
+        fc.property(fc.hexaString({ minLength: 64, maxLength: 64 }), (msg) => {
+          const priv = toHex(C.utils.randomPrivateKey());
+          const pub = toHex(C.getPublicKey(priv));
+          const sig = C.sign(msg, priv);
+          let sighex = isBytes(sig) ? toHex(sig) : sig.toCompactHex();
+          deepStrictEqual(C.verify(sighex, msg, pub), true, `priv=${priv},pub=${pub},msg=${msg}`);
         }),
         { numRuns: NUM_RUNS }
       )
