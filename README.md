@@ -146,7 +146,7 @@ Default `verify` behavior follows [ZIP215](https://zips.z.cash/zip-0215) and
 It has SUF-CMA (strong unforgeability under chosen message attacks).
 `zip215: false` option switches verification criteria to strict
 [RFC8032](https://www.rfc-editor.org/rfc/rfc8032) / [FIPS 186-5](https://csrc.nist.gov/publications/detail/fips/186/5/final)
-and additionally provides non-repudiation with SBS [(Strongly Binding Signatures)](https://eprint.iacr.org/2020/1244).
+and additionally provides [non-repudiation with SBS](#edwards-twisted-edwards-curve).
 
 X25519 follows [RFC7748](https://www.rfc-editor.org/rfc/rfc7748).
 
@@ -489,6 +489,12 @@ Twisted Edwards curve's formula is `ax² + y² = 1 + dx²y²`. You must specify 
 and coordinates `Gx`, `Gy` of generator point.
 
 For EdDSA signatures, `hash` param required. `adjustScalarBytes` which instructs how to change private scalars could be specified.
+
+We support [non-repudiation](https://eprint.iacr.org/2020/1244), which help in following scenarios:
+
+- Contract Signing: if A signed an agreement with B using key that allows repudiation, it can later claim that it signed a different contract
+- E-voting: malicious voters may pick keys that allow repudiation in order to deny results
+- Blockchains: transaction of amount X might also be valid for a different amount Y
 
 **Edwards points:**
 

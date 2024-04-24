@@ -3,9 +3,9 @@
 // This is OK: `abstract` directory does not use noble-hashes.
 // User may opt-in into using different hashing library. This way, noble-hashes
 // won't be included into their bundle.
-const _0n = BigInt(0);
-const _1n = BigInt(1);
-const _2n = BigInt(2);
+const _0n = /* @__PURE__ */ BigInt(0);
+const _1n = /* @__PURE__ */ BigInt(1);
+const _2n = /* @__PURE__ */ BigInt(2);
 export type Hex = Uint8Array | string; // hex strings are accepted for simplicity
 export type PrivKey = Hex | bigint; // bigints are accepted to ease learning curve
 export type CHash = {

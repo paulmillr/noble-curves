@@ -26,16 +26,18 @@ const ED25519_P = BigInt(
   '57896044618658097711785492504343953926634992332820282019728792003956564819949'
 );
 // √(-1) aka √(a) aka 2^((p-1)/4)
-const ED25519_SQRT_M1 = BigInt(
+const ED25519_SQRT_M1 = /* @__PURE__ */ BigInt(
   '19681161376707505956807079304988542015446066515923890162744021073123829784752'
 );
 
 // prettier-ignore
-const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _5n = BigInt(5);
+const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3);
 // prettier-ignore
-const _10n = BigInt(10), _20n = BigInt(20), _40n = BigInt(40), _80n = BigInt(80);
+const _5n = BigInt(5), _8n = BigInt(8);
 
 function ed25519_pow_2_252_3(x: bigint) {
+  // prettier-ignore
+  const _10n = BigInt(10), _20n = BigInt(20), _40n = BigInt(40), _80n = BigInt(80);
   const P = ED25519_P;
   const x2 = (x * x) % P;
   const b2 = (x2 * x) % P; // x^3, 11
@@ -96,34 +98,35 @@ export const ED25519_TORSION_SUBGROUP = [
   'c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa',
 ];
 
-const Fp = Field(ED25519_P, undefined, true);
+const Fp = /* @__PURE__ */ (() => Field(ED25519_P, undefined, true))();
 
-const ed25519Defaults = {
-  // Param: a
-  a: BigInt(-1), // Fp.create(-1) is proper; our way still works and is faster
-  // d is equal to -121665/121666 over finite field.
-  // Negative number is P - number, and division is invert(number, P)
-  d: BigInt('37095705934669439343138083508754565189542113879843219016388785533085940283555'),
-  // Finite field 𝔽p over which we'll do calculations; 2n**255n - 19n
-  Fp,
-  // Subgroup order: how many points curve has
-  // 2n**252n + 27742317777372353535851937790883648493n;
-  n: BigInt('7237005577332262213973186563042994240857116359379907606001950938285454250989'),
-  // Cofactor
-  h: BigInt(8),
-  // Base point (x, y) aka generator point
-  Gx: BigInt('15112221349535400772501151409588531511454012693041857206046113283949847762202'),
-  Gy: BigInt('46316835694926478169428394003475163141307993866256225615783033603165251855960'),
-  hash: sha512,
-  randomBytes,
-  adjustScalarBytes,
-  // dom2
-  // Ratio of u to v. Allows us to combine inversion and square root. Uses algo from RFC8032 5.1.3.
-  // Constant-time, u/√v
-  uvRatio,
-} as const;
+const ed25519Defaults = /* @__PURE__ */ (() =>
+  ({
+    // Param: a
+    a: BigInt(-1), // Fp.create(-1) is proper; our way still works and is faster
+    // d is equal to -121665/121666 over finite field.
+    // Negative number is P - number, and division is invert(number, P)
+    d: BigInt('37095705934669439343138083508754565189542113879843219016388785533085940283555'),
+    // Finite field 𝔽p over which we'll do calculations; 2n**255n - 19n
+    Fp,
+    // Subgroup order: how many points curve has
+    // 2n**252n + 27742317777372353535851937790883648493n;
+    n: BigInt('7237005577332262213973186563042994240857116359379907606001950938285454250989'),
+    // Cofactor
+    h: _8n,
+    // Base point (x, y) aka generator point
+    Gx: BigInt('15112221349535400772501151409588531511454012693041857206046113283949847762202'),
+    Gy: BigInt('46316835694926478169428394003475163141307993866256225615783033603165251855960'),
+    hash: sha512,
+    randomBytes,
+    adjustScalarBytes,
+    // dom2
+    // Ratio of u to v. Allows us to combine inversion and square root. Uses algo from RFC8032 5.1.3.
+    // Constant-time, u/√v
+    uvRatio,
+  }) as const)();
 
-export const ed25519 = /* @__PURE__ */ twistedEdwards(ed25519Defaults);
+export const ed25519 = /* @__PURE__ */ (() => twistedEdwards(ed25519Defaults))();
 
 function ed25519_domain(data: Uint8Array, ctx: Uint8Array, phflag: boolean) {
   if (ctx.length > 255) throw new Error('Context is too big');
@@ -135,15 +138,18 @@ function ed25519_domain(data: Uint8Array, ctx: Uint8Array, phflag: boolean) {
   );
 }
 
-export const ed25519ctx = /* @__PURE__ */ twistedEdwards({
-  ...ed25519Defaults,
-  domain: ed25519_domain,
-});
-export const ed25519ph = /* @__PURE__ */ twistedEdwards({
-  ...ed25519Defaults,
-  domain: ed25519_domain,
-  prehash: sha512,
-});
+export const ed25519ctx = /* @__PURE__ */ (() =>
+  twistedEdwards({
+    ...ed25519Defaults,
+    domain: ed25519_domain,
+  }))();
+export const ed25519ph = /* @__PURE__ */ (() =>
+  twistedEdwards(
+    Object.assign({}, ed25519Defaults, {
+      domain: ed25519_domain,
+      prehash: sha512,
+    })
+  ))();
 
 export const x25519 = /* @__PURE__ */ (() =>
   montgomery({
@@ -156,7 +162,7 @@ export const x25519 = /* @__PURE__ */ (() =>
       const P = ED25519_P;
       // x^(p-2) aka x^(2^255-21)
       const { pow_p_5_8, b2 } = ed25519_pow_2_252_3(x);
-      return mod(pow2(pow_p_5_8, BigInt(3), P) * b2, P);
+      return mod(pow2(pow_p_5_8, _3n, P) * b2, P);
     },
     adjustScalarBytes,
     randomBytes,
@@ -194,49 +200,49 @@ export function edwardsToMontgomeryPriv(edwardsPriv: Uint8Array): Uint8Array {
 // NOTE: very important part is usage of FpSqrtEven for ELL2_C1_EDWARDS, since
 // SageMath returns different root first and everything falls apart
 
-const ELL2_C1 = (Fp.ORDER + BigInt(3)) / BigInt(8); // 1. c1 = (q + 3) / 8       # Integer arithmetic
-
-const ELL2_C2 = Fp.pow(_2n, ELL2_C1); // 2. c2 = 2^c1
-const ELL2_C3 = Fp.sqrt(Fp.neg(Fp.ONE)); // 3. c3 = sqrt(-1)
-const ELL2_C4 = (Fp.ORDER - BigInt(5)) / BigInt(8); // 4. c4 = (q - 5) / 8       # Integer arithmetic
-const ELL2_J = BigInt(486662);
+const ELL2_C1 = /* @__PURE__ */ (() => (Fp.ORDER + _3n) / _8n)(); // 1. c1 = (q + 3) / 8       # Integer arithmetic
+const ELL2_C2 = /* @__PURE__ */ (() => Fp.pow(_2n, ELL2_C1))(); // 2. c2 = 2^c1
+const ELL2_C3 = /* @__PURE__ */ (() => Fp.sqrt(Fp.neg(Fp.ONE)))(); // 3. c3 = sqrt(-1)
 
 // prettier-ignore
 function map_to_curve_elligator2_curve25519(u: bigint) {
-  let tv1 = Fp.sqr(u);       //  1.  tv1 = u^2
+  const ELL2_C4 = (Fp.ORDER - _5n) / _8n; // 4. c4 = (q - 5) / 8       # Integer arithmetic
+  const ELL2_J = BigInt(486662);
+
+  let tv1 = Fp.sqr(u);          //  1.  tv1 = u^2
   tv1 = Fp.mul(tv1, _2n);       //  2.  tv1 = 2 * tv1
   let xd = Fp.add(tv1, Fp.ONE); //  3.   xd = tv1 + 1         # Nonzero: -1 is square (mod p), tv1 is not
-  let x1n = Fp.neg(ELL2_J);  //  4.  x1n = -J              # x1 = x1n / xd = -J / (1 + 2 * u^2)
-  let tv2 = Fp.sqr(xd);      //  5.  tv2 = xd^2
+  let x1n = Fp.neg(ELL2_J);     //  4.  x1n = -J              # x1 = x1n / xd = -J / (1 + 2 * u^2)
+  let tv2 = Fp.sqr(xd);         //  5.  tv2 = xd^2
   let gxd = Fp.mul(tv2, xd);    //  6.  gxd = tv2 * xd        # gxd = xd^3
-  let gx1 = Fp.mul(tv1, ELL2_J); //  7.  gx1 = J * tv1         # x1n + J * xd
+  let gx1 = Fp.mul(tv1, ELL2_J);//  7.  gx1 = J * tv1         # x1n + J * xd
   gx1 = Fp.mul(gx1, x1n);       //  8.  gx1 = gx1 * x1n       # x1n^2 + J * x1n * xd
   gx1 = Fp.add(gx1, tv2);       //  9.  gx1 = gx1 + tv2       # x1n^2 + J * x1n * xd + xd^2
   gx1 = Fp.mul(gx1, x1n);       //  10. gx1 = gx1 * x1n       # x1n^3 + J * x1n^2 * xd + x1n * xd^2
-  let tv3 = Fp.sqr(gxd);     //  11. tv3 = gxd^2
-  tv2 = Fp.sqr(tv3);         //  12. tv2 = tv3^2           # gxd^4
+  let tv3 = Fp.sqr(gxd);        //  11. tv3 = gxd^2
+  tv2 = Fp.sqr(tv3);            //  12. tv2 = tv3^2           # gxd^4
   tv3 = Fp.mul(tv3, gxd);       //  13. tv3 = tv3 * gxd       # gxd^3
   tv3 = Fp.mul(tv3, gx1);       //  14. tv3 = tv3 * gx1       # gx1 * gxd^3
   tv2 = Fp.mul(tv2, tv3);       //  15. tv2 = tv2 * tv3       # gx1 * gxd^7
   let y11 = Fp.pow(tv2, ELL2_C4); //  16. y11 = tv2^c4        # (gx1 * gxd^7)^((p - 5) / 8)
   y11 = Fp.mul(y11, tv3);       //  17. y11 = y11 * tv3       # gx1*gxd^3*(gx1*gxd^7)^((p-5)/8)
   let y12 = Fp.mul(y11, ELL2_C3); //  18. y12 = y11 * c3
-  tv2 = Fp.sqr(y11);         //  19. tv2 = y11^2
+  tv2 = Fp.sqr(y11);            //  19. tv2 = y11^2
   tv2 = Fp.mul(tv2, gxd);       //  20. tv2 = tv2 * gxd
-  let e1 = Fp.eql(tv2, gx1); //  21.  e1 = tv2 == gx1
+  let e1 = Fp.eql(tv2, gx1);    //  21.  e1 = tv2 == gx1
   let y1 = Fp.cmov(y12, y11, e1); //  22.  y1 = CMOV(y12, y11, e1)  # If g(x1) is square, this is its sqrt
   let x2n = Fp.mul(x1n, tv1);   //  23. x2n = x1n * tv1       # x2 = x2n / xd = 2 * u^2 * x1n / xd
   let y21 = Fp.mul(y11, u);     //  24. y21 = y11 * u
   y21 = Fp.mul(y21, ELL2_C2);   //  25. y21 = y21 * c2
   let y22 = Fp.mul(y21, ELL2_C3); //  26. y22 = y21 * c3
   let gx2 = Fp.mul(gx1, tv1);   //  27. gx2 = gx1 * tv1       # g(x2) = gx2 / gxd = 2 * u^2 * g(x1)
-  tv2 = Fp.sqr(y21);         //  28. tv2 = y21^2
+  tv2 = Fp.sqr(y21);            //  28. tv2 = y21^2
   tv2 = Fp.mul(tv2, gxd);       //  29. tv2 = tv2 * gxd
-  let e2 = Fp.eql(tv2, gx2); //  30.  e2 = tv2 == gx2
+  let e2 = Fp.eql(tv2, gx2);    //  30.  e2 = tv2 == gx2
   let y2 = Fp.cmov(y22, y21, e2); //  31.  y2 = CMOV(y22, y21, e2)  # If g(x2) is square, this is its sqrt
-  tv2 = Fp.sqr(y1);          //  32. tv2 = y1^2
+  tv2 = Fp.sqr(y1);             //  32. tv2 = y1^2
   tv2 = Fp.mul(tv2, gxd);       //  33. tv2 = tv2 * gxd
-  let e3 = Fp.eql(tv2, gx1); //  34.  e3 = tv2 == gx1
+  let e3 = Fp.eql(tv2, gx1);    //  34.  e3 = tv2 == gx1
   let xn = Fp.cmov(x2n, x1n, e3); //  35.  xn = CMOV(x2n, x1n, e3)  # If e3, x = x1, else x = x2
   let y = Fp.cmov(y2, y1, e3);  //  36.   y = CMOV(y2, y1, e3)    # If e3, y = y1, else y = y2
   let e4 = Fp.isOdd(y);         //  37.  e4 = sgn0(y) == 1        # Fix sign of y
@@ -244,7 +250,7 @@ function map_to_curve_elligator2_curve25519(u: bigint) {
   return { xMn: xn, xMd: xd, yMn: y, yMd: _1n }; //  39. return (xn, xd, y, 1)
 }
 
-const ELL2_C1_EDWARDS = FpSqrtEven(Fp, Fp.neg(BigInt(486664))); // sgn0(c1) MUST equal 0
+const ELL2_C1_EDWARDS = /* @__PURE__ */ (() => FpSqrtEven(Fp, Fp.neg(BigInt(486664))))(); // sgn0(c1) MUST equal 0
 function map_to_curve_elligator2_edwards25519(u: bigint) {
   const { xMn, xMd, yMn, yMd } = map_to_curve_elligator2_curve25519(u); //  1.  (xMn, xMd, yMn, yMd) =
   // map_to_curve_elligator2_curve25519(u)
@@ -288,25 +294,27 @@ function assertRstPoint(other: unknown) {
 // √(-1) aka √(a) aka 2^((p-1)/4)
 const SQRT_M1 = ED25519_SQRT_M1;
 // √(ad - 1)
-const SQRT_AD_MINUS_ONE = BigInt(
+const SQRT_AD_MINUS_ONE = /* @__PURE__ */ BigInt(
   '25063068953384623474111414158702152701244531502492656460079210482610430750235'
 );
 // 1 / √(a-d)
-const INVSQRT_A_MINUS_D = BigInt(
+const INVSQRT_A_MINUS_D = /* @__PURE__ */ BigInt(
   '54469307008909316920995813868745141605393597292927456921205312896311721017578'
 );
 // 1-d²
-const ONE_MINUS_D_SQ = BigInt(
+const ONE_MINUS_D_SQ = /* @__PURE__ */ BigInt(
   '1159843021668779879193775521855586647937357759715417654439879720876111806838'
 );
 // (d-1)²
-const D_MINUS_ONE_SQ = BigInt(
+const D_MINUS_ONE_SQ = /* @__PURE__ */ BigInt(
   '40440834346308536858101042469323190826248399146238708352240133220865137265952'
 );
 // Calculates 1/√(number)
 const invertSqrt = (number: bigint) => uvRatio(_1n, number);
 
-const MAX_255B = BigInt('0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff');
+const MAX_255B = /* @__PURE__ */ BigInt(
+  '0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
+);
 const bytes255ToNumberLE = (bytes: Uint8Array) =>
   ed25519.CURVE.Fp.create(bytesToNumberLE(bytes) & MAX_255B);
 
