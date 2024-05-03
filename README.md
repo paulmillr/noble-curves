@@ -10,7 +10,7 @@ Audited & minimal JS implementation of elliptic curve cryptography.
 - ✍️ ECDSA, EdDSA, Schnorr, BLS signature schemes, ECDH key agreement, hashing to curves
 - 🔖 SUF-CMA, SBS (non-repudiation), ZIP215 (consensus friendliness) features for ed25519
 - 🧜‍♂️ Poseidon ZK-friendly hash
-- 🪶 178KB for everything, 25KB for single-curve build
+- 🪶 178KB (87KB gzipped) for everything, 22KB (10KB gzipped) for single-curve build
 
 For discussions, questions and support, visit
 [GitHub Discussions](https://github.com/paulmillr/noble-curves/discussions)
@@ -329,7 +329,9 @@ type CHash = {
 };
 
 // example
-function sha256(message: Uint8Array) { return _internal_lowlvl(message) }
+function sha256(message: Uint8Array) {
+  return _internal_lowlvl(message);
+}
 sha256.outputLen = 32; // 32 bytes of output for sha2-256
 ```
 
@@ -620,7 +622,7 @@ const isValid = bls.verify(signature, message, publicKey);
 console.log({ publicKey, signature, isValid });
 
 // Use custom DST, e.g. for Ethereum consensus layer
-const htfEthereum = {DST: 'BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_'};
+const htfEthereum = { DST: 'BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_' };
 const signatureEth = bls.sign(message, privateKey, htfEthereum);
 const isValidEth = bls.verify(signature, message, publicKey, htfEthereum);
 console.log({ signatureEth, isValidEth });
@@ -651,9 +653,9 @@ bls.pairing(PointG1, PointG2, false);
 bls.fields.Fp12.finalExponentiate(bls.fields.Fp12.mul(PointG1, PointG2));
 
 // Others
-bls.G1.ProjectivePoint.BASE, bls.G2.ProjectivePoint.BASE
-bls.fields.Fp, bls.fields.Fp2, bls.fields.Fp12, bls.fields.Fr
-bls.params.x, bls.params.r, bls.params.G1b, bls.params.G2b
+bls.G1.ProjectivePoint.BASE, bls.G2.ProjectivePoint.BASE;
+bls.fields.Fp, bls.fields.Fp2, bls.fields.Fp12, bls.fields.Fr;
+bls.params.x, bls.params.r, bls.params.G1b, bls.params.G2b;
 
 // hash-to-curve examples can be seen below
 ```
@@ -845,17 +847,17 @@ Use low-level libraries & languages. Nonetheless we're targetting algorithmic co
 
 ### Supply chain security
 
-* **Commits** are signed with PGP keys, to prevent forgery. Make sure to verify commit signatures.
-* **Releases** are transparent and built on GitHub CI. Make sure to verify [provenance](https://docs.npmjs.com/generating-provenance-statements) logs
-* **Rare releasing** is followed to ensure less re-audit need for end-users
-* **Dependencies** are minimized and locked-down:
-   - If your app has 500 dependencies, any dep could get hacked and you'll be downloading
-     malware with every install. We make sure to use as few dependencies as possible
-   - We prevent automatic dependency updates by locking-down version ranges. Every update is checked with `npm-diff`
-   - One dependency [noble-hashes](https://github.com/paulmillr/noble-hashes) is used, by the same author, to provide hashing functionality
-* **Dev Dependencies** are only used if you want to contribute to the repo. They are disabled for end-users:
-   - scure-base, scure-bip32, scure-bip39, micro-bmark and micro-should are developed by the same author and follow identical security practices
-   - prettier (linter), fast-check (property-based testing) and typescript are used for code quality, vector generation and ts compilation. The packages are big, which makes it hard to audit their source code thoroughly and fully
+- **Commits** are signed with PGP keys, to prevent forgery. Make sure to verify commit signatures.
+- **Releases** are transparent and built on GitHub CI. Make sure to verify [provenance](https://docs.npmjs.com/generating-provenance-statements) logs
+- **Rare releasing** is followed to ensure less re-audit need for end-users
+- **Dependencies** are minimized and locked-down:
+  - If your app has 500 dependencies, any dep could get hacked and you'll be downloading
+    malware with every install. We make sure to use as few dependencies as possible
+  - We prevent automatic dependency updates by locking-down version ranges. Every update is checked with `npm-diff`
+  - One dependency [noble-hashes](https://github.com/paulmillr/noble-hashes) is used, by the same author, to provide hashing functionality
+- **Dev Dependencies** are only used if you want to contribute to the repo. They are disabled for end-users:
+  - scure-base, scure-bip32, scure-bip39, micro-bmark and micro-should are developed by the same author and follow identical security practices
+  - prettier (linter), fast-check (property-based testing) and typescript are used for code quality, vector generation and ts compilation. The packages are big, which makes it hard to audit their source code thoroughly and fully
 
 ### Randomness
 
