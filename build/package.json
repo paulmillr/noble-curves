@@ -9,6 +9,7 @@
     "esbuild": "0.20.1"
   },
   "scripts": {
-    "build:release": "npx esbuild --bundle input.js --outfile=`npx jsbt outfile` --global-name=`npx jsbt global`"
+    "build:release": "npx esbuild --bundle input.js --outfile=`npx jsbt outfile` --global-name=`npx jsbt global`",
+    "build:min": "npx esbuild --bundle input.js --minify --outfile=`npx jsbt outfile` --global-name=`npx jsbt global`; gzip -9 `npx jsbt outfile`"
   }
 }

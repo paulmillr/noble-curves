@@ -5,10 +5,10 @@ import * as fc from 'fast-check';
 import { describe, should } from 'micro-should';
 import { ed25519 as ed, ED25519_TORSION_SUBGROUP, numberToBytesLE } from './ed25519.helpers.js';
 // Old vectors allow to test sign() because they include private key
-import { default as ed25519vectors_OLD } from './ed25519/ed25519_test_OLD.json' assert { type: 'json' };
-import { default as ed25519vectors } from './wycheproof/ed25519_test.json' assert { type: 'json' };
-import { default as zip215 } from './ed25519/zip215.json' assert { type: 'json' };
-import { default as edgeCases } from './ed25519/edge-cases.json' assert { type: 'json' };
+import { default as ed25519vectors_OLD } from './ed25519/ed25519_test_OLD.json' with { type: 'json' };
+import { default as ed25519vectors } from './wycheproof/ed25519_test.json' with { type: 'json' };
+import { default as zip215 } from './ed25519/zip215.json' with { type: 'json' };
+import { default as edgeCases } from './ed25519/edge-cases.json' with { type: 'json' };
 
 // Any changes to the file will need to be aware of the fact
 // the file is shared between noble-curves and noble-ed25519.

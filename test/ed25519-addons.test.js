@@ -3,7 +3,7 @@ import { bytesToHex as hex, hexToBytes } from '@noble/hashes/utils';
 import { deepStrictEqual, throws } from 'assert';
 import { describe, should } from 'micro-should';
 import { bytesToNumberLE, numberToBytesLE } from '../esm/abstract/utils.js';
-import { default as x25519vectors } from './wycheproof/x25519_test.json' assert { type: 'json' };
+import { default as x25519vectors } from './wycheproof/x25519_test.json' with { type: 'json' };
 import {
   ed25519,
   ed25519ctx,

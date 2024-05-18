@@ -3,7 +3,7 @@ import { should, describe } from 'micro-should';
 import * as poseidon from '../esm/abstract/poseidon.js';
 import * as stark from './_poseidon.helpers.js';
 import * as mod from '../esm/abstract/modular.js';
-import { default as pvectors } from './vectors/poseidon.json' assert { type: 'json' };
+import { default as pvectors } from './vectors/poseidon.json' with { type: 'json' };
 const { st1, st2, st3, st4 } = pvectors;
 
 describe('Stark', () => {

@@ -8,11 +8,11 @@ import {
   secp, sigFromDER, sigToDER, selectHash, normVerifySig, mod, bytesToNumberBE, numberToBytesBE
 } from './secp256k1.helpers.js';
 
-import { default as ecdsa } from './vectors/secp256k1/ecdsa.json' assert { type: 'json' };
-import { default as ecdh } from './wycheproof/ecdh_secp256k1_test.json' assert { type: 'json' };
-import { default as privates } from './vectors/secp256k1/privates.json' assert { type: 'json' };
-import { default as points } from './vectors/secp256k1/points.json' assert { type: 'json' };
-import { default as wp } from './wycheproof/ecdsa_secp256k1_sha256_test.json' assert { type: 'json' };
+import { default as ecdsa } from './vectors/secp256k1/ecdsa.json' with { type: 'json' };
+import { default as ecdh } from './wycheproof/ecdh_secp256k1_test.json' with { type: 'json' };
+import { default as privates } from './vectors/secp256k1/privates.json' with { type: 'json' };
+import { default as points } from './vectors/secp256k1/points.json' with { type: 'json' };
+import { default as wp } from './wycheproof/ecdsa_secp256k1_sha256_test.json' with { type: 'json' };
 
 // Any changes to the file will need to be aware of the fact
 // the file is shared between noble-curves and noble-secp256k1.
