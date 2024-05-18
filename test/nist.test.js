@@ -1,4 +1,4 @@
-import { deepStrictEqual, throws } from 'assert';
+import { deepStrictEqual, throws } from 'node:assert';
 import { describe, should } from 'micro-should';
 import { secp192r1, secp224r1, p192, p224 } from './_more-curves.helpers.js';
 import { DER } from '../esm/abstract/weierstrass.js';
@@ -479,7 +479,7 @@ should('have proper GLV endomorphism logic in secp256k1', () => {
 });
 
 // ESM is broken.
-import url from 'url';
+import url from 'node:url';
 if (import.meta.url === url.pathToFileURL(process.argv[1]).href) {
   should.run();
 }

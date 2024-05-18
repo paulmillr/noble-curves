@@ -1,6 +1,6 @@
-import { deepStrictEqual, notDeepStrictEqual, throws } from 'assert';
+import { deepStrictEqual, notDeepStrictEqual, throws } from 'node:assert';
 import * as fc from 'fast-check';
-import { readFileSync } from 'fs';
+import { readFileSync } from 'node:fs';
 import { describe, should } from 'micro-should';
 import { wNAF } from '../esm/abstract/curve.js';
 import { bytesToHex, utf8ToBytes } from '../esm/abstract/utils.js';
@@ -1481,7 +1481,7 @@ describe('bls12-381 deterministic', () => {
 });
 
 // ESM is broken.
-import url from 'url';
+import url from 'node:url';
 if (import.meta.url === url.pathToFileURL(process.argv[1]).href) {
   should.run();
 }

@@ -1,5 +1,5 @@
-import { deepStrictEqual, strictEqual, throws } from 'assert';
-import { readFileSync } from 'fs';
+import { deepStrictEqual, strictEqual, throws } from 'node:assert';
+import { readFileSync } from 'node:fs';
 import { bytesToHex, concatBytes, hexToBytes, utf8ToBytes, randomBytes } from '@noble/hashes/utils';
 import * as fc from 'fast-check';
 import { describe, should } from 'micro-should';
@@ -448,7 +448,7 @@ describe('ed25519', () => {
 });
 
 // ESM is broken.
-import url from 'url';
+import url from 'node:url';
 if (import.meta.url === url.pathToFileURL(process.argv[1]).href) {
   should.run();
 }

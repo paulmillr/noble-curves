@@ -1,6 +1,6 @@
 import { sha512 } from '@noble/hashes/sha512';
 import { bytesToHex as hex, hexToBytes } from '@noble/hashes/utils';
-import { deepStrictEqual, throws } from 'assert';
+import { deepStrictEqual, throws } from 'node:assert';
 import { describe, should } from 'micro-should';
 import { bytesToNumberLE, numberToBytesLE } from '../esm/abstract/utils.js';
 import { default as x25519vectors } from './wycheproof/x25519_test.json' with { type: 'json' };
@@ -355,7 +355,7 @@ describe('ristretto255', () => {
 });
 
 // ESM is broken.
-import url from 'url';
+import url from 'node:url';
 
 if (import.meta.url === url.pathToFileURL(process.argv[1]).href) {
   should.run();

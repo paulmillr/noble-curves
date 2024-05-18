@@ -1,5 +1,5 @@
 import { bytesToHex as hex, hexToBytes } from '@noble/hashes/utils';
-import { deepStrictEqual, throws } from 'assert';
+import { deepStrictEqual, throws } from 'node:assert';
 import { describe, should } from 'micro-should';
 import { bytesToNumberLE } from '../esm/abstract/utils.js';
 import { ed448, DecafPoint } from '../esm/ed448.js';
@@ -110,7 +110,7 @@ describe('decaf448', () => {
 });
 
 // ESM is broken.
-import url from 'url';
+import url from 'node:url';
 
 if (import.meta.url === url.pathToFileURL(process.argv[1]).href) {
   should.run();

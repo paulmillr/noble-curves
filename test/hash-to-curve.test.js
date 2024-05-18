@@ -1,4 +1,4 @@
-import { deepStrictEqual } from 'assert';
+import { deepStrictEqual } from 'node:assert';
 import { describe, should } from 'micro-should';
 import { bytesToHex } from '@noble/hashes/utils';
 // Generic tests for all curves in package
@@ -144,7 +144,7 @@ testCurve(ed25519, ed25519_ro, ed25519_nu);
 testCurve(ed448, ed448_ro, ed448_nu);
 
 // ESM is broken.
-import url from 'url';
+import url from 'node:url';
 if (import.meta.url === url.pathToFileURL(process.argv[1]).href) {
   should.run();
 }

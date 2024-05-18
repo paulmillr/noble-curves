@@ -1,7 +1,7 @@
 import { hexToBytes, bytesToHex as hex } from '@noble/hashes/utils';
-import { deepStrictEqual, throws } from 'assert';
+import { deepStrictEqual, throws } from 'node:assert';
 import * as fc from 'fast-check';
-import { readFileSync } from 'fs';
+import { readFileSync } from 'node:fs';
 import { should, describe } from 'micro-should';
 // prettier-ignore
 import {
@@ -570,7 +570,7 @@ describe('secp256k1', () => {
 });
 
 // ESM is broken.
-import url from 'url';
+import url from 'node:url';
 if (import.meta.url === url.pathToFileURL(process.argv[1]).href) {
   should.run();
 }

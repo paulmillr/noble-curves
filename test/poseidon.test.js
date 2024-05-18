@@ -1,4 +1,4 @@
-import { deepStrictEqual, throws } from 'assert';
+import { deepStrictEqual, throws } from 'node:assert';
 import { should, describe } from 'micro-should';
 import * as poseidon from '../esm/abstract/poseidon.js';
 import * as stark from './_poseidon.helpers.js';
@@ -375,7 +375,7 @@ should('poseidonperm_x5_254_5', () => {
 // Startadperm is unsupported, since it is non prime field
 
 // ESM is broken.
-import url from 'url';
+import url from 'node:url';
 if (import.meta.url === url.pathToFileURL(process.argv[1]).href) {
   should.run();
 }

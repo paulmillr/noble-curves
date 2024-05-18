@@ -1,5 +1,5 @@
-import { deepStrictEqual, throws } from 'assert';
-import { readFileSync } from 'fs';
+import { deepStrictEqual, throws } from 'node:assert';
+import { readFileSync } from 'node:fs';
 import { should, describe } from 'micro-should';
 import { bytesToHex as hex } from '@noble/hashes/utils';
 import { schnorr } from '../esm/secp256k1.js';
@@ -28,7 +28,7 @@ describe('schnorr.sign()', () => {
 });
 
 // ESM is broken.
-import url from 'url';
+import url from 'node:url';
 if (import.meta.url === url.pathToFileURL(process.argv[1]).href) {
   should.run();
 }

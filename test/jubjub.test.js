@@ -1,6 +1,6 @@
 import { jubjub, findGroupHash } from '../esm/jubjub.js';
 import { describe, should } from 'micro-should';
-import { deepStrictEqual, throws } from 'assert';
+import { deepStrictEqual, throws } from 'node:assert';
 const Point = jubjub.ExtendedPoint;
 
 const G_SPEND = new Point(
@@ -76,7 +76,7 @@ describe('jubjub', () => {
 });
 
 // ESM is broken.
-import url from 'url';
+import url from 'node:url';
 if (import.meta.url === url.pathToFileURL(process.argv[1]).href) {
   should.run();
 }
