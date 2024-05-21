@@ -10,7 +10,7 @@ Audited & minimal JS implementation of elliptic curve cryptography.
 - ✍️ ECDSA, EdDSA, Schnorr, BLS signature schemes, ECDH key agreement, hashing to curves
 - 🔖 SUF-CMA, SBS (non-repudiation), ZIP215 (consensus friendliness) features for ed25519
 - 🧜‍♂️ Poseidon ZK-friendly hash
-- 🪶 178KB (87KB gzipped) for everything, 22KB (10KB gzipped) for single-curve build
+- 🪶 178KB (87KB gzipped) for everything including hashes, 22KB (10KB gzipped) for single-curve build
 
 For discussions, questions and support, visit
 [GitHub Discussions](https://github.com/paulmillr/noble-curves/discussions)
