@@ -43,6 +43,19 @@ export type SignatureCoder<Fp2> = {
   toHex(point: ProjPointType<Fp2>): string;
 };
 
+type Fp2Bls<Fp, Fp2> = IField<Fp2> & {
+  reim: (num: Fp2) => { re: Fp; im: Fp };
+  multiplyByB: (num: Fp2) => Fp2;
+  frobeniusMap(num: Fp2, power: number): Fp2;
+};
+
+type Fp12Bls<Fp2, Fp12> = IField<Fp12> & {
+  frobeniusMap(num: Fp12, power: number): Fp12;
+  multiplyBy014(num: Fp12, o0: Fp2, o1: Fp2, o4: Fp2): Fp12;
+  conjugate(num: Fp12): Fp12;
+  finalExponentiate(num: Fp12): Fp12;
+};
+
 export type CurveType<Fp, Fp2, Fp6, Fp12> = {
   G1: Omit<CurvePointsType<Fp>, 'n'> & {
     ShortSignature: SignatureCoder<Fp>;
@@ -57,18 +70,9 @@ export type CurveType<Fp, Fp2, Fp6, Fp12> = {
   fields: {
     Fp: IField<Fp>;
     Fr: IField<bigint>;
-    Fp2: IField<Fp2> & {
-      reim: (num: Fp2) => { re: bigint; im: bigint };
-      multiplyByB: (num: Fp2) => Fp2;
-      frobeniusMap(num: Fp2, power: number): Fp2;
-    };
+    Fp2: Fp2Bls<Fp, Fp2>;
     Fp6: IField<Fp6>;
-    Fp12: IField<Fp12> & {
-      frobeniusMap(num: Fp12, power: number): Fp12;
-      multiplyBy014(num: Fp12, o0: Fp2, o1: Fp2, o4: Fp2): Fp12;
-      conjugate(num: Fp12): Fp12;
-      finalExponentiate(num: Fp12): Fp12;
-    };
+    Fp12: Fp12Bls<Fp2, Fp12>;
   };
   params: {
     x: bigint;
@@ -134,9 +138,9 @@ export type CurveFn<Fp, Fp2, Fp6, Fp12> = {
   };
   fields: {
     Fp: IField<Fp>;
-    Fp2: IField<Fp2>;
+    Fp2: Fp2Bls<Fp, Fp2>;
     Fp6: IField<Fp6>;
-    Fp12: IField<Fp12>;
+    Fp12: Fp12Bls<Fp2, Fp12>;
     Fr: IField<bigint>;
   };
   utils: {
