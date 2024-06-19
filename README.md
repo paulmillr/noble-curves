@@ -2,15 +2,15 @@
 
 Audited & minimal JS implementation of elliptic curve cryptography.
 
-- 🔒 [**Audited**](#security) by independent security firms
-- 🔻 Tree-shaking-friendly: use only what's necessary, other code won't be included
-- 🏎 Ultra-fast, hand-optimized for caveats of JS engines
-- 🔍 Unique tests ensure correctness: property-based, cross-library and Wycheproof vectors, fuzzing
+- 🔒 [**Audited**](#security) by an independent security firms
+- 🔻 Tree-shakeable: unused code is excluded from your builds
+- 🏎 Fast: hand-optimized for caveats of JS engines
+- 🔍 Reliable: property-based / cross-library / wycheproof tests and fuzzing ensure correctness
 - ➰ Short Weierstrass, Edwards, Montgomery curves
 - ✍️ ECDSA, EdDSA, Schnorr, BLS signature schemes, ECDH key agreement, hashing to curves
 - 🔖 SUF-CMA, SBS (non-repudiation), ZIP215 (consensus friendliness) features for ed25519
 - 🧜‍♂️ Poseidon ZK-friendly hash
-- 🪶 178KB (87KB gzipped) for everything including hashes, 22KB (10KB gzipped) for single-curve build
+- 🪶 178KB (87KB gzipped) for everything including bundled hashes, 22KB (10KB gzipped) for single-curve build
 
 For discussions, questions and support, visit
 [GitHub Discussions](https://github.com/paulmillr/noble-curves/discussions)
