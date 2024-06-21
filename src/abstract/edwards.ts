@@ -372,7 +372,8 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
         // y=0 is allowed
       } else {
         // RFC8032 prohibits >= p, but ZIP215 doesn't
-        if (zip215) assertInRange(y, MASK); // zip215=true [1..P-1] (2^255-19-1 for ed25519)
+        if (zip215)
+          assertInRange(y, MASK); // zip215=true [1..P-1] (2^255-19-1 for ed25519)
         else assertInRange(y, Fp.ORDER); // zip215=false [1..MASK-1] (2^256-1 for ed25519)
       }
 
