@@ -9,7 +9,7 @@ import { bls12_381 as bls, bls12_381 } from '../esm/bls12-381.js';
 
 import * as utils from '../esm/abstract/utils.js';
 
-import eip2537v from './bls12-381/eip2537.json' with { type: 'json' };
+import eip2537 from './bls12-381/eip2537.json' with { type: 'json' };
 import zkVectors from './bls12-381/zkcrypto/converted.json' with { type: 'json' };
 import pairingVectors from './bls12-381/go_pairing_vectors/pairing.json' with { type: 'json' };
 const G1_VECTORS = readFileSync('./test/bls12-381/bls12-381-g1-test-vectors.txt', 'utf-8')
@@ -1480,16 +1480,26 @@ describe('bls12-381 deterministic', () => {
     throws(() => G1Point.fromHex(compressedBit), 'infinity compressed');
   });
 
-  should('EIP2537 vectors', () => {
-    for (const i of eip2537v) {
-      const input = hexToBytes(i.Input);
-      const { x, y } = bls12_381.G1.mapToCurve(bytesToNumberBE(input)).toAffine();
-      // ETH related paddings
-      const xHex = x.toString(16).padStart(128, '0');
-      const yHex = y.toString(16).padStart(128, '0');
-      const val = xHex + yHex;
-      deepStrictEqual(val, i.Expected);
-    }
+  describe('EIP2537', () => {
+    const toEthHex = (n) => n.toString(16).padStart(128, '0');
+    should('G1', () => {
+      for (const v of eip2537.G1) {
+        const input = hexToBytes(v.Input);
+        const { x, y } = bls12_381.G1.mapToCurve(bytesToNumberBE(input)).toAffine();
+        const val = toEthHex(x) + toEthHex(y);
+        deepStrictEqual(val, v.Expected);
+      }
+    });
+    should('G2', () => {
+      for (const v of eip2537.G2) {
+        const input1 = BigInt(`0x${v.Input.slice(0, 128)}`);
+        const input2 = BigInt(`0x${v.Input.slice(128, 256)}`);
+        const { x, y } = bls12_381.G2.mapToCurve([input1, input2]).toAffine();
+        const res = toEthHex(x.c0) + toEthHex(x.c1) + toEthHex(y.c0) + toEthHex(y.c1);
+        deepStrictEqual(res, v.Expected);
+        // console.log('G2', res === v.Expected);
+      }
+    });
   });
 });
 

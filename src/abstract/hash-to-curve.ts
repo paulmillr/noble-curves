@@ -218,9 +218,12 @@ export function createHasher<T>(
       return P;
     },
     // Same as encodeToCurve, but without hash
-    mapToCurve(scalar: bigint) {
-      if (typeof scalar !== 'bigint') throw new Error(`mapToCurve: wrong scalar=${scalar}`);
-      const P = Point.fromAffine(mapToCurve([scalar])).clearCofactor();
+    mapToCurve(scalars: bigint[]) {
+      if (!Array.isArray(scalars)) throw new Error('mapToCurve: expected array of bigints');
+      for (const i of scalars)
+        if (typeof i !== 'bigint')
+          throw new Error(`mapToCurve: expected array of bigints, got ${i} in array`);
+      const P = Point.fromAffine(mapToCurve(scalars)).clearCofactor();
       P.assertValidity();
       return P;
     },
