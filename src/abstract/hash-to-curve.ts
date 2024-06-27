@@ -1,8 +1,8 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import type { Group, GroupConstructor, AffinePoint } from './curve.js';
-import { mod, IField } from './modular.js';
+import type { AffinePoint, Group, GroupConstructor } from './curve.js';
+import { IField, mod } from './modular.js';
 import type { CHash } from './utils.js';
-import { bytesToNumberBE, abytes, concatBytes, utf8ToBytes, validateObject } from './utils.js';
+import { abytes, bytesToNumberBE, concatBytes, utf8ToBytes, validateObject } from './utils.js';
 
 /**
  * * `DST` is a domain separation tag, defined in section 2.2.5

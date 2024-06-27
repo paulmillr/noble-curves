@@ -1,8 +1,8 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { hmac } from '@noble/hashes/hmac';
 import { concatBytes, randomBytes } from '@noble/hashes/utils';
-import { weierstrass, CurveType } from './abstract/weierstrass.js';
 import { CHash } from './abstract/utils.js';
+import { CurveType, weierstrass } from './abstract/weierstrass.js';
 
 // connects noble-curves to noble-hashes
 export function getHash(hash: CHash) {

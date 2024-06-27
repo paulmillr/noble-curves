@@ -1,9 +1,9 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { createCurve } from './_shortw_utils.js';
 import { sha512 } from '@noble/hashes/sha512';
+import { createCurve } from './_shortw_utils.js';
+import { createHasher } from './abstract/hash-to-curve.js';
 import { Field } from './abstract/modular.js';
 import { mapToCurveSimpleSWU } from './abstract/weierstrass.js';
-import { createHasher } from './abstract/hash-to-curve.js';
 
 // NIST secp521r1 aka p521
 // Note that it's 521, which differs from 512 of its hash function.

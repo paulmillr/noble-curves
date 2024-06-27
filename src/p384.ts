@@ -1,9 +1,9 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { createCurve } from './_shortw_utils.js';
 import { sha384 } from '@noble/hashes/sha512';
+import { createCurve } from './_shortw_utils.js';
+import { createHasher } from './abstract/hash-to-curve.js';
 import { Field } from './abstract/modular.js';
 import { mapToCurveSimpleSWU } from './abstract/weierstrass.js';
-import { createHasher } from './abstract/hash-to-curve.js';
 
 // NIST secp384r1 aka p384
 // https://www.secg.org/sec2-v2.pdf, https://neuromancer.sk/std/nist/P-384

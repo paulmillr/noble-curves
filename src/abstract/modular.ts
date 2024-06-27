@@ -2,11 +2,11 @@
 // Utilities for modular arithmetics and finite fields
 import {
   bitMask,
-  numberToBytesBE,
-  numberToBytesLE,
   bytesToNumberBE,
   bytesToNumberLE,
   ensureBytes,
+  numberToBytesBE,
+  numberToBytesLE,
   validateObject,
 } from './utils.js';
 // prettier-ignore

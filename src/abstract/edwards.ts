@@ -1,9 +1,9 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 // Twisted Edwards curve. The formula is: ax² + y² = 1 + dx²y²
+import { AffinePoint, BasicCurve, Group, GroupConstructor, validateBasic, wNAF } from './curve.js';
 import { mod } from './modular.js';
 import * as ut from './utils.js';
 import { ensureBytes, FHash, Hex } from './utils.js';
-import { Group, GroupConstructor, wNAF, BasicCurve, validateBasic, AffinePoint } from './curve.js';
 
 // Be friendly to bad ECMAScript parsers by not using bigint literals
 // prettier-ignore
@@ -372,7 +372,8 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
         // y=0 is allowed
       } else {
         // RFC8032 prohibits >= p, but ZIP215 doesn't
-        if (zip215) assertInRange(y, MASK); // zip215=true [1..P-1] (2^255-19-1 for ed25519)
+        if (zip215)
+          assertInRange(y, MASK); // zip215=true [1..P-1] (2^255-19-1 for ed25519)
         else assertInRange(y, Fp.ORDER); // zip215=false [1..MASK-1] (2^256-1 for ed25519)
       }
 

@@ -1,58 +1,60 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-
-// bls12-381 is pairing-friendly Barreto-Lynn-Scott elliptic curve construction allowing to:
-// - Construct zk-SNARKs at the 120-bit security
-// - Efficiently verify N aggregate signatures with 1 pairing and N ec additions:
-//   the Boneh-Lynn-Shacham signature scheme is orders of magnitude more efficient than Schnorr
-//
-// ### Summary
-// 1. BLS Relies on Bilinear Pairing (expensive)
-// 2. Private Keys: 32 bytes
-// 3. Public Keys: 48 bytes: 381 bit affine x coordinate, encoded into 48 big-endian bytes.
-// 4. Signatures: 96 bytes: two 381 bit integers (affine x coordinate), encoded into two 48 big-endian byte arrays.
-//     - The signature is a point on the G2 subgroup, which is defined over a finite field
-//     with elements twice as big as the G1 curve (G2 is over Fp2 rather than Fp. Fp2 is analogous to the complex numbers).
-// 5. The 12 stands for the Embedding degree.
-//
-// ### Formulas
-// - `P = pk x G` - public keys
-// - `S = pk x H(m)` - signing
-// - `e(P, H(m)) == e(G, S)` - verification using pairings
-// - `e(G, S) = e(G, SUM(n)(Si)) = MUL(n)(e(G, Si))` - signature aggregation
-//
-// ### Compatibility and notes
-// 1. It is compatible with Algorand, Chia, Dfinity, Ethereum, Filecoin, ZEC
-//    Filecoin uses little endian byte arrays for private keys - make sure to reverse byte order.
-// 2. Some projects use G2 for public keys and G1 for signatures. It's called "short signature"
-// 3. Curve security level is about 120 bits as per Barbulescu-Duquesne 2017
-//    https://hal.science/hal-01534101/file/main.pdf
-// 4. Compatible with specs:
-// [cfrg-pairing-friendly-curves-11](https://tools.ietf.org/html/draft-irtf-cfrg-pairing-friendly-curves-11),
-// [cfrg-bls-signature-05](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-bls-signature-05),
-// [RFC 9380](https://www.rfc-editor.org/rfc/rfc9380).
 import { sha256 } from '@noble/hashes/sha256';
 import { randomBytes } from '@noble/hashes/utils';
 import { bls, CurveFn } from './abstract/bls.js';
 import * as mod from './abstract/modular.js';
 import {
-  concatBytes as concatB,
-  ensureBytes,
-  numberToBytesBE,
-  bytesToNumberBE,
-  bitLen,
   bitGet,
-  Hex,
+  bitLen,
   bitMask,
   bytesToHex,
+  bytesToNumberBE,
+  concatBytes as concatB,
+  ensureBytes,
+  Hex,
+  numberToBytesBE,
 } from './abstract/utils.js';
 // Types
-import {
-  ProjPointType,
-  ProjConstructor,
-  mapToCurveSimpleSWU,
-  AffinePoint,
-} from './abstract/weierstrass.js';
 import { isogenyMap } from './abstract/hash-to-curve.js';
+import {
+  AffinePoint,
+  mapToCurveSimpleSWU,
+  ProjConstructor,
+  ProjPointType,
+} from './abstract/weierstrass.js';
+
+/*
+bls12-381 is pairing-friendly Barreto-Lynn-Scott elliptic curve construction allowing to:
+- Construct zk-SNARKs at the 120-bit security
+- Efficiently verify N aggregate signatures with 1 pairing and N ec additions:
+  the Boneh-Lynn-Shacham signature scheme is orders of magnitude more efficient than Schnorr
+
+### Summary
+1. BLS Relies on Bilinear Pairing (expensive)
+2. Private Keys: 32 bytes
+3. Public Keys: 48 bytes: 381 bit affine x coordinate, encoded into 48 big-endian bytes.
+4. Signatures: 96 bytes: two 381 bit integers (affine x coordinate), encoded into two 48 big-endian byte arrays.
+    - The signature is a point on the G2 subgroup, which is defined over a finite field
+    with elements twice as big as the G1 curve (G2 is over Fp2 rather than Fp. Fp2 is analogous to the complex numbers).
+5. The 12 stands for the Embedding degree.
+
+### Formulas
+- `P = pk x G` - public keys
+- `S = pk x H(m)` - signing
+- `e(P, H(m)) == e(G, S)` - verification using pairings
+- `e(G, S) = e(G, SUM(n)(Si)) = MUL(n)(e(G, Si))` - signature aggregation
+
+### Compatibility and notes
+1. It is compatible with Algorand, Chia, Dfinity, Ethereum, Filecoin, ZEC
+   Filecoin uses little endian byte arrays for private keys - make sure to reverse byte order.
+2. Some projects use G2 for public keys and G1 for signatures. It's called "short signature"
+3. Curve security level is about 120 bits as per Barbulescu-Duquesne 2017
+   https://hal.science/hal-01534101/file/main.pdf
+4. Compatible with specs:
+[cfrg-pairing-friendly-curves-11](https://tools.ietf.org/html/draft-irtf-cfrg-pairing-friendly-curves-11),
+[cfrg-bls-signature-05](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-bls-signature-05),
+[RFC 9380](https://www.rfc-editor.org/rfc/rfc9380).
+*/
 
 // Be friendly to bad ECMAScript parsers by not using bigint literals
 // prettier-ignore
@@ -503,9 +505,9 @@ const BLS_X_LEN = bitLen(BLS_X);
 
 // prettier-ignore
 type BigintTwelve = [
-    bigint, bigint, bigint, bigint, bigint, bigint,
-    bigint, bigint, bigint, bigint, bigint, bigint
-  ];
+  bigint, bigint, bigint, bigint, bigint, bigint,
+  bigint, bigint, bigint, bigint, bigint, bigint
+];
 const Fp12Add = ({ c0, c1 }: Fp12, { c0: r0, c1: r1 }: Fp12) => ({
   c0: Fp6.add(c0, r0),
   c1: Fp6.add(c1, r1),

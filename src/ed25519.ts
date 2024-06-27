@@ -1,9 +1,11 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha512 } from '@noble/hashes/sha512';
 import { concatBytes, randomBytes, utf8ToBytes } from '@noble/hashes/utils';
+import { AffinePoint, Group } from './abstract/curve.js';
 import { ExtPointType, twistedEdwards } from './abstract/edwards.js';
-import { montgomery } from './abstract/montgomery.js';
+import { createHasher, expand_message_xmd, htfBasicOpts } from './abstract/hash-to-curve.js';
 import { Field, FpSqrtEven, isNegativeLE, mod, pow2 } from './abstract/modular.js';
+import { montgomery } from './abstract/montgomery.js';
 import {
   bytesToHex,
   bytesToNumberLE,
@@ -12,8 +14,6 @@ import {
   Hex,
   numberToBytesLE,
 } from './abstract/utils.js';
-import { createHasher, htfBasicOpts, expand_message_xmd } from './abstract/hash-to-curve.js';
-import { AffinePoint, Group } from './abstract/curve.js';
 
 /**
  * ed25519 Twisted Edwards curve with following addons:

@@ -1,16 +1,5 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-/**
- * BLS (Barreto-Lynn-Scott) family of pairing-friendly curves.
- * Implements BLS (Boneh-Lynn-Shacham) signatures.
- * Consists of two curves: G1 and G2:
- * - G1 is a subgroup of (x, y) E(Fq) over y² = x³ + 4.
- * - G2 is a subgroup of ((x₁, x₂+i), (y₁, y₂+i)) E(Fq²) over y² = x³ + 4(1 + i) where i is √-1
- * - Gt, created by bilinear (ate) pairing e(G1, G2), consists of p-th roots of unity in
- *   Fq^k where k is embedding degree. Only degree 12 is currently supported, 24 is not.
- * Pairing is used to aggregate and verify signatures.
- * We are using Fp for private keys (shorter) and Fp₂ for signatures (longer).
- * Some projects may prefer to swap this relation, it is not supported for now.
- */
+// BLS (Barreto-Lynn-Scott) family of pairing-friendly curves.
 import { AffinePoint } from './curve.js';
 import { IField, getMinHashLength, mapHashToField } from './modular.js';
 import { Hex, PrivKey, CHash, bitLen, bitGet, ensureBytes } from './utils.js';
@@ -25,6 +14,19 @@ import {
   CurvePointsRes,
   weierstrassPoints,
 } from './weierstrass.js';
+
+/**
+ * BLS (Barreto-Lynn-Scott) family of pairing-friendly curves.
+ * Implements BLS (Boneh-Lynn-Shacham) signatures.
+ * Consists of two curves: G1 and G2:
+ * - G1 is a subgroup of (x, y) E(Fq) over y² = x³ + 4.
+ * - G2 is a subgroup of ((x₁, x₂+i), (y₁, y₂+i)) E(Fq²) over y² = x³ + 4(1 + i) where i is √-1
+ * - Gt, created by bilinear (ate) pairing e(G1, G2), consists of p-th roots of unity in
+ *   Fq^k where k is embedding degree. Only degree 12 is currently supported, 24 is not.
+ * Pairing is used to aggregate and verify signatures.
+ * We are using Fp for private keys (shorter) and Fp₂ for signatures (longer).
+ * Some projects may prefer to swap this relation, it is not supported for now.
+ **/
 
 type Fp = bigint; // Can be different field?
 

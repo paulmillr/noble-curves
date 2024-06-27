@@ -9,7 +9,7 @@ import { bls12_381 as bls, bls12_381 } from '../esm/bls12-381.js';
 
 import * as utils from '../esm/abstract/utils.js';
 
-import eip2537v from './bls12-381/eip2537.json' with { type: 'json'};
+import eip2537v from './bls12-381/eip2537.json' with { type: 'json' };
 import zkVectors from './bls12-381/zkcrypto/converted.json' with { type: 'json' };
 import pairingVectors from './bls12-381/go_pairing_vectors/pairing.json' with { type: 'json' };
 const G1_VECTORS = readFileSync('./test/bls12-381/bls12-381-g1-test-vectors.txt', 'utf-8')
@@ -1490,7 +1490,7 @@ describe('bls12-381 deterministic', () => {
       const val = xHex + yHex;
       deepStrictEqual(val, i.Expected);
     }
-  })
+  });
 });
 
 // ESM is broken.
