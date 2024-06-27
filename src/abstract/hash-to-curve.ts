@@ -217,5 +217,12 @@ export function createHasher<T>(
       P.assertValidity();
       return P;
     },
+    // Same as encodeToCurve, but without hash
+    mapToCurve(scalar: bigint) {
+      if (typeof scalar !== 'bigint') throw new Error(`mapToCurve: wrong scalar=${scalar}`);
+      const P = Point.fromAffine(mapToCurve([scalar])).clearCofactor();
+      P.assertValidity();
+      return P;
+    },
   };
 }

@@ -3,12 +3,13 @@ import * as fc from 'fast-check';
 import { readFileSync } from 'node:fs';
 import { describe, should } from 'micro-should';
 import { wNAF } from '../esm/abstract/curve.js';
-import { bytesToHex, utf8ToBytes } from '../esm/abstract/utils.js';
+import { bytesToHex, utf8ToBytes, hexToBytes, bytesToNumberBE } from '../esm/abstract/utils.js';
 import { hash_to_field } from '../esm/abstract/hash-to-curve.js';
 import { bls12_381 as bls, bls12_381 } from '../esm/bls12-381.js';
 
 import * as utils from '../esm/abstract/utils.js';
 
+import eip2537v from './bls12-381/eip2537.json' with { type: 'json'};
 import zkVectors from './bls12-381/zkcrypto/converted.json' with { type: 'json' };
 import pairingVectors from './bls12-381/go_pairing_vectors/pairing.json' with { type: 'json' };
 const G1_VECTORS = readFileSync('./test/bls12-381/bls12-381-g1-test-vectors.txt', 'utf-8')
@@ -1478,6 +1479,18 @@ describe('bls12-381 deterministic', () => {
     infinityCompressed[0] |= 0b0100_0000;
     throws(() => G1Point.fromHex(compressedBit), 'infinity compressed');
   });
+
+  should('EIP2537 vectors', () => {
+    for (const i of eip2537v) {
+      const input = hexToBytes(i.Input);
+      const { x, y } = bls12_381.G1.mapToCurve(bytesToNumberBE(input)).toAffine();
+      // ETH related paddings
+      const xHex = x.toString(16).padStart(128, '0');
+      const yHex = y.toString(16).padStart(128, '0');
+      const val = xHex + yHex;
+      deepStrictEqual(val, i.Expected);
+    }
+  })
 });
 
 // ESM is broken.
