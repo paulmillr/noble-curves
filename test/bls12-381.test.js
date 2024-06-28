@@ -1485,7 +1485,7 @@ describe('bls12-381 deterministic', () => {
     should('G1', () => {
       for (const v of eip2537.G1) {
         const input = hexToBytes(v.Input);
-        const { x, y } = bls12_381.G1.mapToCurve(bytesToNumberBE(input)).toAffine();
+        const { x, y } = bls12_381.G1.mapToCurve([bytesToNumberBE(input)]).toAffine();
         const val = toEthHex(x) + toEthHex(y);
         deepStrictEqual(val, v.Expected);
       }
