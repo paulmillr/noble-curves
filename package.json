@@ -1,6 +1,6 @@
 {
   "name": "@noble/curves",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "Audited & minimal JS implementation of elliptic curve cryptography",
   "files": [
     "abstract",
@@ -31,7 +31,7 @@
     "@noble/hashes": "1.4.0"
   },
   "devDependencies": {
-    "@paulmillr/jsbt": "0.2.0",
+    "@paulmillr/jsbt": "0.2.1",
     "fast-check": "3.0.0",
     "micro-bmark": "0.3.1",
     "micro-should": "0.4.0",
