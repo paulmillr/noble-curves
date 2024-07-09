@@ -46,6 +46,16 @@ function validateOpts(curve: CurveType) {
   return Object.freeze({ ...opts } as const);
 }
 
+const isBig = (n: bigint) => typeof n === 'bigint' && _0n <= n; // n in [1..]
+
+/**
+ * Asserts min <= n < max
+ */
+function assertInRange(title: string, n: bigint, min: bigint, max: bigint) {
+  if (isBig(n) && isBig(min) && isBig(max) && min <= n && n < max) return;
+  throw new Error(`expected valid ${title}: ${min} <= coord < ${max}, got ${typeof n} ${n}`);
+}
+
 // Instance of Extended Point with coordinates in X, Y, Z, T
 export interface ExtPointType extends Group<ExtPointType> {
   readonly ex: bigint;
@@ -127,20 +137,13 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       if (ctx.length || phflag) throw new Error('Contexts/pre-hash are not supported');
       return data;
     }); // NOOP
-  const inBig = (n: bigint) => typeof n === 'bigint' && _0n < n; // n in [1..]
-  const inRange = (n: bigint, max: bigint) => inBig(n) && inBig(max) && n < max; // n in [1..max-1]
-  const in0MaskRange = (n: bigint) => n === _0n || inRange(n, MASK); // n in [0..MASK-1]
-  function assertInRange(n: bigint, max: bigint) {
-    // n in [1..max-1]
-    if (inRange(n, max)) return n;
-    throw new Error(`Expected valid scalar < ${max}, got ${typeof n} ${n}`);
-  }
-  function assertGE0(n: bigint) {
-    // n in [0..CURVE_ORDER-1]
-    return n === _0n ? n : assertInRange(n, CURVE_ORDER); // GE = prime subgroup, not full group
+  // 0 <= n < MASK
+  // Coordinates larger than Fp.ORDER are allowed for zip215
+  function assertCoordinate(title: string, n: bigint) {
+    assertInRange('coordinate ' + title, n, _0n, MASK);
   }
   const pointPrecomputes = new Map<Point, Point[]>();
-  function isPoint(other: unknown) {
+  function assertPoint(other: unknown) {
     if (!(other instanceof Point)) throw new Error('ExtendedPoint expected');
   }
   // Extended Point works in extended coordinates: (x, y, z, t) ∋ (x=x/z, y=y/z, t=xy).
@@ -155,10 +158,10 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       readonly ez: bigint,
       readonly et: bigint
     ) {
-      if (!in0MaskRange(ex)) throw new Error('x required');
-      if (!in0MaskRange(ey)) throw new Error('y required');
-      if (!in0MaskRange(ez)) throw new Error('z required');
-      if (!in0MaskRange(et)) throw new Error('t required');
+      assertCoordinate('x', ex);
+      assertCoordinate('y', ey);
+      assertCoordinate('z', ez);
+      assertCoordinate('t', et);
     }
 
     get x(): bigint {
@@ -171,7 +174,8 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     static fromAffine(p: AffinePoint<bigint>): Point {
       if (p instanceof Point) throw new Error('extended point not allowed');
       const { x, y } = p || {};
-      if (!in0MaskRange(x) || !in0MaskRange(y)) throw new Error('invalid affine point');
+      assertCoordinate('x', x);
+      assertCoordinate('y', y);
       return new Point(x, y, _1n, modP(x * y));
     }
     static normalizeZ(points: Point[]): Point[] {
@@ -213,7 +217,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
 
     // Compare one point to another.
     equals(other: Point): boolean {
-      isPoint(other);
+      assertPoint(other);
       const { ex: X1, ey: Y1, ez: Z1 } = this;
       const { ex: X2, ey: Y2, ez: Z2 } = other;
       const X1Z2 = modP(X1 * Z2);
@@ -258,7 +262,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     // https://hyperelliptic.org/EFD/g1p/auto-twisted-extended.html#addition-add-2008-hwcd
     // Cost: 9M + 1*a + 1*d + 7add.
     add(other: Point) {
-      isPoint(other);
+      assertPoint(other);
       const { a, d } = CURVE;
       const { ex: X1, ey: Y1, ez: Z1, et: T1 } = this;
       const { ex: X2, ey: Y2, ez: Z2, et: T2 } = other;
@@ -308,7 +312,9 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
 
     // Constant-time multiplication.
     multiply(scalar: bigint): Point {
-      const { p, f } = this.wNAF(assertInRange(scalar, CURVE_ORDER));
+      let n = scalar;
+      assertInRange('scalar', n, _1n, CURVE_ORDER);
+      const { p, f } = this.wNAF(n);
       return Point.normalizeZ([p, f])[0];
     }
 
@@ -317,7 +323,8 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     // an exposed private key e.g. sig verification.
     // Does NOT allow scalars higher than CURVE.n.
     multiplyUnsafe(scalar: bigint): Point {
-      let n = assertGE0(scalar); // 0 <= scalar < CURVE.n
+      let n = scalar;
+      assertInRange('scalar', n, _0n, CURVE_ORDER); // 0 <= scalar < l
       if (n === _0n) return I;
       if (this.equals(I) || n === _1n) return this;
       if (this.equals(G)) return this.wNAF(n).p;
@@ -368,14 +375,12 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       const lastByte = hex[len - 1]; // select last byte
       normed[len - 1] = lastByte & ~0x80; // clear last bit
       const y = ut.bytesToNumberLE(normed);
-      if (y === _0n) {
-        // y=0 is allowed
-      } else {
-        // RFC8032 prohibits >= p, but ZIP215 doesn't
-        if (zip215)
-          assertInRange(y, MASK); // zip215=true [1..P-1] (2^255-19-1 for ed25519)
-        else assertInRange(y, Fp.ORDER); // zip215=false [1..MASK-1] (2^256-1 for ed25519)
-      }
+
+      // RFC8032 prohibits >= p, but ZIP215 doesn't
+      // zip215=true:  1 <= y < MASK (2^256 for ed25519)
+      // zip215=false: 1 <= y < P (2^255-19 for ed25519)
+      const max = zip215 ? MASK : Fp.ORDER;
+      assertInRange('pointHex.y', y, _0n, max);
 
       // Ed25519: x² = (y²-1)/(dy²+1) mod p. Ed448: x² = (y²-1)/(dy²-1) mod p. Generic case:
       // ax²+y²=1+dx²y² => y²-1=dx²y²-ax² => y²-1=x²(dy²-a) => x²=(y²-1)/(dy²-a)
@@ -451,7 +456,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     const R = G.multiply(r).toRawBytes(); // R = rG
     const k = hashDomainToScalar(options.context, R, pointBytes, msg); // R || A || PH(M)
     const s = modN(r + k * scalar); // S = (r + k * s) mod L
-    assertGE0(s); // 0 <= s < l
+    assertInRange('signature.s', s, _0n, CURVE_ORDER); // 0 <= s < l
     const res = ut.concatBytes(R, ut.numberToBytesLE(s, Fp.BYTES));
     return ensureBytes('result', res, nByteLength * 2); // 64-byte signature
   }
