@@ -1,8 +1,13 @@
-import { readFileSync } from 'fs';
+import { readFileSync } from 'node:fs';
 import { mark, run } from 'micro-bmark';
 import { bls12_381 as bls } from '../bls12-381.js';
-
-const G2_VECTORS = readFileSync('../test/bls12-381/bls12-381-g2-test-vectors.txt', 'utf-8')
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const G2_VECTORS = readFileSync(
+  `${__dirname}/../test/bls12-381/bls12-381-g2-test-vectors.txt`,
+  'utf-8'
+)
   .trim()
   .split('\n')
   .map((l) => l.split(':'));
@@ -40,9 +45,22 @@ run(async () => {
   await mark('verify', 50, () => bls.verify(sig, '09', pub));
   await mark('pairing', 100, () => bls.pairing(p1, p2));
 
-  const scalars1 = Array(4096).fill(0).map(i => 2n ** 235n - BigInt(i));
-  const scalars2 = Array(4096).fill(0).map(i => 2n ** 241n + BigInt(i));
-  const points = scalars1.map(s => bls.G1.ProjectivePoint.BASE.multiply(s));
+  const scalars1 = Array(4096)
+    .fill(0)
+    .map((i) => 2n ** 235n - BigInt(i));
+  const scalars2 = Array(4096)
+    .fill(0)
+    .map((i) => 2n ** 241n + BigInt(i));
+  const points = scalars1.map((s) => bls.G1.ProjectivePoint.BASE.multiply(s));
+  const pointsG2 = scalars1.map((s) => bls.G2.ProjectivePoint.BASE.multiply(s));
+
+  const pairingBatch = 10;
+  await mark(`pairing${pairingBatch}`, 10, () => {
+    const res = [];
+    for (let i = 0; i < pairingBatch; i++) res.push({ g1: points[i], g2: pointsG2[i] });
+    bls.pairingBatch(res);
+  });
+
   await mark('MSM 4096 scalars x points', 1, () => {
     // naive approach, not using multi-scalar-multiplication
     let sum = bls.G1.ProjectivePoint.ZERO;

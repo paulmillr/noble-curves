@@ -56,6 +56,7 @@ import { secp256k1 } from '@noble/curves/secp256k1'; // ESM and Common.js
   - [ed25519, X25519, ristretto255](#ed25519-x25519-ristretto255)
   - [ed448, X448, decaf448](#ed448-x448-decaf448)
   - [bls12-381](#bls12-381)
+  - [bn254 aka alt_bn128](#bn254-aka-alt_bn128)
   - [All available imports](#all-available-imports)
   - [Accessing a curve's variables](#accessing-a-curves-variables)
 - [Abstract API](#abstract-api)
@@ -246,7 +247,29 @@ Same RFC7748 / RFC8032 / IRTF draft are followed.
 
 #### bls12-381
 
+```ts
+import { bls12_381 } from '@noble/curves/bls12-381';
+```
+
 See [abstract/bls](#bls-barreto-lynn-scott-curves).
+
+#### bn254 aka alt_bn128
+
+```ts
+import { bn254 } from '@noble/curves/bn254';
+
+console.log(
+  bn254.G1,
+  bn254.G2,
+  bn254.pairing
+)
+```
+
+The API mirrors [abstract/bls](#bls-barreto-lynn-scott-curves).
+
+The curve was previously called alt_bn128.
+The implementation is compatible with [EIP-196](https://eips.ethereum.org/EIPS/eip-196) and
+[EIP-197](https://eips.ethereum.org/EIPS/eip-197).
 
 #### All available imports
 
@@ -590,7 +613,7 @@ use aggregated, batch-verifiable
 using Boneh-Lynn-Shacham signature scheme.
 
 The module doesn't expose `CURVE` property: use `G1.CURVE`, `G2.CURVE` instead.
-Only BLS12-381 is implemented currently.
+Only BLS12-381 is currently implemented.
 Defining BLS12-377 and BLS24 should be straightforward.
 
 Main methods and properties are:

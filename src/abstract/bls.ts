@@ -1,8 +1,6 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-// BLS (Barreto-Lynn-Scott) family of pairing-friendly curves.
-import { AffinePoint } from './curve.js';
 import { IField, getMinHashLength, mapHashToField } from './modular.js';
-import { Hex, PrivKey, CHash, bitLen, bitGet, ensureBytes } from './utils.js';
+import { Hex, PrivKey, CHash, ensureBytes } from './utils.js';
 // prettier-ignore
 import {
   MapToCurve, Opts as HTFOpts, H2CPointConstructor, htfBasicOpts,
@@ -14,24 +12,30 @@ import {
   CurvePointsRes,
   weierstrassPoints,
 } from './weierstrass.js';
+import type { Fp2, Fp6, Fp12, Fp2Bls, Fp12Bls } from './tower.js';
 
 /**
- * BLS (Barreto-Lynn-Scott) family of pairing-friendly curves.
- * Implements BLS (Boneh-Lynn-Shacham) signatures.
+ * BLS != BLS.
+ * The file implements BLS (Boneh-Lynn-Shacham) signatures.
+ * Used in both BLS (Barreto-Lynn-Scott) and BN (Barreto-Naehrig)
+ * families of pairing-friendly curves.
  * Consists of two curves: G1 and G2:
  * - G1 is a subgroup of (x, y) E(Fq) over y² = x³ + 4.
  * - G2 is a subgroup of ((x₁, x₂+i), (y₁, y₂+i)) E(Fq²) over y² = x³ + 4(1 + i) where i is √-1
  * - Gt, created by bilinear (ate) pairing e(G1, G2), consists of p-th roots of unity in
  *   Fq^k where k is embedding degree. Only degree 12 is currently supported, 24 is not.
  * Pairing is used to aggregate and verify signatures.
- * We are using Fp for private keys (shorter) and Fp₂ for signatures (longer).
- * Some projects may prefer to swap this relation, it is not supported for now.
+ * There are two main ways to use it:
+ * 1. Fp for short private keys, Fp₂ for signatures
+ * 2. Fp for short signatures, Fp₂ for private keys
  **/
 
 type Fp = bigint; // Can be different field?
 
 // prettier-ignore
-const _2n = BigInt(2), _3n = BigInt(3);
+const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3);
+
+export type TwistType = 'multiplicative' | 'divisive';
 
 export type ShortSignatureCoder<Fp> = {
   fromHex(hex: Hex): ProjPointType<Fp>;
@@ -39,26 +43,13 @@ export type ShortSignatureCoder<Fp> = {
   toHex(point: ProjPointType<Fp>): string;
 };
 
-export type SignatureCoder<Fp2> = {
-  fromHex(hex: Hex): ProjPointType<Fp2>;
-  toRawBytes(point: ProjPointType<Fp2>): Uint8Array;
-  toHex(point: ProjPointType<Fp2>): string;
+export type SignatureCoder<Fp> = {
+  fromHex(hex: Hex): ProjPointType<Fp>;
+  toRawBytes(point: ProjPointType<Fp>): Uint8Array;
+  toHex(point: ProjPointType<Fp>): string;
 };
 
-type Fp2Bls<Fp, Fp2> = IField<Fp2> & {
-  reim: (num: Fp2) => { re: Fp; im: Fp };
-  multiplyByB: (num: Fp2) => Fp2;
-  frobeniusMap(num: Fp2, power: number): Fp2;
-};
-
-type Fp12Bls<Fp2, Fp12> = IField<Fp12> & {
-  frobeniusMap(num: Fp12, power: number): Fp12;
-  multiplyBy014(num: Fp12, o0: Fp2, o1: Fp2, o4: Fp2): Fp12;
-  conjugate(num: Fp12): Fp12;
-  finalExponentiate(num: Fp12): Fp12;
-};
-
-export type CurveType<Fp, Fp2, Fp6, Fp12> = {
+export type CurveType = {
   G1: Omit<CurvePointsType<Fp>, 'n'> & {
     ShortSignature: SignatureCoder<Fp>;
     mapToCurve: MapToCurve<Fp>;
@@ -72,20 +63,37 @@ export type CurveType<Fp, Fp2, Fp6, Fp12> = {
   fields: {
     Fp: IField<Fp>;
     Fr: IField<bigint>;
-    Fp2: Fp2Bls<Fp, Fp2>;
+    Fp2: Fp2Bls;
     Fp6: IField<Fp6>;
-    Fp12: Fp12Bls<Fp2, Fp12>;
+    Fp12: Fp12Bls;
   };
   params: {
-    x: bigint;
+    // NOTE: MSB is always ignored and used as marker for length,
+    // otherwise leading zeros will be lost.
+    // Can be different from 'X' (seed) param!
+    ateLoopSize: bigint;
+    xNegative: boolean;
     r: bigint;
+    twistType: TwistType; // BLS12-381: Multiplicative, BN254: Divisive
   };
   htfDefaults: HTFOpts;
   hash: CHash; // Because we need outputLen for DRBG
   randomBytes: (bytesLength?: number) => Uint8Array;
+  // This is super ugly hack for untwist point in BN254 after miller loop
+  postPrecompute?: (
+    Rx: Fp2,
+    Ry: Fp2,
+    Rz: Fp2,
+    Qx: Fp2,
+    Qy: Fp2,
+    pointAdd: (Rx: Fp2, Ry: Fp2, Rz: Fp2, Qx: Fp2, Qy: Fp2) => { Rx: Fp2; Ry: Fp2; Rz: Fp2 }
+  ) => void;
 };
 
-export type CurveFn<Fp, Fp2, Fp6, Fp12> = {
+type PrecomputeSingle = [Fp2, Fp2, Fp2][];
+type Precompute = PrecomputeSingle[];
+
+export type CurveFn = {
   getPublicKey: (privateKey: PrivKey) => Uint8Array;
   getPublicKeyForShortSignatures: (privateKey: PrivKey) => Uint8Array;
   sign: {
@@ -126,99 +134,206 @@ export type CurveFn<Fp, Fp2, Fp6, Fp12> = {
     (signatures: Hex[]): Uint8Array;
     (signatures: ProjPointType<Fp>[]): ProjPointType<Fp>;
   };
-  millerLoop: (ell: [Fp2, Fp2, Fp2][], g1: [Fp, Fp]) => Fp12;
+  millerLoopBatch: (pairs: [Precompute, Fp, Fp][]) => Fp12;
   pairing: (P: ProjPointType<Fp>, Q: ProjPointType<Fp2>, withFinalExponent?: boolean) => Fp12;
+  pairingBatch: (
+    pairs: { g1: ProjPointType<Fp>; g2: ProjPointType<Fp2> }[],
+    withFinalExponent?: boolean
+  ) => Fp12;
   G1: CurvePointsRes<Fp> & ReturnType<typeof createHasher<Fp>>;
   G2: CurvePointsRes<Fp2> & ReturnType<typeof createHasher<Fp2>>;
   Signature: SignatureCoder<Fp2>;
   ShortSignature: ShortSignatureCoder<Fp>;
   params: {
-    x: bigint;
+    ateLoopSize: bigint;
     r: bigint;
     G1b: bigint;
     G2b: Fp2;
   };
   fields: {
     Fp: IField<Fp>;
-    Fp2: Fp2Bls<Fp, Fp2>;
+    Fp2: Fp2Bls;
     Fp6: IField<Fp6>;
-    Fp12: Fp12Bls<Fp2, Fp12>;
+    Fp12: Fp12Bls;
     Fr: IField<bigint>;
   };
   utils: {
     randomPrivateKey: () => Uint8Array;
-    calcPairingPrecomputes: (p: AffinePoint<Fp2>) => [Fp2, Fp2, Fp2][];
+    calcPairingPrecomputes: (p: ProjPointType<Fp2>) => Precompute;
   };
 };
 
-export function bls<Fp2, Fp6, Fp12>(
-  CURVE: CurveType<Fp, Fp2, Fp6, Fp12>
-): CurveFn<Fp, Fp2, Fp6, Fp12> {
+// Not used with BLS12-381 (no sequential `11` in X). Useful for other curves.
+function NAfDecomposition(a: bigint) {
+  const res = [];
+  // a>1 because of marker bit
+  for (; a > _1n; a >>= _1n) {
+    if ((a & _1n) === _0n) res.unshift(0);
+    else if ((a & _3n) === _3n) {
+      res.unshift(-1);
+      a += _1n;
+    } else res.unshift(1);
+  }
+  return res;
+}
+
+export function bls(CURVE: CurveType): CurveFn {
   // Fields are specific for curve, so for now we'll need to pass them with opts
   const { Fp, Fr, Fp2, Fp6, Fp12 } = CURVE.fields;
-  const BLS_X_LEN = bitLen(CURVE.params.x);
+  const BLS_X_IS_NEGATIVE = CURVE.params.xNegative;
+  const TWIST: TwistType = CURVE.params.twistType;
+  // Point on G1 curve: (x, y)
+  const G1_ = weierstrassPoints({ n: Fr.ORDER, ...CURVE.G1 });
+  const G1 = Object.assign(
+    G1_,
+    createHasher(G1_.ProjectivePoint, CURVE.G1.mapToCurve, {
+      ...CURVE.htfDefaults,
+      ...CURVE.G1.htfDefaults,
+    })
+  );
+  // Point on G2 curve (complex numbers): (x₁, x₂+i), (y₁, y₂+i)
+  const G2_ = weierstrassPoints({ n: Fr.ORDER, ...CURVE.G2 });
+  const G2 = Object.assign(
+    G2_,
+    createHasher(G2_.ProjectivePoint as H2CPointConstructor<Fp2>, CURVE.G2.mapToCurve, {
+      ...CURVE.htfDefaults,
+      ...CURVE.G2.htfDefaults,
+    })
+  );
+  type G1 = typeof G1.ProjectivePoint.BASE;
+  type G2 = typeof G2.ProjectivePoint.BASE & { _PPRECOMPUTES?: Precompute };
+
+  // Applies sparse multiplication as line function
+  let lineFunction: (c0: Fp2, c1: Fp2, c2: Fp2, f: Fp12, Px: Fp, Py: Fp) => Fp12;
+  if (TWIST === 'multiplicative') {
+    lineFunction = (c0: Fp2, c1: Fp2, c2: Fp2, f: Fp12, Px: Fp, Py: Fp) =>
+      Fp12.mul014(f, c0, Fp2.mul(c1, Px), Fp2.mul(c2, Py));
+  } else if (TWIST === 'divisive') {
+    // NOTE: it should be [c0, c1, c2], but we use different order here to reduce complexity of
+    // precompute calculations.
+    lineFunction = (c0: Fp2, c1: Fp2, c2: Fp2, f: Fp12, Px: Fp, Py: Fp) =>
+      Fp12.mul034(f, Fp2.mul(c2, Py), Fp2.mul(c1, Px), c0);
+  } else throw new Error('bls: unknown twist type');
+
+  const Fp2div2 = Fp2.div(Fp2.ONE, Fp2.mul(Fp2.ONE, _2n));
+  const pointDouble = (ell: PrecomputeSingle, Rx: Fp2, Ry: Fp2, Rz: Fp2) => {
+    const t0 = Fp2.sqr(Ry); // Ry²
+    const t1 = Fp2.sqr(Rz); // Rz²
+    const t2 = Fp2.mulByB(Fp2.mul(t1, _3n)); // 3 * T1 * B
+    const t3 = Fp2.mul(t2, _3n); // 3 * T2
+    const t4 = Fp2.sub(Fp2.sub(Fp2.sqr(Fp2.add(Ry, Rz)), t1), t0); // (Ry + Rz)² - T1 - T0
+    const c0 = Fp2.sub(t2, t0); // T2 - T0 (i)
+    const c1 = Fp2.mul(Fp2.sqr(Rx), _3n); // 3 * Rx²
+    const c2 = Fp2.neg(t4); // -T4 (-h)
+
+    ell.push([c0, c1, c2]);
+
+    Rx = Fp2.mul(Fp2.mul(Fp2.mul(Fp2.sub(t0, t3), Rx), Ry), Fp2div2); // ((T0 - T3) * Rx * Ry) / 2
+    Ry = Fp2.sub(Fp2.sqr(Fp2.mul(Fp2.add(t0, t3), Fp2div2)), Fp2.mul(Fp2.sqr(t2), _3n)); // ((T0 + T3) / 2)² - 3 * T2²
+    Rz = Fp2.mul(t0, t4); // T0 * T4
+    return { Rx, Ry, Rz };
+  };
+  function pointAdd(ell: PrecomputeSingle, Rx: Fp2, Ry: Fp2, Rz: Fp2, Qx: Fp2, Qy: Fp2) {
+    // Addition
+    const t0 = Fp2.sub(Ry, Fp2.mul(Qy, Rz)); // Ry - Qy * Rz
+    const t1 = Fp2.sub(Rx, Fp2.mul(Qx, Rz)); // Rx - Qx * Rz
+    const c0 = Fp2.sub(Fp2.mul(t0, Qx), Fp2.mul(t1, Qy)); // T0 * Qx - T1 * Qy (i)
+    const c1 = Fp2.neg(t0); // -T0
+    const c2 = t1;
+
+    ell.push([c0, c1, c2]);
+
+    const t2 = Fp2.sqr(t1); // T1²
+    const t3 = Fp2.mul(t2, t1); // T2 * T1
+    const t4 = Fp2.mul(t2, Rx); // T2 * Rx
+    const t5 = Fp2.add(Fp2.sub(t3, Fp2.mul(t4, _2n)), Fp2.mul(Fp2.sqr(t0), Rz)); // T3 - 2 * T4 + T0² * Rz
+    Rx = Fp2.mul(t1, t5); // T1 * T5
+    Ry = Fp2.sub(Fp2.mul(Fp2.sub(t4, t5), t0), Fp2.mul(t3, Ry)); // (T4 - T5) * T0 - T3 * Ry
+    Rz = Fp2.mul(Rz, t3); // Rz * T3
+    return { Rx, Ry, Rz };
+  }
 
   // Pre-compute coefficients for sparse multiplication
   // Point addition and point double calculations is reused for coefficients
-  function calcPairingPrecomputes(p: AffinePoint<Fp2>) {
-    const { x, y } = p;
+  // pointAdd happens only if bit set, so wNAF is reasonable. Unfortunately we cannot combine
+  // add + double in windowed precomputes here, otherwise it would be single op (since X is static)
+  const ATE_NAF = NAfDecomposition(CURVE.params.ateLoopSize);
+  // TODO: Fp.sqr can-be re-used in batch
+  // TODO: we can combine two lineFunc multipl in one, but applying result can be slower
+  // For G1 we can only convert it into affine, no other precomputes possible
+  function calcPairingPrecomputes(point: G2) {
+    const p = point;
+    if (p._PPRECOMPUTES) return p._PPRECOMPUTES;
+    const { x, y } = p.toAffine();
     // prettier-ignore
-    const Qx = x, Qy = y, Qz = Fp2.ONE;
+    const Qx = x, Qy = y, negQy = Fp2.neg(y);
     // prettier-ignore
-    let Rx = Qx, Ry = Qy, Rz = Qz;
-    let ell_coeff: [Fp2, Fp2, Fp2][] = [];
-    for (let i = BLS_X_LEN - 2; i >= 0; i--) {
-      // Double
-      let t0 = Fp2.sqr(Ry); // Ry²
-      let t1 = Fp2.sqr(Rz); // Rz²
-      let t2 = Fp2.multiplyByB(Fp2.mul(t1, _3n)); // 3 * T1 * B
-      let t3 = Fp2.mul(t2, _3n); // 3 * T2
-      let t4 = Fp2.sub(Fp2.sub(Fp2.sqr(Fp2.add(Ry, Rz)), t1), t0); // (Ry + Rz)² - T1 - T0
-      ell_coeff.push([
-        Fp2.sub(t2, t0), // T2 - T0
-        Fp2.mul(Fp2.sqr(Rx), _3n), // 3 * Rx²
-        Fp2.neg(t4), // -T4
-      ]);
-      Rx = Fp2.div(Fp2.mul(Fp2.mul(Fp2.sub(t0, t3), Rx), Ry), _2n); // ((T0 - T3) * Rx * Ry) / 2
-      Ry = Fp2.sub(Fp2.sqr(Fp2.div(Fp2.add(t0, t3), _2n)), Fp2.mul(Fp2.sqr(t2), _3n)); // ((T0 + T3) / 2)² - 3 * T2²
-      Rz = Fp2.mul(t0, t4); // T0 * T4
-      if (bitGet(CURVE.params.x, i)) {
-        // Addition
-        let t0 = Fp2.sub(Ry, Fp2.mul(Qy, Rz)); // Ry - Qy * Rz
-        let t1 = Fp2.sub(Rx, Fp2.mul(Qx, Rz)); // Rx - Qx * Rz
-        ell_coeff.push([
-          Fp2.sub(Fp2.mul(t0, Qx), Fp2.mul(t1, Qy)), // T0 * Qx - T1 * Qy
-          Fp2.neg(t0), // -T0
-          t1, // T1
-        ]);
-        let t2 = Fp2.sqr(t1); // T1²
-        let t3 = Fp2.mul(t2, t1); // T2 * T1
-        let t4 = Fp2.mul(t2, Rx); // T2 * Rx
-        let t5 = Fp2.add(Fp2.sub(t3, Fp2.mul(t4, _2n)), Fp2.mul(Fp2.sqr(t0), Rz)); // T3 - 2 * T4 + T0² * Rz
-        Rx = Fp2.mul(t1, t5); // T1 * T5
-        Ry = Fp2.sub(Fp2.mul(Fp2.sub(t4, t5), t0), Fp2.mul(t3, Ry)); // (T4 - T5) * T0 - T3 * Ry
-        Rz = Fp2.mul(Rz, t3); // Rz * T3
-      }
+    let Rx = Qx, Ry = Qy, Rz = Fp2.ONE;
+    const ell: Precompute = [];
+    for (const bit of ATE_NAF) {
+      const cur: PrecomputeSingle = [];
+      ({ Rx, Ry, Rz } = pointDouble(cur, Rx, Ry, Rz));
+      if (bit) ({ Rx, Ry, Rz } = pointAdd(cur, Rx, Ry, Rz, Qx, bit === -1 ? negQy : Qy));
+      ell.push(cur);
     }
-    return ell_coeff;
+    if (CURVE.postPrecompute) {
+      const last = ell[ell.length - 1];
+      CURVE.postPrecompute(Rx, Ry, Rz, Qx, Qy, pointAdd.bind(null, last));
+    }
+    p._PPRECOMPUTES = ell;
+    return ell;
   }
-
-  function millerLoop(ell: [Fp2, Fp2, Fp2][], g1: [Fp, Fp]): Fp12 {
-    const { x } = CURVE.params;
-    const Px = g1[0];
-    const Py = g1[1];
+  // Main pairing logic is here. Computes product of miller loops + final exponentiate
+  // Applies calculated precomputes
+  type MillerInput = [Precompute, Fp, Fp][];
+  function millerLoopBatch(pairs: MillerInput, withFinalExponent: boolean = false) {
     let f12 = Fp12.ONE;
-    for (let j = 0, i = BLS_X_LEN - 2; i >= 0; i--, j++) {
-      const E = ell[j];
-      f12 = Fp12.multiplyBy014(f12, E[0], Fp2.mul(E[1], Px), Fp2.mul(E[2], Py));
-      if (bitGet(x, i)) {
-        j += 1;
-        const F = ell[j];
-        f12 = Fp12.multiplyBy014(f12, F[0], Fp2.mul(F[1], Px), Fp2.mul(F[2], Py));
+    if (pairs.length) {
+      const ellLen = pairs[0][0].length;
+      for (let i = 0; i < ellLen; i++) {
+        f12 = Fp12.sqr(f12); // This allows us to do sqr only one time for all pairings
+        // NOTE: we apply multiple pairings in parallel here
+        for (const [ell, Px, Py] of pairs) {
+          for (const [c0, c1, c2] of ell[i]) f12 = lineFunction(c0, c1, c2, f12, Px, Py);
+        }
       }
-      if (i !== 0) f12 = Fp12.sqr(f12);
     }
-    return Fp12.conjugate(f12);
+    if (BLS_X_IS_NEGATIVE) f12 = Fp12.conjugate(f12);
+    return withFinalExponent ? Fp12.finalExponentiate(f12) : f12;
+  }
+  /*
+  TODO: revisit using precomputes and maybe remove them.
+
+  pairing x 84 ops/sec @ 11ms/op
+  pairing10 x 18 ops/sec @ 54ms/op (raw expected to be 110ms/op, so ~2x faster?)
+  pairing10 x 19 ops/sec @ 52ms/op with disabled precomputes
+
+  verifyBatch can be faster, but we don't bench it.
+  assertValidity/toAffine is very slow.
+  */
+  type PairingInput = { g1: G1; g2: G2 };
+  // Calculates product of multiple pairings
+  function pairingBatch(pairs: PairingInput[], withFinalExponent: boolean = true) {
+    const res: MillerInput = [];
+    // Pairings use affine coordinates inside
+    const g1Norm = G1.ProjectivePoint.normalizeZ(pairs.map(({ g1 }) => g1));
+    const g2Norm = G2.ProjectivePoint.normalizeZ(pairs.map(({ g2 }) => g2));
+    for (let i = 0; i < g1Norm.length; i++) {
+      const g1 = g1Norm[i];
+      const g2 = g2Norm[i];
+      if (g1.equals(G1.ProjectivePoint.ZERO) || g2.equals(G2.ProjectivePoint.ZERO))
+        throw new Error('pairing is not available for ZERO point');
+      // This uses toAffine inside
+      g1.assertValidity();
+      g2.assertValidity();
+      const Qa = g1.toAffine();
+      res.push([calcPairingPrecomputes(g2), Qa.x, Qa.y]);
+    }
+    return millerLoopBatch(res, withFinalExponent);
+  }
+  // Calculates bilinear pairing
+  function pairing(Q: G1, P: G2, withFinalExponent: boolean = true): Fp12 {
+    return pairingBatch([{ g1: Q, g2: P }], withFinalExponent);
   }
 
   const utils = {
@@ -229,58 +344,8 @@ export function bls<Fp2, Fp6, Fp12>(
     calcPairingPrecomputes,
   };
 
-  // Point on G1 curve: (x, y)
-  const G1_ = weierstrassPoints({ n: Fr.ORDER, ...CURVE.G1 });
-  const G1 = Object.assign(
-    G1_,
-    createHasher(G1_.ProjectivePoint, CURVE.G1.mapToCurve, {
-      ...CURVE.htfDefaults,
-      ...CURVE.G1.htfDefaults,
-    })
-  );
-
-  // Sparse multiplication against precomputed coefficients
-  // TODO: replace with weakmap?
-  type withPairingPrecomputes = { _PPRECOMPUTES: [Fp2, Fp2, Fp2][] | undefined };
-  function pairingPrecomputes(point: G2): [Fp2, Fp2, Fp2][] {
-    const p = point as G2 & withPairingPrecomputes;
-    if (p._PPRECOMPUTES) return p._PPRECOMPUTES;
-    p._PPRECOMPUTES = calcPairingPrecomputes(point.toAffine());
-    return p._PPRECOMPUTES;
-  }
-
-  // TODO: export
-  // function clearPairingPrecomputes(point: G2) {
-  //   const p = point as G2 & withPairingPrecomputes;
-  //   p._PPRECOMPUTES = undefined;
-  // }
-
-  // Point on G2 curve (complex numbers): (x₁, x₂+i), (y₁, y₂+i)
-  const G2_ = weierstrassPoints({ n: Fr.ORDER, ...CURVE.G2 });
-  const G2 = Object.assign(
-    G2_,
-    createHasher(G2_.ProjectivePoint as H2CPointConstructor<Fp2>, CURVE.G2.mapToCurve, {
-      ...CURVE.htfDefaults,
-      ...CURVE.G2.htfDefaults,
-    })
-  );
-
   const { ShortSignature } = CURVE.G1;
   const { Signature } = CURVE.G2;
-
-  // Calculates bilinear pairing
-  function pairing(Q: G1, P: G2, withFinalExponent: boolean = true): Fp12 {
-    if (Q.equals(G1.ProjectivePoint.ZERO) || P.equals(G2.ProjectivePoint.ZERO))
-      throw new Error('pairing is not available for ZERO point');
-    Q.assertValidity();
-    P.assertValidity();
-    // Performance: 9ms for millerLoop and ~14ms for exp.
-    const Qa = Q.toAffine();
-    const looped = millerLoop(pairingPrecomputes(P), [Qa.x, Qa.y]);
-    return withFinalExponent ? Fp12.finalExponentiate(looped) : looped;
-  }
-  type G1 = typeof G1.ProjectivePoint.BASE;
-  type G2 = typeof G2.ProjectivePoint.BASE;
 
   type G1Hex = Hex | G1;
   type G2Hex = Hex | G2;
@@ -355,11 +420,10 @@ export function bls<Fp2, Fp6, Fp12>(
     const Hm = normP2Hash(message, htfOpts);
     const G = G1.ProjectivePoint.BASE;
     const S = normP2(signature);
-    // Instead of doing 2 exponentiations, we use property of billinear maps
-    // and do one exp after multiplying 2 points.
-    const ePHm = pairing(P.negate(), Hm, false);
-    const eGS = pairing(G, S, false);
-    const exp = Fp12.finalExponentiate(Fp12.mul(eGS, ePHm));
+    const exp = pairingBatch([
+      { g1: P.negate(), g2: Hm }, // ePHM = pairing(P.negate(), Hm, false);
+      { g1: G, g2: S }, // eGS = pairing(G, S, false);
+    ]);
     return Fp12.eql(exp, Fp12.ONE);
   }
 
@@ -375,11 +439,10 @@ export function bls<Fp2, Fp6, Fp12>(
     const Hm = normP1Hash(message, htfOpts);
     const G = G2.ProjectivePoint.BASE;
     const S = normP1(signature);
-    // Instead of doing 2 exponentiations, we use property of billinear maps
-    // and do one exp after multiplying 2 points.
-    const eHmP = pairing(Hm, P, false);
-    const eSG = pairing(S, G.negate(), false);
-    const exp = Fp12.finalExponentiate(Fp12.mul(eSG, eHmP));
+    const exp = pairingBatch([
+      { g1: Hm, g2: P }, // eHmP = pairing(Hm, P, false);
+      { g1: S, g2: G.negate() }, // eSG = pairing(S, G.negate(), false);
+    ]);
     return Fp12.eql(exp, Fp12.ONE);
   }
 
@@ -435,9 +498,6 @@ export function bls<Fp2, Fp6, Fp12>(
     publicKeys: G1Hex[],
     htfOpts?: htfBasicOpts
   ): boolean {
-    // @ts-ignore
-    // console.log('verifyBatch', bytesToHex(signature as any), messages, publicKeys.map(bytesToHex));
-
     if (!messages.length) throw new Error('Expected non-empty messages array');
     if (publicKeys.length !== messages.length)
       throw new Error('Pubkey count should equal msg count');
@@ -447,19 +507,16 @@ export function bls<Fp2, Fp6, Fp12>(
     try {
       const paired = [];
       for (const message of new Set(nMessages)) {
+        // TODO: seems broken
+        // nMessages is set of objects -> same message is different object. '===' won't work here.
         const groupPublicKey = nMessages.reduce(
-          (groupPublicKey, subMessage, i) =>
-            subMessage === message ? groupPublicKey.add(nPublicKeys[i]) : groupPublicKey,
+          (acc, subMessage, i) => (subMessage === message ? acc.add(nPublicKeys[i]) : acc),
           G1.ProjectivePoint.ZERO
         );
-        // const msg = message instanceof PointG2 ? message : await PointG2.hashToCurve(message);
-        // Possible to batch pairing for same msg with different groupPublicKey here
-        paired.push(pairing(groupPublicKey, message, false));
+        paired.push({ g1: groupPublicKey, g2: message });
       }
-      paired.push(pairing(G1.ProjectivePoint.BASE.negate(), sig, false));
-      const product = paired.reduce((a, b) => Fp12.mul(a, b), Fp12.ONE);
-      const exp = Fp12.finalExponentiate(product);
-      return Fp12.eql(exp, Fp12.ONE);
+      paired.push({ g1: G1.ProjectivePoint.BASE.negate(), g2: sig });
+      return Fp12.eql(pairingBatch(paired), Fp12.ONE);
     } catch {
       return false;
     }
@@ -478,8 +535,9 @@ export function bls<Fp2, Fp6, Fp12>(
     aggregatePublicKeys,
     aggregateSignatures,
     aggregateShortSignatures,
-    millerLoop,
+    millerLoopBatch,
     pairing,
+    pairingBatch,
     G1,
     G2,
     Signature,
@@ -492,7 +550,7 @@ export function bls<Fp2, Fp6, Fp12>(
       Fp12,
     },
     params: {
-      x: CURVE.params.x,
+      ateLoopSize: CURVE.params.ateLoopSize,
       r: CURVE.params.r,
       G1b: CURVE.G1.b,
       G2b: CURVE.G2.b,

@@ -574,6 +574,8 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
     // (x, y, z) ∋ (x=x/z, y=y/z)
     toAffine(iz?: T): AffinePoint<T> {
       const { px: x, py: y, pz: z } = this;
+      // Fast-path for normalized points
+      if (Fp.eql(z, Fp.ONE)) return { x, y };
       const is0 = this.is0();
       // If invZ was 0, we return zero point. However we still want to execute
       // all operations, so we replace invZ with a random number, 1.

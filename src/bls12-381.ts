@@ -6,7 +6,6 @@ import * as mod from './abstract/modular.js';
 import {
   bitGet,
   bitLen,
-  bitMask,
   bytesToHex,
   bytesToNumberBE,
   concatBytes as concatB,
@@ -16,12 +15,9 @@ import {
 } from './abstract/utils.js';
 // Types
 import { isogenyMap } from './abstract/hash-to-curve.js';
-import {
-  AffinePoint,
-  mapToCurveSimpleSWU,
-  ProjConstructor,
-  ProjPointType,
-} from './abstract/weierstrass.js';
+import { AffinePoint, mapToCurveSimpleSWU, ProjPointType } from './abstract/weierstrass.js';
+import { tower12, psiFrobenius } from './abstract/tower.js';
+import type { Fp, Fp2, Fp6, Fp12 } from './abstract/tower.js';
 
 /*
 bls12-381 is pairing-friendly Barreto-Lynn-Scott elliptic curve construction allowing to:
@@ -59,603 +55,56 @@ bls12-381 is pairing-friendly Barreto-Lynn-Scott elliptic curve construction all
 // Be friendly to bad ECMAScript parsers by not using bigint literals
 // prettier-ignore
 const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3), _4n = BigInt(4);
-// prettier-ignore
-const _8n = BigInt(8), _16n = BigInt(16);
 
-// CURVE FIELDS
-// Finite field over p.
-const Fp_raw = BigInt(
-  '0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab'
-);
-const Fp = mod.Field(Fp_raw);
-type Fp = bigint;
-// Finite field over r.
-// This particular field is not used anywhere in bls12-381, but it is still useful.
-const Fr = mod.Field(BigInt('0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001'));
+/* 
+Embedding degree (k): 12
+Seed (X): -15132376222941642752
+Fr:  (x⁴-x²+1)
+Fp: ((x-1)² ⋅ r(x)/3+x)
+(E/Fp): Y²=X³+4
+(Eₜ/Fp²): Y² = X³+4(u+1) (M-type twist)
+Ate loop size: X
 
-// Fp₂ over complex plane
-type BigintTuple = [bigint, bigint];
-type Fp2 = { c0: bigint; c1: bigint };
-const Fp2Add = ({ c0, c1 }: Fp2, { c0: r0, c1: r1 }: Fp2) => ({
-  c0: Fp.add(c0, r0),
-  c1: Fp.add(c1, r1),
-});
-const Fp2Subtract = ({ c0, c1 }: Fp2, { c0: r0, c1: r1 }: Fp2) => ({
-  c0: Fp.sub(c0, r0),
-  c1: Fp.sub(c1, r1),
-});
-const Fp2Multiply = ({ c0, c1 }: Fp2, rhs: Fp2) => {
-  if (typeof rhs === 'bigint') return { c0: Fp.mul(c0, rhs), c1: Fp.mul(c1, rhs) };
-  // (a+bi)(c+di) = (ac−bd) + (ad+bc)i
-  const { c0: r0, c1: r1 } = rhs;
-  let t1 = Fp.mul(c0, r0); // c0 * o0
-  let t2 = Fp.mul(c1, r1); // c1 * o1
-  // (T1 - T2) + ((c0 + c1) * (r0 + r1) - (T1 + T2))*i
-  const o0 = Fp.sub(t1, t2);
-  const o1 = Fp.sub(Fp.mul(Fp.add(c0, c1), Fp.add(r0, r1)), Fp.add(t1, t2));
-  return { c0: o0, c1: o1 };
-};
-const Fp2Square = ({ c0, c1 }: Fp2) => {
-  const a = Fp.add(c0, c1);
-  const b = Fp.sub(c0, c1);
-  const c = Fp.add(c0, c0);
-  return { c0: Fp.mul(a, b), c1: Fp.mul(c, c1) };
-};
-type Fp2Utils = {
-  fromBigTuple: (tuple: BigintTuple | bigint[]) => Fp2;
-  reim: (num: Fp2) => { re: bigint; im: bigint };
-  mulByNonresidue: (num: Fp2) => Fp2;
-  multiplyByB: (num: Fp2) => Fp2;
-  frobeniusMap(num: Fp2, power: number): Fp2;
-};
-// G2 is the order-q subgroup of E2(Fp²) : y² = x³+4(1+√−1),
-// where Fp2 is Fp[√−1]/(x2+1). #E2(Fp2 ) = h2q, where
-// G² - 1
-// h2q
-// NOTE: ORDER was wrong!
-const FP2_ORDER = Fp_raw * Fp_raw;
+Towers:
+- Fp²[u] = Fp/u²+1
+- Fp⁶[v] = Fp²/v³-1-u
+- Fp¹²[w] = Fp⁶/w²-v
 
-const Fp2: mod.IField<Fp2> & Fp2Utils = {
-  ORDER: FP2_ORDER,
-  BITS: bitLen(FP2_ORDER),
-  BYTES: Math.ceil(bitLen(FP2_ORDER) / 8),
-  MASK: bitMask(bitLen(FP2_ORDER)),
-  ZERO: { c0: Fp.ZERO, c1: Fp.ZERO },
-  ONE: { c0: Fp.ONE, c1: Fp.ZERO },
-  create: (num) => num,
-  isValid: ({ c0, c1 }) => typeof c0 === 'bigint' && typeof c1 === 'bigint',
-  is0: ({ c0, c1 }) => Fp.is0(c0) && Fp.is0(c1),
-  eql: ({ c0, c1 }: Fp2, { c0: r0, c1: r1 }: Fp2) => Fp.eql(c0, r0) && Fp.eql(c1, r1),
-  neg: ({ c0, c1 }) => ({ c0: Fp.neg(c0), c1: Fp.neg(c1) }),
-  pow: (num, power) => mod.FpPow(Fp2, num, power),
-  invertBatch: (nums) => mod.FpInvertBatch(Fp2, nums),
-  // Normalized
-  add: Fp2Add,
-  sub: Fp2Subtract,
-  mul: Fp2Multiply,
-  sqr: Fp2Square,
-  // NonNormalized stuff
-  addN: Fp2Add,
-  subN: Fp2Subtract,
-  mulN: Fp2Multiply,
-  sqrN: Fp2Square,
-  // Why inversion for bigint inside Fp instead of Fp2? it is even used in that context?
-  div: (lhs, rhs) => Fp2.mul(lhs, typeof rhs === 'bigint' ? Fp.inv(Fp.create(rhs)) : Fp2.inv(rhs)),
-  inv: ({ c0: a, c1: b }) => {
-    // We wish to find the multiplicative inverse of a nonzero
-    // element a + bu in Fp2. We leverage an identity
-    //
-    // (a + bu)(a - bu) = a² + b²
-    //
-    // which holds because u² = -1. This can be rewritten as
-    //
-    // (a + bu)(a - bu)/(a² + b²) = 1
-    //
-    // because a² + b² = 0 has no nonzero solutions for (a, b).
-    // This gives that (a - bu)/(a² + b²) is the inverse
-    // of (a + bu). Importantly, this can be computing using
-    // only a single inversion in Fp.
-    const factor = Fp.inv(Fp.create(a * a + b * b));
-    return { c0: Fp.mul(factor, Fp.create(a)), c1: Fp.mul(factor, Fp.create(-b)) };
-  },
-  sqrt: (num) => {
-    if (Fp2.eql(num, Fp2.ZERO)) return Fp2.ZERO; // Algo doesn't handles this case
-    // TODO: Optimize this line. It's extremely slow.
-    // Speeding this up would boost aggregateSignatures.
-    // https://eprint.iacr.org/2012/685.pdf applicable?
-    // https://github.com/zkcrypto/bls12_381/blob/080eaa74ec0e394377caa1ba302c8c121df08b07/src/fp2.rs#L250
-    // https://github.com/supranational/blst/blob/aae0c7d70b799ac269ff5edf29d8191dbd357876/src/exp2.c#L1
-    // Inspired by https://github.com/dalek-cryptography/curve25519-dalek/blob/17698df9d4c834204f83a3574143abacb4fc81a5/src/field.rs#L99
-    const candidateSqrt = Fp2.pow(num, (Fp2.ORDER + _8n) / _16n);
-    const check = Fp2.div(Fp2.sqr(candidateSqrt), num); // candidateSqrt.square().div(this);
-    const R = FP2_ROOTS_OF_UNITY;
-    const divisor = [R[0], R[2], R[4], R[6]].find((r) => Fp2.eql(r, check));
-    if (!divisor) throw new Error('No root');
-    const index = R.indexOf(divisor);
-    const root = R[index / 2];
-    if (!root) throw new Error('Invalid root');
-    const x1 = Fp2.div(candidateSqrt, root);
-    const x2 = Fp2.neg(x1);
-    const { re: re1, im: im1 } = Fp2.reim(x1);
-    const { re: re2, im: im2 } = Fp2.reim(x2);
-    if (im1 > im2 || (im1 === im2 && re1 > re2)) return x1;
-    return x2;
-  },
-  // Same as sgn0_m_eq_2 in RFC 9380
-  isOdd: (x: Fp2) => {
-    const { re: x0, im: x1 } = Fp2.reim(x);
-    const sign_0 = x0 % _2n;
-    const zero_0 = x0 === _0n;
-    const sign_1 = x1 % _2n;
-    return BigInt(sign_0 || (zero_0 && sign_1)) == _1n;
-  },
-  // Bytes util
-  fromBytes(b: Uint8Array): Fp2 {
-    if (b.length !== Fp2.BYTES) throw new Error(`fromBytes wrong length=${b.length}`);
-    return { c0: Fp.fromBytes(b.subarray(0, Fp.BYTES)), c1: Fp.fromBytes(b.subarray(Fp.BYTES)) };
-  },
-  toBytes: ({ c0, c1 }) => concatB(Fp.toBytes(c0), Fp.toBytes(c1)),
-  cmov: ({ c0, c1 }, { c0: r0, c1: r1 }, c) => ({
-    c0: Fp.cmov(c0, r0, c),
-    c1: Fp.cmov(c1, r1, c),
-  }),
-  // Specific utils
-  // toString() {
-  //   return `Fp2(${this.c0} + ${this.c1}×i)`;
-  // }
-  reim: ({ c0, c1 }) => ({ re: c0, im: c1 }),
-  // multiply by u + 1
-  mulByNonresidue: ({ c0, c1 }) => ({ c0: Fp.sub(c0, c1), c1: Fp.add(c0, c1) }),
-  multiplyByB: ({ c0, c1 }) => {
-    let t0 = Fp.mul(c0, _4n); // 4 * c0
-    let t1 = Fp.mul(c1, _4n); // 4 * c1
-    // (T0-T1) + (T0+T1)*i
-    return { c0: Fp.sub(t0, t1), c1: Fp.add(t0, t1) };
-  },
-  fromBigTuple: (tuple: BigintTuple | bigint[]) => {
-    if (tuple.length !== 2) throw new Error('Invalid tuple');
-    const fps = tuple.map((n) => Fp.create(n)) as [Fp, Fp];
-    return { c0: fps[0], c1: fps[1] };
-  },
-  frobeniusMap: ({ c0, c1 }, power: number): Fp2 => ({
-    c0,
-    c1: Fp.mul(c1, FP2_FROBENIUS_COEFFICIENTS[power % 2]),
-  }),
-};
-// Finite extension field over irreducible polynominal.
-// Fp(u) / (u² - β) where β = -1
-const FP2_FROBENIUS_COEFFICIENTS = [
-  BigInt('0x1'),
-  BigInt(
-    '0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaaa'
-  ),
-].map((item) => Fp.create(item));
 
-// For Fp2 roots of unity.
-const rv1 = BigInt(
-  '0x6af0e0437ff400b6831e36d6bd17ffe48395dabc2d3435e77f76e17009241c5ee67992f72ec05f4c81084fbede3cc09'
-);
-// const ev1 =
-//   BigInt('0x699be3b8c6870965e5bf892ad5d2cc7b0e85a117402dfd83b7f4a947e02d978498255a2aaec0ac627b5afbdf1bf1c90');
-// const ev2 =
-//   BigInt('0x8157cd83046453f5dd0972b6e3949e4288020b5b8a9cc99ca07e27089a2ce2436d965026adad3ef7baba37f2183e9b5');
-// const ev3 =
-//   BigInt('0xab1c2ffdd6c253ca155231eb3e71ba044fd562f6f72bc5bad5ec46a0b7a3b0247cf08ce6c6317f40edbc653a72dee17');
-// const ev4 =
-//   BigInt('0xaa404866706722864480885d68ad0ccac1967c7544b447873cc37e0181271e006df72162a3d3e0287bf597fbf7f8fc1');
+TODO: BLS & BN Fp/Fr can be constructed from seed.
+*/
 
-// Eighth roots of unity, used for computing square roots in Fp2.
-// To verify or re-calculate:
-// Array(8).fill(new Fp2([1n, 1n])).map((fp2, k) => fp2.pow(Fp2.ORDER * BigInt(k) / 8n))
-const FP2_ROOTS_OF_UNITY = [
-  [_1n, _0n],
-  [rv1, -rv1],
-  [_0n, _1n],
-  [rv1, rv1],
-  [-_1n, _0n],
-  [-rv1, rv1],
-  [_0n, -_1n],
-  [-rv1, -rv1],
-].map((pair) => Fp2.fromBigTuple(pair));
-// eta values, used for computing sqrt(g(X1(t)))
-// const FP2_ETAs = [
-//   [ev1, ev2],
-//   [-ev2, ev1],
-//   [ev3, ev4],
-//   [-ev4, ev3],
-// ].map((pair) => Fp2.fromBigTuple(pair));
-
-// Finite extension field over irreducible polynominal.
-// Fp2(v) / (v³ - ξ) where ξ = u + 1
-type BigintSix = [bigint, bigint, bigint, bigint, bigint, bigint];
-type Fp6 = { c0: Fp2; c1: Fp2; c2: Fp2 };
-const Fp6Add = ({ c0, c1, c2 }: Fp6, { c0: r0, c1: r1, c2: r2 }: Fp6) => ({
-  c0: Fp2.add(c0, r0),
-  c1: Fp2.add(c1, r1),
-  c2: Fp2.add(c2, r2),
-});
-const Fp6Subtract = ({ c0, c1, c2 }: Fp6, { c0: r0, c1: r1, c2: r2 }: Fp6) => ({
-  c0: Fp2.sub(c0, r0),
-  c1: Fp2.sub(c1, r1),
-  c2: Fp2.sub(c2, r2),
-});
-const Fp6Multiply = ({ c0, c1, c2 }: Fp6, rhs: Fp6 | bigint) => {
-  if (typeof rhs === 'bigint') {
-    return {
-      c0: Fp2.mul(c0, rhs),
-      c1: Fp2.mul(c1, rhs),
-      c2: Fp2.mul(c2, rhs),
-    };
-  }
-  const { c0: r0, c1: r1, c2: r2 } = rhs;
-  const t0 = Fp2.mul(c0, r0); // c0 * o0
-  const t1 = Fp2.mul(c1, r1); // c1 * o1
-  const t2 = Fp2.mul(c2, r2); // c2 * o2
-  return {
-    // t0 + (c1 + c2) * (r1 * r2) - (T1 + T2) * (u + 1)
-    c0: Fp2.add(
-      t0,
-      Fp2.mulByNonresidue(Fp2.sub(Fp2.mul(Fp2.add(c1, c2), Fp2.add(r1, r2)), Fp2.add(t1, t2)))
-    ),
-    // (c0 + c1) * (r0 + r1) - (T0 + T1) + T2 * (u + 1)
-    c1: Fp2.add(
-      Fp2.sub(Fp2.mul(Fp2.add(c0, c1), Fp2.add(r0, r1)), Fp2.add(t0, t1)),
-      Fp2.mulByNonresidue(t2)
-    ),
-    // T1 + (c0 + c2) * (r0 + r2) - T0 + T2
-    c2: Fp2.sub(Fp2.add(t1, Fp2.mul(Fp2.add(c0, c2), Fp2.add(r0, r2))), Fp2.add(t0, t2)),
-  };
-};
-const Fp6Square = ({ c0, c1, c2 }: Fp6) => {
-  let t0 = Fp2.sqr(c0); // c0²
-  let t1 = Fp2.mul(Fp2.mul(c0, c1), _2n); // 2 * c0 * c1
-  let t3 = Fp2.mul(Fp2.mul(c1, c2), _2n); // 2 * c1 * c2
-  let t4 = Fp2.sqr(c2); // c2²
-  return {
-    c0: Fp2.add(Fp2.mulByNonresidue(t3), t0), // T3 * (u + 1) + T0
-    c1: Fp2.add(Fp2.mulByNonresidue(t4), t1), // T4 * (u + 1) + T1
-    // T1 + (c0 - c1 + c2)² + T3 - T0 - T4
-    c2: Fp2.sub(Fp2.sub(Fp2.add(Fp2.add(t1, Fp2.sqr(Fp2.add(Fp2.sub(c0, c1), c2))), t3), t0), t4),
-  };
-};
-type Fp6Utils = {
-  fromBigSix: (tuple: BigintSix) => Fp6;
-  mulByNonresidue: (num: Fp6) => Fp6;
-  frobeniusMap(num: Fp6, power: number): Fp6;
-  multiplyBy1(num: Fp6, b1: Fp2): Fp6;
-  multiplyBy01(num: Fp6, b0: Fp2, b1: Fp2): Fp6;
-  multiplyByFp2(lhs: Fp6, rhs: Fp2): Fp6;
-};
-
-const Fp6: mod.IField<Fp6> & Fp6Utils = {
-  ORDER: Fp2.ORDER, // TODO: unused, but need to verify
-  BITS: 3 * Fp2.BITS,
-  BYTES: 3 * Fp2.BYTES,
-  MASK: bitMask(3 * Fp2.BITS),
-  ZERO: { c0: Fp2.ZERO, c1: Fp2.ZERO, c2: Fp2.ZERO },
-  ONE: { c0: Fp2.ONE, c1: Fp2.ZERO, c2: Fp2.ZERO },
-  create: (num) => num,
-  isValid: ({ c0, c1, c2 }) => Fp2.isValid(c0) && Fp2.isValid(c1) && Fp2.isValid(c2),
-  is0: ({ c0, c1, c2 }) => Fp2.is0(c0) && Fp2.is0(c1) && Fp2.is0(c2),
-  neg: ({ c0, c1, c2 }) => ({ c0: Fp2.neg(c0), c1: Fp2.neg(c1), c2: Fp2.neg(c2) }),
-  eql: ({ c0, c1, c2 }, { c0: r0, c1: r1, c2: r2 }) =>
-    Fp2.eql(c0, r0) && Fp2.eql(c1, r1) && Fp2.eql(c2, r2),
-  sqrt: () => {
-    throw new Error('Not implemented');
-  },
-  // Do we need division by bigint at all? Should be done via order:
-  div: (lhs, rhs) => Fp6.mul(lhs, typeof rhs === 'bigint' ? Fp.inv(Fp.create(rhs)) : Fp6.inv(rhs)),
-  pow: (num, power) => mod.FpPow(Fp6, num, power),
-  invertBatch: (nums) => mod.FpInvertBatch(Fp6, nums),
-  // Normalized
-  add: Fp6Add,
-  sub: Fp6Subtract,
-  mul: Fp6Multiply,
-  sqr: Fp6Square,
-  // NonNormalized stuff
-  addN: Fp6Add,
-  subN: Fp6Subtract,
-  mulN: Fp6Multiply,
-  sqrN: Fp6Square,
-
-  inv: ({ c0, c1, c2 }) => {
-    let t0 = Fp2.sub(Fp2.sqr(c0), Fp2.mulByNonresidue(Fp2.mul(c2, c1))); // c0² - c2 * c1 * (u + 1)
-    let t1 = Fp2.sub(Fp2.mulByNonresidue(Fp2.sqr(c2)), Fp2.mul(c0, c1)); // c2² * (u + 1) - c0 * c1
-    let t2 = Fp2.sub(Fp2.sqr(c1), Fp2.mul(c0, c2)); // c1² - c0 * c2
-    // 1/(((c2 * T1 + c1 * T2) * v) + c0 * T0)
-    let t4 = Fp2.inv(
-      Fp2.add(Fp2.mulByNonresidue(Fp2.add(Fp2.mul(c2, t1), Fp2.mul(c1, t2))), Fp2.mul(c0, t0))
-    );
-    return { c0: Fp2.mul(t4, t0), c1: Fp2.mul(t4, t1), c2: Fp2.mul(t4, t2) };
-  },
-  // Bytes utils
-  fromBytes: (b: Uint8Array): Fp6 => {
-    if (b.length !== Fp6.BYTES) throw new Error(`fromBytes wrong length=${b.length}`);
-    return {
-      c0: Fp2.fromBytes(b.subarray(0, Fp2.BYTES)),
-      c1: Fp2.fromBytes(b.subarray(Fp2.BYTES, 2 * Fp2.BYTES)),
-      c2: Fp2.fromBytes(b.subarray(2 * Fp2.BYTES)),
-    };
-  },
-  toBytes: ({ c0, c1, c2 }): Uint8Array =>
-    concatB(Fp2.toBytes(c0), Fp2.toBytes(c1), Fp2.toBytes(c2)),
-  cmov: ({ c0, c1, c2 }: Fp6, { c0: r0, c1: r1, c2: r2 }: Fp6, c) => ({
-    c0: Fp2.cmov(c0, r0, c),
-    c1: Fp2.cmov(c1, r1, c),
-    c2: Fp2.cmov(c2, r2, c),
-  }),
-  // Utils
-  //   fromTriple(triple: [Fp2, Fp2, Fp2]) {
-  //     return new Fp6(...triple);
-  //   }
-  //   toString() {
-  //     return `Fp6(${this.c0} + ${this.c1} * v, ${this.c2} * v^2)`;
-  //   }
-  fromBigSix: (t: BigintSix): Fp6 => {
-    if (!Array.isArray(t) || t.length !== 6) throw new Error('Invalid Fp6 usage');
-    return {
-      c0: Fp2.fromBigTuple(t.slice(0, 2)),
-      c1: Fp2.fromBigTuple(t.slice(2, 4)),
-      c2: Fp2.fromBigTuple(t.slice(4, 6)),
-    };
-  },
-  frobeniusMap: ({ c0, c1, c2 }, power: number) => ({
-    c0: Fp2.frobeniusMap(c0, power),
-    c1: Fp2.mul(Fp2.frobeniusMap(c1, power), FP6_FROBENIUS_COEFFICIENTS_1[power % 6]),
-    c2: Fp2.mul(Fp2.frobeniusMap(c2, power), FP6_FROBENIUS_COEFFICIENTS_2[power % 6]),
-  }),
-  mulByNonresidue: ({ c0, c1, c2 }) => ({ c0: Fp2.mulByNonresidue(c2), c1: c0, c2: c1 }),
-
-  // Sparse multiplication
-  multiplyBy1: ({ c0, c1, c2 }, b1: Fp2): Fp6 => ({
-    c0: Fp2.mulByNonresidue(Fp2.mul(c2, b1)),
-    c1: Fp2.mul(c0, b1),
-    c2: Fp2.mul(c1, b1),
-  }),
-  // Sparse multiplication
-  multiplyBy01({ c0, c1, c2 }, b0: Fp2, b1: Fp2): Fp6 {
-    let t0 = Fp2.mul(c0, b0); // c0 * b0
-    let t1 = Fp2.mul(c1, b1); // c1 * b1
-    return {
-      // ((c1 + c2) * b1 - T1) * (u + 1) + T0
-      c0: Fp2.add(Fp2.mulByNonresidue(Fp2.sub(Fp2.mul(Fp2.add(c1, c2), b1), t1)), t0),
-      // (b0 + b1) * (c0 + c1) - T0 - T1
-      c1: Fp2.sub(Fp2.sub(Fp2.mul(Fp2.add(b0, b1), Fp2.add(c0, c1)), t0), t1),
-      // (c0 + c2) * b0 - T0 + T1
-      c2: Fp2.add(Fp2.sub(Fp2.mul(Fp2.add(c0, c2), b0), t0), t1),
-    };
-  },
-
-  multiplyByFp2: ({ c0, c1, c2 }, rhs: Fp2): Fp6 => ({
-    c0: Fp2.mul(c0, rhs),
-    c1: Fp2.mul(c1, rhs),
-    c2: Fp2.mul(c2, rhs),
-  }),
-};
-
-const FP6_FROBENIUS_COEFFICIENTS_1 = [
-  [BigInt('0x1'), BigInt('0x0')],
-  [
-    BigInt('0x0'),
-    BigInt(
-      '0x1a0111ea397fe699ec02408663d4de85aa0d857d89759ad4897d29650fb85f9b409427eb4f49fffd8bfd00000000aaac'
-    ),
-  ],
-  [
-    BigInt(
-      '0x00000000000000005f19672fdf76ce51ba69c6076a0f77eaddb3a93be6f89688de17d813620a00022e01fffffffefffe'
-    ),
-    BigInt('0x0'),
-  ],
-  [BigInt('0x0'), BigInt('0x1')],
-  [
-    BigInt(
-      '0x1a0111ea397fe699ec02408663d4de85aa0d857d89759ad4897d29650fb85f9b409427eb4f49fffd8bfd00000000aaac'
-    ),
-    BigInt('0x0'),
-  ],
-  [
-    BigInt('0x0'),
-    BigInt(
-      '0x00000000000000005f19672fdf76ce51ba69c6076a0f77eaddb3a93be6f89688de17d813620a00022e01fffffffefffe'
-    ),
-  ],
-].map((pair) => Fp2.fromBigTuple(pair));
-const FP6_FROBENIUS_COEFFICIENTS_2 = [
-  [BigInt('0x1'), BigInt('0x0')],
-  [
-    BigInt(
-      '0x1a0111ea397fe699ec02408663d4de85aa0d857d89759ad4897d29650fb85f9b409427eb4f49fffd8bfd00000000aaad'
-    ),
-    BigInt('0x0'),
-  ],
-  [
-    BigInt(
-      '0x1a0111ea397fe699ec02408663d4de85aa0d857d89759ad4897d29650fb85f9b409427eb4f49fffd8bfd00000000aaac'
-    ),
-    BigInt('0x0'),
-  ],
-  [
-    BigInt(
-      '0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaaa'
-    ),
-    BigInt('0x0'),
-  ],
-  [
-    BigInt(
-      '0x00000000000000005f19672fdf76ce51ba69c6076a0f77eaddb3a93be6f89688de17d813620a00022e01fffffffefffe'
-    ),
-    BigInt('0x0'),
-  ],
-  [
-    BigInt(
-      '0x00000000000000005f19672fdf76ce51ba69c6076a0f77eaddb3a93be6f89688de17d813620a00022e01fffffffeffff'
-    ),
-    BigInt('0x0'),
-  ],
-].map((pair) => Fp2.fromBigTuple(pair));
-
-// Finite extension field over irreducible polynominal.
-// Fp₁₂ = Fp₆² => Fp₂³
-// Fp₆(w) / (w² - γ) where γ = v
-type Fp12 = { c0: Fp6; c1: Fp6 };
-// The BLS parameter x for BLS12-381
+// The BLS parameter x (seed) for BLS12-381. NOTE: it is negative!
 const BLS_X = BigInt('0xd201000000010000');
 const BLS_X_LEN = bitLen(BLS_X);
 
-// prettier-ignore
-type BigintTwelve = [
-  bigint, bigint, bigint, bigint, bigint, bigint,
-  bigint, bigint, bigint, bigint, bigint, bigint
-];
-const Fp12Add = ({ c0, c1 }: Fp12, { c0: r0, c1: r1 }: Fp12) => ({
-  c0: Fp6.add(c0, r0),
-  c1: Fp6.add(c1, r1),
-});
-const Fp12Subtract = ({ c0, c1 }: Fp12, { c0: r0, c1: r1 }: Fp12) => ({
-  c0: Fp6.sub(c0, r0),
-  c1: Fp6.sub(c1, r1),
-});
-const Fp12Multiply = ({ c0, c1 }: Fp12, rhs: Fp12 | bigint) => {
-  if (typeof rhs === 'bigint') return { c0: Fp6.mul(c0, rhs), c1: Fp6.mul(c1, rhs) };
-  let { c0: r0, c1: r1 } = rhs;
-  let t1 = Fp6.mul(c0, r0); // c0 * r0
-  let t2 = Fp6.mul(c1, r1); // c1 * r1
-  return {
-    c0: Fp6.add(t1, Fp6.mulByNonresidue(t2)), // T1 + T2 * v
-    // (c0 + c1) * (r0 + r1) - (T1 + T2)
-    c1: Fp6.sub(Fp6.mul(Fp6.add(c0, c1), Fp6.add(r0, r1)), Fp6.add(t1, t2)),
-  };
-};
-const Fp12Square = ({ c0, c1 }: Fp12) => {
-  let ab = Fp6.mul(c0, c1); // c0 * c1
-  return {
-    // (c1 * v + c0) * (c0 + c1) - AB - AB * v
-    c0: Fp6.sub(
-      Fp6.sub(Fp6.mul(Fp6.add(Fp6.mulByNonresidue(c1), c0), Fp6.add(c0, c1)), ab),
-      Fp6.mulByNonresidue(ab)
-    ),
-    c1: Fp6.add(ab, ab),
-  }; // AB + AB
-};
-function Fp4Square(a: Fp2, b: Fp2): { first: Fp2; second: Fp2 } {
-  const a2 = Fp2.sqr(a);
-  const b2 = Fp2.sqr(b);
-  return {
-    first: Fp2.add(Fp2.mulByNonresidue(b2), a2), // b² * Nonresidue + a²
-    second: Fp2.sub(Fp2.sub(Fp2.sqr(Fp2.add(a, b)), a2), b2), // (a + b)² - a² - b²
-  };
-}
-type Fp12Utils = {
-  fromBigTwelve: (t: BigintTwelve) => Fp12;
-  frobeniusMap(num: Fp12, power: number): Fp12;
-  multiplyBy014(num: Fp12, o0: Fp2, o1: Fp2, o4: Fp2): Fp12;
-  multiplyByFp2(lhs: Fp12, rhs: Fp2): Fp12;
-  conjugate(num: Fp12): Fp12;
-  finalExponentiate(num: Fp12): Fp12;
-  _cyclotomicSquare(num: Fp12): Fp12;
-  _cyclotomicExp(num: Fp12, n: bigint): Fp12;
-};
-
-const Fp12: mod.IField<Fp12> & Fp12Utils = {
-  ORDER: Fp2.ORDER, // TODO: unused, but need to verify
-  BITS: 2 * Fp2.BITS,
-  BYTES: 2 * Fp2.BYTES,
-  MASK: bitMask(2 * Fp2.BITS),
-  ZERO: { c0: Fp6.ZERO, c1: Fp6.ZERO },
-  ONE: { c0: Fp6.ONE, c1: Fp6.ZERO },
-  create: (num) => num,
-  isValid: ({ c0, c1 }) => Fp6.isValid(c0) && Fp6.isValid(c1),
-  is0: ({ c0, c1 }) => Fp6.is0(c0) && Fp6.is0(c1),
-  neg: ({ c0, c1 }) => ({ c0: Fp6.neg(c0), c1: Fp6.neg(c1) }),
-  eql: ({ c0, c1 }, { c0: r0, c1: r1 }) => Fp6.eql(c0, r0) && Fp6.eql(c1, r1),
-  sqrt: () => {
-    throw new Error('Not implemented');
+// CURVE FIELDS
+const { Fp, Fp2, Fp6, Fp4Square, Fp12 } = tower12({
+  // Order of Fp
+  ORDER: BigInt(
+    '0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab'
+  ),
+  // Finite extension field over irreducible polynominal.
+  // Fp(u) / (u² - β) where β = -1
+  FP2_NONRESIDUE: [_1n, _1n],
+  Fp2mulByB: ({ c0, c1 }) => {
+    const t0 = Fp.mul(c0, _4n); // 4 * c0
+    const t1 = Fp.mul(c1, _4n); // 4 * c1
+    // (T0-T1) + (T0+T1)*i
+    return { c0: Fp.sub(t0, t1), c1: Fp.add(t0, t1) };
   },
-  inv: ({ c0, c1 }) => {
-    let t = Fp6.inv(Fp6.sub(Fp6.sqr(c0), Fp6.mulByNonresidue(Fp6.sqr(c1)))); // 1 / (c0² - c1² * v)
-    return { c0: Fp6.mul(c0, t), c1: Fp6.neg(Fp6.mul(c1, t)) }; // ((C0 * T) * T) + (-C1 * T) * w
-  },
-  div: (lhs, rhs) =>
-    Fp12.mul(lhs, typeof rhs === 'bigint' ? Fp.inv(Fp.create(rhs)) : Fp12.inv(rhs)),
-  pow: (num, power) => mod.FpPow(Fp12, num, power),
-  invertBatch: (nums) => mod.FpInvertBatch(Fp12, nums),
-  // Normalized
-  add: Fp12Add,
-  sub: Fp12Subtract,
-  mul: Fp12Multiply,
-  sqr: Fp12Square,
-  // NonNormalized stuff
-  addN: Fp12Add,
-  subN: Fp12Subtract,
-  mulN: Fp12Multiply,
-  sqrN: Fp12Square,
-
-  // Bytes utils
-  fromBytes: (b: Uint8Array): Fp12 => {
-    if (b.length !== Fp12.BYTES) throw new Error(`fromBytes wrong length=${b.length}`);
-    return {
-      c0: Fp6.fromBytes(b.subarray(0, Fp6.BYTES)),
-      c1: Fp6.fromBytes(b.subarray(Fp6.BYTES)),
-    };
-  },
-  toBytes: ({ c0, c1 }): Uint8Array => concatB(Fp6.toBytes(c0), Fp6.toBytes(c1)),
-  cmov: ({ c0, c1 }, { c0: r0, c1: r1 }, c) => ({
-    c0: Fp6.cmov(c0, r0, c),
-    c1: Fp6.cmov(c1, r1, c),
-  }),
-  // Utils
-  // toString() {
-  //   return `Fp12(${this.c0} + ${this.c1} * w)`;
-  // },
-  // fromTuple(c: [Fp6, Fp6]) {
-  //   return new Fp12(...c);
-  // }
-  fromBigTwelve: (t: BigintTwelve): Fp12 => ({
-    c0: Fp6.fromBigSix(t.slice(0, 6) as BigintSix),
-    c1: Fp6.fromBigSix(t.slice(6, 12) as BigintSix),
-  }),
-  // Raises to q**i -th power
-  frobeniusMap(lhs, power: number) {
-    const r0 = Fp6.frobeniusMap(lhs.c0, power);
-    const { c0, c1, c2 } = Fp6.frobeniusMap(lhs.c1, power);
-    const coeff = FP12_FROBENIUS_COEFFICIENTS[power % 12];
-    return {
-      c0: r0,
-      c1: Fp6.create({
-        c0: Fp2.mul(c0, coeff),
-        c1: Fp2.mul(c1, coeff),
-        c2: Fp2.mul(c2, coeff),
-      }),
-    };
-  },
-  // Sparse multiplication
-  multiplyBy014: ({ c0, c1 }, o0: Fp2, o1: Fp2, o4: Fp2) => {
-    let t0 = Fp6.multiplyBy01(c0, o0, o1);
-    let t1 = Fp6.multiplyBy1(c1, o4);
-    return {
-      c0: Fp6.add(Fp6.mulByNonresidue(t1), t0), // T1 * v + T0
-      // (c1 + c0) * [o0, o1+o4] - T0 - T1
-      c1: Fp6.sub(Fp6.sub(Fp6.multiplyBy01(Fp6.add(c1, c0), o0, Fp2.add(o1, o4)), t0), t1),
-    };
-  },
-  multiplyByFp2: ({ c0, c1 }, rhs: Fp2): Fp12 => ({
-    c0: Fp6.multiplyByFp2(c0, rhs),
-    c1: Fp6.multiplyByFp2(c1, rhs),
-  }),
-  conjugate: ({ c0, c1 }): Fp12 => ({ c0, c1: Fp6.neg(c1) }),
-
+  // Fp12
   // A cyclotomic group is a subgroup of Fp^n defined by
   //   GΦₙ(p) = {α ∈ Fpⁿ : α^Φₙ(p) = 1}
   // The result of any pairing is in a cyclotomic subgroup
   // https://eprint.iacr.org/2009/565.pdf
-  _cyclotomicSquare: ({ c0, c1 }): Fp12 => {
+  Fp12cyclotomicSquare: ({ c0, c1 }): Fp12 => {
     const { c0: c0c0, c1: c0c1, c2: c0c2 } = c0;
     const { c0: c1c0, c1: c1c1, c2: c1c2 } = c1;
     const { first: t3, second: t4 } = Fp4Square(c0c0, c1c1);
     const { first: t5, second: t6 } = Fp4Square(c1c0, c0c2);
     const { first: t7, second: t8 } = Fp4Square(c0c1, c1c2);
-    let t9 = Fp2.mulByNonresidue(t8); // T8 * (u + 1)
+    const t9 = Fp2.mulByNonresidue(t8); // T8 * (u + 1)
     return {
       c0: Fp6.create({
         c0: Fp2.add(Fp2.mul(Fp2.sub(t3, c0c0), _2n), t3), // 2 * (T3 - c0c0)  + T3
@@ -669,7 +118,7 @@ const Fp12: mod.IField<Fp12> & Fp12Utils = {
       }),
     }; // 2 * (T6 + c1c2) + T6
   },
-  _cyclotomicExp(num, n) {
+  Fp12cyclotomicExp(num, n) {
     let z = Fp12.ONE;
     for (let i = BLS_X_LEN - 1; i >= 0; i--) {
       z = Fp12._cyclotomicSquare(z);
@@ -679,7 +128,7 @@ const Fp12: mod.IField<Fp12> & Fp12Utils = {
   },
   // https://eprint.iacr.org/2010/354.pdf
   // https://eprint.iacr.org/2009/565.pdf
-  finalExponentiate: (num) => {
+  Fp12finalExponentiate: (num) => {
     const x = BLS_X;
     // this^(q⁶) / this
     const t0 = Fp12.div(Fp12.frobeniusMap(num, 6), num);
@@ -698,88 +147,12 @@ const Fp12: mod.IField<Fp12> & Fp12Utils = {
     // (t2 * t5)^(q²) * (t4 * t1)^(q³) * (t6 * t1.conj)^(q^1) * t7 * t3.conj * t1
     return Fp12.mul(Fp12.mul(Fp12.mul(t2_t5_pow_q2, t4_t1_pow_q3), t6_t1c_pow_q1), t7_t3c_t1);
   },
-};
-const FP12_FROBENIUS_COEFFICIENTS = [
-  [BigInt('0x1'), BigInt('0x0')],
-  [
-    BigInt(
-      '0x1904d3bf02bb0667c231beb4202c0d1f0fd603fd3cbd5f4f7b2443d784bab9c4f67ea53d63e7813d8d0775ed92235fb8'
-    ),
-    BigInt(
-      '0x00fc3e2b36c4e03288e9e902231f9fb854a14787b6c7b36fec0c8ec971f63c5f282d5ac14d6c7ec22cf78a126ddc4af3'
-    ),
-  ],
-  [
-    BigInt(
-      '0x00000000000000005f19672fdf76ce51ba69c6076a0f77eaddb3a93be6f89688de17d813620a00022e01fffffffeffff'
-    ),
-    BigInt('0x0'),
-  ],
-  [
-    BigInt(
-      '0x135203e60180a68ee2e9c448d77a2cd91c3dedd930b1cf60ef396489f61eb45e304466cf3e67fa0af1ee7b04121bdea2'
-    ),
-    BigInt(
-      '0x06af0e0437ff400b6831e36d6bd17ffe48395dabc2d3435e77f76e17009241c5ee67992f72ec05f4c81084fbede3cc09'
-    ),
-  ],
-  [
-    BigInt(
-      '0x00000000000000005f19672fdf76ce51ba69c6076a0f77eaddb3a93be6f89688de17d813620a00022e01fffffffefffe'
-    ),
-    BigInt('0x0'),
-  ],
-  [
-    BigInt(
-      '0x144e4211384586c16bd3ad4afa99cc9170df3560e77982d0db45f3536814f0bd5871c1908bd478cd1ee605167ff82995'
-    ),
-    BigInt(
-      '0x05b2cfd9013a5fd8df47fa6b48b1e045f39816240c0b8fee8beadf4d8e9c0566c63a3e6e257f87329b18fae980078116'
-    ),
-  ],
-  [
-    BigInt(
-      '0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaaa'
-    ),
-    BigInt('0x0'),
-  ],
-  [
-    BigInt(
-      '0x00fc3e2b36c4e03288e9e902231f9fb854a14787b6c7b36fec0c8ec971f63c5f282d5ac14d6c7ec22cf78a126ddc4af3'
-    ),
-    BigInt(
-      '0x1904d3bf02bb0667c231beb4202c0d1f0fd603fd3cbd5f4f7b2443d784bab9c4f67ea53d63e7813d8d0775ed92235fb8'
-    ),
-  ],
-  [
-    BigInt(
-      '0x1a0111ea397fe699ec02408663d4de85aa0d857d89759ad4897d29650fb85f9b409427eb4f49fffd8bfd00000000aaac'
-    ),
-    BigInt('0x0'),
-  ],
-  [
-    BigInt(
-      '0x06af0e0437ff400b6831e36d6bd17ffe48395dabc2d3435e77f76e17009241c5ee67992f72ec05f4c81084fbede3cc09'
-    ),
-    BigInt(
-      '0x135203e60180a68ee2e9c448d77a2cd91c3dedd930b1cf60ef396489f61eb45e304466cf3e67fa0af1ee7b04121bdea2'
-    ),
-  ],
-  [
-    BigInt(
-      '0x1a0111ea397fe699ec02408663d4de85aa0d857d89759ad4897d29650fb85f9b409427eb4f49fffd8bfd00000000aaad'
-    ),
-    BigInt('0x0'),
-  ],
-  [
-    BigInt(
-      '0x05b2cfd9013a5fd8df47fa6b48b1e045f39816240c0b8fee8beadf4d8e9c0566c63a3e6e257f87329b18fae980078116'
-    ),
-    BigInt(
-      '0x144e4211384586c16bd3ad4afa99cc9170df3560e77982d0db45f3536814f0bd5871c1908bd478cd1ee605167ff82995'
-    ),
-  ],
-].map((n) => Fp2.fromBigTuple(n));
+});
+
+// Finite field over r.
+// This particular field is not used anywhere in bls12-381, but it is still useful.
+const Fr = mod.Field(BigInt('0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001'));
+
 // END OF CURVE FIELDS
 
 // HashToCurve
@@ -953,36 +326,7 @@ const G1_SWU = mapToCurveSimpleSWU(Fp, {
 
 // Endomorphisms (for fast cofactor clearing)
 // Ψ(P) endomorphism
-const ut_root = Fp6.create({ c0: Fp2.ZERO, c1: Fp2.ONE, c2: Fp2.ZERO });
-const wsq = Fp12.create({ c0: ut_root, c1: Fp6.ZERO });
-const wcu = Fp12.create({ c0: Fp6.ZERO, c1: ut_root });
-const [wsq_inv, wcu_inv] = Fp12.invertBatch([wsq, wcu]);
-function psi(x: Fp2, y: Fp2): [Fp2, Fp2] {
-  // Untwist Fp2->Fp12 && frobenius(1) && twist back
-  const x2 = Fp12.mul(Fp12.frobeniusMap(Fp12.multiplyByFp2(wsq_inv, x), 1), wsq).c0.c0;
-  const y2 = Fp12.mul(Fp12.frobeniusMap(Fp12.multiplyByFp2(wcu_inv, y), 1), wcu).c0.c0;
-  return [x2, y2];
-}
-// Ψ endomorphism
-function G2psi(c: ProjConstructor<Fp2>, P: ProjPointType<Fp2>) {
-  const affine = P.toAffine();
-  const p = psi(affine.x, affine.y);
-  return new c(p[0], p[1], Fp2.ONE);
-}
-// Ψ²(P) endomorphism
-// 1 / F2(2)^((p-1)/3) in GF(p²)
-const PSI2_C1 = BigInt(
-  '0x1a0111ea397fe699ec02408663d4de85aa0d857d89759ad4897d29650fb85f9b409427eb4f49fffd8bfd00000000aaac'
-);
-
-function psi2(x: Fp2, y: Fp2): [Fp2, Fp2] {
-  return [Fp2.mul(x, PSI2_C1), Fp2.neg(y)];
-}
-function G2psi2(c: ProjConstructor<Fp2>, P: ProjPointType<Fp2>) {
-  const affine = P.toAffine();
-  const p = psi2(affine.x, affine.y);
-  return new c(p[0], p[1], Fp2.ONE);
-}
+const { G2psi, G2psi2 } = psiFrobenius(Fp, Fp2, Fp2.div(Fp2.ONE, Fp2.NONRESIDUE)); // 1/(u+1)
 
 // Default hash_to_field options are for hash to G2.
 //
@@ -1084,7 +428,7 @@ function signatureG2ToRawBytes(point: ProjPointType<Fp2>) {
 // Fp₂(v) / (v³ - ξ) where ξ = u + 1
 // Fp₆(w) / (w² - γ) where γ = v
 // Here goes constants && point encoding format
-export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
+export const bls12_381: CurveFn = bls({
   // Fields
   fields: {
     Fp,
@@ -1125,8 +469,8 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
       const phi = new c(Fp.mul(point.px, cubicRootOfUnityModP), point.py, point.pz);
 
       // todo: unroll
-      const xP = point.multiplyUnsafe(bls12_381.params.x).negate(); // [x]P
-      const u2P = xP.multiplyUnsafe(bls12_381.params.x); // [u2]P
+      const xP = point.multiplyUnsafe(BLS_X).negate(); // [x]P
+      const u2P = xP.multiplyUnsafe(BLS_X); // [u2]P
       return u2P.equals(phi);
 
       // https://eprint.iacr.org/2019/814.pdf
@@ -1145,7 +489,7 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
     // https://eprint.iacr.org/2019/403
     clearCofactor: (_c, point) => {
       // return this.multiplyUnsafe(CURVE.h);
-      return point.multiplyUnsafe(bls12_381.params.x).add(point); // x*P + P
+      return point.multiplyUnsafe(BLS_X).add(point); // x*P + P
     },
     mapToCurve: (scalars: bigint[]) => {
       const { x, y } = G1_SWU(Fp.create(scalars[0]));
@@ -1270,7 +614,7 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
     // It returns false for shitty points.
     // https://eprint.iacr.org/2021/1130.pdf
     isTorsionFree: (c, P): boolean => {
-      return P.multiplyUnsafe(bls12_381.params.x).negate().equals(G2psi(c, P)); // ψ(P) == [u](P)
+      return P.multiplyUnsafe(BLS_X).negate().equals(G2psi(c, P)); // ψ(P) == [u](P)
       // Older version: https://eprint.iacr.org/2019/814.pdf
       // Ψ²(P) => Ψ³(P) => [z]Ψ³(P) where z = -x => [z]Ψ³(P) - Ψ²(P) + P == O
       // return P.psi2().psi().mulNegX().subtract(psi2).add(P).isZero();
@@ -1280,7 +624,7 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
     // https://eprint.iacr.org/2017/419.pdf
     // prettier-ignore
     clearCofactor: (c, P) => {
-      const x = bls12_381.params.x;
+      const x = BLS_X;
       let t1 = P.multiplyUnsafe(x).negate();  // [-x]P
       let t2 = G2psi(c, P);                   // Ψ(P)
       let t3 = P.double();                    // 2P
@@ -1401,8 +745,10 @@ export const bls12_381: CurveFn<Fp, Fp2, Fp6, Fp12> = bls({
     },
   },
   params: {
-    x: BLS_X, // The BLS parameter x for BLS12-381
+    ateLoopSize: BLS_X, // The BLS parameter x for BLS12-381
     r: Fr.ORDER, // order; z⁴ − z² + 1; CURVE.n from other curves
+    xNegative: true,
+    twistType: 'multiplicative',
   },
   htfDefaults,
   hash: sha256,

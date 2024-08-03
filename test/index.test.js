@@ -13,5 +13,6 @@ import './jubjub.test.js';
 import './hash-to-curve.test.js';
 import './poseidon.test.js';
 import './bls12-381.test.js';
+import './bn254.test.js';
 
 should.run();

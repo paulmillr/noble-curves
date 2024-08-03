@@ -317,3 +317,10 @@ export function validateObject<T extends Record<string, any>>(
 // const z2 = validateObject(o, { a: 'isSafeInteger' }, { c: 'zz' });
 // const z3 = validateObject(o, { test: 'boolean', z: 'bug' });
 // const z4 = validateObject(o, { a: 'boolean', z: 'bug' });
+
+/**
+ * throws not implemented error
+ */
+export const notImplemented = () => {
+  throw new Error('not implemented');
+};

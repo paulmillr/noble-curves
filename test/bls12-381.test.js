@@ -85,6 +85,23 @@ describe('bls12-381 Fp2', () => {
       })
     );
   });
+  should('sqrt: correct root', () => {
+    const sqr = Fp2.fromBigTuple([
+      3341065098200961989598748404381324054605449840948293400785922068969583005812936621662354076014412578129291257715488n,
+      2133050398774337206222816300118221327418763981033055222570091459262312519047975404484651902003138703421962555090222n,
+    ]);
+    const sqrt0 = Fp2.fromBigTuple([
+      2017258952934375457849735304558732518256013841723352154472679471057686924117014146018818524865681679396399932211882n,
+      3074855889729334937670587859959866275799142626485414915307030157330054773488162299461738339401058098462460928340205n,
+    ]);
+    const sqrt1 = Fp2.fromBigTuple([
+      1985150602287291935568054521177171638300868978215655730859378665066344726373823718423869104263333984641494340347905n,
+      927553665492332455747201965776037880757740193453592970025027978793976877002675564980949289727957565575433344219582n,
+    ]);
+    deepStrictEqual(Fp2.sqr(sqrt0), sqr, 'sqrt0');
+    deepStrictEqual(Fp2.sqr(sqrt1), sqr, 'sqrt1');
+    deepStrictEqual(Fp2.sqrt(sqr), sqrt0);
+  });
 
   should('div/x/1=x', () => {
     fc.assert(
@@ -896,44 +913,6 @@ describe('pairing', () => {
   const G1 = G1Point.BASE;
   const G2 = G2Point.BASE;
 
-  should('creates negative G1 pairing', () => {
-    const p1 = pairing(G1, G2);
-    const p2 = pairing(G1.negate(), G2);
-    deepStrictEqual(Fp12.mul(p1, p2), Fp12.ONE);
-  });
-  should('creates negative G2 pairing', () => {
-    const p2 = pairing(G1.negate(), G2);
-    const p3 = pairing(G1, G2.negate());
-    deepStrictEqual(p2, p3);
-  });
-  should('creates proper pairing output order', () => {
-    const p1 = pairing(G1, G2);
-    const p2 = Fp12.pow(p1, CURVE_ORDER);
-    deepStrictEqual(p2, Fp12.ONE);
-  });
-  should('G1 billinearity', () => {
-    const p1 = pairing(G1, G2);
-    const p2 = pairing(G1.multiply(2n), G2);
-    deepStrictEqual(Fp12.mul(p1, p1), p2);
-  });
-  should('should not degenerate', () => {
-    const p1 = pairing(G1, G2);
-    const p2 = pairing(G1.multiply(2n), G2);
-    const p3 = pairing(G1, G2.negate());
-    notDeepStrictEqual(p1, p2);
-    notDeepStrictEqual(p1, p3);
-    notDeepStrictEqual(p2, p3);
-  });
-  should('G2 billinearity', () => {
-    const p1 = pairing(G1, G2);
-    const p2 = pairing(G1, G2.multiply(2n));
-    deepStrictEqual(Fp12.mul(p1, p1), p2);
-  });
-  should('proper pairing composite check', () => {
-    const p1 = pairing(G1.multiply(37n), G2.multiply(27n));
-    const p2 = pairing(G1.multiply(999n), G2);
-    deepStrictEqual(p1, p2);
-  });
   should('vectors from https://github.com/zkcrypto/pairing', () => {
     const p1 = pairing(G1, G2);
     deepStrictEqual(

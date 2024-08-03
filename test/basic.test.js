@@ -1,4 +1,4 @@
-import { deepStrictEqual, throws } from 'node:assert';
+import { deepStrictEqual, notDeepStrictEqual, throws } from 'node:assert';
 import { should, describe } from 'micro-should';
 import * as fc from 'fast-check';
 import * as mod from '../esm/abstract/modular.js';
@@ -12,13 +12,14 @@ import { secp256k1 } from '../esm/secp256k1.js';
 import { ed25519, ed25519ctx, ed25519ph, x25519 } from '../esm/ed25519.js';
 import { ed448, ed448ph } from '../esm/ed448.js';
 import { pallas, vesta } from '../esm/pasta.js';
-import { bn254 } from '../esm/bn254.js';
+import { bn254_weierstrass } from '../esm/bn254.js';
 import { jubjub } from '../esm/jubjub.js';
 import { bls12_381 } from '../esm/bls12-381.js';
 import { default as wyche_curves } from './wycheproof/ec_prime_order_curves_test.json' with { type: 'json' };
 import { createCurve } from '../esm/_shortw_utils.js';
 import { Field } from '../esm/abstract/modular.js';
 import { sha256 } from '@noble/hashes/sha256';
+import { bn254 } from '../esm/bn254.js';
 
 // Fields tests
 const FIELDS = {
@@ -30,7 +31,7 @@ const FIELDS = {
   jubjub: { Fp: [jubjub.CURVE.Fp] },
   ed25519: { Fp: [ed25519.CURVE.Fp] },
   ed448: { Fp: [ed448.CURVE.Fp] },
-  bn254: { Fp: [bn254.CURVE.Fp] },
+  bn254_weierstrass: { Fp: [bn254_weierstrass.CURVE.Fp] },
   pallas: { Fp: [pallas.CURVE.Fp] },
   vesta: { Fp: [vesta.CURVE.Fp] },
   bls12: {
@@ -53,7 +54,43 @@ const FIELDS = {
       (Fp12, num) => Fp12.fromBigTwelve(num),
     ],
   },
+  bn254: {
+    Fp: [bn254.fields.Fp],
+    Fp2: [
+      bn254.fields.Fp2,
+      fc.array(fc.bigInt(1n, bn254.fields.Fp.ORDER - 1n), {
+        minLength: 2,
+        maxLength: 2,
+      }),
+      (Fp2, num) => Fp2.fromBigTuple([num[0], num[1]]),
+    ],
+    // Fp6: [bls12_381.fields.Fp6],
+    Fp12: [
+      bn254.fields.Fp12,
+      fc.array(fc.bigInt(1n, bn254.fields.Fp.ORDER - 1n), {
+        minLength: 12,
+        maxLength: 12,
+      }),
+      (Fp12, num) => Fp12.fromBigTwelve(num),
+    ],
+  },
 };
+
+// prettier-ignore
+const CURVES = {
+  secp192r1, secp224r1, secp256r1, secp384r1, secp521r1,
+  secp256k1,
+  ed25519, ed25519ctx, ed25519ph,
+  ed448, ed448ph,
+  pallas, vesta,
+  bn254: bn254_weierstrass,
+  jubjub,
+  bls12_381_G1: bls12_381.G1, bls12_381_G2: bls12_381.G2,
+  // Requires fromHex/toHex
+  // alt_bn128_G1: alt_bn128.G1, alt_bn128_G2: alt_bn128.G2,
+};
+
+const PAIRINGS = { bls12_381, bn254 };
 
 for (const c in FIELDS) {
   const curve = FIELDS[c];
@@ -225,7 +262,7 @@ for (const c in FIELDS) {
 
       const isSquare = mod.FpIsSquare(Fp);
       // Not implemented
-      if (Fp !== bls12_381.fields.Fp12) {
+      if (Fp !== bls12_381.fields.Fp12 && Fp !== bn254.fields.Fp12) {
         should('multiply/sqrt', () => {
           fc.assert(
             fc.property(FC_BIGINT, (num) => {
@@ -310,16 +347,6 @@ for (const c in FIELDS) {
 }
 
 // Group tests
-// prettier-ignore
-const CURVES = {
-  secp192r1, secp224r1, secp256r1, secp384r1, secp521r1,
-  secp256k1,
-  ed25519, ed25519ctx, ed25519ph,
-  ed448, ed448ph,
-  pallas, vesta,
-  bn254,
-  jubjub,
-};
 
 const NUM_RUNS = 5;
 
@@ -580,71 +607,76 @@ for (const name in CURVES) {
       throws(() => C.getPublicKey(new Uint8Array(4096).fill(1)));
       throws(() => C.getPublicKey(Array(32).fill(1)));
     });
-    should('.verify() should verify random signatures', () =>
-      fc.assert(
-        fc.property(fc.hexaString({ minLength: 64, maxLength: 64 }), (msg) => {
-          const priv = C.utils.randomPrivateKey();
-          const pub = C.getPublicKey(priv);
-          const sig = C.sign(msg, priv);
-          deepStrictEqual(
-            C.verify(sig, msg, pub),
-            true,
-            `priv=${toHex(priv)},pub=${toHex(pub)},msg=${msg}`
-          );
-        }),
-        { numRuns: NUM_RUNS }
-      )
-    );
-    should('.verify() should verify random signatures in hex', () =>
-      fc.assert(
-        fc.property(fc.hexaString({ minLength: 64, maxLength: 64 }), (msg) => {
-          const priv = toHex(C.utils.randomPrivateKey());
-          const pub = toHex(C.getPublicKey(priv));
-          const sig = C.sign(msg, priv);
-          let sighex = isBytes(sig) ? toHex(sig) : sig.toCompactHex();
-          deepStrictEqual(C.verify(sighex, msg, pub), true, `priv=${priv},pub=${pub},msg=${msg}`);
-        }),
-        { numRuns: NUM_RUNS }
-      )
-    );
-    should('.verify() should verify empty signatures', () => {
-      const msg = new Uint8Array([]);
-      const priv = C.utils.randomPrivateKey();
-      const pub = C.getPublicKey(priv);
-      const sig = C.sign(msg, priv);
-      deepStrictEqual(
-        C.verify(sig, msg, pub),
-        true,
-        'priv=${toHex(priv)},pub=${toHex(pub)},msg=${msg}'
-      );
-    });
-    should('.sign() edge cases', () => {
-      throws(() => C.sign());
-      throws(() => C.sign(''));
-      throws(() => C.sign('', ''));
-      throws(() => C.sign(new Uint8Array(), new Uint8Array()));
-    });
 
-    describe('verify()', () => {
-      const msg = '01'.repeat(32);
-      should('true for proper signatures', () => {
+    if (C.verify) {
+      //if (C.verify)
+      should('.verify() should verify random signatures', () =>
+        fc.assert(
+          fc.property(fc.hexaString({ minLength: 64, maxLength: 64 }), (msg) => {
+            const priv = C.utils.randomPrivateKey();
+            const pub = C.getPublicKey(priv);
+            const sig = C.sign(msg, priv);
+            deepStrictEqual(
+              C.verify(sig, msg, pub),
+              true,
+              `priv=${toHex(priv)},pub=${toHex(pub)},msg=${msg}`
+            );
+          }),
+          { numRuns: NUM_RUNS }
+        )
+      );
+      should('.verify() should verify random signatures in hex', () =>
+        fc.assert(
+          fc.property(fc.hexaString({ minLength: 64, maxLength: 64 }), (msg) => {
+            const priv = toHex(C.utils.randomPrivateKey());
+            const pub = toHex(C.getPublicKey(priv));
+            const sig = C.sign(msg, priv);
+            let sighex = isBytes(sig) ? toHex(sig) : sig.toCompactHex();
+            deepStrictEqual(C.verify(sighex, msg, pub), true, `priv=${priv},pub=${pub},msg=${msg}`);
+          }),
+          { numRuns: NUM_RUNS }
+        )
+      );
+      should('.verify() should verify empty signatures', () => {
+        const msg = new Uint8Array([]);
         const priv = C.utils.randomPrivateKey();
-        const sig = C.sign(msg, priv);
         const pub = C.getPublicKey(priv);
-        deepStrictEqual(C.verify(sig, msg, pub), true);
-      });
-      should('false for wrong messages', () => {
-        const priv = C.utils.randomPrivateKey();
         const sig = C.sign(msg, priv);
-        const pub = C.getPublicKey(priv);
-        deepStrictEqual(C.verify(sig, '11'.repeat(32), pub), false);
+        deepStrictEqual(
+          C.verify(sig, msg, pub),
+          true,
+          'priv=${toHex(priv)},pub=${toHex(pub)},msg=${msg}'
+        );
       });
-      should('false for wrong keys', () => {
-        const priv = C.utils.randomPrivateKey();
-        const sig = C.sign(msg, priv);
-        deepStrictEqual(C.verify(sig, msg, C.getPublicKey(C.utils.randomPrivateKey())), false);
+
+      should('.sign() edge cases', () => {
+        throws(() => C.sign());
+        throws(() => C.sign(''));
+        throws(() => C.sign('', ''));
+        throws(() => C.sign(new Uint8Array(), new Uint8Array()));
       });
-    });
+
+      describe('verify()', () => {
+        const msg = '01'.repeat(32);
+        should('true for proper signatures', () => {
+          const priv = C.utils.randomPrivateKey();
+          const sig = C.sign(msg, priv);
+          const pub = C.getPublicKey(priv);
+          deepStrictEqual(C.verify(sig, msg, pub), true);
+        });
+        should('false for wrong messages', () => {
+          const priv = C.utils.randomPrivateKey();
+          const sig = C.sign(msg, priv);
+          const pub = C.getPublicKey(priv);
+          deepStrictEqual(C.verify(sig, '11'.repeat(32), pub), false);
+        });
+        should('false for wrong keys', () => {
+          const priv = C.utils.randomPrivateKey();
+          const sig = C.sign(msg, priv);
+          deepStrictEqual(C.verify(sig, msg, C.getPublicKey(C.utils.randomPrivateKey())), false);
+        });
+      });
+    }
     if (C.Signature) {
       should('Signature serialization roundtrip', () =>
         fc.assert(
@@ -804,6 +836,59 @@ should('validate generator point is on curve', () => {
       sha256
     )
   );
+});
+
+describe('Pairings', () => {
+  for (const [name, curve] of Object.entries(PAIRINGS)) {
+    describe(name, () => {
+      const { pairing } = curve;
+      const { Fp12 } = curve.fields;
+      const G1Point = curve.G1.ProjectivePoint;
+      const G2Point = curve.G2.ProjectivePoint;
+      const CURVE_ORDER = curve.ORDER;
+      const G1 = G1Point.BASE;
+      const G2 = G2Point.BASE;
+
+      should('creates negative G1 pairing', () => {
+        const p1 = pairing(G1, G2);
+        const p2 = pairing(G1.negate(), G2);
+        deepStrictEqual(Fp12.mul(p1, p2), Fp12.ONE);
+      });
+      should('creates negative G2 pairing', () => {
+        const p2 = pairing(G1.negate(), G2);
+        const p3 = pairing(G1, G2.negate());
+        deepStrictEqual(p2, p3);
+      });
+      should('creates proper pairing output order', () => {
+        const p1 = pairing(G1, G2);
+        const p2 = Fp12.pow(p1, CURVE_ORDER);
+        deepStrictEqual(p2, Fp12.ONE);
+      });
+      should('G1 billinearity', () => {
+        const p1 = pairing(G1, G2);
+        const p2 = pairing(G1.multiply(2n), G2);
+        deepStrictEqual(Fp12.mul(p1, p1), p2);
+      });
+      should('should not degenerate', () => {
+        const p1 = pairing(G1, G2);
+        const p2 = pairing(G1.multiply(2n), G2);
+        const p3 = pairing(G1, G2.negate());
+        notDeepStrictEqual(p1, p2);
+        notDeepStrictEqual(p1, p3);
+        notDeepStrictEqual(p2, p3);
+      });
+      should('G2 billinearity', () => {
+        const p1 = pairing(G1, G2);
+        const p2 = pairing(G1, G2.multiply(2n));
+        deepStrictEqual(Fp12.mul(p1, p1), p2);
+      });
+      should('proper pairing composite check', () => {
+        const p1 = pairing(G1.multiply(37n), G2.multiply(27n));
+        const p2 = pairing(G1.multiply(999n), G2);
+        deepStrictEqual(p1, p2);
+      });
+    });
+  }
 });
 
 // ESM is broken.

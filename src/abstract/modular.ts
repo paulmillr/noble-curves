@@ -195,7 +195,6 @@ export function FpSqrt(P: bigint) {
     //   return Fp.cmov(tv1, tv2, e3); //  10.  z = CMOV(tv1, tv2, e3)  # Select the sqrt from tv1 and tv2
     // }
   }
-
   // Other cases: Tonelli-Shanks algorithm
   return tonelliShanks(P);
 }
@@ -314,11 +313,19 @@ export function FpDiv<T>(f: IField<T>, lhs: T, rhs: T | bigint): T {
   return f.mul(lhs, typeof rhs === 'bigint' ? invert(rhs, f.ORDER) : f.inv(rhs));
 }
 
+export function FpLegendre(order: bigint) {
+  // (a | p) ≡ 1    if a is a square (mod p), quadratic residue
+  // (a | p) ≡ -1   if a is not a square (mod p), quadratic non residue
+  // (a | p) ≡ 0    if a ≡ 0 (mod p)
+  const legendreConst = (order - _1n) / _2n; // Integer arithmetic
+  return <T>(f: IField<T>, x: T): T => f.pow(x, legendreConst);
+}
+
 // This function returns True whenever the value x is a square in the field F.
 export function FpIsSquare<T>(f: IField<T>) {
-  const legendreConst = (f.ORDER - _1n) / _2n; // Integer arithmetic
+  const legendre = FpLegendre(f.ORDER);
   return (x: T): boolean => {
-    const p = f.pow(x, legendreConst);
+    const p = legendre(f, x);
     return f.eql(p, f.ZERO) || f.eql(p, f.ONE);
   };
 }
