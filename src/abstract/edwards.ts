@@ -46,16 +46,6 @@ function validateOpts(curve: CurveType) {
   return Object.freeze({ ...opts } as const);
 }
 
-const isBig = (n: bigint) => typeof n === 'bigint' && _0n <= n; // n in [1..]
-
-/**
- * Asserts min <= n < max
- */
-function assertInRange(title: string, n: bigint, min: bigint, max: bigint) {
-  if (isBig(n) && isBig(min) && isBig(max) && min <= n && n < max) return;
-  throw new Error(`expected valid ${title}: ${min} <= coord < ${max}, got ${typeof n} ${n}`);
-}
-
 // Instance of Extended Point with coordinates in X, Y, Z, T
 export interface ExtPointType extends Group<ExtPointType> {
   readonly ex: bigint;
@@ -82,6 +72,10 @@ export interface ExtPointConstructor extends GroupConstructor<ExtPointType> {
   fromPrivateKey(privateKey: Hex): ExtPointType;
 }
 
+/**
+ * Edwards Curve interface.
+ * Main methods: `getPublicKey(priv)`, `sign(msg, priv)`, `verify(sig, msg, pub)`.
+ */
 export type CurveFn = {
   CURVE: ReturnType<typeof validateOpts>;
   getPublicKey: (privateKey: Hex) => Uint8Array;
@@ -332,8 +326,8 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
 
     // Constant-time multiplication.
     multiply(scalar: bigint): Point {
-      let n = scalar;
-      assertInRange('scalar', n, _1n, CURVE_ORDER);
+      const n = scalar;
+      ut.aInRange('scalar', n, _1n, CURVE_ORDER); // 1 <= scalar < L
       const { p, f } = this.wNAF(n);
       return Point.normalizeZ([p, f])[0];
     }
@@ -343,8 +337,8 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     // an exposed private key e.g. sig verification.
     // Does NOT allow scalars higher than CURVE.n.
     multiplyUnsafe(scalar: bigint): Point {
-      let n = scalar;
-      assertInRange('scalar', n, _0n, CURVE_ORDER); // 0 <= scalar < l
+      const n = scalar;
+      ut.aInRange('scalar', n, _0n, CURVE_ORDER); // 0 <= scalar < L
       if (n === _0n) return I;
       if (this.equals(I) || n === _1n) return this;
       if (this.equals(G)) return this.wNAF(n).p;
@@ -390,10 +384,10 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       const y = ut.bytesToNumberLE(normed);
 
       // RFC8032 prohibits >= p, but ZIP215 doesn't
-      // zip215=true:  1 <= y < MASK (2^256 for ed25519)
-      // zip215=false: 1 <= y < P (2^255-19 for ed25519)
+      // zip215=true:  0 <= y < MASK (2^256 for ed25519)
+      // zip215=false: 0 <= y < P (2^255-19 for ed25519)
       const max = zip215 ? MASK : Fp.ORDER;
-      assertInRange('pointHex.y', y, _0n, max);
+      ut.aInRange('pointHex.y', y, _0n, max);
 
       // Ed25519: x² = (y²-1)/(dy²+1) mod p. Ed448: x² = (y²-1)/(dy²-1) mod p. Generic case:
       // ax²+y²=1+dx²y² => y²-1=dx²y²-ax² => y²-1=x²(dy²-a) => x²=(y²-1)/(dy²-a)
@@ -469,7 +463,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     const R = G.multiply(r).toRawBytes(); // R = rG
     const k = hashDomainToScalar(options.context, R, pointBytes, msg); // R || A || PH(M)
     const s = modN(r + k * scalar); // S = (r + k * s) mod L
-    assertInRange('signature.s', s, _0n, CURVE_ORDER); // 0 <= s < l
+    ut.aInRange('signature.s', s, _0n, CURVE_ORDER); // 0 <= s < l
     const res = ut.concatBytes(R, ut.numberToBytesLE(s, Fp.BYTES));
     return ensureBytes('result', res, nByteLength * 2); // 64-byte signature
   }

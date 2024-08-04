@@ -1,6 +1,12 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { mod, pow } from './modular.js';
-import { bytesToNumberLE, ensureBytes, numberToBytesLE, validateObject } from './utils.js';
+import {
+  aInRange,
+  bytesToNumberLE,
+  ensureBytes,
+  numberToBytesLE,
+  validateObject,
+} from './utils.js';
 
 const _0n = BigInt(0);
 const _1n = BigInt(1);
@@ -75,12 +81,6 @@ export function montgomery(curveDef: CurveType): CurveFn {
     return [x_2, x_3];
   }
 
-  // Accepts 0 as well
-  function assertFieldElement(n: bigint): bigint {
-    if (typeof n === 'bigint' && _0n <= n && n < P) return n;
-    throw new Error('Expected valid scalar 0 < scalar < CURVE.P');
-  }
-
   // x25519 from 4
   // The constant a24 is (486662 - 2) / 4 = 121665 for curve25519/X25519
   const a24 = (CURVE.a - BigInt(2)) / BigInt(4);
@@ -90,11 +90,12 @@ export function montgomery(curveDef: CurveType): CurveFn {
    * @param scalar by which the point would be multiplied
    * @returns new Point on Montgomery curve
    */
-  function montgomeryLadder(pointU: bigint, scalar: bigint): bigint {
-    const u = assertFieldElement(pointU);
+  function montgomeryLadder(u: bigint, scalar: bigint): bigint {
+    aInRange('u', u, _0n, P);
+    aInRange('scalar', scalar, _0n, P);
     // Section 5: Implementations MUST accept non-canonical values and process them as
     // if they had been reduced modulo the field prime.
-    const k = assertFieldElement(scalar);
+    const k = scalar;
     const x_1 = u;
     let x_2 = _1n;
     let z_2 = _0n;

@@ -5,7 +5,14 @@ import { createCurve } from './_shortw_utils.js';
 import { createHasher, isogenyMap } from './abstract/hash-to-curve.js';
 import { Field, mod, pow2 } from './abstract/modular.js';
 import type { Hex, PrivKey } from './abstract/utils.js';
-import { bytesToNumberBE, concatBytes, ensureBytes, numberToBytesBE } from './abstract/utils.js';
+import {
+  inRange,
+  aInRange,
+  bytesToNumberBE,
+  concatBytes,
+  ensureBytes,
+  numberToBytesBE,
+} from './abstract/utils.js';
 import { ProjPointType as PointType, mapToCurveSimpleSWU } from './abstract/weierstrass.js';
 
 const secp256k1P = BigInt('0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f');
@@ -44,6 +51,9 @@ function sqrtMod(y: bigint): bigint {
 
 const Fp = Field(secp256k1P, undefined, undefined, { sqrt: sqrtMod });
 
+/**
+ * secp256k1 short weierstrass curve and ECDSA signatures over it.
+ */
 export const secp256k1 = createCurve(
   {
     a: BigInt(0), // equation params: a, b
@@ -92,8 +102,6 @@ export const secp256k1 = createCurve(
 // Schnorr signatures are superior to ECDSA from above. Below is Schnorr-specific BIP0340 code.
 // https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki
 const _0n = BigInt(0);
-const fe = (x: bigint) => typeof x === 'bigint' && _0n < x && x < secp256k1P;
-const ge = (x: bigint) => typeof x === 'bigint' && _0n < x && x < secp256k1N;
 /** An object mapping tags to their tagged hash prefix of [SHA256(tag) | SHA256(tag)] */
 const TAGGED_HASH_PREFIXES: { [tag: string]: Uint8Array } = {};
 function taggedHash(tag: string, ...messages: Uint8Array[]): Uint8Array {
@@ -127,7 +135,7 @@ function schnorrGetExtPubKey(priv: PrivKey) {
  * @returns valid point checked for being on-curve
  */
 function lift_x(x: bigint): PointType<bigint> {
-  if (!fe(x)) throw new Error('bad x: need 0 < x < p'); // Fail if x ≥ p.
+  aInRange('x', x, _1n, secp256k1P); // Fail if x ≥ p.
   const xx = modP(x * x);
   const c = modP(xx * x + BigInt(7)); // Let c = x³ + 7 mod p.
   let y = sqrtMod(c); // Let y = c^(p+1)/4 mod p.
@@ -136,11 +144,12 @@ function lift_x(x: bigint): PointType<bigint> {
   p.assertValidity();
   return p;
 }
+const num = bytesToNumberBE;
 /**
  * Create tagged hash, convert it to bigint, reduce modulo-n.
  */
 function challenge(...args: Uint8Array[]): bigint {
-  return modN(bytesToNumberBE(taggedHash('BIP0340/challenge', ...args)));
+  return modN(num(taggedHash('BIP0340/challenge', ...args)));
 }
 
 /**
@@ -162,9 +171,9 @@ function schnorrSign(
   const m = ensureBytes('message', message);
   const { bytes: px, scalar: d } = schnorrGetExtPubKey(privateKey); // checks for isWithinCurveOrder
   const a = ensureBytes('auxRand', auxRand, 32); // Auxiliary random data a: a 32-byte array
-  const t = numTo32b(d ^ bytesToNumberBE(taggedHash('BIP0340/aux', a))); // Let t be the byte-wise xor of bytes(d) and hash/aux(a)
+  const t = numTo32b(d ^ num(taggedHash('BIP0340/aux', a))); // Let t be the byte-wise xor of bytes(d) and hash/aux(a)
   const rand = taggedHash('BIP0340/nonce', t, px, m); // Let rand = hash/nonce(t || bytes(P) || m)
-  const k_ = modN(bytesToNumberBE(rand)); // Let k' = int(rand) mod n
+  const k_ = modN(num(rand)); // Let k' = int(rand) mod n
   if (k_ === _0n) throw new Error('sign failed: k is zero'); // Fail if k' = 0.
   const { bytes: rx, scalar: k } = schnorrGetExtPubKey(k_); // Let R = k'⋅G.
   const e = challenge(rx, px, m); // Let e = int(hash/challenge(bytes(R) || bytes(P) || m)) mod n.
@@ -185,11 +194,11 @@ function schnorrVerify(signature: Hex, message: Hex, publicKey: Hex): boolean {
   const m = ensureBytes('message', message);
   const pub = ensureBytes('publicKey', publicKey, 32);
   try {
-    const P = lift_x(bytesToNumberBE(pub)); // P = lift_x(int(pk)); fail if that fails
-    const r = bytesToNumberBE(sig.subarray(0, 32)); // Let r = int(sig[0:32]); fail if r ≥ p.
-    if (!fe(r)) return false;
-    const s = bytesToNumberBE(sig.subarray(32, 64)); // Let s = int(sig[32:64]); fail if s ≥ n.
-    if (!ge(s)) return false;
+    const P = lift_x(num(pub)); // P = lift_x(int(pk)); fail if that fails
+    const r = num(sig.subarray(0, 32)); // Let r = int(sig[0:32]); fail if r ≥ p.
+    if (!inRange(r, _1n, secp256k1P)) return false;
+    const s = num(sig.subarray(32, 64)); // Let s = int(sig[32:64]); fail if s ≥ n.
+    if (!inRange(s, _1n, secp256k1N)) return false;
     const e = challenge(numTo32b(r), pointToBytes(P), m); // int(challenge(bytes(r)||bytes(P)||m))%n
     const R = GmulAdd(P, s, modN(-e)); // R = s⋅G - e⋅P
     if (!R || !R.hasEvenY() || R.toAffine().x !== r) return false; // -eP == (n-e)P
@@ -199,6 +208,9 @@ function schnorrVerify(signature: Hex, message: Hex, publicKey: Hex): boolean {
   }
 }
 
+/**
+ * Schnorr signatures over secp256k1.
+ */
 export const schnorr = /* @__PURE__ */ (() => ({
   getPublicKey: schnorrGetPublicKey,
   sign: schnorrSign,

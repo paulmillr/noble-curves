@@ -233,15 +233,12 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
 
   // Valid group elements reside in range 1..n-1
   function isWithinCurveOrder(num: bigint): boolean {
-    return typeof num === 'bigint' && _0n < num && num < CURVE.n;
-  }
-  function assertGE(num: bigint) {
-    if (!isWithinCurveOrder(num)) throw new Error('Expected valid bigint: 0 < bigint < curve.n');
+    return ut.inRange(num, _1n, CURVE.n);
   }
   // Validates if priv key is valid and converts it to bigint.
   // Supports options allowedPrivateKeyLengths and wrapPrivateKey.
   function normPrivateKeyToScalar(key: PrivKey): bigint {
-    const { allowedPrivateKeyLengths: lengths, nByteLength, wrapPrivateKey, n } = CURVE;
+    const { allowedPrivateKeyLengths: lengths, nByteLength, wrapPrivateKey, n: N } = CURVE;
     if (lengths && typeof key !== 'bigint') {
       if (ut.isBytes(key)) key = ut.bytesToHex(key);
       // Normalize to hex string, pad. E.g. P521 would norm 130-132 char hex to 132-char bytes
@@ -257,16 +254,16 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
     } catch (error) {
       throw new Error(`private key must be ${nByteLength} bytes, hex or bigint, not ${typeof key}`);
     }
-    if (wrapPrivateKey) num = mod.mod(num, n); // disabled by default, enabled for BLS
-    assertGE(num); // num in range [1..N-1]
+    if (wrapPrivateKey) num = mod.mod(num, N); // disabled by default, enabled for BLS
+    ut.aInRange('private key', num, _1n, N); // num in range [1..N-1]
     return num;
   }
 
   function assertPrjPoint(other: unknown) {
     if (!(other instanceof Point)) throw new Error('ProjectivePoint expected');
   }
-  // NOTE: these are pretty heavy function which used a lot of times, but since we have completely immutable points,
-  // we can cache them.
+
+  // Memoized toAffine / validity check. They are heavy. Points are immutable.
 
   // Converts Projective point to affine (x, y) coordinates.
   // Can accept precomputed Z^-1 - for example, from invertBatch.
@@ -520,16 +517,16 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
      * It's faster, but should only be used when you don't care about
      * an exposed private key e.g. sig verification, which works over *public* keys.
      */
-    multiplyUnsafe(n: bigint): Point {
+    multiplyUnsafe(sc: bigint): Point {
+      ut.aInRange('scalar', sc, _0n, CURVE.n);
       const I = Point.ZERO;
-      if (n === _0n) return I;
-      assertGE(n); // Will throw on 0
-      if (n === _1n) return this;
+      if (sc === _0n) return I;
+      if (sc === _1n) return this;
       const { endo } = CURVE;
-      if (!endo) return wnaf.unsafeLadder(this, n);
+      if (!endo) return wnaf.unsafeLadder(this, sc);
 
       // Apply endomorphism
-      let { k1neg, k1, k2neg, k2 } = endo.splitScalar(n);
+      let { k1neg, k1, k2neg, k2 } = endo.splitScalar(sc);
       let k1p = I;
       let k2p = I;
       let d: Point = this;
@@ -556,12 +553,11 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
      * @returns New point
      */
     multiply(scalar: bigint): Point {
-      assertGE(scalar);
-      let n = scalar;
+      const { endo, n: N } = CURVE;
+      ut.aInRange('scalar', scalar, _1n, N);
       let point: Point, fake: Point; // Fake point is used to const-time mult
-      const { endo } = CURVE;
       if (endo) {
-        const { k1neg, k1, k2neg, k2 } = endo.splitScalar(n);
+        const { k1neg, k1, k2neg, k2 } = endo.splitScalar(scalar);
         let { p: k1p, f: f1p } = this.wNAF(k1);
         let { p: k2p, f: f2p } = this.wNAF(k2);
         k1p = wnaf.constTimeNegate(k1neg, k1p);
@@ -570,7 +566,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
         point = k1p.add(k2p);
         fake = f1p.add(f2p);
       } else {
-        const { p, f } = this.wNAF(n);
+        const { p, f } = this.wNAF(scalar);
         point = p;
         fake = f;
       }
@@ -721,9 +717,6 @@ export function weierstrass(curveDef: CurveType): CurveFn {
   const compressedLen = Fp.BYTES + 1; // e.g. 33 for 32
   const uncompressedLen = 2 * Fp.BYTES + 1; // e.g. 65 for 32
 
-  function isValidFieldElement(num: bigint): boolean {
-    return _0n < num && num < Fp.ORDER; // 0 is banned since it's not invertible FE
-  }
   function modN(a: bigint) {
     return mod.mod(a, CURVE_ORDER);
   }
@@ -756,7 +749,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       // this.assertValidity() is done inside of fromHex
       if (len === compressedLen && (head === 0x02 || head === 0x03)) {
         const x = ut.bytesToNumberBE(tail);
-        if (!isValidFieldElement(x)) throw new Error('Point is not on curve');
+        if (!ut.inRange(x, _1n, Fp.ORDER)) throw new Error('Point is not on curve');
         const y2 = weierstrassEquation(x); // y² = x³ + ax + b
         let y: bigint;
         try {
@@ -822,9 +815,8 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     }
 
     assertValidity(): void {
-      // can use assertGE here
-      if (!isWithinCurveOrder(this.r)) throw new Error('r must be 0 < r < CURVE.n');
-      if (!isWithinCurveOrder(this.s)) throw new Error('s must be 0 < s < CURVE.n');
+      ut.aInRange('r', this.r, _1n, CURVE_ORDER); // r in [1..N]
+      ut.aInRange('s', this.s, _1n, CURVE_ORDER); // s in [1..N]
     }
 
     addRecoveryBit(recovery: number): RecoveredSignature {
@@ -974,9 +966,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
    * Converts to bytes. Checks if num in `[0..ORDER_MASK-1]` e.g.: `[0..2^256-1]`.
    */
   function int2octets(num: bigint): Uint8Array {
-    if (typeof num !== 'bigint') throw new Error('bigint expected');
-    if (!(_0n <= num && num < ORDER_MASK))
-      throw new Error(`bigint expected < 2^${CURVE.nBitLength}`);
+    ut.aInRange(`num < 2^${CURVE.nBitLength}`, num, _0n, ORDER_MASK);
     // works with order, can have different size than numToField!
     return ut.numberToBytesBE(num, CURVE.nByteLength);
   }

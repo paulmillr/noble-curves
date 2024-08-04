@@ -27,6 +27,11 @@ export function abytes(item: unknown): void {
   if (!isBytes(item)) throw new Error('Uint8Array expected');
 }
 
+export function abool(title: string, value: boolean): void {
+  if (typeof value !== 'boolean')
+    throw new Error(`${title} must be valid boolean, got "${value}".`);
+}
+
 // Array where index 0xf0 (240) is mapped to string 'f0'
 const hexes = /* @__PURE__ */ Array.from({ length: 256 }, (_, i) =>
   i.toString(16).padStart(2, '0')
@@ -172,6 +177,28 @@ declare const TextEncoder: any;
 export function utf8ToBytes(str: string): Uint8Array {
   if (typeof str !== 'string') throw new Error(`utf8ToBytes expected string, got ${typeof str}`);
   return new Uint8Array(new TextEncoder().encode(str)); // https://bugzil.la/1681809
+}
+
+// Is positive bigint
+const isPosBig = (n: bigint) => typeof n === 'bigint' && _0n <= n;
+
+export function inRange(n: bigint, min: bigint, max: bigint) {
+  return isPosBig(n) && isPosBig(min) && isPosBig(max) && min <= n && n < max;
+}
+
+/**
+ * Asserts min <= n < max. NOTE: It's < max and not <= max.
+ * @example
+ * aInRange('x', x, 1n, 256n); // would assume x is in (1n..255n)
+ */
+export function aInRange(title: string, n: bigint, min: bigint, max: bigint) {
+  // Why min <= n < max and not a (min < n < max) OR b (min <= n <= max)?
+  // consider P=256n, min=0n, max=P
+  // - a for min=0 would require -1:          `inRange('x', x, -1n, P)`
+  // - b would commonly require subtraction:  `inRange('x', x, 0n, P - 1n)`
+  // - our way is the cleanest:               `inRange('x', x, 0n, P)
+  if (!inRange(n, min, max))
+    throw new Error(`expected valid ${title}: ${min} <= n < ${max}, got ${typeof n} ${n}`);
 }
 
 // Bit operations

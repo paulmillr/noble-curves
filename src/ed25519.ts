@@ -2,7 +2,7 @@
 import { sha512 } from '@noble/hashes/sha512';
 import { concatBytes, randomBytes, utf8ToBytes } from '@noble/hashes/utils';
 import { AffinePoint, Group } from './abstract/curve.js';
-import { ExtPointType, twistedEdwards } from './abstract/edwards.js';
+import { CurveFn, ExtPointType, twistedEdwards } from './abstract/edwards.js';
 import { createHasher, expand_message_xmd, htfBasicOpts } from './abstract/hash-to-curve.js';
 import { Field, FpSqrtEven, isNegativeLE, mod, pow2 } from './abstract/modular.js';
 import { montgomery } from './abstract/montgomery.js';
@@ -126,7 +126,10 @@ const ed25519Defaults = /* @__PURE__ */ (() =>
     uvRatio,
   }) as const)();
 
-export const ed25519 = /* @__PURE__ */ (() => twistedEdwards(ed25519Defaults))();
+/**
+ * ed25519 curve with EdDSA signatures.
+ */
+export const ed25519: CurveFn = /* @__PURE__ */ (() => twistedEdwards(ed25519Defaults))();
 
 function ed25519_domain(data: Uint8Array, ctx: Uint8Array, phflag: boolean) {
   if (ctx.length > 255) throw new Error('Context is too big');
