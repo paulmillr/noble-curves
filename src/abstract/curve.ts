@@ -25,6 +25,11 @@ export type GroupConstructor<T> = {
 };
 export type Mapper<T> = (i: T[]) => T[];
 
+// Since points in different groups cannot be equal (different object constructor),
+// we can have single place to store precomputes
+const pointPrecomputes = new WeakMap<any, any[]>();
+const pointWindowSizes = new WeakMap<any, number>(); // This allows use make points immutable (nothing changes inside)
+
 // Elliptic curve multiplication of Point by scalar. Fragile.
 // Scalars should always be less than curve order: this should be checked inside of a curve itself.
 // Creates precomputation tables for fast multiplication:
@@ -41,7 +46,12 @@ export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number) {
     const neg = item.negate();
     return condition ? neg : item;
   };
+  const validateW = (W: number) => {
+    if (!Number.isSafeInteger(W) || W <= 0 || W > bits)
+      throw new Error(`Wrong window size=${W}, should be [1..${bits}]`);
+  };
   const opts = (W: number) => {
+    validateW(W);
     const windows = Math.ceil(bits / W) + 1; // +1, because
     const windowSize = 2 ** (W - 1); // -1 because we skip zero
     return { windows, windowSize };
@@ -149,18 +159,24 @@ export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number) {
       return { p, f };
     },
 
-    wNAFCached(P: T, precomputesMap: Map<T, T[]>, n: bigint, transform: Mapper<T>): { p: T; f: T } {
-      // @ts-ignore
-      const W: number = P._WINDOW_SIZE || 1;
+    wNAFCached(P: T, n: bigint, transform: Mapper<T>): { p: T; f: T } {
+      const W: number = pointWindowSizes.get(P) || 1;
       // Calculate precomputes on a first run, reuse them after
-      let comp = precomputesMap.get(P);
+      let comp = pointPrecomputes.get(P);
       if (!comp) {
         comp = this.precomputeWindow(P, W) as T[];
-        if (W !== 1) {
-          precomputesMap.set(P, transform(comp));
-        }
+        if (W !== 1) pointPrecomputes.set(P, transform(comp));
       }
       return this.wNAF(W, comp, n);
+    },
+    // We calculate precomputes for elliptic curve point multiplication
+    // using windowed method. This specifies window size and
+    // stores precomputed values. Usually only base point would be precomputed.
+
+    setWindowSize(P: T, W: number) {
+      validateW(W);
+      pointWindowSizes.set(P, W);
+      pointPrecomputes.delete(P);
     },
   };
 }

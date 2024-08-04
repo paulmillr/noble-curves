@@ -3,7 +3,7 @@
 import { AffinePoint, BasicCurve, Group, GroupConstructor, validateBasic, wNAF } from './curve.js';
 import { mod } from './modular.js';
 import * as ut from './utils.js';
-import { ensureBytes, FHash, Hex } from './utils.js';
+import { ensureBytes, FHash, Hex, memoized, abool } from './utils.js';
 
 // Be friendly to bad ECMAScript parsers by not using bigint literals
 // prettier-ignore
@@ -105,7 +105,13 @@ export type CurveFn = {
   };
 };
 
-// It is not generic twisted curve for now, but ed25519/ed448 generic implementation
+/**
+ * Creates Twisted Edwards curve with EdDSA signatures.
+ * @example
+ * import { Field } from '@noble/curves/abstract/modular';
+ * // Before that, define BigInt-s: a, d, p, n, Gx, Gy, h
+ * const curve = twistedEdwards({ a, d, Fp: Field(p), n, Gx, Gy, h })
+ */
 export function twistedEdwards(curveDef: CurveType): CurveFn {
   const CURVE = validateOpts(curveDef) as ReturnType<typeof validateOpts>;
   const {
@@ -134,18 +140,53 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
   const domain =
     CURVE.domain ||
     ((data: Uint8Array, ctx: Uint8Array, phflag: boolean) => {
+      abool('phflag', phflag);
       if (ctx.length || phflag) throw new Error('Contexts/pre-hash are not supported');
       return data;
     }); // NOOP
   // 0 <= n < MASK
   // Coordinates larger than Fp.ORDER are allowed for zip215
-  function assertCoordinate(title: string, n: bigint) {
-    assertInRange('coordinate ' + title, n, _0n, MASK);
+  function aCoordinate(title: string, n: bigint) {
+    ut.aInRange('coordinate ' + title, n, _0n, MASK);
   }
-  const pointPrecomputes = new Map<Point, Point[]>();
+
   function assertPoint(other: unknown) {
     if (!(other instanceof Point)) throw new Error('ExtendedPoint expected');
   }
+  // Converts Extended point to default (x, y) coordinates.
+  // Can accept precomputed Z^-1 - for example, from invertBatch.
+  const toAffineMemo = memoized((p: Point, iz?: bigint): AffinePoint<bigint> => {
+    const { ex: x, ey: y, ez: z } = p;
+    const is0 = p.is0();
+    if (iz == null) iz = is0 ? _8n : (Fp.inv(z) as bigint); // 8 was chosen arbitrarily
+    const ax = modP(x * iz);
+    const ay = modP(y * iz);
+    const zz = modP(z * iz);
+    if (is0) return { x: _0n, y: _1n };
+    if (zz !== _1n) throw new Error('invZ was invalid');
+    return { x: ax, y: ay };
+  });
+  const assertValidMemo = memoized((p: Point) => {
+    const { a, d } = CURVE;
+    if (p.is0()) throw new Error('bad point: ZERO'); // TODO: optimize, with vars below?
+    // Equation in affine coordinates: ax² + y² = 1 + dx²y²
+    // Equation in projective coordinates (X/Z, Y/Z, Z):  (aX² + Y²)Z² = Z⁴ + dX²Y²
+    const { ex: X, ey: Y, ez: Z, et: T } = p;
+    const X2 = modP(X * X); // X²
+    const Y2 = modP(Y * Y); // Y²
+    const Z2 = modP(Z * Z); // Z²
+    const Z4 = modP(Z2 * Z2); // Z⁴
+    const aX2 = modP(X2 * a); // aX²
+    const left = modP(Z2 * modP(aX2 + Y2)); // (aX² + Y²)Z²
+    const right = modP(Z4 + modP(d * modP(X2 * Y2))); // Z⁴ + dX²Y²
+    if (left !== right) throw new Error('bad point: equation left != right (1)');
+    // In Extended coordinates we also have T, which is x*y=T/Z: check X*Y == Z*T
+    const XY = modP(X * Y);
+    const ZT = modP(Z * T);
+    if (XY !== ZT) throw new Error('bad point: equation left != right (2)');
+    return true;
+  });
+
   // Extended Point works in extended coordinates: (x, y, z, t) ∋ (x=x/z, y=y/z, t=xy).
   // https://en.wikipedia.org/wiki/Twisted_Edwards_curve#Extended_coordinates
   class Point implements ExtPointType {
@@ -158,10 +199,11 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       readonly ez: bigint,
       readonly et: bigint
     ) {
-      assertCoordinate('x', ex);
-      assertCoordinate('y', ey);
-      assertCoordinate('z', ez);
-      assertCoordinate('t', et);
+      aCoordinate('x', ex);
+      aCoordinate('y', ey);
+      aCoordinate('z', ez);
+      aCoordinate('t', et);
+      Object.freeze(this);
     }
 
     get x(): bigint {
@@ -174,8 +216,8 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     static fromAffine(p: AffinePoint<bigint>): Point {
       if (p instanceof Point) throw new Error('extended point not allowed');
       const { x, y } = p || {};
-      assertCoordinate('x', x);
-      assertCoordinate('y', y);
+      aCoordinate('x', x);
+      aCoordinate('y', y);
       return new Point(x, y, _1n, modP(x * y));
     }
     static normalizeZ(points: Point[]): Point[] {
@@ -183,36 +225,14 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       return points.map((p, i) => p.toAffine(toInv[i])).map(Point.fromAffine);
     }
 
-    // We calculate precomputes for elliptic curve point multiplication
-    // using windowed method. This specifies window size and
-    // stores precomputed values. Usually only base point would be precomputed.
-    _WINDOW_SIZE?: number;
-
     // "Private method", don't use it directly
     _setWindowSize(windowSize: number) {
-      this._WINDOW_SIZE = windowSize;
-      pointPrecomputes.delete(this);
+      wnaf.setWindowSize(this, windowSize);
     }
     // Not required for fromHex(), which always creates valid points.
     // Could be useful for fromAffine().
     assertValidity(): void {
-      const { a, d } = CURVE;
-      if (this.is0()) throw new Error('bad point: ZERO'); // TODO: optimize, with vars below?
-      // Equation in affine coordinates: ax² + y² = 1 + dx²y²
-      // Equation in projective coordinates (X/Z, Y/Z, Z):  (aX² + Y²)Z² = Z⁴ + dX²Y²
-      const { ex: X, ey: Y, ez: Z, et: T } = this;
-      const X2 = modP(X * X); // X²
-      const Y2 = modP(Y * Y); // Y²
-      const Z2 = modP(Z * Z); // Z²
-      const Z4 = modP(Z2 * Z2); // Z⁴
-      const aX2 = modP(X2 * a); // aX²
-      const left = modP(Z2 * modP(aX2 + Y2)); // (aX² + Y²)Z²
-      const right = modP(Z4 + modP(d * modP(X2 * Y2))); // Z⁴ + dX²Y²
-      if (left !== right) throw new Error('bad point: equation left != right (1)');
-      // In Extended coordinates we also have T, which is x*y=T/Z: check X*Y == Z*T
-      const XY = modP(X * Y);
-      const ZT = modP(Z * T);
-      if (XY !== ZT) throw new Error('bad point: equation left != right (2)');
+      assertValidMemo(this);
     }
 
     // Compare one point to another.
@@ -227,7 +247,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       return X1Z2 === X2Z1 && Y1Z2 === Y2Z1;
     }
 
-    protected is0(): boolean {
+    is0(): boolean {
       return this.equals(Point.ZERO);
     }
 
@@ -307,7 +327,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     }
 
     private wNAF(n: bigint): { p: Point; f: Point } {
-      return wnaf.wNAFCached(this, pointPrecomputes, n, Point.normalizeZ);
+      return wnaf.wNAFCached(this, n, Point.normalizeZ);
     }
 
     // Constant-time multiplication.
@@ -348,15 +368,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     // Converts Extended point to default (x, y) coordinates.
     // Can accept precomputed Z^-1 - for example, from invertBatch.
     toAffine(iz?: bigint): AffinePoint<bigint> {
-      const { ex: x, ey: y, ez: z } = this;
-      const is0 = this.is0();
-      if (iz == null) iz = is0 ? _8n : (Fp.inv(z) as bigint); // 8 was chosen arbitrarily
-      const ax = modP(x * iz);
-      const ay = modP(y * iz);
-      const zz = modP(z * iz);
-      if (is0) return { x: _0n, y: _1n };
-      if (zz !== _1n) throw new Error('invZ was invalid');
-      return { x: ax, y: ay };
+      return toAffineMemo(this, iz);
     }
 
     clearCofactor(): Point {
@@ -371,6 +383,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       const { d, a } = CURVE;
       const len = Fp.BYTES;
       hex = ensureBytes('pointHex', hex, len); // copy hex to a new array
+      abool('zip215', zip215);
       const normed = hex.slice(); // copy again, we'll manipulate it
       const lastByte = hex[len - 1]; // select last byte
       normed[len - 1] = lastByte & ~0x80; // clear last bit
@@ -467,6 +480,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     const len = Fp.BYTES; // Verifies EdDSA signature against message and public key. RFC8032 5.1.7.
     sig = ensureBytes('signature', sig, 2 * len); // An extended group equation is checked.
     msg = ensureBytes('message', msg);
+    if (zip215 !== undefined) abool('zip215', zip215);
     if (prehash) msg = prehash(msg); // for ed25519ph, etc
 
     const s = ut.bytesToNumberLE(sig.slice(len, 2 * len));

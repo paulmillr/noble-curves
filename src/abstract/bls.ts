@@ -1,6 +1,8 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
+// BLS (Barreto-Lynn-Scott) family of pairing-friendly curves.
+// TODO: import { AffinePoint } from './curve.js';
 import { IField, getMinHashLength, mapHashToField } from './modular.js';
-import { Hex, PrivKey, CHash, ensureBytes } from './utils.js';
+import { Hex, PrivKey, CHash, ensureBytes, memoized } from './utils.js';
 // prettier-ignore
 import {
   MapToCurve, Opts as HTFOpts, H2CPointConstructor, htfBasicOpts,
@@ -201,7 +203,7 @@ export function bls(CURVE: CurveType): CurveFn {
     })
   );
   type G1 = typeof G1.ProjectivePoint.BASE;
-  type G2 = typeof G2.ProjectivePoint.BASE & { _PPRECOMPUTES?: Precompute };
+  type G2 = typeof G2.ProjectivePoint.BASE;
 
   // Applies sparse multiplication as line function
   let lineFunction: (c0: Fp2, c1: Fp2, c2: Fp2, f: Fp12, Px: Fp, Py: Fp) => Fp12;
@@ -216,7 +218,7 @@ export function bls(CURVE: CurveType): CurveFn {
   } else throw new Error('bls: unknown twist type');
 
   const Fp2div2 = Fp2.div(Fp2.ONE, Fp2.mul(Fp2.ONE, _2n));
-  const pointDouble = (ell: PrecomputeSingle, Rx: Fp2, Ry: Fp2, Rz: Fp2) => {
+  function pointDouble(ell: PrecomputeSingle, Rx: Fp2, Ry: Fp2, Rz: Fp2) {
     const t0 = Fp2.sqr(Ry); // Ry²
     const t1 = Fp2.sqr(Rz); // Rz²
     const t2 = Fp2.mulByB(Fp2.mul(t1, _3n)); // 3 * T1 * B
@@ -232,14 +234,14 @@ export function bls(CURVE: CurveType): CurveFn {
     Ry = Fp2.sub(Fp2.sqr(Fp2.mul(Fp2.add(t0, t3), Fp2div2)), Fp2.mul(Fp2.sqr(t2), _3n)); // ((T0 + T3) / 2)² - 3 * T2²
     Rz = Fp2.mul(t0, t4); // T0 * T4
     return { Rx, Ry, Rz };
-  };
+  }
   function pointAdd(ell: PrecomputeSingle, Rx: Fp2, Ry: Fp2, Rz: Fp2, Qx: Fp2, Qy: Fp2) {
     // Addition
     const t0 = Fp2.sub(Ry, Fp2.mul(Qy, Rz)); // Ry - Qy * Rz
     const t1 = Fp2.sub(Rx, Fp2.mul(Qx, Rz)); // Rx - Qx * Rz
-    const c0 = Fp2.sub(Fp2.mul(t0, Qx), Fp2.mul(t1, Qy)); // T0 * Qx - T1 * Qy (i)
-    const c1 = Fp2.neg(t0); // -T0
-    const c2 = t1;
+    const c0 = Fp2.sub(Fp2.mul(t0, Qx), Fp2.mul(t1, Qy)); // T0 * Qx - T1 * Qy == Ry * Qx  - Rx * Qy
+    const c1 = Fp2.neg(t0); // -T0 == Qy * Rz - Ry
+    const c2 = t1; // == Rx - Qx * Rz
 
     ell.push([c0, c1, c2]);
 
@@ -258,12 +260,9 @@ export function bls(CURVE: CurveType): CurveFn {
   // pointAdd happens only if bit set, so wNAF is reasonable. Unfortunately we cannot combine
   // add + double in windowed precomputes here, otherwise it would be single op (since X is static)
   const ATE_NAF = NAfDecomposition(CURVE.params.ateLoopSize);
-  // TODO: Fp.sqr can-be re-used in batch
-  // TODO: we can combine two lineFunc multipl in one, but applying result can be slower
-  // For G1 we can only convert it into affine, no other precomputes possible
-  function calcPairingPrecomputes(point: G2) {
+
+  const calcPairingPrecomputes = memoized((point: G2) => {
     const p = point;
-    if (p._PPRECOMPUTES) return p._PPRECOMPUTES;
     const { x, y } = p.toAffine();
     // prettier-ignore
     const Qx = x, Qy = y, negQy = Fp2.neg(y);
@@ -280,9 +279,9 @@ export function bls(CURVE: CurveType): CurveFn {
       const last = ell[ell.length - 1];
       CURVE.postPrecompute(Rx, Ry, Rz, Qx, Qy, pointAdd.bind(null, last));
     }
-    p._PPRECOMPUTES = ell;
     return ell;
-  }
+  });
+
   // Main pairing logic is here. Computes product of miller loops + final exponentiate
   // Applies calculated precomputes
   type MillerInput = [Precompute, Fp, Fp][];
@@ -301,26 +300,15 @@ export function bls(CURVE: CurveType): CurveFn {
     if (BLS_X_IS_NEGATIVE) f12 = Fp12.conjugate(f12);
     return withFinalExponent ? Fp12.finalExponentiate(f12) : f12;
   }
-  /*
-  TODO: revisit using precomputes and maybe remove them.
-
-  pairing x 84 ops/sec @ 11ms/op
-  pairing10 x 18 ops/sec @ 54ms/op (raw expected to be 110ms/op, so ~2x faster?)
-  pairing10 x 19 ops/sec @ 52ms/op with disabled precomputes
-
-  verifyBatch can be faster, but we don't bench it.
-  assertValidity/toAffine is very slow.
-  */
   type PairingInput = { g1: G1; g2: G2 };
   // Calculates product of multiple pairings
+  // This up to x2 faster than just `map(({g1, g2})=>pairing({g1,g2}))`
   function pairingBatch(pairs: PairingInput[], withFinalExponent: boolean = true) {
     const res: MillerInput = [];
-    // Pairings use affine coordinates inside
-    const g1Norm = G1.ProjectivePoint.normalizeZ(pairs.map(({ g1 }) => g1));
-    const g2Norm = G2.ProjectivePoint.normalizeZ(pairs.map(({ g2 }) => g2));
-    for (let i = 0; i < g1Norm.length; i++) {
-      const g1 = g1Norm[i];
-      const g2 = g2Norm[i];
+    // This cache precomputed toAffine for all points
+    G1.ProjectivePoint.normalizeZ(pairs.map(({ g1 }) => g1));
+    G2.ProjectivePoint.normalizeZ(pairs.map(({ g2 }) => g2));
+    for (const { g1, g2 } of pairs) {
       if (g1.equals(G1.ProjectivePoint.ZERO) || g2.equals(G2.ProjectivePoint.ZERO))
         throw new Error('pairing is not available for ZERO point');
       // This uses toAffine inside
@@ -494,6 +482,7 @@ export function bls(CURVE: CurveType): CurveFn {
   // e(G, S) = e(G, SUM(n)(Si)) = MUL(n)(e(G, Si))
   function verifyBatch(
     signature: G2Hex,
+    // TODO: maybe `{message: G2Hex, publicKey: G1Hex}[]` instead?
     messages: G2Hex[],
     publicKeys: G1Hex[],
     htfOpts?: htfBasicOpts
@@ -504,16 +493,23 @@ export function bls(CURVE: CurveType): CurveFn {
     const sig = normP2(signature);
     const nMessages = messages.map((i) => normP2Hash(i, htfOpts));
     const nPublicKeys = publicKeys.map(normP1);
+    // NOTE: this works only for exact same object
+    const messagePubKeyMap = new Map<G2, G1[]>();
+    for (let i = 0; i < nPublicKeys.length; i++) {
+      const pub = nPublicKeys[i];
+      const msg = nMessages[i];
+      let keys = messagePubKeyMap.get(msg);
+      if (keys === undefined) {
+        keys = [];
+        messagePubKeyMap.set(msg, keys);
+      }
+      keys.push(pub);
+    }
+    const paired = [];
     try {
-      const paired = [];
-      for (const message of new Set(nMessages)) {
-        // TODO: seems broken
-        // nMessages is set of objects -> same message is different object. '===' won't work here.
-        const groupPublicKey = nMessages.reduce(
-          (acc, subMessage, i) => (subMessage === message ? acc.add(nPublicKeys[i]) : acc),
-          G1.ProjectivePoint.ZERO
-        );
-        paired.push({ g1: groupPublicKey, g2: message });
+      for (const [msg, keys] of messagePubKeyMap) {
+        const groupPublicKey = keys.reduce((acc, msg) => acc.add(msg));
+        paired.push({ g1: groupPublicKey, g2: msg });
       }
       paired.push({ g1: G1.ProjectivePoint.BASE.negate(), g2: sig });
       return Fp12.eql(pairingBatch(paired), Fp12.ONE);

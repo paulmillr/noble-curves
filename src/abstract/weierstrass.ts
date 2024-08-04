@@ -3,7 +3,7 @@
 import { AffinePoint, BasicCurve, Group, GroupConstructor, validateBasic, wNAF } from './curve.js';
 import * as mod from './modular.js';
 import * as ut from './utils.js';
-import { CHash, Hex, PrivKey, ensureBytes } from './utils.js';
+import { CHash, Hex, PrivKey, ensureBytes, memoized, abool } from './utils.js';
 
 export type { AffinePoint };
 type HmacFnSync = (key: Uint8Array, ...messages: Uint8Array[]) => Uint8Array;
@@ -30,6 +30,11 @@ export type BasicWCurve<T> = BasicCurve<T> & {
 type Entropy = Hex | boolean;
 export type SignOpts = { lowS?: boolean; extraEntropy?: Entropy; prehash?: boolean };
 export type VerOpts = { lowS?: boolean; prehash?: boolean };
+
+function validateSigVerOpts(opts: SignOpts | VerOpts) {
+  if (opts.lowS !== undefined) abool('lowS', opts.lowS);
+  if (opts.prehash !== undefined) abool('prehash', opts.prehash);
+}
 
 /**
  * ### Design rationale for types
@@ -257,10 +262,51 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
     return num;
   }
 
-  const pointPrecomputes = new Map<Point, Point[]>();
   function assertPrjPoint(other: unknown) {
     if (!(other instanceof Point)) throw new Error('ProjectivePoint expected');
   }
+  // NOTE: these are pretty heavy function which used a lot of times, but since we have completely immutable points,
+  // we can cache them.
+
+  // Converts Projective point to affine (x, y) coordinates.
+  // Can accept precomputed Z^-1 - for example, from invertBatch.
+  // (x, y, z) ∋ (x=x/z, y=y/z)
+  const toAffineMemo = memoized((p: Point, iz?: T): AffinePoint<T> => {
+    const { px: x, py: y, pz: z } = p;
+    // Fast-path for normalized points
+    if (Fp.eql(z, Fp.ONE)) return { x, y };
+    const is0 = p.is0();
+    // If invZ was 0, we return zero point. However we still want to execute
+    // all operations, so we replace invZ with a random number, 1.
+    if (iz == null) iz = is0 ? Fp.ONE : Fp.inv(z);
+    const ax = Fp.mul(x, iz);
+    const ay = Fp.mul(y, iz);
+    const zz = Fp.mul(z, iz);
+    if (is0) return { x: Fp.ZERO, y: Fp.ZERO };
+    if (!Fp.eql(zz, Fp.ONE)) throw new Error('invZ was invalid');
+    return { x: ax, y: ay };
+  });
+  // NOTE: on exception this will crash 'cached' and no value will be set.
+  // Otherwise true will be return
+  const assertValidMemo = memoized((p: Point) => {
+    if (p.is0()) {
+      // (0, 1, 0) aka ZERO is invalid in most contexts.
+      // In BLS, ZERO can be serialized, so we allow it.
+      // (0, 0, 0) is wrong representation of ZERO and is always invalid.
+      if (CURVE.allowInfinityPoint && !Fp.is0(p.py)) return;
+      throw new Error('bad point: ZERO');
+    }
+    // Some 3rd-party test vectors require different wording between here & `fromCompressedHex`
+    const { x, y } = p.toAffine();
+    // Check if x, y are valid field elements
+    if (!Fp.isValid(x) || !Fp.isValid(y)) throw new Error('bad point: x or y not FE');
+    const left = Fp.sqr(y); // y²
+    const right = weierstrassEquation(x); // x³ + ax + b
+    if (!Fp.eql(left, right)) throw new Error('bad point: equation left != right');
+    if (!p.isTorsionFree()) throw new Error('bad point: not in prime-order subgroup');
+    return true;
+  });
+
   /**
    * Projective Point works in 3d / projective (homogeneous) coordinates: (x, y, z) ∋ (x=x/z, y=y/z)
    * Default Point works in 2d / affine coordinates: (x, y)
@@ -278,6 +324,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
       if (px == null || !Fp.isValid(px)) throw new Error('x required');
       if (py == null || !Fp.isValid(py)) throw new Error('y required');
       if (pz == null || !Fp.isValid(pz)) throw new Error('z required');
+      Object.freeze(this);
     }
 
     // Does not validate if the point is on-curve.
@@ -325,35 +372,16 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
       return Point.BASE.multiply(normPrivateKeyToScalar(privateKey));
     }
 
-    // We calculate precomputes for elliptic curve point multiplication
-    // using windowed method. This specifies window size and
-    // stores precomputed values. Usually only base point would be precomputed.
-    _WINDOW_SIZE?: number;
-
     // "Private method", don't use it directly
     _setWindowSize(windowSize: number) {
-      this._WINDOW_SIZE = windowSize;
-      pointPrecomputes.delete(this);
+      wnaf.setWindowSize(this, windowSize);
     }
 
     // A point on curve is valid if it conforms to equation.
     assertValidity(): void {
-      if (this.is0()) {
-        // (0, 1, 0) aka ZERO is invalid in most contexts.
-        // In BLS, ZERO can be serialized, so we allow it.
-        // (0, 0, 0) is wrong representation of ZERO and is always invalid.
-        if (CURVE.allowInfinityPoint && !Fp.is0(this.py)) return;
-        throw new Error('bad point: ZERO');
-      }
-      // Some 3rd-party test vectors require different wording between here & `fromCompressedHex`
-      const { x, y } = this.toAffine();
-      // Check if x, y are valid field elements
-      if (!Fp.isValid(x) || !Fp.isValid(y)) throw new Error('bad point: x or y not FE');
-      const left = Fp.sqr(y); // y²
-      const right = weierstrassEquation(x); // x³ + ax + b
-      if (!Fp.eql(left, right)) throw new Error('bad point: equation left != right');
-      if (!this.isTorsionFree()) throw new Error('bad point: not in prime-order subgroup');
+      assertValidMemo(this);
     }
+
     hasEvenY(): boolean {
       const { y } = this.toAffine();
       if (Fp.isOdd) return !Fp.isOdd(y);
@@ -480,14 +508,11 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
       return this.add(other.negate());
     }
 
-    private is0() {
+    is0() {
       return this.equals(Point.ZERO);
     }
     private wNAF(n: bigint): { p: Point; f: Point } {
-      return wnaf.wNAFCached(this, pointPrecomputes, n, (comp: Point[]) => {
-        const toInv = Fp.invertBatch(comp.map((p) => p.pz));
-        return comp.map((p, i) => p.toAffine(toInv[i])).map(Point.fromAffine);
-      });
+      return wnaf.wNAFCached(this, n, Point.normalizeZ);
     }
 
     /**
@@ -573,19 +598,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
     // Can accept precomputed Z^-1 - for example, from invertBatch.
     // (x, y, z) ∋ (x=x/z, y=y/z)
     toAffine(iz?: T): AffinePoint<T> {
-      const { px: x, py: y, pz: z } = this;
-      // Fast-path for normalized points
-      if (Fp.eql(z, Fp.ONE)) return { x, y };
-      const is0 = this.is0();
-      // If invZ was 0, we return zero point. However we still want to execute
-      // all operations, so we replace invZ with a random number, 1.
-      if (iz == null) iz = is0 ? Fp.ONE : Fp.inv(z);
-      const ax = Fp.mul(x, iz);
-      const ay = Fp.mul(y, iz);
-      const zz = Fp.mul(z, iz);
-      if (is0) return { x: Fp.ZERO, y: Fp.ZERO };
-      if (!Fp.eql(zz, Fp.ONE)) throw new Error('invZ was invalid');
-      return { x: ax, y: ay };
+      return toAffineMemo(this, iz);
     }
     isTorsionFree(): boolean {
       const { h: cofactor, isTorsionFree } = CURVE;
@@ -601,11 +614,13 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
     }
 
     toRawBytes(isCompressed = true): Uint8Array {
+      abool('isCompressed', isCompressed);
       this.assertValidity();
       return toBytes(Point, this, isCompressed);
     }
 
     toHex(isCompressed = true): string {
+      abool('isCompressed', isCompressed);
       return ut.bytesToHex(this.toRawBytes(isCompressed));
     }
   }
@@ -693,6 +708,13 @@ export type CurveFn = {
   };
 };
 
+/**
+ * Creates short weierstrass curve and ECDSA signature methods for it.
+ * @example
+ * import { Field } from '@noble/curves/abstract/modular';
+ * // Before that, define BigInt-s: a, b, p, n, Gx, Gy
+ * const curve = weierstrass({ a, b, Fp: Field(p), n, Gx, Gy, h: 1n })
+ */
 export function weierstrass(curveDef: CurveType): CurveFn {
   const CURVE = validateOpts(curveDef) as ReturnType<typeof validateOpts>;
   const { Fp, n: CURVE_ORDER } = CURVE;
@@ -720,6 +742,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       const a = point.toAffine();
       const x = Fp.toBytes(a.x);
       const cat = ut.concatBytes;
+      abool('isCompressed', isCompressed);
       if (isCompressed) {
         return cat(Uint8Array.from([point.hasEvenY() ? 0x02 : 0x03]), x);
       } else {
@@ -970,6 +993,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     let { lowS, prehash, extraEntropy: ent } = opts; // generates low-s sigs by default
     if (lowS == null) lowS = true; // RFC6979 3.2: we skip step A, because we already provide hash
     msgHash = ensureBytes('msgHash', msgHash);
+    validateSigVerOpts(opts);
     if (prehash) msgHash = ensureBytes('prehashed msgHash', hash(msgHash));
 
     // We can't later call bits2octets, since nested bits2int is broken for curves
@@ -1060,6 +1084,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     msgHash = ensureBytes('msgHash', msgHash);
     publicKey = ensureBytes('publicKey', publicKey);
     if ('strict' in opts) throw new Error('options.strict was renamed to lowS');
+    validateSigVerOpts(opts);
     const { lowS, prehash } = opts;
 
     let _sig: Signature | undefined = undefined;

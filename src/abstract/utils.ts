@@ -324,3 +324,18 @@ export function validateObject<T extends Record<string, any>>(
 export const notImplemented = () => {
   throw new Error('not implemented');
 };
+
+/**
+ * Memoizes (caches) computation result.
+ * Uses WeakMap: the value is going auto-cleaned by GC after last reference is removed.
+ */
+export function memoized<T extends object, R, O extends any[]>(fn: (arg: T, ...args: O) => R) {
+  const map = new WeakMap<T, R>();
+  return (arg: T, ...args: O): R => {
+    const val = map.get(arg);
+    if (val !== undefined) return val;
+    const computed = fn(arg, ...args);
+    map.set(arg, computed);
+    return computed;
+  };
+}

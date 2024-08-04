@@ -346,6 +346,9 @@ type FpField = IField<bigint> & Required<Pick<IField<bigint>, 'isOdd'>>;
  * * a) denormalized operations like mulN instead of mul
  * * b) same object shape: never add or remove keys
  * * c) Object.freeze
+ * NOTE: operations don't check 'isValid' for all elements for performance reasons,
+ * it is caller responsibility to check this.
+ * This is low-level code, please make sure you know what you doing.
  * @param ORDER prime positive bigint
  * @param bitLen how many bits the field consumes
  * @param isLE (def: false) if encoding / decoding should be in little-endian

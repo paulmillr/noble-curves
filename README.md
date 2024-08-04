@@ -49,7 +49,7 @@ import { secp256k1 } from '@noble/curves/secp256k1'; // ESM and Common.js
 ```
 
 - [Implementations](#implementations)
-  - [ECDSA signature scheme](#ecdsa-signature-scheme)
+  - [ECDSA signatures over secp256k1 and others](#ecdsa-signatures-over-secp256k1-and-others)
   - [ECDSA public key recovery & extra entropy](#ecdsa-public-key-recovery--extra-entropy)
   - [ECDH: Elliptic Curve Diffie-Hellman](#ecdh-elliptic-curve-diffie-hellman)
   - [Schnorr signatures over secp256k1, BIP340](#schnorr-signatures-over-secp256k1-bip340)
@@ -80,24 +80,24 @@ import { secp256k1 } from '@noble/curves/secp256k1'; // ESM and Common.js
 Implementations use [noble-hashes](https://github.com/paulmillr/noble-hashes).
 If you want to use a different hashing library, [abstract API](#abstract-api) doesn't depend on them.
 
-#### ECDSA signature scheme
-
-Generic example that works for all curves, shown for secp256k1:
+#### ECDSA signatures over secp256k1 and others
 
 ```ts
 import { secp256k1 } from '@noble/curves/secp256k1';
+// import { p256 } from '@noble/curves/p256'; // or p384 / p521
+
 const priv = secp256k1.utils.randomPrivateKey();
 const pub = secp256k1.getPublicKey(priv);
 const msg = new Uint8Array(32).fill(1); // message hash (not message) in ecdsa
 const sig = secp256k1.sign(msg, priv); // `{prehash: true}` option is available
 const isValid = secp256k1.verify(sig, msg, pub) === true;
 
-// hex strings are also supported besides Uint8Arrays:
+// hex strings are also supported besides Uint8Array-s:
 const privHex = '46c930bc7bb4db7f55da20798697421b98c4175a52c630294d75a84b9c126236';
 const pub2 = secp256k1.getPublicKey(privHex);
 ```
 
-We support P256 (secp256r1), P384 (secp384r1), P521 (secp521r1).
+The same code would work for NIST P256 (secp256r1), P384 (secp384r1) & P521 (secp521r1).
 
 #### ECDSA public key recovery & extra entropy
 
@@ -252,6 +252,7 @@ import { bls12_381 } from '@noble/curves/bls12-381';
 ```
 
 See [abstract/bls](#bls-barreto-lynn-scott-curves).
+For example usage, check out [the implementation of EVM precompiles](https://github.com/ethereumjs/ethereumjs-monorepo/blob/361f4edbc239e795a411ac2da7e5567298b9e7e5/packages/evm/src/precompiles/bls12_381/noble.ts).
 
 #### bn254 aka alt_bn128
 
@@ -894,74 +895,87 @@ is even worse: there is no reliable userspace source of quality entropy.
 
 ## Speed
 
-Benchmark results on Apple M2 with node v20:
+Benchmark results on Apple M2 with node v22:
 
 ```
 secp256k1
 init x 68 ops/sec @ 14ms/op
-getPublicKey x 6,750 ops/sec @ 148μs/op
-sign x 5,206 ops/sec @ 192μs/op
-verify x 880 ops/sec @ 1ms/op
-getSharedSecret x 536 ops/sec @ 1ms/op
-recoverPublicKey x 852 ops/sec @ 1ms/op
-schnorr.sign x 685 ops/sec @ 1ms/op
-schnorr.verify x 908 ops/sec @ 1ms/op
+getPublicKey x 6,839 ops/sec @ 146μs/op
+sign x 5,226 ops/sec @ 191μs/op
+verify x 893 ops/sec @ 1ms/op
+getSharedSecret x 538 ops/sec @ 1ms/op
+recoverPublicKey x 923 ops/sec @ 1ms/op
+schnorr.sign x 700 ops/sec @ 1ms/op
+schnorr.verify x 919 ops/sec @ 1ms/op
+
+ed25519
+init x 51 ops/sec @ 19ms/op
+getPublicKey x 9,809 ops/sec @ 101μs/op
+sign x 4,976 ops/sec @ 200μs/op
+verify x 1,018 ops/sec @ 981μs/op
+
+ed448
+init x 19 ops/sec @ 50ms/op
+getPublicKey x 3,723 ops/sec @ 268μs/op
+sign x 1,759 ops/sec @ 568μs/op
+verify x 344 ops/sec @ 2ms/op
 
 p256
-init x 38 ops/sec @ 26ms/op
-getPublicKey x 6,530 ops/sec @ 153μs/op
-sign x 5,074 ops/sec @ 197μs/op
-verify x 626 ops/sec @ 1ms/op
+init x 39 ops/sec @ 25ms/op
+getPublicKey x 6,518 ops/sec @ 153μs/op
+sign x 5,148 ops/sec @ 194μs/op
+verify x 609 ops/sec @ 1ms/op
 
 p384
 init x 17 ops/sec @ 57ms/op
-getPublicKey x 2,883 ops/sec @ 346μs/op
-sign x 2,358 ops/sec @ 424μs/op
-verify x 245 ops/sec @ 4ms/op
+getPublicKey x 2,933 ops/sec @ 340μs/op
+sign x 2,327 ops/sec @ 429μs/op
+verify x 244 ops/sec @ 4ms/op
 
 p521
-init x 9 ops/sec @ 109ms/op
-getPublicKey x 1,516 ops/sec @ 659μs/op
-sign x 1,271 ops/sec @ 786μs/op
-verify x 123 ops/sec @ 8ms/op
+init x 8 ops/sec @ 112ms/op
+getPublicKey x 1,484 ops/sec @ 673μs/op
+sign x 1,264 ops/sec @ 790μs/op
+verify x 124 ops/sec @ 8ms/op
 
-ed25519
-init x 54 ops/sec @ 18ms/op
-getPublicKey x 10,269 ops/sec @ 97μs/op
-sign x 5,110 ops/sec @ 195μs/op
-verify x 1,049 ops/sec @ 952μs/op
+ristretto255
+add x 680,735 ops/sec @ 1μs/op
+multiply x 10,766 ops/sec @ 92μs/op
+encode x 15,835 ops/sec @ 63μs/op
+decode x 15,972 ops/sec @ 62μs/op
 
-ed448
-init x 19 ops/sec @ 51ms/op
-getPublicKey x 3,775 ops/sec @ 264μs/op
-sign x 1,771 ops/sec @ 564μs/op
-verify x 351 ops/sec @ 2ms/op
+decaf448
+add x 345,303 ops/sec @ 2μs/op
+multiply x 300 ops/sec @ 3ms/op
+encode x 5,987 ops/sec @ 167μs/op
+decode x 5,892 ops/sec @ 169μs/op
 
 ecdh
-├─x25519 x 1,466 ops/sec @ 682μs/op
-├─secp256k1 x 539 ops/sec @ 1ms/op
-├─p256 x 511 ops/sec @ 1ms/op
-├─p384 x 199 ops/sec @ 5ms/op
-├─p521 x 103 ops/sec @ 9ms/op
-└─x448 x 548 ops/sec @ 1ms/op
+├─x25519 x 1,477 ops/sec @ 676μs/op
+├─secp256k1 x 537 ops/sec @ 1ms/op
+├─p256 x 512 ops/sec @ 1ms/op
+├─p384 x 198 ops/sec @ 5ms/op
+├─p521 x 99 ops/sec @ 10ms/op
+└─x448 x 504 ops/sec @ 1ms/op
 
 bls12-381
 init x 36 ops/sec @ 27ms/op
-getPublicKey 1-bit x 973 ops/sec @ 1ms/op
-getPublicKey x 970 ops/sec @ 1ms/op
-sign x 55 ops/sec @ 17ms/op
-verify x 39 ops/sec @ 25ms/op
-pairing x 106 ops/sec @ 9ms/op
+getPublicKey x 960 ops/sec @ 1ms/op
+sign x 60 ops/sec @ 16ms/op
+verify x 47 ops/sec @ 21ms/op
+pairing x 125 ops/sec @ 7ms/op
+pairing10 x 40 ops/sec @ 24ms/op ± 23.27% (min: 21ms, max: 48ms)
+MSM 4096 scalars x points x 0 ops/sec @ 4655ms/op
 aggregatePublicKeys/8 x 129 ops/sec @ 7ms/op
 aggregatePublicKeys/32 x 34 ops/sec @ 28ms/op
-aggregatePublicKeys/128 x 8 ops/sec @ 112ms/op
-aggregatePublicKeys/512 x 2 ops/sec @ 446ms/op
-aggregatePublicKeys/2048 x 0 ops/sec @ 1778ms/op
-aggregateSignatures/8 x 50 ops/sec @ 19ms/op
-aggregateSignatures/32 x 13 ops/sec @ 74ms/op
-aggregateSignatures/128 x 3 ops/sec @ 296ms/op
-aggregateSignatures/512 x 0 ops/sec @ 1180ms/op
-aggregateSignatures/2048 x 0 ops/sec @ 4715ms/op
+aggregatePublicKeys/128 x 8 ops/sec @ 113ms/op
+aggregatePublicKeys/512 x 2 ops/sec @ 449ms/op
+aggregatePublicKeys/2048 x 0 ops/sec @ 1792ms/op
+aggregateSignatures/8 x 62 ops/sec @ 15ms/op
+aggregateSignatures/32 x 16 ops/sec @ 60ms/op
+aggregateSignatures/128 x 4 ops/sec @ 238ms/op
+aggregateSignatures/512 x 1 ops/sec @ 946ms/op
+aggregateSignatures/2048 x 0 ops/sec @ 3774ms/op
 
 hash-to-curve
 hash_to_field x 91,600 ops/sec @ 10μs/op
