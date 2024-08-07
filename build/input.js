@@ -16,5 +16,7 @@ export { p256 } from '@noble/curves/p256';
 export { p384 } from '@noble/curves/p384';
 export { p521 } from '@noble/curves/p521';
 export { bls12_381 } from '@noble/curves/bls12-381';
+export { bn254 } from '@noble/curves/bn254';
 
+export * as mod from '@noble/curves/abstract/modular';
 export const utils = { bytesToHex, concatBytes, hexToBytes, utf8ToBytes };

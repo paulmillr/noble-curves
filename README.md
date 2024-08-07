@@ -248,7 +248,39 @@ Same RFC7748 / RFC8032 / IRTF draft are followed.
 #### bls12-381
 
 ```ts
-import { bls12_381 } from '@noble/curves/bls12-381';
+import { bls12_381 as bls } from '@noble/curves/bls12-381';
+
+// G1 keys, G2 signatures
+const privateKey = '67d53f170b908cabb9eb326c3c337762d59289a8fec79f7bc9254b584b73265c';
+const message = '64726e3da8';
+const publicKey = bls.getPublicKey(privateKey);
+const signature = bls.sign(message, privateKey);
+const isValid = bls.verify(signature, message, publicKey);
+console.log({ publicKey, signature, isValid });
+
+// G2 signatures, G1 keys
+// getPublicKeyForShortSignatures(privateKey)
+// signShortSignature(message, privateKey)
+// verifyShortSignature(signature, message, publicKey)
+// aggregateShortSignatures(signatures)
+
+// Custom DST
+const htfEthereum = { DST: 'BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_' };
+const signatureEth = bls.sign(message, privateKey, htfEthereum);
+const isValidEth = bls.verify(signature, message, publicKey, htfEthereum);
+
+// Aggregation
+const aggregatedKey = bls.aggregatePublicKeys([bls.utils.randomPrivateKey(), bls.utils.randomPrivateKey()])
+// const aggregatedSig = bls.aggregateSignatures(sigs)
+
+// Pairings, with and without final exponentiation
+// bls.pairing(PointG1, PointG2);
+// bls.pairing(PointG1, PointG2, false);
+// bls.fields.Fp12.finalExponentiate(bls.fields.Fp12.mul(PointG1, PointG2));
+
+// Others
+// bls.G1.ProjectivePoint.BASE, bls.G2.ProjectivePoint.BASE;
+// bls.fields.Fp, bls.fields.Fp2, bls.fields.Fp12, bls.fields.Fr;
 ```
 
 See [abstract/bls](#bls-barreto-lynn-scott-curves).
@@ -266,7 +298,7 @@ console.log(
 )
 ```
 
-The API mirrors [abstract/bls](#bls-barreto-lynn-scott-curves). The curve was previously called alt_bn128.
+The API mirrors [BLS](#bls12-381). The curve was previously called alt_bn128.
 The implementation is compatible with [EIP-196](https://eips.ethereum.org/EIPS/eip-196) and
 [EIP-197](https://eips.ethereum.org/EIPS/eip-197).
 
@@ -624,72 +656,8 @@ The module doesn't expose `CURVE` property: use `G1.CURVE`, `G2.CURVE` instead.
 Only BLS12-381 is currently implemented.
 Defining BLS12-377 and BLS24 should be straightforward.
 
-Main methods and properties are:
-
-- `getPublicKey(privateKey)`
-- `sign(message, privateKey)`
-- `verify(signature, message, publicKey)`
-- `aggregatePublicKeys(publicKeys)`
-- `aggregateSignatures(signatures)`
-- `G1` and `G2` curves containing `CURVE` and `ProjectivePoint`
-- `Signature` property with `fromHex`, `toHex` methods
-- `fields` containing `Fp`, `Fp2`, `Fp6`, `Fp12`, `Fr`
-
 The default BLS uses short public keys (with public keys in G1 and signatures in G2).
-Short signatures (public keys in G2 and signatures in G1) is also supported, using:
-
-- `getPublicKeyForShortSignatures(privateKey)`
-- `signShortSignature(message, privateKey)`
-- `verifyShortSignature(signature, message, publicKey)`
-- `aggregateShortSignatures(signatures)`
-
-```ts
-import { bls12_381 as bls } from '@noble/curves/bls12-381';
-const privateKey = '67d53f170b908cabb9eb326c3c337762d59289a8fec79f7bc9254b584b73265c';
-const message = '64726e3da8';
-const publicKey = bls.getPublicKey(privateKey);
-const signature = bls.sign(message, privateKey);
-const isValid = bls.verify(signature, message, publicKey);
-console.log({ publicKey, signature, isValid });
-
-// Use custom DST, e.g. for Ethereum consensus layer
-const htfEthereum = { DST: 'BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_' };
-const signatureEth = bls.sign(message, privateKey, htfEthereum);
-const isValidEth = bls.verify(signature, message, publicKey, htfEthereum);
-console.log({ signatureEth, isValidEth });
-
-// Sign 1 msg with 3 keys
-const privateKeys = [
-  '18f020b98eb798752a50ed0563b079c125b0db5dd0b1060d1c1b47d4a193e1e4',
-  'ed69a8c50cf8c9836be3b67c7eeff416612d45ba39a5c099d48fa668bf558c9c',
-  '16ae669f3be7a2121e17d0c68c05a8f3d6bef21ec0f2315f1d7aec12484e4cf5',
-];
-const messages = ['d2', '0d98', '05caf3'];
-const publicKeys = privateKeys.map(bls.getPublicKey);
-const signatures2 = privateKeys.map((p) => bls.sign(message, p));
-const aggPubKey2 = bls.aggregatePublicKeys(publicKeys);
-const aggSignature2 = bls.aggregateSignatures(signatures2);
-const isValid2 = bls.verify(aggSignature2, message, aggPubKey2);
-console.log({ signatures2, aggSignature2, isValid2 });
-
-// Sign 3 msgs with 3 keys
-const signatures3 = privateKeys.map((p, i) => bls.sign(messages[i], p));
-const aggSignature3 = bls.aggregateSignatures(signatures3);
-const isValid3 = bls.verifyBatch(aggSignature3, messages, publicKeys);
-console.log({ publicKeys, signatures3, aggSignature3, isValid3 });
-
-// Pairings, with and without final exponentiation
-bls.pairing(PointG1, PointG2);
-bls.pairing(PointG1, PointG2, false);
-bls.fields.Fp12.finalExponentiate(bls.fields.Fp12.mul(PointG1, PointG2));
-
-// Others
-bls.G1.ProjectivePoint.BASE, bls.G2.ProjectivePoint.BASE;
-bls.fields.Fp, bls.fields.Fp2, bls.fields.Fp12, bls.fields.Fr;
-bls.params.x, bls.params.r, bls.params.G1b, bls.params.G2b;
-
-// hash-to-curve examples can be seen below
-```
+Short signatures (public keys in G2 and signatures in G1) are also supported.
 
 ### hash-to-curve: Hashing strings to curve points
 
