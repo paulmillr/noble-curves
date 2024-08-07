@@ -63,7 +63,7 @@ import { secp256k1 } from '@noble/curves/secp256k1'; // ESM and Common.js
   - [weierstrass: Short Weierstrass curve](#weierstrass-short-weierstrass-curve)
   - [edwards: Twisted Edwards curve](#edwards-twisted-edwards-curve)
   - [montgomery: Montgomery curve](#montgomery-montgomery-curve)
-  - [bls: Barreto-Lynn-Scott curves](#bls-barreto-lynn-scott-curves)
+  - [bls: Boneh-Lynn-Shacham signatures](#bls-boneh-lynn-shacham-signatures)
   - [hash-to-curve: Hashing strings to curve points](#hash-to-curve-hashing-strings-to-curve-points)
   - [poseidon: Poseidon hash](#poseidon-poseidon-hash)
   - [modular: Modular arithmetics utilities](#modular-modular-arithmetics-utilities)
@@ -252,7 +252,7 @@ import { bls12_381 } from '@noble/curves/bls12-381';
 ```
 
 See [abstract/bls](#bls-barreto-lynn-scott-curves).
-For example usage, check out [the implementation of EVM precompiles](https://github.com/ethereumjs/ethereumjs-monorepo/blob/361f4edbc239e795a411ac2da7e5567298b9e7e5/packages/evm/src/precompiles/bls12_381/noble.ts).
+For example usage, check out [the implementation of BLS EVM precompiles](https://github.com/ethereumjs/ethereumjs-monorepo/blob/361f4edbc239e795a411ac2da7e5567298b9e7e5/packages/evm/src/precompiles/bls12_381/noble.ts).
 
 #### bn254 aka alt_bn128
 
@@ -271,6 +271,15 @@ The API mirrors [abstract/bls](#bls-barreto-lynn-scott-curves).
 The curve was previously called alt_bn128.
 The implementation is compatible with [EIP-196](https://eips.ethereum.org/EIPS/eip-196) and
 [EIP-197](https://eips.ethereum.org/EIPS/eip-197).
+
+Keep in mind that we don't implement Point methods toHex / toRawBytes. It's because
+different implementations of bn254 do it differently - there is no standard. Points of divergence:
+
+- Endianness: LE vs BE (byte-swapped)
+- Flags as first hex bits (similar to BLS) vs no-flags
+- Imaginary part last in G2 vs first (c0, c1 vs c1, c0)
+
+For example usage, check out [the implementation of bn254 EVM precompiles](https://github.com/paulmillr/noble-curves/blob/3ed792f8ad9932765b84d1064afea8663a255457/test/bn254.test.js#L697).
 
 #### All available imports
 
