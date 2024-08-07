@@ -266,9 +266,7 @@ console.log(
 )
 ```
 
-The API mirrors [abstract/bls](#bls-barreto-lynn-scott-curves).
-
-The curve was previously called alt_bn128.
+The API mirrors [abstract/bls](#bls-barreto-lynn-scott-curves). The curve was previously called alt_bn128.
 The implementation is compatible with [EIP-196](https://eips.ethereum.org/EIPS/eip-196) and
 [EIP-197](https://eips.ethereum.org/EIPS/eip-197).
 
