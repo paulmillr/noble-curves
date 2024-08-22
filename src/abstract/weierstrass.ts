@@ -135,8 +135,15 @@ export type CurvePointsRes<T> = {
   isWithinCurveOrder: (num: bigint) => boolean;
 };
 
-// ASN.1 DER encoding utilities
 const { bytesToNumberBE: b2n, hexToBytes: h2b } = ut;
+
+/**
+ * ASN.1 DER encoding utilities. ASN is very complex & fragile. Format:
+ *
+ *     [0x30 (SEQUENCE), bytelength, 0x02 (INTEGER), intLength, R, 0x02 (INTEGER), intLength, S]
+ *
+ * Docs: https://letsencrypt.org/docs/a-warm-welcome-to-asn1-and-der/, https://luca.ntop.org/Teaching/Appunti/asn1.html
+ */
 export const DER = {
   // asn.1 DER encoding utils
   Err: class DERErr extends Error {
@@ -144,48 +151,84 @@ export const DER = {
       super(m);
     }
   },
-  _parseInt(data: Uint8Array): { d: bigint; l: Uint8Array } {
-    const { Err: E } = DER;
-    if (data.length < 2 || data[0] !== 0x02) throw new E('Invalid signature integer tag');
-    const len = data[1];
-    const res = data.subarray(2, len + 2);
-    if (!len || res.length !== len) throw new E('Invalid signature integer: wrong length');
-    // https://crypto.stackexchange.com/a/57734 Leftmost bit of first byte is 'negative' flag,
-    // since we always use positive integers here. It must always be empty:
-    // - add zero byte if exists
-    // - if next byte doesn't have a flag, leading zero is not allowed (minimal encoding)
-    if (res[0] & 0b10000000) throw new E('Invalid signature integer: negative');
-    if (res[0] === 0x00 && !(res[1] & 0b10000000))
-      throw new E('Invalid signature integer: unnecessary leading zero');
-    return { d: b2n(res), l: data.subarray(len + 2) }; // d is data, l is left
+  // Basic building block is TLV (Tag-Length-Value)
+  _tlv: {
+    encode: (tag: number, data: string) => {
+      const { Err: E } = DER;
+      if (tag < 0 || tag > 256) throw new E('tlv.encode: wrong tag');
+      if (data.length & 1) throw new E('tlv.encode: unpadded data');
+      const dataLen = data.length / 2;
+      const len = ut.numberToHexUnpadded(dataLen);
+      if ((len.length / 2) & 0b1000_0000) throw new E('tlv.encode: long form length too big');
+      // length of length with long form flag
+      const lenLen = dataLen > 127 ? ut.numberToHexUnpadded((len.length / 2) | 0b1000_0000) : '';
+      return `${ut.numberToHexUnpadded(tag)}${lenLen}${len}${data}`;
+    },
+    // v - value, l - left bytes (unparsed)
+    decode(tag: number, data: Uint8Array): { v: Uint8Array; l: Uint8Array } {
+      const { Err: E } = DER;
+      let pos = 0;
+      if (tag < 0 || tag > 256) throw new E('tlv.encode: wrong tag');
+      if (data.length < 2 || data[pos++] !== tag) throw new E('tlv.decode: wrong tlv');
+      const first = data[pos++];
+      const isLong = !!(first & 0b1000_0000); // First bit of first length byte is flag for short/long form
+      let length = 0;
+      if (!isLong) length = first;
+      else {
+        // Long form: [longFlag(1bit), lengthLength(7bit), length (BE)]
+        const lenLen = first & 0b0111_1111;
+        if (!lenLen) throw new E('tlv.decode(long): indefinite length not supported');
+        if (lenLen > 4) throw new E('tlv.decode(long): byte length is too big'); // this will overflow u32 in js
+        const lengthBytes = data.subarray(pos, pos + lenLen);
+        if (lengthBytes.length !== lenLen) throw new E('tlv.decode: length bytes not complete');
+        if (lengthBytes[0] === 0) throw new E('tlv.decode(long): zero leftmost byte');
+        for (const b of lengthBytes) length = (length << 8) | b;
+        pos += lenLen;
+        if (length < 128) throw new E('tlv.decode(long): not minimal encoding');
+      }
+      const v = data.subarray(pos, pos + length);
+      if (v.length !== length) throw new E('tlv.decode: wrong value length');
+      return { v, l: data.subarray(pos + length) };
+    },
+  },
+  // https://crypto.stackexchange.com/a/57734 Leftmost bit of first byte is 'negative' flag,
+  // since we always use positive integers here. It must always be empty:
+  // - add zero byte if exists
+  // - if next byte doesn't have a flag, leading zero is not allowed (minimal encoding)
+  _int: {
+    encode(num: bigint) {
+      const { Err: E } = DER;
+      if (num < _0n) throw new E('integer: negative integers are not allowed');
+      let hex = ut.numberToHexUnpadded(num);
+      // Pad with zero byte if negative flag is present
+      if (Number.parseInt(hex[0], 16) & 0b1000) hex = '00' + hex;
+      if (hex.length & 1) throw new E('unexpected assertion');
+      return hex;
+    },
+    decode(data: Uint8Array): bigint {
+      const { Err: E } = DER;
+      if (data[0] & 0b1000_0000) throw new E('Invalid signature integer: negative');
+      if (data[0] === 0x00 && !(data[1] & 0b1000_0000))
+        throw new E('Invalid signature integer: unnecessary leading zero');
+      return b2n(data);
+    },
   },
   toSig(hex: string | Uint8Array): { r: bigint; s: bigint } {
     // parse DER signature
-    const { Err: E } = DER;
+    const { Err: E, _int: int, _tlv: tlv } = DER;
     const data = typeof hex === 'string' ? h2b(hex) : hex;
     ut.abytes(data);
-    let l = data.length;
-    if (l < 2 || data[0] != 0x30) throw new E('Invalid signature tag');
-    if (data[1] !== l - 2) throw new E('Invalid signature: incorrect length');
-    const { d: r, l: sBytes } = DER._parseInt(data.subarray(2));
-    const { d: s, l: rBytesLeft } = DER._parseInt(sBytes);
-    if (rBytesLeft.length) throw new E('Invalid signature: left bytes after parsing');
-    return { r, s };
+    const { v: seqBytes, l: seqLeftBytes } = tlv.decode(0x30, data);
+    if (seqLeftBytes.length) throw new E('Invalid signature: left bytes after parsing');
+    const { v: rBytes, l: rLeftBytes } = tlv.decode(0x02, seqBytes);
+    const { v: sBytes, l: sLeftBytes } = tlv.decode(0x02, rLeftBytes);
+    if (sLeftBytes.length) throw new E('Invalid signature: left bytes after parsing');
+    return { r: int.decode(rBytes), s: int.decode(sBytes) };
   },
   hexFromSig(sig: { r: bigint; s: bigint }): string {
-    // Add leading zero if first byte has negative bit enabled. More details in '_parseInt'
-    const slice = (s: string): string => (Number.parseInt(s[0], 16) & 0b1000 ? '00' + s : s);
-    const h = (num: number | bigint) => {
-      const hex = num.toString(16);
-      return hex.length & 1 ? `0${hex}` : hex;
-    };
-    const s = slice(h(sig.s));
-    const r = slice(h(sig.r));
-    const shl = s.length / 2;
-    const rhl = r.length / 2;
-    const sl = h(shl);
-    const rl = h(rhl);
-    return `30${h(rhl + shl + 4)}02${rl}${r}02${sl}${s}`;
+    const { _tlv: tlv, _int: int } = DER;
+    const seq = `${tlv.encode(0x02, int.encode(sig.r))}${tlv.encode(0x02, int.encode(sig.s))}`;
+    return tlv.encode(0x30, seq);
   },
 };
 

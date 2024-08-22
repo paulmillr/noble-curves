@@ -107,12 +107,12 @@ function verifyECDHVector(test, curve) {
     const pubB = test.public.slice(-encodedHexLen); // slice(-130) for P256
     let privA = test.private;
 
-    // Some wycheproof vectors are padded with 00:
+    // Some wycheproof vectors are padded with 00 (because c6 > 128 and would be negative number otherwise):
     // 00c6cafb74e2a50c83b3d232c4585237f44d4c5433c4b3f50ce978e6aeda3a4f5d
     // instead of
     // c6cafb74e2a50c83b3d232c4585237f44d4c5433c4b3f50ce978e6aeda3a4f5d
     if (privA.length / 2 === fnLen + 1 && privA.startsWith('00')) privA = privA.slice(2);
-
+    // privA = DER._int.decode(privA);
     if (!curve.utils.isValidPrivateKey(privA)) return; // Ignore invalid private key size
     try {
       curve.ProjectivePoint.fromHex(pubB);
@@ -326,13 +326,6 @@ function runWycheproof(name, CURVE, group, index) {
     const m = CURVE.CURVE.hash(hexToBytes(test.msg));
     const { sig } = test;
     if (test.result === 'valid' || test.result === 'acceptable') {
-      try {
-        CURVE.Signature.fromDER(sig);
-      } catch (e) {
-        // Some tests has invalid signature which we don't accept
-        if (e.message.includes('Invalid signature: incorrect length')) continue;
-        throw e;
-      }
       const verified = CURVE.verify(sig, m, pubR);
       if (name === 'secp256k1') {
         // lowS: true for secp256k1
@@ -373,13 +366,6 @@ describe('wycheproof ECDSA', () => {
           test.result = 'invalid';
         const m = CURVE.CURVE.hash(hexToBytes(test.msg));
         if (test.result === 'valid' || test.result === 'acceptable') {
-          try {
-            CURVE.Signature.fromDER(test.sig);
-          } catch (e) {
-            // Some test has invalid signature which we don't accept
-            if (e.message.includes('Invalid signature: incorrect length')) continue;
-            throw e;
-          }
           const verified = CURVE.verify(test.sig, m, pubKey.toHex());
           if (group.key.curve === 'secp256k1') {
             // lowS: true for secp256k1
