@@ -1,3 +1,4 @@
+import { json } from './utils.js';
 import { deepStrictEqual, throws } from 'node:assert';
 import { describe, should } from 'micro-should';
 import * as fc from 'fast-check';
@@ -5,9 +6,9 @@ import { ed448, ed448ph, x448 } from '../esm/ed448.js';
 import { bytesToHex, concatBytes, hexToBytes, randomBytes } from '@noble/hashes/utils';
 import { numberToBytesLE } from '../esm/abstract/utils.js';
 // Old vectors allow to test sign() because they include private key
-import { default as ed448vectorsOld } from './ed448/ed448_test_OLD.json' with { type: 'json' };
-import { default as ed448vectors } from './wycheproof/ed448_test.json' with { type: 'json' };
-import { default as x448vectors } from './wycheproof/x448_test.json' with { type: 'json' };
+const ed448vectorsOld = json('./ed448/ed448_test_OLD.json');
+const ed448vectors = json('./wycheproof/ed448_test.json');
+const x448vectors = json('./wycheproof/x448_test.json');
 
 describe('ed448', () => {
   const ed = ed448;

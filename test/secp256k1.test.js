@@ -1,3 +1,4 @@
+import { json } from './utils.js';
 import { hexToBytes, bytesToHex as hex } from '@noble/hashes/utils';
 import { deepStrictEqual, throws } from 'node:assert';
 import * as fc from 'fast-check';
@@ -8,11 +9,11 @@ import {
   secp, sigFromDER, sigToDER, selectHash, normVerifySig, mod, bytesToNumberBE, numberToBytesBE
 } from './secp256k1.helpers.js';
 
-import { default as ecdsa } from './vectors/secp256k1/ecdsa.json' with { type: 'json' };
-import { default as ecdh } from './wycheproof/ecdh_secp256k1_test.json' with { type: 'json' };
-import { default as privates } from './vectors/secp256k1/privates.json' with { type: 'json' };
-import { default as points } from './vectors/secp256k1/points.json' with { type: 'json' };
-import { default as wp } from './wycheproof/ecdsa_secp256k1_sha256_test.json' with { type: 'json' };
+const ecdsa = json('./vectors/secp256k1/ecdsa.json');
+const ecdh = json('./wycheproof/ecdh_secp256k1_test.json');
+const privates = json('./vectors/secp256k1/privates.json');
+const points = json('./vectors/secp256k1/points.json');
+const wp = json('./wycheproof/ecdsa_secp256k1_sha256_test.json');
 
 // Any changes to the file will need to be aware of the fact
 // the file is shared between noble-curves and noble-secp256k1.

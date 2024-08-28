@@ -1,3 +1,4 @@
+import { json } from './utils.js';
 import { deepStrictEqual } from 'node:assert';
 import { describe, should } from 'micro-should';
 import { bytesToHex } from '@noble/hashes/utils';
@@ -15,37 +16,37 @@ import { bls12_381 } from '../esm/bls12-381.js';
 import { expand_message_xmd, expand_message_xof } from '../esm/abstract/hash-to-curve.js';
 import { utf8ToBytes } from '../esm/abstract/utils.js';
 // XMD
-import { default as xmd_sha256_38 } from './hash-to-curve/expand_message_xmd_SHA256_38.json' with { type: 'json' };
-import { default as xmd_sha256_256 } from './hash-to-curve/expand_message_xmd_SHA256_256.json' with { type: 'json' };
-import { default as xmd_sha512_38 } from './hash-to-curve/expand_message_xmd_SHA512_38.json' with { type: 'json' };
+const xmd_sha256_38 = json('./hash-to-curve/expand_message_xmd_SHA256_38.json');
+const xmd_sha256_256 = json('./hash-to-curve/expand_message_xmd_SHA256_256.json');
+const xmd_sha512_38 = json('./hash-to-curve/expand_message_xmd_SHA512_38.json');
 // XOF
-import { default as xof_shake128_36 } from './hash-to-curve/expand_message_xof_SHAKE128_36.json' with { type: 'json' };
-import { default as xof_shake128_256 } from './hash-to-curve/expand_message_xof_SHAKE128_256.json' with { type: 'json' };
-import { default as xof_shake256_36 } from './hash-to-curve/expand_message_xof_SHAKE256_36.json' with { type: 'json' };
+const xof_shake128_36 = json('./hash-to-curve/expand_message_xof_SHAKE128_36.json');
+const xof_shake128_256 = json('./hash-to-curve/expand_message_xof_SHAKE128_256.json');
+const xof_shake256_36 = json('./hash-to-curve/expand_message_xof_SHAKE256_36.json');
 // P256
-import { default as p256_ro } from './hash-to-curve/P256_XMD_SHA-256_SSWU_RO_.json' with { type: 'json' };
-import { default as p256_nu } from './hash-to-curve/P256_XMD_SHA-256_SSWU_NU_.json' with { type: 'json' };
+const p256_ro = json('./hash-to-curve/P256_XMD_SHA-256_SSWU_RO_.json');
+const p256_nu = json('./hash-to-curve/P256_XMD_SHA-256_SSWU_NU_.json');
 // P384
-import { default as p384_ro } from './hash-to-curve/P384_XMD_SHA-384_SSWU_RO_.json' with { type: 'json' };
-import { default as p384_nu } from './hash-to-curve/P384_XMD_SHA-384_SSWU_NU_.json' with { type: 'json' };
+const p384_ro = json('./hash-to-curve/P384_XMD_SHA-384_SSWU_RO_.json');
+const p384_nu = json('./hash-to-curve/P384_XMD_SHA-384_SSWU_NU_.json');
 // P521
-import { default as p521_ro } from './hash-to-curve/P521_XMD_SHA-512_SSWU_RO_.json' with { type: 'json' };
-import { default as p521_nu } from './hash-to-curve/P521_XMD_SHA-512_SSWU_NU_.json' with { type: 'json' };
+const p521_ro = json('./hash-to-curve/P521_XMD_SHA-512_SSWU_RO_.json');
+const p521_nu = json('./hash-to-curve/P521_XMD_SHA-512_SSWU_NU_.json');
 // secp256k1
-import { default as secp256k1_ro } from './hash-to-curve/secp256k1_XMD_SHA-256_SSWU_RO_.json' with { type: 'json' };
-import { default as secp256k1_nu } from './hash-to-curve/secp256k1_XMD_SHA-256_SSWU_NU_.json' with { type: 'json' };
+const secp256k1_ro = json('./hash-to-curve/secp256k1_XMD_SHA-256_SSWU_RO_.json');
+const secp256k1_nu = json('./hash-to-curve/secp256k1_XMD_SHA-256_SSWU_NU_.json');
 // bls-G1
-import { default as g1_ro } from './hash-to-curve/BLS12381G1_XMD_SHA-256_SSWU_RO_.json' with { type: 'json' };
-import { default as g1_nu } from './hash-to-curve/BLS12381G1_XMD_SHA-256_SSWU_NU_.json' with { type: 'json' };
+const g1_ro = json('./hash-to-curve/BLS12381G1_XMD_SHA-256_SSWU_RO_.json');
+const g1_nu = json('./hash-to-curve/BLS12381G1_XMD_SHA-256_SSWU_NU_.json');
 // bls-G2
-import { default as g2_ro } from './hash-to-curve/BLS12381G2_XMD_SHA-256_SSWU_RO_.json' with { type: 'json' };
-import { default as g2_nu } from './hash-to-curve/BLS12381G2_XMD_SHA-256_SSWU_NU_.json' with { type: 'json' };
+const g2_ro = json('./hash-to-curve/BLS12381G2_XMD_SHA-256_SSWU_RO_.json');
+const g2_nu = json('./hash-to-curve/BLS12381G2_XMD_SHA-256_SSWU_NU_.json');
 // ed25519
-import { default as ed25519_ro } from './hash-to-curve/edwards25519_XMD_SHA-512_ELL2_RO_.json' with { type: 'json' };
-import { default as ed25519_nu } from './hash-to-curve/edwards25519_XMD_SHA-512_ELL2_NU_.json' with { type: 'json' };
+const ed25519_ro = json('./hash-to-curve/edwards25519_XMD_SHA-512_ELL2_RO_.json');
+const ed25519_nu = json('./hash-to-curve/edwards25519_XMD_SHA-512_ELL2_NU_.json');
 // ed448
-import { default as ed448_ro } from './hash-to-curve/edwards448_XOF_SHAKE256_ELL2_RO_.json' with { type: 'json' };
-import { default as ed448_nu } from './hash-to-curve/edwards448_XOF_SHAKE256_ELL2_NU_.json' with { type: 'json' };
+const ed448_ro = json('./hash-to-curve/edwards448_XOF_SHAKE256_ELL2_RO_.json');
+const ed448_nu = json('./hash-to-curve/edwards448_XOF_SHAKE256_ELL2_NU_.json');
 
 function testExpandXMD(hash, vectors) {
   describe(`${vectors.hash}/${vectors.DST.length}`, () => {
