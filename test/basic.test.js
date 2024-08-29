@@ -1,3 +1,4 @@
+import { json } from './utils.js';
 import { deepStrictEqual, notDeepStrictEqual, throws } from 'node:assert';
 import { should, describe } from 'micro-should';
 import * as fc from 'fast-check';
@@ -15,11 +16,11 @@ import { pallas, vesta } from '../esm/pasta.js';
 import { bn254_weierstrass } from '../esm/bn254.js';
 import { jubjub } from '../esm/jubjub.js';
 import { bls12_381 } from '../esm/bls12-381.js';
-import { default as wyche_curves } from './wycheproof/ec_prime_order_curves_test.json' with { type: 'json' };
 import { createCurve } from '../esm/_shortw_utils.js';
 import { Field } from '../esm/abstract/modular.js';
 import { sha256 } from '@noble/hashes/sha256';
 import { bn254 } from '../esm/bn254.js';
+const wyche_curves = json('./wycheproof/ec_prime_order_curves_test.json');
 
 // Fields tests
 const FIELDS = {

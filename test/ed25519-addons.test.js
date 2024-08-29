@@ -1,9 +1,10 @@
+import { json } from './utils.js';
 import { sha512 } from '@noble/hashes/sha512';
 import { bytesToHex as hex, hexToBytes } from '@noble/hashes/utils';
 import { deepStrictEqual, throws } from 'node:assert';
 import { describe, should } from 'micro-should';
 import { bytesToNumberLE, numberToBytesLE } from '../esm/abstract/utils.js';
-import { default as x25519vectors } from './wycheproof/x25519_test.json' with { type: 'json' };
+const x25519vectors = json('./wycheproof/x25519_test.json');
 import {
   ed25519,
   ed25519ctx,

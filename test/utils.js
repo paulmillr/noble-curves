@@ -9,3 +9,7 @@ export function jsonGZ(path) {
   const unz = gunzipSync(readFileSync(joinPath(__dirname, path)));
   return JSON.parse(unz.toString('utf8'));
 }
+
+export function json(path) {
+  return JSON.parse(readFileSync(joinPath(__dirname, path), { encoding: 'utf-8' }));
+}

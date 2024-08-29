@@ -1,4 +1,5 @@
-import { deepStrictEqual, notDeepStrictEqual, throws } from 'node:assert';
+import { json } from './utils.js';
+import { deepStrictEqual, throws } from 'node:assert';
 import * as fc from 'fast-check';
 import { readFileSync } from 'node:fs';
 import { describe, should } from 'micro-should';
@@ -9,9 +10,9 @@ import { bls12_381 as bls, bls12_381 } from '../esm/bls12-381.js';
 
 import * as utils from '../esm/abstract/utils.js';
 
-import eip2537 from './bls12-381/eip2537.json' with { type: 'json' };
-import zkVectors from './bls12-381/zkcrypto/converted.json' with { type: 'json' };
-import pairingVectors from './bls12-381/go_pairing_vectors/pairing.json' with { type: 'json' };
+const eip2537 = json('./bls12-381/eip2537.json');
+const zkVectors = json('./bls12-381/zkcrypto/converted.json');
+const pairingVectors = json('./bls12-381/go_pairing_vectors/pairing.json');
 const G1_VECTORS = readFileSync('./test/bls12-381/bls12-381-g1-test-vectors.txt', 'utf-8')
   .trim()
   .split('\n')

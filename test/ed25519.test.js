@@ -1,3 +1,4 @@
+import { json } from './utils.js';
 import { deepStrictEqual, strictEqual, throws } from 'node:assert';
 import { readFileSync } from 'node:fs';
 import { bytesToHex, concatBytes, hexToBytes, utf8ToBytes, randomBytes } from '@noble/hashes/utils';
@@ -5,10 +6,10 @@ import * as fc from 'fast-check';
 import { describe, should } from 'micro-should';
 import { ed25519 as ed, ED25519_TORSION_SUBGROUP, numberToBytesLE } from './ed25519.helpers.js';
 // Old vectors allow to test sign() because they include private key
-import { default as ed25519vectors_OLD } from './ed25519/ed25519_test_OLD.json' with { type: 'json' };
-import { default as ed25519vectors } from './wycheproof/ed25519_test.json' with { type: 'json' };
-import { default as zip215 } from './ed25519/zip215.json' with { type: 'json' };
-import { default as edgeCases } from './ed25519/edge-cases.json' with { type: 'json' };
+const ed25519vectors_OLD = json('./ed25519/ed25519_test_OLD.json');
+const ed25519vectors = json('./wycheproof/ed25519_test.json');
+const zip215 = json('./ed25519/zip215.json');
+const edgeCases = json('./ed25519/edge-cases.json');
 
 // Any changes to the file will need to be aware of the fact
 // the file is shared between noble-curves and noble-ed25519.
