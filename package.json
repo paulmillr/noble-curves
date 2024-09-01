@@ -38,6 +38,9 @@
     "prettier": "3.3.2",
     "typescript": "5.5.2"
   },
+  "engines": {
+    "node": "^14.21.3 || ^16.20.2 || ^18 || ^20 || >=22"
+  },
   "sideEffects": false,
   "main": "index.js",
   "exports": {
