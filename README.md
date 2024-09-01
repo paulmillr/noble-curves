@@ -12,9 +12,7 @@ Audited & minimal JS implementation of elliptic curve cryptography.
 - 🧜‍♂️ Poseidon ZK-friendly hash
 - 🪶 178KB (87KB gzipped) for everything including bundled hashes, 22KB (10KB gzipped) for single-curve build
 
-For discussions, questions and support, visit
-[GitHub Discussions](https://github.com/paulmillr/noble-curves/discussions)
-section of the repository.
+Take a glance at [GitHub Discussions](https://github.com/paulmillr/noble-curves/discussions) for questions and support.
 
 ### This library belongs to _noble_ cryptography
 
@@ -45,7 +43,7 @@ A standalone file [noble-curves.js](https://github.com/paulmillr/noble-curves/re
 ```js
 // import * from '@noble/curves'; // Error: use sub-imports, to ensure small app size
 import { secp256k1 } from '@noble/curves/secp256k1'; // ESM and Common.js
-// import { secp256k1 } from 'npm:@noble/curves@1.4.0/secp256k1'; // Deno
+// import { secp256k1 } from 'npm:@noble/curves@1.6.0/secp256k1'; // Deno
 ```
 
 - [Implementations](#implementations)

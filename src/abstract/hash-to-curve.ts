@@ -67,8 +67,7 @@ export function expand_message_xmd(
   if (DST.length > 255) DST = H(concatBytes(utf8ToBytes('H2C-OVERSIZE-DST-'), DST));
   const { outputLen: b_in_bytes, blockLen: r_in_bytes } = H;
   const ell = Math.ceil(lenInBytes / b_in_bytes);
-  if (lenInBytes > 65535 || ell > 255)
-    throw new Error('expand_message_xmd: invalid lenInBytes');
+  if (lenInBytes > 65535 || ell > 255) throw new Error('expand_message_xmd: invalid lenInBytes');
   const DST_prime = concatBytes(DST, i2osp(DST.length, 1));
   const Z_pad = i2osp(0, r_in_bytes);
   const l_i_b_str = i2osp(lenInBytes, 2); // len_in_bytes_str
