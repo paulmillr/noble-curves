@@ -27,6 +27,8 @@ const os2ip = bytesToNumberBE;
 
 // Integer to Octet Stream (numberToBytesBE)
 function i2osp(value: number, length: number): Uint8Array {
+  anum(value);
+  anum(length);
   if (value < 0 || value >= 1 << (8 * length)) {
     throw new Error(`bad I2OSP call: value=${value} length=${length}`);
   }
@@ -65,7 +67,8 @@ export function expand_message_xmd(
   if (DST.length > 255) DST = H(concatBytes(utf8ToBytes('H2C-OVERSIZE-DST-'), DST));
   const { outputLen: b_in_bytes, blockLen: r_in_bytes } = H;
   const ell = Math.ceil(lenInBytes / b_in_bytes);
-  if (ell > 255) throw new Error('Invalid xmd length');
+  if (lenInBytes > 65535 || ell > 255)
+    throw new Error('expand_message_xmd: invalid lenInBytes');
   const DST_prime = concatBytes(DST, i2osp(DST.length, 1));
   const Z_pad = i2osp(0, r_in_bytes);
   const l_i_b_str = i2osp(lenInBytes, 2); // len_in_bytes_str
