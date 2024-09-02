@@ -10,7 +10,7 @@ Audited & minimal JS implementation of elliptic curve cryptography.
 - ✍️ ECDSA, EdDSA, Schnorr, BLS signature schemes, ECDH key agreement, hashing to curves
 - 🔖 SUF-CMA, SBS (non-repudiation), ZIP215 (consensus friendliness) features for ed25519
 - 🧜‍♂️ Poseidon ZK-friendly hash
-- 🪶 178KB (87KB gzipped) for everything including bundled hashes, 22KB (10KB gzipped) for single-curve build
+- 🪶 190KB (92KB gzipped) for everything including bundled hashes
 
 Take a glance at [GitHub Discussions](https://github.com/paulmillr/noble-curves/discussions) for questions and support.
 
@@ -62,7 +62,7 @@ import { secp256k1 } from '@noble/curves/secp256k1'; // ESM and Common.js
   - [weierstrass: Short Weierstrass curve](#weierstrass-short-weierstrass-curve)
   - [edwards: Twisted Edwards curve](#edwards-twisted-edwards-curve)
   - [montgomery: Montgomery curve](#montgomery-montgomery-curve)
-  - [bls: Boneh-Lynn-Shacham signatures](#bls-boneh-lynn-shacham-signatures)
+  - [bls: Barreto-Lynn-Scott curves](#bls-barreto-lynn-scott-curves)
   - [hash-to-curve: Hashing strings to curve points](#hash-to-curve-hashing-strings-to-curve-points)
   - [poseidon: Poseidon hash](#poseidon-poseidon-hash)
   - [modular: Modular arithmetics utilities](#modular-modular-arithmetics-utilities)
