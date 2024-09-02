@@ -2,7 +2,7 @@
 
 Audited & minimal JS implementation of elliptic curve cryptography.
 
-- 🔒 [**Audited**](#security) by an independent security firms
+- 🔒 [**Audited**](#security) by independent security firms
 - 🔻 Tree-shakeable: unused code is excluded from your builds
 - 🏎 Fast: hand-optimized for caveats of JS engines
 - 🔍 Reliable: property-based / cross-library / wycheproof tests and fuzzing ensure correctness
