@@ -1,7 +1,7 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 // Abelian group utilities
 import { IField, validateField, nLength } from './modular.js';
-import { validateObject } from './utils.js';
+import { validateObject, bitLen } from './utils.js';
 const _0n = BigInt(0);
 const _1n = BigInt(1);
 
@@ -179,6 +179,62 @@ export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number) {
       pointPrecomputes.delete(P);
     },
   };
+}
+
+/**
+ * Pippenger algorithm for multi-scalar multiplication (MSM).
+ * MSM is basically (Pa + Qb + Rc + ...).
+ * 30x faster vs naive addition on L=4096, 10x faster with precomputes.
+ * For N=254bit, L=1, it does: 1024 ADD + 254 DBL. For L=5: 1536 ADD + 254 DBL.
+ * Algorithmically constant-time (for same L), even when 1 point + scalar, or when scalar = 0.
+ * @param c Curve Point constructor
+ * @param field field over CURVE.N - important that it's not over CURVE.P
+ * @param points array of L curve points
+ * @param scalars array of L scalars (aka private keys / bigints)
+ */
+export function pippenger<T extends Group<T>>(
+  c: GroupConstructor<T>,
+  field: IField<bigint>,
+  points: T[],
+  scalars: bigint[]
+): T {
+  // If we split scalars by some window (let's say 8 bits), every chunk will only
+  // take 256 buckets even if there are 4096 scalars, also re-uses double.
+  // TODO:
+  // - https://eprint.iacr.org/2024/750.pdf
+  // - https://tches.iacr.org/index.php/TCHES/article/view/10287
+  // 0 is accepted in scalars
+  if (!Array.isArray(points) || !Array.isArray(scalars) || scalars.length !== points.length)
+    throw new Error('arrays of scalars and points must have equal length');
+  scalars.forEach((s, i) => {
+    if (!field.isValid(s)) throw new Error(`wrong scalar at index ${i}`);
+  });
+  points.forEach((p, i) => {
+    if (!(p instanceof (c as any))) throw new Error(`wrong point at index ${i}`);
+  });
+  const wbits = bitLen(BigInt(points.length));
+  const windowSize = wbits > 12 ? wbits - 3 : wbits > 4 ? wbits - 2 : wbits ? 2 : 1; // in bits
+  const MASK = (1 << windowSize) - 1;
+  const buckets = new Array(MASK + 1).fill(c.ZERO); // +1 for zero array
+  const lastBits = Math.floor((field.BITS - 1) / windowSize) * windowSize;
+  let sum = c.ZERO;
+  for (let i = lastBits; i >= 0; i -= windowSize) {
+    buckets.fill(c.ZERO);
+    for (let j = 0; j < scalars.length; j++) {
+      const scalar = scalars[j];
+      const wbits = Number((scalar >> BigInt(i)) & BigInt(MASK));
+      buckets[wbits] = buckets[wbits].add(points[j]);
+    }
+    let resI = c.ZERO; // not using this will do small speed-up, but will lose ct
+    // Skip first bucket, because it is zero
+    for (let j = buckets.length - 1, sumI = c.ZERO; j > 0; j--) {
+      sumI = sumI.add(buckets[j]);
+      resI = resI.add(sumI);
+    }
+    sum = sum.add(resI);
+    if (i !== 0) for (let j = 0; j < windowSize; j++) sum = sum.double();
+  }
+  return sum as T;
 }
 
 // Generic BasicCurve interface: works even for polynomial fields (BLS): P, n, h would be ok.

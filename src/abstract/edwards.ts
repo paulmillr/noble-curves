@@ -1,7 +1,15 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 // Twisted Edwards curve. The formula is: ax² + y² = 1 + dx²y²
-import { AffinePoint, BasicCurve, Group, GroupConstructor, validateBasic, wNAF } from './curve.js';
-import { mod } from './modular.js';
+import {
+  AffinePoint,
+  BasicCurve,
+  Group,
+  GroupConstructor,
+  validateBasic,
+  wNAF,
+  pippenger,
+} from './curve.js';
+import { mod, Field } from './modular.js';
 import * as ut from './utils.js';
 import { ensureBytes, FHash, Hex, memoized, abool } from './utils.js';
 
@@ -70,6 +78,7 @@ export interface ExtPointConstructor extends GroupConstructor<ExtPointType> {
   fromAffine(p: AffinePoint<bigint>): ExtPointType;
   fromHex(hex: Hex): ExtPointType;
   fromPrivateKey(privateKey: Hex): ExtPointType;
+  msm(points: ExtPointType[], scalars: bigint[]): ExtPointType;
 }
 
 /**
@@ -119,6 +128,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
   } = CURVE;
   const MASK = _2n << (BigInt(nByteLength * 8) - _1n);
   const modP = Fp.create; // Function overrides
+  const Fn = Field(CURVE.n, CURVE.nBitLength);
 
   // sqrt(u/v)
   const uvRatio =
@@ -217,6 +227,10 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     static normalizeZ(points: Point[]): Point[] {
       const toInv = Fp.invertBatch(points.map((p) => p.ez));
       return points.map((p, i) => p.toAffine(toInv[i])).map(Point.fromAffine);
+    }
+    // Multiscalar Multiplication
+    static msm(points: Point[], scalars: bigint[]) {
+      return pippenger(Point, Fn, points, scalars);
     }
 
     // "Private method", don't use it directly

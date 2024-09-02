@@ -468,6 +468,33 @@ for (const name in CURVES) {
             { numRuns: NUM_RUNS }
           )
         );
+        should('MSM (basic)', () => {
+          equal(p.msm([p.BASE], [0n]), p.ZERO, '0*G');
+          equal(p.msm([], []), p.ZERO, 'empty');
+          equal(p.msm([p.ZERO], [123n]), p.ZERO, '123 * Infinity');
+          equal(p.msm([p.BASE], [123n]), p.BASE.multiply(123n), '123 * G');
+          const points = [p.BASE, p.BASE.multiply(2n), p.BASE.multiply(4n), p.BASE.multiply(8n)];
+          // 1*3 + 5*2 + 4*7 + 11*8 = 129
+          equal(p.msm(points, [3n, 5n, 7n, 11n]), p.BASE.multiply(129n), '129 * G');
+        });
+        should('MSM (rand)', () =>
+          fc.assert(
+            fc.property(fc.array(fc.tuple(FC_BIGINT, FC_BIGINT)), FC_BIGINT, (pairs) => {
+              let total = 0n;
+              const scalars = [];
+              const points = [];
+              for (const [ps, s] of pairs) {
+                points.push(p.BASE.multiply(ps));
+                scalars.push(s);
+                total += ps * s;
+              }
+              total = mod.mod(total, CURVE_ORDER);
+              const exp = total ? p.BASE.multiply(total) : p.ZERO;
+              equal(p.msm(points, scalars), exp, 'total');
+            }),
+            { numRuns: NUM_RUNS }
+          )
+        );
       });
 
       for (const op of ['add', 'subtract']) {

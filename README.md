@@ -55,6 +55,7 @@ import { secp256k1 } from '@noble/curves/secp256k1'; // ESM and Common.js
   - [ed448, X448, decaf448](#ed448-x448-decaf448)
   - [bls12-381](#bls12-381)
   - [bn254 aka alt_bn128](#bn254-aka-alt_bn128)
+  - [Multi-scalar-multiplication](#multi-scalar-multiplication)
   - [All available imports](#all-available-imports)
   - [Accessing a curve's variables](#accessing-a-curves-variables)
 - [Abstract API](#abstract-api)
@@ -309,6 +310,19 @@ different implementations of bn254 do it differently - there is no standard. Poi
 
 For example usage, check out [the implementation of bn254 EVM precompiles](https://github.com/paulmillr/noble-curves/blob/3ed792f8ad9932765b84d1064afea8663a255457/test/bn254.test.js#L697).
 
+#### Multi-scalar-multiplication
+
+```ts
+import { secp256k1 } from '@noble/curves/secp256k1';
+const p = secp256k1.ProjectivePoint;
+const points = [p.BASE, p.BASE.multiply(2n), p.BASE.multiply(4n), p.BASE.multiply(8n)];
+p.msm(points, [3n, 5n, 7n, 11n]).equals(p.BASE.multiply(129n)); // 129*G
+```
+
+Pippenger algorithm is used underneath.
+Multi-scalar-multiplication (MSM) is basically `(Pa + Qb + Rc + ...)`.
+It's 10-30x faster vs naive addition for large amount of points.
+
 #### All available imports
 
 ```typescript
@@ -460,6 +474,7 @@ interface ProjConstructor<T> extends GroupConstructor<ProjPointType<T>> {
   fromAffine(p: AffinePoint<T>): ProjPointType<T>;
   fromHex(hex: Hex): ProjPointType<T>;
   fromPrivateKey(privateKey: PrivKey): ProjPointType<T>;
+  msm(points: ProjPointType[], scalars: bigint[]): ProjPointType<T>;
 }
 ```
 
@@ -612,6 +627,7 @@ interface ExtPointConstructor extends GroupConstructor<ExtPointType> {
   fromAffine(p: AffinePoint<bigint>): ExtPointType;
   fromHex(hex: Hex): ExtPointType;
   fromPrivateKey(privateKey: Hex): ExtPointType;
+  msm(points: ExtPointType[], scalars: bigint[]): ExtPointType;
 }
 ```
 
@@ -813,6 +829,11 @@ utils.equalBytes(Uint8Array.from([0xde]), Uint8Array.from([0xde]));
 
 The library has been independently audited:
 
+- at version 1.6.0, in Sep 2024, by [cure53](https://cure53.de)
+  - PDFs: [in-repo](./audit/2024-09-01-cure53-audit-nbl4.pdf)
+  - [Changes since audit](https://github.com/paulmillr/noble-curves/compare/1.6.0..main)
+  - Scope: ed25519, ed448, their add-ons, bls12-381, bn254,
+    hash-to-curve, low-level primitives bls, tower, edwards, montgomery etc.
 - at version 1.2.0, in Sep 2023, by [Kudelski Security](https://kudelskisecurity.com)
   - PDFs: [offline](./audit/2023-09-kudelski-audit-starknet.pdf)
   - [Changes since audit](https://github.com/paulmillr/noble-curves/compare/1.2.0..main)

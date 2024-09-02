@@ -1,6 +1,14 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 // Short Weierstrass curve. The formula is: y² = x³ + ax + b
-import { AffinePoint, BasicCurve, Group, GroupConstructor, validateBasic, wNAF } from './curve.js';
+import {
+  AffinePoint,
+  BasicCurve,
+  Group,
+  GroupConstructor,
+  validateBasic,
+  wNAF,
+  pippenger,
+} from './curve.js';
 import * as mod from './modular.js';
 import * as ut from './utils.js';
 import { CHash, Hex, PrivKey, ensureBytes, memoized, abool } from './utils.js';
@@ -85,6 +93,7 @@ export interface ProjConstructor<T> extends GroupConstructor<ProjPointType<T>> {
   fromHex(hex: Hex): ProjPointType<T>;
   fromPrivateKey(privateKey: PrivKey): ProjPointType<T>;
   normalizeZ(points: ProjPointType<T>[]): ProjPointType<T>[];
+  msm(points: ProjPointType<T>[], scalars: bigint[]): ProjPointType<T>;
 }
 
 export type CurvePointsType<T> = BasicWCurve<T> & {
@@ -239,6 +248,7 @@ const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3), _4n = 
 export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T> {
   const CURVE = validatePointOpts(opts);
   const { Fp } = CURVE; // All curves has same field / group length as for now, but they can differ
+  const Fn = mod.Field(CURVE.n, CURVE.nBitLength);
 
   const toBytes =
     CURVE.toBytes ||
@@ -410,6 +420,11 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
     // Multiplies generator point by privateKey.
     static fromPrivateKey(privateKey: PrivKey) {
       return Point.BASE.multiply(normPrivateKeyToScalar(privateKey));
+    }
+
+    // Multiscalar Multiplication
+    static msm(points: Point[], scalars: bigint[]) {
+      return pippenger(Point, Fn, points, scalars);
     }
 
     // "Private method", don't use it directly
