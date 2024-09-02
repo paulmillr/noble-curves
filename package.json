@@ -130,6 +130,9 @@
       "require": "./secp256k1.js"
     }
   },
+  "engines": {
+    "node": "^14.21.3 || >=16"
+  },
   "keywords": [
     "elliptic",
     "curve",
