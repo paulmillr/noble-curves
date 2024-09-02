@@ -1,3 +1,4 @@
+/*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import * as mod from './modular.js';
 import { bitLen, bitMask, concatBytes, notImplemented } from './utils.js';
 import type { ProjConstructor, ProjPointType } from './weierstrass.js';

@@ -205,7 +205,7 @@ export function pippenger<T extends Group<T>>(
   // - https://tches.iacr.org/index.php/TCHES/article/view/10287
   // 0 is accepted in scalars
   if (!Array.isArray(points) || !Array.isArray(scalars) || scalars.length !== points.length)
-    throw new Error('arrays of scalars and points must have equal length');
+    throw new Error('arrays of points and scalars must have equal length');
   scalars.forEach((s, i) => {
     if (!field.isValid(s)) throw new Error(`wrong scalar at index ${i}`);
   });
