@@ -46,13 +46,18 @@ export function groupHash(tag: Uint8Array, personalization: Uint8Array) {
   return p;
 }
 
+// No secret data is leaked here at all.
+// It operates over public data:
+// const G_SPEND = jubjub.findGroupHash(new Uint8Array(), utf8ToBytes('Item_G_'));
 export function findGroupHash(m: Uint8Array, personalization: Uint8Array) {
   const tag = concatBytes(m, new Uint8Array([0]));
+  const hashes = [];
   for (let i = 0; i < 256; i++) {
     tag[tag.length - 1] = i;
     try {
-      return groupHash(tag, personalization);
+      hashes.push(groupHash(tag, personalization));
     } catch (e) {}
   }
-  throw new Error('findGroupHash tag overflow');
+  if (!hashes.length) throw new Error('findGroupHash tag overflow');
+  return hashes[0];
 }
