@@ -47,6 +47,7 @@ export type Fp12Bls = mod.IField<Fp12> & {
   mul034(num: Fp12, o0: Fp2, o3: Fp2, o4: Fp2): Fp12;
   conjugate(num: Fp12): Fp12;
   finalExponentiate(num: Fp12): Fp12;
+  fromBigTwelve(num: BigintTwelve): Fp12;
 };
 
 function calcFrobeniusCoefficients<T>(
