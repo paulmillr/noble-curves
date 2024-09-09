@@ -257,7 +257,7 @@ const signature = bls.sign(message, privateKey);
 const isValid = bls.verify(signature, message, publicKey);
 console.log({ publicKey, signature, isValid });
 
-// G2 signatures, G1 keys
+// G2 keys, G1 signatures
 // getPublicKeyForShortSignatures(privateKey)
 // signShortSignature(message, privateKey)
 // verifyShortSignature(signature, message, publicKey)
