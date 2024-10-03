@@ -3,7 +3,7 @@ import { sha256 } from '@noble/hashes/sha256';
 import { getHash } from './_shortw_utils.js';
 import { weierstrass } from './abstract/weierstrass.js';
 import { randomBytes } from '@noble/hashes/utils';
-import { bls, CurveFn } from './abstract/bls.js';
+import { bls, CurveFn, PostPrecomputeFn, PostPrecomputePointAddFn } from './abstract/bls.js';
 import { Field } from './abstract/modular.js';
 import { bitGet, bitLen, notImplemented } from './abstract/utils.js';
 import { tower12, psiFrobenius } from './abstract/tower.js';
@@ -148,6 +148,13 @@ const htfDefaults = Object.freeze({
   hash: sha256,
 } as const);
 
+export const _postPrecompute: PostPrecomputeFn = (Rx: Fp2, Ry: Fp2, Rz: Fp2, Qx: Fp2, Qy: Fp2, pointAdd: PostPrecomputePointAddFn) => {
+  const q = psi(Qx, Qy);
+  ({ Rx, Ry, Rz } = pointAdd(Rx, Ry, Rz, q[0], q[1]));
+  const q2 = psi(q[0], q[1]);
+  pointAdd(Rx, Ry, Rz, q2[0], Fp2.neg(q2[1]));
+}
+
 /**
  * bn254 (a.k.a. alt_bn128) pairing-friendly curve.
  * Contains G1 / G2 operations and pairings.
@@ -212,12 +219,7 @@ export const bn254: CurveFn = bls({
   hash: sha256,
   randomBytes,
 
-  postPrecompute: (Rx, Ry, Rz, Qx, Qy, pointAdd) => {
-    const q = psi(Qx, Qy);
-    ({ Rx, Ry, Rz } = pointAdd(Rx, Ry, Rz, q[0], q[1]));
-    const q2 = psi(q[0], q[1]);
-    pointAdd(Rx, Ry, Rz, q2[0], Fp2.neg(q2[1]));
-  },
+  postPrecompute: _postPrecompute,
 });
 
 /**

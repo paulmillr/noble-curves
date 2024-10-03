@@ -51,6 +51,15 @@ export type SignatureCoder<Fp> = {
   toHex(point: ProjPointType<Fp>): string;
 };
 
+export type PostPrecomputePointAddFn = (Rx: Fp2, Ry: Fp2, Rz: Fp2, Qx: Fp2, Qy: Fp2) => { Rx: Fp2; Ry: Fp2; Rz: Fp2 };
+export type PostPrecomputeFn = (
+  Rx: Fp2,
+  Ry: Fp2,
+  Rz: Fp2,
+  Qx: Fp2,
+  Qy: Fp2,
+  pointAdd: PostPrecomputePointAddFn
+) => void;
 export type CurveType = {
   G1: Omit<CurvePointsType<Fp>, 'n'> & {
     ShortSignature: SignatureCoder<Fp>;
@@ -82,14 +91,7 @@ export type CurveType = {
   hash: CHash; // Because we need outputLen for DRBG
   randomBytes: (bytesLength?: number) => Uint8Array;
   // This is super ugly hack for untwist point in BN254 after miller loop
-  postPrecompute?: (
-    Rx: Fp2,
-    Ry: Fp2,
-    Rz: Fp2,
-    Qx: Fp2,
-    Qy: Fp2,
-    pointAdd: (Rx: Fp2, Ry: Fp2, Rz: Fp2, Qx: Fp2, Qy: Fp2) => { Rx: Fp2; Ry: Fp2; Rz: Fp2 }
-  ) => void;
+  postPrecompute?: PostPrecomputeFn;
 };
 
 type PrecomputeSingle = [Fp2, Fp2, Fp2][];
