@@ -51,7 +51,13 @@ export type SignatureCoder<Fp> = {
   toHex(point: ProjPointType<Fp>): string;
 };
 
-export type PostPrecomputePointAddFn = (Rx: Fp2, Ry: Fp2, Rz: Fp2, Qx: Fp2, Qy: Fp2) => { Rx: Fp2; Ry: Fp2; Rz: Fp2 };
+export type PostPrecomputePointAddFn = (
+  Rx: Fp2,
+  Ry: Fp2,
+  Rz: Fp2,
+  Qx: Fp2,
+  Qy: Fp2
+) => { Rx: Fp2; Ry: Fp2; Rz: Fp2 };
 export type PostPrecomputeFn = (
   Rx: Fp2,
   Ry: Fp2,

@@ -148,12 +148,19 @@ const htfDefaults = Object.freeze({
   hash: sha256,
 } as const);
 
-export const _postPrecompute: PostPrecomputeFn = (Rx: Fp2, Ry: Fp2, Rz: Fp2, Qx: Fp2, Qy: Fp2, pointAdd: PostPrecomputePointAddFn) => {
+export const _postPrecompute: PostPrecomputeFn = (
+  Rx: Fp2,
+  Ry: Fp2,
+  Rz: Fp2,
+  Qx: Fp2,
+  Qy: Fp2,
+  pointAdd: PostPrecomputePointAddFn
+) => {
   const q = psi(Qx, Qy);
   ({ Rx, Ry, Rz } = pointAdd(Rx, Ry, Rz, q[0], q[1]));
   const q2 = psi(q[0], q[1]);
   pointAdd(Rx, Ry, Rz, q2[0], Fp2.neg(q2[1]));
-}
+};
 
 /**
  * bn254 (a.k.a. alt_bn128) pairing-friendly curve.
