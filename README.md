@@ -758,15 +758,18 @@ const instance = poseidon(opts: PoseidonOpts);
 
 ```ts
 import * as mod from '@noble/curves/abstract/modular';
+
+// Finite Field utils
 const fp = mod.Field(2n ** 255n - 19n); // Finite field over 2^255-19
 fp.mul(591n, 932n); // multiplication
 fp.pow(481n, 11024858120n); // exponentiation
 fp.div(5n, 17n); // division: 5/17 mod 2^255-19 == 5 * invert(17)
+fp.inv(5n); // modular inverse
 fp.sqrt(21n); // square root
 
-// Generic non-FP utils are also available
+// Non-Field generic utils are also available
 mod.mod(21n, 10n); // 21 mod 10 == 1n; fixed version of 21 % 10
-mod.inv(17n, 10n); // invert(17) mod 10; modular multiplicative inverse
+mod.invert(17n, 10n); // invert(17) mod 10; modular multiplicative inverse
 mod.invertBatch([1n, 2n, 4n], 21n); // => [1n, 11n, 16n] in one inversion
 ```
 
