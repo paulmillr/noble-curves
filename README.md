@@ -5,7 +5,7 @@ Audited & minimal JS implementation of elliptic curve cryptography.
 - 🔒 [**Audited**](#security) by independent security firms
 - 🔻 Tree-shakeable: unused code is excluded from your builds
 - 🏎 Fast: hand-optimized for caveats of JS engines
-- 🔍 Reliable: property-based / cross-library / wycheproof tests and fuzzing ensure correctness
+- 🔍 Reliable: cross-library / wycheproof tests and fuzzing ensure correctness
 - ➰ Short Weierstrass, Edwards, Montgomery curves
 - ✍️ ECDSA, EdDSA, Schnorr, BLS, ECDH, hashing to curves, Poseidon ZK-friendly hash
 - 🔖 SUF-CMA, SBS (non-repudiation), ZIP215 (consensus friendliness) features for ed25519 & ed448
@@ -766,7 +766,7 @@ fp.sqrt(21n); // square root
 
 // Generic non-FP utils are also available
 mod.mod(21n, 10n); // 21 mod 10 == 1n; fixed version of 21 % 10
-mod.invert(17n, 10n); // invert(17) mod 10; modular multiplicative inverse
+mod.inv(17n, 10n); // invert(17) mod 10; modular multiplicative inverse
 mod.invertBatch([1n, 2n, 4n], 21n); // => [1n, 11n, 16n] in one inversion
 ```
 
@@ -774,12 +774,12 @@ Field operations are not constant-time: they are using JS bigints, see [security
 The fact is mostly irrelevant, but the important method to keep in mind is `pow`,
 which may leak exponent bits, when used naïvely.
 
-`mod.Field` is always **field over prime**. Non-prime fields aren't supported for now.
+`mod.Field` is always **field over prime number**. Non-prime fields aren't supported for now.
 We don't test for prime-ness for speed and because algorithms are probabilistic anyway.
 Initializing a non-prime field could make your app suspectible to
 DoS (infilite loop) on Tonelli-Shanks square root calculation.
 
-Unlike `mod.invert`, `mod.invertBatch` won't throw on `0`: make sure to throw an error yourself.
+Unlike `mod.inv`, `mod.invertBatch` won't throw on `0`: make sure to throw an error yourself.
 
 #### Creating private keys from hashes
 
