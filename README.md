@@ -831,7 +831,7 @@ utils.equalBytes(Uint8Array.from([0xde]), Uint8Array.from([0xde]));
 
 The library has been independently audited:
 
-- at version 1.6.0, in Sep 2024, by [cure53](https://cure53.de)
+- at version 1.6.0, in Sep 2024, by [Cure53](https://cure53.de)
   - PDFs: [in-repo](./audit/2024-09-cure53-audit-nbl4.pdf)
   - [Changes since audit](https://github.com/paulmillr/noble-curves/compare/1.6.0..main)
   - Scope: ed25519, ed448, their add-ons, bls12-381, bn254,
