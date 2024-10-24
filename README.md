@@ -367,20 +367,43 @@ import { Field } from '@noble/curves/abstract/modular'; // finite field for mod 
 import { sha256 } from '@noble/hashes/sha256'; // 3rd-party sha256() of type utils.CHash
 import { hmac } from '@noble/hashes/hmac'; // 3rd-party hmac() that will accept sha256()
 import { concatBytes, randomBytes } from '@noble/hashes/utils'; // 3rd-party utilities
+
+const hmacSha256 = (key: Uint8Array, ...msgs: Uint8Array[]) => hmac(sha256, key, concatBytes(...msgs));
+
+// secq256k1: cycle of secp256k1 with Fp/N flipped.
+// https://personaelabs.org/posts/spartan-ecdsa
+// https://zcash.github.io/halo2/background/curves.html#cycles-of-curves
 const secq256k1 = weierstrass({
-  // secq256k1: cycle of secp256k1 with Fp/N flipped.
-  // https://personaelabs.org/posts/spartan-ecdsa
-  // https://zcash.github.io/halo2/background/curves.html#cycles-of-curves
+  // Curve equation params a, b
   a: 0n,
   b: 7n,
+  // Field over which we'll do calculations
   Fp: Field(2n ** 256n - 432420386565659656852420866394968145599n),
+  // Curve order, total count of valid points in the field.
   n: 2n ** 256n - 2n ** 32n - 2n ** 9n - 2n ** 8n - 2n ** 7n - 2n ** 6n - 2n ** 4n - 1n,
+  // Base point (x, y) aka generator point
   Gx: 55066263022277343669578718895168534326250603453777594175500187360389116729240n,
   Gy: 32670510020758816978083085130507043184471273380659243275938904335757337482424n,
+ 
   hash: sha256,
-  hmac: (key: Uint8Array, ...msgs: Uint8Array[]) => hmac(sha256, key, concatBytes(...msgs)),
+  hmac: hmacSha256,
   randomBytes,
 });
+
+// NIST secp192r1 aka p192 https://www.secg.org/sec2-v2.pdf, https://neuromancer.sk/std/secg/secp192r1
+const secp192r1 = weierstrass({
+  a: BigInt('0xfffffffffffffffffffffffffffffffefffffffffffffffc'),
+  b: BigInt('0x64210519e59c80e70fa7e9ab72243049feb8deecc146b9b1'),
+  Fp: Field(BigInt('0xfffffffffffffffffffffffffffffffeffffffffffffffff')),
+  n: BigInt('0xffffffffffffffffffffffff99def836146bc9b1b4d22831'),
+  Gx: BigInt('0x188da80eb03090f67cbf20eb43a18800f4ff0afd82ff1012'),
+  Gy: BigInt('0x07192b95ffc8da78631011ed6b24cdd573f977a11e794811'),
+  h: BigInt(1),
+  hash: sha256,
+  hmac: hmacSha256,
+  randomBytes,
+});
+
 
 // Replace weierstrass() with weierstrassPoints() if you don't need ECDSA, hash, hmac, randomBytes
 ```
