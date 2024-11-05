@@ -384,7 +384,7 @@ const secq256k1 = weierstrass({
   // Base point (x, y) aka generator point
   Gx: 55066263022277343669578718895168534326250603453777594175500187360389116729240n,
   Gy: 32670510020758816978083085130507043184471273380659243275938904335757337482424n,
- 
+
   hash: sha256,
   hmac: hmacSha256,
   randomBytes,
@@ -855,10 +855,11 @@ utils.equalBytes(Uint8Array.from([0xde]), Uint8Array.from([0xde]));
 The library has been independently audited:
 
 - at version 1.6.0, in Sep 2024, by [Cure53](https://cure53.de)
-  - PDFs: [in-repo](./audit/2024-09-cure53-audit-nbl4.pdf)
+  - PDFs: [website](https://cure53.de/audit-report_noble-crypto-libs.pdf), [in-repo](./audit/2024-09-cure53-audit-nbl4.pdf)
   - [Changes since audit](https://github.com/paulmillr/noble-curves/compare/1.6.0..main)
   - Scope: ed25519, ed448, their add-ons, bls12-381, bn254,
-    hash-to-curve, low-level primitives bls, tower, edwards, montgomery etc.
+    hash-to-curve, low-level primitives bls, tower, edwards, montgomery.
+  - The audit has been funded by [OpenSats](https://opensats.org)
 - at version 1.2.0, in Sep 2023, by [Kudelski Security](https://kudelskisecurity.com)
   - PDFs: [in-repo](./audit/2023-09-kudelski-audit-starknet.pdf)
   - [Changes since audit](https://github.com/paulmillr/noble-curves/compare/1.2.0..main)
