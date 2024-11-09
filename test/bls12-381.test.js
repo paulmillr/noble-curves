@@ -29,7 +29,7 @@ const SCALAR_VECTORS = readFileSync('./test/bls12-381/bls12-381-scalar-test-vect
   .map((l) => l.split(':'));
 
 // @ts-ignore
-const NUM_RUNS = Number(process.env.RUNS_COUNT || 10); // reduce to 1 to shorten test time
+const NUM_RUNS = Number(globalThis.process?.env?.RUNS_COUNT || 10); // reduce to 1 to shorten test time
 fc.configureGlobal({ numRuns: NUM_RUNS });
 
 const G1Point = bls.G1.ProjectivePoint;
