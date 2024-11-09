@@ -18,7 +18,7 @@
     "build:clean": "rm *.{js,d.ts,d.ts.map,js.map} esm/*.{js,d.ts,d.ts.map,js.map} 2> /dev/null",
     "lint": "prettier --check 'src/**/*.{js,ts}' 'test/*.js'",
     "format": "prettier --write 'src/**/*.{js,ts}' 'test/*.js'",
-    "test": "node test/index.test.js"
+    "test": "node test/index.js"
   },
   "author": "Paul Miller (https://paulmillr.com)",
   "homepage": "https://paulmillr.com/noble/",
