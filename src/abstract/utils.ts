@@ -17,10 +17,7 @@ export type CHash = {
 export type FHash = (message: Uint8Array | string) => Uint8Array;
 
 export function isBytes(a: unknown): a is Uint8Array {
-  return (
-    a instanceof Uint8Array ||
-    (a != null && typeof a === 'object' && a.constructor.name === 'Uint8Array')
-  );
+  return a instanceof Uint8Array || (ArrayBuffer.isView(a) && a.constructor.name === 'Uint8Array');
 }
 
 export function abytes(item: unknown): void {
