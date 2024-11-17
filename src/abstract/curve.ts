@@ -30,6 +30,37 @@ export type Mapper<T> = (i: T[]) => T[];
 const pointPrecomputes = new WeakMap<any, any[]>();
 const pointWindowSizes = new WeakMap<any, number>(); // This allows use make points immutable (nothing changes inside)
 
+function validateW(W: number, bits: number) {
+  if (!Number.isSafeInteger(W) || W <= 0 || W > bits)
+    throw new Error(`Wrong window size=${W}, should be [1..${bits}]`);
+}
+
+function calcWOpts(W: number, bits: number) {
+  validateW(W, bits);
+  const windows = Math.ceil(bits / W) + 1; // +1, because
+  const windowSize = 2 ** (W - 1); // -1 because we skip zero
+  return { windows, windowSize };
+}
+
+function validateMSMPoints(points: any[], c: any) {
+  if (!Array.isArray(points)) throw new Error('array expected');
+  points.forEach((p, i) => {
+    if (!(p instanceof c)) throw new Error(`wrong point at index ${i}`);
+  });
+}
+
+function validateMSMArgs(points: any[], c: any, scalars: any[], field: any) {
+  validateMSMPoints(points, c);
+  if (!Array.isArray(scalars) || scalars.length !== points.length)
+    throw new Error('arrays of points and scalars must have equal length');
+  scalars.forEach((s, i) => {
+    if (!field.isValid(s)) throw new Error(`wrong scalar at index ${i}`);
+  });
+}
+function getW(P: any): number {
+  return pointWindowSizes.get(P) || 1;
+}
+
 // Elliptic curve multiplication of Point by scalar. Fragile.
 // Scalars should always be less than curve order: this should be checked inside of a curve itself.
 // Creates precomputation tables for fast multiplication:
@@ -46,21 +77,13 @@ export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number) {
     const neg = item.negate();
     return condition ? neg : item;
   };
-  const validateW = (W: number) => {
-    if (!Number.isSafeInteger(W) || W <= 0 || W > bits)
-      throw new Error(`Wrong window size=${W}, should be [1..${bits}]`);
-  };
-  const opts = (W: number) => {
-    validateW(W);
-    const windows = Math.ceil(bits / W) + 1; // +1, because
-    const windowSize = 2 ** (W - 1); // -1 because we skip zero
-    return { windows, windowSize };
-  };
   return {
     constTimeNegate,
+    hasPrecomputes(elm: T) {
+      return getW(elm) !== 1;
+    },
     // non-const time multiplication ladder
-    unsafeLadder(elm: T, n: bigint) {
-      let p = c.ZERO;
+    unsafeLadder(elm: T, n: bigint, p = c.ZERO) {
       let d: T = elm;
       while (n > _0n) {
         if (n & _1n) p = p.add(d);
@@ -81,7 +104,7 @@ export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number) {
      * @returns precomputed point tables flattened to a single array
      */
     precomputeWindow(elm: T, W: number): Group<T>[] {
-      const { windows, windowSize } = opts(W);
+      const { windows, windowSize } = calcWOpts(W, bits);
       const points: T[] = [];
       let p: T = elm;
       let base = p;
@@ -108,7 +131,7 @@ export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number) {
     wNAF(W: number, precomputes: T[], n: bigint): { p: T; f: T } {
       // TODO: maybe check that scalar is less than group order? wNAF behavious is undefined otherwise
       // But need to carefully remove other checks before wNAF. ORDER == bits here
-      const { windows, windowSize } = opts(W);
+      const { windows, windowSize } = calcWOpts(W, bits);
 
       let p = c.ZERO;
       let f = c.BASE;
@@ -174,7 +197,7 @@ export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number) {
     // stores precomputed values. Usually only base point would be precomputed.
 
     setWindowSize(P: T, W: number) {
-      validateW(W);
+      validateW(W, bits);
       pointWindowSizes.set(P, W);
       pointPrecomputes.delete(P);
     },
@@ -204,14 +227,7 @@ export function pippenger<T extends Group<T>>(
   // - https://eprint.iacr.org/2024/750.pdf
   // - https://tches.iacr.org/index.php/TCHES/article/view/10287
   // 0 is accepted in scalars
-  if (!Array.isArray(points) || !Array.isArray(scalars) || scalars.length !== points.length)
-    throw new Error('arrays of points and scalars must have equal length');
-  scalars.forEach((s, i) => {
-    if (!field.isValid(s)) throw new Error(`wrong scalar at index ${i}`);
-  });
-  points.forEach((p, i) => {
-    if (!(p instanceof (c as any))) throw new Error(`wrong point at index ${i}`);
-  });
+  validateMSMArgs(points, c, scalars, field);
   const wbits = bitLen(BigInt(points.length));
   const windowSize = wbits > 12 ? wbits - 3 : wbits > 4 ? wbits - 2 : wbits ? 2 : 1; // in bits
   const MASK = (1 << windowSize) - 1;
