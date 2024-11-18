@@ -21,3 +21,34 @@ export function json(path) {
     return require('./' + file + '.json'); // in this form so that bundler can glob this
   }
 }
+
+
+const TYPE_TEST_BASE = [
+  null,
+  [1, 2, 3],
+  { a: 1, b: 2, c: 3 },
+  NaN,
+  0.1234,
+  1.0000000000001,
+  10e9999,
+  new Uint32Array([1, 2, 3]),
+  100n,
+  new Set([1, 2, 3]),
+  new Uint8ClampedArray([1, 2, 3]),
+  new Int16Array([1, 2, 3]),
+  new ArrayBuffer(100),
+  new DataView(new ArrayBuffer(100)),
+  { constructor: { name: 'Uint8Array' }, length: '1e30' },
+  () => {},
+  async () => {},
+  class Test {},
+];
+const TYPE_TEST_NOT_STR = [
+  ' 1 2 3 4 5',
+  '010203040x',
+  'abcdefgh',
+  '1 2 3 4 5 ',
+  'bee',
+  new String('1234'),
+];
+export const TYPE_TEST = { hex: TYPE_TEST_BASE.concat(TYPE_TEST_NOT_STR), bytes: TYPE_TEST_BASE.concat(TYPE_TEST_NOT_STR) };
