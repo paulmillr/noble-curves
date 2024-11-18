@@ -3,8 +3,11 @@ import { deepStrictEqual, notDeepStrictEqual, throws } from 'node:assert';
 import { should, describe } from 'micro-should';
 import * as fc from 'fast-check';
 import * as mod from '../esm/abstract/modular.js';
-import { bytesToHex, isBytes, bytesToHex as toHex } from '../esm/abstract/utils.js';
+import { isBytes, bytesToHex as toHex } from '../esm/abstract/utils.js';
 // Generic tests for all curves in package
+import { twistedEdwards } from '../esm/abstract/edwards.js';
+import { sha512 } from '@noble/hashes/sha512';
+import { randomBytes } from '@noble/hashes/utils';
 import { secp192r1, secp224r1 } from './_more-curves.helpers.js';
 import { secp256r1 } from '../esm/p256.js';
 import { secp384r1 } from '../esm/p384.js';
@@ -17,6 +20,7 @@ import { bn254_weierstrass } from '../esm/bn254.js';
 import { jubjub } from '../esm/jubjub.js';
 import { bls12_381 } from '../esm/bls12-381.js';
 import { createCurve } from '../esm/_shortw_utils.js';
+import { precomputeMSMUnsafe } from '../esm/abstract/curve.js';
 import { Field } from '../esm/abstract/modular.js';
 import { sha256 } from '@noble/hashes/sha256';
 import { bn254 } from '../esm/bn254.js';
@@ -90,8 +94,6 @@ const CURVES = {
   // Requires fromHex/toHex
   // alt_bn128_G1: alt_bn128.G1, alt_bn128_G2: alt_bn128.G2,
 };
-
-const PAIRINGS = { bls12_381, bn254 };
 
 for (const c in FIELDS) {
   const curve = FIELDS[c];
@@ -468,33 +470,6 @@ for (const name in CURVES) {
             { numRuns: NUM_RUNS }
           )
         );
-        should('MSM (basic)', () => {
-          equal(p.msm([p.BASE], [0n]), p.ZERO, '0*G');
-          equal(p.msm([], []), p.ZERO, 'empty');
-          equal(p.msm([p.ZERO], [123n]), p.ZERO, '123 * Infinity');
-          equal(p.msm([p.BASE], [123n]), p.BASE.multiply(123n), '123 * G');
-          const points = [p.BASE, p.BASE.multiply(2n), p.BASE.multiply(4n), p.BASE.multiply(8n)];
-          // 1*3 + 5*2 + 4*7 + 11*8 = 129
-          equal(p.msm(points, [3n, 5n, 7n, 11n]), p.BASE.multiply(129n), '129 * G');
-        });
-        should('MSM (rand)', () =>
-          fc.assert(
-            fc.property(fc.array(fc.tuple(FC_BIGINT, FC_BIGINT)), FC_BIGINT, (pairs) => {
-              let total = 0n;
-              const scalars = [];
-              const points = [];
-              for (const [ps, s] of pairs) {
-                points.push(p.BASE.multiply(ps));
-                scalars.push(s);
-                total += ps * s;
-              }
-              total = mod.mod(total, CURVE_ORDER);
-              const exp = total ? p.BASE.multiply(total) : p.ZERO;
-              equal(p.msm(points, scalars), exp, 'total');
-            }),
-            { numRuns: NUM_RUNS }
-          )
-        );
       });
 
       for (const op of ['add', 'subtract']) {
@@ -571,6 +546,78 @@ for (const name in CURVES) {
           });
         });
       }
+
+      describe('multiscalar multiplication', () => {
+        should('MSM basic', () => {
+          const msm = p.msm;
+          equal(msm([p.BASE], [0n]), p.ZERO, '0*G');
+          equal(msm([], []), p.ZERO, 'empty');
+          equal(msm([p.ZERO], [123n]), p.ZERO, '123 * Infinity');
+          equal(msm([p.BASE], [123n]), p.BASE.multiply(123n), '123 * G');
+          const points = [p.BASE, p.BASE.multiply(2n), p.BASE.multiply(4n), p.BASE.multiply(8n)];
+          // 1*3 + 5*2 + 4*7 + 11*8 = 129
+          equal(msm(points, [3n, 5n, 7n, 11n]), p.BASE.multiply(129n), '129 * G');
+        });
+        should('MSM random', () =>
+          fc.assert(
+            fc.property(fc.array(fc.tuple(FC_BIGINT, FC_BIGINT)), FC_BIGINT, (pairs) => {
+              let total = 0n;
+              const scalars = [];
+              const points = [];
+              for (const [ps, s] of pairs) {
+                points.push(p.BASE.multiply(ps));
+                scalars.push(s);
+                total += ps * s;
+              }
+              total = mod.mod(total, CURVE_ORDER);
+              const exp = total ? p.BASE.multiply(total) : p.ZERO;
+              equal(p.msm(points, scalars), exp, 'total');
+            }),
+            { numRuns: NUM_RUNS }
+          )
+        );
+        should('precomputeMSMUnsafe basic', () => {
+          const Point = C.ExtendedPoint || C.ProjectivePoint;
+          if (!Point) throw new Error('Unknown point');
+          const field = Field(CURVE_ORDER);
+
+          const points = [p.BASE, p.BASE.multiply(2n), p.BASE.multiply(4n), p.BASE.multiply(8n)];
+          const scalars = [3n, 5n, 7n, 11n];
+          const res = p.BASE.multiply(129n);
+
+          for (let windowSize = 1; windowSize <= 10; windowSize++) {
+            const mul = precomputeMSMUnsafe(Point, field, points, windowSize);
+            equal(mul(scalars), res, 'windowSize=' + windowSize);
+          }
+        });
+        should('precomputeMSMUnsafe random', () =>
+          fc.assert(
+            fc.property(fc.array(fc.tuple(FC_BIGINT, FC_BIGINT)), FC_BIGINT, (pairs) => {
+              const Point = C.ExtendedPoint || C.ProjectivePoint;
+              if (!Point) throw new Error('Unknown point');
+              const field = Field(CURVE_ORDER);
+
+              let total = 0n;
+              const scalars = [];
+              const points = [];
+              for (const [ps, s] of pairs) {
+                points.push(p.BASE.multiply(ps));
+                scalars.push(s);
+                total += ps * s;
+              }
+              total = mod.mod(total, CURVE_ORDER);
+              const res = total ? p.BASE.multiply(total) : p.ZERO;
+
+              for (let windowSize = 1; windowSize <= 10; windowSize++) {
+                const mul = precomputeMSMUnsafe(Point, field, points, windowSize);
+                equal(mul(scalars), res, 'windowSize=' + windowSize);
+              }
+            }),
+            { numRuns: NUM_RUNS }
+          )
+        );
+      });
+
       // Complex point (Extended/Jacobian/Projective?)
       // if (p.BASE.toAffine && C.Point) {
       //   should('toAffine()', () => {
@@ -793,81 +840,108 @@ for (const name in CURVES) {
   });
 }
 
-should('secp224k1 sqrt bug', () => {
-  const { Fp } = secp224r1.CURVE;
-  const sqrtMinus1 = Fp.sqrt(-1n);
-  // Verified against sage
-  deepStrictEqual(
-    sqrtMinus1,
-    23621584063597419797792593680131996961517196803742576047493035507225n
-  );
-  deepStrictEqual(
-    Fp.neg(sqrtMinus1),
-    3338362603553219996874421406887633712040719456283732096017030791656n
-  );
-  deepStrictEqual(Fp.sqr(sqrtMinus1), Fp.create(-1n));
+describe('edge cases', () => {
+  should('bigInt private keys', () => {
+    // Doesn't support bigints anymore
+    throws(() => ed25519.sign('', 123n));
+    throws(() => ed25519.getPublicKey(123n));
+    throws(() => x25519.getPublicKey(123n));
+    // Weierstrass still supports
+    secp256k1.getPublicKey(123n);
+    secp256k1.sign('', 123n);
+  });
+
+  should('secp224k1 sqrt bug', () => {
+    const { Fp } = secp224r1.CURVE;
+    const sqrtMinus1 = Fp.sqrt(-1n);
+    // Verified against sage
+    deepStrictEqual(
+      sqrtMinus1,
+      23621584063597419797792593680131996961517196803742576047493035507225n
+    );
+    deepStrictEqual(
+      Fp.neg(sqrtMinus1),
+      3338362603553219996874421406887633712040719456283732096017030791656n
+    );
+    deepStrictEqual(Fp.sqr(sqrtMinus1), Fp.create(-1n));
+  });
+
+  should('Field: prohibit non-prime sqrt. gh-168', () => {
+    const Fp =
+      Field(21888242871839275222246405745257275088548364400416034343698204186575808495617n);
+    throws(() =>
+      mod.tonelliShanks(
+        21888242871839275222246405745257275088614511777268538073601725287587578984328n
+      )
+    );
+    const babyJubNoble = twistedEdwards({
+      a: Fp.create(168700n),
+      d: Fp.create(168696n),
+      Fp: Fp,
+      n: 21888242871839275222246405745257275088614511777268538073601725287587578984328n,
+      h: 8n,
+      Gx: 5299619240641551281634865583518297030282874472190772894086521144482721001553n,
+      Gy: 16950150798460657717958625567821834550301663161624707787222815936182638968203n,
+      hash: sha512,
+      randomBytes,
+    });
+  });
 });
 
-should('bigInt private keys', () => {
-  // Doesn't support bigints anymore
-  throws(() => ed25519.sign('', 123n));
-  throws(() => ed25519.getPublicKey(123n));
-  throws(() => x25519.getPublicKey(123n));
-  // Weierstrass still supports
-  secp256k1.getPublicKey(123n);
-  secp256k1.sign('', 123n);
-});
+describe('createCurve', () => {
+  describe('handles wycheproof vectors', () => {
+    const VECTORS = wyche_curves.testGroups[0].tests;
+    for (const v of VECTORS) {
+      should(`${v.name}`, () => {
+        const CURVE = createCurve(
+          {
+            Fp: Field(BigInt(`0x${v.p}`)),
+            a: BigInt(`0x${v.a}`),
+            b: BigInt(`0x${v.b}`),
+            n: BigInt(`0x${v.n}`),
+            h: BigInt(v.h),
+            Gx: BigInt(`0x${v.gx}`),
+            Gy: BigInt(`0x${v.gy}`),
+          },
+          sha256
+        );
+      });
+      const CURVE = CURVES[v.name];
+      if (!CURVE) continue;
+      should(`${v.name} parms verify`, () => {
+        deepStrictEqual(CURVE.CURVE.Fp.ORDER, BigInt(`0x${v.p}`));
+        deepStrictEqual(CURVE.CURVE.a, BigInt(`0x${v.a}`));
+        deepStrictEqual(CURVE.CURVE.b, BigInt(`0x${v.b}`));
+        deepStrictEqual(CURVE.CURVE.n, BigInt(`0x${v.n}`));
+        deepStrictEqual(CURVE.CURVE.Gx, BigInt(`0x${v.gx}`));
+        deepStrictEqual(CURVE.CURVE.Gy, BigInt(`0x${v.gy}`));
+        deepStrictEqual(CURVE.CURVE.h, BigInt(v.h));
+      });
+    }
+  });
 
-describe('wycheproof curve creation', () => {
-  const VECTORS = wyche_curves.testGroups[0].tests;
-  for (const v of VECTORS) {
-    should(`${v.name}`, () => {
-      const CURVE = createCurve(
+  should('validates generator is on-curve', () => {
+    throws(() =>
+      createCurve(
         {
-          Fp: Field(BigInt(`0x${v.p}`)),
-          a: BigInt(`0x${v.a}`),
-          b: BigInt(`0x${v.b}`),
-          n: BigInt(`0x${v.n}`),
-          h: BigInt(v.h),
-          Gx: BigInt(`0x${v.gx}`),
-          Gy: BigInt(`0x${v.gy}`),
+          Fp: Field(BigInt(`0x00c302f41d932a36cda7a3463093d18db78fce476de1a86297`)),
+          a: BigInt(`0x00c302f41d932a36cda7a3463093d18db78fce476de1a86294`),
+          b: BigInt(`0x13d56ffaec78681e68f9deb43b35bec2fb68542e27897b79`),
+          n: BigInt(`0x00c302f41d932a36cda7a3462f9e9e916b5be8f1029ac4acc1`),
+          h: BigInt(1),
+          Gx: BigInt(`0x3ae9e58c82f63c30282e1fe7bbf43fa72c446af6f4618129`),
+          Gy: BigInt(`0x097e2c5667c2223a902ab5ca449d0084b7e5b3de7ccc01c8`), // last 9 -> 8
         },
         sha256
-      );
-    });
-    const CURVE = CURVES[v.name];
-    if (!CURVE) continue;
-    should(`${v.name} parms verify`, () => {
-      deepStrictEqual(CURVE.CURVE.Fp.ORDER, BigInt(`0x${v.p}`));
-      deepStrictEqual(CURVE.CURVE.a, BigInt(`0x${v.a}`));
-      deepStrictEqual(CURVE.CURVE.b, BigInt(`0x${v.b}`));
-      deepStrictEqual(CURVE.CURVE.n, BigInt(`0x${v.n}`));
-      deepStrictEqual(CURVE.CURVE.Gx, BigInt(`0x${v.gx}`));
-      deepStrictEqual(CURVE.CURVE.Gy, BigInt(`0x${v.gy}`));
-      deepStrictEqual(CURVE.CURVE.h, BigInt(v.h));
-    });
-  }
-});
-
-should('validate generator point is on curve', () => {
-  throws(() =>
-    createCurve(
-      {
-        Fp: Field(BigInt(`0x00c302f41d932a36cda7a3463093d18db78fce476de1a86297`)),
-        a: BigInt(`0x00c302f41d932a36cda7a3463093d18db78fce476de1a86294`),
-        b: BigInt(`0x13d56ffaec78681e68f9deb43b35bec2fb68542e27897b79`),
-        n: BigInt(`0x00c302f41d932a36cda7a3462f9e9e916b5be8f1029ac4acc1`),
-        h: BigInt(1),
-        Gx: BigInt(`0x3ae9e58c82f63c30282e1fe7bbf43fa72c446af6f4618129`),
-        Gy: BigInt(`0x097e2c5667c2223a902ab5ca449d0084b7e5b3de7ccc01c8`), // last 9 -> 8
-      },
-      sha256
-    )
-  );
+      )
+    );
+  });
 });
 
 describe('Pairings', () => {
-  for (const [name, curve] of Object.entries(PAIRINGS)) {
+  const pairingCurves = { bls12_381, bn254 };
+
+  for (const [name, curve] of Object.entries(pairingCurves)) {
     describe(name, () => {
       const { pairing } = curve;
       const { Fp12 } = curve.fields;
