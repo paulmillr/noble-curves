@@ -423,7 +423,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
     }
 
     // Multiscalar Multiplication
-    static msm(points: Point[], scalars: bigint[]) {
+    static msm(points: Point[], scalars: bigint[]): Point {
       return pippenger(Point, Fn, points, scalars);
     }
 
@@ -576,14 +576,17 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
      * an exposed private key e.g. sig verification, which works over *public* keys.
      */
     multiplyUnsafe(sc: bigint): Point {
-      ut.aInRange('scalar', sc, _0n, CURVE.n);
+      const { endo, n: N } = CURVE;
+      ut.aInRange('scalar', sc, _0n, N);
       const I = Point.ZERO;
       if (sc === _0n) return I;
-      if (sc === _1n) return this;
-      const { endo } = CURVE;
-      if (!endo) return wnaf.unsafeLadder(this, sc);
+      if (this.is0() || sc === _1n) return this;
 
-      // Apply endomorphism
+      // Case a: no endomorphism. Case b: has precomputes.
+      if (!endo || wnaf.hasPrecomputes(this))
+        return wnaf.wNAFCachedUnsafe(this, sc, Point.normalizeZ);
+
+      // Case c: endomorphism
       let { k1neg, k1, k2neg, k2 } = endo.splitScalar(sc);
       let k1p = I;
       let k2p = I;

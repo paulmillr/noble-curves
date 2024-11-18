@@ -71,6 +71,7 @@ export interface ExtPointType extends Group<ExtPointType> {
   toAffine(iz?: bigint): AffinePoint<bigint>;
   toRawBytes(isCompressed?: boolean): Uint8Array;
   toHex(isCompressed?: boolean): string;
+  _setWindowSize(windowSize: number): void;
 }
 // Static methods of Extended Point with coordinates in X, Y, Z, T
 export interface ExtPointConstructor extends GroupConstructor<ExtPointType> {
@@ -105,6 +106,7 @@ export type CurveFn = {
       point: ExtPointType;
       pointBytes: Uint8Array;
     };
+    precompute: (windowSize?: number, point?: ExtPointType) => ExtPointType;
   };
 };
 
@@ -229,7 +231,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       return points.map((p, i) => p.toAffine(toInv[i])).map(Point.fromAffine);
     }
     // Multiscalar Multiplication
-    static msm(points: Point[], scalars: bigint[]) {
+    static msm(points: Point[], scalars: bigint[]): Point {
       return pippenger(Point, Fn, points, scalars);
     }
 
@@ -350,13 +352,13 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     // It's faster, but should only be used when you don't care about
     // an exposed private key e.g. sig verification.
     // Does NOT allow scalars higher than CURVE.n.
-    multiplyUnsafe(scalar: bigint): Point {
+    // Accepts optional accumulator to merge with multiply (important for sparse scalars)
+    multiplyUnsafe(scalar: bigint, acc = Point.ZERO): Point {
       const n = scalar;
       ut.aInRange('scalar', n, _0n, CURVE_ORDER); // 0 <= scalar < L
       if (n === _0n) return I;
-      if (this.equals(I) || n === _1n) return this;
-      if (this.equals(G)) return this.wNAF(n).p;
-      return wnaf.unsafeLadder(this, n);
+      if (this.is0() || n === _1n) return this;
+      return wnaf.wNAFCachedUnsafe(this, n, Point.normalizeZ, acc);
     }
 
     // Checks if point is of small order.
@@ -523,7 +525,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
      * but allows to speed-up subsequent getPublicKey() calls up to 20x.
      * @param windowSize 2, 4, 8, 16
      */
-    precompute(windowSize = 8, point = Point.BASE): typeof Point.BASE {
+    precompute(windowSize = 8, point: ExtPointType = Point.BASE): ExtPointType {
       point._setWindowSize(windowSize);
       point.multiply(BigInt(3));
       return point;
