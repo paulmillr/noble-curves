@@ -97,7 +97,10 @@ export function tonelliShanks(P: bigint) {
   for (Q = P - _1n, S = 0; Q % _2n === _0n; Q /= _2n, S++);
 
   // Step 2: Select a non-square z such that (z | p) ≡ -1 and set c ≡ zq
-  for (Z = _2n; Z < P && pow(Z, legendreC, P) !== P - _1n; Z++);
+  for (Z = _2n; Z < P && pow(Z, legendreC, P) !== P - _1n; Z++) {
+    // Crash instead of infinity loop, we cannot reasonable count until P.
+    if (Z > 1000) throw new Error('Cannot find square root: likely non-prime P');
+  }
 
   // Fast-path
   if (S === 1) {
@@ -360,10 +363,10 @@ export function Field(
   isLE = false,
   redef: Partial<IField<bigint>> = {}
 ): Readonly<FpField> {
-  if (ORDER <= _0n) throw new Error(`Expected Field ORDER > 0, got ${ORDER}`);
+  if (ORDER <= _0n) throw new Error(`Invalid field: expected ORDER > 0, got ${ORDER}`);
   const { nBitLength: BITS, nByteLength: BYTES } = nLength(ORDER, bitLen);
-  if (BYTES > 2048) throw new Error('Field lengths over 2048 bytes are not supported');
-  const sqrtP = FpSqrt(ORDER);
+  if (BYTES > 2048) throw new Error('Invalid field: expected ORDER of <= 2048 bytes');
+  let sqrtP: ReturnType<typeof FpSqrt>; // cached sqrtP
   const f: Readonly<FpField> = Object.freeze({
     ORDER,
     BITS,
@@ -396,7 +399,12 @@ export function Field(
     mulN: (lhs, rhs) => lhs * rhs,
 
     inv: (num) => invert(num, ORDER),
-    sqrt: redef.sqrt || ((n) => sqrtP(f, n)),
+    sqrt:
+      redef.sqrt ||
+      ((n) => {
+        if (!sqrtP) sqrtP = FpSqrt(ORDER);
+        return sqrtP(f, n);
+      }),
     invertBatch: (lst) => FpInvertBatch(f, lst),
     // TODO: do we really need constant cmov?
     // We don't have const-time bigints anyway, so probably will be not very useful
@@ -404,7 +412,7 @@ export function Field(
     toBytes: (num) => (isLE ? numberToBytesLE(num, BYTES) : numberToBytesBE(num, BYTES)),
     fromBytes: (bytes) => {
       if (bytes.length !== BYTES)
-        throw new Error(`Fp.fromBytes: expected ${BYTES}, got ${bytes.length}`);
+        throw new Error(`Field.fromBytes: expected ${BYTES} bytes, got ${bytes.length}`);
       return isLE ? bytesToNumberLE(bytes) : bytesToNumberBE(bytes);
     },
   } as FpField);
