@@ -22,7 +22,6 @@ export function json(path) {
   }
 }
 
-
 const TYPE_TEST_BASE = [
   null,
   [1, 2, 3],
@@ -51,4 +50,7 @@ const TYPE_TEST_NOT_STR = [
   'bee',
   new String('1234'),
 ];
-export const TYPE_TEST = { hex: TYPE_TEST_BASE.concat(TYPE_TEST_NOT_STR), bytes: TYPE_TEST_BASE.concat(TYPE_TEST_NOT_STR) };
+export const TYPE_TEST = {
+  hex: TYPE_TEST_BASE.concat(TYPE_TEST_NOT_STR),
+  bytes: TYPE_TEST_BASE.concat(TYPE_TEST_NOT_STR),
+};
