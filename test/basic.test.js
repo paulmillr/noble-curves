@@ -791,9 +791,15 @@ for (const name in CURVES) {
           fc.property(fc.hexaString({ minLength: 64, maxLength: 64 }), (msg) => {
             const priv = C.utils.randomPrivateKey();
             const pub = C.getPublicKey(priv);
-            const sig = C.sign(msg, priv);
-            const sig2 = sig.normalizeS();
-            deepStrictEqual(sig2.hasHighS(), false);
+            const sig = C.sign(msg, priv, { lowS: false });
+            if (!sig.hasHighS()) return;
+            const sigNorm = sig.normalizeS();
+            deepStrictEqual(sigNorm.hasHighS(), false, 'a');
+
+            deepStrictEqual(C.verify(sig, msg, pub, { lowS: false }), true, 'b');
+            deepStrictEqual(C.verify(sig, msg, pub, { lowS: true }), false, 'c');
+            deepStrictEqual(C.verify(sigNorm, msg, pub, { lowS: true }), true, 'd');
+            deepStrictEqual(C.verify(sigNorm, msg, pub, { lowS: false }), true, 'e');
           }),
           { numRuns: NUM_RUNS }
         )
