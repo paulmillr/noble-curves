@@ -673,7 +673,9 @@ for (const name in CURVES) {
       throws(() => C.getPublicKey(undefined), 'undefined');
       throws(() => C.getPublicKey(''), "''");
       // NOTE: passes because of disabled hex padding checks for starknet, maybe enable?
-      // throws(() => C.getPublicKey('1'), "'1'");
+      if (name !== 'starknet') {
+        // throws(() => C.getPublicKey('1'), "'1'");
+      }
       throws(() => C.getPublicKey('key'), "'key'");
       throws(() => C.getPublicKey({}));
       throws(() => C.getPublicKey(new Uint8Array([])));
