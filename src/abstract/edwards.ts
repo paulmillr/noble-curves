@@ -128,6 +128,10 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     nByteLength,
     h: cofactor,
   } = CURVE;
+  // Important:
+  // There are some places where Fp.BYTES is used instead of nByteLength.
+  // So far, everything has been tested with curves of Fp.BYTES == nByteLength.
+  // TODO: test and find curves which behave otherwise.
   const MASK = _2n << (BigInt(nByteLength * 8) - _1n);
   const modP = Fp.create; // Function overrides
   const Fn = Field(CURVE.n, CURVE.nBitLength);
@@ -399,6 +403,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       normed[len - 1] = lastByte & ~0x80; // clear last bit
       const y = ut.bytesToNumberLE(normed);
 
+      // zip215=true is good for consensus-critical apps. =false follows RFC8032 / NIST186-5.
       // RFC8032 prohibits >= p, but ZIP215 doesn't
       // zip215=true:  0 <= y < MASK (2^256 for ed25519)
       // zip215=false: 0 <= y < P (2^255-19 for ed25519)
@@ -446,7 +451,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
 
   /** Convenience method that creates public key and other stuff. RFC8032 5.1.5 */
   function getExtendedPublicKey(key: Hex) {
-    const len = nByteLength;
+    const len = Fp.BYTES;
     key = ensureBytes('private key', key, len);
     // Hash private key with curve's hash function to produce uniformingly random input
     // Check byte lengths: ensure(64, h(ensure(32, key)))
@@ -481,23 +486,30 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     const s = modN(r + k * scalar); // S = (r + k * s) mod L
     ut.aInRange('signature.s', s, _0n, CURVE_ORDER); // 0 <= s < l
     const res = ut.concatBytes(R, ut.numberToBytesLE(s, Fp.BYTES));
-    return ensureBytes('result', res, nByteLength * 2); // 64-byte signature
+    return ensureBytes('result', res, Fp.BYTES * 2); // 64-byte signature
   }
 
   const verifyOpts: { context?: Hex; zip215?: boolean } = VERIFY_DEFAULT;
+
+  /**
+   * Verifies EdDSA signature against message and public key. RFC8032 5.1.7.
+   * An extended group equation is checked.
+   */
   function verify(sig: Hex, msg: Hex, publicKey: Hex, options = verifyOpts): boolean {
     const { context, zip215 } = options;
     const len = Fp.BYTES; // Verifies EdDSA signature against message and public key. RFC8032 5.1.7.
     sig = ensureBytes('signature', sig, 2 * len); // An extended group equation is checked.
     msg = ensureBytes('message', msg);
+    publicKey = ensureBytes('publicKey', publicKey, len);
     if (zip215 !== undefined) abool('zip215', zip215);
     if (prehash) msg = prehash(msg); // for ed25519ph, etc
 
     const s = ut.bytesToNumberLE(sig.slice(len, 2 * len));
-    // zip215: true is good for consensus-critical apps and allows points < 2^256
-    // zip215: false follows RFC8032 / NIST186-5 and restricts points to CURVE.p
     let A, R, SB;
     try {
+      // zip215=true is good for consensus-critical apps. =false follows RFC8032 / NIST186-5.
+      // zip215=true:  0 <= y < MASK (2^256 for ed25519)
+      // zip215=false: 0 <= y < P (2^255-19 for ed25519)
       A = Point.fromHex(publicKey, zip215);
       R = Point.fromHex(sig.slice(0, len), zip215);
       SB = G.multiplyUnsafe(s); // 0 <= s < l is done inside
@@ -508,6 +520,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
 
     const k = hashDomainToScalar(context, R.toRawBytes(), A.toRawBytes(), msg);
     const RkA = R.add(A.multiplyUnsafe(k));
+    // Extended group equation
     // [8][S]B = [8]R + [8][k]A'
     return RkA.subtract(SB).clearCofactor().equals(Point.ZERO);
   }
