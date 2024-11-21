@@ -1,4 +1,4 @@
-import { json } from './utils.js';
+import { getTypeTests, json } from './utils.js';
 import { deepStrictEqual, notDeepStrictEqual, throws } from 'node:assert';
 import { should, describe } from 'micro-should';
 import * as fc from 'fast-check';
@@ -25,6 +25,8 @@ import { Field } from '../esm/abstract/modular.js';
 import { sha256 } from '@noble/hashes/sha256';
 import { bn254 } from '../esm/bn254.js';
 const wyche_curves = json('./wycheproof/ec_prime_order_curves_test.json');
+
+const NUM_RUNS = 5;
 
 // Fields tests
 const FIELDS = {
@@ -350,9 +352,6 @@ for (const c in FIELDS) {
 }
 
 // Group tests
-
-const NUM_RUNS = 5;
-
 const getXY = (p) => ({ x: p.x, y: p.y });
 
 function equal(a, b, comment) {
@@ -472,31 +471,25 @@ for (const name in CURVES) {
         );
       });
 
+      // special case for add, subtract, equals, multiply. NOT multiplyUnsafe
+      // [0n, '0n'],
+
       for (const op of ['add', 'subtract']) {
         describe(op, () => {
           should('type check', () => {
+            for (let [item, repr_] of getTypeTests()) {
+              throws(() => G[1][op](item), repr_);
+            }
             throws(() => G[1][op](0), '0');
             throws(() => G[1][op](0n), '0n');
             G[1][op](G[2]);
             throws(() => G[1][op](CURVE_ORDER), 'CURVE_ORDER');
-            throws(() => G[1][op](-123n), '-123n');
-            throws(() => G[1][op](123), '123');
-            throws(() => G[1][op](123.456), '123.456');
-            throws(() => G[1][op](true), 'true');
-            throws(() => G[1][op](false), 'false');
-            throws(() => G[1][op](null), 'null');
-            throws(() => G[1][op](undefined), 'undefined');
-            throws(() => G[1][op]('1'), "'1'");
             throws(() => G[1][op]({ x: 1n, y: 1n }), '{ x: 1n, y: 1n }');
             throws(() => G[1][op]({ x: 1n, y: 1n, z: 1n }), '{ x: 1n, y: 1n, z: 1n }');
             throws(
               () => G[1][op]({ x: 1n, y: 1n, z: 1n, t: 1n }),
               '{ x: 1n, y: 1n, z: 1n, t: 1n }'
             );
-            throws(() => G[1][op](new Uint8Array([])), 'ui8a([])');
-            throws(() => G[1][op](new Uint8Array([0])), 'ui8a([0])');
-            throws(() => G[1][op](new Uint8Array([1])), 'ui8a([1])');
-            throws(() => G[1][op](new Uint8Array(4096).fill(1)), 'ui8a(4096*[1])');
             // if (G[1].toAffine) throws(() => G[1][op](C.Point.BASE), `Point ${op} ${pointName}`);
             throws(() => G[1][op](o.BASE), `${op}/other curve point`);
           });
@@ -504,20 +497,17 @@ for (const name in CURVES) {
       }
 
       should('equals type check', () => {
+        const op = 'equals';
+        for (let [item, repr_] of getTypeTests()) {
+          throws(() => G[1][op](item), repr_);
+        }
         throws(() => G[1].equals(0), '0');
         throws(() => G[1].equals(0n), '0n');
         deepStrictEqual(G[1].equals(G[2]), false, '1*G != 2*G');
         deepStrictEqual(G[1].equals(G[1]), true, '1*G == 1*G');
         deepStrictEqual(G[2].equals(G[2]), true, '2*G == 2*G');
         throws(() => G[1].equals(CURVE_ORDER), 'CURVE_ORDER');
-        throws(() => G[1].equals(123.456), '123.456');
-        throws(() => G[1].equals(true), 'true');
-        throws(() => G[1].equals('1'), "'1'");
         throws(() => G[1].equals({ x: 1n, y: 1n, z: 1n, t: 1n }), '{ x: 1n, y: 1n, z: 1n, t: 1n }');
-        throws(() => G[1].equals(new Uint8Array([])), 'ui8a([])');
-        throws(() => G[1].equals(new Uint8Array([0])), 'ui8a([0])');
-        throws(() => G[1].equals(new Uint8Array([1])), 'ui8a([1])');
-        throws(() => G[1].equals(new Uint8Array(4096).fill(1)), 'ui8a(4096*[1])');
         // if (G[1].toAffine) throws(() => G[1].equals(C.Point.BASE), 'Point.equals(${pointName})');
         throws(() => G[1].equals(o.BASE), 'other curve point');
       });
@@ -526,23 +516,19 @@ for (const name in CURVES) {
         if (!p.BASE[op]) continue;
         describe(op, () => {
           should('type check', () => {
-            if (op !== 'multiplyUnsafe') {
-              throws(() => G[1][op](0), '0');
-              throws(() => G[1][op](0n), '0n');
+            for (let [item, repr_] of getTypeTests()) {
+              throws(() => G[1][op](item), repr_);
             }
             G[1][op](1n);
             G[1][op](CURVE_ORDER - 1n);
             throws(() => G[1][op](G[2]), 'G[2]');
             throws(() => G[1][op](CURVE_ORDER), 'CURVE_ORDER');
             throws(() => G[1][op](CURVE_ORDER + 1n), 'CURVE_ORDER+1');
-            throws(() => G[1][op](123.456), '123.456');
-            throws(() => G[1][op](true), 'true');
-            throws(() => G[1][op]('1'), '1');
-            throws(() => G[1][op](new Uint8Array([])), 'ui8a([])');
-            throws(() => G[1][op](new Uint8Array([0])), 'ui8a([0])');
-            throws(() => G[1][op](new Uint8Array([1])), 'ui8a([1])');
-            throws(() => G[1][op](new Uint8Array(4096).fill(1)), 'ui8a(4096*[1])');
             throws(() => G[1][op](o.BASE), 'other curve point');
+            if (op !== 'multiplyUnsafe') {
+              throws(() => G[1][op](0), '0');
+              throws(() => G[1][op](0n), '0n');
+            }
           });
         });
       }
@@ -662,16 +648,9 @@ for (const name in CURVES) {
     if (['bn254', 'pallas', 'vesta'].includes(name)) return;
     // Generic complex things (getPublicKey/sign/verify/getSharedSecret)
     should('.getPublicKey() type check', () => {
-      throws(() => C.getPublicKey(0), '0');
-      throws(() => C.getPublicKey(0n), '0n');
-      throws(() => C.getPublicKey(-123n), '-123n');
-      throws(() => C.getPublicKey(123), '123');
-      throws(() => C.getPublicKey(123.456), '123.456');
-      throws(() => C.getPublicKey(true), 'true');
-      throws(() => C.getPublicKey(false), 'false');
-      throws(() => C.getPublicKey(null), 'null');
-      throws(() => C.getPublicKey(undefined), 'undefined');
-      throws(() => C.getPublicKey(''), "''");
+      for (let [item, repr_] of getTypeTests()) {
+        throws(() => C.getPublicKey(item), repr_);
+      }
       // NOTE: passes because of disabled hex padding checks for starknet, maybe enable?
       if (name !== 'starknet') {
         // throws(() => C.getPublicKey('1'), "'1'");
@@ -679,9 +658,6 @@ for (const name in CURVES) {
       throws(() => C.getPublicKey('key'), "'key'");
       throws(() => C.getPublicKey({}));
       throws(() => C.getPublicKey(new Uint8Array([])));
-      throws(() => C.getPublicKey(new Uint8Array([0])));
-      throws(() => C.getPublicKey(new Uint8Array([1])));
-      throws(() => C.getPublicKey(new Uint8Array(4096).fill(1)));
       throws(() => C.getPublicKey(Array(32).fill(1)));
     });
 
@@ -726,6 +702,17 @@ for (const name in CURVES) {
         );
       });
 
+      should('.sign() type tests', () => {
+        const msg = new Uint8Array([]);
+        const priv = C.utils.randomPrivateKey();
+        C.sign(msg, priv);
+        for (let [item, repr_] of getTypeTests()) {
+          throws(() => C.sign(msg, item), repr_);
+          if (!repr_.startsWith('ui8a') && repr_ !== '""') {
+            throws(() => C.sign(item, priv), repr_);
+          }
+        }
+      });
       should('.sign() edge cases', () => {
         throws(() => C.sign());
         throws(() => C.sign(''));
@@ -735,6 +722,7 @@ for (const name in CURVES) {
 
       describe('verify()', () => {
         const msg = '01'.repeat(32);
+        const msgWrong = '11'.repeat(32);
         should('true for proper signatures', () => {
           const priv = C.utils.randomPrivateKey();
           const sig = C.sign(msg, priv);
@@ -745,12 +733,24 @@ for (const name in CURVES) {
           const priv = C.utils.randomPrivateKey();
           const sig = C.sign(msg, priv);
           const pub = C.getPublicKey(priv);
-          deepStrictEqual(C.verify(sig, '11'.repeat(32), pub), false);
+          deepStrictEqual(C.verify(sig, msgWrong, pub), false);
         });
         should('false for wrong keys', () => {
           const priv = C.utils.randomPrivateKey();
           const sig = C.sign(msg, priv);
           deepStrictEqual(C.verify(sig, msg, C.getPublicKey(C.utils.randomPrivateKey())), false);
+        });
+        should('type tests', () => {
+          const priv = C.utils.randomPrivateKey();
+          const sig = C.sign(msg, priv);
+          const pub = C.getPublicKey(priv);
+          C.verify(sig, msg, pub);
+          for (let [item, repr_] of getTypeTests()) {
+            if (repr_.startsWith('ui8a') || repr_.startsWith('"')) continue;
+            throws(() => C.verify(item, msg, pub), `verify(${repr_}, _, _)`);
+            throws(() => C.verify(sig, item, pub), `verify(_, ${repr_}, _)`);
+            throws(() => C.verify(sig, msg, item), `verify(_, _, ${repr_})`);
+          }
         });
       });
     }
