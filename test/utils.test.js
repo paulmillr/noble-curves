@@ -3,7 +3,7 @@ import * as fc from 'fast-check';
 import { describe, should } from 'micro-should';
 import { bytesToHex, concatBytes, hexToBytes } from '../esm/abstract/utils.js';
 import { mod, invert } from '../esm/abstract/modular.js';
-import { TYPE_TEST } from './utils.js';
+import { getTypeTests } from './utils.js';
 
 describe('utils', () => {
   const staticHexVectors = [
@@ -15,13 +15,15 @@ describe('utils', () => {
   should('hexToBytes', () => {
     for (let v of staticHexVectors) deepStrictEqual(hexToBytes(v.hex), v.bytes);
     for (let v of staticHexVectors) deepStrictEqual(hexToBytes(v.hex.toUpperCase()), v.bytes);
-    for (let v of TYPE_TEST.hex) {
+    for (let [v, repr] of getTypeTests()) {
+      if (repr === '""') continue;
       throws(() => hexToBytes(v));
     }
   });
   should('bytesToHex', () => {
     for (let v of staticHexVectors) deepStrictEqual(bytesToHex(v.bytes), v.hex);
-    for (let v of TYPE_TEST.bytes) {
+    for (let [v, repr] of getTypeTests()) {
+      if (repr.startsWith('ui8a')) continue;
       throws(() => bytesToHex(v));
     }
   });
@@ -45,10 +47,12 @@ describe('utils', () => {
     deepStrictEqual(concatBytes(), new Uint8Array());
     deepStrictEqual(concatBytes(aa, bb), Uint8Array.from([a, b]));
     deepStrictEqual(concatBytes(aa, bb, cc), Uint8Array.from([a, b, c]));
-    for (let v of TYPE_TEST.bytes)
+    for (let [v, repr] of getTypeTests()) {
+      if (repr.startsWith('ui8a')) continue;
       throws(() => {
         concatBytes(v);
       });
+    }
   });
   should('concatBytes random', () =>
     fc.assert(
