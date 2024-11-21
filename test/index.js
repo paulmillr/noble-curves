@@ -14,5 +14,6 @@ import './hash-to-curve.test.js';
 import './poseidon.test.js';
 import './bls12-381.test.js';
 import './bn254.test.js';
+import './utils.test.js';
 
 should.run();
