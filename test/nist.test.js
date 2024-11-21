@@ -465,6 +465,30 @@ should('have proper GLV endomorphism logic in secp256k1', () => {
   }
 });
 
+should('handle edge-case in P521', () => {
+  // elliptic 6.6.0 edge-case
+  const privKey = hexToBytes(
+    '01535d22d63de9195efd4c41358ddc89c68b6cc202b558fbf48a09e95dddf953afc1b4cfed6df0f3330f986735085e367fd07030c3ab49dcd3461197b00f09a064fb'
+  );
+  const msg = hexToBytes('12f830e9591916ec');
+  const sig =
+    '308188024201e92eeaf15414d4af3ee933825131867b6cb10234f28336ac976a' +
+    '99127139f23100458a9ee7184bfa64540ba385331eb3b469f491b3da013c42ad' +
+    '154a5907f554f0024200db3703c6d51b8a85c10c21b7643fe751781a7ad5708e' +
+    '3a944107f6da086afdc8532765871a9cabc81cec0f5b28ee59f0c72b48b72a39' +
+    'ae2d230dfb03afb9968a94';
+
+  // const fault =
+  //   '30818702415efa2e9fb7d988bf19e750bc6235364ecfdbe649f1a3b9a89af077' +
+  //   'eefd7f8dd979f371b28d77b885cf369a100c0d326804fc4b9ab681a39d212b41' +
+  //   'a85b126b00130242008fbcbd46e829ca57a8e25c5deb30b5064366cae2f4bd82' +
+  //   '14e8dafcb8f6a7d59757ec8896981466d6f0eb5ca07dcaa46e6bb86eb20471e4' +
+  //   '5702429ef132e0c96615';
+
+  const hex = secp521r1.sign(msg, privKey, { lowS: false, prehash: true }).toDERHex();
+  deepStrictEqual(hex, sig);
+});
+
 // ESM is broken.
 import url from 'node:url';
 if (import.meta.url === url.pathToFileURL(process.argv[1]).href) {
