@@ -46,7 +46,12 @@ const TYPE_TEST_BASE = [
   async () => {},
   class Test {},
   Symbol.for('a'),
-  new Proxy(new Uint8Array(), {}),
+  new Proxy(new Uint8Array(), {
+    get(t, p, r) {
+      if (p === 'isProxy') return true;
+      return Reflect.get(t, p, r);
+    },
+  }),
 ];
 
 const TYPE_TEST_OPT = [
@@ -77,3 +82,9 @@ export const TYPE_TEST = {
   bytes: TYPE_TEST_BASE.concat(TYPE_TEST_NOT_INT, TYPE_TEST_NOT_BOOL),
   hex: TYPE_TEST_BASE.concat(TYPE_TEST_NOT_INT, TYPE_TEST_NOT_BOOL, TYPE_TEST_NOT_HEX),
 };
+
+export function repr(item) {
+  if (item && item.isProxy) return '[proxy]';
+  if (typeof item === 'symbol') return item.toString();
+  return `${item}`;
+}
