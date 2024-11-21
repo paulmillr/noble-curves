@@ -37,7 +37,7 @@ export type BasicWCurve<T> = BasicCurve<T> & {
 
 type Entropy = Hex | boolean;
 export type SignOpts = { lowS?: boolean; extraEntropy?: Entropy; prehash?: boolean };
-export type VerOpts = { lowS?: boolean; prehash?: boolean };
+export type VerOpts = { lowS?: boolean; prehash?: boolean; format?: 'compact' | 'der' | undefined };
 
 function validateSigVerOpts(opts: SignOpts | VerOpts) {
   if (opts.lowS !== undefined) abool('lowS', opts.lowS);
@@ -1134,34 +1134,43 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     const sg = signature;
     msgHash = ensureBytes('msgHash', msgHash);
     publicKey = ensureBytes('publicKey', publicKey);
-    if ('strict' in opts) throw new Error('options.strict was renamed to lowS');
+    const { lowS, prehash, format } = opts;
+
+    // Verify opts, deduce signature format
     validateSigVerOpts(opts);
-    const { lowS, prehash } = opts;
+    if ('strict' in opts) throw new Error('options.strict was renamed to lowS');
+    if (format !== undefined && format !== 'compact' && format !== 'der')
+      throw new Error('format must be compact or der');
+    const isHex = typeof sg === 'string' || ut.isBytes(sg);
+    const isObj =
+      !isHex &&
+      !format &&
+      typeof sg === 'object' &&
+      sg !== null &&
+      typeof sg.r === 'bigint' &&
+      typeof sg.s === 'bigint';
+    if (!isHex && !isObj)
+      throw new Error(`signature must be Signature instance, Uint8Array or hex string`);
 
     let _sig: Signature | undefined = undefined;
     let P: ProjPointType<bigint>;
     try {
-      if (typeof sg === 'string' || ut.isBytes(sg)) {
+      if (isObj) _sig = new Signature(sg.r, sg.s);
+      if (isHex) {
         // Signature can be represented in 2 ways: compact (2*nByteLength) & DER (variable-length).
         // Since DER can also be 2*nByteLength bytes, we check for it first.
         try {
-          _sig = Signature.fromDER(sg);
+          if (format !== 'compact') _sig = Signature.fromDER(sg);
         } catch (derError) {
           if (!(derError instanceof DER.Err)) throw derError;
-          _sig = Signature.fromCompact(sg);
         }
-      } else if (typeof sg === 'object' && typeof sg.r === 'bigint' && typeof sg.s === 'bigint') {
-        const { r, s } = sg;
-        _sig = new Signature(r, s);
-      } else {
-        throw new Error('PARSE');
+        if (!_sig && format !== 'der') _sig = Signature.fromCompact(sg);
       }
       P = Point.fromHex(publicKey);
     } catch (error) {
-      if ((error as Error).message === 'PARSE')
-        throw new Error(`signature must be Signature instance, Uint8Array or hex string`);
       return false;
     }
+    if (!_sig) return false;
     if (lowS && _sig.hasHighS()) return false;
     if (prehash) msgHash = CURVE.hash(msgHash);
     const { r, s } = _sig;
