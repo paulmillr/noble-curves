@@ -45,11 +45,11 @@ function sqrtMod(y: bigint): bigint {
   const t1 = (pow2(b223, _23n, P) * b22) % P;
   const t2 = (pow2(t1, _6n, P) * b2) % P;
   const root = pow2(t2, _2n, P);
-  if (!Fp.eql(Fp.sqr(root), y)) throw new Error('Cannot find square root');
+  if (!Fpk1.eql(Fpk1.sqr(root), y)) throw new Error('Cannot find square root');
   return root;
 }
 
-const Fp = Field(secp256k1P, undefined, undefined, { sqrt: sqrtMod });
+const Fpk1 = Field(secp256k1P, undefined, undefined, { sqrt: sqrtMod });
 
 /**
  * secp256k1 short weierstrass curve and ECDSA signatures over it.
@@ -58,7 +58,7 @@ export const secp256k1 = createCurve(
   {
     a: BigInt(0), // equation params: a, b
     b: BigInt(7), // Seem to be rigid: bitcointalk.org/index.php?topic=289795.msg3183975#msg3183975
-    Fp, // Field's prime: 2n**256n - 2n**32n - 2n**9n - 2n**8n - 2n**7n - 2n**6n - 2n**4n - 1n
+    Fp: Fpk1, // Field's prime: 2n**256n - 2n**32n - 2n**9n - 2n**8n - 2n**7n - 2n**6n - 2n**4n - 1n
     n: secp256k1N, // Curve order, total count of valid points in the field
     // Base point (x, y) aka generator point
     Gx: BigInt('55066263022277343669578718895168534326250603453777594175500187360389116729240'),
@@ -228,7 +228,7 @@ export const schnorr = /* @__PURE__ */ (() => ({
 
 const isoMap = /* @__PURE__ */ (() =>
   isogenyMap(
-    Fp,
+    Fpk1,
     [
       // xNum
       [
@@ -260,22 +260,22 @@ const isoMap = /* @__PURE__ */ (() =>
     ].map((i) => i.map((j) => BigInt(j))) as [bigint[], bigint[], bigint[], bigint[]]
   ))();
 const mapSWU = /* @__PURE__ */ (() =>
-  mapToCurveSimpleSWU(Fp, {
+  mapToCurveSimpleSWU(Fpk1, {
     A: BigInt('0x3f8731abdd661adca08a5558f0f5d272e953d363cb6f0e5d405447c01a444533'),
     B: BigInt('1771'),
-    Z: Fp.create(BigInt('-11')),
+    Z: Fpk1.create(BigInt('-11')),
   }))();
 const htf = /* @__PURE__ */ (() =>
   createHasher(
     secp256k1.ProjectivePoint,
     (scalars: bigint[]) => {
-      const { x, y } = mapSWU(Fp.create(scalars[0]));
+      const { x, y } = mapSWU(Fpk1.create(scalars[0]));
       return isoMap(x, y);
     },
     {
       DST: 'secp256k1_XMD:SHA-256_SSWU_RO_',
       encodeDST: 'secp256k1_XMD:SHA-256_SSWU_NU_',
-      p: Fp.ORDER,
+      p: Fpk1.ORDER,
       m: 1,
       k: 128,
       expand: 'xmd',

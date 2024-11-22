@@ -12,14 +12,14 @@ import { mapToCurveSimpleSWU } from './abstract/weierstrass.js';
 // Field over which we'll do calculations.
 // prettier-ignore
 const P = BigInt('0x1ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff');
-const Fp = Field(P);
+const Fp521 = Field(P);
 
 const CURVE = {
-  a: Fp.create(BigInt('-3')),
+  a: Fp521.create(BigInt('-3')),
   b: BigInt(
     '0x0051953eb9618e1c9a1f929a21a0b68540eea2da725b99b315f3b8b489918ef109e156193951ec7e937b1652c0bd3bb1bf073573df883d2c34f1ef451fd46b503f00'
   ),
-  Fp,
+  Fp: Fp521,
   n: BigInt(
     '0x01fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffa51868783bf2f966b7fcc0148f709a5d03bb5c9b8899c47aebb6fb71e91386409'
   ),
@@ -36,7 +36,7 @@ const CURVE = {
 export const p521 = createCurve({
   a: CURVE.a, // Equation params: a, b
   b: CURVE.b,
-  Fp, // Field: 2n**521n - 1n
+  Fp: Fp521, // Field: 2n**521n - 1n
   // Curve order, total count of valid points in the field
   n: CURVE.n,
   Gx: CURVE.Gx, // Base point (x, y) aka generator point
@@ -48,17 +48,17 @@ export const p521 = createCurve({
 export const secp521r1 = p521;
 
 const mapSWU = /* @__PURE__ */ (() =>
-  mapToCurveSimpleSWU(Fp, {
+  mapToCurveSimpleSWU(Fp521, {
     A: CURVE.a,
     B: CURVE.b,
-    Z: Fp.create(BigInt('-4')),
+    Z: Fp521.create(BigInt('-4')),
   }))();
 
 const htf = /* @__PURE__ */ (() =>
   createHasher(secp521r1.ProjectivePoint, (scalars: bigint[]) => mapSWU(scalars[0]), {
     DST: 'P521_XMD:SHA-512_SSWU_RO_',
     encodeDST: 'P521_XMD:SHA-512_SSWU_NU_',
-    p: Fp.ORDER,
+    p: Fp521.ORDER,
     m: 1,
     k: 256,
     expand: 'xmd',

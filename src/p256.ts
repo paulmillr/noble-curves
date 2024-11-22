@@ -8,15 +8,15 @@ import { mapToCurveSimpleSWU } from './abstract/weierstrass.js';
 // NIST secp256r1 aka p256
 // https://www.secg.org/sec2-v2.pdf, https://neuromancer.sk/std/nist/P-256
 
-const Fp = Field(BigInt('0xffffffff00000001000000000000000000000000ffffffffffffffffffffffff'));
-const CURVE_A = Fp.create(BigInt('-3'));
+const Fp256 = Field(BigInt('0xffffffff00000001000000000000000000000000ffffffffffffffffffffffff'));
+const CURVE_A = Fp256.create(BigInt('-3'));
 const CURVE_B = BigInt('0x5ac635d8aa3a93e7b3ebbd55769886bc651d06b0cc53b0f63bce3c3e27d2604b');
 
 // prettier-ignore
 export const p256 = createCurve({
   a: CURVE_A, // Equation params: a, b
   b: CURVE_B,
-  Fp, // Field: 2n**224n * (2n**32n-1n) + 2n**192n + 2n**96n-1n
+  Fp: Fp256, // Field: 2n**224n * (2n**32n-1n) + 2n**192n + 2n**96n-1n
   // Curve order, total count of valid points in the field
   n: BigInt('0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551'),
   // Base (generator) point (x, y)
@@ -28,17 +28,17 @@ export const p256 = createCurve({
 export const secp256r1 = p256;
 
 const mapSWU = /* @__PURE__ */ (() =>
-  mapToCurveSimpleSWU(Fp, {
+  mapToCurveSimpleSWU(Fp256, {
     A: CURVE_A,
     B: CURVE_B,
-    Z: Fp.create(BigInt('-10')),
+    Z: Fp256.create(BigInt('-10')),
   }))();
 
 const htf = /* @__PURE__ */ (() =>
   createHasher(secp256r1.ProjectivePoint, (scalars: bigint[]) => mapSWU(scalars[0]), {
     DST: 'P256_XMD:SHA-256_SSWU_RO_',
     encodeDST: 'P256_XMD:SHA-256_SSWU_NU_',
-    p: Fp.ORDER,
+    p: Fp256.ORDER,
     m: 1,
     k: 128,
     expand: 'xmd',
