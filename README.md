@@ -413,8 +413,11 @@ expects arguments `a`, `b`, field `Fp`, curve order `n`, cofactor `h`
 and coordinates `Gx`, `Gy` of generator point.
 
 **`k` generation** is done deterministically, following
-[RFC6979](https://www.rfc-editor.org/rfc/rfc6979). For this you will need
-`hmac` & `hash`, which in our implementations is provided by noble-hashes. If
+[RFC6979](https://www.rfc-editor.org/rfc/rfc6979). It is suggested to use `extraEntropy`
+option, which incorporates randomness into signatures to increase their security.
+
+For k generation, specifying `hmac` & `hash` is required,
+which in our implementations is done by noble-hashes. If
 you're using different hashing library, make sure to wrap it in the following interface:
 
 ```ts
@@ -460,7 +463,7 @@ type CurveFn = {
     signature: Hex | SignatureType,
     msgHash: Hex,
     publicKey: Hex,
-    opts?: { lowS?: boolean; prehash?: boolean }
+    opts?: { lowS?: boolean; prehash?: boolean; format?: 'compact' | 'der' }
   ) => boolean;
   ProjectivePoint: ProjectivePointConstructor;
   Signature: SignatureConstructor;
@@ -535,6 +538,9 @@ secq256k1.getPublicKey(priv); // Convert private key to public.
 const sig = secq256k1.sign(msg, priv); // Sign msg with private key.
 const sig2 = secq256k1.sign(msg, priv, { prehash: true }); // hash(msg)
 secq256k1.verify(sig, msg, priv); // Verify if sig is correct.
+
+// Default behavior is "try DER, then try compact if fails". Can be explicit:
+secq256k1.verify(sig.toCompactHex(), msg, priv, { format: 'compact' });
 
 const Point = secq256k1.ProjectivePoint;
 const point = Point.BASE; // Elliptic curve Point class and BASE point static var.
