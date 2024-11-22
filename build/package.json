@@ -10,6 +10,8 @@
   },
   "scripts": {
     "build:release": "npx esbuild --bundle input.js --outfile=`npx jsbt outfile` --global-name=`npx jsbt global`",
-    "build:min": "npx esbuild --bundle input.js --minify --outfile=`npx jsbt outfile` --global-name=`npx jsbt global`"
+    "build:min": "npx esbuild --minify --bundle input.js --outfile=`npx jsbt outfile` --global-name=`npx jsbt global`",
+    "build:gzip": "gzip -c8 `npx jsbt outfile` > `npx jsbt outfile`.gz",
+    "build:single": "npx esbuild --minify --bundle input-single.js --outfile=`npx jsbt outfile` --global-name=`npx jsbt global`"
   }
 }
