@@ -25,8 +25,7 @@ export function abytes(item: unknown): void {
 }
 
 export function abool(title: string, value: boolean): void {
-  if (typeof value !== 'boolean')
-    throw new Error(`${title} must be valid boolean, got "${value}".`);
+  if (typeof value !== 'boolean') throw new Error(title + ' boolean expected, got ' + value);
 }
 
 // Array where index 0xf0 (240) is mapped to string 'f0'
@@ -48,13 +47,12 @@ export function bytesToHex(bytes: Uint8Array): string {
 
 export function numberToHexUnpadded(num: number | bigint): string {
   const hex = num.toString(16);
-  return hex.length & 1 ? `0${hex}` : hex;
+  return hex.length & 1 ? '0' + hex : hex;
 }
 
 export function hexToNumber(hex: string): bigint {
   if (typeof hex !== 'string') throw new Error('hex string expected, got ' + typeof hex);
-  // Big Endian
-  return BigInt(hex === '' ? '0' : `0x${hex}`);
+  return hex === '' ? _0n : BigInt('0x' + hex); // Big Endian
 }
 
 // We use optimized technique to convert hex string to byte array
@@ -73,7 +71,7 @@ export function hexToBytes(hex: string): Uint8Array {
   if (typeof hex !== 'string') throw new Error('hex string expected, got ' + typeof hex);
   const hl = hex.length;
   const al = hl / 2;
-  if (hl % 2) throw new Error('padded hex string expected, got unpadded hex of length ' + hl);
+  if (hl % 2) throw new Error('hex string expected, got unpadded hex of length ' + hl);
   const array = new Uint8Array(al);
   for (let ai = 0, hi = 0; ai < al; ai++, hi += 2) {
     const n1 = asciiToBase16(hex.charCodeAt(hi));
@@ -122,18 +120,18 @@ export function ensureBytes(title: string, hex: Hex, expectedLength?: number): U
     try {
       res = hexToBytes(hex);
     } catch (e) {
-      throw new Error(`${title} must be valid hex string, got "${hex}". Cause: ${e}`);
+      throw new Error(title + ' must be hex string or Uint8Array, cause: ' + e);
     }
   } else if (isBytes(hex)) {
     // Uint8Array.from() instead of hash.slice() because node.js Buffer
     // is instance of Uint8Array, and its slice() creates **mutable** copy
     res = Uint8Array.from(hex);
   } else {
-    throw new Error(`${title} must be hex string or Uint8Array`);
+    throw new Error(title + ' must be hex string or Uint8Array');
   }
   const len = res.length;
   if (typeof expectedLength === 'number' && len !== expectedLength)
-    throw new Error(`${title} expected ${expectedLength} bytes, got ${len}`);
+    throw new Error(title + ' of length ' + expectedLength + ' expected, got ' + len);
   return res;
 }
 
@@ -172,7 +170,7 @@ declare const TextEncoder: any;
  * @example utf8ToBytes('abc') // new Uint8Array([97, 98, 99])
  */
 export function utf8ToBytes(str: string): Uint8Array {
-  if (typeof str !== 'string') throw new Error(`utf8ToBytes expected string, got ${typeof str}`);
+  if (typeof str !== 'string') throw new Error('string expected');
   return new Uint8Array(new TextEncoder().encode(str)); // https://bugzil.la/1681809
 }
 
@@ -195,7 +193,7 @@ export function aInRange(title: string, n: bigint, min: bigint, max: bigint) {
   // - b would commonly require subtraction:  `inRange('x', x, 0n, P - 1n)`
   // - our way is the cleanest:               `inRange('x', x, 0n, P)
   if (!inRange(n, min, max))
-    throw new Error(`expected valid ${title}: ${min} <= n < ${max}, got ${typeof n} ${n}`);
+    throw new Error('expected valid ' + title + ': ' + min + ' <= n < ' + max + ', got ' + n);
 }
 
 // Bit operations
@@ -318,14 +316,13 @@ export function validateObject<T extends Record<string, any>>(
 ) {
   const checkField = (fieldName: keyof T, type: Validator, isOptional: boolean) => {
     const checkVal = validatorFns[type];
-    if (typeof checkVal !== 'function')
-      throw new Error(`Invalid validator "${type}", expected function`);
+    if (typeof checkVal !== 'function') throw new Error('invalid validator function');
 
     const val = object[fieldName as keyof typeof object];
     if (isOptional && val === undefined) return;
     if (!checkVal(val, object)) {
       throw new Error(
-        `Invalid param ${String(fieldName)}=${val} (${typeof val}), expected ${type}`
+        'param ' + String(fieldName) + ' is invalid. Expected ' + type + ', got ' + val
       );
     }
   };

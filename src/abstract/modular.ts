@@ -29,7 +29,8 @@ export function mod(a: bigint, b: bigint): bigint {
  */
 // TODO: use field version && remove
 export function pow(num: bigint, power: bigint, modulo: bigint): bigint {
-  if (modulo <= _0n || power < _0n) throw new Error('Expected power/modulo > 0');
+  if (power < _0n) throw new Error('invalid exponent, negatives unsupported');
+  if (modulo <= _0n) throw new Error('invalid modulus');
   if (modulo === _1n) return _0n;
   let res = _1n;
   while (power > _0n) {
@@ -52,9 +53,8 @@ export function pow2(x: bigint, power: bigint, modulo: bigint): bigint {
 
 // Inverses number over modulo
 export function invert(number: bigint, modulo: bigint): bigint {
-  if (number === _0n || modulo <= _0n) {
-    throw new Error(`invert: expected positive integers, got n=${number} mod=${modulo}`);
-  }
+  if (number === _0n) throw new Error('invert: expected non-zero number');
+  if (modulo <= _0n) throw new Error('invert: expected positive modulus, got ' + modulo);
   // Euclidean GCD https://brilliant.org/wiki/extended-euclidean-algorithm/
   // Fermat's little theorem "CT-like" version inv(n) = n^(m-2) mod m is 30x slower.
   let a = mod(number, modulo);
@@ -276,7 +276,7 @@ export function validateField<T>(field: IField<T>) {
 export function FpPow<T>(f: IField<T>, num: T, power: bigint): T {
   // Should have same speed as pow for bigints
   // TODO: benchmark!
-  if (power < _0n) throw new Error('Expected power > 0');
+  if (power < _0n) throw new Error('invalid exponent, negatives unsupported');
   if (power === _0n) return f.ONE;
   if (power === _1n) return num;
   let p = f.ONE;
@@ -363,9 +363,9 @@ export function Field(
   isLE = false,
   redef: Partial<IField<bigint>> = {}
 ): Readonly<FpField> {
-  if (ORDER <= _0n) throw new Error(`Invalid field: expected ORDER > 0, got ${ORDER}`);
+  if (ORDER <= _0n) throw new Error('invalid field: expected ORDER > 0, got ' + ORDER);
   const { nBitLength: BITS, nByteLength: BYTES } = nLength(ORDER, bitLen);
-  if (BYTES > 2048) throw new Error('Invalid field: expected ORDER of <= 2048 bytes');
+  if (BYTES > 2048) throw new Error('invalid field: expected ORDER of <= 2048 bytes');
   let sqrtP: ReturnType<typeof FpSqrt>; // cached sqrtP
   const f: Readonly<FpField> = Object.freeze({
     ORDER,
@@ -377,7 +377,7 @@ export function Field(
     create: (num) => mod(num, ORDER),
     isValid: (num) => {
       if (typeof num !== 'bigint')
-        throw new Error(`Invalid field element: expected bigint, got ${typeof num}`);
+        throw new Error('invalid field element: expected bigint, got ' + typeof num);
       return _0n <= num && num < ORDER; // 0 is valid element, but it's not invertible
     },
     is0: (num) => num === _0n,
@@ -412,7 +412,7 @@ export function Field(
     toBytes: (num) => (isLE ? numberToBytesLE(num, BYTES) : numberToBytesBE(num, BYTES)),
     fromBytes: (bytes) => {
       if (bytes.length !== BYTES)
-        throw new Error(`Field.fromBytes: expected ${BYTES} bytes, got ${bytes.length}`);
+        throw new Error('Field.fromBytes: expected ' + BYTES + ' bytes, got ' + bytes.length);
       return isLE ? bytesToNumberLE(bytes) : bytesToNumberBE(bytes);
     },
   } as FpField);
@@ -420,13 +420,13 @@ export function Field(
 }
 
 export function FpSqrtOdd<T>(Fp: IField<T>, elm: T) {
-  if (!Fp.isOdd) throw new Error(`Field doesn't have isOdd`);
+  if (!Fp.isOdd) throw new Error("Field doesn't have isOdd");
   const root = Fp.sqrt(elm);
   return Fp.isOdd(root) ? root : Fp.neg(root);
 }
 
 export function FpSqrtEven<T>(Fp: IField<T>, elm: T) {
-  if (!Fp.isOdd) throw new Error(`Field doesn't have isOdd`);
+  if (!Fp.isOdd) throw new Error("Field doesn't have isOdd");
   const root = Fp.sqrt(elm);
   return Fp.isOdd(root) ? Fp.neg(root) : root;
 }
@@ -446,7 +446,9 @@ export function hashToPrivateScalar(
   const hashLen = hash.length;
   const minLen = nLength(groupOrder).nByteLength + 8;
   if (minLen < 24 || hashLen < minLen || hashLen > 1024)
-    throw new Error(`hashToPrivateScalar: expected ${minLen}-1024 bytes of input, got ${hashLen}`);
+    throw new Error(
+      'hashToPrivateScalar: expected ' + minLen + '-1024 bytes of input, got ' + hashLen
+    );
   const num = isLE ? bytesToNumberLE(hash) : bytesToNumberBE(hash);
   return mod(num, groupOrder - _1n) + _1n;
 }
@@ -494,7 +496,7 @@ export function mapHashToField(key: Uint8Array, fieldOrder: bigint, isLE = false
   const minLen = getMinHashLength(fieldOrder);
   // No small numbers: need to understand bias story. No huge numbers: easier to detect JS timings.
   if (len < 16 || len < minLen || len > 1024)
-    throw new Error(`expected ${minLen}-1024 bytes of input, got ${len}`);
+    throw new Error('expected ' + minLen + '-1024 bytes of input, got ' + len);
   const num = isLE ? bytesToNumberBE(key) : bytesToNumberLE(key);
   // `mod(x, 11)` can sometimes produce 0. `mod(x, 10) + 1` is the same, but no 0
   const reduced = mod(num, fieldOrder - _1n) + _1n;

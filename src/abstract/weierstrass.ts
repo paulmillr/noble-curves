@@ -123,14 +123,14 @@ function validatePointOpts<T>(curve: CurvePointsType<T>) {
   const { endo, Fp, a } = opts;
   if (endo) {
     if (!Fp.eql(a, Fp.ZERO)) {
-      throw new Error('Endomorphism can only be defined for Koblitz curves that have a=0');
+      throw new Error('endomorphism can only be defined for Koblitz curves that have a=0');
     }
     if (
       typeof endo !== 'object' ||
       typeof endo.beta !== 'bigint' ||
       typeof endo.splitScalar !== 'function'
     ) {
-      throw new Error('Expected endomorphism with beta: bigint and splitScalar: function');
+      throw new Error('expected endomorphism with beta: bigint and splitScalar: function');
     }
   }
   return Object.freeze({ ...opts } as const);
@@ -171,7 +171,8 @@ export const DER = {
       if ((len.length / 2) & 0b1000_0000) throw new E('tlv.encode: long form length too big');
       // length of length with long form flag
       const lenLen = dataLen > 127 ? ut.numberToHexUnpadded((len.length / 2) | 0b1000_0000) : '';
-      return `${ut.numberToHexUnpadded(tag)}${lenLen}${len}${data}`;
+      const t = ut.numberToHexUnpadded(tag);
+      return t + lenLen + len + data;
     },
     // v - value, l - left bytes (unparsed)
     decode(tag: number, data: Uint8Array): { v: Uint8Array; l: Uint8Array } {
@@ -211,14 +212,14 @@ export const DER = {
       let hex = ut.numberToHexUnpadded(num);
       // Pad with zero byte if negative flag is present
       if (Number.parseInt(hex[0], 16) & 0b1000) hex = '00' + hex;
-      if (hex.length & 1) throw new E('unexpected assertion');
+      if (hex.length & 1) throw new E('unexpected DER parsing assertion: unpadded hex');
       return hex;
     },
     decode(data: Uint8Array): bigint {
       const { Err: E } = DER;
-      if (data[0] & 0b1000_0000) throw new E('Invalid signature integer: negative');
+      if (data[0] & 0b1000_0000) throw new E('invalid signature integer: negative');
       if (data[0] === 0x00 && !(data[1] & 0b1000_0000))
-        throw new E('Invalid signature integer: unnecessary leading zero');
+        throw new E('invalid signature integer: unnecessary leading zero');
       return b2n(data);
     },
   },
@@ -228,15 +229,17 @@ export const DER = {
     const data = typeof hex === 'string' ? h2b(hex) : hex;
     ut.abytes(data);
     const { v: seqBytes, l: seqLeftBytes } = tlv.decode(0x30, data);
-    if (seqLeftBytes.length) throw new E('Invalid signature: left bytes after parsing');
+    if (seqLeftBytes.length) throw new E('invalid signature: left bytes after parsing');
     const { v: rBytes, l: rLeftBytes } = tlv.decode(0x02, seqBytes);
     const { v: sBytes, l: sLeftBytes } = tlv.decode(0x02, rLeftBytes);
-    if (sLeftBytes.length) throw new E('Invalid signature: left bytes after parsing');
+    if (sLeftBytes.length) throw new E('invalid signature: left bytes after parsing');
     return { r: int.decode(rBytes), s: int.decode(sBytes) };
   },
   hexFromSig(sig: { r: bigint; s: bigint }): string {
     const { _tlv: tlv, _int: int } = DER;
-    const seq = `${tlv.encode(0x02, int.encode(sig.r))}${tlv.encode(0x02, int.encode(sig.s))}`;
+    const rs = tlv.encode(0x02, int.encode(sig.r));
+    const ss = tlv.encode(0x02, int.encode(sig.s));
+    const seq = rs + ss;
     return tlv.encode(0x30, seq);
   },
 };
@@ -295,7 +298,8 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
     if (lengths && typeof key !== 'bigint') {
       if (ut.isBytes(key)) key = ut.bytesToHex(key);
       // Normalize to hex string, pad. E.g. P521 would norm 130-132 char hex to 132-char bytes
-      if (typeof key !== 'string' || !lengths.includes(key.length)) throw new Error('Invalid key');
+      if (typeof key !== 'string' || !lengths.includes(key.length))
+        throw new Error('invalid private key');
       key = key.padStart(nByteLength * 2, '0');
     }
     let num: bigint;
@@ -305,7 +309,9 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
           ? key
           : ut.bytesToNumberBE(ensureBytes('private key', key, nByteLength));
     } catch (error) {
-      throw new Error(`private key must be ${nByteLength} bytes, hex or bigint, not ${typeof key}`);
+      throw new Error(
+        'invalid private key, expected hex or ' + nByteLength + ' bytes, got ' + typeof key
+      );
     }
     if (wrapPrivateKey) num = mod.mod(num, N); // disabled by default, enabled for BLS
     ut.aInRange('private key', num, _1n, N); // num in range [1..N-1]
@@ -342,7 +348,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
     if (p.is0()) {
       // (0, 1, 0) aka ZERO is invalid in most contexts.
       // In BLS, ZERO can be serialized, so we allow it.
-      // (0, 0, 0) is wrong representation of ZERO and is always invalid.
+      // (0, 0, 0) is invalid representation of ZERO.
       if (CURVE.allowInfinityPoint && !Fp.is0(p.py)) return;
       throw new Error('bad point: ZERO');
     }
@@ -829,8 +835,10 @@ export function weierstrass(curveDef: CurveType): CurveFn {
         const y = Fp.fromBytes(tail.subarray(Fp.BYTES, 2 * Fp.BYTES));
         return { x, y };
       } else {
+        const cl = compressedLen;
+        const ul = uncompressedLen;
         throw new Error(
-          `Point of length ${len} was invalid. Expected ${compressedLen} compressed bytes or ${uncompressedLen} uncompressed bytes`
+          'invalid Point, expected length of ' + cl + ', or uncompressed ' + ul + ', got ' + len
         );
       }
     },
@@ -1029,7 +1037,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
    * Converts to bytes. Checks if num in `[0..ORDER_MASK-1]` e.g.: `[0..2^256-1]`.
    */
   function int2octets(num: bigint): Uint8Array {
-    ut.aInRange(`num < 2^${CURVE.nBitLength}`, num, _0n, ORDER_MASK);
+    ut.aInRange('num < 2^' + CURVE.nBitLength, num, _0n, ORDER_MASK);
     // works with order, can have different size than numToField!
     return ut.numberToBytesBE(num, CURVE.nByteLength);
   }
@@ -1037,8 +1045,8 @@ export function weierstrass(curveDef: CurveType): CurveFn {
   // Steps A, D of RFC6979 3.2
   // Creates RFC6979 seed; converts msg/privKey to numbers.
   // Used only in sign, not in verify.
-  // NOTE: we cannot assume here that msgHash has same amount of bytes as curve order, this will be wrong at least for P521.
-  // Also it can be bigger for P224 + SHA256
+  // NOTE: we cannot assume here that msgHash has same amount of bytes as curve order,
+  // this will be invalid at least for P521. Also it can be bigger for P224 + SHA256
   function prepSig(msgHash: Hex, privateKey: PrivKey, opts = defaultSigOpts) {
     if (['recovered', 'canonical'].some((k) => k in opts))
       throw new Error('sign() legacy options not supported');
@@ -1152,7 +1160,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       typeof sg.r === 'bigint' &&
       typeof sg.s === 'bigint';
     if (!isHex && !isObj)
-      throw new Error(`signature must be Signature instance, Uint8Array or hex string`);
+      throw new Error('invalid signature, expected Uint8Array, hex string or Signature instance');
 
     let _sig: Signature | undefined = undefined;
     let P: ProjPointType<bigint>;
