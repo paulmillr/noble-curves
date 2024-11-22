@@ -123,14 +123,14 @@ function validatePointOpts<T>(curve: CurvePointsType<T>) {
   const { endo, Fp, a } = opts;
   if (endo) {
     if (!Fp.eql(a, Fp.ZERO)) {
-      throw new Error('endomorphism can only be defined for Koblitz curves that have a=0');
+      throw new Error('invalid endomorphism, can only be defined for Koblitz curves that have a=0');
     }
     if (
       typeof endo !== 'object' ||
       typeof endo.beta !== 'bigint' ||
       typeof endo.splitScalar !== 'function'
     ) {
-      throw new Error('expected endomorphism with beta: bigint and splitScalar: function');
+      throw new Error('invalid endomorphism, expected beta: bigint and splitScalar: function');
     }
   }
   return Object.freeze({ ...opts } as const);
