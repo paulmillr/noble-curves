@@ -10,11 +10,11 @@ import {
   validateObject,
 } from './utils.js';
 // prettier-ignore
-const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3);
+const _0n = BigInt(0), _1n = BigInt(1), _2n = /* @__PURE__ */ BigInt(2), _3n = /* @__PURE__ */ BigInt(3);
 // prettier-ignore
-const _4n = BigInt(4), _5n = BigInt(5), _8n = BigInt(8);
+const _4n = /* @__PURE__ */ BigInt(4), _5n = /* @__PURE__ */ BigInt(5), _8n = /* @__PURE__ */ BigInt(8);
 // prettier-ignore
-const _9n = BigInt(9), _16n = BigInt(16);
+const _9n =/* @__PURE__ */ BigInt(9), _16n = /* @__PURE__ */ BigInt(16);
 
 // Calculates a modulo b
 export function mod(a: bigint, b: bigint): bigint {
