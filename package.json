@@ -29,7 +29,7 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@noble/hashes": "1.5.0"
+    "@noble/hashes": "1.6.0"
   },
   "devDependencies": {
     "@paulmillr/jsbt": "0.2.1",
