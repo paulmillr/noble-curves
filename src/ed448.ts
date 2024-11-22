@@ -120,7 +120,7 @@ const ED448_DEF = {
   adjustScalarBytes,
   // dom4
   domain: (data: Uint8Array, ctx: Uint8Array, phflag: boolean) => {
-    if (ctx.length > 255) throw new Error(`Context is too big: ${ctx.length}`);
+    if (ctx.length > 255) throw new Error('context must be smaller than 255, got: ' + ctx.length);
     return concatBytes(
       utf8ToBytes('SigEd448'),
       new Uint8Array([phflag ? 1 : 0, ctx.length]),

@@ -164,7 +164,7 @@ export function tower12(opts: Tower12Opts) {
     frobeniusMap(num: Fp2, power: number): Fp2;
   };
   const Fp2fromBigTuple = (tuple: BigintTuple | bigint[]) => {
-    if (tuple.length !== 2) throw new Error('Invalid tuple');
+    if (tuple.length !== 2) throw new Error('invalid tuple');
     const fps = tuple.map((n) => Fp.create(n)) as [Fp, Fp];
     return { c0: fps[0], c1: fps[1] };
   };
@@ -251,7 +251,7 @@ export function tower12(opts: Tower12Opts) {
     },
     // Bytes util
     fromBytes(b: Uint8Array): Fp2 {
-      if (b.length !== Fp2.BYTES) throw new Error(`fromBytes wrong length=${b.length}`);
+      if (b.length !== Fp2.BYTES) throw new Error('fromBytes invalid length=' + b.length);
       return { c0: Fp.fromBytes(b.subarray(0, Fp.BYTES)), c1: Fp.fromBytes(b.subarray(Fp.BYTES)) };
     },
     toBytes: ({ c0, c1 }) => concatBytes(Fp.toBytes(c0), Fp.toBytes(c1)),
@@ -379,7 +379,7 @@ export function tower12(opts: Tower12Opts) {
     },
     // Bytes utils
     fromBytes: (b: Uint8Array): Fp6 => {
-      if (b.length !== Fp6.BYTES) throw new Error(`fromBytes wrong length=${b.length}`);
+      if (b.length !== Fp6.BYTES) throw new Error('fromBytes invalid length=' + b.length);
       return {
         c0: Fp2.fromBytes(b.subarray(0, Fp2.BYTES)),
         c1: Fp2.fromBytes(b.subarray(Fp2.BYTES, 2 * Fp2.BYTES)),
@@ -394,7 +394,7 @@ export function tower12(opts: Tower12Opts) {
       c2: Fp2.cmov(c2, r2, c),
     }),
     fromBigSix: (t: BigintSix): Fp6 => {
-      if (!Array.isArray(t) || t.length !== 6) throw new Error('Invalid Fp6 usage');
+      if (!Array.isArray(t) || t.length !== 6) throw new Error('invalid Fp6 usage');
       return {
         c0: Fp2.fromBigTuple(t.slice(0, 2)),
         c1: Fp2.fromBigTuple(t.slice(2, 4)),
@@ -527,7 +527,7 @@ export function tower12(opts: Tower12Opts) {
 
     // Bytes utils
     fromBytes: (b: Uint8Array): Fp12 => {
-      if (b.length !== Fp12.BYTES) throw new Error(`fromBytes wrong length=${b.length}`);
+      if (b.length !== Fp12.BYTES) throw new Error('fromBytes invalid length=' + b.length);
       return {
         c0: Fp6.fromBytes(b.subarray(0, Fp6.BYTES)),
         c1: Fp6.fromBytes(b.subarray(Fp6.BYTES)),
@@ -540,7 +540,7 @@ export function tower12(opts: Tower12Opts) {
     }),
     // Utils
     // toString() {
-    //   return `Fp12(${this.c0} + ${this.c1} * w)`;
+    //   return '' + 'Fp12(' + this.c0 + this.c1 + '* w');
     // },
     // fromTuple(c: [Fp6, Fp6]) {
     //   return new Fp12(...c);

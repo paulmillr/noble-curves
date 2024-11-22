@@ -29,9 +29,7 @@ const os2ip = bytesToNumberBE;
 function i2osp(value: number, length: number): Uint8Array {
   anum(value);
   anum(length);
-  if (value < 0 || value >= 1 << (8 * length)) {
-    throw new Error(`bad I2OSP call: value=${value} length=${length}`);
-  }
+  if (value < 0 || value >= 1 << (8 * length)) throw new Error('invalid I2OSP input: ' + value);
   const res = Array.from({ length }).fill(0) as number[];
   for (let i = length - 1; i >= 0; i--) {
     res[i] = value & 0xff;
@@ -223,8 +221,7 @@ export function createHasher<T>(
     mapToCurve(scalars: bigint[]) {
       if (!Array.isArray(scalars)) throw new Error('mapToCurve: expected array of bigints');
       for (const i of scalars)
-        if (typeof i !== 'bigint')
-          throw new Error(`mapToCurve: expected array of bigints, got ${i} in array`);
+        if (typeof i !== 'bigint') throw new Error('mapToCurve: expected array of bigints');
       const P = Point.fromAffine(mapToCurve(scalars)).clearCofactor();
       P.assertValidity();
       return P;

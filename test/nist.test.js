@@ -118,7 +118,7 @@ function verifyECDHVector(test, curve) {
     try {
       curve.ProjectivePoint.fromHex(pubB);
     } catch (e) {
-      if (e.message.startsWith('Point of length')) return; // Ignore
+      if (e.message.startsWith('invalid Point, expected length')) return; // Ignore
       throw e;
     }
     const shared = curve.getSharedSecret(privA, pubB).subarray(1);

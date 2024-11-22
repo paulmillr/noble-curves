@@ -442,12 +442,16 @@ export function bls(CURVE: CurveType): CurveFn {
     return Fp12.eql(exp, Fp12.ONE);
   }
 
+  function aNonEmpty(arr: any[]) {
+    if (!Array.isArray(arr) || arr.length === 0) throw new Error('expected non-empty array');
+  }
+
   // Adds a bunch of public key points together.
   // pk1 + pk2 + pk3 = pkA
   function aggregatePublicKeys(publicKeys: Hex[]): Uint8Array;
   function aggregatePublicKeys(publicKeys: G1[]): G1;
   function aggregatePublicKeys(publicKeys: G1Hex[]): Uint8Array | G1 {
-    if (!publicKeys.length) throw new Error('Expected non-empty array');
+    aNonEmpty(publicKeys);
     const agg = publicKeys.map(normP1).reduce((sum, p) => sum.add(p), G1.ProjectivePoint.ZERO);
     const aggAffine = agg; //.toAffine();
     if (publicKeys[0] instanceof G1.ProjectivePoint) {
@@ -462,7 +466,7 @@ export function bls(CURVE: CurveType): CurveFn {
   function aggregateSignatures(signatures: Hex[]): Uint8Array;
   function aggregateSignatures(signatures: G2[]): G2;
   function aggregateSignatures(signatures: G2Hex[]): Uint8Array | G2 {
-    if (!signatures.length) throw new Error('Expected non-empty array');
+    aNonEmpty(signatures);
     const agg = signatures.map(normP2).reduce((sum, s) => sum.add(s), G2.ProjectivePoint.ZERO);
     const aggAffine = agg; //.toAffine();
     if (signatures[0] instanceof G2.ProjectivePoint) {
@@ -476,7 +480,7 @@ export function bls(CURVE: CurveType): CurveFn {
   function aggregateShortSignatures(signatures: Hex[]): Uint8Array;
   function aggregateShortSignatures(signatures: G1[]): G1;
   function aggregateShortSignatures(signatures: G1Hex[]): Uint8Array | G1 {
-    if (!signatures.length) throw new Error('Expected non-empty array');
+    aNonEmpty(signatures);
     const agg = signatures.map(normP1).reduce((sum, s) => sum.add(s), G1.ProjectivePoint.ZERO);
     const aggAffine = agg; //.toAffine();
     if (signatures[0] instanceof G1.ProjectivePoint) {
@@ -495,9 +499,9 @@ export function bls(CURVE: CurveType): CurveFn {
     publicKeys: G1Hex[],
     htfOpts?: htfBasicOpts
   ): boolean {
-    if (!messages.length) throw new Error('Expected non-empty messages array');
+    aNonEmpty(messages);
     if (publicKeys.length !== messages.length)
-      throw new Error('Pubkey count should equal msg count');
+      throw new Error('amount of public keys and messages should be equal');
     const sig = normP2(signature);
     const nMessages = messages.map((i) => normP2Hash(i, htfOpts));
     const nPublicKeys = publicKeys.map(normP1);

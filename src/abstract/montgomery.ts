@@ -158,8 +158,10 @@ export function montgomery(curveDef: CurveType): CurveFn {
   function decodeScalar(n: Hex): bigint {
     const bytes = ensureBytes('scalar', n);
     const len = bytes.length;
-    if (len !== montgomeryBytes && len !== fieldLen)
-      throw new Error(`Expected ${montgomeryBytes} or ${fieldLen} bytes, got ${len}`);
+    if (len !== montgomeryBytes && len !== fieldLen) {
+      let valid = '' + montgomeryBytes + ' or ' + fieldLen;
+      throw new Error('invalid scalar, expected ' + valid + ' bytes, got ' + len);
+    }
     return bytesToNumberLE(adjustScalarBytes(bytes));
   }
   function scalarMult(scalar: Hex, u: Hex): Uint8Array {
@@ -168,7 +170,7 @@ export function montgomery(curveDef: CurveType): CurveFn {
     const pu = montgomeryLadder(pointU, _scalar);
     // The result was not contributory
     // https://cr.yp.to/ecdh.html#validate
-    if (pu === _0n) throw new Error('Invalid private or public key received');
+    if (pu === _0n) throw new Error('invalid private or public key received');
     return encodeUCoordinate(pu);
   }
   // Computes public key from private. By doing scalar multiplication of base point.

@@ -21,40 +21,37 @@ export function validateOpts(opts: PoseidonOpts) {
   validateField(Fp);
   for (const i of ['t', 'roundsFull', 'roundsPartial'] as const) {
     if (typeof opts[i] !== 'number' || !Number.isSafeInteger(opts[i]))
-      throw new Error(`Poseidon: invalid param ${i}=${opts[i]} (${typeof opts[i]})`);
+      throw new Error('invalid number ' + i);
   }
 
   // MDS is TxT matrix
-  if (!Array.isArray(mds) || mds.length !== t) throw new Error('Poseidon: wrong MDS matrix');
+  if (!Array.isArray(mds) || mds.length !== t) throw new Error('Poseidon: invalid MDS matrix');
   const _mds = mds.map((mdsRow) => {
     if (!Array.isArray(mdsRow) || mdsRow.length !== t)
-      throw new Error(`Poseidon MDS matrix row: ${mdsRow}`);
+      throw new Error('invalid MDS matrix row: ' + mdsRow);
     return mdsRow.map((i) => {
-      if (typeof i !== 'bigint') throw new Error(`Poseidon MDS matrix value=${i}`);
+      if (typeof i !== 'bigint') throw new Error('invalid MDS matrix bigint: ' + i);
       return Fp.create(i);
     });
   });
 
   if (rev !== undefined && typeof rev !== 'boolean')
-    throw new Error(`Poseidon: invalid param reversePartialPowIdx=${rev}`);
+    throw new Error('invalid param reversePartialPowIdx=' + rev);
 
-  if (roundsFull % 2 !== 0) throw new Error(`Poseidon roundsFull is not even: ${roundsFull}`);
+  if (roundsFull & 1) throw new Error('roundsFull is not even' + roundsFull);
   const rounds = roundsFull + roundsPartial;
 
   if (!Array.isArray(rc) || rc.length !== rounds)
-    throw new Error('Poseidon: wrong round constants');
+    throw new Error('Poseidon: invalid round constants');
   const roundConstants = rc.map((rc) => {
-    if (!Array.isArray(rc) || rc.length !== t)
-      throw new Error(`Poseidon wrong round constants: ${rc}`);
+    if (!Array.isArray(rc) || rc.length !== t) throw new Error('invalid round constants');
     return rc.map((i) => {
-      if (typeof i !== 'bigint' || !Fp.isValid(i))
-        throw new Error(`Poseidon wrong round constant=${i}`);
+      if (typeof i !== 'bigint' || !Fp.isValid(i)) throw new Error('invalid round constant');
       return Fp.create(i);
     });
   });
 
-  if (!sboxPower || ![3, 5, 7].includes(sboxPower))
-    throw new Error(`Poseidon wrong sboxPower=${sboxPower}`);
+  if (!sboxPower || ![3, 5, 7].includes(sboxPower)) throw new Error('invalid sboxPower');
   const _sboxPower = BigInt(sboxPower);
   let sboxFn = (n: bigint) => FpPow(Fp, n, _sboxPower);
   // Unwrapped sbox power for common cases (195->142μs)
@@ -65,8 +62,8 @@ export function validateOpts(opts: PoseidonOpts) {
 }
 
 export function splitConstants(rc: bigint[], t: number) {
-  if (typeof t !== 'number') throw new Error('poseidonSplitConstants: wrong t');
-  if (!Array.isArray(rc) || rc.length % t) throw new Error('poseidonSplitConstants: wrong rc');
+  if (typeof t !== 'number') throw new Error('poseidonSplitConstants: invalid t');
+  if (!Array.isArray(rc) || rc.length % t) throw new Error('poseidonSplitConstants: invalid rc');
   const res = [];
   let tmp = [];
   for (let i = 0; i < rc.length; i++) {
@@ -81,7 +78,7 @@ export function splitConstants(rc: bigint[], t: number) {
 
 export function poseidon(opts: PoseidonOpts) {
   const _opts = validateOpts(opts);
-  const { Fp, mds, roundConstants, rounds, roundsPartial, sboxFn, t } = _opts;
+  const { Fp, mds, roundConstants, rounds: totalRounds, roundsPartial, sboxFn, t } = _opts;
   const halfRoundsFull = _opts.roundsFull / 2;
   const partialIdx = _opts.reversePartialPowIdx ? t - 1 : 0;
   const poseidonRound = (values: bigint[], isFull: boolean, idx: number) => {
@@ -95,21 +92,20 @@ export function poseidon(opts: PoseidonOpts) {
   };
   const poseidonHash = function poseidonHash(values: bigint[]) {
     if (!Array.isArray(values) || values.length !== t)
-      throw new Error(`Poseidon: wrong values (expected array of bigints with length ${t})`);
+      throw new Error('invalid values, expected array of bigints with length ' + t);
     values = values.map((i) => {
-      if (typeof i !== 'bigint') throw new Error(`Poseidon: wrong value=${i} (${typeof i})`);
+      if (typeof i !== 'bigint') throw new Error('invalid bigint=' + i);
       return Fp.create(i);
     });
-    let round = 0;
+    let lastRound = 0;
     // Apply r_f/2 full rounds.
-    for (let i = 0; i < halfRoundsFull; i++) values = poseidonRound(values, true, round++);
+    for (let i = 0; i < halfRoundsFull; i++) values = poseidonRound(values, true, lastRound++);
     // Apply r_p partial rounds.
-    for (let i = 0; i < roundsPartial; i++) values = poseidonRound(values, false, round++);
+    for (let i = 0; i < roundsPartial; i++) values = poseidonRound(values, false, lastRound++);
     // Apply r_f/2 full rounds.
-    for (let i = 0; i < halfRoundsFull; i++) values = poseidonRound(values, true, round++);
+    for (let i = 0; i < halfRoundsFull; i++) values = poseidonRound(values, true, lastRound++);
 
-    if (round !== rounds)
-      throw new Error(`Poseidon: wrong number of rounds: last round=${round}, total=${rounds}`);
+    if (lastRound !== totalRounds) throw new Error('invalid number of rounds');
     return values;
   };
   // For verification in tests

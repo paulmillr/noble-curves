@@ -32,7 +32,7 @@ function constTimeNegate<T extends Group<T>>(condition: boolean, item: T): T {
 
 function validateW(W: number, bits: number) {
   if (!Number.isSafeInteger(W) || W <= 0 || W > bits)
-    throw new Error(`Wrong window size=${W}, should be [1..${bits}]`);
+    throw new Error('invalid window size, expected [1..' + bits + '], got W=' + W);
 }
 
 function calcWOpts(W: number, bits: number) {
@@ -45,13 +45,13 @@ function calcWOpts(W: number, bits: number) {
 function validateMSMPoints(points: any[], c: any) {
   if (!Array.isArray(points)) throw new Error('array expected');
   points.forEach((p, i) => {
-    if (!(p instanceof c)) throw new Error(`wrong point at index ${i}`);
+    if (!(p instanceof c)) throw new Error('invalid point at index ' + i);
   });
 }
 function validateMSMScalars(scalars: any[], field: any) {
   if (!Array.isArray(scalars)) throw new Error('array of scalars expected');
   scalars.forEach((s, i) => {
-    if (!field.isValid(s)) throw new Error(`wrong scalar at index ${i}`);
+    if (!field.isValid(s)) throw new Error('invalid scalar at index ' + i);
   });
 }
 

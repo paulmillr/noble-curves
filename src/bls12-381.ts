@@ -56,7 +56,7 @@ bls12-381 is pairing-friendly Barreto-Lynn-Scott elliptic curve construction all
 // prettier-ignore
 const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3), _4n = BigInt(4);
 
-/* 
+/*
 Embedding degree (k): 12
 Seed (X): -15132376222941642752
 Fr:  (x⁴-x²+1)
@@ -509,7 +509,7 @@ export const bls12_381: CurveFn = bls({
         }
         const right = Fp.add(Fp.pow(x, _3n), Fp.create(bls12_381.params.G1b)); // y² = x³ + b
         let y = Fp.sqrt(right);
-        if (!y) throw new Error('Invalid compressed G1 point');
+        if (!y) throw new Error('invalid compressed G1 point');
         if ((y * _2n) / P !== BigInt(sort)) y = Fp.neg(y);
         return { x: Fp.create(x), y: Fp.create(y) };
       } else if (value.length === 96 && !compressed) {
@@ -522,7 +522,7 @@ export const bls12_381: CurveFn = bls({
         }
         return { x: Fp.create(x), y: Fp.create(y) };
       } else {
-        throw new Error('Invalid point G1, expected 48/96 bytes');
+        throw new Error('invalid point G1, expected 48/96 bytes');
       }
     },
     toBytes: (c, point, isCompressed) => {
@@ -553,7 +553,7 @@ export const bls12_381: CurveFn = bls({
         const x = Fp.create(compressedValue & Fp.MASK);
         const right = Fp.add(Fp.pow(x, _3n), Fp.create(bls12_381.params.G1b)); // y² = x³ + b
         let y = Fp.sqrt(right);
-        if (!y) throw new Error('Invalid compressed G1 point');
+        if (!y) throw new Error('invalid compressed G1 point');
         const aflag = BigInt(sort);
         if ((y * _2n) / P !== aflag) y = Fp.neg(y);
         const point = bls12_381.G1.ProjectivePoint.fromAffine({ x, y });
@@ -644,7 +644,7 @@ export const bls12_381: CurveFn = bls({
         (!compressed && infinity && sort) || // 01100000
         (sort && infinity && compressed) // 11100000
       ) {
-        throw new Error('Invalid encoding flag: ' + (bytes[0] & 0b1110_0000));
+        throw new Error('invalid encoding flag: ' + (bytes[0] & 0b1110_0000));
       }
       const L = Fp.BYTES;
       const slc = (b: Uint8Array, from: number, to?: number) => bytesToNumberBE(b.slice(from, to));
@@ -654,7 +654,7 @@ export const bls12_381: CurveFn = bls({
         if (infinity) {
           // check that all bytes are 0
           if (value.reduce((p, c) => (p !== 0 ? c + 1 : c), 0) > 0) {
-            throw new Error('Invalid compressed G2 point');
+            throw new Error('invalid compressed G2 point');
           }
           return { x: Fp2.ZERO, y: Fp2.ZERO };
         }
@@ -669,7 +669,7 @@ export const bls12_381: CurveFn = bls({
       } else if (value.length === 192 && !compressed) {
         if (infinity) {
           if (value.reduce((p, c) => (p !== 0 ? c + 1 : c), 0) > 0) {
-            throw new Error('Invalid uncompressed G2 point');
+            throw new Error('invalid uncompressed G2 point');
           }
           return { x: Fp2.ZERO, y: Fp2.ZERO };
         }
@@ -679,7 +679,7 @@ export const bls12_381: CurveFn = bls({
         const y0 = slc(value, 3 * L, 4 * L);
         return { x: Fp2.fromBigTuple([x0, x1]), y: Fp2.fromBigTuple([y0, y1]) };
       } else {
-        throw new Error('Invalid point G2, expected 96/192 bytes');
+        throw new Error('invalid point G2, expected 96/192 bytes');
       }
     },
     toBytes: (c, point, isCompressed) => {
@@ -712,7 +712,7 @@ export const bls12_381: CurveFn = bls({
         const P = Fp.ORDER;
         const half = value.length / 2;
         if (half !== 48 && half !== 96)
-          throw new Error('Invalid compressed signature length, must be 96 or 192');
+          throw new Error('invalid compressed signature length, must be 96 or 192');
         const z1 = bytesToNumberBE(value.slice(0, half));
         const z2 = bytesToNumberBE(value.slice(half));
         // Indicates the infinity point

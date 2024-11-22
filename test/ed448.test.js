@@ -707,9 +707,9 @@ describe('ed448', () => {
             deepStrictEqual(shared, v.shared, index);
           } catch (e) {
             // We are more strict
-            if (e.message.includes('Expected valid scalar')) return;
-            if (e.message.includes('Invalid private or public key received')) return;
-            if (e.message.includes('Expected 56 bytes')) return;
+            if (e.message.includes('expected valid scalar')) return;
+            if (e.message.includes('invalid private or public key received')) return;
+            if (e.message.includes('expected 56 bytes')) return;
             throw e;
           }
         } else if (v.result === 'invalid') {

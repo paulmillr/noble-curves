@@ -218,8 +218,8 @@ describe('RFC7748 X25519 ECDH', () => {
           deepStrictEqual(shared, v.shared, comment);
         } catch (e) {
           // We are more strict
-          if (e.message.includes('Expected valid scalar')) return;
-          if (e.message.includes('Invalid private or public key received')) return;
+          if (e.message.includes('expected valid scalar')) return;
+          if (e.message.includes('invalid private or public key received')) return;
           throw e;
         }
       } else if (v.result === 'invalid') {
