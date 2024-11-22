@@ -1,16 +1,16 @@
 import { run, mark, utils } from 'micro-bmark';
-import { hash_to_field } from '../abstract/hash-to-curve.js';
-import { hashToPrivateScalar } from '../abstract/modular.js';
+import { hash_to_field } from '@noble/curves/abstract/hash-to-curve';
+import { hashToPrivateScalar } from '@noble/curves/abstract/modular';
 import { randomBytes } from '@noble/hashes/utils';
 import { sha256 } from '@noble/hashes/sha256';
 // import { generateData } from './_shared.js';
-import { hashToCurve as secp256k1 } from '../secp256k1.js';
-import { hashToCurve as p256 } from '../p256.js';
-import { hashToCurve as p384 } from '../p384.js';
-import { hashToCurve as p521 } from '../p521.js';
-import { hashToCurve as ed25519, hash_to_ristretto255 } from '../ed25519.js';
-import { hashToCurve as ed448, hash_to_decaf448 } from '../ed448.js';
-import { utf8ToBytes } from '../abstract/utils.js';
+import { hashToCurve as secp256k1 } from '@noble/curves/secp256k1';
+import { hashToCurve as p256 } from '@noble/curves/p256';
+import { hashToCurve as p384 } from '@noble/curves/p384';
+import { hashToCurve as p521 } from '@noble/curves/p521';
+import { hashToCurve as ed25519, hash_to_ristretto255 } from '@noble/curves/ed25519';
+import { hashToCurve as ed448, hash_to_decaf448 } from '@noble/curves/ed448';
+import { utf8ToBytes } from '@noble/curves/abstract/utils';
 
 const N = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n;
 run(async () => {

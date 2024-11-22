@@ -2,20 +2,11 @@
   "name": "benchmark",
   "private": true,
   "version": "0.1.0",
-  "description": "benchmarks",
-  "main": "index.js",
   "type": "module",
   "scripts": {
     "bench": "node index.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "MIT",
-  "devDependencies": {
-    "micro-bmark": "0.3.0"
-  },
   "dependencies": {
-    "@noble/hashes": "^1.1.5",
-    "elliptic": "^6.5.4"
+    "@noble/curves": "file:.."
   }
 }

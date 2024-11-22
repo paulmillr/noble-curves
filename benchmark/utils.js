@@ -1,4 +1,4 @@
-import { hexToBytes } from '../abstract/utils.js';
+import { hexToBytes } from '@noble/curves/abstract/utils';
 import { run, mark } from 'micro-bmark';
 
 run(async () => {

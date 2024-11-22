@@ -1,7 +1,7 @@
 import { run, mark, utils } from 'micro-bmark';
 import { shake256 } from '@noble/hashes/sha3';
-import * as mod from '../abstract/modular.js';
-import { ed448, DecafPoint } from '../ed448.js';
+import * as mod from '@noble/curves/abstract/modular';
+import { ed448, DecafPoint } from '@noble/curves/ed448';
 
 run(async () => {
   const RAM = false;

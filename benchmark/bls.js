@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { mark, run } from 'micro-bmark';
-import { bls12_381 as bls } from '../bls12-381.js';
+import { bls12_381 as bls } from '@noble/curves/bls12-381';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));

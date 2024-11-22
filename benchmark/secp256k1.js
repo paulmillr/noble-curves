@@ -1,5 +1,5 @@
 import { run, mark, utils } from 'micro-bmark';
-import { secp256k1, schnorr } from '../secp256k1.js';
+import { secp256k1, schnorr } from '@noble/curves/secp256k1';
 import { generateData } from './_shared.js';
 
 run(async () => {

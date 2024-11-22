@@ -1,6 +1,6 @@
 import { run, mark } from 'micro-bmark';
-import { secp256k1 } from '../secp256k1.js';
-import { Field as Fp  } from '../abstract/modular.js';
+import { secp256k1 } from '@noble/curves/secp256k1';
+import { Field as Fp  } from '@noble/curves/abstract/modular';
 
 run(async () => {
   console.log(`\x1b[36mmodular, secp256k1 field\x1b[0m`);

@@ -1,5 +1,5 @@
 import { run, mark, compare, utils } from 'micro-bmark';
-import { bls12_381 } from '../bls12-381.js';
+import { bls12_381 } from '@noble/curves/bls12-381';
 
 run(async () => {
   const g1 = bls12_381.G1.ProjectivePoint;
