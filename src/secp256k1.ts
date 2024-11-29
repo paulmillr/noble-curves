@@ -163,17 +163,24 @@ function schnorrGetPublicKey(privateKey: Hex): Uint8Array {
  * Creates Schnorr signature as per BIP340. Verifies itself before returning anything.
  * auxRand is optional and is not the sole source of k generation: bad CSPRNG won't be dangerous.
  */
-function schnorrSign(
-  message: Hex,
-  privateKey: PrivKey,
-  auxRand: Hex = randomBytes(32)
-): Uint8Array {
+function schnorrSign(message: Hex, privateKey: PrivKey, auxRand?: Hex | boolean): Uint8Array {
+  if (typeof auxRand === 'string' || auxRand instanceof Uint8Array) {
+    return schnorrSignInternal(message, privateKey, auxRand);
+  }
+
+  const withAuxRand = auxRand === undefined || auxRand;
+  if (withAuxRand) {
+    return schnorrSignInternal(message, privateKey, randomBytes(32));
+  }
+  // sign without auxRand
+  return schnorrSignInternal(message, privateKey);
+}
+
+function schnorrSignInternal(message: Hex, privateKey: PrivKey, auxRand?: Hex): Uint8Array {
   const m = ensureBytes('message', message);
   const { bytes: px, scalar: d } = schnorrGetExtPubKey(privateKey); // checks for isWithinCurveOrder
-  const a = ensureBytes('auxRand', auxRand, 32); // Auxiliary random data a: a 32-byte array
-  const t = numTo32b(d ^ num(taggedHash('BIP0340/aux', a))); // Let t be the byte-wise xor of bytes(d) and hash/aux(a)
-  const rand = taggedHash('BIP0340/nonce', t, px, m); // Let rand = hash/nonce(t || bytes(P) || m)
-  const k_ = modN(num(rand)); // Let k' = int(rand) mod n
+  const rand = getBip340Nonce(m, d, px, auxRand);
+  const k_ = modN(bytesToNumberBE(rand)); // Let k' = int(rand) mod n
   if (k_ === _0n) throw new Error('sign failed: k is zero'); // Fail if k' = 0.
   const { bytes: rx, scalar: k } = schnorrGetExtPubKey(k_); // Let R = k'⋅G.
   const e = challenge(rx, px, m); // Let e = int(hash/challenge(bytes(R) || bytes(P) || m)) mod n.
@@ -183,6 +190,22 @@ function schnorrSign(
   // If Verify(bytes(P), m, sig) (see below) returns failure, abort
   if (!schnorrVerify(sig, m, px)) throw new Error('sign: Invalid signature produced');
   return sig;
+}
+
+function getBip340Nonce(
+  msgBytes: Uint8Array,
+  scalar: bigint,
+  px: Uint8Array,
+  auxRand?: Hex
+): Uint8Array {
+  if (auxRand === undefined) {
+    return taggedHash('BIP0340/nonce', numTo32b(scalar), px, msgBytes);
+  }
+
+  const a = ensureBytes('auxRand', auxRand, 32); // Auxiliary random data a: a 32-byte array
+  const t = numTo32b(scalar ^ bytesToNumberBE(taggedHash('BIP0340/aux', a))); // Let t be the byte-wise xor of bytes(d) and hash/aux(a)
+  // Let rand = hash/nonce(t || bytes(P) || m)
+  return taggedHash('BIP0340/nonce', t, px, msgBytes);
 }
 
 /**

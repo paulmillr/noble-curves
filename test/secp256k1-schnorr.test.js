@@ -27,8 +27,29 @@ describe('schnorr.sign()', () => {
   }
 });
 
+describe('schnorr.sign() without aux rand', () => {
+  // index,secret key,public key,aux_rand,message,signature,verification result,comment
+  const vectors = schCsv
+    .split('\n')
+    .map((line) => line.split(','))
+    .slice(1, -1);
+  for (let vec of vectors) {
+    const [index, sec, pub, msg, comment] = vec;
+    should(`${comment || 'vector ' + index}`, () => {
+      if (sec) {
+        deepStrictEqual(hex(schnorr.getPublicKey(sec)), pub.toLowerCase());
+        const sig = schnorr.sign(msg, sec, false);
+        const sig2 = schnorr.sign(msg, sec, false);
+        deepStrictEqual(hex(sig), hex(sig2));
+        deepStrictEqual(schnorr.verify(sig, msg, pub), true);
+      }
+    });
+  }
+});
+
 // ESM is broken.
 import url from 'node:url';
+
 if (import.meta.url === url.pathToFileURL(process.argv[1]).href) {
   should.run();
 }
