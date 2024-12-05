@@ -208,6 +208,7 @@ export const isNegativeLE = (num: bigint, modulo: bigint) => (mod(num, modulo) &
 // Field is not always over prime: for example, Fp2 has ORDER(q)=p^m
 export interface IField<T> {
   ORDER: bigint;
+  isLE: boolean;
   BYTES: number;
   BITS: number;
   MASK: bigint;
@@ -369,6 +370,7 @@ export function Field(
   let sqrtP: ReturnType<typeof FpSqrt>; // cached sqrtP
   const f: Readonly<FpField> = Object.freeze({
     ORDER,
+    isLE,
     BITS,
     BYTES,
     MASK: bitMask(BITS),
@@ -497,7 +499,7 @@ export function mapHashToField(key: Uint8Array, fieldOrder: bigint, isLE = false
   // No small numbers: need to understand bias story. No huge numbers: easier to detect JS timings.
   if (len < 16 || len < minLen || len > 1024)
     throw new Error('expected ' + minLen + '-1024 bytes of input, got ' + len);
-  const num = isLE ? bytesToNumberBE(key) : bytesToNumberLE(key);
+  const num = isLE ? bytesToNumberLE(key) : bytesToNumberBE(key);
   // `mod(x, 11)` can sometimes produce 0. `mod(x, 10) + 1` is the same, but no 0
   const reduced = mod(num, fieldOrder - _1n) + _1n;
   return isLE ? numberToBytesLE(reduced, fieldLen) : numberToBytesBE(reduced, fieldLen);

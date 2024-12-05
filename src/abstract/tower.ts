@@ -173,6 +173,7 @@ export function tower12(opts: Tower12Opts) {
   const Fp2Nonresidue = Fp2fromBigTuple(opts.FP2_NONRESIDUE);
   const Fp2: mod.IField<Fp2> & Fp2Utils = {
     ORDER: FP2_ORDER,
+    isLE: Fp.isLE,
     NONRESIDUE: Fp2Nonresidue,
     BITS: bitLen(FP2_ORDER),
     BYTES: Math.ceil(bitLen(FP2_ORDER) / 8),
@@ -339,6 +340,7 @@ export function tower12(opts: Tower12Opts) {
 
   const Fp6: mod.IField<Fp6> & Fp6Utils = {
     ORDER: Fp2.ORDER, // TODO: unused, but need to verify
+    isLE: Fp2.isLE,
     BITS: 3 * Fp2.BITS,
     BYTES: 3 * Fp2.BYTES,
     MASK: bitMask(3 * Fp2.BITS),
@@ -495,6 +497,7 @@ export function tower12(opts: Tower12Opts) {
 
   const Fp12: mod.IField<Fp12> & Fp12Utils = {
     ORDER: Fp2.ORDER, // TODO: unused, but need to verify
+    isLE: Fp6.isLE,
     BITS: 2 * Fp2.BITS,
     BYTES: 2 * Fp2.BYTES,
     MASK: bitMask(2 * Fp2.BITS),
