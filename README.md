@@ -11,6 +11,10 @@ Audited & minimal JS implementation of elliptic curve cryptography.
 - 🔖 SUF-CMA, SBS (non-repudiation), ZIP215 (consensus friendliness) features for ed25519 & ed448
 - 🪶 93KB for everything with hashes, 26KB (11KB gzipped) for single-curve build
 
+Curves have 4KB sister projects
+[secp256k1](https://github.com/paulmillr/noble-secp256k1) & [ed25519](https://github.com/paulmillr/noble-ed25519).
+They have smaller attack surface, but less features.
+
 Take a glance at [GitHub Discussions](https://github.com/paulmillr/noble-curves/discussions) for questions and support.
 
 ### This library belongs to _noble_ cryptography
