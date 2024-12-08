@@ -75,7 +75,7 @@ import { secp256k1 } from '@noble/curves/secp256k1'; // ESM and Common.js
 - [Speed](#speed)
 - [Upgrading](#upgrading)
 - [Contributing & testing](#contributing--testing)
-- [Resources](#resources)
+- [License](#license)
 
 ### Implementations
 
