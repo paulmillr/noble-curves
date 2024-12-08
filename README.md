@@ -1078,14 +1078,15 @@ Upgrading from [@noble/bls12-381](https://github.com/paulmillr/noble-bls12-381):
 
 ## Contributing & testing
 
-1. Clone the repository
-2. `npm install` to install build dependencies like TypeScript
-3. `npm run build` to compile TypeScript code
-4. `npm run test` will execute all main tests
+* `npm install && npm run build && npm test` will build the code and run tests.
+* `npm run lint` / `npm run format` will run linter / fix linter issues.
+* `npm run bench` will run benchmarks, which may need their deps first (`npm run bench:install`)
+* `cd build && npm install && npm run build:release` will build single file
 
-## Resources
+Check out [github.com/paulmillr/guidelines](https://github.com/paulmillr/guidelines)
+for general coding practices and rules.
 
-Check out [paulmillr.com/noble](https://paulmillr.com/noble/)
+See [paulmillr.com/noble](https://paulmillr.com/noble/)
 for useful resources, articles, documentation and demos
 related to the library.
 
