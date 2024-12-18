@@ -923,6 +923,16 @@ In the past, browsers had bugs that made it weak: it may happen again.
 Implementing a userspace CSPRNG to get resilient to the weakness
 is even worse: there is no reliable userspace source of quality entropy.
 
+### Quantum computers
+
+Cryptographically relevant quantum computer, if built, will allow to
+break elliptic curve cryptography (both ECDSA / EdDSA & ECDH) using Shor's algorithm.
+
+Consider switching to newer / hybrid algorithms, such as SPHINCS+. They are available in
+[noble-post-quantum](https://github.com/paulmillr/noble-post-quantum).
+
+NIST prohibits classical cryptography (RSA, DSA, ECDSA, ECDH) [after 2035](https://nvlpubs.nist.gov/nistpubs/ir/2024/NIST.IR.8547.ipd.pdf). Australian ASD prohibits it [after 2030](https://www.cyber.gov.au/resources-business-and-government/essential-cyber-security/ism/cyber-security-guidelines/guidelines-cryptography).
+
 ## Speed
 
 Benchmark results on Apple M2 with node v22:
