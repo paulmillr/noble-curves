@@ -3,20 +3,20 @@
   "version": "1.7.0",
   "description": "Audited & minimal JS implementation of elliptic curve cryptography",
   "files": [
-    "abstract",
-    "esm",
-    "src",
     "*.js",
     "*.js.map",
     "*.d.ts",
-    "*.d.ts.map"
+    "*.d.ts.map",
+    "esm",
+    "src",
+    "abstract"
   ],
   "scripts": {
     "bench": "cd benchmark; node secp256k1.js; node curves.js; node ecdh.js; node hash-to-curve.js; node modular.js; node bls.js; node ristretto255.js; node decaf448.js",
     "bench:install": "cd benchmark; npm install; npm install .. --install-links",
     "build": "tsc && tsc -p tsconfig.esm.json",
     "build:release": "cd build && npm i && npm run build",
-    "build:clean": "rm *.{js,d.ts,d.ts.map,js.map} esm/*.{js,d.ts,d.ts.map,js.map} 2> /dev/null",
+    "build:clean": "rm {.,esm,abstract,esm/abstract}/*.{js,d.ts,d.ts.map,js.map} 2> /dev/null",
     "lint": "prettier --check 'src/**/*.{js,ts}' 'test/*.js'",
     "format": "prettier --write 'src/**/*.{js,ts}' 'test/*.js'",
     "test": "node test/index.js"
