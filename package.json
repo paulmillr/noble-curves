@@ -19,7 +19,8 @@
     "build:clean": "rm {.,esm,abstract,esm/abstract}/*.{js,d.ts,d.ts.map,js.map} 2> /dev/null",
     "lint": "prettier --check 'src/**/*.{js,ts}' 'test/*.js'",
     "format": "prettier --write 'src/**/*.{js,ts}' 'test/*.js'",
-    "test": "node test/index.js"
+    "test": "node test/index.js",
+    "coverage": "c8 node test/index.js"
   },
   "author": "Paul Miller (https://paulmillr.com)",
   "homepage": "https://paulmillr.com/noble/",
@@ -33,6 +34,7 @@
   },
   "devDependencies": {
     "@paulmillr/jsbt": "0.2.1",
+    "c8": "10.1.2",
     "fast-check": "3.0.0",
     "micro-bmark": "0.3.1",
     "micro-should": "0.4.0",
