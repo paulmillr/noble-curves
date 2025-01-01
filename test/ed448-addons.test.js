@@ -2,7 +2,7 @@ import { bytesToHex as hex, hexToBytes } from '@noble/hashes/utils';
 import { deepStrictEqual, throws } from 'node:assert';
 import { describe, should } from 'micro-should';
 import { bytesToNumberLE } from '../esm/abstract/utils.js';
-import { ed448, DecafPoint } from '../esm/ed448.js';
+import { ed448, DecafPoint, edwardsToMontgomeryPub, hash_to_decaf448 } from '../esm/ed448.js';
 
 describe('decaf448', () => {
   should('follow the byte encodings of small multiples', () => {
@@ -106,6 +106,26 @@ describe('decaf448', () => {
     ]);
     const pub = DecafPoint.BASE.multiply(bytes448ToNumberLE(priv));
     deepStrictEqual(pub.equals(DecafPoint.ZERO), false);
+  });
+
+  should('edwardsToMontgomery should produce correct output', () => {
+    const edSecret = hexToBytes(
+      '77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab1'
+    );
+    const edPublic = ed448.getPublicKey(edSecret);
+    const xPublic = edwardsToMontgomeryPub(edPublic);
+    deepStrictEqual(
+      hex(xPublic),
+      'f0301c19656bce1d1cd0a474c952d196041811b63617fc8fdaacee533644e2b2d49273426c8dbb5a76033ea84fb5215b84f9ebf22bde0b0700'
+    );
+  });
+  should('hash_to_decaf448', () => {
+    deepStrictEqual(
+      hash_to_decaf448(new Uint8Array(10).fill(5), {
+        DST: 'decaf448_XOF:SHAKE256_D448MAP_RO_',
+      }).toHex(),
+      '1287dea7519af966cf537a58f614e8b39b93a7c0b989bcdb4f94af8f2573ab59589accb0d2a2097b5f30c1d721619470f21e78613bbfc4b6'
+    );
   });
 });
 

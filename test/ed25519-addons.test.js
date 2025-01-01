@@ -13,6 +13,7 @@ import {
   edwardsToMontgomeryPriv,
   RistrettoPoint,
   x25519,
+  hash_to_ristretto255,
 } from '../esm/ed25519.js';
 
 const VECTORS_RFC8032_CTX = [
@@ -270,6 +271,11 @@ describe('ristretto255', () => {
     for (const encoded of encodingsOfSmallMultiples) {
       deepStrictEqual(P.toHex(), encoded);
       deepStrictEqual(RistrettoPoint.fromHex(encoded).toHex(), encoded);
+      deepStrictEqual(
+        RistrettoPoint.fromAffine(RistrettoPoint.fromHex(encoded).ep.toAffine()).toHex(),
+        encoded
+      );
+      deepStrictEqual(RistrettoPoint.fromHex(encoded).toString(), encoded);
       P = P.add(B);
     }
   });
@@ -352,6 +358,19 @@ describe('ristretto255', () => {
     ]);
     const pub = RistrettoPoint.BASE.multiply(bytes255ToNumberLE(priv));
     deepStrictEqual(pub.equals(RistrettoPoint.ZERO), false);
+
+    const pub2 = RistrettoPoint.BASE.multiplyUnsafe(bytes255ToNumberLE(priv));
+    deepStrictEqual(pub2.equals(RistrettoPoint.ZERO), false);
+    deepStrictEqual(pub.toHex(), pub2.toHex());
+  });
+
+  should('hash_to_ristretto255', () => {
+    deepStrictEqual(
+      hash_to_ristretto255(new Uint8Array(10).fill(5), {
+        DST: 'ristretto255_XMD:SHA-512_R255MAP_RO_',
+      }).toHex(),
+      'be2194e53cc014665821003f8ecf49e99b7cd16f5326e53f234ecd21c448ee6c'
+    );
   });
 });
 

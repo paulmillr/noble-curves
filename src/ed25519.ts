@@ -6,6 +6,7 @@ import { CurveFn, ExtPointType, twistedEdwards } from './abstract/edwards.js';
 import { createHasher, expand_message_xmd, htfBasicOpts } from './abstract/hash-to-curve.js';
 import { Field, FpSqrtEven, isNegativeLE, mod, pow2 } from './abstract/modular.js';
 import { montgomery } from './abstract/montgomery.js';
+import { pippenger } from './abstract/curve.js';
 import {
   bytesToHex,
   bytesToNumberLE,
@@ -411,6 +412,11 @@ class RistPoint implements Group<RistPoint> {
     const t = mod(x * y); // 12
     if (!isValid || isNegativeLE(t, P) || y === _0n) throw new Error(emsg);
     return new RistPoint(new ed25519.ExtendedPoint(x, y, _1n, t));
+  }
+
+  static msm(points: RistPoint[], scalars: bigint[]): RistPoint {
+    const Fn = Field(ed25519.CURVE.n, ed25519.CURVE.nBitLength);
+    return pippenger(RistPoint, Fn, points, scalars);
   }
 
   /**

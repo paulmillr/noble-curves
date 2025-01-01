@@ -882,6 +882,8 @@ describe('bls12-381/basic', () => {
       const [priv, msg, expected] = vector;
       const sig = bls.signShortSignature(msg, priv);
       deepStrictEqual(bytesToHex(sig), expected);
+      deepStrictEqual(bls.ShortSignature.toRawBytes(bls.ShortSignature.fromHex(sig)), sig);
+      deepStrictEqual(bls.ShortSignature.toHex(bls.ShortSignature.fromHex(sig)), bytesToHex(sig));
     }
   });
   should(`produce correct signatures (${G2_VECTORS.length} vectors)`, () => {
@@ -889,6 +891,8 @@ describe('bls12-381/basic', () => {
       const [priv, msg, expected] = vector;
       const sig = bls.sign(msg, priv);
       deepStrictEqual(bytesToHex(sig), expected);
+      deepStrictEqual(bls.Signature.toRawBytes(bls.Signature.fromHex(sig)), sig);
+      deepStrictEqual(bls.Signature.toHex(bls.Signature.fromHex(sig)), bytesToHex(sig));
     }
   });
   should(`produce correct scalars (${SCALAR_VECTORS.length} vectors)`, () => {
@@ -1428,7 +1432,7 @@ describe('bls12-381 deterministic', () => {
       }
     }
   });
-  should(`zkcrypt/G1 & G2 encoding edge cases`, () => {
+  should(`zkcrypt/G1 encoding edge cases`, () => {
     const Fp = bls12_381.fields.Fp;
     const S_BIT_POS = Fp.BITS; // C_bit, compression bit for serialization flag
     const I_BIT_POS = Fp.BITS + 1; // I_bit, point-at-infinity bit for serialization flag
@@ -1458,6 +1462,43 @@ describe('bls12-381 deterministic', () => {
     const infinityCompressed = baseC.slice();
     infinityCompressed[0] |= 0b0100_0000;
     throws(() => G1Point.fromHex(compressedBit), 'infinity compressed');
+  });
+  should(`zkcrypt/G2 encoding edge cases`, () => {
+    const Fp = bls12_381.fields.Fp;
+    const S_BIT_POS = Fp.BITS; // C_bit, compression bit for serialization flag
+    const I_BIT_POS = Fp.BITS + 1; // I_bit, point-at-infinity bit for serialization flag
+    const C_BIT_POS = Fp.BITS + 2; // S_bit, sort bit for serialization flag
+    const VECTORS = [
+      { pos: C_BIT_POS, shift: 7 }, // compression_flag_set = Choice::from((bytes[0] >> 7) & 1);
+      { pos: I_BIT_POS, shift: 6 }, // infinity_flag_set = Choice::from((bytes[0] >> 6) & 1)
+      { pos: S_BIT_POS, shift: 5 }, // sort_flag_set = Choice::from((bytes[0] >> 5) & 1)
+    ];
+    for (const { pos, shift } of VECTORS) {
+      const d = utils.numberToBytesBE(utils.bitSet(0n, pos, Boolean(true)), Fp.BYTES);
+      deepStrictEqual((d[0] >> shift) & 1, 1, `${pos}`);
+    }
+    const baseC = G2Point.BASE.toRawBytes();
+    deepStrictEqual(baseC.length, 96);
+    const baseU = G2Point.BASE.toRawBytes(false);
+    deepStrictEqual(baseU.length, 192);
+    const compressedBit = baseU.slice();
+    compressedBit[0] |= 0b1000_0000; // add compression bit
+    throws(() => G2Point.fromHex(compressedBit), 'compressed bit'); // uncompressed point with compressed length
+    const uncompressedBit = baseC.slice();
+    uncompressedBit[0] &= 0b0111_1111; // remove compression bit
+    throws(() => G2Point.fromHex(uncompressedBit), 'uncompressed bit');
+    const infinityUncompressed = baseU.slice();
+    infinityUncompressed[0] |= 0b0100_0000;
+    throws(() => G2Point.fromHex(compressedBit), 'infinity uncompressed');
+    const infinityCompressed = baseC.slice();
+    infinityCompressed[0] |= 0b0100_0000;
+    throws(() => G2Point.fromHex(compressedBit), 'infinity compressed');
+    infinityCompressed[0] = 0b00100000;
+    throws(() => G2Point.fromHex(compressedBit), '(!compressed && !infinity && sort)');
+    infinityCompressed[0] = 0b01100000;
+    throws(() => G2Point.fromHex(compressedBit), '(!compressed && infinity && sort)');
+    infinityCompressed[0] = 0b11100000;
+    throws(() => G2Point.fromHex(compressedBit), '(sort && infinity && compressed)');
   });
 
   describe('EIP2537', () => {

@@ -6,6 +6,7 @@ import { ExtPointType, twistedEdwards } from './abstract/edwards.js';
 import { createHasher, expand_message_xof, htfBasicOpts } from './abstract/hash-to-curve.js';
 import { Field, isNegativeLE, mod, pow2 } from './abstract/modular.js';
 import { montgomery } from './abstract/montgomery.js';
+import { pippenger } from './abstract/curve.js';
 import {
   bytesToHex,
   bytesToNumberLE,
@@ -389,6 +390,11 @@ class DcfPoint implements Group<DcfPoint> {
 
     if (!isValid) throw new Error(emsg);
     return new DcfPoint(new ed448.ExtendedPoint(x, y, _1n, t));
+  }
+
+  static msm(points: DcfPoint[], scalars: bigint[]): DcfPoint {
+    const Fn = Field(ed448.CURVE.n, ed448.CURVE.nBitLength);
+    return pippenger(DcfPoint, Fn, points, scalars);
   }
 
   /**

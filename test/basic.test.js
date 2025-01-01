@@ -13,8 +13,8 @@ import { secp256r1 } from '../esm/p256.js';
 import { secp384r1 } from '../esm/p384.js';
 import { secp521r1 } from '../esm/p521.js';
 import { secp256k1 } from '../esm/secp256k1.js';
-import { ed25519, ed25519ctx, ed25519ph, x25519 } from '../esm/ed25519.js';
-import { ed448, ed448ph } from '../esm/ed448.js';
+import { ed25519, ed25519ctx, ed25519ph, x25519, RistrettoPoint } from '../esm/ed25519.js';
+import { ed448, ed448ph, DecafPoint } from '../esm/ed448.js';
 import { pallas, vesta } from '../esm/pasta.js';
 import { bn254_weierstrass } from '../esm/bn254.js';
 import { jubjub } from '../esm/jubjub.js';
@@ -85,16 +85,27 @@ const FIELDS = {
 
 // prettier-ignore
 const CURVES = {
-  secp192r1, secp224r1, secp256r1, secp384r1, secp521r1,
+  secp192r1,
+  secp224r1,
+  secp256r1,
+  secp384r1,
+  secp521r1,
   secp256k1,
-  ed25519, ed25519ctx, ed25519ph,
-  ed448, ed448ph,
-  pallas, vesta,
+  ed25519,
+  ed25519ctx,
+  ed25519ph,
+  ed448,
+  ed448ph,
+  pallas,
+  vesta,
   bn254: bn254_weierstrass,
   jubjub,
-  bls12_381_G1: bls12_381.G1, bls12_381_G2: bls12_381.G2,
+  bls12_381_G1: bls12_381.G1,
+  bls12_381_G2: bls12_381.G2,
   // Requires fromHex/toHex
   // alt_bn128_G1: alt_bn128.G1, alt_bn128_G2: alt_bn128.G2,
+  ristretto: { ...ed25519, ExtendedPoint: RistrettoPoint },
+  decaf: { ...ed448, ExtendedPoint: DecafPoint },
 };
 
 for (const c in FIELDS) {
@@ -570,7 +581,6 @@ for (const name in CURVES) {
           const points = [p.BASE, p.BASE.multiply(2n), p.BASE.multiply(4n), p.BASE.multiply(8n)];
           const scalars = [3n, 5n, 7n, 11n];
           const res = p.BASE.multiply(129n);
-
           for (let windowSize = 1; windowSize <= 10; windowSize++) {
             const mul = precomputeMSMUnsafe(Point, field, points, windowSize);
             equal(mul(scalars), res, 'windowSize=' + windowSize);
