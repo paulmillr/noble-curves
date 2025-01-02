@@ -1,0 +1,43 @@
+{
+  "name": "@noble/curves",
+  "version": "1.7.0",
+  "exports": {
+    ".": "./src/index.ts",
+    "./abstract/bls": "./abstract/bls.ts",
+    "./abstract/curve": "./abstract/curve.ts",
+    "./abstract/edwards": "./abstract/edwards.ts",
+    "./abstract/hash-to-curve": "./abstract/hash-to-curve.ts",
+    "./abstract/modular": "./abstract/modular.ts",
+    "./abstract/montgomery": "./abstract/montgomery.ts",
+    "./abstract/poseidon": "./abstract/poseidon.ts",
+    "./abstract/tower": "./abstract/tower.ts",
+    "./abstract/utils": "./abstract/utils.ts",
+    "./abstract/weierstrass": "./abstract/weierstrass.ts",
+    "./_shortw_utils": "./_shortw_utils.ts",
+    "./bls12-381": "./bls12-381.ts",
+    "./bn254": "./bn254.ts",
+    "./ed25519": "./ed25519.ts",
+    "./ed448": "./ed448.ts",
+    "./jubjub": "./jubjub.ts",
+    "./p256": "./p256.ts",
+    "./p384": "./p384.ts",
+    "./p521": "./p521.ts",
+    "./pasta": "./pasta.ts",
+    "./secp256k1": "./secp256k1.ts"
+  },
+  "imports": {
+    "@noble/hashes": "jsr:@noble/hashes@1.6.1"
+  },
+  "publish": {
+    "include": [
+      "src",
+      "jsr.json",
+      "LICENSE",
+      "README.md"
+    ],
+    "exclude": [
+      "src/cryptoNode.ts"
+    ]
+  },
+  "license": "MIT"
+}
