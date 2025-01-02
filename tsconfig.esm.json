@@ -1,7 +1,8 @@
 {
   "extends": "@paulmillr/jsbt/tsconfig.esm.json",
   "compilerOptions": {
-    "outDir": "esm"
+    "outDir": "esm",
+    "isolatedDeclarations": true
   },
   "include": [
     "src"

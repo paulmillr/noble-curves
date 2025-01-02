@@ -1,8 +1,8 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha256 } from '@noble/hashes/sha256';
 import { randomBytes } from '@noble/hashes/utils';
-import { createCurve } from './_shortw_utils.js';
-import { createHasher, isogenyMap } from './abstract/hash-to-curve.js';
+import { createCurve, CurveFnWithCreate } from './_shortw_utils.js';
+import { createHasher, HTFMethod, isogenyMap } from './abstract/hash-to-curve.js';
 import { Field, mod, pow2 } from './abstract/modular.js';
 import type { Hex, PrivKey } from './abstract/utils.js';
 import {
@@ -54,7 +54,7 @@ const Fpk1 = Field(secp256k1P, undefined, undefined, { sqrt: sqrtMod });
 /**
  * secp256k1 short weierstrass curve and ECDSA signatures over it.
  */
-export const secp256k1 = createCurve(
+export const secp256k1: CurveFnWithCreate = createCurve(
   {
     a: BigInt(0), // equation params: a, b
     b: BigInt(7), // Seem to be rigid: bitcointalk.org/index.php?topic=289795.msg3183975#msg3183975
@@ -211,7 +211,20 @@ function schnorrVerify(signature: Hex, message: Hex, publicKey: Hex): boolean {
 /**
  * Schnorr signatures over secp256k1.
  */
-export const schnorr = /* @__PURE__ */ (() => ({
+export const schnorr: {
+  getPublicKey: typeof schnorrGetPublicKey;
+  sign: typeof schnorrSign;
+  verify: typeof schnorrVerify;
+  utils: {
+    randomPrivateKey: () => Uint8Array;
+    lift_x: typeof lift_x;
+    pointToBytes: (point: PointType<bigint>) => Uint8Array;
+    numberToBytesBE: typeof numberToBytesBE;
+    bytesToNumberBE: typeof bytesToNumberBE;
+    taggedHash: typeof taggedHash;
+    mod: typeof mod;
+  };
+} = /* @__PURE__ */ (() => ({
   getPublicKey: schnorrGetPublicKey,
   sign: schnorrSign,
   verify: schnorrVerify,
@@ -282,5 +295,5 @@ const htf = /* @__PURE__ */ (() =>
       hash: sha256,
     }
   ))();
-export const hashToCurve = /* @__PURE__ */ (() => htf.hashToCurve)();
-export const encodeToCurve = /* @__PURE__ */ (() => htf.encodeToCurve)();
+export const hashToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() => htf.hashToCurve)();
+export const encodeToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() => htf.encodeToCurve)();

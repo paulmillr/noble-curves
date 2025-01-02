@@ -155,7 +155,7 @@ export function concatBytes(...arrays: Uint8Array[]): Uint8Array {
 }
 
 // Compares 2 u8a-s in kinda constant time
-export function equalBytes(a: Uint8Array, b: Uint8Array) {
+export function equalBytes(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) return false;
   let diff = 0;
   for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
@@ -177,7 +177,7 @@ export function utf8ToBytes(str: string): Uint8Array {
 // Is positive bigint
 const isPosBig = (n: bigint) => typeof n === 'bigint' && _0n <= n;
 
-export function inRange(n: bigint, min: bigint, max: bigint) {
+export function inRange(n: bigint, min: bigint, max: bigint): boolean {
   return isPosBig(n) && isPosBig(min) && isPosBig(max) && min <= n && n < max;
 }
 
@@ -186,7 +186,7 @@ export function inRange(n: bigint, min: bigint, max: bigint) {
  * @example
  * aInRange('x', x, 1n, 256n); // would assume x is in (1n..255n)
  */
-export function aInRange(title: string, n: bigint, min: bigint, max: bigint) {
+export function aInRange(title: string, n: bigint, min: bigint, max: bigint): void {
   // Why min <= n < max and not a (min < n < max) OR b (min <= n <= max)?
   // consider P=256n, min=0n, max=P
   // - a for min=0 would require -1:          `inRange('x', x, -1n, P)`
@@ -202,7 +202,7 @@ export function aInRange(title: string, n: bigint, min: bigint, max: bigint) {
  * Calculates amount of bits in a bigint.
  * Same as `n.toString(2).length`
  */
-export function bitLen(n: bigint) {
+export function bitLen(n: bigint): number {
   let len;
   for (len = 0; n > _0n; n >>= _1n, len += 1);
   return len;
@@ -213,14 +213,14 @@ export function bitLen(n: bigint) {
  * NOTE: first bit position is 0 (same as arrays)
  * Same as `!!+Array.from(n.toString(2)).reverse()[pos]`
  */
-export function bitGet(n: bigint, pos: number) {
+export function bitGet(n: bigint, pos: number): bigint {
   return (n >> BigInt(pos)) & _1n;
 }
 
 /**
  * Sets single bit at position.
  */
-export function bitSet(n: bigint, pos: number, value: boolean) {
+export function bitSet(n: bigint, pos: number, value: boolean): bigint {
   return n | ((value ? _1n : _0n) << BigInt(pos));
 }
 
@@ -228,7 +228,7 @@ export function bitSet(n: bigint, pos: number, value: boolean) {
  * Calculate mask for N bits. Not using ** operator with bigints because of old engines.
  * Same as BigInt(`0b${Array(i).fill('1').join('')}`)
  */
-export const bitMask = (n: number) => (_2n << BigInt(n - 1)) - _1n;
+export const bitMask = (n: number): bigint => (_2n << BigInt(n - 1)) - _1n;
 
 // DRBG
 
@@ -295,15 +295,15 @@ export function createHmacDrbg<T>(
 // Validating curves and fields
 
 const validatorFns = {
-  bigint: (val: any) => typeof val === 'bigint',
-  function: (val: any) => typeof val === 'function',
-  boolean: (val: any) => typeof val === 'boolean',
-  string: (val: any) => typeof val === 'string',
-  stringOrUint8Array: (val: any) => typeof val === 'string' || isBytes(val),
-  isSafeInteger: (val: any) => Number.isSafeInteger(val),
-  array: (val: any) => Array.isArray(val),
-  field: (val: any, object: any) => (object as any).Fp.isValid(val),
-  hash: (val: any) => typeof val === 'function' && Number.isSafeInteger(val.outputLen),
+  bigint: (val: any): boolean => typeof val === 'bigint',
+  function: (val: any): boolean => typeof val === 'function',
+  boolean: (val: any): boolean => typeof val === 'boolean',
+  string: (val: any): boolean => typeof val === 'string',
+  stringOrUint8Array: (val: any): boolean => typeof val === 'string' || isBytes(val),
+  isSafeInteger: (val: any): boolean => Number.isSafeInteger(val),
+  array: (val: any): boolean => Array.isArray(val),
+  field: (val: any, object: any): any => (object as any).Fp.isValid(val),
+  hash: (val: any): boolean => typeof val === 'function' && Number.isSafeInteger(val.outputLen),
 } as const;
 type Validator = keyof typeof validatorFns;
 type ValMap<T extends Record<string, any>> = { [K in keyof T]?: Validator };
@@ -313,7 +313,7 @@ export function validateObject<T extends Record<string, any>>(
   object: T,
   validators: ValMap<T>,
   optValidators: ValMap<T> = {}
-) {
+): T {
   const checkField = (fieldName: keyof T, type: Validator, isOptional: boolean) => {
     const checkVal = validatorFns[type];
     if (typeof checkVal !== 'function') throw new Error('invalid validator function');
@@ -342,7 +342,7 @@ export function validateObject<T extends Record<string, any>>(
 /**
  * throws not implemented error
  */
-export const notImplemented = () => {
+export const notImplemented = (): never => {
   throw new Error('not implemented');
 };
 
@@ -350,7 +350,9 @@ export const notImplemented = () => {
  * Memoizes (caches) computation result.
  * Uses WeakMap: the value is going auto-cleaned by GC after last reference is removed.
  */
-export function memoized<T extends object, R, O extends any[]>(fn: (arg: T, ...args: O) => R) {
+export function memoized<T extends object, R, O extends any[]>(
+  fn: (arg: T, ...args: O) => R
+): (arg: T, ...args: O) => R {
   const map = new WeakMap<T, R>();
   return (arg: T, ...args: O): R => {
     const val = map.get(arg);

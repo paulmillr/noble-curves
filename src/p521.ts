@@ -1,7 +1,7 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha512 } from '@noble/hashes/sha512';
-import { createCurve } from './_shortw_utils.js';
-import { createHasher } from './abstract/hash-to-curve.js';
+import { createCurve, CurveFnWithCreate } from './_shortw_utils.js';
+import { createHasher, HTFMethod } from './abstract/hash-to-curve.js';
 import { Field } from './abstract/modular.js';
 import { mapToCurveSimpleSWU } from './abstract/weierstrass.js';
 
@@ -33,7 +33,7 @@ const CURVE = {
 };
 
 // prettier-ignore
-export const p521 = createCurve({
+export const p521: CurveFnWithCreate = createCurve({
   a: CURVE.a, // Equation params: a, b
   b: CURVE.b,
   Fp: Fp521, // Field: 2n**521n - 1n
@@ -45,7 +45,7 @@ export const p521 = createCurve({
   lowS: false,
   allowedPrivateKeyLengths: [130, 131, 132] // P521 keys are variable-length. Normalize to 132b
 } as const, sha512);
-export const secp521r1 = p521;
+export const secp521r1: CurveFnWithCreate = p521;
 
 const mapSWU = /* @__PURE__ */ (() =>
   mapToCurveSimpleSWU(Fp521, {
@@ -64,5 +64,5 @@ const htf = /* @__PURE__ */ (() =>
     expand: 'xmd',
     hash: sha512,
   }))();
-export const hashToCurve = /* @__PURE__ */ (() => htf.hashToCurve)();
-export const encodeToCurve = /* @__PURE__ */ (() => htf.encodeToCurve)();
+export const hashToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() => htf.hashToCurve)();
+export const encodeToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() => htf.encodeToCurve)();

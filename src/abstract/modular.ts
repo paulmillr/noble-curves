@@ -83,7 +83,7 @@ export function invert(number: bigint, modulo: bigint): bigint {
  * @param P field order
  * @returns function that takes field Fp (created from P) and number n
  */
-export function tonelliShanks(P: bigint) {
+export function tonelliShanks(P: bigint): <T>(Fp: IField<T>, n: T) => T {
   // Legendre constant: used to calculate Legendre symbol (a | p),
   // which denotes the value of a^((p-1)/2) (mod p).
   // (a | p) ≡ 1    if a is a square (mod p)
@@ -142,7 +142,7 @@ export function tonelliShanks(P: bigint) {
   };
 }
 
-export function FpSqrt(P: bigint) {
+export function FpSqrt(P: bigint): <T>(Fp: IField<T>, n: T) => T {
   // NOTE: different algorithms can give different roots, it is up to user to decide which one they want.
   // For example there is FpSqrtOdd/FpSqrtEven to choice root based on oddness (used for hash-to-curve).
 
@@ -203,7 +203,8 @@ export function FpSqrt(P: bigint) {
 }
 
 // Little-endian check for first LE bit (last BE bit);
-export const isNegativeLE = (num: bigint, modulo: bigint) => (mod(num, modulo) & _1n) === _1n;
+export const isNegativeLE = (num: bigint, modulo: bigint): boolean =>
+  (mod(num, modulo) & _1n) === _1n;
 
 // Field is not always over prime: for example, Fp2 has ORDER(q)=p^m
 export interface IField<T> {
@@ -254,7 +255,7 @@ const FIELD_FIELDS = [
   'eql', 'add', 'sub', 'mul', 'pow', 'div',
   'addN', 'subN', 'mulN', 'sqrN'
 ] as const;
-export function validateField<T>(field: IField<T>) {
+export function validateField<T>(field: IField<T>): IField<T> {
   const initial = {
     ORDER: 'bigint',
     MASK: 'bigint',
@@ -317,7 +318,7 @@ export function FpDiv<T>(f: IField<T>, lhs: T, rhs: T | bigint): T {
   return f.mul(lhs, typeof rhs === 'bigint' ? invert(rhs, f.ORDER) : f.inv(rhs));
 }
 
-export function FpLegendre(order: bigint) {
+export function FpLegendre(order: bigint): <T>(f: IField<T>, x: T) => T {
   // (a | p) ≡ 1    if a is a square (mod p), quadratic residue
   // (a | p) ≡ -1   if a is not a square (mod p), quadratic non residue
   // (a | p) ≡ 0    if a ≡ 0 (mod p)
@@ -326,7 +327,7 @@ export function FpLegendre(order: bigint) {
 }
 
 // This function returns True whenever the value x is a square in the field F.
-export function FpIsSquare<T>(f: IField<T>) {
+export function FpIsSquare<T>(f: IField<T>): (x: T) => boolean {
   const legendre = FpLegendre(f.ORDER);
   return (x: T): boolean => {
     const p = legendre(f, x);
@@ -335,7 +336,13 @@ export function FpIsSquare<T>(f: IField<T>) {
 }
 
 // CURVE.n lengths
-export function nLength(n: bigint, nBitLength?: number) {
+export function nLength(
+  n: bigint,
+  nBitLength?: number
+): {
+  nBitLength: number;
+  nByteLength: number;
+} {
   // Bit size, byte size of CURVE.n
   const _nBitLength = nBitLength !== undefined ? nBitLength : n.toString(2).length;
   const nByteLength = Math.ceil(_nBitLength / 8);
@@ -421,13 +428,13 @@ export function Field(
   return Object.freeze(f);
 }
 
-export function FpSqrtOdd<T>(Fp: IField<T>, elm: T) {
+export function FpSqrtOdd<T>(Fp: IField<T>, elm: T): T {
   if (!Fp.isOdd) throw new Error("Field doesn't have isOdd");
   const root = Fp.sqrt(elm);
   return Fp.isOdd(root) ? root : Fp.neg(root);
 }
 
-export function FpSqrtEven<T>(Fp: IField<T>, elm: T) {
+export function FpSqrtEven<T>(Fp: IField<T>, elm: T): T {
   if (!Fp.isOdd) throw new Error("Field doesn't have isOdd");
   const root = Fp.sqrt(elm);
   return Fp.isOdd(root) ? Fp.neg(root) : root;

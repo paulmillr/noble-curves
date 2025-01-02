@@ -64,6 +64,19 @@ function getW(P: any): number {
   return pointWindowSizes.get(P) || 1;
 }
 
+export type IWNAF<T extends Group<T>> = {
+  constTimeNegate: <T extends Group<T>>(condition: boolean, item: T) => T;
+  hasPrecomputes(elm: T): boolean;
+  unsafeLadder(elm: T, n: bigint, p?: T): T;
+  precomputeWindow(elm: T, W: number): Group<T>[];
+  wNAF(W: number, precomputes: T[], n: bigint): { p: T; f: T };
+  wNAFUnsafe(W: number, precomputes: T[], n: bigint, acc?: T): T;
+  getPrecomputes(W: number, P: T, transform: Mapper<T>): T[];
+  wNAFCached(P: T, n: bigint, transform: Mapper<T>): { p: T; f: T };
+  wNAFCachedUnsafe(P: T, n: bigint, transform: Mapper<T>, prev?: T): T;
+  setWindowSize(P: T, W: number): void;
+};
+
 // Elliptic curve multiplication of Point by scalar. Fragile.
 // Scalars should always be less than curve order: this should be checked inside of a curve itself.
 // Creates precomputation tables for fast multiplication:
@@ -75,7 +88,7 @@ function getW(P: any): number {
 // - wNAF reduces table size: 2x less memory + 2x faster generation, but 10% slower multiplication
 // TODO: Research returning 2d JS array of windows, instead of a single window. This would allow
 // windows to be in different memory locations
-export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number) {
+export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number): IWNAF<T> {
   return {
     constTimeNegate,
 
@@ -316,7 +329,7 @@ export function precomputeMSMUnsafe<T extends Group<T>>(
   fieldN: IField<bigint>,
   points: T[],
   windowSize: number
-) {
+): (scalars: bigint[]) => T {
   /**
    * Performance Analysis of Window-based Precomputation
    *
@@ -400,7 +413,17 @@ export type BasicCurve<T> = {
   allowInfinityPoint?: boolean; // bls12-381 requires it. ZERO point is valid, but invalid pubkey
 };
 
-export function validateBasic<FP, T>(curve: BasicCurve<FP> & T) {
+export function validateBasic<FP, T>(
+  curve: BasicCurve<FP> & T
+): Readonly<
+  {
+    readonly nBitLength: number;
+    readonly nByteLength: number;
+  } & BasicCurve<FP> &
+    T & {
+      p: bigint;
+    }
+> {
   validateField(curve.Fp);
   validateObject(
     curve,

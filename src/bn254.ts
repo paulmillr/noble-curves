@@ -1,9 +1,14 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha256 } from '@noble/hashes/sha256';
 import { getHash } from './_shortw_utils.js';
-import { weierstrass } from './abstract/weierstrass.js';
+import { CurveFn, weierstrass } from './abstract/weierstrass.js';
 import { randomBytes } from '@noble/hashes/utils';
-import { bls, CurveFn, PostPrecomputeFn, PostPrecomputePointAddFn } from './abstract/bls.js';
+import {
+  bls,
+  CurveFn as BLSCurveFn,
+  PostPrecomputeFn,
+  PostPrecomputePointAddFn,
+} from './abstract/bls.js';
 import { Field } from './abstract/modular.js';
 import { bitGet, bitLen, notImplemented } from './abstract/utils.js';
 import { tower12, psiFrobenius } from './abstract/tower.js';
@@ -166,7 +171,7 @@ export const _postPrecompute: PostPrecomputeFn = (
  * bn254 (a.k.a. alt_bn128) pairing-friendly curve.
  * Contains G1 / G2 operations and pairings.
  */
-export const bn254: CurveFn = bls({
+export const bn254: BLSCurveFn = bls({
   // Fields
   fields: { Fp, Fp2, Fp6, Fp12, Fr },
   G1: {
@@ -234,7 +239,7 @@ export const bn254: CurveFn = bls({
  * This is very rare and probably not used anywhere.
  * Instead, you should use G1 / G2, defined above.
  */
-export const bn254_weierstrass = weierstrass({
+export const bn254_weierstrass: CurveFn = weierstrass({
   a: BigInt(0),
   b: BigInt(3),
   Fp,

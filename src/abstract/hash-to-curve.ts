@@ -161,7 +161,14 @@ export function hash_to_field(msg: Uint8Array, count: number, options: Opts): bi
   return u;
 }
 
-export function isogenyMap<T, F extends IField<T>>(field: F, map: [T[], T[], T[], T[]]) {
+export type XY<T> = (
+  x: T,
+  y: T
+) => {
+  x: T;
+  y: T;
+};
+export function isogenyMap<T, F extends IField<T>>(field: F, map: [T[], T[], T[], T[]]): XY<T> {
   // Make same order as in spec
   const COEFF = map.map((i) => Array.from(i).reverse());
   return (x: T, y: T) => {
@@ -170,7 +177,7 @@ export function isogenyMap<T, F extends IField<T>>(field: F, map: [T[], T[], T[]
     );
     x = field.div(xNum, xDen); // xNum / xDen
     y = field.mul(y, field.div(yNum, yDen)); // y * (yNum / yDev)
-    return { x, y };
+    return { x: x, y: y };
   };
 }
 
@@ -190,17 +197,23 @@ export type MapToCurve<T> = (scalar: bigint[]) => AffinePoint<T>;
 // Separated from initialization opts, so users won't accidentally change per-curve parameters
 // (changing DST is ok!)
 export type htfBasicOpts = { DST: UnicodeOrBytes };
+export type HTFMethod<T> = (msg: Uint8Array, options?: htfBasicOpts) => H2CPoint<T>;
+export type MapMethod<T> = (scalars: bigint[]) => H2CPoint<T>;
 
 export function createHasher<T>(
   Point: H2CPointConstructor<T>,
   mapToCurve: MapToCurve<T>,
   def: Opts & { encodeDST?: UnicodeOrBytes }
-) {
+): {
+  hashToCurve: HTFMethod<T>;
+  encodeToCurve: HTFMethod<T>;
+  mapToCurve: MapMethod<T>;
+} {
   if (typeof mapToCurve !== 'function') throw new Error('mapToCurve() must be defined');
   return {
     // Encodes byte string to elliptic curve.
     // hash_to_curve from https://www.rfc-editor.org/rfc/rfc9380#section-3
-    hashToCurve(msg: Uint8Array, options?: htfBasicOpts) {
+    hashToCurve(msg: Uint8Array, options?: htfBasicOpts): H2CPoint<T> {
       const u = hash_to_field(msg, 2, { ...def, DST: def.DST, ...options } as Opts);
       const u0 = Point.fromAffine(mapToCurve(u[0]));
       const u1 = Point.fromAffine(mapToCurve(u[1]));
@@ -211,14 +224,14 @@ export function createHasher<T>(
 
     // Encodes byte string to elliptic curve.
     // encode_to_curve from https://www.rfc-editor.org/rfc/rfc9380#section-3
-    encodeToCurve(msg: Uint8Array, options?: htfBasicOpts) {
+    encodeToCurve(msg: Uint8Array, options?: htfBasicOpts): H2CPoint<T> {
       const u = hash_to_field(msg, 1, { ...def, DST: def.encodeDST, ...options } as Opts);
       const P = Point.fromAffine(mapToCurve(u[0])).clearCofactor();
       P.assertValidity();
       return P;
     },
     // Same as encodeToCurve, but without hash
-    mapToCurve(scalars: bigint[]) {
+    mapToCurve(scalars: bigint[]): H2CPoint<T> {
       if (!Array.isArray(scalars)) throw new Error('mapToCurve: expected array of bigints');
       for (const i of scalars)
         if (typeof i !== 'bigint') throw new Error('mapToCurve: expected array of bigints');

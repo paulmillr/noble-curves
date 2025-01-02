@@ -30,10 +30,12 @@ export type CurveType = BasicCurve<bigint> & {
   mapToCurve?: (scalar: bigint[]) => AffinePoint<bigint>; // for hash-to-curve standard
 };
 
+export type CurveTypeWithLength = Readonly<CurveType & { nByteLength: number; nBitLength: number }>;
+
 // verification rule is either zip215 or rfc8032 / nist186-5. Consult fromHex:
 const VERIFY_DEFAULT = { zip215: true };
 
-function validateOpts(curve: CurveType) {
+function validateOpts(curve: CurveType): CurveTypeWithLength {
   const opts = validateBasic(curve);
   ut.validateObject(
     curve,

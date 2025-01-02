@@ -102,7 +102,11 @@ export type CurvePointsType<T> = BasicWCurve<T> & {
   toBytes?: (c: ProjConstructor<T>, point: ProjPointType<T>, isCompressed: boolean) => Uint8Array;
 };
 
-function validatePointOpts<T>(curve: CurvePointsType<T>) {
+export type CurvePointsTypeWithLength<T> = Readonly<
+  CurvePointsType<T> & { nByteLength: number; nBitLength: number }
+>;
+
+function validatePointOpts<T>(curve: CurvePointsType<T>): CurvePointsTypeWithLength<T> {
   const opts = validateBasic(curve);
   ut.validateObject(
     opts,
@@ -146,6 +150,31 @@ export type CurvePointsRes<T> = {
 
 const { bytesToNumberBE: b2n, hexToBytes: h2b } = ut;
 
+export class DERErr extends Error {
+  constructor(m = '') {
+    super(m);
+  }
+}
+export type IDER = {
+  // asn.1 DER encoding utils
+  Err: typeof DERErr;
+  // Basic building block is TLV (Tag-Length-Value)
+  _tlv: {
+    encode: (tag: number, data: string) => string;
+    // v - value, l - left bytes (unparsed)
+    decode(tag: number, data: Uint8Array): { v: Uint8Array; l: Uint8Array };
+  };
+  // https://crypto.stackexchange.com/a/57734 Leftmost bit of first byte is 'negative' flag,
+  // since we always use positive integers here. It must always be empty:
+  // - add zero byte if exists
+  // - if next byte doesn't have a flag, leading zero is not allowed (minimal encoding)
+  _int: {
+    encode(num: bigint): string;
+    decode(data: Uint8Array): bigint;
+  };
+  toSig(hex: string | Uint8Array): { r: bigint; s: bigint };
+  hexFromSig(sig: { r: bigint; s: bigint }): string;
+};
 /**
  * ASN.1 DER encoding utilities. ASN is very complex & fragile. Format:
  *
@@ -153,16 +182,12 @@ const { bytesToNumberBE: b2n, hexToBytes: h2b } = ut;
  *
  * Docs: https://letsencrypt.org/docs/a-warm-welcome-to-asn1-and-der/, https://luca.ntop.org/Teaching/Appunti/asn1.html
  */
-export const DER = {
+export const DER: IDER = {
   // asn.1 DER encoding utils
-  Err: class DERErr extends Error {
-    constructor(m = '') {
-      super(m);
-    }
-  },
+  Err: DERErr,
   // Basic building block is TLV (Tag-Length-Value)
   _tlv: {
-    encode: (tag: number, data: string) => {
+    encode: (tag: number, data: string): string => {
       const { Err: E } = DER;
       if (tag < 0 || tag > 256) throw new E('tlv.encode: wrong tag');
       if (data.length & 1) throw new E('tlv.encode: unpadded data');
@@ -206,7 +231,7 @@ export const DER = {
   // - add zero byte if exists
   // - if next byte doesn't have a flag, leading zero is not allowed (minimal encoding)
   _int: {
-    encode(num: bigint) {
+    encode(num: bigint): string {
       const { Err: E } = DER;
       if (num < _0n) throw new E('integer: negative integers are not allowed');
       let hex = ut.numberToHexUnpadded(num);
@@ -737,7 +762,9 @@ export type CurveType = BasicWCurve<bigint> & {
   bits2int_modN?: (bytes: Uint8Array) => bigint;
 };
 
-function validateOpts(curve: CurveType) {
+function validateOpts(
+  curve: CurveType
+): Readonly<CurveType & { nByteLength: number; nBitLength: number }> {
   const opts = validateBasic(curve);
   ut.validateObject(
     opts,
@@ -1214,7 +1241,10 @@ export function weierstrass(curveDef: CurveType): CurveFn {
  * @param Z
  * @returns
  */
-export function SWUFpSqrtRatio<T>(Fp: mod.IField<T>, Z: T) {
+export function SWUFpSqrtRatio<T>(
+  Fp: mod.IField<T>,
+  Z: T
+): (u: T, v: T) => { isValid: boolean; value: T } {
   // Generic implementation
   const q = Fp.ORDER;
   let l = _0n;
@@ -1293,7 +1323,7 @@ export function mapToCurveSimpleSWU<T>(
     B: T;
     Z: T;
   }
-) {
+): (u: T) => { x: T; y: T } {
   mod.validateField(Fp);
   if (!Fp.isValid(opts.A) || !Fp.isValid(opts.B) || !Fp.isValid(opts.Z))
     throw new Error('mapToCurveSimpleSWU: invalid opts');

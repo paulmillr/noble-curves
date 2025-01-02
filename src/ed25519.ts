@@ -3,9 +3,14 @@ import { sha512 } from '@noble/hashes/sha512';
 import { concatBytes, randomBytes, utf8ToBytes } from '@noble/hashes/utils';
 import { AffinePoint, Group } from './abstract/curve.js';
 import { CurveFn, ExtPointType, twistedEdwards } from './abstract/edwards.js';
-import { createHasher, expand_message_xmd, htfBasicOpts } from './abstract/hash-to-curve.js';
+import {
+  createHasher,
+  expand_message_xmd,
+  htfBasicOpts,
+  HTFMethod,
+} from './abstract/hash-to-curve.js';
 import { Field, FpSqrtEven, isNegativeLE, mod, pow2 } from './abstract/modular.js';
-import { montgomery } from './abstract/montgomery.js';
+import { CurveFn as XCurveFn, montgomery } from './abstract/montgomery.js';
 import { pippenger } from './abstract/curve.js';
 import {
   bytesToHex,
@@ -88,7 +93,7 @@ function uvRatio(u: bigint, v: bigint): { isValid: boolean; value: bigint } {
 }
 
 // Just in case
-export const ED25519_TORSION_SUBGROUP = [
+export const ED25519_TORSION_SUBGROUP: string[] = [
   '0100000000000000000000000000000000000000000000000000000000000000',
   'c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a',
   '0000000000000000000000000000000000000000000000000000000000000080',
@@ -142,12 +147,12 @@ function ed25519_domain(data: Uint8Array, ctx: Uint8Array, phflag: boolean) {
   );
 }
 
-export const ed25519ctx = /* @__PURE__ */ (() =>
+export const ed25519ctx: CurveFn = /* @__PURE__ */ (() =>
   twistedEdwards({
     ...ed25519Defaults,
     domain: ed25519_domain,
   }))();
-export const ed25519ph = /* @__PURE__ */ (() =>
+export const ed25519ph: CurveFn = /* @__PURE__ */ (() =>
   twistedEdwards(
     Object.assign({}, ed25519Defaults, {
       domain: ed25519_domain,
@@ -155,7 +160,7 @@ export const ed25519ph = /* @__PURE__ */ (() =>
     })
   ))();
 
-export const x25519 = /* @__PURE__ */ (() =>
+export const x25519: XCurveFn = /* @__PURE__ */ (() =>
   montgomery({
     P: ED25519_P,
     a: BigInt(486662),
@@ -186,7 +191,7 @@ export function edwardsToMontgomeryPub(edwardsPub: Hex): Uint8Array {
   const _1n = BigInt(1);
   return Fp.toBytes(Fp.create((_1n + y) * Fp.inv(_1n - y)));
 }
-export const edwardsToMontgomery = edwardsToMontgomeryPub; // deprecated
+export const edwardsToMontgomery: typeof edwardsToMontgomeryPub = edwardsToMontgomeryPub; // deprecated
 
 /**
  * Converts ed25519 secret key to x25519 secret key.
@@ -288,8 +293,8 @@ const htf = /* @__PURE__ */ (() =>
       hash: sha512,
     }
   ))();
-export const hashToCurve = /* @__PURE__ */ (() => htf.hashToCurve)();
-export const encodeToCurve = /* @__PURE__ */ (() => htf.encodeToCurve)();
+export const hashToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() => htf.hashToCurve)();
+export const encodeToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() => htf.encodeToCurve)();
 
 function assertRstPoint(other: unknown) {
   if (!(other instanceof RistPoint)) throw new Error('RistrettoPoint expected');
@@ -362,7 +367,7 @@ class RistPoint implements Group<RistPoint> {
   // Always use Ristretto encoding/decoding instead.
   constructor(private readonly ep: ExtendedPoint) {}
 
-  static fromAffine(ap: AffinePoint<bigint>) {
+  static fromAffine(ap: AffinePoint<bigint>): RistPoint {
     return new RistPoint(ed25519.ExtendedPoint.fromAffine(ap));
   }
 
@@ -497,18 +502,19 @@ class RistPoint implements Group<RistPoint> {
     return new RistPoint(this.ep.negate());
   }
 }
-export const RistrettoPoint = /* @__PURE__ */ (() => {
+export const RistrettoPoint: typeof RistPoint = /* @__PURE__ */ (() => {
   if (!RistPoint.BASE) RistPoint.BASE = new RistPoint(ed25519.ExtendedPoint.BASE);
   if (!RistPoint.ZERO) RistPoint.ZERO = new RistPoint(ed25519.ExtendedPoint.ZERO);
   return RistPoint;
 })();
 
 // Hashing to ristretto255. https://www.rfc-editor.org/rfc/rfc9380#appendix-B
-export const hashToRistretto255 = (msg: Uint8Array, options: htfBasicOpts) => {
+export const hashToRistretto255 = (msg: Uint8Array, options: htfBasicOpts): RistPoint => {
   const d = options.DST;
   const DST = typeof d === 'string' ? utf8ToBytes(d) : d;
   const uniform_bytes = expand_message_xmd(msg, DST, 64, sha512);
   const P = RistPoint.hashToCurve(uniform_bytes);
   return P;
 };
-export const hash_to_ristretto255 = hashToRistretto255; // legacy
+export const hash_to_ristretto255: (msg: Uint8Array, options: htfBasicOpts) => RistPoint =
+  hashToRistretto255; // legacy

@@ -1,7 +1,7 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha256 } from '@noble/hashes/sha256';
-import { createCurve } from './_shortw_utils.js';
-import { createHasher } from './abstract/hash-to-curve.js';
+import { createCurve, CurveFnWithCreate } from './_shortw_utils.js';
+import { createHasher, HTFMethod } from './abstract/hash-to-curve.js';
 import { Field } from './abstract/modular.js';
 import { mapToCurveSimpleSWU } from './abstract/weierstrass.js';
 
@@ -13,7 +13,7 @@ const CURVE_A = Fp256.create(BigInt('-3'));
 const CURVE_B = BigInt('0x5ac635d8aa3a93e7b3ebbd55769886bc651d06b0cc53b0f63bce3c3e27d2604b');
 
 // prettier-ignore
-export const p256 = createCurve({
+export const p256: CurveFnWithCreate = createCurve({
   a: CURVE_A, // Equation params: a, b
   b: CURVE_B,
   Fp: Fp256, // Field: 2n**224n * (2n**32n-1n) + 2n**192n + 2n**96n-1n
@@ -25,7 +25,7 @@ export const p256 = createCurve({
   h: BigInt(1),
   lowS: false,
 } as const, sha256);
-export const secp256r1 = p256;
+export const secp256r1: CurveFnWithCreate = p256;
 
 const mapSWU = /* @__PURE__ */ (() =>
   mapToCurveSimpleSWU(Fp256, {
@@ -44,5 +44,5 @@ const htf = /* @__PURE__ */ (() =>
     expand: 'xmd',
     hash: sha256,
   }))();
-export const hashToCurve = /* @__PURE__ */ (() => htf.hashToCurve)();
-export const encodeToCurve = /* @__PURE__ */ (() => htf.encodeToCurve)();
+export const hashToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() => htf.hashToCurve)();
+export const encodeToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() => htf.encodeToCurve)();

@@ -2,7 +2,7 @@
 import { blake2s } from '@noble/hashes/blake2s';
 import { sha512 } from '@noble/hashes/sha512';
 import { concatBytes, randomBytes, utf8ToBytes } from '@noble/hashes/utils';
-import { twistedEdwards } from './abstract/edwards.js';
+import { CurveFn, ExtPointType, twistedEdwards } from './abstract/edwards.js';
 import { Field } from './abstract/modular.js';
 
 /**
@@ -11,7 +11,7 @@ import { Field } from './abstract/modular.js';
  * jubjub does not use EdDSA, so `hash`/sha512 params are passed because interface expects them.
  */
 
-export const jubjub = /* @__PURE__ */ twistedEdwards({
+export const jubjub: CurveFn = /* @__PURE__ */ twistedEdwards({
   // Params: a, d
   a: BigInt('0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000000'),
   d: BigInt('0x2a9318e74bfa2b48f5fd9207e6bd7fd4292d7f6d37579d2601065fd6d6343eb1'),
@@ -34,7 +34,7 @@ const GH_FIRST_BLOCK = utf8ToBytes(
 );
 
 // Returns point at JubJub curve which is prime order and not zero
-export function groupHash(tag: Uint8Array, personalization: Uint8Array) {
+export function groupHash(tag: Uint8Array, personalization: Uint8Array): ExtPointType {
   const h = blake2s.create({ personalization, dkLen: 32 });
   h.update(GH_FIRST_BLOCK);
   h.update(tag);
@@ -49,7 +49,7 @@ export function groupHash(tag: Uint8Array, personalization: Uint8Array) {
 // No secret data is leaked here at all.
 // It operates over public data:
 // const G_SPEND = jubjub.findGroupHash(new Uint8Array(), utf8ToBytes('Item_G_'));
-export function findGroupHash(m: Uint8Array, personalization: Uint8Array) {
+export function findGroupHash(m: Uint8Array, personalization: Uint8Array): ExtPointType {
   const tag = concatBytes(m, new Uint8Array([0]));
   const hashes = [];
   for (let i = 0; i < 256; i++) {

@@ -2,13 +2,17 @@
 import { sha256 } from '@noble/hashes/sha256';
 import { getHash } from './_shortw_utils.js';
 import { Field, mod } from './abstract/modular.js';
-import { weierstrass } from './abstract/weierstrass.js';
+import { CurveFn, weierstrass } from './abstract/weierstrass.js';
 
-export const p = BigInt('0x40000000000000000000000000000000224698fc094cf91b992d30ed00000001');
-export const q = BigInt('0x40000000000000000000000000000000224698fc0994a8dd8c46eb2100000001');
+export const p: bigint = BigInt(
+  '0x40000000000000000000000000000000224698fc094cf91b992d30ed00000001'
+);
+export const q: bigint = BigInt(
+  '0x40000000000000000000000000000000224698fc0994a8dd8c46eb2100000001'
+);
 
 // https://neuromancer.sk/std/other/Pallas
-export const pallas = weierstrass({
+export const pallas: CurveFn = weierstrass({
   a: BigInt(0),
   b: BigInt(5),
   Fp: Field(p),
@@ -19,7 +23,7 @@ export const pallas = weierstrass({
   ...getHash(sha256),
 });
 // https://neuromancer.sk/std/other/Vesta
-export const vesta = weierstrass({
+export const vesta: CurveFn = weierstrass({
   a: BigInt(0),
   b: BigInt(5),
   Fp: Field(q),

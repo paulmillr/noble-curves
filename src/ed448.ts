@@ -2,10 +2,15 @@
 import { shake256 } from '@noble/hashes/sha3';
 import { concatBytes, randomBytes, utf8ToBytes, wrapConstructor } from '@noble/hashes/utils';
 import { AffinePoint, Group } from './abstract/curve.js';
-import { ExtPointType, twistedEdwards } from './abstract/edwards.js';
-import { createHasher, expand_message_xof, htfBasicOpts } from './abstract/hash-to-curve.js';
+import { CurveFn, ExtPointType, twistedEdwards } from './abstract/edwards.js';
+import {
+  createHasher,
+  expand_message_xof,
+  htfBasicOpts,
+  HTFMethod,
+} from './abstract/hash-to-curve.js';
 import { Field, isNegativeLE, mod, pow2 } from './abstract/modular.js';
-import { montgomery } from './abstract/montgomery.js';
+import { CurveFn as XCurveFn, montgomery } from './abstract/montgomery.js';
 import { pippenger } from './abstract/curve.js';
 import {
   bytesToHex,
@@ -132,11 +137,14 @@ const ED448_DEF = {
   uvRatio,
 } as const;
 
-export const ed448 = /* @__PURE__ */ twistedEdwards(ED448_DEF);
+export const ed448: CurveFn = /* @__PURE__ */ twistedEdwards(ED448_DEF);
 // NOTE: there is no ed448ctx, since ed448 supports ctx by default
-export const ed448ph = /* @__PURE__ */ twistedEdwards({ ...ED448_DEF, prehash: shake256_64 });
+export const ed448ph: CurveFn = /* @__PURE__ */ twistedEdwards({
+  ...ED448_DEF,
+  prehash: shake256_64,
+});
 
-export const x448 = /* @__PURE__ */ (() =>
+export const x448: XCurveFn = /* @__PURE__ */ (() =>
   montgomery({
     a: BigInt(156326),
     // RFC 7748 has 56-byte keys, RFC 8032 has 57-byte keys
@@ -168,7 +176,7 @@ export function edwardsToMontgomeryPub(edwardsPub: string | Uint8Array): Uint8Ar
   return Fp.toBytes(Fp.create((y - _1n) * Fp.inv(y + _1n)));
 }
 
-export const edwardsToMontgomery = edwardsToMontgomeryPub; // deprecated
+export const edwardsToMontgomery: typeof edwardsToMontgomeryPub = edwardsToMontgomeryPub; // deprecated
 // TODO: add edwardsToMontgomeryPriv, similar to ed25519 version
 
 // Hash To Curve Elligator2 Map
@@ -262,8 +270,8 @@ const htf = /* @__PURE__ */ (() =>
       hash: shake256,
     }
   ))();
-export const hashToCurve = /* @__PURE__ */ (() => htf.hashToCurve)();
-export const encodeToCurve = /* @__PURE__ */ (() => htf.encodeToCurve)();
+export const hashToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() => htf.hashToCurve)();
+export const encodeToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() => htf.encodeToCurve)();
 
 function assertDcfPoint(other: unknown) {
   if (!(other instanceof DcfPoint)) throw new Error('DecafPoint expected');
@@ -337,7 +345,7 @@ class DcfPoint implements Group<DcfPoint> {
   // Always use Decaf encoding/decoding instead.
   constructor(private readonly ep: ExtendedPoint) {}
 
-  static fromAffine(ap: AffinePoint<bigint>) {
+  static fromAffine(ap: AffinePoint<bigint>): DcfPoint {
     return new DcfPoint(ed448.ExtendedPoint.fromAffine(ap));
   }
 
@@ -467,7 +475,7 @@ class DcfPoint implements Group<DcfPoint> {
   }
 }
 
-export const DecafPoint = /* @__PURE__ */ (() => {
+export const DecafPoint: typeof DcfPoint = /* @__PURE__ */ (() => {
   // decaf448 base point is ed448 base x 2
   // https://github.com/dalek-cryptography/curve25519-dalek/blob/59837c6ecff02b77b9d5ff84dbc239d0cf33ef90/vendor/ristretto.sage#L699
   if (!DcfPoint.BASE) DcfPoint.BASE = new DcfPoint(ed448.ExtendedPoint.BASE).multiply(_2n);
@@ -476,11 +484,11 @@ export const DecafPoint = /* @__PURE__ */ (() => {
 })();
 
 // Hashing to decaf448. https://www.rfc-editor.org/rfc/rfc9380#appendix-C
-export const hashToDecaf448 = (msg: Uint8Array, options: htfBasicOpts) => {
+export const hashToDecaf448 = (msg: Uint8Array, options: htfBasicOpts): DcfPoint => {
   const d = options.DST;
   const DST = typeof d === 'string' ? utf8ToBytes(d) : d;
   const uniform_bytes = expand_message_xof(msg, DST, 112, 224, shake256);
   const P = DcfPoint.hashToCurve(uniform_bytes);
   return P;
 };
-export const hash_to_decaf448 = hashToDecaf448; // legacy
+export const hash_to_decaf448: typeof hashToDecaf448 = hashToDecaf448; // legacy

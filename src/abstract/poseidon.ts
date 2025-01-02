@@ -14,7 +14,18 @@ export type PoseidonOpts = {
   roundConstants: bigint[][];
 };
 
-export function validateOpts(opts: PoseidonOpts) {
+export function validateOpts(opts: PoseidonOpts): Readonly<{
+  rounds: number;
+  sboxFn: (n: bigint) => bigint;
+  roundConstants: bigint[][];
+  mds: bigint[][];
+  Fp: IField<bigint>;
+  t: number;
+  roundsFull: number;
+  roundsPartial: number;
+  sboxPower?: number;
+  reversePartialPowIdx?: boolean; // Hack for stark
+}> {
   const { Fp, mds, reversePartialPowIdx: rev, roundConstants: rc } = opts;
   const { roundsFull, roundsPartial, sboxPower, t } = opts;
 
@@ -61,7 +72,7 @@ export function validateOpts(opts: PoseidonOpts) {
   return Object.freeze({ ...opts, rounds, sboxFn, roundConstants, mds: _mds });
 }
 
-export function splitConstants(rc: bigint[], t: number) {
+export function splitConstants(rc: bigint[], t: number): bigint[][] {
   if (typeof t !== 'number') throw new Error('poseidonSplitConstants: invalid t');
   if (!Array.isArray(rc) || rc.length % t) throw new Error('poseidonSplitConstants: invalid rc');
   const res = [];
@@ -76,7 +87,11 @@ export function splitConstants(rc: bigint[], t: number) {
   return res;
 }
 
-export function poseidon(opts: PoseidonOpts) {
+export function poseidon(opts: PoseidonOpts): {
+  (values: bigint[]): bigint[];
+  // For verification in tests
+  roundConstants: bigint[][];
+} {
   const _opts = validateOpts(opts);
   const { Fp, mds, roundConstants, rounds: totalRounds, roundsPartial, sboxFn, t } = _opts;
   const halfRoundsFull = _opts.roundsFull / 2;
