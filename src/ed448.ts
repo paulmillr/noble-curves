@@ -1,3 +1,11 @@
+/**
+ * Edwards448 (not Ed448-Goldilocks) curve with following addons:
+ * - X448 ECDH
+ * - Decaf cofactor elimination
+ * - Elligator hash-to-group / point indistinguishability
+ * Conforms to RFC 8032 https://www.rfc-editor.org/rfc/rfc8032.html#section-5.2
+ * @module
+ */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { shake256 } from '@noble/hashes/sha3';
 import { concatBytes, randomBytes, utf8ToBytes, wrapConstructor } from '@noble/hashes/utils';
@@ -20,15 +28,6 @@ import {
   Hex,
   numberToBytesLE,
 } from './abstract/utils.js';
-
-/**
- * Edwards448 (not Ed448-Goldilocks) curve with following addons:
- * - X448 ECDH
- * - Decaf cofactor elimination
- * - Elligator hash-to-group / point indistinguishability
- * Conforms to RFC 8032 https://www.rfc-editor.org/rfc/rfc8032.html#section-5.2
- * @module
- */
 
 const shake256_114 = wrapConstructor(() => shake256.create({ dkLen: 114 }));
 const shake256_64 = wrapConstructor(() => shake256.create({ dkLen: 64 }));

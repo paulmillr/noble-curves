@@ -1,17 +1,3 @@
-/*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import {
-  AffinePoint,
-  BasicCurve,
-  Group,
-  GroupConstructor,
-  validateBasic,
-  wNAF,
-  pippenger,
-} from './curve.js';
-import * as mod from './modular.js';
-import * as ut from './utils.js';
-import { CHash, Hex, PrivKey, ensureBytes, memoized, abool } from './utils.js';
-
 /**
  * Short Weierstrass curve methods. The formula is: y² = x³ + ax + b.
  *
@@ -38,6 +24,19 @@ import { CHash, Hex, PrivKey, ensureBytes, memoized, abool } from './utils.js';
  * @todo https://www.typescriptlang.org/docs/handbook/release-notes/typescript-2-7.html#unique-symbol
  * @module
  */
+/*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
+import {
+  AffinePoint,
+  BasicCurve,
+  Group,
+  GroupConstructor,
+  validateBasic,
+  wNAF,
+  pippenger,
+} from './curve.js';
+import * as mod from './modular.js';
+import * as ut from './utils.js';
+import { CHash, Hex, PrivKey, ensureBytes, memoized, abool } from './utils.js';
 
 export type { AffinePoint };
 type HmacFnSync = (key: Uint8Array, ...messages: Uint8Array[]) => Uint8Array;

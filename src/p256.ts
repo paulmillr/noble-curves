@@ -1,15 +1,14 @@
+/**
+ * NIST secp256r1 aka p256.
+ * https://www.secg.org/sec2-v2.pdf, https://neuromancer.sk/std/nist/P-256
+ * @module
+ */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha256 } from '@noble/hashes/sha256';
 import { createCurve, CurveFnWithCreate } from './_shortw_utils.js';
 import { createHasher, HTFMethod } from './abstract/hash-to-curve.js';
 import { Field } from './abstract/modular.js';
 import { mapToCurveSimpleSWU } from './abstract/weierstrass.js';
-
-/**
- * NIST secp256r1 aka p256.
- * https://www.secg.org/sec2-v2.pdf, https://neuromancer.sk/std/nist/P-256
- * @module
- */
 
 const Fp256 = Field(BigInt('0xffffffff00000001000000000000000000000000ffffffffffffffffffffffff'));
 const CURVE_A = Fp256.create(BigInt('-3'));

@@ -1,6 +1,3 @@
-/*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { FpPow, IField, validateField } from './modular.js';
-
 /**
  * Implements [Poseidon](https://www.poseidon-hash.info) ZK-friendly hash.
  *
@@ -9,6 +6,9 @@ import { FpPow, IField, validateField } from './modular.js';
  * Check out [micro-starknet](https://github.com/paulmillr/micro-starknet) package for a proper example.
  * @module
  */
+/*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
+import { FpPow, IField, validateField } from './modular.js';
+
 export type PoseidonOpts = {
   Fp: IField<bigint>;
   t: number;

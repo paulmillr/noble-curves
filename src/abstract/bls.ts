@@ -1,20 +1,3 @@
-/*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-// TODO: import { AffinePoint } from './curve.js';
-import { IField, getMinHashLength, mapHashToField } from './modular.js';
-import { Hex, PrivKey, CHash, ensureBytes, memoized } from './utils.js';
-// prettier-ignore
-import {
-  MapToCurve, Opts as HTFOpts, H2CPointConstructor, htfBasicOpts,
-  createHasher
-} from './hash-to-curve.js';
-import {
-  CurvePointsType,
-  ProjPointType as ProjPointType,
-  CurvePointsRes,
-  weierstrassPoints,
-} from './weierstrass.js';
-import type { Fp2, Fp6, Fp12, Fp2Bls, Fp12Bls } from './tower.js';
-
 /**
  * BLS (Barreto-Lynn-Scott) family of pairing-friendly curves.
  * BLS != BLS.
@@ -32,6 +15,22 @@ import type { Fp2, Fp6, Fp12, Fp2Bls, Fp12Bls } from './tower.js';
  * 2. Fp for short signatures, Fp₂ for private keys
  * @module
  **/
+/*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
+// TODO: import { AffinePoint } from './curve.js';
+import { IField, getMinHashLength, mapHashToField } from './modular.js';
+import { Hex, PrivKey, CHash, ensureBytes, memoized } from './utils.js';
+// prettier-ignore
+import {
+  MapToCurve, Opts as HTFOpts, H2CPointConstructor, htfBasicOpts,
+  createHasher
+} from './hash-to-curve.js';
+import {
+  CurvePointsType,
+  ProjPointType as ProjPointType,
+  CurvePointsRes,
+  weierstrassPoints,
+} from './weierstrass.js';
+import type { Fp2, Fp6, Fp12, Fp2Bls, Fp12Bls } from './tower.js';
 
 type Fp = bigint; // Can be different field?
 

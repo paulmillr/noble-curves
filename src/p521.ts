@@ -1,16 +1,15 @@
-/*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { sha512 } from '@noble/hashes/sha512';
-import { createCurve, CurveFnWithCreate } from './_shortw_utils.js';
-import { createHasher, HTFMethod } from './abstract/hash-to-curve.js';
-import { Field } from './abstract/modular.js';
-import { mapToCurveSimpleSWU } from './abstract/weierstrass.js';
-
 /**
  * NIST secp521r1 aka p521.
  * Note that it's 521, which differs from 512 of its hash function.
  * https://www.secg.org/sec2-v2.pdf, https://neuromancer.sk/std/nist/P-521
  * @module
  */
+/*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
+import { sha512 } from '@noble/hashes/sha512';
+import { createCurve, CurveFnWithCreate } from './_shortw_utils.js';
+import { createHasher, HTFMethod } from './abstract/hash-to-curve.js';
+import { Field } from './abstract/modular.js';
+import { mapToCurveSimpleSWU } from './abstract/weierstrass.js';
 
 // Field over which we'll do calculations.
 // prettier-ignore

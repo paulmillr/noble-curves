@@ -1,12 +1,13 @@
+/**
+ * Pasta curves. See [Spec](https://o1-labs.github.io/proof-systems/specs/pasta.html).
+ * @module
+ */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha256 } from '@noble/hashes/sha256';
 import { getHash } from './_shortw_utils.js';
 import { Field, mod } from './abstract/modular.js';
 import { CurveFn, weierstrass } from './abstract/weierstrass.js';
 
-/**
- * Pasta curves. See [Spec](https://o1-labs.github.io/proof-systems/specs/pasta.html).
- */
 export const p: bigint = BigInt(
   '0x40000000000000000000000000000000224698fc094cf91b992d30ed00000001'
 );

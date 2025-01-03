@@ -1,15 +1,14 @@
+/**
+ * NIST secp384r1 aka p384.
+ * https://www.secg.org/sec2-v2.pdf, https://neuromancer.sk/std/nist/P-384
+ * @module
+ */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha384 } from '@noble/hashes/sha512';
 import { createCurve, CurveFnWithCreate } from './_shortw_utils.js';
 import { createHasher, HTFMethod } from './abstract/hash-to-curve.js';
 import { Field } from './abstract/modular.js';
 import { mapToCurveSimpleSWU } from './abstract/weierstrass.js';
-
-/**
- * NIST secp384r1 aka p384.
- * https://www.secg.org/sec2-v2.pdf, https://neuromancer.sk/std/nist/P-384
- * @module
- */
 
 // Field over which we'll do calculations.
 // prettier-ignore

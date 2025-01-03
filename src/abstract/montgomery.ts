@@ -1,3 +1,9 @@
+/**
+ * Montgomery curve methods. It's not really whole montgomery curve,
+ * just bunch of very specific methods for X25519 / X448 from
+ * [RFC 7748](https://www.rfc-editor.org/rfc/rfc7748)
+ * @module
+ */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { mod, pow } from './modular.js';
 import {
@@ -7,13 +13,6 @@ import {
   numberToBytesLE,
   validateObject,
 } from './utils.js';
-
-/**
- * Montgomery curve methods. It's not really whole montgomery curve,
- * just bunch of very specific methods for X25519 / X448 from
- * [RFC 7748](https://www.rfc-editor.org/rfc/rfc7748)
- * @module
- */
 
 const _0n = BigInt(0);
 const _1n = BigInt(1);

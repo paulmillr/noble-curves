@@ -1,5 +1,10 @@
+/**
+ * Utils for modular division and finite fields.
+ * A finite field over 11 is integer number operations `mod 11`.
+ * There is no division: it is replaced by modular multiplicative inverse.
+ * @module
+ */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-// Utilities for modular arithmetics and finite fields
 import {
   bitMask,
   bytesToNumberBE,
@@ -9,13 +14,6 @@ import {
   numberToBytesLE,
   validateObject,
 } from './utils.js';
-
-/**
- * Utils for modular division and finite fields.
- * A finite field over 11 is integer number operations `mod 11`.
- * There is no division: it is replaced by modular multiplicative inverse.
- * @module
- */
 
 // prettier-ignore
 const _0n = BigInt(0), _1n = BigInt(1), _2n = /* @__PURE__ */ BigInt(2), _3n = /* @__PURE__ */ BigInt(3);

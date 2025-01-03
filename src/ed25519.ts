@@ -1,3 +1,10 @@
+/**
+ * ed25519 Twisted Edwards curve with following addons:
+ * - X25519 ECDH
+ * - Ristretto cofactor elimination
+ * - Elligator hash-to-group / point indistinguishability
+ * @module
+ */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha512 } from '@noble/hashes/sha512';
 import { concatBytes, randomBytes, utf8ToBytes } from '@noble/hashes/utils';
@@ -20,14 +27,6 @@ import {
   Hex,
   numberToBytesLE,
 } from './abstract/utils.js';
-
-/**
- * ed25519 Twisted Edwards curve with following addons:
- * - X25519 ECDH
- * - Ristretto cofactor elimination
- * - Elligator hash-to-group / point indistinguishability
- * @module
- */
 
 const ED25519_P = BigInt(
   '57896044618658097711785492504343953926634992332820282019728792003956564819949'

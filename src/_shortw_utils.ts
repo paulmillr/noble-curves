@@ -1,13 +1,12 @@
+/**
+ * Utilities for short weierstrass curves, combined with noble-hashes.
+ * @module
+ */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { hmac } from '@noble/hashes/hmac';
 import { concatBytes, randomBytes } from '@noble/hashes/utils';
 import { CHash } from './abstract/utils.js';
 import { CurveType, CurveFn, weierstrass } from './abstract/weierstrass.js';
-
-/**
- * Utilities for short weierstrass curves, combined with noble-hashes.
- * @module
- */
 
 /** connects noble-curves to noble-hashes */
 export function getHash(hash: CHash): {

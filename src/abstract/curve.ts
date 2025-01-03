@@ -1,13 +1,11 @@
-/*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-// Abelian group utilities
-import { IField, validateField, nLength } from './modular.js';
-import { validateObject, bitLen } from './utils.js';
-
 /**
  * Methods for elliptic curve multiplication by scalars.
  * Contains wNAF, pippenger
  * @module
  */
+/*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
+import { IField, validateField, nLength } from './modular.js';
+import { validateObject, bitLen } from './utils.js';
 
 const _0n = BigInt(0);
 const _1n = BigInt(1);

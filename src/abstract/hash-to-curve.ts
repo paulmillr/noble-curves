@@ -1,14 +1,13 @@
-/*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import type { AffinePoint, Group, GroupConstructor } from './curve.js';
-import { IField, mod } from './modular.js';
-import type { CHash } from './utils.js';
-import { abytes, bytesToNumberBE, concatBytes, utf8ToBytes, validateObject } from './utils.js';
-
 /**
  * hash-to-curve from [RFC 9380](https://www.rfc-editor.org/rfc/rfc9380).
  * Hashes arbitrary-length byte strings to a list of one or more elements of a finite field F.
  * @module
  */
+/*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
+import type { AffinePoint, Group, GroupConstructor } from './curve.js';
+import { IField, mod } from './modular.js';
+import type { CHash } from './utils.js';
+import { abytes, bytesToNumberBE, concatBytes, utf8ToBytes, validateObject } from './utils.js';
 
 export type UnicodeOrBytes = string | Uint8Array;
 

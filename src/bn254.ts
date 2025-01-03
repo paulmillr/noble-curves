@@ -1,35 +1,11 @@
-/*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { sha256 } from '@noble/hashes/sha256';
-import { getHash } from './_shortw_utils.js';
-import { CurveFn, weierstrass } from './abstract/weierstrass.js';
-import { randomBytes } from '@noble/hashes/utils';
-import {
-  bls,
-  CurveFn as BLSCurveFn,
-  PostPrecomputeFn,
-  PostPrecomputePointAddFn,
-} from './abstract/bls.js';
-import { Field } from './abstract/modular.js';
-import { bitGet, bitLen, notImplemented } from './abstract/utils.js';
-import { tower12, psiFrobenius } from './abstract/tower.js';
-// Types
-import type { Fp, Fp2, Fp6, Fp12 } from './abstract/tower.js';
-// prettier-ignore
-const _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3);
-// prettier-ignore
-const _6n = BigInt(6);
-
 /**
  * bn254, previously known as alt_bn_128, when it had 128-bit security.
- * Barbulescu-Duquesne 2017 shown it's weaker: just about 100 bits,
- * so the naming has been adjusted to its prime bit count:
- * https://hal.science/hal-01534101/file/main.pdf
- *
- * Compatible with EIP-196 and EIP-197.
- * @module
- */
 
-/*
+Barbulescu-Duquesne 2017 shown it's weaker: just about 100 bits,
+so the naming has been adjusted to its prime bit count:
+https://hal.science/hal-01534101/file/main.pdf.
+Compatible with EIP-196 and EIP-197.
+
 There are huge compatibility issues in the ecosystem:
 
 1. Different libraries call it in different ways: "bn254", "bn256", "alt_bn128", "bn128".
@@ -65,7 +41,30 @@ Ate loop size: 6x+2
 - Fp²[u] = Fp/u²+1
 - Fp⁶[v] = Fp²/v³-9-u
 - Fp¹²[w] = Fp⁶/w²-v
-*/
+
+ * @module
+ */
+/*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
+import { sha256 } from '@noble/hashes/sha256';
+import { getHash } from './_shortw_utils.js';
+import { CurveFn, weierstrass } from './abstract/weierstrass.js';
+import { randomBytes } from '@noble/hashes/utils';
+import {
+  bls,
+  CurveFn as BLSCurveFn,
+  PostPrecomputeFn,
+  PostPrecomputePointAddFn,
+} from './abstract/bls.js';
+import { Field } from './abstract/modular.js';
+import { bitGet, bitLen, notImplemented } from './abstract/utils.js';
+import { tower12, psiFrobenius } from './abstract/tower.js';
+// Types
+import type { Fp, Fp2, Fp6, Fp12 } from './abstract/tower.js';
+// prettier-ignore
+const _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3);
+// prettier-ignore
+const _6n = BigInt(6);
+
 const BN_X = BigInt('4965661367192848881');
 const BN_X_LEN = bitLen(BN_X);
 const SIX_X_SQUARED = _6n * BN_X ** _2n;

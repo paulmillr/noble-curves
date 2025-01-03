@@ -1,16 +1,15 @@
-/*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { blake2s } from '@noble/hashes/blake2s';
-import { sha512 } from '@noble/hashes/sha512';
-import { concatBytes, randomBytes, utf8ToBytes } from '@noble/hashes/utils';
-import { CurveFn, ExtPointType, twistedEdwards } from './abstract/edwards.js';
-import { Field } from './abstract/modular.js';
-
 /**
  * jubjub Twisted Edwards curve.
  * https://neuromancer.sk/std/other/JubJub
  * jubjub does not use EdDSA, so `hash`/sha512 params are passed because interface expects them.
  * @module
  */
+/*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
+import { blake2s } from '@noble/hashes/blake2s';
+import { sha512 } from '@noble/hashes/sha512';
+import { concatBytes, randomBytes, utf8ToBytes } from '@noble/hashes/utils';
+import { CurveFn, ExtPointType, twistedEdwards } from './abstract/edwards.js';
+import { Field } from './abstract/modular.js';
 
 export const jubjub: CurveFn = /* @__PURE__ */ twistedEdwards({
   // Params: a, d

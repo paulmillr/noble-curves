@@ -1,3 +1,8 @@
+/**
+ * Twisted Edwards curve. The formula is: ax² + y² = 1 + dx²y².
+ * For design rationale of types / exports, see weierstrass module documentation.
+ * @module
+ */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import {
   AffinePoint,
@@ -11,12 +16,6 @@ import {
 import { mod, Field } from './modular.js';
 import * as ut from './utils.js';
 import { ensureBytes, FHash, Hex, memoized, abool } from './utils.js';
-
-/**
- * Twisted Edwards curve. The formula is: ax² + y² = 1 + dx²y².
- * For design rationale of types / exports, see weierstrass module documentation.
- * @module
- */
 
 // Be friendly to bad ECMAScript parsers by not using bigint literals
 // prettier-ignore

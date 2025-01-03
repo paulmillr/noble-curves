@@ -52,15 +52,6 @@ import type { Fp, Fp2, Fp6, Fp12 } from './abstract/tower.js';
  *    [cfrg-bls-signature-05](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-bls-signature-05),
  *    [RFC 9380](https://www.rfc-editor.org/rfc/rfc9380).
  *
- * @todo construct bls & bn fp/fr from seed.
- * @module
- */
-
-// Be friendly to bad ECMAScript parsers by not using bigint literals
-// prettier-ignore
-const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3), _4n = BigInt(4);
-
-/**
  * ### Params
  * To verify curve parameters, see
  * [pairing-friendly-curves spec](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-pairing-friendly-curves-11).
@@ -85,7 +76,14 @@ const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3), _4n = 
  * - Fp²[u] = Fp/u²+1
  * - Fp⁶[v] = Fp²/v³-1-u
  * - Fp¹²[w] = Fp⁶/w²-v
+ *
+ * @todo construct bls & bn fp/fr from seed.
+ * @module
  */
+
+// Be friendly to bad ECMAScript parsers by not using bigint literals
+// prettier-ignore
+const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3), _4n = BigInt(4);
 
 // The BLS parameter x (seed) for BLS12-381. NOTE: it is negative!
 const BLS_X = BigInt('0xd201000000010000');

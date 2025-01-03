@@ -1,8 +1,3 @@
-/*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import * as mod from './modular.js';
-import { bitLen, bitMask, concatBytes, notImplemented } from './utils.js';
-import type { ProjConstructor, ProjPointType } from './weierstrass.js';
-
 /**
  * Towered extension fields.
  * Rather than implementing a massive 12th-degree extension directly, it is more efficient
@@ -14,6 +9,10 @@ import type { ProjConstructor, ProjPointType } from './weierstrass.js';
  * For more info: "Pairings for beginners" by Costello, section 7.3.
  * @module
  */
+/*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
+import * as mod from './modular.js';
+import { bitLen, bitMask, concatBytes, notImplemented } from './utils.js';
+import type { ProjConstructor, ProjPointType } from './weierstrass.js';
 
 // Be friendly to bad ECMAScript parsers by not using bigint literals
 // prettier-ignore
