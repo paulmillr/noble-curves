@@ -1,24 +1,3 @@
-/*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { sha256 } from '@noble/hashes/sha256';
-import { randomBytes } from '@noble/hashes/utils';
-import { bls, CurveFn } from './abstract/bls.js';
-import * as mod from './abstract/modular.js';
-import {
-  bitGet,
-  bitLen,
-  bytesToHex,
-  bytesToNumberBE,
-  concatBytes as concatB,
-  ensureBytes,
-  Hex,
-  numberToBytesBE,
-} from './abstract/utils.js';
-// Types
-import { isogenyMap } from './abstract/hash-to-curve.js';
-import { AffinePoint, mapToCurveSimpleSWU, ProjPointType } from './abstract/weierstrass.js';
-import { tower12, psiFrobenius } from './abstract/tower.js';
-import type { Fp, Fp2, Fp6, Fp12 } from './abstract/tower.js';
-
 /**
  * bls12-381 is pairing-friendly Barreto-Lynn-Scott elliptic curve construction allowing to:
  * * Construct zk-SNARKs at the ~120-bit security
@@ -58,11 +37,6 @@ import type { Fp, Fp2, Fp6, Fp12 } from './abstract/tower.js';
  * Basic math is done over finite fields over p.
  * More complicated math is done over polynominal extension fields.
  * To simplify calculations in Fp12, we construct extension tower:
- * - Fp₁₂ = Fp₆² => Fp₂³
- * - Fp(u) / (u² - β) where β = -1
- * - Fp₂(v) / (v³ - ξ) where ξ = u + 1
- * - Fp₆(w) / (w² - γ) where γ = v
- * Here goes constants && point encoding format
  *
  * Embedding degree (k): 12
  * Seed (X): -15132376222941642752
@@ -73,6 +47,10 @@ import type { Fp, Fp2, Fp6, Fp12 } from './abstract/tower.js';
  * Ate loop size: X
  *
  * ### Towers
+ * - Fp₁₂ = Fp₆² => Fp₂³
+ * - Fp(u) / (u² - β) where β = -1
+ * - Fp₂(v) / (v³ - ξ) where ξ = u + 1
+ * - Fp₆(w) / (w² - γ) where γ = v
  * - Fp²[u] = Fp/u²+1
  * - Fp⁶[v] = Fp²/v³-1-u
  * - Fp¹²[w] = Fp⁶/w²-v
@@ -80,6 +58,26 @@ import type { Fp, Fp2, Fp6, Fp12 } from './abstract/tower.js';
  * @todo construct bls & bn fp/fr from seed.
  * @module
  */
+/*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
+import { sha256 } from '@noble/hashes/sha256';
+import { randomBytes } from '@noble/hashes/utils';
+import { bls, CurveFn } from './abstract/bls.js';
+import * as mod from './abstract/modular.js';
+import {
+  bitGet,
+  bitLen,
+  bytesToHex,
+  bytesToNumberBE,
+  concatBytes as concatB,
+  ensureBytes,
+  Hex,
+  numberToBytesBE,
+} from './abstract/utils.js';
+// Types
+import { isogenyMap } from './abstract/hash-to-curve.js';
+import { AffinePoint, mapToCurveSimpleSWU, ProjPointType } from './abstract/weierstrass.js';
+import { tower12, psiFrobenius } from './abstract/tower.js';
+import type { Fp, Fp2, Fp6, Fp12 } from './abstract/tower.js';
 
 // Be friendly to bad ECMAScript parsers by not using bigint literals
 // prettier-ignore
