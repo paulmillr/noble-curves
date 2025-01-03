@@ -81,7 +81,7 @@ const NIST = {
   secp256k1,
 };
 
-describe('NIST curves', () => {});
+// describe('NIST curves', () => {});
 should('fields', () => {
   const vectors = {
     secp192r1: 0xfffffffffffffffffffffffffffffffeffffffffffffffffn,
