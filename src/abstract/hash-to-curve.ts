@@ -5,6 +5,14 @@ import type { CHash } from './utils.js';
 import { abytes, bytesToNumberBE, concatBytes, utf8ToBytes, validateObject } from './utils.js';
 
 /**
+ * hash-to-curve from [RFC 9380](https://www.rfc-editor.org/rfc/rfc9380).
+ * Hashes arbitrary-length byte strings to a list of one or more elements of a finite field F.
+ * @module
+ */
+
+export type UnicodeOrBytes = string | Uint8Array;
+
+/**
  * * `DST` is a domain separation tag, defined in section 2.2.5
  * * `p` characteristic of F, where F is a finite field of characteristic p and order q = p^m
  * * `m` is extension degree (1 for prime fields)
@@ -12,7 +20,6 @@ import { abytes, bytesToNumberBE, concatBytes, utf8ToBytes, validateObject } fro
  * * `expand` is `xmd` (SHA2, SHA3, BLAKE) or `xof` (SHAKE, BLAKE-XOF)
  * * `hash` conforming to `utils.CHash` interface, with `outputLen` / `blockLen` props
  */
-type UnicodeOrBytes = string | Uint8Array;
 export type Opts = {
   DST: UnicodeOrBytes;
   p: bigint;
@@ -50,8 +57,10 @@ function anum(item: unknown): void {
   if (!Number.isSafeInteger(item)) throw new Error('number expected');
 }
 
-// Produces a uniformly random byte string using a cryptographic hash function H that outputs b bits
-// https://www.rfc-editor.org/rfc/rfc9380#section-5.3.1
+/**
+ * Produces a uniformly random byte string using a cryptographic hash function H that outputs b bits.
+ * [RFC 9380 5.3.1](https://www.rfc-editor.org/rfc/rfc9380#section-5.3.1).
+ */
 export function expand_message_xmd(
   msg: Uint8Array,
   DST: Uint8Array,
@@ -80,11 +89,13 @@ export function expand_message_xmd(
   return pseudo_random_bytes.slice(0, lenInBytes);
 }
 
-// Produces a uniformly random byte string using an extendable-output function (XOF) H.
-// 1. The collision resistance of H MUST be at least k bits.
-// 2. H MUST be an XOF that has been proved indifferentiable from
-//    a random oracle under a reasonable cryptographic assumption.
-// https://www.rfc-editor.org/rfc/rfc9380#section-5.3.2
+/**
+ * Produces a uniformly random byte string using an extendable-output function (XOF) H.
+ * 1. The collision resistance of H MUST be at least k bits.
+ * 2. H MUST be an XOF that has been proved indifferentiable from
+ *    a random oracle under a reasonable cryptographic assumption.
+ * [RFC 9380 5.3.2](https://www.rfc-editor.org/rfc/rfc9380#section-5.3.2).
+ */
 export function expand_message_xof(
   msg: Uint8Array,
   DST: Uint8Array,
@@ -115,8 +126,8 @@ export function expand_message_xof(
 }
 
 /**
- * Hashes arbitrary-length byte strings to a list of one or more elements of a finite field F
- * https://www.rfc-editor.org/rfc/rfc9380#section-5.2
+ * Hashes arbitrary-length byte strings to a list of one or more elements of a finite field F.
+ * [RFC 9380 5.2](https://www.rfc-editor.org/rfc/rfc9380#section-5.2).
  * @param msg a byte string containing the message to hash
  * @param count the number of elements of F to output
  * @param options `{DST: string, p: bigint, m: number, k: number, expand: 'xmd' | 'xof', hash: H}`, see above
@@ -181,6 +192,7 @@ export function isogenyMap<T, F extends IField<T>>(field: F, map: [T[], T[], T[]
   };
 }
 
+/** Point interface, which curves must implement to work correctly with the module. */
 export interface H2CPoint<T> extends Group<H2CPoint<T>> {
   add(rhs: H2CPoint<T>): H2CPoint<T>;
   toAffine(iz?: bigint): AffinePoint<T>;
@@ -200,6 +212,7 @@ export type htfBasicOpts = { DST: UnicodeOrBytes };
 export type HTFMethod<T> = (msg: Uint8Array, options?: htfBasicOpts) => H2CPoint<T>;
 export type MapMethod<T> = (scalars: bigint[]) => H2CPoint<T>;
 
+/** Creates hash-to-curve methods from EC Point and mapToCurve function. */
 export function createHasher<T>(
   Point: H2CPointConstructor<T>,
   mapToCurve: MapToCurve<T>,

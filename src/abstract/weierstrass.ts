@@ -1,5 +1,4 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-// Short Weierstrass curve. The formula is: y² = x³ + ax + b
 import {
   AffinePoint,
   BasicCurve,
@@ -12,6 +11,33 @@ import {
 import * as mod from './modular.js';
 import * as ut from './utils.js';
 import { CHash, Hex, PrivKey, ensureBytes, memoized, abool } from './utils.js';
+
+/**
+ * Short Weierstrass curve methods. The formula is: y² = x³ + ax + b.
+ *
+ * ### Design rationale for types
+ *
+ * * Interaction between classes from different curves should fail:
+ *   `k256.Point.BASE.add(p256.Point.BASE)`
+ * * For this purpose we want to use `instanceof` operator, which is fast and works during runtime
+ * * Different calls of `curve()` would return different classes -
+ *   `curve(params) !== curve(params)`: if somebody decided to monkey-patch their curve,
+ *   it won't affect others
+ *
+ * TypeScript can't infer types for classes created inside a function. Classes is one instance
+ * of nominative types in TypeScript and interfaces only check for shape, so it's hard to create
+ * unique type for every function call.
+ *
+ * We can use generic types via some param, like curve opts, but that would:
+ *     1. Enable interaction between `curve(params)` and `curve(params)` (curves of same params)
+ *     which is hard to debug.
+ *     2. Params can be generic and we can't enforce them to be constant value:
+ *     if somebody creates curve from non-constant params,
+ *     it would be allowed to interact with other curves with non-constant params
+ *
+ * @todo https://www.typescriptlang.org/docs/handbook/release-notes/typescript-2-7.html#unique-symbol
+ * @module
+ */
 
 export type { AffinePoint };
 type HmacFnSync = (key: Uint8Array, ...messages: Uint8Array[]) => Uint8Array;
@@ -43,28 +69,6 @@ function validateSigVerOpts(opts: SignOpts | VerOpts) {
   if (opts.lowS !== undefined) abool('lowS', opts.lowS);
   if (opts.prehash !== undefined) abool('prehash', opts.prehash);
 }
-
-/**
- * ### Design rationale for types
- *
- * * Interaction between classes from different curves should fail:
- *   `k256.Point.BASE.add(p256.Point.BASE)`
- * * For this purpose we want to use `instanceof` operator, which is fast and works during runtime
- * * Different calls of `curve()` would return different classes -
- *   `curve(params) !== curve(params)`: if somebody decided to monkey-patch their curve,
- *   it won't affect others
- *
- * TypeScript can't infer types for classes created inside a function. Classes is one instance of nominative types in TypeScript and interfaces only check for shape, so it's hard to create unique type for every function call.
- *
- * We can use generic types via some param, like curve opts, but that would:
- *     1. Enable interaction between `curve(params)` and `curve(params)` (curves of same params)
- *     which is hard to debug.
- *     2. Params can be generic and we can't enforce them to be constant value:
- *     if somebody creates curve from non-constant params,
- *     it would be allowed to interact with other curves with non-constant params
- *
- * TODO: https://www.typescriptlang.org/docs/handbook/release-notes/typescript-2-7.html#unique-symbol
- */
 
 // Instance for 3d XYZ points
 export interface ProjPointType<T> extends Group<ProjPointType<T>> {

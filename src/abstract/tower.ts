@@ -3,17 +3,17 @@ import * as mod from './modular.js';
 import { bitLen, bitMask, concatBytes, notImplemented } from './utils.js';
 import type { ProjConstructor, ProjPointType } from './weierstrass.js';
 
-/*
-Towered extension fields
-
-Rather than implementing a massive 12th-degree extension directly, it is more efficient
-to build it up from smaller extensions: a tower of extensions.
-
-For BLS12-381, the Fp12 field is implemented as a quadratic (degree two) extension,
-on top of a cubic (degree three) extension, on top of a quadratic extension of Fp.
-
-For more info: "Pairings for beginners" by Costello, section 7.3.
-*/
+/**
+ * Towered extension fields.
+ * Rather than implementing a massive 12th-degree extension directly, it is more efficient
+ * to build it up from smaller extensions: a tower of extensions.
+ *
+ * For BLS12-381, the Fp12 field is implemented as a quadratic (degree two) extension,
+ * on top of a cubic (degree three) extension, on top of a quadratic extension of Fp.
+ *
+ * For more info: "Pairings for beginners" by Costello, section 7.3.
+ * @module
+ */
 
 // Be friendly to bad ECMAScript parsers by not using bigint literals
 // prettier-ignore

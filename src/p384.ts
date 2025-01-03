@@ -5,8 +5,11 @@ import { createHasher, HTFMethod } from './abstract/hash-to-curve.js';
 import { Field } from './abstract/modular.js';
 import { mapToCurveSimpleSWU } from './abstract/weierstrass.js';
 
-// NIST secp384r1 aka p384
-// https://www.secg.org/sec2-v2.pdf, https://neuromancer.sk/std/nist/P-384
+/**
+ * NIST secp384r1 aka p384.
+ * https://www.secg.org/sec2-v2.pdf, https://neuromancer.sk/std/nist/P-384
+ * @module
+ */
 
 // Field over which we'll do calculations.
 // prettier-ignore
@@ -16,6 +19,7 @@ const CURVE_A = Fp384.create(BigInt('-3'));
 // prettier-ignore
 const CURVE_B = BigInt('0xb3312fa7e23ee7e4988e056be3f82d19181d9c6efe8141120314088f5013875ac656398d8a2ed19d2a85c8edd3ec2aef');
 
+/** secp384r1 curve, ECDSA and ECDH methods. */
 // prettier-ignore
 export const p384: CurveFnWithCreate = createCurve({
   a: CURVE_A, // Equation params: a, b
@@ -29,6 +33,7 @@ export const p384: CurveFnWithCreate = createCurve({
   h: BigInt(1),
   lowS: false,
 } as const, sha384);
+/** Alias to p384. */
 export const secp384r1: CurveFnWithCreate = p384;
 
 const mapSWU = /* @__PURE__ */ (() =>
@@ -48,5 +53,7 @@ const htf = /* @__PURE__ */ (() =>
     expand: 'xmd',
     hash: sha384,
   }))();
+/** secp384r1 hash-to-curve from [RFC 9380](https://www.rfc-editor.org/rfc/rfc9380). */
 export const hashToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() => htf.hashToCurve)();
+/** secp384r1 encode-to-curve from [RFC 9380](https://www.rfc-editor.org/rfc/rfc9380). */
 export const encodeToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() => htf.encodeToCurve)();

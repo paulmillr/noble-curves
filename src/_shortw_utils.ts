@@ -4,7 +4,12 @@ import { concatBytes, randomBytes } from '@noble/hashes/utils';
 import { CHash } from './abstract/utils.js';
 import { CurveType, CurveFn, weierstrass } from './abstract/weierstrass.js';
 
-// connects noble-curves to noble-hashes
+/**
+ * Utilities for short weierstrass curves, combined with noble-hashes.
+ * @module
+ */
+
+/** connects noble-curves to noble-hashes */
 export function getHash(hash: CHash): {
   hash: CHash;
   hmac: (key: Uint8Array, ...msgs: Uint8Array[]) => Uint8Array;
@@ -16,9 +21,10 @@ export function getHash(hash: CHash): {
     randomBytes,
   };
 }
-// Same API as @noble/hashes, with ability to create curve with custom hash
+/** Same API as @noble/hashes, with ability to create curve with custom hash */
 export type CurveDef = Readonly<Omit<CurveType, 'hash' | 'hmac' | 'randomBytes'>>;
 export type CurveFnWithCreate = CurveFn & { create: (hash: CHash) => CurveFn };
+
 export function createCurve(curveDef: CurveDef, defHash: CHash): CurveFnWithCreate {
   const create = (hash: CHash): CurveFn => weierstrass({ ...curveDef, ...getHash(hash) });
   return { ...create(defHash), create };

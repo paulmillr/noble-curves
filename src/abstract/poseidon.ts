@@ -1,8 +1,12 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-// Poseidon Hash: https://eprint.iacr.org/2019/458.pdf, https://www.poseidon-hash.info
 import { FpPow, IField, validateField } from './modular.js';
-// We don't provide any constants, since different implementations use different constants.
-// For reference constants see './test/poseidon.test.js'.
+
+/**
+ * Poseidon Hash: [website](https://www.poseidon-hash.info), [pdf](https://eprint.iacr.org/2019/458.pdf).
+ * We don't provide any constants, since different implementations use different constants.
+ * For reference constants see './test/poseidon.test.js'.
+ * @module
+ */
 export type PoseidonOpts = {
   Fp: IField<bigint>;
   t: number;
@@ -87,6 +91,7 @@ export function splitConstants(rc: bigint[], t: number): bigint[][] {
   return res;
 }
 
+/** Poseidon NTT-friendly hash. */
 export function poseidon(opts: PoseidonOpts): {
   (values: bigint[]): bigint[];
   // For verification in tests

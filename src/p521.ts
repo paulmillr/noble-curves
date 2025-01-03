@@ -5,9 +5,12 @@ import { createHasher, HTFMethod } from './abstract/hash-to-curve.js';
 import { Field } from './abstract/modular.js';
 import { mapToCurveSimpleSWU } from './abstract/weierstrass.js';
 
-// NIST secp521r1 aka p521
-// Note that it's 521, which differs from 512 of its hash function.
-// https://www.secg.org/sec2-v2.pdf, https://neuromancer.sk/std/nist/P-521
+/**
+ * NIST secp521r1 aka p521.
+ * Note that it's 521, which differs from 512 of its hash function.
+ * https://www.secg.org/sec2-v2.pdf, https://neuromancer.sk/std/nist/P-521
+ * @module
+ */
 
 // Field over which we'll do calculations.
 // prettier-ignore
@@ -32,6 +35,9 @@ const CURVE = {
   h: BigInt(1),
 };
 
+/**
+ * NIST secp521r1 aka p521.
+ */
 // prettier-ignore
 export const p521: CurveFnWithCreate = createCurve({
   a: CURVE.a, // Equation params: a, b
@@ -64,5 +70,7 @@ const htf = /* @__PURE__ */ (() =>
     expand: 'xmd',
     hash: sha512,
   }))();
+/** secp521r1 hash-to-curve from [RFC 9380](https://www.rfc-editor.org/rfc/rfc9380). */
 export const hashToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() => htf.hashToCurve)();
+/** secp521r1 encode-to-curve from [RFC 9380](https://www.rfc-editor.org/rfc/rfc9380). */
 export const encodeToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() => htf.encodeToCurve)();

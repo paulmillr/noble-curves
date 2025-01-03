@@ -9,6 +9,7 @@ import { Field } from './abstract/modular.js';
  * jubjub Twisted Edwards curve.
  * https://neuromancer.sk/std/other/JubJub
  * jubjub does not use EdDSA, so `hash`/sha512 params are passed because interface expects them.
+ * @module
  */
 
 export const jubjub: CurveFn = /* @__PURE__ */ twistedEdwards({

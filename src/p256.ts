@@ -5,13 +5,17 @@ import { createHasher, HTFMethod } from './abstract/hash-to-curve.js';
 import { Field } from './abstract/modular.js';
 import { mapToCurveSimpleSWU } from './abstract/weierstrass.js';
 
-// NIST secp256r1 aka p256
-// https://www.secg.org/sec2-v2.pdf, https://neuromancer.sk/std/nist/P-256
+/**
+ * NIST secp256r1 aka p256.
+ * https://www.secg.org/sec2-v2.pdf, https://neuromancer.sk/std/nist/P-256
+ * @module
+ */
 
 const Fp256 = Field(BigInt('0xffffffff00000001000000000000000000000000ffffffffffffffffffffffff'));
 const CURVE_A = Fp256.create(BigInt('-3'));
 const CURVE_B = BigInt('0x5ac635d8aa3a93e7b3ebbd55769886bc651d06b0cc53b0f63bce3c3e27d2604b');
 
+/** secp256r1 curve, ECDSA and ECDH methods. */
 // prettier-ignore
 export const p256: CurveFnWithCreate = createCurve({
   a: CURVE_A, // Equation params: a, b
@@ -25,6 +29,7 @@ export const p256: CurveFnWithCreate = createCurve({
   h: BigInt(1),
   lowS: false,
 } as const, sha256);
+/** Alias to p256. */
 export const secp256r1: CurveFnWithCreate = p256;
 
 const mapSWU = /* @__PURE__ */ (() =>
@@ -44,5 +49,7 @@ const htf = /* @__PURE__ */ (() =>
     expand: 'xmd',
     hash: sha256,
   }))();
+/** secp256r1 hash-to-curve from [RFC 9380](https://www.rfc-editor.org/rfc/rfc9380). */
 export const hashToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() => htf.hashToCurve)();
+/** secp256r1 encode-to-curve from [RFC 9380](https://www.rfc-editor.org/rfc/rfc9380). */
 export const encodeToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() => htf.encodeToCurve)();

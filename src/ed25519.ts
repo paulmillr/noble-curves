@@ -26,6 +26,7 @@ import {
  * - X25519 ECDH
  * - Ristretto cofactor elimination
  * - Elligator hash-to-group / point indistinguishability
+ * @module
  */
 
 const ED25519_P = BigInt(

@@ -4,6 +4,9 @@ import { getHash } from './_shortw_utils.js';
 import { Field, mod } from './abstract/modular.js';
 import { CurveFn, weierstrass } from './abstract/weierstrass.js';
 
+/**
+ * Pasta curves. See [Spec](https://o1-labs.github.io/proof-systems/specs/pasta.html).
+ */
 export const p: bigint = BigInt(
   '0x40000000000000000000000000000000224698fc094cf91b992d30ed00000001'
 );
@@ -11,7 +14,7 @@ export const q: bigint = BigInt(
   '0x40000000000000000000000000000000224698fc0994a8dd8c46eb2100000001'
 );
 
-// https://neuromancer.sk/std/other/Pallas
+/** https://neuromancer.sk/std/other/Pallas */
 export const pallas: CurveFn = weierstrass({
   a: BigInt(0),
   b: BigInt(5),
@@ -22,7 +25,7 @@ export const pallas: CurveFn = weierstrass({
   h: BigInt(1),
   ...getHash(sha256),
 });
-// https://neuromancer.sk/std/other/Vesta
+/** https://neuromancer.sk/std/other/Vesta */
 export const vesta: CurveFn = weierstrass({
   a: BigInt(0),
   b: BigInt(5),

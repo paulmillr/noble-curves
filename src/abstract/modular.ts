@@ -9,6 +9,14 @@ import {
   numberToBytesLE,
   validateObject,
 } from './utils.js';
+
+/**
+ * Utils for modular division and finite fields.
+ * A finite field over 11 is integer number operations `mod 11`.
+ * There is no division: it is replaced by modular multiplicative inverse.
+ * @module
+ */
+
 // prettier-ignore
 const _0n = BigInt(0), _1n = BigInt(1), _2n = /* @__PURE__ */ BigInt(2), _3n = /* @__PURE__ */ BigInt(3);
 // prettier-ignore
@@ -24,10 +32,10 @@ export function mod(a: bigint, b: bigint): bigint {
 /**
  * Efficiently raise num to power and do modular division.
  * Unsafe in some contexts: uses ladder, so can expose bigint bits.
+ * @todo use field version && remove
  * @example
  * pow(2n, 6n, 11n) // 64n % 11n == 9n
  */
-// TODO: use field version && remove
 export function pow(num: bigint, power: bigint, modulo: bigint): bigint {
   if (power < _0n) throw new Error('invalid exponent, negatives unsupported');
   if (modulo <= _0n) throw new Error('invalid modulus');
@@ -41,7 +49,7 @@ export function pow(num: bigint, power: bigint, modulo: bigint): bigint {
   return res;
 }
 
-// Does x ^ (2 ^ power) mod p. pow2(30, 4) == 30 ^ (2 ^ 4)
+/** Does `x^(2^power)` mod p. `pow2(30, 4)` == `30^(2^4)` */
 export function pow2(x: bigint, power: bigint, modulo: bigint): bigint {
   let res = x;
   while (power-- > _0n) {
@@ -51,11 +59,13 @@ export function pow2(x: bigint, power: bigint, modulo: bigint): bigint {
   return res;
 }
 
-// Inverses number over modulo
+/**
+ * Inverses number over modulo.
+ * Implemented using [Euclidean GCD](https://brilliant.org/wiki/extended-euclidean-algorithm/).
+ */
 export function invert(number: bigint, modulo: bigint): bigint {
   if (number === _0n) throw new Error('invert: expected non-zero number');
   if (modulo <= _0n) throw new Error('invert: expected positive modulus, got ' + modulo);
-  // Euclidean GCD https://brilliant.org/wiki/extended-euclidean-algorithm/
   // Fermat's little theorem "CT-like" version inv(n) = n^(m-2) mod m is 30x slower.
   let a = mod(number, modulo);
   let b = modulo;
@@ -142,10 +152,18 @@ export function tonelliShanks(P: bigint): <T>(Fp: IField<T>, n: T) => T {
   };
 }
 
+/**
+ * Square root for a finite field. It will try to check if optimizations are applicable and fall back to 4:
+ *
+ * 1. P ≡ 3 (mod 4)
+ * 2. P ≡ 5 (mod 8)
+ * 3. P ≡ 9 (mod 16)
+ * 4. Tonelli-Shanks algorithm
+ *
+ * Different algorithms can give different roots, it is up to user to decide which one they want.
+ * For example there is FpSqrtOdd/FpSqrtEven to choice root based on oddness (used for hash-to-curve).
+ */
 export function FpSqrt(P: bigint): <T>(Fp: IField<T>, n: T) => T {
-  // NOTE: different algorithms can give different roots, it is up to user to decide which one they want.
-  // For example there is FpSqrtOdd/FpSqrtEven to choice root based on oddness (used for hash-to-curve).
-
   // P ≡ 3 (mod 4)
   // √n = n^((P+1)/4)
   if (P % _4n === _3n) {
@@ -206,7 +224,7 @@ export function FpSqrt(P: bigint): <T>(Fp: IField<T>, n: T) => T {
 export const isNegativeLE = (num: bigint, modulo: bigint): boolean =>
   (mod(num, modulo) & _1n) === _1n;
 
-// Field is not always over prime: for example, Fp2 has ORDER(q)=p^m
+/** Field is not always over prime: for example, Fp2 has ORDER(q)=p^m. */
 export interface IField<T> {
   ORDER: bigint;
   isLE: boolean;
@@ -318,10 +336,13 @@ export function FpDiv<T>(f: IField<T>, lhs: T, rhs: T | bigint): T {
   return f.mul(lhs, typeof rhs === 'bigint' ? invert(rhs, f.ORDER) : f.inv(rhs));
 }
 
+/**
+ * Legendre symbol.
+ * * (a | p) ≡ 1    if a is a square (mod p), quadratic residue
+ * * (a | p) ≡ -1   if a is not a square (mod p), quadratic non residue
+ * * (a | p) ≡ 0    if a ≡ 0 (mod p)
+ */
 export function FpLegendre(order: bigint): <T>(f: IField<T>, x: T) => T {
-  // (a | p) ≡ 1    if a is a square (mod p), quadratic residue
-  // (a | p) ≡ -1   if a is not a square (mod p), quadratic non residue
-  // (a | p) ≡ 0    if a ≡ 0 (mod p)
   const legendreConst = (order - _1n) / _2n; // Integer arithmetic
   return <T>(f: IField<T>, x: T): T => f.pow(x, legendreConst);
 }
@@ -351,15 +372,15 @@ export function nLength(
 
 type FpField = IField<bigint> & Required<Pick<IField<bigint>, 'isOdd'>>;
 /**
- * Initializes a finite field over prime. **Non-primes are not supported.**
- * Do not init in loop: slow. Very fragile: always run a benchmark on a change.
+ * Initializes a finite field over prime.
  * Major performance optimizations:
  * * a) denormalized operations like mulN instead of mul
  * * b) same object shape: never add or remove keys
  * * c) Object.freeze
- * NOTE: operations don't check 'isValid' for all elements for performance reasons,
+ * Fragile: always run a benchmark on a change.
+ * Security note: operations don't check 'isValid' for all elements for performance reasons,
  * it is caller responsibility to check this.
- * This is low-level code, please make sure you know what you doing.
+ * This is low-level code, please make sure you know what you're doing.
  * @param ORDER prime positive bigint
  * @param bitLen how many bits the field consumes
  * @param isLE (def: false) if encoding / decoding should be in little-endian
@@ -444,7 +465,7 @@ export function FpSqrtEven<T>(Fp: IField<T>, elm: T): T {
  * "Constant-time" private key generation utility.
  * Same as mapKeyToField, but accepts less bytes (40 instead of 48 for 32-byte field).
  * Which makes it slightly more biased, less secure.
- * @deprecated use mapKeyToField instead
+ * @deprecated use `mapKeyToField` instead
  */
 export function hashToPrivateScalar(
   hash: string | Uint8Array,

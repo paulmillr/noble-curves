@@ -8,6 +8,13 @@ import {
   validateObject,
 } from './utils.js';
 
+/**
+ * Montgomery curve methods. It's not really whole montgomery curve,
+ * just bunch of very specific methods for X25519 / X448 from
+ * [RFC 7748](https://www.rfc-editor.org/rfc/rfc7748)
+ * @module
+ */
+
 const _0n = BigInt(0);
 const _1n = BigInt(1);
 type Hex = string | Uint8Array;
@@ -24,6 +31,7 @@ export type CurveType = {
   Gu: bigint;
   randomBytes?: (bytesLength?: number) => Uint8Array;
 };
+
 export type CurveFn = {
   scalarMult: (scalar: Hex, u: Hex) => Uint8Array;
   scalarMultBase: (scalar: Hex) => Uint8Array;
@@ -52,7 +60,6 @@ function validateOpts(curve: CurveType) {
   return Object.freeze({ ...curve } as const);
 }
 
-// NOTE: not really montgomery curve, just bunch of very specific methods for X25519/X448 (RFC 7748, https://www.rfc-editor.org/rfc/rfc7748)
 // Uses only one coordinate instead of two
 export function montgomery(curveDef: CurveType): CurveFn {
   const CURVE = validateOpts(curveDef);

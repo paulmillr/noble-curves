@@ -1,5 +1,4 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-// BLS (Barreto-Lynn-Scott) family of pairing-friendly curves.
 // TODO: import { AffinePoint } from './curve.js';
 import { IField, getMinHashLength, mapHashToField } from './modular.js';
 import { Hex, PrivKey, CHash, ensureBytes, memoized } from './utils.js';
@@ -17,6 +16,7 @@ import {
 import type { Fp2, Fp6, Fp12, Fp2Bls, Fp12Bls } from './tower.js';
 
 /**
+ * BLS (Barreto-Lynn-Scott) family of pairing-friendly curves.
  * BLS != BLS.
  * The file implements BLS (Boneh-Lynn-Shacham) signatures.
  * Used in both BLS (Barreto-Lynn-Scott) and BN (Barreto-Naehrig)
@@ -30,6 +30,7 @@ import type { Fp2, Fp6, Fp12, Fp2Bls, Fp12Bls } from './tower.js';
  * There are two main ways to use it:
  * 1. Fp for short private keys, Fp₂ for signatures
  * 2. Fp for short signatures, Fp₂ for private keys
+ * @module
  **/
 
 type Fp = bigint; // Can be different field?

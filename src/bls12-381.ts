@@ -19,60 +19,73 @@ import { AffinePoint, mapToCurveSimpleSWU, ProjPointType } from './abstract/weie
 import { tower12, psiFrobenius } from './abstract/tower.js';
 import type { Fp, Fp2, Fp6, Fp12 } from './abstract/tower.js';
 
-/*
-bls12-381 is pairing-friendly Barreto-Lynn-Scott elliptic curve construction allowing to:
-- Construct zk-SNARKs at the 120-bit security
-- Efficiently verify N aggregate signatures with 1 pairing and N ec additions:
-  the Boneh-Lynn-Shacham signature scheme is orders of magnitude more efficient than Schnorr
-
-### Summary
-1. BLS Relies on Bilinear Pairing (expensive)
-2. Private Keys: 32 bytes
-3. Public Keys: 48 bytes: 381 bit affine x coordinate, encoded into 48 big-endian bytes.
-4. Signatures: 96 bytes: two 381 bit integers (affine x coordinate), encoded into two 48 big-endian byte arrays.
-    - The signature is a point on the G2 subgroup, which is defined over a finite field
-    with elements twice as big as the G1 curve (G2 is over Fp2 rather than Fp. Fp2 is analogous to the complex numbers).
-5. The 12 stands for the Embedding degree.
-
-### Formulas
-- `P = pk x G` - public keys
-- `S = pk x H(m)` - signing
-- `e(P, H(m)) == e(G, S)` - verification using pairings
-- `e(G, S) = e(G, SUM(n)(Si)) = MUL(n)(e(G, Si))` - signature aggregation
-
-### Compatibility and notes
-1. It is compatible with Algorand, Chia, Dfinity, Ethereum, Filecoin, ZEC
-   Filecoin uses little endian byte arrays for private keys - make sure to reverse byte order.
-2. Some projects use G2 for public keys and G1 for signatures. It's called "short signature"
-3. Curve security level is about 120 bits as per Barbulescu-Duquesne 2017
-   https://hal.science/hal-01534101/file/main.pdf
-4. Compatible with specs:
-[cfrg-pairing-friendly-curves-11](https://tools.ietf.org/html/draft-irtf-cfrg-pairing-friendly-curves-11),
-[cfrg-bls-signature-05](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-bls-signature-05),
-[RFC 9380](https://www.rfc-editor.org/rfc/rfc9380).
-*/
+/**
+ * bls12-381 is pairing-friendly Barreto-Lynn-Scott elliptic curve construction allowing to:
+ * * Construct zk-SNARKs at the ~120-bit security
+ * * Efficiently verify N aggregate signatures with 1 pairing and N ec additions:
+ *   the Boneh-Lynn-Shacham signature scheme is orders of magnitude more efficient than Schnorr
+ *
+ * ### Summary
+ * 1. BLS Relies on Bilinear Pairing (expensive)
+ * 2. Private Keys: 32 bytes
+ * 3. Public Keys: 48 bytes: 381 bit affine x coordinate, encoded into 48 big-endian bytes.
+ * 4. Signatures: 96 bytes: two 381 bit integers (affine x coordinate), encoded into two 48 big-endian byte arrays.
+ *     - The signature is a point on the G2 subgroup, which is defined over a finite field
+ *       with elements twice as big as the G1 curve (G2 is over Fp2 rather than Fp. Fp2 is analogous to the
+ *       complex numbers).
+ *     - We also support reversed 96-byte pubkeys & 48-byte short signatures.
+ * 5. The 12 stands for the Embedding degree.
+ *
+ * ### Formulas
+ * - `P = pk x G` - public keys
+ * - `S = pk x H(m)` - signing
+ * - `e(P, H(m)) == e(G, S)` - verification using pairings
+ * - `e(G, S) = e(G, SUM(n)(Si)) = MUL(n)(e(G, Si))` - signature aggregation
+ *
+ * ### Compatibility and notes
+ * 1. It is compatible with Algorand, Chia, Dfinity, Ethereum, Filecoin, ZEC.
+ * Filecoin uses little endian byte arrays for private keys - make sure to reverse byte order.
+ * 2. Some projects use G2 for public keys and G1 for signatures. It's called "short signature".
+ * 3. Curve security level is about 120 bits as per [Barbulescu-Duquesne 2017](https://hal.science/hal-01534101/file/main.pdf)
+ * 4. Compatible with specs:
+ *    [cfrg-pairing-friendly-curves-11](https://tools.ietf.org/html/draft-irtf-cfrg-pairing-friendly-curves-11),
+ *    [cfrg-bls-signature-05](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-bls-signature-05),
+ *    [RFC 9380](https://www.rfc-editor.org/rfc/rfc9380).
+ *
+ * @todo construct bls & bn fp/fr from seed.
+ * @module
+ */
 
 // Be friendly to bad ECMAScript parsers by not using bigint literals
 // prettier-ignore
 const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3), _4n = BigInt(4);
 
-/*
-Embedding degree (k): 12
-Seed (X): -15132376222941642752
-Fr:  (x⁴-x²+1)
-Fp: ((x-1)² ⋅ r(x)/3+x)
-(E/Fp): Y²=X³+4
-(Eₜ/Fp²): Y² = X³+4(u+1) (M-type twist)
-Ate loop size: X
-
-Towers:
-- Fp²[u] = Fp/u²+1
-- Fp⁶[v] = Fp²/v³-1-u
-- Fp¹²[w] = Fp⁶/w²-v
-
-
-TODO: BLS & BN Fp/Fr can be constructed from seed.
-*/
+/**
+ * ### Params
+ * To verify curve parameters, see
+ * [pairing-friendly-curves spec](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-pairing-friendly-curves-11).
+ * Basic math is done over finite fields over p.
+ * More complicated math is done over polynominal extension fields.
+ * To simplify calculations in Fp12, we construct extension tower:
+ * - Fp₁₂ = Fp₆² => Fp₂³
+ * - Fp(u) / (u² - β) where β = -1
+ * - Fp₂(v) / (v³ - ξ) where ξ = u + 1
+ * - Fp₆(w) / (w² - γ) where γ = v
+ * Here goes constants && point encoding format
+ *
+ * Embedding degree (k): 12
+ * Seed (X): -15132376222941642752
+ * Fr:  (x⁴-x²+1)
+ * Fp: ((x-1)² ⋅ r(x)/3+x)
+ * (E/Fp): Y²=X³+4
+ * (Eₜ/Fp²): Y² = X³+4(u+1) (M-type twist)
+ * Ate loop size: X
+ *
+ * ### Towers
+ * - Fp²[u] = Fp/u²+1
+ * - Fp⁶[v] = Fp²/v³-1-u
+ * - Fp¹²[w] = Fp⁶/w²-v
+ */
 
 // The BLS parameter x (seed) for BLS12-381. NOTE: it is negative!
 const BLS_X = BigInt('0xd201000000010000');
@@ -418,16 +431,15 @@ function signatureG2ToRawBytes(point: ProjPointType<Fp2>) {
   );
 }
 
-// To verify curve parameters, see pairing-friendly-curves spec:
-// https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-pairing-friendly-curves-11
-// Basic math is done over finite fields over p.
-// More complicated math is done over polynominal extension fields.
-// To simplify calculations in Fp12, we construct extension tower:
-// Fp₁₂ = Fp₆² => Fp₂³
-// Fp(u) / (u² - β) where β = -1
-// Fp₂(v) / (v³ - ξ) where ξ = u + 1
-// Fp₆(w) / (w² - γ) where γ = v
-// Here goes constants && point encoding format
+/**
+ * bls12-381 pairing-friendly curve.
+ * Main methods: `getPublicKey`, `sign`, `verify`, `aggregatePublicKeys`, `aggregateSignatures`,
+ * `pairing`.
+ * - `P = pk x G` - public keys
+ * - `S = pk x H(m)` - signing
+ * - `e(P, H(m)) == e(G, S)` - verification using pairings
+ * - `e(G, S) = e(G, SUM(n)(Si)) = MUL(n)(e(G, Si))` - signature aggregation
+ */
 export const bls12_381: CurveFn = bls({
   // Fields
   fields: {

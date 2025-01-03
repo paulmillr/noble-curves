@@ -15,6 +15,12 @@ import {
 } from './abstract/utils.js';
 import { ProjPointType as PointType, mapToCurveSimpleSWU } from './abstract/weierstrass.js';
 
+/**
+ * NIST secp256k1.
+ * https://www.secg.org/sec2-v2.pdf
+ * @module
+ */
+
 const secp256k1P = BigInt('0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f');
 const secp256k1N = BigInt('0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141');
 const _1n = BigInt(1);
@@ -53,11 +59,19 @@ const Fpk1 = Field(secp256k1P, undefined, undefined, { sqrt: sqrtMod });
 
 /**
  * secp256k1 short weierstrass curve and ECDSA signatures over it.
+ *
+ * Seems to be rigid (not backdoored)
+ * [as per discussion](https://bitcointalk.org/index.php?topic=289795.msg3183975#msg3183975).
+ *
+ * secp256k1 belongs to Koblitz curves: it has efficiently computable endomorphism.
+ * Endomorphism uses 2x less RAM, speeds up precomputation by 2x and ECDH / key recovery by 20%.
+ * For precomputed wNAF it trades off 1/2 init time & 1/3 ram for 20% perf hit.
+ * [See explanation](https://gist.github.com/paulmillr/eb670806793e84df628a7c434a873066).
  */
 export const secp256k1: CurveFnWithCreate = createCurve(
   {
     a: BigInt(0), // equation params: a, b
-    b: BigInt(7), // Seem to be rigid: bitcointalk.org/index.php?topic=289795.msg3183975#msg3183975
+    b: BigInt(7),
     Fp: Fpk1, // Field's prime: 2n**256n - 2n**32n - 2n**9n - 2n**8n - 2n**7n - 2n**6n - 2n**4n - 1n
     n: secp256k1N, // Curve order, total count of valid points in the field
     // Base point (x, y) aka generator point
@@ -65,13 +79,8 @@ export const secp256k1: CurveFnWithCreate = createCurve(
     Gy: BigInt('32670510020758816978083085130507043184471273380659243275938904335757337482424'),
     h: BigInt(1), // Cofactor
     lowS: true, // Allow only low-S signatures by default in sign() and verify()
-    /**
-     * secp256k1 belongs to Koblitz curves: it has efficiently computable endomorphism.
-     * Endomorphism uses 2x less RAM, speeds up precomputation by 2x and ECDH / key recovery by 20%.
-     * For precomputed wNAF it trades off 1/2 init time & 1/3 ram for 20% perf hit.
-     * Explanation: https://gist.github.com/paulmillr/eb670806793e84df628a7c434a873066
-     */
     endo: {
+      // Endomorphism, see above
       beta: BigInt('0x7ae96a2b657c07106e64479eac3434e99cf0497512f58995c1396c28719501ee'),
       splitScalar: (k: bigint) => {
         const n = secp256k1N;
@@ -208,10 +217,7 @@ function schnorrVerify(signature: Hex, message: Hex, publicKey: Hex): boolean {
   }
 }
 
-/**
- * Schnorr signatures over secp256k1.
- */
-export const schnorr: {
+export type SecpSchnorr = {
   getPublicKey: typeof schnorrGetPublicKey;
   sign: typeof schnorrSign;
   verify: typeof schnorrVerify;
@@ -224,7 +230,19 @@ export const schnorr: {
     taggedHash: typeof taggedHash;
     mod: typeof mod;
   };
-} = /* @__PURE__ */ (() => ({
+};
+/**
+ * Schnorr signatures over secp256k1.
+ * https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki
+ * @example
+ * import { schnorr } from '@noble/curves/secp256k1';
+ * const priv = schnorr.utils.randomPrivateKey();
+ * const pub = schnorr.getPublicKey(priv);
+ * const msg = new TextEncoder().encode('hello');
+ * const sig = schnorr.sign(msg, priv);
+ * const isValid = schnorr.verify(sig, msg, pub);
+ */
+export const schnorr: SecpSchnorr = /* @__PURE__ */ (() => ({
   getPublicKey: schnorrGetPublicKey,
   sign: schnorrSign,
   verify: schnorrVerify,
@@ -295,5 +313,9 @@ const htf = /* @__PURE__ */ (() =>
       hash: sha256,
     }
   ))();
+
+/** secp256k1 hash-to-curve from [RFC 9380](https://www.rfc-editor.org/rfc/rfc9380). */
 export const hashToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() => htf.hashToCurve)();
+
+/** secp256k1 encode-to-curve from [RFC 9380](https://www.rfc-editor.org/rfc/rfc9380). */
 export const encodeToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() => htf.encodeToCurve)();

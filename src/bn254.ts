@@ -19,12 +19,17 @@ const _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3);
 // prettier-ignore
 const _6n = BigInt(6);
 
-/*
-bn254, previously known as alt_bn_128, when it had 128-bit security.
-Barbulescu-Duquesne 2017 shown it's weaker: just about 100 bits,
-so the naming has been adjusted to its prime bit count:
-https://hal.science/hal-01534101/file/main.pdf
+/**
+ * bn254, previously known as alt_bn_128, when it had 128-bit security.
+ * Barbulescu-Duquesne 2017 shown it's weaker: just about 100 bits,
+ * so the naming has been adjusted to its prime bit count:
+ * https://hal.science/hal-01534101/file/main.pdf
+ *
+ * Compatible with EIP-196 and EIP-197.
+ * @module
+ */
 
+/*
 There are huge compatibility issues in the ecosystem:
 
 1. Different libraries call it in different ways: "bn254", "bn256", "alt_bn128", "bn128".
@@ -47,9 +52,8 @@ because it at least has specs:
     - https://github.com/ethereum/py_pairing
     - https://github.com/ethereum/execution-specs/blob/master/src/ethereum/crypto/alt_bn128.py
 - Points are encoded differently in different implementations
-*/
 
-/*
+### Params
 Seed (X): 4965661367192848881
 Fr: (36x⁴+36x³+18x²+6x+1)
 Fp: (36x⁴+36x³+24x²+6x+1)
@@ -57,7 +61,7 @@ Fp: (36x⁴+36x³+24x²+6x+1)
 (Et / Fp²): Y² = X³+3/(u+9) (D-type twist)
 Ate loop size: 6x+2
 
-Towers:
+### Towers
 - Fp²[u] = Fp/u²+1
 - Fp⁶[v] = Fp²/v³-9-u
 - Fp¹²[w] = Fp⁶/w²-v

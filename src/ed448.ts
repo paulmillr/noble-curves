@@ -27,6 +27,7 @@ import {
  * - Decaf cofactor elimination
  * - Elligator hash-to-group / point indistinguishability
  * Conforms to RFC 8032 https://www.rfc-editor.org/rfc/rfc8032.html#section-5.2
+ * @module
  */
 
 const shake256_114 = wrapConstructor(() => shake256.create({ dkLen: 114 }));

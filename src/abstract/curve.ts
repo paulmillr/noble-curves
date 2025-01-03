@@ -2,6 +2,13 @@
 // Abelian group utilities
 import { IField, validateField, nLength } from './modular.js';
 import { validateObject, bitLen } from './utils.js';
+
+/**
+ * Methods for elliptic curve multiplication by scalars.
+ * Contains wNAF, pippenger
+ * @module
+ */
+
 const _0n = BigInt(0);
 const _1n = BigInt(1);
 
@@ -77,17 +84,20 @@ export type IWNAF<T extends Group<T>> = {
   setWindowSize(P: T, W: number): void;
 };
 
-// Elliptic curve multiplication of Point by scalar. Fragile.
-// Scalars should always be less than curve order: this should be checked inside of a curve itself.
-// Creates precomputation tables for fast multiplication:
-// - private scalar is split by fixed size windows of W bits
-// - every window point is collected from window's table & added to accumulator
-// - since windows are different, same point inside tables won't be accessed more than once per calc
-// - each multiplication is 'Math.ceil(CURVE_ORDER / 𝑊) + 1' point additions (fixed for any scalar)
-// - +1 window is neccessary for wNAF
-// - wNAF reduces table size: 2x less memory + 2x faster generation, but 10% slower multiplication
-// TODO: Research returning 2d JS array of windows, instead of a single window. This would allow
-// windows to be in different memory locations
+/**
+ * Elliptic curve multiplication of Point by scalar. Fragile.
+ * Scalars should always be less than curve order: this should be checked inside of a curve itself.
+ * Creates precomputation tables for fast multiplication:
+ * - private scalar is split by fixed size windows of W bits
+ * - every window point is collected from window's table & added to accumulator
+ * - since windows are different, same point inside tables won't be accessed more than once per calc
+ * - each multiplication is 'Math.ceil(CURVE_ORDER / 𝑊) + 1' point additions (fixed for any scalar)
+ * - +1 window is neccessary for wNAF
+ * - wNAF reduces table size: 2x less memory + 2x faster generation, but 10% slower multiplication
+ *
+ * @todo Research returning 2d JS array of windows, instead of a single window.
+ * This would allow windows to be in different memory locations
+ */
 export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number): IWNAF<T> {
   return {
     constTimeNegate,
@@ -399,8 +409,10 @@ export function precomputeMSMUnsafe<T extends Group<T>>(
   };
 }
 
-// Generic BasicCurve interface: works even for polynomial fields (BLS): P, n, h would be ok.
-// Though generator can be different (Fp2 / Fp6 for BLS).
+/**
+ * Generic BasicCurve interface: works even for polynomial fields (BLS): P, n, h would be ok.
+ * Though generator can be different (Fp2 / Fp6 for BLS).
+ */
 export type BasicCurve<T> = {
   Fp: IField<T>; // Field over which we'll do calculations (Fp)
   n: bigint; // Curve order, total count of valid points in the field

@@ -1,5 +1,4 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-// Twisted Edwards curve. The formula is: ax² + y² = 1 + dx²y²
 import {
   AffinePoint,
   BasicCurve,
@@ -13,11 +12,17 @@ import { mod, Field } from './modular.js';
 import * as ut from './utils.js';
 import { ensureBytes, FHash, Hex, memoized, abool } from './utils.js';
 
+/**
+ * Twisted Edwards curve. The formula is: ax² + y² = 1 + dx²y².
+ * For design rationale of types / exports, see weierstrass module documentation.
+ * @module
+ */
+
 // Be friendly to bad ECMAScript parsers by not using bigint literals
 // prettier-ignore
 const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _8n = BigInt(8);
 
-// Edwards curves must declare params a & d.
+/** Edwards curves must declare params a & d. */
 export type CurveType = BasicCurve<bigint> & {
   a: bigint; // curve param a
   d: bigint; // curve param d
@@ -56,7 +61,7 @@ function validateOpts(curve: CurveType): CurveTypeWithLength {
   return Object.freeze({ ...opts } as const);
 }
 
-// Instance of Extended Point with coordinates in X, Y, Z, T
+/** Instance of Extended Point with coordinates in X, Y, Z, T. */
 export interface ExtPointType extends Group<ExtPointType> {
   readonly ex: bigint;
   readonly ey: bigint;
@@ -75,7 +80,7 @@ export interface ExtPointType extends Group<ExtPointType> {
   toHex(isCompressed?: boolean): string;
   _setWindowSize(windowSize: number): void;
 }
-// Static methods of Extended Point with coordinates in X, Y, Z, T
+/** Static methods of Extended Point with coordinates in X, Y, Z, T. */
 export interface ExtPointConstructor extends GroupConstructor<ExtPointType> {
   new (x: bigint, y: bigint, z: bigint, t: bigint): ExtPointType;
   fromAffine(p: AffinePoint<bigint>): ExtPointType;
