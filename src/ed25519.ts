@@ -135,6 +135,14 @@ const ed25519Defaults = /* @__PURE__ */ (() =>
 
 /**
  * ed25519 curve with EdDSA signatures.
+ * @example
+ * import { ed25519 } from '@noble/curves/ed25519';
+ * const priv = ed25519.utils.randomPrivateKey();
+ * const pub = ed25519.getPublicKey(priv);
+ * const msg = new TextEncoder().encode('hello');
+ * const sig = ed25519.sign(msg, priv);
+ * ed25519.verify(sig, msg, pub); // Default mode: follows ZIP215
+ * ed25519.verify(sig, msg, pub, { zip215: false }); // RFC8032 / FIPS 186-5
  */
 export const ed25519: CurveFn = /* @__PURE__ */ (() => twistedEdwards(ed25519Defaults))();
 
@@ -161,6 +169,16 @@ export const ed25519ph: CurveFn = /* @__PURE__ */ (() =>
     })
   ))();
 
+/**
+ * ECDH using curve25519 aka x25519.
+ * @example
+ * import { x25519 } from '@noble/curves/ed25519';
+ * const priv = 'a546e36bf0527c9d3b16154b82465edd62144c0ac1fc5a18506a2244ba449ac4';
+ * const pub = 'e6db6867583030db3594c1a424b15f7c726624ec26b3353b10a903a6d0ab1c4c';
+ * x25519.getSharedSecret(priv, pub) === x25519.scalarMult(priv, pub); // aliases
+ * x25519.getPublicKey(priv) === x25519.scalarMultBase(priv);
+ * x25519.getPublicKey(x25519.utils.randomPrivateKey());
+ */
 export const x25519: XCurveFn = /* @__PURE__ */ (() =>
   montgomery({
     P: ED25519_P,

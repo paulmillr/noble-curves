@@ -433,12 +433,14 @@ function signatureG2ToRawBytes(point: ProjPointType<Fp2>) {
 
 /**
  * bls12-381 pairing-friendly curve.
- * Main methods: `getPublicKey`, `sign`, `verify`, `aggregatePublicKeys`, `aggregateSignatures`,
- * `pairing`.
- * - `P = pk x G` - public keys
- * - `S = pk x H(m)` - signing
- * - `e(P, H(m)) == e(G, S)` - verification using pairings
- * - `e(G, S) = e(G, SUM(n)(Si)) = MUL(n)(e(G, Si))` - signature aggregation
+ * @example
+ * import { bls12_381 as bls } from '@noble/curves/bls12-381';
+ * // G1 keys, G2 signatures
+ * const privateKey = '67d53f170b908cabb9eb326c3c337762d59289a8fec79f7bc9254b584b73265c';
+ * const message = '64726e3da8';
+ * const publicKey = bls.getPublicKey(privateKey);
+ * const signature = bls.sign(message, privateKey);
+ * const isValid = bls.verify(signature, message, publicKey);
  */
 export const bls12_381: CurveFn = bls({
   // Fields

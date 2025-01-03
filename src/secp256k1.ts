@@ -67,6 +67,15 @@ const Fpk1 = Field(secp256k1P, undefined, undefined, { sqrt: sqrtMod });
  * Endomorphism uses 2x less RAM, speeds up precomputation by 2x and ECDH / key recovery by 20%.
  * For precomputed wNAF it trades off 1/2 init time & 1/3 ram for 20% perf hit.
  * [See explanation](https://gist.github.com/paulmillr/eb670806793e84df628a7c434a873066).
+ *
+ * @example
+ * import { secp256k1 } from '@noble/curves/secp256k1';
+ *
+ * const priv = secp256k1.utils.randomPrivateKey();
+ * const pub = secp256k1.getPublicKey(priv);
+ * const msg = new Uint8Array(32).fill(1); // message hash (not message) in ecdsa
+ * const sig = secp256k1.sign(msg, priv); // `{prehash: true}` option is available
+ * const isValid = secp256k1.verify(sig, msg, pub) === true;
  */
 export const secp256k1: CurveFnWithCreate = createCurve(
   {

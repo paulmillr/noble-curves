@@ -138,6 +138,16 @@ const ED448_DEF = {
   uvRatio,
 } as const;
 
+/**
+ * ed448 EdDSA curve and methods.
+ * @example
+ * import { ed448 } from '@noble/curves/ed448';
+ * const priv = ed448.utils.randomPrivateKey();
+ * const pub = ed448.getPublicKey(priv);
+ * const msg = new TextEncoder().encode('whatsup');
+ * const sig = ed448.sign(msg, priv);
+ * ed448.verify(sig, msg, pub);
+ */
 export const ed448: CurveFn = /* @__PURE__ */ twistedEdwards(ED448_DEF);
 // NOTE: there is no ed448ctx, since ed448 supports ctx by default
 export const ed448ph: CurveFn = /* @__PURE__ */ twistedEdwards({
@@ -145,6 +155,9 @@ export const ed448ph: CurveFn = /* @__PURE__ */ twistedEdwards({
   prehash: shake256_64,
 });
 
+/**
+ * ECDH using curve448 aka x448.
+ */
 export const x448: XCurveFn = /* @__PURE__ */ (() =>
   montgomery({
     a: BigInt(156326),

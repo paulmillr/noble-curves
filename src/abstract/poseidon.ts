@@ -2,9 +2,11 @@
 import { FpPow, IField, validateField } from './modular.js';
 
 /**
- * Poseidon Hash: [website](https://www.poseidon-hash.info), [pdf](https://eprint.iacr.org/2019/458.pdf).
- * We don't provide any constants, since different implementations use different constants.
- * For reference constants see './test/poseidon.test.js'.
+ * Implements [Poseidon](https://www.poseidon-hash.info) ZK-friendly hash.
+ *
+ * There are many poseidon variants with different constants.
+ * We don't provide them: you should construct them manually.
+ * Check out [micro-starknet](https://github.com/paulmillr/micro-starknet) package for a proper example.
  * @module
  */
 export type PoseidonOpts = {
