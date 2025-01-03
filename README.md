@@ -40,6 +40,8 @@ Take a glance at [GitHub Discussions](https://github.com/paulmillr/noble-curves/
 
 > deno add jsr:@noble/curves
 
+> deno doc jsr:@noble/curves  # command-line documentation
+
 We support all major platforms and runtimes.
 For React Native, you may need a [polyfill for getRandomValues](https://github.com/LinusU/react-native-get-random-values).
 A standalone file [noble-curves.js](https://github.com/paulmillr/noble-curves/releases) is also available.
@@ -60,8 +62,8 @@ import { secp256k1 } from '@noble/curves/secp256k1'; // ESM and Common.js
   - [bls12-381](#bls12-381)
   - [bn254 aka alt_bn128](#bn254-aka-alt_bn128)
   - [Multi-scalar-multiplication](#multi-scalar-multiplication)
-  - [All available imports](#all-available-imports)
   - [Accessing a curve's variables](#accessing-a-curves-variables)
+  - [All available imports](#all-available-imports)
 - [Abstract API](#abstract-api)
   - [weierstrass: Short Weierstrass curve](#weierstrass-short-weierstrass-curve)
   - [edwards: Twisted Edwards curve](#edwards-twisted-edwards-curve)
@@ -327,6 +329,18 @@ Pippenger algorithm is used underneath.
 Multi-scalar-multiplication (MSM) is basically `(Pa + Qb + Rc + ...)`.
 It's 10-30x faster vs naive addition for large amount of points.
 
+#### Accessing a curve's variables
+
+```ts
+import { secp256k1 } from '@noble/curves/secp256k1';
+// Every curve has `CURVE` object that contains its parameters, field, and others
+console.log(secp256k1.CURVE.p); // field modulus
+console.log(secp256k1.CURVE.n); // curve order
+console.log(secp256k1.CURVE.a, secp256k1.CURVE.b); // equation params
+console.log(secp256k1.CURVE.Gx, secp256k1.CURVE.Gy); // base point coordinates
+```
+
+
 #### All available imports
 
 ```typescript
@@ -341,17 +355,6 @@ import { bls12_381 } from '@noble/curves/bls12-381';
 import { bn254 } from '@noble/curves/bn254'; // also known as alt_bn128
 import { jubjub } from '@noble/curves/jubjub';
 import { bytesToHex, hexToBytes, concatBytes, utf8ToBytes } from '@noble/curves/abstract/utils';
-```
-
-#### Accessing a curve's variables
-
-```ts
-import { secp256k1 } from '@noble/curves/secp256k1';
-// Every curve has `CURVE` object that contains its parameters, field, and others
-console.log(secp256k1.CURVE.p); // field modulus
-console.log(secp256k1.CURVE.n); // curve order
-console.log(secp256k1.CURVE.a, secp256k1.CURVE.b); // equation params
-console.log(secp256k1.CURVE.Gx, secp256k1.CURVE.Gy); // base point coordinates
 ```
 
 ## Abstract API
