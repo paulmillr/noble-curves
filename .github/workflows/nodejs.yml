@@ -3,23 +3,38 @@ on:
   - push
   - pull_request
 jobs:
-  test:
+  bun:
+    name: Bun
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@1e31de5234b9f8995739874a8ce0492dc87873e2 # v4
+      - uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
+      - run: bun install
+      - run: bun run build
+      - run: bun index.test.js
+  deno:
+    name: Deno
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@1e31de5234b9f8995739874a8ce0492dc87873e2 # v4
+      - uses: denoland/setup-deno@909cc5acb0fdd60627fb858598759246509fa755 # v2.0.2
+      - run: deno install
+      - run: deno task build
+      - run: deno --allow-env --allow-read --allow-write test/index.js
+  node:
     name: v${{ matrix.node }} @ ubuntu-latest
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node:
-          - 14
-          - 16
-          - 18
-          - 20
-          - 22
+        node: [14, 16, 18, 20, 22]
     steps:
       - uses: actions/checkout@1e31de5234b9f8995739874a8ce0492dc87873e2 # v4
       - name: Use Node.js ${{ matrix.node }}
         uses: actions/setup-node@8f152de45cc393bb48ce5d89d36b731f54556e65 # v4
         with:
           node-version: ${{ matrix.node }}
+          registry-url: 'https://registry.npmjs.org'
+          cache: npm
       - run: npm install
       - run: npm run build --if-present
       - run: npm test
