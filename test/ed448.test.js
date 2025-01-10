@@ -427,18 +427,21 @@ describe('ed448', () => {
     const publicKey = ed.getPublicKey(privateKey);
 
     for (let i = 0; i < 100; i++) {
-      let payload = randomBytes(100);
-      let signature = ed.sign(payload, privateKey);
-      if (!ed.verify(signature, payload, publicKey)) {
-        throw new Error('Signature verification failed');
-      }
-      const signatureCopy = Buffer.alloc(signature.byteLength);
-      signatureCopy.set(signature, 0); // <-- breaks
-      payload = payload.slice();
-      signature = signature.slice();
+      let pay = randomBytes(100); // payload
+      let sig = ed.sign(pay, privateKey);
+      if (!ed.verify(sig, pay, publicKey)) throw new Error('Signature verification failed');
+      if (typeof Buffer === 'undefined') {
+        if (!ed.verify(sig.slice(), pay.slice(), publicKey))
+          throw new Error('Signature verification failed');
+      } else {
+        const signatureCopy = Buffer.alloc(sig.byteLength);
+        signatureCopy.set(sig, 0); // <-- breaks
+        pay = pay.slice();
+        sig = sig.slice();
 
-      if (!ed.verify(signatureCopy, payload, publicKey))
-        throw new Error('Copied signature verification failed');
+        if (!ed.verify(signatureCopy, pay, publicKey))
+          throw new Error('Copied signature verification failed');
+      }
     }
   });
 
