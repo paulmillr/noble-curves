@@ -12,4 +12,4 @@ jobs:
     steps:
       - uses: actions/checkout@1e31de5234b9f8995739874a8ce0492dc87873e2 # v4
       - run: npm install -g jsr
-      - run: jsr publish --allow-slow-types
+      - run: jsr publish
