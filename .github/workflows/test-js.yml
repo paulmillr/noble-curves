@@ -51,7 +51,7 @@ jobs:
       - run: npm run build --if-present
       - run: npm test
   coverage:
-    name: Measure test coverage on node
+    name: Measure coverage on Node
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@1e31de5234b9f8995739874a8ce0492dc87873e2 # v4

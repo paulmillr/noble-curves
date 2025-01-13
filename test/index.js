@@ -16,4 +16,4 @@ import './bls12-381.test.js';
 import './bn254.test.js';
 import './utils.test.js';
 
-should.run();
+should.runWhen(import.meta.url);

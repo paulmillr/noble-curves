@@ -375,8 +375,4 @@ should('poseidonperm_x5_254_5', () => {
 });
 // Startadperm is unsupported, since it is non prime field
 
-// ESM is broken.
-import url from 'node:url';
-if (import.meta.url === url.pathToFileURL(process.argv[1]).href) {
-  should.run();
-}
+should.runWhen(import.meta.url);

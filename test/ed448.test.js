@@ -5,6 +5,7 @@ import * as fc from 'fast-check';
 import { ed448, ed448ph, x448 } from '../esm/ed448.js';
 import { bytesToHex, concatBytes, hexToBytes, randomBytes } from '@noble/hashes/utils';
 import { numberToBytesLE } from '../esm/abstract/utils.js';
+
 // Old vectors allow to test sign() because they include private key
 const ed448vectorsOld = json('./ed448/ed448_test_OLD.json');
 const ed448vectors = json('./wycheproof/ed448_test.json');
@@ -738,8 +739,4 @@ describe('ed448', () => {
   });
 });
 
-// ESM is broken.
-import url from 'node:url';
-if (import.meta.url === url.pathToFileURL(process.argv[1]).href) {
-  should.run();
-}
+should.runWhen(import.meta.url);

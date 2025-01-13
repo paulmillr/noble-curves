@@ -144,8 +144,4 @@ testCurve(secp256k1, secp256k1_ro, secp256k1_nu);
 testCurve(ed25519, ed25519_ro, ed25519_nu);
 testCurve(ed448, ed448_ro, ed448_nu);
 
-// ESM is broken.
-import url from 'node:url';
-if (import.meta.url === url.pathToFileURL(process.argv[1]).href) {
-  should.run();
-}
+should.runWhen(import.meta.url);
