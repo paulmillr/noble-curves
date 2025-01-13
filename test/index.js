@@ -16,5 +16,5 @@ import './bls12-381.test.js';
 import './bn254.test.js';
 import './utils.test.js';
 
-process.env.MSHOULD_FAST=1
+process.env.MSHOULD_FAST = 1;
 should.runWhen(import.meta.url);
