@@ -181,9 +181,15 @@ describe('secp256k1', () => {
       if ('fromDER' in secp.Signature) return; // noble-curves has no this check
       const msg = '12'.repeat(32);
       const priv = '34'.repeat(32);
-      throws(() => { secp.sign(msg, priv, { der: true }) });
-      throws(() => { secp.sign(msg, priv, { canonical: true }) });
-      throws(() => { secp.sign(msg, priv, { recovered: true }) });
+      throws(() => {
+        secp.sign(msg, priv, { der: true });
+      });
+      throws(() => {
+        secp.sign(msg, priv, { canonical: true });
+      });
+      throws(() => {
+        secp.sign(msg, priv, { recovered: true });
+      });
     });
   });
 
