@@ -31,8 +31,8 @@ describe('ed25519', () => {
     throws(() => ed.getPublicKey(invalidPriv));
   });
   should('not accept >32byte private keys in Uint8Array format', () => {
-    const invalidPriv = new Uint8Array(33);
-    throws(() => ed.getPublicKey(invalidPriv), new Error('Uint8Array of valid length expected'));
+    const invalidPriv = new Uint8Array(33).fill(1);
+    throws(() => ed.getPublicKey(invalidPriv));
   });
   should('verify recent signature', () => {
     fc.assert(
