@@ -169,6 +169,22 @@ describe('secp256k1', () => {
         throws(() => Point.BASE.multiply(num));
       }
     });
+
+    should('.fromAffine', () => {
+      const xy = { x: 0n, y: 0n };
+      const p = Point.fromAffine(xy);
+      deepStrictEqual(p, Point.ZERO);
+      deepStrictEqual(p.toAffine(), xy);
+    });
+
+    should('sign legacy options', () => {
+      if ('fromDER' in secp.Signature) return; // noble-curves has no this check
+      const msg = '12'.repeat(32);
+      const priv = '34'.repeat(32);
+      throws(() => { secp.sign(msg, priv, { der: true }) });
+      throws(() => { secp.sign(msg, priv, { canonical: true }) });
+      throws(() => { secp.sign(msg, priv, { recovered: true }) });
+    });
   });
 
   // multiply() should equal multiplyUnsafe()

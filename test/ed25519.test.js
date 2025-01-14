@@ -30,6 +30,10 @@ describe('ed25519', () => {
       100000000000000000000000000000000000009000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000090000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000800073278156000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000n;
     throws(() => ed.getPublicKey(invalidPriv));
   });
+  should('not accept >32byte private keys in Uint8Array format', () => {
+    const invalidPriv = new Uint8Array(33);
+    throws(() => ed.getPublicKey(invalidPriv), new Error('Uint8Array of valid length expected'));
+  });
   should('verify recent signature', () => {
     fc.assert(
       fc.property(
@@ -325,6 +329,9 @@ describe('ed25519', () => {
       // sig.R = BASE, sig.s = N+1
       const sig =
         '5866666666666666666666666666666666666666666666666666666666666666eed3f55c1a631258d69cf7a2def9de1400000000000000000000000000000010';
+      throws(() => {
+        deepStrictEqual(ed.verify(sig, 'deadbeef', Point.BASE), false);
+      });
       deepStrictEqual(ed.verify(sig, 'be'.repeat(64), Point.BASE.toRawBytes()), false);
     });
   });
@@ -449,6 +456,13 @@ describe('ed25519', () => {
     // Otherwise (without assertValidity):
     // const point2 = point.double();
     // point2.toAffine(); // crash!
+  });
+
+  should('.fromAffine', () => {
+    const xy = { x: 0n, y: 1n };
+    const p = Point.fromAffine(xy);
+    deepStrictEqual(p, Point.ZERO);
+    deepStrictEqual(p.toAffine(), xy);
   });
 });
 
