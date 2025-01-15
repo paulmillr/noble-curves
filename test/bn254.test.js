@@ -666,7 +666,7 @@ describe('bn254', () => {
       ])
     );
   });
-  describe('Cross-tests', () => {
+  should('Cross-tests', () => {
     // verify that we work exactly same as:
     // - https://github.com/paritytech/bn (old version)
     // - https://github.com/zcash-hackworks/bn
@@ -675,7 +675,7 @@ describe('bn254', () => {
     for (const [name, vectors] of Object.entries(crossTests)) {
       if (['ark_bls12-381', 'ark_bls12-377'].includes(name)) continue;
       const { Fp, Fp2, Fp12 } = bn254.fields;
-      should(`${name}`, () => {
+      // should(`${name}`, () => {
         for (const t of vectors) {
           // TODO: projective stuff is somewhat broken on export?
           const g1 = bn254.G1.ProjectivePoint.fromAffine({
@@ -688,9 +688,9 @@ describe('bn254', () => {
           });
           const fp12 = Fp12.fromBigTwelve(t.pairing.map(BigInt));
           const p = bn254.pairing(g1, g2, true);
-          deepStrictEqual(p, fp12);
+          deepStrictEqual(p, fp12, name);
         }
-      });
+      // });
     }
   });
 
