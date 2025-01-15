@@ -36,11 +36,11 @@ Take a glance at [GitHub Discussions](https://github.com/paulmillr/noble-curves/
 
 ## Usage
 
-> npm install @noble/curves
+> `npm install @noble/curves`
 
-> deno add jsr:@noble/curves
+> `deno add jsr:@noble/curves`
 
-> deno doc jsr:@noble/curves  # command-line documentation
+> `deno doc jsr:@noble/curves`  # command-line documentation
 
 We support all major platforms and runtimes.
 For React Native, you may need a [polyfill for getRandomValues](https://github.com/LinusU/react-native-get-random-values).
