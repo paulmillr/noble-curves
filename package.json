@@ -20,7 +20,9 @@
     "lint": "prettier --check 'src/**/*.{js,ts}' 'test/*.js'",
     "format": "prettier --write 'src/**/*.{js,ts}' 'test/*.js'",
     "test": "node test/index.js",
-    "test:coverage": "c8 node test/index.js"
+    "test:bun": "bun test/index.js",
+    "test:deno": "deno --allow-env --allow-read test/index.js",
+    "test:coverage": "npm install --no-save c8@10.1.2 && npx c8 npm test"
   },
   "author": "Paul Miller (https://paulmillr.com)",
   "homepage": "https://paulmillr.com/noble/",
