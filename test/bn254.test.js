@@ -676,20 +676,20 @@ describe('bn254', () => {
       if (['ark_bls12-381', 'ark_bls12-377'].includes(name)) continue;
       const { Fp, Fp2, Fp12 } = bn254.fields;
       // should(`${name}`, () => {
-        for (const t of vectors) {
-          // TODO: projective stuff is somewhat broken on export?
-          const g1 = bn254.G1.ProjectivePoint.fromAffine({
-            x: Fp.create(BigInt(t.g1.x[0])),
-            y: Fp.create(BigInt(t.g1.y[0])),
-          });
-          const g2 = bn254.G2.ProjectivePoint.fromAffine({
-            x: Fp2.fromBigTuple(t.g2.x.map(BigInt)),
-            y: Fp2.fromBigTuple(t.g2.y.map(BigInt)),
-          });
-          const fp12 = Fp12.fromBigTwelve(t.pairing.map(BigInt));
-          const p = bn254.pairing(g1, g2, true);
-          deepStrictEqual(p, fp12, name);
-        }
+      for (const t of vectors) {
+        // TODO: projective stuff is somewhat broken on export?
+        const g1 = bn254.G1.ProjectivePoint.fromAffine({
+          x: Fp.create(BigInt(t.g1.x[0])),
+          y: Fp.create(BigInt(t.g1.y[0])),
+        });
+        const g2 = bn254.G2.ProjectivePoint.fromAffine({
+          x: Fp2.fromBigTuple(t.g2.x.map(BigInt)),
+          y: Fp2.fromBigTuple(t.g2.y.map(BigInt)),
+        });
+        const fp12 = Fp12.fromBigTwelve(t.pairing.map(BigInt));
+        const p = bn254.pairing(g1, g2, true);
+        deepStrictEqual(p, fp12, name);
+      }
       // });
     }
   });
