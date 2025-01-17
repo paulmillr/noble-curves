@@ -46,23 +46,21 @@ Ate loop size: 6x+2
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha256 } from '@noble/hashes/sha256';
-import { getHash } from './_shortw_utils.js';
-import { CurveFn, weierstrass } from './abstract/weierstrass.js';
 import { randomBytes } from '@noble/hashes/utils';
+import { getHash } from './_shortw_utils.js';
 import {
   bls,
-  CurveFn as BLSCurveFn,
-  PostPrecomputeFn,
-  PostPrecomputePointAddFn,
+  type CurveFn as BLSCurveFn,
+  type PostPrecomputeFn,
+  type PostPrecomputePointAddFn,
 } from './abstract/bls.js';
 import { Field } from './abstract/modular.js';
+import type { Fp, Fp12, Fp2, Fp6 } from './abstract/tower.js';
+import { psiFrobenius, tower12 } from './abstract/tower.js';
 import { bitGet, bitLen, notImplemented } from './abstract/utils.js';
-import { tower12, psiFrobenius } from './abstract/tower.js';
-// Types
-import type { Fp, Fp2, Fp6, Fp12 } from './abstract/tower.js';
+import { type CurveFn, weierstrass } from './abstract/weierstrass.js';
 // prettier-ignore
 const _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3);
-// prettier-ignore
 const _6n = BigInt(6);
 
 const BN_X = BigInt('4965661367192848881');

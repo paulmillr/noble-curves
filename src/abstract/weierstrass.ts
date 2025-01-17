@@ -26,17 +26,25 @@
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import {
-  AffinePoint,
-  BasicCurve,
-  Group,
-  GroupConstructor,
+  type AffinePoint,
+  type BasicCurve,
+  type Group,
+  type GroupConstructor,
+  pippenger,
   validateBasic,
   wNAF,
-  pippenger,
 } from './curve.js';
-import * as mod from './modular.js';
+import {
+  Field,
+  type IField,
+  getMinHashLength,
+  invert,
+  mapHashToField,
+  mod,
+  validateField,
+} from './modular.js';
 import * as ut from './utils.js';
-import { CHash, Hex, PrivKey, ensureBytes, memoized, abool } from './utils.js';
+import { type CHash, type Hex, type PrivKey, abool, ensureBytes, memoized } from './utils.js';
 
 export type { AffinePoint };
 type HmacFnSync = (key: Uint8Array, ...messages: Uint8Array[]) => Uint8Array;
@@ -279,7 +287,7 @@ const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3), _4n = 
 export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T> {
   const CURVE = validatePointOpts(opts);
   const { Fp } = CURVE; // All curves has same field / group length as for now, but they can differ
-  const Fn = mod.Field(CURVE.n, CURVE.nBitLength);
+  const Fn = Field(CURVE.n, CURVE.nBitLength);
 
   const toBytes =
     CURVE.toBytes ||
@@ -341,7 +349,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
         'invalid private key, expected hex or ' + nByteLength + ' bytes, got ' + typeof key
       );
     }
-    if (wrapPrivateKey) num = mod.mod(num, N); // disabled by default, enabled for BLS
+    if (wrapPrivateKey) num = mod(num, N); // disabled by default, enabled for BLS
     ut.aInRange('private key', num, _1n, N); // num in range [1..N-1]
     return num;
   }
@@ -815,10 +823,10 @@ export function weierstrass(curveDef: CurveType): CurveFn {
   const uncompressedLen = 2 * Fp.BYTES + 1; // e.g. 65 for 32
 
   function modN(a: bigint) {
-    return mod.mod(a, CURVE_ORDER);
+    return mod(a, CURVE_ORDER);
   }
   function invN(a: bigint) {
-    return mod.invert(a, CURVE_ORDER);
+    return invert(a, CURVE_ORDER);
   }
 
   const {
@@ -982,8 +990,8 @@ export function weierstrass(curveDef: CurveType): CurveFn {
      * (groupLen + ceil(groupLen / 2)) with modulo bias being negligible.
      */
     randomPrivateKey: (): Uint8Array => {
-      const length = mod.getMinHashLength(CURVE.n);
-      return mod.mapHashToField(CURVE.randomBytes(length), CURVE.n);
+      const length = getMinHashLength(CURVE.n);
+      return mapHashToField(CURVE.randomBytes(length), CURVE.n);
     },
 
     /**
@@ -1245,7 +1253,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
  * @returns
  */
 export function SWUFpSqrtRatio<T>(
-  Fp: mod.IField<T>,
+  Fp: IField<T>,
   Z: T
 ): (u: T, v: T) => { isValid: boolean; value: T } {
   // Generic implementation
@@ -1320,14 +1328,14 @@ export function SWUFpSqrtRatio<T>(
  * https://www.rfc-editor.org/rfc/rfc9380#section-6.6.2
  */
 export function mapToCurveSimpleSWU<T>(
-  Fp: mod.IField<T>,
+  Fp: IField<T>,
   opts: {
     A: T;
     B: T;
     Z: T;
   }
 ): (u: T) => { x: T; y: T } {
-  mod.validateField(Fp);
+  validateField(Fp);
   if (!Fp.isValid(opts.A) || !Fp.isValid(opts.B) || !Fp.isValid(opts.Z))
     throw new Error('mapToCurveSimpleSWU: invalid opts');
   const sqrtRatio = SWUFpSqrtRatio(Fp, opts.Z);

@@ -6,7 +6,7 @@
 import { sha256 } from '@noble/hashes/sha256';
 import { getHash } from './_shortw_utils.js';
 import { Field, mod } from './abstract/modular.js';
-import { CurveFn, weierstrass } from './abstract/weierstrass.js';
+import { type CurveFn, weierstrass } from './abstract/weierstrass.js';
 
 export const p: bigint = BigInt(
   '0x40000000000000000000000000000000224698fc094cf91b992d30ed00000001'

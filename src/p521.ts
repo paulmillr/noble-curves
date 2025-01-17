@@ -6,8 +6,8 @@
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha512 } from '@noble/hashes/sha512';
-import { createCurve, CurveFnWithCreate } from './_shortw_utils.js';
-import { createHasher, HTFMethod } from './abstract/hash-to-curve.js';
+import { createCurve, type CurveFnWithCreate } from './_shortw_utils.js';
+import { createHasher, type HTFMethod } from './abstract/hash-to-curve.js';
 import { Field } from './abstract/modular.js';
 import { mapToCurveSimpleSWU } from './abstract/weierstrass.js';
 

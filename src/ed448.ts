@@ -9,23 +9,23 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { shake256 } from '@noble/hashes/sha3';
 import { concatBytes, randomBytes, utf8ToBytes, wrapConstructor } from '@noble/hashes/utils';
-import { AffinePoint, Group } from './abstract/curve.js';
-import { CurveFn, ExtPointType, twistedEdwards } from './abstract/edwards.js';
+import type { AffinePoint, Group } from './abstract/curve.js';
+import { pippenger } from './abstract/curve.js';
+import { type CurveFn, type ExtPointType, twistedEdwards } from './abstract/edwards.js';
 import {
   createHasher,
   expand_message_xof,
-  htfBasicOpts,
-  HTFMethod,
+  type htfBasicOpts,
+  type HTFMethod,
 } from './abstract/hash-to-curve.js';
 import { Field, isNegativeLE, mod, pow2 } from './abstract/modular.js';
-import { CurveFn as XCurveFn, montgomery } from './abstract/montgomery.js';
-import { pippenger } from './abstract/curve.js';
+import { montgomery, type CurveFn as XCurveFn } from './abstract/montgomery.js';
 import {
   bytesToHex,
   bytesToNumberLE,
   ensureBytes,
   equalBytes,
-  Hex,
+  type Hex,
   numberToBytesLE,
 } from './abstract/utils.js';
 

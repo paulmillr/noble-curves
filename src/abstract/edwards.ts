@@ -5,17 +5,17 @@
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import {
-  AffinePoint,
-  BasicCurve,
-  Group,
-  GroupConstructor,
+  type AffinePoint,
+  type BasicCurve,
+  type Group,
+  type GroupConstructor,
+  pippenger,
   validateBasic,
   wNAF,
-  pippenger,
 } from './curve.js';
-import { mod, Field } from './modular.js';
+import { Field, mod } from './modular.js';
 import * as ut from './utils.js';
-import { ensureBytes, FHash, Hex, memoized, abool } from './utils.js';
+import { abool, ensureBytes, type FHash, type Hex, memoized } from './utils.js';
 
 // Be friendly to bad ECMAScript parsers by not using bigint literals
 // prettier-ignore

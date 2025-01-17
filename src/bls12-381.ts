@@ -61,7 +61,7 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha256 } from '@noble/hashes/sha256';
 import { randomBytes } from '@noble/hashes/utils';
-import { bls, CurveFn } from './abstract/bls.js';
+import { bls, type CurveFn } from './abstract/bls.js';
 import * as mod from './abstract/modular.js';
 import {
   bitGet,
@@ -70,14 +70,18 @@ import {
   bytesToNumberBE,
   concatBytes as concatB,
   ensureBytes,
-  Hex,
+  type Hex,
   numberToBytesBE,
 } from './abstract/utils.js';
 // Types
 import { isogenyMap } from './abstract/hash-to-curve.js';
-import { AffinePoint, mapToCurveSimpleSWU, ProjPointType } from './abstract/weierstrass.js';
-import { tower12, psiFrobenius } from './abstract/tower.js';
-import type { Fp, Fp2, Fp6, Fp12 } from './abstract/tower.js';
+import type { Fp, Fp12, Fp2, Fp6 } from './abstract/tower.js';
+import { psiFrobenius, tower12 } from './abstract/tower.js';
+import {
+  type AffinePoint,
+  mapToCurveSimpleSWU,
+  type ProjPointType,
+} from './abstract/weierstrass.js';
 
 // Be friendly to bad ECMAScript parsers by not using bigint literals
 // prettier-ignore

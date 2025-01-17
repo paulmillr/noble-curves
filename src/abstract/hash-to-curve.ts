@@ -5,7 +5,7 @@
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import type { AffinePoint, Group, GroupConstructor } from './curve.js';
-import { IField, mod } from './modular.js';
+import { type IField, mod } from './modular.js';
 import type { CHash } from './utils.js';
 import { abytes, bytesToNumberBE, concatBytes, utf8ToBytes, validateObject } from './utils.js';
 

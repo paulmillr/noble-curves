@@ -8,23 +8,22 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha512 } from '@noble/hashes/sha512';
 import { concatBytes, randomBytes, utf8ToBytes } from '@noble/hashes/utils';
-import { AffinePoint, Group } from './abstract/curve.js';
-import { CurveFn, ExtPointType, twistedEdwards } from './abstract/edwards.js';
+import { type AffinePoint, type Group, pippenger } from './abstract/curve.js';
+import { type CurveFn, type ExtPointType, twistedEdwards } from './abstract/edwards.js';
 import {
   createHasher,
   expand_message_xmd,
-  htfBasicOpts,
-  HTFMethod,
+  type htfBasicOpts,
+  type HTFMethod,
 } from './abstract/hash-to-curve.js';
 import { Field, FpSqrtEven, isNegativeLE, mod, pow2 } from './abstract/modular.js';
-import { CurveFn as XCurveFn, montgomery } from './abstract/montgomery.js';
-import { pippenger } from './abstract/curve.js';
+import { montgomery, type CurveFn as XCurveFn } from './abstract/montgomery.js';
 import {
   bytesToHex,
   bytesToNumberLE,
   ensureBytes,
   equalBytes,
-  Hex,
+  type Hex,
   numberToBytesLE,
 } from './abstract/utils.js';
 
