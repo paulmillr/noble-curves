@@ -38,7 +38,7 @@
     "@paulmillr/jsbt": "0.3.0",
     "fast-check": "3.0.0",
     "micro-bmark": "0.3.1",
-    "micro-should": "0.5.0",
+    "micro-should": "0.5.1",
     "prettier": "3.3.2",
     "typescript": "5.5.2"
   },
