@@ -4,6 +4,6 @@ node_modules
 *.d.ts
 *.d.ts.map
 *.js.map
-/build
+/test/build
 /abstract
 /esm/abstract

@@ -2,56 +2,14 @@ name: Publish release
 on:
   release:
     types: [created]
-  workflow_dispatch:
 jobs:
-  publish-jsr:
-    name: Publish to JSR.io
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - uses: actions/checkout@1e31de5234b9f8995739874a8ce0492dc87873e2 # v4
-      - run: npm install -g jsr
-      - run: jsr publish
-  publish-npm:
-    name: Publish to NPM
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - uses: actions/checkout@1e31de5234b9f8995739874a8ce0492dc87873e2 # v4
-      - uses: actions/setup-node@8f152de45cc393bb48ce5d89d36b731f54556e65 # v4
-        with:
-          node-version: 22
-          registry-url: 'https://registry.npmjs.org'
-          cache: npm
-      - run: npm ci
-      - run: npm run build
-      - run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
-  standalone:
-    name: Upload files to GitHub Releases
-    runs-on: ubuntu-latest
+  test-js:
+    name: 'jsbt v0.3.0' # Should match commit below
+    uses: paulmillr/jsbt/.github/workflows/test-js.yml@973650a225c0344aa5f993a6cd63835a262077e9
+    with:
+      build-path: test/build
+    secrets:
+      NPM_PUBLISH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
     permissions:
       contents: write
       id-token: write
-    steps:
-      - uses: actions/checkout@1e31de5234b9f8995739874a8ce0492dc87873e2 # v4
-      - uses: actions/setup-node@8f152de45cc393bb48ce5d89d36b731f54556e65 # v4
-        with:
-          node-version: 22
-          registry-url: 'https://registry.npmjs.org'
-          cache: npm
-      - run: npm ci
-      - run: npm run build
-      - run: |
-          cd build
-          npm ci
-          npm run build:release
-          cd ..
-      - run: gh release upload ${{ github.event.release.tag_name }} build/`npx jsbt outfile`
-        env:
-          GH_TOKEN: ${{ github.token }}
