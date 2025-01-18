@@ -1,10 +1,8 @@
-import { run, mark, utils } from 'micro-bmark';
-import { secp256k1, schnorr } from '@noble/curves/secp256k1';
+import { schnorr, secp256k1 } from '@noble/curves/secp256k1';
+import mark from 'micro-bmark';
 import { generateData } from './_shared.js';
 
-run(async () => {
-  const RAM = false;
-  if (RAM) utils.logMem();
+(async () => {
   console.log(`\x1b[36msecp256k1\x1b[0m`);
   await mark('init', 1, () => secp256k1.utils.precompute(8));
   const d = generateData(secp256k1);
@@ -18,5 +16,4 @@ run(async () => {
   const spub = schnorr.getPublicKey(d.priv);
   await mark('schnorr.sign', 1000, () => schnorr.sign(d.msg, d.priv));
   await mark('schnorr.verify', 1000, () => schnorr.verify(s, d.msg, spub));
-  if (RAM) utils.logMem();
-});
+})();

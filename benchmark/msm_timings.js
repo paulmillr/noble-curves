@@ -1,7 +1,9 @@
-import { run, mark, compare, utils } from 'micro-bmark';
 import { bls12_381 } from '@noble/curves/bls12-381';
 
-run(async () => {
+// todo
+function compare() {}
+
+(async () => {
   const g1 = bls12_381.G1.ProjectivePoint;
   const bits = bls12_381.G1.CURVE.nBitLength - 1;
   const ones = BigInt(`0b${'1'.repeat(bits)}`);
@@ -48,6 +50,4 @@ run(async () => {
     'onezero*Inf': () => g1.ZERO.multiply(onezero),
     'one8zero*Inf': () => g1.ZERO.multiply(one8zero),
   });
-
-  utils.logMem();
-});
+})();

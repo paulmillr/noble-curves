@@ -1,11 +1,9 @@
-import { run, mark, utils } from 'micro-bmark';
-import { sha512 } from '@noble/hashes/sha512';
 import * as mod from '@noble/curves/abstract/modular';
 import { ed25519, RistrettoPoint } from '@noble/curves/ed25519';
+import { sha512 } from '@noble/hashes/sha512';
+import mark from 'micro-bmark';
 
-run(async () => {
-  const RAM = false;
-  if (RAM) utils.logMem();
+(async () => {
   console.log(`\x1b[36mristretto255\x1b[0m`);
   const priv = mod.hashToPrivateScalar(sha512(ed25519.utils.randomPrivateKey()), ed25519.CURVE.n);
   const pub = RistrettoPoint.BASE.multiply(priv);
@@ -14,5 +12,4 @@ run(async () => {
   await mark('multiply', 10000, () => RistrettoPoint.BASE.multiply(priv));
   await mark('encode', 10000, () => RistrettoPoint.BASE.toRawBytes());
   await mark('decode', 10000, () => RistrettoPoint.fromHex(encoded));
-  if (RAM) utils.logMem();
-});
+})();
