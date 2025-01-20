@@ -40,7 +40,7 @@ Take a glance at [GitHub Discussions](https://github.com/paulmillr/noble-curves/
 
 > `deno add jsr:@noble/curves`
 
-> `deno doc jsr:@noble/curves`  # command-line documentation
+> `deno doc jsr:@noble/curves` # command-line documentation
 
 We support all major platforms and runtimes.
 For React Native, you may need a [polyfill for getRandomValues](https://github.com/LinusU/react-native-get-random-values).
@@ -48,8 +48,7 @@ A standalone file [noble-curves.js](https://github.com/paulmillr/noble-curves/re
 
 ```js
 // import * from '@noble/curves'; // Error: use sub-imports, to ensure small app size
-import { secp256k1 } from '@noble/curves/secp256k1'; // ESM and Common.js
-// import { secp256k1 } from 'npm:@noble/curves@1.6.0/secp256k1'; // Deno
+import { secp256k1 } from '@noble/curves/secp256k1';
 ```
 
 - [Implementations](#implementations)
@@ -275,7 +274,10 @@ const signatureEth = bls.sign(message, privateKey, htfEthereum);
 const isValidEth = bls.verify(signature, message, publicKey, htfEthereum);
 
 // Aggregation
-const aggregatedKey = bls.aggregatePublicKeys([bls.utils.randomPrivateKey(), bls.utils.randomPrivateKey()])
+const aggregatedKey = bls.aggregatePublicKeys([
+  bls.utils.randomPrivateKey(),
+  bls.utils.randomPrivateKey(),
+]);
 // const aggregatedSig = bls.aggregateSignatures(sigs)
 
 // Pairings, with and without final exponentiation
@@ -296,11 +298,7 @@ For example usage, check out [the implementation of BLS EVM precompiles](https:/
 ```ts
 import { bn254 } from '@noble/curves/bn254';
 
-console.log(
-  bn254.G1,
-  bn254.G2,
-  bn254.pairing
-)
+console.log(bn254.G1, bn254.G2, bn254.pairing);
 ```
 
 The API mirrors [BLS](#bls12-381). The curve was previously called alt_bn128.
@@ -340,7 +338,6 @@ console.log(secp256k1.CURVE.a, secp256k1.CURVE.b); // equation params
 console.log(secp256k1.CURVE.Gx, secp256k1.CURVE.Gy); // base point coordinates
 ```
 
-
 #### All available imports
 
 ```typescript
@@ -376,7 +373,8 @@ import { sha256 } from '@noble/hashes/sha256'; // 3rd-party sha256() of type uti
 import { hmac } from '@noble/hashes/hmac'; // 3rd-party hmac() that will accept sha256()
 import { concatBytes, randomBytes } from '@noble/hashes/utils'; // 3rd-party utilities
 
-const hmacSha256 = (key: Uint8Array, ...msgs: Uint8Array[]) => hmac(sha256, key, concatBytes(...msgs));
+const hmacSha256 = (key: Uint8Array, ...msgs: Uint8Array[]) =>
+  hmac(sha256, key, concatBytes(...msgs));
 
 // secq256k1: cycle of secp256k1 with Fp/N flipped.
 // https://personaelabs.org/posts/spartan-ecdsa
@@ -411,7 +409,6 @@ const secp192r1 = weierstrass({
   hmac: hmacSha256,
   randomBytes,
 });
-
 
 // Replace weierstrass() with weierstrassPoints() if you don't need ECDSA, hash, hmac, randomBytes
 ```
@@ -1092,10 +1089,10 @@ Upgrading from [@noble/bls12-381](https://github.com/paulmillr/noble-bls12-381):
 
 ## Contributing & testing
 
-* `npm install && npm run build && npm test` will build the code and run tests.
-* `npm run lint` / `npm run format` will run linter / fix linter issues.
-* `npm run bench` will run benchmarks, which may need their deps first (`npm run bench:install`)
-* `cd build && npm install && npm run build:release` will build single file
+- `npm install && npm run build && npm test` will build the code and run tests.
+- `npm run lint` / `npm run format` will run linter / fix linter issues.
+- `npm run bench` will run benchmarks, which may need their deps first (`npm run bench:install`)
+- `cd build && npm install && npm run build:release` will build single file
 
 Check out [github.com/paulmillr/guidelines](https://github.com/paulmillr/guidelines)
 for general coding practices and rules.
