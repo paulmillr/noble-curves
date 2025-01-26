@@ -61,9 +61,9 @@ import { bytesToHex, hexToBytes, concatBytes, utf8ToBytes } from '@noble/curves/
 ```
 
 - [ECDSA signatures over secp256k1 and others](#ecdsa-signatures-over-secp256k1-and-others)
-- [ECDSA public key recovery & extra entropy](#ecdsa-public-key-recovery--extra-entropy)
+- [Hedged ECDSA with noise](#hedged-ecdsa-with-noise)
 - [ECDH: Elliptic Curve Diffie-Hellman](#ecdh-elliptic-curve-diffie-hellman)
-- [Schnorr signatures over secp256k1, BIP340](#schnorr-signatures-over-secp256k1-bip340)
+- [secp256k1 Schnorr signatures from BIP340](#secp256k1-schnorr-signatures-from-bip340)
 - [ed25519, X25519, ristretto255](#ed25519-x25519-ristretto255)
 - [ed448, X448, decaf448](#ed448-x448-decaf448)
 - [bls12-381](#bls12-381)
@@ -96,22 +96,26 @@ const isValid = secp256k1.verify(sig, msg, pub) === true;
 // hex strings are also supported besides Uint8Array-s:
 const privHex = '46c930bc7bb4db7f55da20798697421b98c4175a52c630294d75a84b9c126236';
 const pub2 = secp256k1.getPublicKey(privHex);
+
+// public key recovery
+// let sig = secp256k1.Signature.fromCompact(sigHex); // or .fromDER(sigDERHex)
+// sig = sig.addRecoveryBit(bit); // bit is not serialized into compact / der format
+sig.recoverPublicKey(msg).toRawBytes(); // === pub; // public key recovery
 ```
 
 The same code would work for NIST P256 (secp256r1), P384 (secp384r1) & P521 (secp521r1).
 
-#### ECDSA public key recovery & extra entropy
+#### Hedged ECDSA with noise
 
 ```ts
-// let sig = secp256k1.Signature.fromCompact(sigHex); // or .fromDER(sigDERHex)
-// sig = sig.addRecoveryBit(bit); // bit is not serialized into compact / der format
-sig.recoverPublicKey(msg).toRawBytes(); // === pub; // public key recovery
-
-// extraEntropy https://moderncrypto.org/mail-archive/curves/2017/000925.html
-const sigImprovedSecurity = secp256k1.sign(msg, priv, { extraEntropy: true });
+const noisySignature = secp256k1.sign(msg, priv, { extraEntropy: true });
 ```
 
-#### ECDH: Elliptic Curve Diffie-Hellman
+Hedged ECDSA is add-on, providing improved protection against fault attacks.
+It adds noise to signatures. The technique is used by default in BIP340; we also implement them
+optionally for ECDSA. Check out [draft](https://datatracker.ietf.org/doc/draft-irtf-cfrg-det-sigs-with-noise/) and [post](https://moderncrypto.org/mail-archive/curves/2017/000925.html)
+
+#### ECDH: Diffie-Hellman shared secrets
 
 ```ts
 // 1. The output includes parity byte. Strip it using shared.slice(1)
@@ -120,7 +124,7 @@ const someonesPub = secp256k1.getPublicKey(secp256k1.utils.randomPrivateKey());
 const shared = secp256k1.getSharedSecret(priv, someonesPub);
 ```
 
-#### Schnorr signatures over secp256k1 (BIP340)
+#### secp256k1 Schnorr signatures from BIP340
 
 ```ts
 import { schnorr } from '@noble/curves/secp256k1';
