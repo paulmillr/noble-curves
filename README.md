@@ -46,9 +46,18 @@ We support all major platforms and runtimes.
 For React Native, you may need a [polyfill for getRandomValues](https://github.com/LinusU/react-native-get-random-values).
 A standalone file [noble-curves.js](https://github.com/paulmillr/noble-curves/releases) is also available.
 
-```js
+```ts
 // import * from '@noble/curves'; // Error: use sub-imports, to ensure small app size
-import { secp256k1 } from '@noble/curves/secp256k1';
+import { secp256k1, schnorr } from '@noble/curves/secp256k1';
+import { ed25519, ed25519ph, ed25519ctx, x25519, RistrettoPoint } from '@noble/curves/ed25519';
+import { ed448, ed448ph, ed448ctx, x448 } from '@noble/curves/ed448';
+import { p256 } from '@noble/curves/p256';
+import { p384 } from '@noble/curves/p384';
+import { p521 } from '@noble/curves/p521';
+import { bls12_381 } from '@noble/curves/bls12-381';
+import { bn254 } from '@noble/curves/bn254'; // also known as alt_bn128
+import { jubjub } from '@noble/curves/jubjub';
+import { bytesToHex, hexToBytes, concatBytes, utf8ToBytes } from '@noble/curves/abstract/utils';
 ```
 
 - [ECDSA signatures over secp256k1 and others](#ecdsa-signatures-over-secp256k1-and-others)
@@ -59,9 +68,7 @@ import { secp256k1 } from '@noble/curves/secp256k1';
 - [ed448, X448, decaf448](#ed448-x448-decaf448)
 - [bls12-381](#bls12-381)
 - [bn254 aka alt_bn128](#bn254-aka-alt_bn128)
-- [Multi-scalar-multiplication](#multi-scalar-multiplication)
-- [Accessing a curve's variables](#accessing-a-curves-variables)
-- [All available imports](#all-available-imports)
+- [Low-level methods](#low-level-methods)
 - [Abstract API](#abstract-api)
   - [weierstrass](#weierstrass-short-weierstrass-curve), [edwards](#edwards-twisted-edwards-curve), [montgomery](#montgomery-montgomery-curve), [bls](#bls-barreto-lynn-scott-curves)
   - [hash-to-curve](#hash-to-curve-hashing-strings-to-curve-points), [poseidon](#poseidon-poseidon-hash)
@@ -73,9 +80,6 @@ import { secp256k1 } from '@noble/curves/secp256k1';
 - [License](#license)
 
 ### Implementations
-
-Implementations use [noble-hashes](https://github.com/paulmillr/noble-hashes).
-If you want to use a different hashing library, [abstract API](#abstract-api) doesn't depend on them.
 
 #### ECDSA signatures over secp256k1 and others
 
@@ -307,47 +311,32 @@ different implementations of bn254 do it differently - there is no standard. Poi
 
 For example usage, check out [the implementation of bn254 EVM precompiles](https://github.com/paulmillr/noble-curves/blob/3ed792f8ad9932765b84d1064afea8663a255457/test/bn254.test.js#L697).
 
-#### Multi-scalar-multiplication
+#### Low-level methods
 
 ```ts
 import { secp256k1 } from '@noble/curves/secp256k1';
-const p = secp256k1.ProjectivePoint;
-const points = [p.BASE, p.BASE.multiply(2n), p.BASE.multiply(4n), p.BASE.multiply(8n)];
-p.msm(points, [3n, 5n, 7n, 11n]).equals(p.BASE.multiply(129n)); // 129*G
-```
 
-Pippenger algorithm is used underneath.
-Multi-scalar-multiplication (MSM) is basically `(Pa + Qb + Rc + ...)`.
-It's 10-30x faster vs naive addition for large amount of points.
-
-#### Accessing a curve's variables
-
-```ts
-import { secp256k1 } from '@noble/curves/secp256k1';
+// Curve's variables
 // Every curve has `CURVE` object that contains its parameters, field, and others
 console.log(secp256k1.CURVE.p); // field modulus
 console.log(secp256k1.CURVE.n); // curve order
 console.log(secp256k1.CURVE.a, secp256k1.CURVE.b); // equation params
 console.log(secp256k1.CURVE.Gx, secp256k1.CURVE.Gy); // base point coordinates
+
+// MSM
+const p = secp256k1.ProjectivePoint;
+const points = [p.BASE, p.BASE.multiply(2n), p.BASE.multiply(4n), p.BASE.multiply(8n)];
+p.msm(points, [3n, 5n, 7n, 11n]).equals(p.BASE.multiply(129n)); // 129*G
 ```
 
-#### All available imports
-
-```typescript
-import { secp256k1, schnorr } from '@noble/curves/secp256k1';
-import { ed25519, ed25519ph, ed25519ctx, x25519, RistrettoPoint } from '@noble/curves/ed25519';
-import { ed448, ed448ph, ed448ctx, x448 } from '@noble/curves/ed448';
-import { p256 } from '@noble/curves/p256';
-import { p384 } from '@noble/curves/p384';
-import { p521 } from '@noble/curves/p521';
-import { pallas, vesta } from '@noble/curves/pasta';
-import { bls12_381 } from '@noble/curves/bls12-381';
-import { bn254 } from '@noble/curves/bn254'; // also known as alt_bn128
-import { jubjub } from '@noble/curves/jubjub';
-import { bytesToHex, hexToBytes, concatBytes, utf8ToBytes } from '@noble/curves/abstract/utils';
-```
+Multi-scalar-multiplication (MSM) is basically `(Pa + Qb + Rc + ...)`.
+It's 10-30x faster vs naive addition for large amount of points.
+Pippenger algorithm is used underneath.
 
 ## Abstract API
+
+Implementations use [noble-hashes](https://github.com/paulmillr/noble-hashes).
+If you want to use a different hashing library, abstract API doesn't depend on them.
 
 Abstract API allows to define custom curves. All arithmetics is done with JS
 bigints over finite fields, which is defined from `modular` sub-module. For
