@@ -64,15 +64,9 @@ import { secp256k1 } from '@noble/curves/secp256k1';
   - [Accessing a curve's variables](#accessing-a-curves-variables)
   - [All available imports](#all-available-imports)
 - [Abstract API](#abstract-api)
-  - [weierstrass: Short Weierstrass curve](#weierstrass-short-weierstrass-curve)
-  - [edwards: Twisted Edwards curve](#edwards-twisted-edwards-curve)
-  - [montgomery: Montgomery curve](#montgomery-montgomery-curve)
-  - [bls: Barreto-Lynn-Scott curves](#bls-barreto-lynn-scott-curves)
-  - [hash-to-curve: Hashing strings to curve points](#hash-to-curve-hashing-strings-to-curve-points)
-  - [poseidon: Poseidon hash](#poseidon-poseidon-hash)
-  - [modular: Modular arithmetics utilities](#modular-modular-arithmetics-utilities)
-    - [Creating private keys from hashes](#creating-private-keys-from-hashes)
-  - [utils: Useful utilities](#utils-useful-utilities)
+  - [weierstrass](#weierstrass-short-weierstrass-curve), [edwards](#edwards-twisted-edwards-curve), [montgomery](#montgomery-montgomery-curve), [bls](#bls-barreto-lynn-scott-curves)
+  - [hash-to-curve](#hash-to-curve-hashing-strings-to-curve-points), [poseidon](#poseidon-poseidon-hash)
+  - [modular](#modular-modular-arithmetics-utilities), [utils](#utils-useful-utilities)
 - [Security](#security)
 - [Speed](#speed)
 - [Upgrading](#upgrading)
@@ -886,7 +880,7 @@ The library has been independently audited:
   - The audit has been funded by [Ryan Shea](https://www.shea.io)
 
 It is tested against property-based, cross-library and Wycheproof vectors,
-and has fuzzing by [Guido Vranken's cryptofuzz](https://github.com/guidovranken/cryptofuzz).
+and is being fuzzed in [the separate repo](https://github.com/paulmillr/fuzzing).
 
 If you see anything unusual: investigate and report.
 
