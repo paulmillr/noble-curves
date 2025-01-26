@@ -892,27 +892,29 @@ If you see anything unusual: investigate and report.
 
 ### Constant-timeness
 
-_JIT-compiler_ and _Garbage Collector_ make "constant time" extremely hard to
-achieve [timing attack](https://en.wikipedia.org/wiki/Timing_attack) resistance
+We're targetting algorithmic constant time. _JIT-compiler_ and _Garbage Collector_ make "constant time"
+extremely hard to achieve [timing attack](https://en.wikipedia.org/wiki/Timing_attack) resistance
 in a scripting language. Which means _any other JS library can't have
 constant-timeness_. Even statically typed Rust, a language without GC,
 [makes it harder to achieve constant-time](https://www.chosenplaintext.ca/open-source/rust-timing-shield/security)
 for some cases. If your goal is absolute security, don't use any JS lib — including bindings to native ones.
-Use low-level libraries & languages. Nonetheless we're targetting algorithmic constant time.
+Use low-level libraries & languages.
 
 ### Supply chain security
 
-- **Commits** are signed with PGP keys, to prevent forgery. Make sure to verify commit signatures.
+- **Commits** are signed with PGP keys, to prevent forgery. Make sure to verify commit signatures
 - **Releases** are transparent and built on GitHub CI. Make sure to verify [provenance](https://docs.npmjs.com/generating-provenance-statements) logs
 - **Rare releasing** is followed to ensure less re-audit need for end-users
-- **Dependencies** are minimized and locked-down:
-  - If your app has 500 dependencies, any dep could get hacked and you'll be downloading
-    malware with every install. We make sure to use as few dependencies as possible
-  - We prevent automatic dependency updates by locking-down version ranges. Every update is checked with `npm-diff`
-  - One dependency [noble-hashes](https://github.com/paulmillr/noble-hashes) is used, by the same author, to provide hashing functionality
-- **Dev Dependencies** are only used if you want to contribute to the repo. They are disabled for end-users:
-  - scure-base, scure-bip32, scure-bip39, micro-bmark and micro-should are developed by the same author and follow identical security practices
-  - prettier (linter), fast-check (property-based testing) and typescript are used for code quality, vector generation and ts compilation. The packages are big, which makes it hard to audit their source code thoroughly and fully
+- **Dependencies** are minimized and locked-down: any dependency could get hacked and users will be downloading malware with every install.
+  - We make sure to use as few dependencies as possible
+  - Automatic dep updates are prevented by locking-down version ranges; diffs are checked with `npm-diff`
+- **Dev Dependencies** are disabled for end-users; they are only used to develop / build the source code
+
+For this package, there is 1 dependency; and a few dev dependencies:
+
+- [noble-hashes](https://github.com/paulmillr/noble-hashes) provides cryptographic hashing functionality
+- micro-bmark, micro-should and jsbt are used for benchmarking / testing / build tooling and developed by the same author
+- prettier, fast-check and typescript are used for code quality / test generation / ts compilation. It's hard to audit their source code thoroughly and fully because of their size
 
 ### Randomness
 
@@ -1092,7 +1094,7 @@ Upgrading from [@noble/bls12-381](https://github.com/paulmillr/noble-bls12-381):
 - `npm install && npm run build && npm test` will build the code and run tests.
 - `npm run lint` / `npm run format` will run linter / fix linter issues.
 - `npm run bench` will run benchmarks, which may need their deps first (`npm run bench:install`)
-- `cd build && npm install && npm run build:release` will build single file
+- `npm run build:release` will build single file
 
 Check out [github.com/paulmillr/guidelines](https://github.com/paulmillr/guidelines)
 for general coding practices and rules.
