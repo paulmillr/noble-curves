@@ -146,6 +146,9 @@ const msg = new TextEncoder().encode('hello');
 const sig = ed25519.sign(msg, priv);
 ed25519.verify(sig, msg, pub); // Default mode: follows ZIP215
 ed25519.verify(sig, msg, pub, { zip215: false }); // RFC8032 / FIPS 186-5
+
+// Variants from RFC8032: with context, prehashed
+import { ed25519ctx, ed25519ph } from '@noble/curves/ed25519';
 ```
 
 Default `verify` behavior follows [ZIP215](https://zips.z.cash/zip-0215) and
@@ -158,9 +161,6 @@ and additionally provides [non-repudiation with SBS](#edwards-twisted-edwards-cu
 X25519 follows [RFC7748](https://www.rfc-editor.org/rfc/rfc7748).
 
 ```ts
-// Variants from RFC8032: with context, prehashed
-import { ed25519ctx, ed25519ph } from '@noble/curves/ed25519';
-
 // ECDH using curve25519 aka x25519
 import { x25519 } from '@noble/curves/ed25519';
 const priv = 'a546e36bf0527c9d3b16154b82465edd62144c0ac1fc5a18506a2244ba449ac4';
@@ -248,8 +248,6 @@ DecafPoint.hashToCurve(shake256(msg, { dkLen: 112 }));
 // full hash-to-curve including domain separation tag
 hashToDecaf448(msg, { DST: 'decaf448_XOF:SHAKE256_D448MAP_RO_' });
 ```
-
-Same RFC7748 / RFC8032 / IRTF draft are followed.
 
 #### bls12-381
 
