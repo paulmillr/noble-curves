@@ -118,10 +118,11 @@ optionally for ECDSA. Check out [draft](https://datatracker.ietf.org/doc/draft-i
 #### ECDH: Diffie-Hellman shared secrets
 
 ```ts
-// 1. The output includes parity byte. Strip it using shared.slice(1)
-// 2. The output is not hashed. More secure way is sha256(shared) or hkdf(shared)
 const someonesPub = secp256k1.getPublicKey(secp256k1.utils.randomPrivateKey());
 const shared = secp256k1.getSharedSecret(priv, someonesPub);
+// NOTE:
+// - `shared` includes parity byte: strip it using shared.slice(1)
+// - `shared` is not hashed: more secure way is sha256(shared) or hkdf(shared)
 ```
 
 #### secp256k1 Schnorr signatures from BIP340
