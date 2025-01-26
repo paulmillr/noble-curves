@@ -62,7 +62,7 @@ import { bytesToHex, hexToBytes, concatBytes, utf8ToBytes } from '@noble/curves/
 
 - [ECDSA signatures over secp256k1 and others](#ecdsa-signatures-over-secp256k1-and-others)
 - [Hedged ECDSA with noise](#hedged-ecdsa-with-noise)
-- [ECDH: Elliptic Curve Diffie-Hellman](#ecdh-elliptic-curve-diffie-hellman)
+- [ECDH: Diffie-Hellman shared secrets](#ecdh-diffie-hellman-shared-secrets)
 - [secp256k1 Schnorr signatures from BIP340](#secp256k1-schnorr-signatures-from-bip340)
 - [ed25519, X25519, ristretto255](#ed25519-x25519-ristretto255)
 - [ed448, X448, decaf448](#ed448-x448-decaf448)
