@@ -49,7 +49,7 @@ A standalone file [noble-curves.js](https://github.com/paulmillr/noble-curves/re
 ```ts
 // import * from '@noble/curves'; // Error: use sub-imports, to ensure small app size
 import { secp256k1, schnorr } from '@noble/curves/secp256k1';
-import { ed25519, ed25519ph, ed25519ctx, x25519, RistrettoPoint } from '@noble/curves/ed25519';
+import { ed25519, ed25519ph, ed25519ctx, x25519 } from '@noble/curves/ed25519';
 import { ed448, ed448ph, ed448ctx, x448 } from '@noble/curves/ed448';
 import { p256 } from '@noble/curves/p256';
 import { p384 } from '@noble/curves/p384';
