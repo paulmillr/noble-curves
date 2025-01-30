@@ -64,8 +64,8 @@ import { bytesToHex, hexToBytes, concatBytes, utf8ToBytes } from '@noble/curves/
 - [Hedged ECDSA with noise](#hedged-ecdsa-with-noise)
 - [ECDH: Diffie-Hellman shared secrets](#ecdh-diffie-hellman-shared-secrets)
 - [secp256k1 Schnorr signatures from BIP340](#secp256k1-schnorr-signatures-from-bip340)
-- [ed25519, X25519, ristretto255](#ed25519-x25519-ristretto255)
-- [ed448, X448, decaf448](#ed448-x448-decaf448)
+- [ed25519](#ed25519) / [X25519](#x25519) / [ristretto255](#ristretto255)
+- [ed448](#ed448) / [X448](#x448) / [decaf448](#decaf448)
 - [bls12-381](#bls12-381)
 - [bn254 aka alt_bn128](#bn254-aka-alt_bn128)
 - [Low-level methods](#low-level-methods)
@@ -136,7 +136,7 @@ const sig = schnorr.sign(msg, priv);
 const isValid = schnorr.verify(sig, msg, pub);
 ```
 
-#### ed25519, X25519, ristretto255
+#### ed25519
 
 ```ts
 import { ed25519 } from '@noble/curves/ed25519';
@@ -153,14 +153,14 @@ import { ed25519ctx, ed25519ph } from '@noble/curves/ed25519';
 
 Default `verify` behavior follows ZIP215 and
 can be used in consensus-critical applications.
-It has SUF-CMA (strong unforgeability under chosen message attacks).
 If you need SBS (Strongly Binding Signatures) and FIPS 186-5 compliance,
 use `zip215: false`. Check out [Edwards Signatures section for more info](#edwards-twisted-edwards-curve).
+Both options have SUF-CMA (strong unforgeability under chosen message attacks).
 
-X25519 follows [RFC7748](https://www.rfc-editor.org/rfc/rfc7748).
+#### X25519
 
 ```ts
-// ECDH using curve25519 aka x25519
+// ECDH using curve25519 aka x25519 from [RFC7748](https://www.rfc-editor.org/rfc/rfc7748)
 import { x25519 } from '@noble/curves/ed25519';
 const priv = 'a546e36bf0527c9d3b16154b82465edd62144c0ac1fc5a18506a2244ba449ac4';
 const pub = 'e6db6867583030db3594c1a424b15f7c726624ec26b3353b10a903a6d0ab1c4c';
@@ -174,10 +174,11 @@ edwardsToMontgomeryPub(ed25519.getPublicKey(ed25519.utils.randomPrivateKey()));
 edwardsToMontgomeryPriv(ed25519.utils.randomPrivateKey());
 ```
 
-ristretto255 follows [irtf draft](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-ristretto255-decaf448).
+#### ristretto255
 
 ```ts
-// hash-to-curve, ristretto255
+// hash-to-curve, ristretto255 from
+// [irtf draft](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-ristretto255-decaf448)
 import { utf8ToBytes } from '@noble/hashes/utils';
 import { sha512 } from '@noble/hashes/sha512';
 import {
@@ -201,7 +202,7 @@ RistrettoPoint.hashToCurve(sha512(msg));
 hashToRistretto255(msg, { DST: 'ristretto255_XMD:SHA-512_R255MAP_RO_' });
 ```
 
-#### ed448, X448, decaf448
+#### ed448
 
 ```ts
 import { ed448 } from '@noble/curves/ed448';
@@ -215,9 +216,10 @@ ed448.verify(sig, msg, pub);
 import { ed448ph } from '@noble/curves/ed448';
 ```
 
-ECDH using Curve448 aka X448, follows [RFC7748](https://www.rfc-editor.org/rfc/rfc7748).
+#### X448
 
 ```ts
+// ECDH using Curve448 aka X448, follows [RFC7748](https://www.rfc-editor.org/rfc/rfc7748).
 import { x448 } from '@noble/curves/ed448';
 x448.getSharedSecret(priv, pub) === x448.scalarMult(priv, pub); // aliases
 x448.getPublicKey(priv) === x448.scalarMultBase(priv);
@@ -227,9 +229,11 @@ import { edwardsToMontgomeryPub } from '@noble/curves/ed448';
 edwardsToMontgomeryPub(ed448.getPublicKey(ed448.utils.randomPrivateKey()));
 ```
 
-decaf448 follows [irtf draft](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-ristretto255-decaf448).
+#### decaf448
 
 ```ts
+// decaf448 follows
+// [irtf draft](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-ristretto255-decaf448)
 import { utf8ToBytes } from '@noble/hashes/utils';
 import { shake256 } from '@noble/hashes/sha3';
 import { hashToCurve, encodeToCurve, DecafPoint, hashToDecaf448 } from '@noble/curves/ed448';
