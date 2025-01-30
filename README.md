@@ -160,7 +160,7 @@ Both options have SUF-CMA (strong unforgeability under chosen message attacks).
 #### X25519
 
 ```ts
-// ECDH using curve25519 aka x25519 from [RFC7748](https://www.rfc-editor.org/rfc/rfc7748)
+// X25519 aka ECDH on Curve25519 from [RFC7748](https://www.rfc-editor.org/rfc/rfc7748)
 import { x25519 } from '@noble/curves/ed25519';
 const priv = 'a546e36bf0527c9d3b16154b82465edd62144c0ac1fc5a18506a2244ba449ac4';
 const pub = 'e6db6867583030db3594c1a424b15f7c726624ec26b3353b10a903a6d0ab1c4c';
@@ -177,8 +177,7 @@ edwardsToMontgomeryPriv(ed25519.utils.randomPrivateKey());
 #### ristretto255
 
 ```ts
-// hash-to-curve, ristretto255 from
-// [irtf draft](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-ristretto255-decaf448)
+// ristretto255 from [RFC9496](https://www.rfc-editor.org/rfc/rfc9496)
 import { utf8ToBytes } from '@noble/hashes/utils';
 import { sha512 } from '@noble/hashes/sha512';
 import {
@@ -219,7 +218,7 @@ import { ed448ph } from '@noble/curves/ed448';
 #### X448
 
 ```ts
-// ECDH using Curve448 aka X448, follows [RFC7748](https://www.rfc-editor.org/rfc/rfc7748).
+// X448 aka ECDH on Curve448 from [RFC7748](https://www.rfc-editor.org/rfc/rfc7748)
 import { x448 } from '@noble/curves/ed448';
 x448.getSharedSecret(priv, pub) === x448.scalarMult(priv, pub); // aliases
 x448.getPublicKey(priv) === x448.scalarMultBase(priv);
@@ -232,8 +231,7 @@ edwardsToMontgomeryPub(ed448.getPublicKey(ed448.utils.randomPrivateKey()));
 #### decaf448
 
 ```ts
-// decaf448 follows
-// [irtf draft](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-ristretto255-decaf448)
+// decaf448 from [RFC9496](https://www.rfc-editor.org/rfc/rfc9496)
 import { utf8ToBytes } from '@noble/hashes/utils';
 import { shake256 } from '@noble/hashes/sha3';
 import { hashToCurve, encodeToCurve, DecafPoint, hashToDecaf448 } from '@noble/curves/ed448';
@@ -509,8 +507,10 @@ For EdDSA signatures, `hash` param required.
   - Contract Signing: if A signed an agreement with B using key that allows repudiation, it can later claim that it signed a different contract
   - E-voting: malicious voters may pick keys that allow repudiation in order to deny results
   - Blockchains: transaction of amount X might also be valid for a different amount Y
+- Both modes have SUF-CMA (strong unforgeability under chosen message attacks).
 
-Both modes have SUF-CMA (strong unforgeability under chosen message attacks).
+Check out [RFC9496](https://datatracker.ietf.org/doc/html/rfc9496) for description of
+ristretto and decaf groups which we implement.
 
 ### montgomery: Montgomery curve
 
