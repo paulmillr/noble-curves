@@ -145,18 +145,17 @@ const pub = ed25519.getPublicKey(priv);
 const msg = new TextEncoder().encode('hello');
 const sig = ed25519.sign(msg, priv);
 ed25519.verify(sig, msg, pub); // Default mode: follows ZIP215
-ed25519.verify(sig, msg, pub, { zip215: false }); // RFC8032 / FIPS 186-5
+ed25519.verify(sig, msg, pub, { zip215: false }); // SBS / e-voting / RFC8032 / FIPS 186-5
 
 // Variants from RFC8032: with context, prehashed
 import { ed25519ctx, ed25519ph } from '@noble/curves/ed25519';
 ```
 
-Default `verify` behavior follows [ZIP215](https://zips.z.cash/zip-0215) and
-[can be used in consensus-critical applications](https://hdevalence.ca/blog/2020-10-04-its-25519am).
+Default `verify` behavior follows ZIP215 and
+can be used in consensus-critical applications.
 It has SUF-CMA (strong unforgeability under chosen message attacks).
-`zip215: false` option switches verification criteria to strict
-[RFC8032](https://www.rfc-editor.org/rfc/rfc8032) / [FIPS 186-5](https://csrc.nist.gov/publications/detail/fips/186/5/final)
-and additionally provides [non-repudiation with SBS](#edwards-twisted-edwards-curve).
+If you need SBS (Strongly Binding Signatures) and FIPS 186-5 compliance,
+use `zip215: false`. Check out [Edwards Signatures section for more info](#edwards-twisted-edwards-curve).
 
 X25519 follows [RFC7748](https://www.rfc-editor.org/rfc/rfc7748).
 
@@ -353,171 +352,69 @@ method: check out examples.
 
 ```ts
 import { weierstrass } from '@noble/curves/abstract/weierstrass';
-import { Field } from '@noble/curves/abstract/modular'; // finite field for mod arithmetics
-import { sha256 } from '@noble/hashes/sha256'; // 3rd-party sha256() of type utils.CHash
-import { hmac } from '@noble/hashes/hmac'; // 3rd-party hmac() that will accept sha256()
-import { concatBytes, randomBytes } from '@noble/hashes/utils'; // 3rd-party utilities
+import { Field } from '@noble/curves/abstract/modular';
+import { sha256 } from '@noble/hashes/sha256';
+import { hmac } from '@noble/hashes/hmac';
+import { concatBytes, randomBytes } from '@noble/hashes/utils';
 
 const hmacSha256 = (key: Uint8Array, ...msgs: Uint8Array[]) =>
   hmac(sha256, key, concatBytes(...msgs));
 
-// secq256k1: cycle of secp256k1 with Fp/N flipped.
+// secQ (not secP) - secq256k1 is a cycle of secp256k1 with Fp/N flipped.
 // https://personaelabs.org/posts/spartan-ecdsa
 // https://zcash.github.io/halo2/background/curves.html#cycles-of-curves
 const secq256k1 = weierstrass({
-  // Curve equation params a, b
   a: 0n,
   b: 7n,
-  // Field over which we'll do calculations
   Fp: Field(2n ** 256n - 432420386565659656852420866394968145599n),
-  // Curve order, total count of valid points in the field.
   n: 2n ** 256n - 2n ** 32n - 2n ** 9n - 2n ** 8n - 2n ** 7n - 2n ** 6n - 2n ** 4n - 1n,
-  // Base point (x, y) aka generator point
   Gx: 55066263022277343669578718895168534326250603453777594175500187360389116729240n,
   Gy: 32670510020758816978083085130507043184471273380659243275938904335757337482424n,
-
   hash: sha256,
   hmac: hmacSha256,
   randomBytes,
 });
 
-// NIST secp192r1 aka p192 https://www.secg.org/sec2-v2.pdf, https://neuromancer.sk/std/secg/secp192r1
+// NIST secp192r1 aka p192
+// https://www.secg.org/sec2-v2.pdf, https://neuromancer.sk/std/secg/secp192r1
 const secp192r1 = weierstrass({
-  a: BigInt('0xfffffffffffffffffffffffffffffffefffffffffffffffc'),
-  b: BigInt('0x64210519e59c80e70fa7e9ab72243049feb8deecc146b9b1'),
-  Fp: Field(BigInt('0xfffffffffffffffffffffffffffffffeffffffffffffffff')),
-  n: BigInt('0xffffffffffffffffffffffff99def836146bc9b1b4d22831'),
-  Gx: BigInt('0x188da80eb03090f67cbf20eb43a18800f4ff0afd82ff1012'),
-  Gy: BigInt('0x07192b95ffc8da78631011ed6b24cdd573f977a11e794811'),
-  h: BigInt(1),
+  a: 0xfffffffffffffffffffffffffffffffefffffffffffffffcn,
+  b: 0x64210519e59c80e70fa7e9ab72243049feb8deecc146b9b1n,
+  Fp: Field(0xfffffffffffffffffffffffffffffffeffffffffffffffffn),
+  n: 0xffffffffffffffffffffffff99def836146bc9b1b4d22831n,
+  Gx: 0x188da80eb03090f67cbf20eb43a18800f4ff0afd82ff1012n,
+  Gy: 0x07192b95ffc8da78631011ed6b24cdd573f977a11e794811n,
   hash: sha256,
   hmac: hmacSha256,
   randomBytes,
 });
-
-// Replace weierstrass() with weierstrassPoints() if you don't need ECDSA, hash, hmac, randomBytes
 ```
 
 Short Weierstrass curve's formula is `y² = x³ + ax + b`. `weierstrass`
 expects arguments `a`, `b`, field `Fp`, curve order `n`, cofactor `h`
 and coordinates `Gx`, `Gy` of generator point.
-
-**`k` generation** is done deterministically, following
-[RFC6979](https://www.rfc-editor.org/rfc/rfc6979). It is suggested to use `extraEntropy`
-option, which incorporates randomness into signatures to increase their security.
-
-For k generation, specifying `hmac` & `hash` is required,
-which in our implementations is done by noble-hashes. If
-you're using different hashing library, make sure to wrap it in the following interface:
-
-```ts
-type CHash = {
-  (message: Uint8Array): Uint8Array;
-  blockLen: number;
-  outputLen: number;
-  create(): any;
-};
-
-// example
-function sha256(message: Uint8Array) {
-  return _internal_lowlvl(message);
-}
-sha256.outputLen = 32; // 32 bytes of output for sha2-256
-```
-
-**Message hash** is expected instead of message itself:
-
-- `sign(msgHash, privKey)` is default behavior, assuming you pre-hash msg with sha2, or other hash
-- `sign(msg, privKey, {prehash: true})` option can be used if you want to pass the message itself
+`hmac` and `hash` must be specified for deterministic `k` generation.
 
 **Weierstrass points:**
 
-1. Exported as `ProjectivePoint`
-2. Represented in projective (homogeneous) coordinates: (x, y, z) ∋ (x=x/z, y=y/z)
-3. Use complete exception-free formulas for addition and doubling
-4. Can be decoded/encoded from/to Uint8Array / hex strings using
-   `ProjectivePoint.fromHex` and `ProjectivePoint#toRawBytes()`
-5. Have `assertValidity()` which checks for being on-curve
-6. Have `toAffine()` and `x` / `y` getters which convert to 2d xy affine coordinates
+- Are exported as `ProjectivePoint`
+- Are represented in projective (homogeneous) coordinates: (x, y, z) ∋ (x=x/z, y=y/z)
+- Use complete exception-free formulas for addition and doubling
+- Can be decoded/encoded from/to Uint8Array / hex strings using
+  `ProjectivePoint.fromHex` and `ProjectivePoint#toRawBytes()`
+- Have `assertValidity()` which checks for being on-curve
+- Have `toAffine()` and `x` / `y` getters which convert to 2d xy affine coordinates
 
-```ts
-// `weierstrassPoints()` returns `CURVE` and `ProjectivePoint`
-// `weierstrass()` returns `CurveFn`
-type SignOpts = { lowS?: boolean; prehash?: boolean; extraEntropy: boolean | Uint8Array };
-type CurveFn = {
-  CURVE: ReturnType<typeof validateOpts>;
-  getPublicKey: (privateKey: PrivKey, isCompressed?: boolean) => Uint8Array;
-  getSharedSecret: (privateA: PrivKey, publicB: Hex, isCompressed?: boolean) => Uint8Array;
-  sign: (msgHash: Hex, privKey: PrivKey, opts?: SignOpts) => SignatureType;
-  verify: (
-    signature: Hex | SignatureType,
-    msgHash: Hex,
-    publicKey: Hex,
-    opts?: { lowS?: boolean; prehash?: boolean; format?: 'compact' | 'der' }
-  ) => boolean;
-  ProjectivePoint: ProjectivePointConstructor;
-  Signature: SignatureConstructor;
-  utils: {
-    normPrivateKeyToScalar: (key: PrivKey) => bigint;
-    isValidPrivateKey(key: PrivKey): boolean;
-    randomPrivateKey: () => Uint8Array;
-    precompute: (windowSize?: number, point?: ProjPointType<bigint>) => ProjPointType<bigint>;
-  };
-};
+**ECDSA signatures:**
 
-// T is usually bigint, but can be something else like complex numbers in BLS curves
-interface ProjPointType<T> extends Group<ProjPointType<T>> {
-  readonly px: T;
-  readonly py: T;
-  readonly pz: T;
-  get x(): bigint;
-  get y(): bigint;
-  multiply(scalar: bigint): ProjPointType<T>;
-  multiplyUnsafe(scalar: bigint): ProjPointType<T>;
-  multiplyAndAddUnsafe(Q: ProjPointType<T>, a: bigint, b: bigint): ProjPointType<T> | undefined;
-  toAffine(iz?: T): AffinePoint<T>;
-  isTorsionFree(): boolean;
-  clearCofactor(): ProjPointType<T>;
-  assertValidity(): void;
-  hasEvenY(): boolean;
-  toRawBytes(isCompressed?: boolean): Uint8Array;
-  toHex(isCompressed?: boolean): string;
-}
-// Static methods for 3d XYZ points
-interface ProjConstructor<T> extends GroupConstructor<ProjPointType<T>> {
-  new (x: T, y: T, z: T): ProjPointType<T>;
-  fromAffine(p: AffinePoint<T>): ProjPointType<T>;
-  fromHex(hex: Hex): ProjPointType<T>;
-  fromPrivateKey(privateKey: PrivKey): ProjPointType<T>;
-  msm(points: ProjPointType[], scalars: bigint[]): ProjPointType<T>;
-}
-```
-
-**ECDSA signatures** are represented by `Signature` instances and can be
-described by the interface:
-
-```ts
-interface SignatureType {
-  readonly r: bigint;
-  readonly s: bigint;
-  readonly recovery?: number;
-  assertValidity(): void;
-  addRecoveryBit(recovery: number): SignatureType;
-  hasHighS(): boolean;
-  normalizeS(): SignatureType;
-  recoverPublicKey(msgHash: Hex): ProjPointType<bigint>;
-  toCompactRawBytes(): Uint8Array;
-  toCompactHex(): string;
-  // DER-encoded
-  toDERRawBytes(): Uint8Array;
-  toDERHex(): string;
-}
-type SignatureConstructor = {
-  new (r: bigint, s: bigint): SignatureType;
-  fromCompact(hex: Hex): SignatureType;
-  fromDER(hex: Hex): SignatureType;
-};
-```
+- Are represented by `Signature` instances with `r, s` and optional `recovery` properties
+- Have `recoverPublicKey()`, `toCompactRawBytes()` and `toDERRawBytes()` methods
+- Can be prehashed, or non-prehashed:
+  - `sign(msgHash, privKey)` (default, prehash: false) - you did hashing before
+  - `sign(msg, privKey, {prehash: true})` - curves will do hashing for you
+- Are generated deterministically, following [RFC6979](https://www.rfc-editor.org/rfc/rfc6979).
+  - Consider [hedged ECDSA with noise](#hedged-ecdsa-with-noise) for adding randomness into
+    for signatures, to get improved security against fault attacks.
 
 More examples:
 
@@ -581,100 +478,40 @@ const ed25519 = twistedEdwards({
 } as const);
 ```
 
-Twisted Edwards curve's formula is `ax² + y² = 1 + dx²y²`. You must specify `a`, `d`, field `Fp`, order `n`, cofactor `h`
+Twisted Edwards curve's formula is `ax² + y² = 1 + dx²y²`.
+You must specify `a`, `d`, field `Fp`, order `n`, cofactor `h`
 and coordinates `Gx`, `Gy` of generator point.
-
-For EdDSA signatures, `hash` param required. `adjustScalarBytes` which instructs how to change private scalars could be specified.
-
-We support [non-repudiation](https://eprint.iacr.org/2020/1244), which help in following scenarios:
-
-- Contract Signing: if A signed an agreement with B using key that allows repudiation, it can later claim that it signed a different contract
-- E-voting: malicious voters may pick keys that allow repudiation in order to deny results
-- Blockchains: transaction of amount X might also be valid for a different amount Y
+For EdDSA signatures, `hash` param required.
+`adjustScalarBytes` which instructs how to change private scalars could be specified.
 
 **Edwards points:**
 
-1. Exported as `ExtendedPoint`
-2. Represented in extended coordinates: (x, y, z, t) ∋ (x=x/z, y=y/z)
-3. Use complete exception-free formulas for addition and doubling
-4. Can be decoded/encoded from/to Uint8Array / hex strings using `ExtendedPoint.fromHex` and `ExtendedPoint#toRawBytes()`
-5. Have `assertValidity()` which checks for being on-curve
-6. Have `toAffine()` and `x` / `y` getters which convert to 2d xy affine coordinates
-7. Have `isTorsionFree()`, `clearCofactor()` and `isSmallOrder()` utilities to handle torsions
+- Are exported as `ExtendedPoint`
+- Are represented in extended coordinates: (x, y, z, t) ∋ (x=x/z, y=y/z)
+- Use complete exception-free formulas for addition and doubling
+- Can be decoded/encoded from/to Uint8Array / hex strings using `ExtendedPoint.fromHex` and `ExtendedPoint#toRawBytes()`
+- Have `assertValidity()` which checks for being on-curve
+- Have `toAffine()` and `x` / `y` getters which convert to 2d xy affine coordinates
+- Have `isTorsionFree()`, `clearCofactor()` and `isSmallOrder()` utilities to handle torsions
 
-```ts
-// `twistedEdwards()` returns `CurveFn` of following type:
-type CurveFn = {
-  CURVE: ReturnType<typeof validateOpts>;
-  getPublicKey: (privateKey: Hex) => Uint8Array;
-  sign: (message: Hex, privateKey: Hex, context?: Hex) => Uint8Array;
-  verify: (sig: SigType, message: Hex, publicKey: Hex, context?: Hex) => boolean;
-  ExtendedPoint: ExtPointConstructor;
-  utils: {
-    randomPrivateKey: () => Uint8Array;
-    getExtendedPublicKey: (key: PrivKey) => {
-      head: Uint8Array;
-      prefix: Uint8Array;
-      scalar: bigint;
-      point: PointType;
-      pointBytes: Uint8Array;
-    };
-  };
-};
+**EdDSA signatures:**
 
-interface ExtPointType extends Group<ExtPointType> {
-  readonly ex: bigint;
-  readonly ey: bigint;
-  readonly ez: bigint;
-  readonly et: bigint;
-  get x(): bigint;
-  get y(): bigint;
-  assertValidity(): void;
-  multiply(scalar: bigint): ExtPointType;
-  multiplyUnsafe(scalar: bigint): ExtPointType;
-  isSmallOrder(): boolean;
-  isTorsionFree(): boolean;
-  clearCofactor(): ExtPointType;
-  toAffine(iz?: bigint): AffinePoint<bigint>;
-  toRawBytes(isCompressed?: boolean): Uint8Array;
-  toHex(isCompressed?: boolean): string;
-}
-// Static methods of Extended Point with coordinates in X, Y, Z, T
-interface ExtPointConstructor extends GroupConstructor<ExtPointType> {
-  new (x: bigint, y: bigint, z: bigint, t: bigint): ExtPointType;
-  fromAffine(p: AffinePoint<bigint>): ExtPointType;
-  fromHex(hex: Hex): ExtPointType;
-  fromPrivateKey(privateKey: Hex): ExtPointType;
-  msm(points: ExtPointType[], scalars: bigint[]): ExtPointType;
-}
-```
+- `zip215: true` is default behavior. It has slightly looser verification logic
+  to be [consensus-friendly](https://hdevalence.ca/blog/2020-10-04-its-25519am), following [ZIP215](https://zips.z.cash/zip-0215) rules
+- `zip215: false` switches verification criteria to strict
+  [RFC8032](https://www.rfc-editor.org/rfc/rfc8032) / [FIPS 186-5](https://csrc.nist.gov/publications/detail/fips/186/5/final)
+  and additionally provides [non-repudiation with SBS](https://eprint.iacr.org/2020/1244),
+  which is useful for:
+  - Contract Signing: if A signed an agreement with B using key that allows repudiation, it can later claim that it signed a different contract
+  - E-voting: malicious voters may pick keys that allow repudiation in order to deny results
+  - Blockchains: transaction of amount X might also be valid for a different amount Y
+
+Both modes have SUF-CMA (strong unforgeability under chosen message attacks).
 
 ### montgomery: Montgomery curve
 
-```typescript
-import { montgomery } from '@noble/curves/abstract/montgomery';
-import { Field } from '@noble/curves/abstract/modular';
-
-const x25519 = montgomery({
-  a: 486662n,
-  Gu: 9n,
-  P: 2n ** 255n - 19n,
-  montgomeryBits: 255,
-  nByteLength: 32,
-  // Optional param
-  adjustScalarBytes(bytes) {
-    bytes[0] &= 248;
-    bytes[31] &= 127;
-    bytes[31] |= 64;
-    return bytes;
-  },
-});
-```
-
 The module contains methods for x-only ECDH on Curve25519 / Curve448 from RFC7748.
 Proper Elliptic Curve Points are not implemented yet.
-
-You must specify curve params `Fp`, `a`, `Gu` coordinate of u, `montgomeryBits` and `nByteLength`.
 
 ### bls: Barreto-Lynn-Scott curves
 
