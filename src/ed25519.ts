@@ -380,9 +380,12 @@ function calcElligatorRistrettoMap(r0: bigint): ExtendedPoint {
 class RistPoint implements Group<RistPoint> {
   static BASE: RistPoint;
   static ZERO: RistPoint;
+  private readonly ep: ExtendedPoint;
   // Private property to discourage combining ExtendedPoint + RistrettoPoint
   // Always use Ristretto encoding/decoding instead.
-  constructor(private readonly ep: ExtendedPoint) {}
+  constructor(ep: ExtendedPoint) {
+    this.ep = ep;
+  }
 
   static fromAffine(ap: AffinePoint<bigint>): RistPoint {
     return new RistPoint(ed25519.ExtendedPoint.fromAffine(ap));

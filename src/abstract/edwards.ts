@@ -208,17 +208,20 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
   class Point implements ExtPointType {
     static readonly BASE = new Point(CURVE.Gx, CURVE.Gy, _1n, modP(CURVE.Gx * CURVE.Gy));
     static readonly ZERO = new Point(_0n, _1n, _1n, _0n); // 0, 1, 1, 0
+    readonly ex: bigint;
+    readonly ey: bigint;
+    readonly ez: bigint;
+    readonly et: bigint;
 
-    constructor(
-      readonly ex: bigint,
-      readonly ey: bigint,
-      readonly ez: bigint,
-      readonly et: bigint
-    ) {
+    constructor(ex: bigint, ey: bigint, ez: bigint, et: bigint) {
       aCoordinate('x', ex);
       aCoordinate('y', ey);
       aCoordinate('z', ez);
       aCoordinate('t', et);
+      this.ex = ex;
+      this.ey = ey;
+      this.ez = ez;
+      this.et = et;
       Object.freeze(this);
     }
 

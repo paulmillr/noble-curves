@@ -354,9 +354,12 @@ function calcElligatorDecafMap(r0: bigint): ExtendedPoint {
 class DcfPoint implements Group<DcfPoint> {
   static BASE: DcfPoint;
   static ZERO: DcfPoint;
+  private readonly ep: ExtendedPoint;
   // Private property to discourage combining ExtendedPoint + DecafPoint
   // Always use Decaf encoding/decoding instead.
-  constructor(private readonly ep: ExtendedPoint) {}
+  constructor(ep: ExtendedPoint) {
+    this.ep = ep;
+  }
 
   static fromAffine(ap: AffinePoint<bigint>): DcfPoint {
     return new DcfPoint(ed448.ExtendedPoint.fromAffine(ap));
