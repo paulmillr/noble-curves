@@ -1,12 +1,18 @@
-import { json } from './utils.js';
-import { hexToBytes, bytesToHex as hex } from '@noble/hashes/utils';
-import { deepStrictEqual, throws } from 'node:assert';
+import { bytesToHex as hex, hexToBytes } from '@noble/hashes/utils';
 import * as fc from 'fast-check';
+import { describe, should } from 'micro-should';
+import { deepStrictEqual, throws } from 'node:assert';
 import { readFileSync } from 'node:fs';
-import { should, describe } from 'micro-should';
+import { json } from './utils.js';
 // prettier-ignore
 import {
-  secp, sigFromDER, sigToDER, selectHash, normVerifySig, mod, bytesToNumberBE, numberToBytesBE
+  bytesToNumberBE,
+  mod,
+  normVerifySig,
+  numberToBytesBE,
+  secp,
+  selectHash,
+  sigFromDER, sigToDER
 } from './secp256k1.helpers.js';
 
 const ecdsa = json('./vectors/secp256k1/ecdsa.json');
@@ -428,11 +434,15 @@ describe('secp256k1', () => {
       const s = 115792089237316195423570985008687907852837564279074904382605163141518162728904n;
 
       const pub = new Point(x, y, 1n).toRawBytes();
-      const signature = new secp.Signature(2n, 2n);
-      signature.r = r;
-      signature.s = s;
+      const sig = new secp.Signature(2n, 2n);
+      throws(() => {
+        sig.r = r;
+        sig.s = s;
+      });
+      const sigHex =
+        '0000000000000000000000000000000000000000000000000000000000000001fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd04917c8';
 
-      const verified = secp.verify(signature, msg, pub);
+      const verified = secp.verify(sigHex, msg, pub);
       // Verifies, but it shouldn't, because signature S > curve order
       deepStrictEqual(verified, false);
     });

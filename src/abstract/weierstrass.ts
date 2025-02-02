@@ -909,6 +909,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       this.s = s;
       if (recovery != null) this.recovery = recovery;
       this.assertValidity();
+      Object.freeze(this);
     }
 
     // pair (bytes of r, bytes of s)
