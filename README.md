@@ -764,6 +764,11 @@ NIST prohibits classical cryptography (RSA, DSA, ECDSA, ECDH) [after 2035](https
 
 ## Speed
 
+During first call of most methods, `init` is done, which calculates base point precomputes.
+The method consumes 20MB+ of memory and takes some time.
+You can adjust how many precomputes are generated,
+by using `_setWindowSize`. Check out the source code.
+
 Benchmark results on Apple M2 with node v22:
 
 ```
