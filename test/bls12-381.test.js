@@ -27,6 +27,13 @@ const SCALAR_VECTORS = readFileSync('./test/bls12-381/bls12-381-scalar-test-vect
   .trim()
   .split('\n')
   .map((l) => l.split(':'));
+const SCALAR_XMD_SHA256_VECTORS = readFileSync(
+  './test/bls12-381/bls12-381-scalar-xmd-sha256-test-vectors.txt',
+  'utf-8'
+)
+  .trim()
+  .split('\n')
+  .map((l) => l.split(':'));
 
 // @ts-ignore
 const NUM_RUNS = Number(globalThis.process?.env?.RUNS_COUNT || 10); // reduce to 1 to shorten test time
@@ -902,6 +909,21 @@ describe('bls12-381/basic', () => {
       expand: '_internal_pass',
     };
     for (let vector of SCALAR_VECTORS) {
+      const [okmAscii, expectedHex] = vector;
+      const expected = BigInt('0x' + expectedHex);
+      const okm = utf8ToBytes(okmAscii);
+      const scalars = hash_to_field(okm, 1, Object.assign({}, bls.G2.CURVE.htfDefaults, options));
+      deepStrictEqual(scalars[0][0], expected);
+    }
+  });
+  should(`produce correct scalars XMD (${SCALAR_XMD_SHA256_VECTORS.length} vectors)`, () => {
+    const options = {
+      p: bls.params.r,
+      m: 1,
+      expand: 'xmd',
+      DST: 'QUUX-V01-CS02-with-BLS12381SCALAR_XMD:SHA-256_SSWU_RO_',
+    };
+    for (let vector of SCALAR_XMD_SHA256_VECTORS) {
       const [okmAscii, expectedHex] = vector;
       const expected = BigInt('0x' + expectedHex);
       const okm = utf8ToBytes(okmAscii);
