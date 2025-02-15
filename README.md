@@ -109,11 +109,15 @@ The same code would work for NIST P256 (secp256r1), P384 (secp384r1) & P521 (sec
 
 ```ts
 const noisySignature = secp256k1.sign(msg, priv, { extraEntropy: true });
+const ent = new Uint8Array(32).fill(3); // set custom entropy
+const noisySignature2 = secp256k1.sign(msg, priv, { extraEntropy: ent });
 ```
 
 Hedged ECDSA is add-on, providing improved protection against fault attacks.
 It adds noise to signatures. The technique is used by default in BIP340; we also implement them
-optionally for ECDSA. Check out [draft](https://datatracker.ietf.org/doc/draft-irtf-cfrg-det-sigs-with-noise/) and [post](https://moderncrypto.org/mail-archive/curves/2017/000925.html)
+optionally for ECDSA. Check out blog post
+[Deterministic signatures are not your friends](https://paulmillr.com/posts/deterministic-signatures/)
+and [spec draft](https://datatracker.ietf.org/doc/draft-irtf-cfrg-det-sigs-with-noise/).
 
 #### ECDH: Diffie-Hellman shared secrets
 
