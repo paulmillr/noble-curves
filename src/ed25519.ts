@@ -538,3 +538,76 @@ export const hashToRistretto255 = (msg: Uint8Array, options: htfBasicOpts): Rist
 };
 export const hash_to_ristretto255: (msg: Uint8Array, options: htfBasicOpts) => RistPoint =
   hashToRistretto255; // legacy
+
+/*
+Half-broken implementation of Hedged EdDSA / XEdDSA.
+Differences from EDDSA:
+- uses curve25519 keys instead of ed25519
+- additional random added to nonce on signing
+- there is zero reasons to use this, if you don't want to re-use x25519 key
+- nobody supports, no test vectors, a few half-broken implementations
+- signal uses for signing ephemeral public for x25519, which is probably only reasonable use case for this.
+*/
+const XEDDSA25519_PREFIX = new Uint8Array([
+  0xfe, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+  0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+]);
+export function montgomeryToEdwards(
+  mont: Uint8Array,
+  sign: boolean
+): typeof ed25519.ExtendedPoint.BASE {
+  const u = Fp.fromBytes(mont);
+  if (Fp.eql(u, Fp.neg(Fp.ONE))) throw new Error('u=-1');
+  const y = Fp.mul(Fp.sub(u, Fp.ONE), Fp.inv(Fp.add(u, Fp.ONE)));
+  const yBytes = numberToBytesLE(y, 32);
+  yBytes[31] ^= (sign ? 1 : 0) << 7;
+  return ed25519.ExtendedPoint.fromHex(yBytes);
+}
+
+export const xeddsa25519 = {
+  sign(secret: Uint8Array, message: Uint8Array, random: Uint8Array = randomBytes(64)): Uint8Array {
+    secret = ensureBytes('secret', secret, 32);
+    const N = ed25519.CURVE.n;
+    const a = mod(bytesToNumberLE(secret), N); // Interpret secret as scalar a.
+    const Apoint = ed25519.ExtendedPoint.BASE.multiply(a); // Compute public key A = a·B.
+    const Abytes = Apoint.toRawBytes(true);
+    const signBit = Abytes[31] & 0x80; // Extract sign bit (top bit of last byte)
+    const rHash = sha512
+      .create()
+      .update(XEDDSA25519_PREFIX)
+      .update(secret)
+      .update(message)
+      .update(random)
+      .digest(); // r = SHA512( HASH_PREFIX || secret || ...messages || randomBytes ) mod L.
+    const r = mod(bytesToNumberLE(rHash), N);
+    const Rpoint = ed25519.ExtendedPoint.BASE.multiply(r); // R = r·B.
+    const Rbytes = Rpoint.toRawBytes(true);
+    const hHash = sha512.create().update(Rbytes).update(Abytes).update(message).digest(); // h = SHA512( R || A || ...messages ) mod n.
+    const h = mod(bytesToNumberLE(hHash), N);
+    const s = mod(h * a + r, N); // s = (h·a + r) mod n.
+    const Sbytes = numberToBytesLE(s, 32);
+    const sig = concatBytes(Rbytes, Sbytes);
+    sig[63] = (sig[63] & 0b0111_1111) | signBit;
+    return sig;
+  },
+  verify(publicKey: Uint8Array, message: Uint8Array, signature: Uint8Array): boolean {
+    publicKey = ensureBytes('publicKey', publicKey, 32);
+    signature = ensureBytes('signature', signature, 64);
+    const N = ed25519.CURVE.n;
+    const signBit = (signature[63] & 0b1000_0000) >> 7 === 1; // Extract sign bit from signature last byte.
+    const Aed = montgomeryToEdwards(publicKey, signBit);
+    const Abytes = Aed.toRawBytes();
+    const capR = signature.subarray(0, 32);
+    const sBytes = signature.slice(32, 64);
+    sBytes[31] &= 0b0111_1111; // masking top bit
+    if ((sBytes[31] & 0b1110_0000) !== 0) return false;
+    const s = mod(bytesToNumberLE(sBytes), N);
+    // h = SHA512( cap_r || A_bytes || ...messages ) mod n.
+    const hash = sha512.create().update(capR).update(Abytes).update(message).digest();
+    const h = mod(bytesToNumberLE(hash), N);
+    // Rcheck = [s]B - [h]A.
+    const Rcheck = ed25519.ExtendedPoint.BASE.multiply(s).add(Aed.negate().multiply(h));
+    const capRcheck = Rcheck.toRawBytes();
+    return equalBytes(capRcheck, capR);
+  },
+};
