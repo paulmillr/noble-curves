@@ -249,8 +249,8 @@ export const bitMask = (n: number): bigint => (_2n << BigInt(n - 1)) - _1n;
 
 // DRBG
 
-const u8n = (data?: any) => new Uint8Array(data); // creates Uint8Array
-const u8fr = (arr: any) => Uint8Array.from(arr); // another shortcut
+const u8n = (len: number) => new Uint8Array(len); // creates Uint8Array
+const u8fr = (arr: ArrayLike<number>) => Uint8Array.from(arr); // another shortcut
 type Pred<T> = (v: Uint8Array) => T | undefined;
 /**
  * Minimal HMAC-DRBG from NIST 800-90 for RFC6979 sigs.
@@ -277,7 +277,7 @@ export function createHmacDrbg<T>(
     i = 0;
   };
   const h = (...b: Uint8Array[]) => hmacFn(k, v, ...b); // hmac(k)(v, ...values)
-  const reseed = (seed = u8n()) => {
+  const reseed = (seed = u8n(0)) => {
     // HMAC-DRBG reseed() function. Steps D-G
     k = h(u8fr([0x00]), seed); // k = hmac(k || v || 0x00 || seed)
     v = h(); // v = hmac(k || v)
