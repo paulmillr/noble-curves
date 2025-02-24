@@ -540,9 +540,9 @@ export function tower12(opts: Tower12Opts): {
   const Fp12: mod.IField<Fp12> & Fp12Utils = {
     ORDER: Fp2.ORDER, // TODO: unused, but need to verify
     isLE: Fp6.isLE,
-    BITS: 2 * Fp2.BITS,
-    BYTES: 2 * Fp2.BYTES,
-    MASK: bitMask(2 * Fp2.BITS),
+    BITS: 2 * Fp6.BITS,
+    BYTES: 2 * Fp6.BYTES,
+    MASK: bitMask(2 * Fp6.BITS),
     ZERO: { c0: Fp6.ZERO, c1: Fp6.ZERO },
     ONE: { c0: Fp6.ONE, c1: Fp6.ZERO },
     create: (num) => num,
