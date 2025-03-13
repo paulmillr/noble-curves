@@ -7,7 +7,7 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { FpPow, type IField, validateField } from './modular.js';
+import { FpPow, type IField, validateField } from './modular.ts';
 
 export type PoseidonOpts = {
   Fp: IField<bigint>;

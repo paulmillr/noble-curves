@@ -33,7 +33,7 @@ import {
   pippenger,
   validateBasic,
   wNAF,
-} from './curve.js';
+} from './curve.ts';
 import {
   Field,
   type IField,
@@ -42,9 +42,9 @@ import {
   mapHashToField,
   mod,
   validateField,
-} from './modular.js';
-import * as ut from './utils.js';
-import { type CHash, type Hex, type PrivKey, abool, ensureBytes, memoized } from './utils.js';
+} from './modular.ts';
+import * as ut from './utils.ts';
+import { type CHash, type Hex, type PrivKey, abool, ensureBytes, memoized } from './utils.ts';
 
 export type { AffinePoint };
 type HmacFnSync = (key: Uint8Array, ...messages: Uint8Array[]) => Uint8Array;

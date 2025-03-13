@@ -8,8 +8,8 @@
 import { blake2s } from '@noble/hashes/blake2s';
 import { sha512 } from '@noble/hashes/sha512';
 import { concatBytes, randomBytes, utf8ToBytes } from '@noble/hashes/utils';
-import { type CurveFn, type ExtPointType, twistedEdwards } from './abstract/edwards.js';
-import { Field } from './abstract/modular.js';
+import { type CurveFn, type ExtPointType, twistedEdwards } from './abstract/edwards.ts';
+import { Field } from './abstract/modular.ts';
 
 export const jubjub: CurveFn = /* @__PURE__ */ twistedEdwards({
   // Params: a, d

@@ -5,10 +5,10 @@
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha256 } from '@noble/hashes/sha256';
-import { createCurve, type CurveFnWithCreate } from './_shortw_utils.js';
-import { createHasher, type HTFMethod } from './abstract/hash-to-curve.js';
-import { Field } from './abstract/modular.js';
-import { mapToCurveSimpleSWU } from './abstract/weierstrass.js';
+import { createCurve, type CurveFnWithCreate } from './_shortw_utils.ts';
+import { createHasher, type HTFMethod } from './abstract/hash-to-curve.ts';
+import { Field } from './abstract/modular.ts';
+import { mapToCurveSimpleSWU } from './abstract/weierstrass.ts';
 
 const Fp256 = Field(BigInt('0xffffffff00000001000000000000000000000000ffffffffffffffffffffffff'));
 const CURVE_A = Fp256.create(BigInt('-3'));

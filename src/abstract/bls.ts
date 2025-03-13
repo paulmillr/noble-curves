@@ -16,23 +16,23 @@
  * @module
  **/
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-// TODO: import { AffinePoint } from './curve.js';
-import { type IField, getMinHashLength, mapHashToField } from './modular.js';
-import { type CHash, type Hex, type PrivKey, ensureBytes, memoized } from './utils.js';
-// prettier-ignore
+// TODO: import { AffinePoint } from './curve.ts';
 import {
-  type H2CPointConstructor, type htfBasicOpts,
+  type H2CPointConstructor,
+  type htfBasicOpts,
   type Opts as HTFOpts,
   type MapToCurve,
-  createHasher
-} from './hash-to-curve.js';
-import type { Fp12, Fp12Bls, Fp2, Fp2Bls, Fp6 } from './tower.js';
+  createHasher,
+} from './hash-to-curve.ts';
+import { type IField, getMinHashLength, mapHashToField } from './modular.ts';
+import type { Fp12, Fp12Bls, Fp2, Fp2Bls, Fp6 } from './tower.ts';
+import { type CHash, type Hex, type PrivKey, ensureBytes, memoized } from './utils.ts';
 import {
   type CurvePointsRes,
   type CurvePointsType,
   type ProjPointType,
   weierstrassPoints,
-} from './weierstrass.js';
+} from './weierstrass.ts';
 
 type Fp = bigint; // Can be different field?
 

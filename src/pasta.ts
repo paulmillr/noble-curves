@@ -4,9 +4,9 @@
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha256 } from '@noble/hashes/sha256';
-import { getHash } from './_shortw_utils.js';
-import { Field, mod } from './abstract/modular.js';
-import { type CurveFn, weierstrass } from './abstract/weierstrass.js';
+import { getHash } from './_shortw_utils.ts';
+import { Field, mod } from './abstract/modular.ts';
+import { type CurveFn, weierstrass } from './abstract/weierstrass.ts';
 
 export const p: bigint = BigInt(
   '0x40000000000000000000000000000000224698fc094cf91b992d30ed00000001'

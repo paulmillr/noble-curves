@@ -12,10 +12,10 @@ import {
   pippenger,
   validateBasic,
   wNAF,
-} from './curve.js';
-import { Field, mod } from './modular.js';
-import * as ut from './utils.js';
-import { abool, ensureBytes, type FHash, type Hex, memoized } from './utils.js';
+} from './curve.ts';
+import { Field, mod } from './modular.ts';
+import * as ut from './utils.ts';
+import { abool, ensureBytes, type FHash, type Hex, memoized } from './utils.ts';
 
 // Be friendly to bad ECMAScript parsers by not using bigint literals
 // prettier-ignore

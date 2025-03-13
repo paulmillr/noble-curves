@@ -8,16 +8,16 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha512 } from '@noble/hashes/sha512';
 import { concatBytes, randomBytes, utf8ToBytes } from '@noble/hashes/utils';
-import { type AffinePoint, type Group, pippenger } from './abstract/curve.js';
-import { type CurveFn, type ExtPointType, twistedEdwards } from './abstract/edwards.js';
+import { type AffinePoint, type Group, pippenger } from './abstract/curve.ts';
+import { type CurveFn, type ExtPointType, twistedEdwards } from './abstract/edwards.ts';
 import {
   createHasher,
   expand_message_xmd,
   type htfBasicOpts,
   type HTFMethod,
-} from './abstract/hash-to-curve.js';
-import { Field, FpSqrtEven, isNegativeLE, mod, pow2 } from './abstract/modular.js';
-import { montgomery, type CurveFn as XCurveFn } from './abstract/montgomery.js';
+} from './abstract/hash-to-curve.ts';
+import { Field, FpSqrtEven, isNegativeLE, mod, pow2 } from './abstract/modular.ts';
+import { montgomery, type CurveFn as XCurveFn } from './abstract/montgomery.ts';
 import {
   bytesToHex,
   bytesToNumberLE,
@@ -25,7 +25,7 @@ import {
   equalBytes,
   type Hex,
   numberToBytesLE,
-} from './abstract/utils.js';
+} from './abstract/utils.ts';
 
 const ED25519_P = BigInt(
   '57896044618658097711785492504343953926634992332820282019728792003956564819949'

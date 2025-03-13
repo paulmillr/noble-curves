@@ -9,17 +9,17 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { shake256 } from '@noble/hashes/sha3';
 import { concatBytes, randomBytes, utf8ToBytes, wrapConstructor } from '@noble/hashes/utils';
-import type { AffinePoint, Group } from './abstract/curve.js';
-import { pippenger } from './abstract/curve.js';
-import { type CurveFn, type ExtPointType, twistedEdwards } from './abstract/edwards.js';
+import type { AffinePoint, Group } from './abstract/curve.ts';
+import { pippenger } from './abstract/curve.ts';
+import { type CurveFn, type ExtPointType, twistedEdwards } from './abstract/edwards.ts';
 import {
   createHasher,
   expand_message_xof,
   type htfBasicOpts,
   type HTFMethod,
-} from './abstract/hash-to-curve.js';
-import { Field, isNegativeLE, mod, pow2 } from './abstract/modular.js';
-import { montgomery, type CurveFn as XCurveFn } from './abstract/montgomery.js';
+} from './abstract/hash-to-curve.ts';
+import { Field, isNegativeLE, mod, pow2 } from './abstract/modular.ts';
+import { montgomery, type CurveFn as XCurveFn } from './abstract/montgomery.ts';
 import {
   bytesToHex,
   bytesToNumberLE,
@@ -27,7 +27,7 @@ import {
   equalBytes,
   type Hex,
   numberToBytesLE,
-} from './abstract/utils.js';
+} from './abstract/utils.ts';
 
 const shake256_114 = wrapConstructor(() => shake256.create({ dkLen: 114 }));
 const shake256_64 = wrapConstructor(() => shake256.create({ dkLen: 64 }));

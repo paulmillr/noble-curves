@@ -4,8 +4,8 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { type IField, nLength, validateField } from './modular.js';
-import { bitLen, validateObject } from './utils.js';
+import { type IField, nLength, validateField } from './modular.ts';
+import { bitLen, validateObject } from './utils.ts';
 
 const _0n = BigInt(0);
 const _1n = BigInt(1);
