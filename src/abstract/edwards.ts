@@ -105,6 +105,7 @@ export type CurveFn = {
   ExtendedPoint: ExtPointConstructor;
   utils: {
     randomPrivateKey: () => Uint8Array;
+    getPrivateScalar: (key: Hex) => { head: Uint8Array; prefix: Uint8Array; scalar: bigint };
     getExtendedPublicKey: (key: Hex) => {
       head: Uint8Array;
       prefix: Uint8Array;
@@ -434,8 +435,9 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       if (isLastByteOdd !== isXOdd) x = modP(-x); // if x_0 != x mod 2, set x = p-x
       return Point.fromAffine({ x, y });
     }
-    static fromPrivateKey(privKey: Hex) {
-      return getExtendedPublicKey(privKey).point;
+    static fromPrivateKey(privKey: Hex): Point {
+      const { scalar } = getPrivateScalar(privKey);
+      return G.multiply(scalar); // reduced one call of `toRawBytes`
     }
     toRawBytes(): Uint8Array {
       const { x, y } = this.toAffine();
@@ -458,8 +460,8 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     return modN(ut.bytesToNumberLE(hash));
   }
 
-  /** Convenience method that creates public key and other stuff. RFC8032 5.1.5 */
-  function getExtendedPublicKey(key: Hex) {
+  // Get the hashed private scalar per RFC8032 5.1.5
+  function getPrivateScalar(key: Hex) {
     const len = Fp.BYTES;
     key = ensureBytes('private key', key, len);
     // Hash private key with curve's hash function to produce uniformingly random input
@@ -468,6 +470,12 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     const head = adjustScalarBytes(hashed.slice(0, len)); // clear first half bits, produce FE
     const prefix = hashed.slice(len, 2 * len); // second half is called key prefix (5.1.6)
     const scalar = modN_LE(head); // The actual private scalar
+    return { head, prefix, scalar };
+  }
+
+  // Convenience method that creates public key from scalar. RFC8032 5.1.5
+  function getExtendedPublicKey(key: Hex) {
+    const { head, prefix, scalar } = getPrivateScalar(key);
     const point = G.multiply(scalar); // Point on Edwards curve aka public key
     const pointBytes = point.toRawBytes(); // Uint8Array representation
     return { head, prefix, scalar, point, pointBytes };
@@ -537,6 +545,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
   G._setWindowSize(8); // Enable precomputes. Slows down first publicKey computation by 20ms.
 
   const utils = {
+    getPrivateScalar,
     getExtendedPublicKey,
     // ed25519 private keys are uniform 32b. No need to check for modulo bias, like in secp256k1.
     randomPrivateKey: (): Uint8Array => randomBytes(Fp.BYTES),

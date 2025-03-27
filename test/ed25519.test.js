@@ -412,7 +412,8 @@ describe('ed25519', () => {
   });
 
   should('isTorsionFree()', () => {
-    const orig = ed.utils.getExtendedPublicKey(ed.utils.randomPrivateKey()).point;
+    const { scalar } = ed.utils.getPrivateScalar(ed.utils.randomPrivateKey());
+    const orig = Point.BASE.multiply(scalar);
     for (const hex of ED25519_TORSION_SUBGROUP.slice(1)) {
       const dirty = orig.add(Point.fromHex(hex));
       const cleared = dirty.clearCofactor();
