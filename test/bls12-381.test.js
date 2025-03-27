@@ -1525,10 +1525,20 @@ describe('bls12-381 deterministic', () => {
 
   describe('EIP2537', () => {
     const toEthHex = (n) => n.toString(16).padStart(128, '0');
+    const mapToCurveEth = (curve, scalars) => {
+      try {
+        return curve.mapToCurve(scalars);
+      } catch (e) {
+        // eth stuff can also wrap other errors here?
+        if (e.message === 'bad point: ZERO') return curve.ProjectivePoint.ZERO;
+        throw e;
+      }
+    };
+
     should('G1', () => {
       for (const v of eip2537.G1) {
         const input = hexToBytes(v.Input);
-        const { x, y } = bls12_381.G1.mapToCurve([bytesToNumberBE(input)]).toAffine();
+        const { x, y } = mapToCurveEth(bls12_381.G1, [bytesToNumberBE(input)]).toAffine();
         const val = toEthHex(x) + toEthHex(y);
         deepStrictEqual(val, v.Expected);
       }
@@ -1537,11 +1547,29 @@ describe('bls12-381 deterministic', () => {
       for (const v of eip2537.G2) {
         const input1 = BigInt(`0x${v.Input.slice(0, 128)}`);
         const input2 = BigInt(`0x${v.Input.slice(128, 256)}`);
-        const { x, y } = bls12_381.G2.mapToCurve([input1, input2]).toAffine();
+        const { x, y } = mapToCurveEth(bls12_381.G2, [input1, input2]).toAffine();
         const res = toEthHex(x.c0) + toEthHex(x.c1) + toEthHex(y.c0) + toEthHex(y.c1);
         deepStrictEqual(res, v.Expected);
         // console.log('G2', res === v.Expected);
       }
+    });
+    should('zero point', () => {
+      /*
+      So, issue with zero point:
+      - we don't return ZERO point: it could break libs which depend on the behavior
+      - RFC 9380 spec goes to great lengths to ensure constant timeness of methods in spec.
+        Early-return of ZERO will break const-time
+      - spec uses inv0, but it is not used in ynum/yden
+      - spec doesn't have test vectors, which would've failed otherwise
+      - In any case, noble's ProjectivePoint#assertValidity will always crash on ZERO point
+      */
+      const t = BigInt(
+        '1006044755431560595281793557931171729984964515682961911911398807521437683216171091013202870577238485832047490326971'
+      );
+      deepStrictEqual(
+        mapToCurveEth(bls12_381.G1, [t]).equals(bls12_381.G1.ProjectivePoint.ZERO),
+        true
+      );
     });
   });
 });

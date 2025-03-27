@@ -185,6 +185,7 @@ export function isogenyMap<T, F extends IField<T>>(field: F, map: [T[], T[], T[]
     const [xNum, xDen, yNum, yDen] = COEFF.map((val) =>
       val.reduce((acc, i) => field.add(field.mul(acc, x), i))
     );
+    if (field.is0(xDen) || field.is0(yDen)) throw new Error('bad point: ZERO');
     x = field.div(xNum, xDen); // xNum / xDen
     y = field.mul(y, field.div(yNum, yDen)); // y * (yNum / yDev)
     return { x: x, y: y };
