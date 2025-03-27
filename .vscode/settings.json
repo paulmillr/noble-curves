@@ -1,7 +1,7 @@
 {
   "files.exclude": {
-    "*.{js,d.ts,js.map}": true,
-    "esm/*.{js,d.ts,js.map}": true,
+    "*.{js,d.ts,js.map,d.ts.map}": true,
+    "esm/*.{js,d.ts,js.map,d.ts.map}": true,
     "audit": true,
     "coverage": true,
     "esm": true,
