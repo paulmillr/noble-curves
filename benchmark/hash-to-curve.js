@@ -3,7 +3,7 @@ import { hashToPrivateScalar } from '@noble/curves/abstract/modular';
 import { sha256 } from '@noble/hashes/sha256';
 import { randomBytes } from '@noble/hashes/utils';
 import mark from 'micro-bmark';
-// import { generateData } from './_shared.js';
+import { title } from './_shared.js';
 import { utf8ToBytes } from '@noble/curves/abstract/utils';
 import { hashToCurve as ed25519, hash_to_ristretto255 } from '@noble/curves/ed25519';
 import { hashToCurve as ed448, hash_to_decaf448 } from '@noble/curves/ed448';
@@ -14,6 +14,7 @@ import { hashToCurve as secp256k1 } from '@noble/curves/secp256k1';
 
 const N = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n;
 (async () => {
+  title('hash-to-curve');
   const rand = randomBytes(40);
   await mark('hashToPrivateScalar', 1000000, () => hashToPrivateScalar(rand, N));
   // - p, the characteristic of F

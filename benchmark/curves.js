@@ -4,13 +4,13 @@ import { p256 } from '@noble/curves/p256';
 import { p384 } from '@noble/curves/p384';
 import { p521 } from '@noble/curves/p521';
 import mark from 'micro-bmark';
-import { generateData } from './_shared.js';
+import { generateData, title } from './_shared.js';
 
 (async () => {
   for (let kv of Object.entries({ ed25519, ed448, p256, p384, p521 })) {
     const [name, curve] = kv;
     console.log();
-    console.log(`\x1b[36m${name}\x1b[0m`);
+    title(name);
 
     await mark('init', 1, () => curve.utils.precompute(8));
     const d = generateData(curve);

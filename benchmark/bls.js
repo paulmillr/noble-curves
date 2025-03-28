@@ -3,6 +3,7 @@ import bench from 'micro-bmark';
 import { readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { title } from './_shared.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const G2_VECTORS = readFileSync(
@@ -14,7 +15,7 @@ const G2_VECTORS = readFileSync(
   .map((l) => l.split(':'));
 
 (async () => {
-  console.log(`\x1b[36mbls12-381\x1b[0m`);
+  title('bls12-381');
   let p1, p2, sig;
   await bench('init', 1, () => {
     p1 =

@@ -1,9 +1,11 @@
 import { bls12_381 } from '@noble/curves/bls12-381';
+import { title } from './_shared.js';
 
 // todo
 function compare() {}
 
 (async () => {
+  title('MSM timings');
   const g1 = bls12_381.G1.ProjectivePoint;
   const bits = bls12_381.G1.CURVE.nBitLength - 1;
   const ones = BigInt(`0b${'1'.repeat(bits)}`);

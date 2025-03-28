@@ -2,9 +2,10 @@ import * as mod from '@noble/curves/abstract/modular';
 import { DecafPoint, ed448 } from '@noble/curves/ed448';
 import { shake256 } from '@noble/hashes/sha3';
 import mark from 'micro-bmark';
+import { title } from './_shared.js';
 
 (async () => {
-  console.log(`\x1b[36mdecaf448\x1b[0m`);
+  title('decaf448');
   const priv = mod.hashToPrivateScalar(
     shake256(ed448.utils.randomPrivateKey(), { dkLen: 112 }),
     ed448.CURVE.n
