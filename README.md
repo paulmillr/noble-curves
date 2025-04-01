@@ -770,6 +770,10 @@ NIST prohibits classical cryptography (RSA, DSA, ECDSA, ECDH) [after 2035](https
 
 ## Speed
 
+```sh
+npm run bench:install && npm run bench
+```
+
 During first call of most methods, `init` is done, which calculates base point precomputes.
 The method consumes 20MB+ of memory and takes some time.
 You can adjust how many precomputes are generated,
