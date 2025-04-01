@@ -40,11 +40,42 @@ function validateW(W: number, bits: number) {
     throw new Error('invalid window size, expected [1..' + bits + '], got W=' + W);
 }
 
-function calcWOpts(W: number, bits: number) {
-  validateW(W, bits);
-  const windows = Math.ceil(bits / W) + 1; // +1, because
-  const windowSize = 2 ** (W - 1); // -1 because we skip zero
-  return { windows, windowSize };
+/** Internal wNAF opts for specific W and scalarBits */
+export type WOpts = {
+  windows: number;
+  windowSize: number;
+  mask: bigint;
+  maxNumber: number;
+  shiftBy: bigint;
+};
+
+function calcWOpts(W: number, scalarBits: number): WOpts {
+  validateW(W, scalarBits);
+  const pow_2_w = 2 ** W; // W=8 256
+  const windows = Math.ceil(scalarBits / W) + 1; // W=8 33. Not 32, because we skip zero
+  const windowSize = 2 ** (W - 1); // W=8 128. Not 256, because we skip zero
+  const maxNumber = pow_2_w; // W=8 256
+  const mask = BigInt(pow_2_w - 1); // W=8 255 == mask 0b11111111
+  const shiftBy = BigInt(W); // W=8 8
+  return { windows, windowSize, mask, maxNumber, shiftBy };
+}
+
+function calcOffsets(n: bigint, window: number, wOpts: WOpts) {
+  const { windowSize, mask, maxNumber, shiftBy } = wOpts;
+  let wbits = Number(n & mask); // extract W bits.
+  let nextN = n >> shiftBy; // shift number by W bits.
+  // split if bits > max: +224 => 256-32
+  if (wbits > windowSize) {
+    wbits -= maxNumber;
+    nextN += _1n;
+  }
+  const offsetStart = window * windowSize;
+  const offset = offsetStart + Math.abs(wbits) - 1; // -1 because we skip zero
+  const isZero = wbits === 0; // is current window slice a 0?
+  const isNeg = wbits < 0; // is current window slice negative?
+  const isNegF = window % 2 !== 0; // fake random statement for noise
+  const offsetF = offsetStart; // fake offset for noise
+  return { nextN, offset, isZero, isNeg, isNegF, offsetF };
 }
 
 function validateMSMPoints(points: any[], c: any) {
@@ -61,9 +92,10 @@ function validateMSMScalars(scalars: any[], field: any) {
 }
 
 // Since points in different groups cannot be equal (different object constructor),
-// we can have single place to store precomputes
+// we can have single place to store precomputes.
+// Allows to make points frozen / immutable.
 const pointPrecomputes = new WeakMap<any, any[]>();
-const pointWindowSizes = new WeakMap<any, number>(); // This allows use make points immutable (nothing changes inside)
+const pointWindowSizes = new WeakMap<any, number>();
 
 function getW(P: any): number {
   return pointWindowSizes.get(P) || 1;
@@ -135,7 +167,7 @@ export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number): 
       for (let window = 0; window < windows; window++) {
         base = p;
         points.push(base);
-        // =1, because we skip zero
+        // i=1, bc we skip 0
         for (let i = 1; i < windowSize; i++) {
           base = base.add(p);
           points.push(base);
@@ -155,52 +187,28 @@ export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number): 
     wNAF(W: number, precomputes: T[], n: bigint): { p: T; f: T } {
       // TODO: maybe check that scalar is less than group order? wNAF behavious is undefined otherwise
       // But need to carefully remove other checks before wNAF. ORDER == bits here
-      const { windows, windowSize } = calcWOpts(W, bits);
-
       let p = c.ZERO;
       let f = c.BASE;
-
-      const mask = BigInt(2 ** W - 1); // Create mask with W ones: 0b1111 for W=4 etc.
-      const maxNumber = 2 ** W;
-      const shiftBy = BigInt(W);
-
-      for (let window = 0; window < windows; window++) {
-        const offset = window * windowSize;
-        // Extract W bits.
-        let wbits = Number(n & mask);
-
-        // Shift number by W bits.
-        n >>= shiftBy;
-
-        // If the bits are bigger than max size, we'll split those.
-        // +224 => 256 - 32
-        if (wbits > windowSize) {
-          wbits -= maxNumber;
-          n += _1n;
-        }
-
-        // This code was first written with assumption that 'f' and 'p' will never be infinity point:
-        // since each addition is multiplied by 2 ** W, it cannot cancel each other. However,
-        // there is negate now: it is possible that negated element from low value
-        // would be the same as high element, which will create carry into next window.
-        // It's not obvious how this can fail, but still worth investigating later.
-
-        // Check if we're onto Zero point.
-        // Add random point inside current window to f.
-        const offset1 = offset;
-        const offset2 = offset + Math.abs(wbits) - 1; // -1 because we skip zero
-        const cond1 = window % 2 !== 0;
-        const cond2 = wbits < 0;
-        if (wbits === 0) {
-          // The most important part for const-time getPublicKey
-          f = f.add(constTimeNegate(cond1, precomputes[offset1]));
+      // This code was first written with assumption that 'f' and 'p' will never be infinity point:
+      // since each addition is multiplied by 2 ** W, it cannot cancel each other. However,
+      // there is negate now: it is possible that negated element from low value
+      // would be the same as high element, which will create carry into next window.
+      // It's not obvious how this can fail, but still worth investigating later.
+      const wo = calcWOpts(W, bits);
+      for (let window = 0; window < wo.windows; window++) {
+        // (n === 0) is still handled. isEven and offsetF are used for noise
+        const { nextN, offset, isZero, isNeg, isNegF, offsetF } = calcOffsets(n, window, wo);
+        n = nextN;
+        if (isZero) {
+          // bits are 0: add garbage to fake point
+          // Important part for const-time getPublicKey: add random "noise" point to f.
+          f = f.add(constTimeNegate(isNegF, precomputes[offsetF]));
         } else {
-          p = p.add(constTimeNegate(cond2, precomputes[offset2]));
+          // bits are 1: add to result point
+          p = p.add(constTimeNegate(isNeg, precomputes[offset]));
         }
       }
-      // JIT-compiler should not eliminate f here, since it will later be used in normalizeZ()
-      // Even if the variable is still unused, there are some checks which will
-      // throw an exception, so compiler needs to prove they won't happen, which is hard.
+      // Return both real and fake points: JIT won't eliminate f.
       // At this point there is a way to F be infinity-point even if p is not,
       // which makes it less const-time: around 1 bigint multiply.
       return { p, f };
@@ -215,28 +223,18 @@ export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number): 
      * @returns point
      */
     wNAFUnsafe(W: number, precomputes: T[], n: bigint, acc: T = c.ZERO): T {
-      const { windows, windowSize } = calcWOpts(W, bits);
-      const mask = BigInt(2 ** W - 1); // Create mask with W ones: 0b1111 for W=4 etc.
-      const maxNumber = 2 ** W;
-      const shiftBy = BigInt(W);
-      for (let window = 0; window < windows; window++) {
-        const offset = window * windowSize;
-        if (n === _0n) break; // No need to go over empty scalar
-        // Extract W bits.
-        let wbits = Number(n & mask);
-        // Shift number by W bits.
-        n >>= shiftBy;
-        // If the bits are bigger than max size, we'll split those.
-        // +224 => 256 - 32
-        if (wbits > windowSize) {
-          wbits -= maxNumber;
-          n += _1n;
+      const wo = calcWOpts(W, bits);
+      for (let window = 0; window < wo.windows; window++) {
+        if (n === _0n) break; // Early-exit, skip 0 value
+        const { nextN, offset, isZero, isNeg } = calcOffsets(n, window, wo);
+        n = nextN;
+        if (isZero) {
+          // Early-proceed, skip zero bit
+          continue;
+        } else {
+          const item = precomputes[offset];
+          acc = acc.add(isNeg ? item.negate() : item); // Re-using acc allows to save adds in MSM
         }
-        if (wbits === 0) continue;
-        let curr = precomputes[offset + Math.abs(wbits) - 1]; // -1 because we skip zero
-        if (wbits < 0) curr = curr.negate();
-        // NOTE: by re-using acc, we can save a lot of additions in case of MSM
-        acc = acc.add(curr);
       }
       return acc;
     },
