@@ -775,96 +775,105 @@ The method consumes 20MB+ of memory and takes some time.
 You can adjust how many precomputes are generated,
 by using `_setWindowSize`. Check out the source code.
 
-Benchmark results on Apple M2 with node v22:
+Benchmark results on Apple M4:
 
 ```
-secp256k1
-init x 68 ops/sec @ 14ms/op
-getPublicKey x 6,839 ops/sec @ 146μs/op
-sign x 5,226 ops/sec @ 191μs/op
-verify x 893 ops/sec @ 1ms/op
-getSharedSecret x 538 ops/sec @ 1ms/op
-recoverPublicKey x 923 ops/sec @ 1ms/op
-schnorr.sign x 700 ops/sec @ 1ms/op
-schnorr.verify x 919 ops/sec @ 1ms/op
+# secp256k1
+init 10ms
+getPublicKey x 9,099 ops/sec @ 109μs/op
+sign x 7,182 ops/sec @ 139μs/op
+verify x 1,188 ops/sec @ 841μs/op
+getSharedSecret x 735 ops/sec @ 1ms/op
+recoverPublicKey x 1,265 ops/sec @ 790μs/op
+schnorr.sign x 957 ops/sec @ 1ms/op
+schnorr.verify x 1,210 ops/sec @ 825μs/op
 
-ed25519
-init x 51 ops/sec @ 19ms/op
-getPublicKey x 9,809 ops/sec @ 101μs/op
-sign x 4,976 ops/sec @ 200μs/op
-verify x 1,018 ops/sec @ 981μs/op
+# ed25519
+init 14ms
+getPublicKey x 14,216 ops/sec @ 70μs/op
+sign x 6,849 ops/sec @ 145μs/op
+verify x 1,400 ops/sec @ 713μs/op
 
-ed448
-init x 19 ops/sec @ 50ms/op
-getPublicKey x 3,723 ops/sec @ 268μs/op
-sign x 1,759 ops/sec @ 568μs/op
-verify x 344 ops/sec @ 2ms/op
+# ed448
+init 37ms
+getPublicKey x 5,273 ops/sec @ 189μs/op
+sign x 2,494 ops/sec @ 400μs/op
+verify x 476 ops/sec @ 2ms/op
 
-p256
-init x 39 ops/sec @ 25ms/op
-getPublicKey x 6,518 ops/sec @ 153μs/op
-sign x 5,148 ops/sec @ 194μs/op
-verify x 609 ops/sec @ 1ms/op
+# p256
+init 17ms
+getPublicKey x 8,977 ops/sec @ 111μs/op
+sign x 7,236 ops/sec @ 138μs/op
+verify x 877 ops/sec @ 1ms/op
 
-p384
-init x 17 ops/sec @ 57ms/op
-getPublicKey x 2,933 ops/sec @ 340μs/op
-sign x 2,327 ops/sec @ 429μs/op
-verify x 244 ops/sec @ 4ms/op
+# p384
+init 42ms
+getPublicKey x 4,084 ops/sec @ 244μs/op
+sign x 3,247 ops/sec @ 307μs/op
+verify x 331 ops/sec @ 3ms/op
 
-p521
-init x 8 ops/sec @ 112ms/op
-getPublicKey x 1,484 ops/sec @ 673μs/op
-sign x 1,264 ops/sec @ 790μs/op
-verify x 124 ops/sec @ 8ms/op
+# p521
+init 83ms
+getPublicKey x 2,049 ops/sec @ 487μs/op
+sign x 1,748 ops/sec @ 571μs/op
+verify x 170 ops/sec @ 5ms/op
 
-ristretto255
-add x 680,735 ops/sec @ 1μs/op
-multiply x 10,766 ops/sec @ 92μs/op
-encode x 15,835 ops/sec @ 63μs/op
-decode x 15,972 ops/sec @ 62μs/op
+# ristretto255
+add x 931,966 ops/sec @ 1μs/op
+multiply x 15,444 ops/sec @ 64μs/op
+encode x 21,367 ops/sec @ 46μs/op
+decode x 21,715 ops/sec @ 46μs/op
 
-decaf448
-add x 345,303 ops/sec @ 2μs/op
-multiply x 300 ops/sec @ 3ms/op
-encode x 5,987 ops/sec @ 167μs/op
-decode x 5,892 ops/sec @ 169μs/op
+# decaf448
+add x 478,011 ops/sec @ 2μs/op
+multiply x 416 ops/sec @ 2ms/op
+encode x 8,562 ops/sec @ 116μs/op
+decode x 8,636 ops/sec @ 115μs/op
 
-ecdh
-├─x25519 x 1,477 ops/sec @ 676μs/op
-├─secp256k1 x 537 ops/sec @ 1ms/op
-├─p256 x 512 ops/sec @ 1ms/op
-├─p384 x 198 ops/sec @ 5ms/op
-├─p521 x 99 ops/sec @ 10ms/op
-└─x448 x 504 ops/sec @ 1ms/op
+# ECDH
+x25519 x 1,981 ops/sec @ 504μs/op
+x448 x 743 ops/sec @ 1ms/op
+secp256k1 x 728 ops/sec @ 1ms/op
+p256 x 705 ops/sec @ 1ms/op
+p384 x 268 ops/sec @ 3ms/op
+p521 x 137 ops/sec @ 7ms/op
 
-bls12-381
-init x 36 ops/sec @ 27ms/op
-getPublicKey x 960 ops/sec @ 1ms/op
-sign x 60 ops/sec @ 16ms/op
-verify x 47 ops/sec @ 21ms/op
-pairing x 125 ops/sec @ 7ms/op
-pairing10 x 40 ops/sec @ 24ms/op ± 23.27% (min: 21ms, max: 48ms)
-MSM 4096 scalars x points x 0 ops/sec @ 4655ms/op
-aggregatePublicKeys/8 x 129 ops/sec @ 7ms/op
-aggregatePublicKeys/32 x 34 ops/sec @ 28ms/op
-aggregatePublicKeys/128 x 8 ops/sec @ 113ms/op
-aggregatePublicKeys/512 x 2 ops/sec @ 449ms/op
-aggregatePublicKeys/2048 x 0 ops/sec @ 1792ms/op
-aggregateSignatures/8 x 62 ops/sec @ 15ms/op
-aggregateSignatures/32 x 16 ops/sec @ 60ms/op
-aggregateSignatures/128 x 4 ops/sec @ 238ms/op
-aggregateSignatures/512 x 1 ops/sec @ 946ms/op
-aggregateSignatures/2048 x 0 ops/sec @ 3774ms/op
+# hash-to-curve
+hashToPrivateScalar x 1,754,385 ops/sec @ 570ns/op
+hash_to_field x 135,703 ops/sec @ 7μs/op
+hashToCurve secp256k1 x 3,194 ops/sec @ 313μs/op
+hashToCurve p256 x 5,962 ops/sec @ 167μs/op
+hashToCurve p384 x 2,230 ops/sec @ 448μs/op
+hashToCurve p521 x 1,063 ops/sec @ 940μs/op
+hashToCurve ed25519 x 4,047 ops/sec @ 247μs/op
+hashToCurve ed448 x 1,691 ops/sec @ 591μs/op
+hash_to_ristretto255 x 8,733 ops/sec @ 114μs/op
+hash_to_decaf448 x 3,882 ops/sec @ 257μs/op
 
-hash-to-curve
-hash_to_field x 91,600 ops/sec @ 10μs/op
-secp256k1 x 2,373 ops/sec @ 421μs/op
-p256 x 4,310 ops/sec @ 231μs/op
-p384 x 1,664 ops/sec @ 600μs/op
-p521 x 807 ops/sec @ 1ms/op
-ed25519 x 3,088 ops/sec @ 323μs/op
-ed448 x 1,247 ops/sec @ 801μs/op
+# modular over secp256k1 P field
+invert a x 866,551 ops/sec @ 1μs/op
+invert b x 693,962 ops/sec @ 1μs/op
+sqrt p = 3 mod 4 x 25,738 ops/sec @ 38μs/op
+sqrt tonneli-shanks x 847 ops/sec @ 1ms/op
+
+# bls12-381
+init 22ms
+getPublicKey x 1,325 ops/sec @ 754μs/op
+sign x 80 ops/sec @ 12ms/op
+verify x 62 ops/sec @ 15ms/op
+pairing x 166 ops/sec @ 6ms/op
+pairing10 x 54 ops/sec @ 18ms/op ± 23.48% (15ms..36ms)
+MSM 4096 scalars x points 3286ms
+aggregatePublicKeys/8 x 173 ops/sec @ 5ms/op
+aggregatePublicKeys/32 x 46 ops/sec @ 21ms/op
+aggregatePublicKeys/128 x 11 ops/sec @ 84ms/op
+aggregatePublicKeys/512 x 2 ops/sec @ 335ms/op
+aggregatePublicKeys/2048 x 0 ops/sec @ 1346ms/op
+aggregateSignatures/8 x 82 ops/sec @ 12ms/op
+aggregateSignatures/32 x 21 ops/sec @ 45ms/op
+aggregateSignatures/128 x 5 ops/sec @ 178ms/op
+aggregateSignatures/512 x 1 ops/sec @ 705ms/op
+aggregateSignatures/2048 x 0 ops/sec @ 2823ms/op
 ```
 
 ## Upgrading
