@@ -5,7 +5,7 @@
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { type IField, nLength, validateField } from './modular.ts';
-import { bitLen, validateObject } from './utils.ts';
+import { bitLen, bitMask, validateObject } from './utils.ts';
 
 const _0n = BigInt(0);
 const _1n = BigInt(1);
@@ -40,11 +40,49 @@ function validateW(W: number, bits: number) {
     throw new Error('invalid window size, expected [1..' + bits + '], got W=' + W);
 }
 
-function calcWOpts(W: number, bits: number) {
-  validateW(W, bits);
-  const windows = Math.ceil(bits / W) + 1; // +1, because
-  const windowSize = 2 ** (W - 1); // -1 because we skip zero
-  return { windows, windowSize };
+/** Internal wNAF opts for specific W and scalarBits */
+export type WOpts = {
+  windows: number;
+  windowSize: number;
+  mask: bigint;
+  maxNumber: number;
+  shiftBy: bigint;
+};
+
+function calcWOpts(W: number, scalarBits: number): WOpts {
+  validateW(W, scalarBits);
+  const pow_2_w = 2 ** W; // W=8 256
+  const windows = Math.ceil(scalarBits / W) + 1; // W=8 33. Not 32, because we skip zero
+  const windowSize = 2 ** (W - 1); // W=8 128. Not 256, because we skip zero
+  const maxNumber = pow_2_w; // W=8 256
+  const mask = bitMask(W); // W=8 255 == mask 0b11111111
+  const shiftBy = BigInt(W); // W=8 8
+  return { windows, windowSize, mask, maxNumber, shiftBy };
+}
+
+function calcOffsets(n: bigint, window: number, wOpts: WOpts) {
+  const { windowSize, mask, maxNumber, shiftBy } = wOpts;
+  let wbits = Number(n & mask); // extract W bits.
+  let nextN = n >> shiftBy; // shift number by W bits.
+
+  // What actually happens here:
+  // const highestBit = Number(mask ^ (mask >> 1n));
+  // let wbits2 = wbits - 1; // skip zero
+  // if (wbits2 & highestBit) { wbits2 ^= Number(mask); // (~);
+
+  // split if bits > max: +224 => 256-32
+  if (wbits > windowSize) {
+    // we skip zero, which means instead of `>= size-1`, we do `> size`
+    wbits -= maxNumber; // -32, can be maxNumber - wbits, but then we need to set isNeg here.
+    nextN += _1n; // +256 (carry)
+  }
+  const offsetStart = window * windowSize;
+  const offset = offsetStart + Math.abs(wbits) - 1; // -1 because we skip zero
+  const isZero = wbits === 0; // is current window slice a 0?
+  const isNeg = wbits < 0; // is current window slice negative?
+  const isNegF = window % 2 !== 0; // fake random statement for noise
+  const offsetF = offsetStart; // fake offset for noise
+  return { nextN, offset, isZero, isNeg, isNegF, offsetF };
 }
 
 function validateMSMPoints(points: any[], c: any) {
@@ -61,9 +99,10 @@ function validateMSMScalars(scalars: any[], field: any) {
 }
 
 // Since points in different groups cannot be equal (different object constructor),
-// we can have single place to store precomputes
+// we can have single place to store precomputes.
+// Allows to make points frozen / immutable.
 const pointPrecomputes = new WeakMap<any, any[]>();
-const pointWindowSizes = new WeakMap<any, number>(); // This allows use make points immutable (nothing changes inside)
+const pointWindowSizes = new WeakMap<any, number>();
 
 function getW(P: any): number {
   return pointWindowSizes.get(P) || 1;
@@ -135,7 +174,7 @@ export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number): 
       for (let window = 0; window < windows; window++) {
         base = p;
         points.push(base);
-        // =1, because we skip zero
+        // i=1, bc we skip 0
         for (let i = 1; i < windowSize; i++) {
           base = base.add(p);
           points.push(base);
@@ -153,54 +192,32 @@ export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number): 
      * @returns real and fake (for const-time) points
      */
     wNAF(W: number, precomputes: T[], n: bigint): { p: T; f: T } {
+      // Smaller version:
+      // https://github.com/paulmillr/noble-secp256k1/blob/47cb1669b6e506ad66b35fe7d76132ae97465da2/index.ts#L502-L541
       // TODO: maybe check that scalar is less than group order? wNAF behavious is undefined otherwise
       // But need to carefully remove other checks before wNAF. ORDER == bits here
-      const { windows, windowSize } = calcWOpts(W, bits);
-
       let p = c.ZERO;
       let f = c.BASE;
-
-      const mask = BigInt(2 ** W - 1); // Create mask with W ones: 0b1111 for W=4 etc.
-      const maxNumber = 2 ** W;
-      const shiftBy = BigInt(W);
-
-      for (let window = 0; window < windows; window++) {
-        const offset = window * windowSize;
-        // Extract W bits.
-        let wbits = Number(n & mask);
-
-        // Shift number by W bits.
-        n >>= shiftBy;
-
-        // If the bits are bigger than max size, we'll split those.
-        // +224 => 256 - 32
-        if (wbits > windowSize) {
-          wbits -= maxNumber;
-          n += _1n;
-        }
-
-        // This code was first written with assumption that 'f' and 'p' will never be infinity point:
-        // since each addition is multiplied by 2 ** W, it cannot cancel each other. However,
-        // there is negate now: it is possible that negated element from low value
-        // would be the same as high element, which will create carry into next window.
-        // It's not obvious how this can fail, but still worth investigating later.
-
-        // Check if we're onto Zero point.
-        // Add random point inside current window to f.
-        const offset1 = offset;
-        const offset2 = offset + Math.abs(wbits) - 1; // -1 because we skip zero
-        const cond1 = window % 2 !== 0;
-        const cond2 = wbits < 0;
-        if (wbits === 0) {
-          // The most important part for const-time getPublicKey
-          f = f.add(constTimeNegate(cond1, precomputes[offset1]));
+      // This code was first written with assumption that 'f' and 'p' will never be infinity point:
+      // since each addition is multiplied by 2 ** W, it cannot cancel each other. However,
+      // there is negate now: it is possible that negated element from low value
+      // would be the same as high element, which will create carry into next window.
+      // It's not obvious how this can fail, but still worth investigating later.
+      const wo = calcWOpts(W, bits);
+      for (let window = 0; window < wo.windows; window++) {
+        // (n === 0) is still handled. isEven and offsetF are used for noise
+        const { nextN, offset, isZero, isNeg, isNegF, offsetF } = calcOffsets(n, window, wo);
+        n = nextN;
+        if (isZero) {
+          // bits are 0: add garbage to fake point
+          // Important part for const-time getPublicKey: add random "noise" point to f.
+          f = f.add(constTimeNegate(isNegF, precomputes[offsetF]));
         } else {
-          p = p.add(constTimeNegate(cond2, precomputes[offset2]));
+          // bits are 1: add to result point
+          p = p.add(constTimeNegate(isNeg, precomputes[offset]));
         }
       }
-      // JIT-compiler should not eliminate f here, since it will later be used in normalizeZ()
-      // Even if the variable is still unused, there are some checks which will
-      // throw an exception, so compiler needs to prove they won't happen, which is hard.
+      // Return both real and fake points: JIT won't eliminate f.
       // At this point there is a way to F be infinity-point even if p is not,
       // which makes it less const-time: around 1 bigint multiply.
       return { p, f };
@@ -215,28 +232,18 @@ export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number): 
      * @returns point
      */
     wNAFUnsafe(W: number, precomputes: T[], n: bigint, acc: T = c.ZERO): T {
-      const { windows, windowSize } = calcWOpts(W, bits);
-      const mask = BigInt(2 ** W - 1); // Create mask with W ones: 0b1111 for W=4 etc.
-      const maxNumber = 2 ** W;
-      const shiftBy = BigInt(W);
-      for (let window = 0; window < windows; window++) {
-        const offset = window * windowSize;
-        if (n === _0n) break; // No need to go over empty scalar
-        // Extract W bits.
-        let wbits = Number(n & mask);
-        // Shift number by W bits.
-        n >>= shiftBy;
-        // If the bits are bigger than max size, we'll split those.
-        // +224 => 256 - 32
-        if (wbits > windowSize) {
-          wbits -= maxNumber;
-          n += _1n;
+      const wo = calcWOpts(W, bits);
+      for (let window = 0; window < wo.windows; window++) {
+        if (n === _0n) break; // Early-exit, skip 0 value
+        const { nextN, offset, isZero, isNeg } = calcOffsets(n, window, wo);
+        n = nextN;
+        if (isZero) {
+          // Early-proceed, skip zero bit
+          continue;
+        } else {
+          const item = precomputes[offset];
+          acc = acc.add(isNeg ? item.negate() : item); // Re-using acc allows to save adds in MSM
         }
-        if (wbits === 0) continue;
-        let curr = precomputes[offset + Math.abs(wbits) - 1]; // -1 because we skip zero
-        if (wbits < 0) curr = curr.negate();
-        // NOTE: by re-using acc, we can save a lot of additions in case of MSM
-        acc = acc.add(curr);
       }
       return acc;
     },
@@ -276,7 +283,7 @@ export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number): 
 
 /**
  * Pippenger algorithm for multi-scalar multiplication (MSM, Pa + Qb + Rc + ...).
- * 30x faster vs naive addition on L=4096, 10x faster with precomputes.
+ * 30x faster vs naive addition on L=4096, 10x faster than precomputes.
  * For N=254bit, L=1, it does: 1024 ADD + 254 DBL. For L=5: 1536 ADD + 254 DBL.
  * Algorithmically constant-time (for same L), even when 1 point + scalar, or when scalar = 0.
  * @param c Curve Point constructor
@@ -303,15 +310,15 @@ export function pippenger<T extends Group<T>>(
   const zero = c.ZERO;
   const wbits = bitLen(BigInt(points.length));
   const windowSize = wbits > 12 ? wbits - 3 : wbits > 4 ? wbits - 2 : wbits ? 2 : 1; // in bits
-  const MASK = (1 << windowSize) - 1;
-  const buckets = new Array(MASK + 1).fill(zero); // +1 for zero array
+  const MASK = bitMask(windowSize);
+  const buckets = new Array(Number(MASK) + 1).fill(zero); // +1 for zero array
   const lastBits = Math.floor((fieldN.BITS - 1) / windowSize) * windowSize;
   let sum = zero;
   for (let i = lastBits; i >= 0; i -= windowSize) {
     buckets.fill(zero);
     for (let j = 0; j < scalars.length; j++) {
       const scalar = scalars[j];
-      const wbits = Number((scalar >> BigInt(i)) & BigInt(MASK));
+      const wbits = Number((scalar >> BigInt(i)) & MASK);
       buckets[wbits] = buckets[wbits].add(points[j]);
     }
     let resI = zero; // not using this will do small speed-up, but will lose ct
@@ -378,7 +385,7 @@ export function precomputeMSMUnsafe<T extends Group<T>>(
   const zero = c.ZERO;
   const tableSize = 2 ** windowSize - 1; // table size (without zero)
   const chunks = Math.ceil(fieldN.BITS / windowSize); // chunks of item
-  const MASK = BigInt((1 << windowSize) - 1);
+  const MASK = bitMask(windowSize);
   const tables = points.map((p: T) => {
     const res = [];
     for (let i = 0, acc = p; i < tableSize; i++) {
