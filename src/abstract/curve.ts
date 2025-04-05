@@ -5,7 +5,7 @@
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { type IField, nLength, validateField } from './modular.ts';
-import { bitLen, validateObject } from './utils.ts';
+import { bitLen, bitMask, validateObject } from './utils.ts';
 
 const _0n = BigInt(0);
 const _1n = BigInt(1);
@@ -55,7 +55,7 @@ function calcWOpts(W: number, scalarBits: number): WOpts {
   const windows = Math.ceil(scalarBits / W) + 1; // W=8 33. Not 32, because we skip zero
   const windowSize = 2 ** (W - 1); // W=8 128. Not 256, because we skip zero
   const maxNumber = pow_2_w; // W=8 256
-  const mask = BigInt(pow_2_w - 1); // W=8 255 == mask 0b11111111
+  const mask = bitMask(W); // W=8 255 == mask 0b11111111
   const shiftBy = BigInt(W); // W=8 8
   return { windows, windowSize, mask, maxNumber, shiftBy };
 }
@@ -64,10 +64,17 @@ function calcOffsets(n: bigint, window: number, wOpts: WOpts) {
   const { windowSize, mask, maxNumber, shiftBy } = wOpts;
   let wbits = Number(n & mask); // extract W bits.
   let nextN = n >> shiftBy; // shift number by W bits.
+
+  // What actually happens here:
+  // const highestBit = Number(mask ^ (mask >> 1n));
+  // let wbits2 = wbits - 1; // skip zero
+  // if (wbits2 & highestBit) { wbits2 ^= Number(mask); // (~);
+
   // split if bits > max: +224 => 256-32
   if (wbits > windowSize) {
-    wbits -= maxNumber;
-    nextN += _1n;
+    // we skip zero, which means instead of `>= size-1`, we do `> size`
+    wbits -= maxNumber; // -32, can be maxNumber - wbits, but then we need to set isNeg here.
+    nextN += _1n; // +256 (carry)
   }
   const offsetStart = window * windowSize;
   const offset = offsetStart + Math.abs(wbits) - 1; // -1 because we skip zero
@@ -185,6 +192,8 @@ export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number): 
      * @returns real and fake (for const-time) points
      */
     wNAF(W: number, precomputes: T[], n: bigint): { p: T; f: T } {
+      // Smaller version:
+      // https://github.com/paulmillr/noble-secp256k1/blob/47cb1669b6e506ad66b35fe7d76132ae97465da2/index.ts#L502-L541
       // TODO: maybe check that scalar is less than group order? wNAF behavious is undefined otherwise
       // But need to carefully remove other checks before wNAF. ORDER == bits here
       let p = c.ZERO;
@@ -274,7 +283,7 @@ export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number): 
 
 /**
  * Pippenger algorithm for multi-scalar multiplication (MSM, Pa + Qb + Rc + ...).
- * 30x faster vs naive addition on L=4096, 10x faster with precomputes.
+ * 30x faster vs naive addition on L=4096, 10x faster than precomputes.
  * For N=254bit, L=1, it does: 1024 ADD + 254 DBL. For L=5: 1536 ADD + 254 DBL.
  * Algorithmically constant-time (for same L), even when 1 point + scalar, or when scalar = 0.
  * @param c Curve Point constructor
@@ -301,15 +310,15 @@ export function pippenger<T extends Group<T>>(
   const zero = c.ZERO;
   const wbits = bitLen(BigInt(points.length));
   const windowSize = wbits > 12 ? wbits - 3 : wbits > 4 ? wbits - 2 : wbits ? 2 : 1; // in bits
-  const MASK = (1 << windowSize) - 1;
-  const buckets = new Array(MASK + 1).fill(zero); // +1 for zero array
+  const MASK = bitMask(windowSize);
+  const buckets = new Array(Number(MASK) + 1).fill(zero); // +1 for zero array
   const lastBits = Math.floor((fieldN.BITS - 1) / windowSize) * windowSize;
   let sum = zero;
   for (let i = lastBits; i >= 0; i -= windowSize) {
     buckets.fill(zero);
     for (let j = 0; j < scalars.length; j++) {
       const scalar = scalars[j];
-      const wbits = Number((scalar >> BigInt(i)) & BigInt(MASK));
+      const wbits = Number((scalar >> BigInt(i)) & MASK);
       buckets[wbits] = buckets[wbits].add(points[j]);
     }
     let resI = zero; // not using this will do small speed-up, but will lose ct
@@ -376,7 +385,7 @@ export function precomputeMSMUnsafe<T extends Group<T>>(
   const zero = c.ZERO;
   const tableSize = 2 ** windowSize - 1; // table size (without zero)
   const chunks = Math.ceil(fieldN.BITS / windowSize); // chunks of item
-  const MASK = BigInt((1 << windowSize) - 1);
+  const MASK = bitMask(windowSize);
   const tables = points.map((p: T) => {
     const res = [];
     for (let i = 0, acc = p; i < tableSize; i++) {
