@@ -10,7 +10,6 @@
 // won't be included into their bundle.
 const _0n = /* @__PURE__ */ BigInt(0);
 const _1n = /* @__PURE__ */ BigInt(1);
-const _2n = /* @__PURE__ */ BigInt(2);
 export type Hex = Uint8Array | string; // hex strings are accepted for simplicity
 export type PrivKey = Hex | bigint; // bigints are accepted to ease learning curve
 export type CHash = {
@@ -245,7 +244,7 @@ export function bitSet(n: bigint, pos: number, value: boolean): bigint {
  * Calculate mask for N bits. Not using ** operator with bigints because of old engines.
  * Same as BigInt(`0b${Array(i).fill('1').join('')}`)
  */
-export const bitMask = (n: number): bigint => (_2n << BigInt(n - 1)) - _1n;
+export const bitMask = (n: number): bigint => (_1n << BigInt(n)) - _1n;
 
 // DRBG
 
