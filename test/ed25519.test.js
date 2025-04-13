@@ -1,10 +1,10 @@
-import { json } from './utils.js';
-import { deepStrictEqual, strictEqual, throws } from 'node:assert';
-import { readFileSync } from 'node:fs';
-import { bytesToHex, concatBytes, hexToBytes, utf8ToBytes, randomBytes } from '@noble/hashes/utils';
+import { bytesToHex, concatBytes, hexToBytes, randomBytes, utf8ToBytes } from '@noble/hashes/utils';
 import * as fc from 'fast-check';
 import { describe, should } from 'micro-should';
+import { deepStrictEqual, strictEqual, throws } from 'node:assert';
+import { readFileSync } from 'node:fs';
 import { ed25519 as ed, ED25519_TORSION_SUBGROUP, numberToBytesLE } from './ed25519.helpers.js';
+import { json } from './utils.js';
 // Old vectors allow to test sign() because they include private key
 const ed25519vectors_OLD = json('./ed25519/ed25519_test_OLD.json');
 const ed25519vectors = json('./wycheproof/ed25519_test.json');
@@ -228,64 +228,6 @@ describe('ed25519', () => {
     );
   });
 
-  // const PRIVATE_KEY = 0xa665a45920422f9d417e4867efn;
-  // const MESSAGE = ripemd160(new Uint8Array([97, 98, 99, 100, 101, 102, 103]));
-  // prettier-ignore
-  // const MESSAGE = new Uint8Array([
-  //   135, 79, 153, 96, 197, 210, 183, 169, 181, 250, 211, 131, 225, 186, 68, 113, 158, 187, 116, 58,
-  // ]);
-  // const WRONG_MESSAGE = ripemd160(new Uint8Array([98, 99, 100, 101, 102, 103]));
-  // prettier-ignore
-  // const WRONG_MESSAGE = new Uint8Array([
-  //   88, 157, 140, 127, 29, 160, 162, 75, 192, 123, 115, 129, 173, 72, 177, 207, 194, 17, 175, 28,
-  // ]);
-  // // it("should verify just signed message", async () => {
-  // //   await fc.assert(fc.asyncProperty(
-  // //     fc.hexa(),
-  // //     fc.bigInt(2n, ristretto25519.PRIME_ORDER),
-  // //     async (message, privateKey) => {
-  // //       const publicKey = await ristretto25519.getPublicKey(privateKey);
-  // //       const signature = await ristretto25519.sign(message, privateKey);
-  // //       expect(publicKey.length).toBe(32);
-  // //       expect(signature.length).toBe(64);
-  // //       expect(await ristretto25519.verify(signature, message, publicKey)).toBe(true);
-  // //     }),
-  // //    { numRuns: 1 }
-  // //   );
-  // // });
-  // // it("should not verify sign with wrong message", async () => {
-  // //   await fc.assert(fc.asyncProperty(
-  // //     fc.array(fc.integer(0x00, 0xff)),
-  // //     fc.array(fc.integer(0x00, 0xff)),
-  // //     fc.bigInt(2n, ristretto25519.PRIME_ORDER),
-  // //     async (bytes, wrongBytes, privateKey) => {
-  // //       const message = new Uint8Array(bytes);
-  // //       const wrongMessage = new Uint8Array(wrongBytes);
-  // //       const publicKey = await ristretto25519.getPublicKey(privateKey);
-  // //       const signature = await ristretto25519.sign(message, privateKey);
-  // //       expect(await ristretto25519.verify(signature, wrongMessage, publicKey)).toBe(
-  // //         bytes.toString() === wrongBytes.toString()
-  // //       );
-  // //     }),
-  // //    { numRuns: 1 }
-  // //   );
-  // // });
-  // // it("should sign and verify", async () => {
-  // //   const publicKey = await ristretto25519.getPublicKey(PRIVATE_KEY);
-  // //   const signature = await ristretto25519.sign(MESSAGE, PRIVATE_KEY);
-  // //   expect(await ristretto25519.verify(signature, MESSAGE, publicKey)).toBe(true);
-  // // });
-  // // it("should not verify signature with wrong public key", async () => {
-  // //   const publicKey = await ristretto25519.getPublicKey(12);
-  // //   const signature = await ristretto25519.sign(MESSAGE, PRIVATE_KEY);
-  // //   expect(await ristretto25519.verify(signature, MESSAGE, publicKey)).toBe(false);
-  // // });
-  // // it("should not verify signature with wrong hash", async () => {
-  // //   const publicKey = await ristretto25519.getPublicKey(PRIVATE_KEY);
-  // //   const signature = await ristretto25519.sign(MESSAGE, PRIVATE_KEY);
-  // //   expect(await ristretto25519.verify(signature, WRONG_MESSAGE, publicKey)).toBe(false);
-  // // });
-
   should('input immutability: sign/verify are immutable', () => {
     const privateKey = ed.utils.randomPrivateKey();
     const publicKey = ed.getPublicKey(privateKey);
@@ -293,8 +235,7 @@ describe('ed25519', () => {
     for (let i = 0; i < 100; i++) {
       let pay = randomBytes(100); // payload
       let sig = ed.sign(pay, privateKey);
-      if (!ed.verify(sig, pay, publicKey))
-        throw new Error('Signature verification failed');
+      if (!ed.verify(sig, pay, publicKey)) throw new Error('Signature verification failed');
       if (typeof Buffer === 'undefined') {
         if (!ed.verify(sig.slice(), pay.slice(), publicKey))
           throw new Error('Signature verification failed');
@@ -358,7 +299,7 @@ describe('ed25519', () => {
   //   );
   // });
 
-  should(`wycheproof/ED25519 (OLD)`, () => {
+  should('wycheproof/ED25519 (OLD)', () => {
     for (let g = 0; g < ed25519vectors_OLD.testGroups.length; g++) {
       const group = ed25519vectors_OLD.testGroups[g];
       const key = group.key;
@@ -382,7 +323,7 @@ describe('ed25519', () => {
     }
   });
 
-  should(`wycheproof/ED25519`, () => {
+  should('wycheproof/ED25519', () => {
     for (let g = 0; g < ed25519vectors.testGroups.length; g++) {
       const group = ed25519vectors.testGroups[g];
       const key = group.publicKey;
@@ -412,12 +353,11 @@ describe('ed25519', () => {
   });
 
   should('isTorsionFree()', () => {
-    const { scalar } = ed.utils.getPrivateScalar(ed.utils.randomPrivateKey());
-    const orig = Point.BASE.multiply(scalar);
+    const { point } = ed.utils.getExtendedPublicKey(ed.utils.randomPrivateKey());
     for (const hex of ED25519_TORSION_SUBGROUP.slice(1)) {
-      const dirty = orig.add(Point.fromHex(hex));
+      const dirty = point.add(Point.fromHex(hex));
       const cleared = dirty.clearCofactor();
-      strictEqual(orig.isTorsionFree(), true, `orig must be torsionFree: ${hex}`);
+      strictEqual(point.isTorsionFree(), true, `orig must be torsionFree: ${hex}`);
       strictEqual(dirty.isTorsionFree(), false, `dirty must not be torsionFree: ${hex}`);
       strictEqual(cleared.isTorsionFree(), true, `cleared must be torsionFree: ${hex}`);
     }
@@ -459,11 +399,38 @@ describe('ed25519', () => {
     // point2.toAffine(); // crash!
   });
 
-  should('.fromAffine', () => {
+  should('have roundtrip of ZERO Point from / to affine', () => {
     const xy = { x: 0n, y: 1n };
     const p = Point.fromAffine(xy);
     deepStrictEqual(p, Point.ZERO);
     deepStrictEqual(p.toAffine(), xy);
+  });
+
+  should('not accept point with z=0', () => {
+    throws(() => new ed.ExtendedPoint(0n, 0n, 0n, 0n));
+
+    const zeros = ed.ExtendedPoint.fromAffine({ x: 0n, y: 0n });
+    deepStrictEqual(zeros.equals(ed.ExtendedPoint.BASE.multiply(3n)), false);
+
+    const key = ed.utils.randomPrivateKey();
+    const A = ed.ExtendedPoint.fromHex(ed.getPublicKey(key));
+    const T = ed.ExtendedPoint.fromHex(ED25519_TORSION_SUBGROUP[2]);
+    // console.log('A', A);
+    // console.log('T', T);
+    // console.log('add2', A.add(T).add(A));
+    // console.log('add2 aff', A.add(T).add(A).toAffine());
+    const B = A.add(T).add(A);
+    const C = ed.ExtendedPoint.fromHex(ed.getPublicKey(ed.utils.randomPrivateKey()));
+    deepStrictEqual(B.equals(C), false);
+
+    deepStrictEqual(
+      ed.verify(
+        '86d8373bf0797b5fee241605760ffebeae65d2d3395cd9afbf67b52f0198484344d9709abd414b2880485fa93a1bb98fb9af0f083c8c3b8141d71b9dfd448b0b',
+        '48656c6c6f2c20576f726c6421',
+        '34fe104df0a1348ef60699b3659b5a31b14a6f8488e14bfa55d2cc310959ae50'
+      ),
+      false
+    );
   });
 });
 

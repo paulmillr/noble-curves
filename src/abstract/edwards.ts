@@ -163,8 +163,9 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     }); // NOOP
   // 0 <= n < MASK
   // Coordinates larger than Fp.ORDER are allowed for zip215
-  function aCoordinate(title: string, n: bigint) {
-    ut.aInRange('coordinate ' + title, n, _0n, MASK);
+  function aCoordinate(title: string, n: bigint, banZero = false) {
+    const min = banZero ? _1n : _0n;
+    ut.aInRange('coordinate ' + title, n, min, MASK);
   }
 
   function assertPoint(other: unknown) {
@@ -217,7 +218,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     constructor(ex: bigint, ey: bigint, ez: bigint, et: bigint) {
       aCoordinate('x', ex);
       aCoordinate('y', ey);
-      aCoordinate('z', ez);
+      aCoordinate('z', ez, true);
       aCoordinate('t', et);
       this.ex = ex;
       this.ey = ey;
@@ -310,26 +311,6 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       const { a, d } = CURVE;
       const { ex: X1, ey: Y1, ez: Z1, et: T1 } = this;
       const { ex: X2, ey: Y2, ez: Z2, et: T2 } = other;
-      // Faster algo for adding 2 Extended Points when curve's a=-1.
-      // http://hyperelliptic.org/EFD/g1p/auto-twisted-extended-1.html#addition-add-2008-hwcd-4
-      // Cost: 8M + 8add + 2*2.
-      // Note: It does not check whether the `other` point is valid.
-      if (a === BigInt(-1)) {
-        const A = modP((Y1 - X1) * (Y2 + X2));
-        const B = modP((Y1 + X1) * (Y2 - X2));
-        const F = modP(B - A);
-        if (F === _0n) return this.double(); // Same point. Tests say it doesn't affect timing
-        const C = modP(Z1 * _2n * T2);
-        const D = modP(T1 * _2n * Z2);
-        const E = D + C;
-        const G = B + A;
-        const H = D - C;
-        const X3 = modP(E * F);
-        const Y3 = modP(G * H);
-        const T3 = modP(E * H);
-        const Z3 = modP(F * G);
-        return new Point(X3, Y3, Z3, T3);
-      }
       const A = modP(X1 * X2); // A = X1*X2
       const B = modP(Y1 * Y2); // B = Y1*Y2
       const C = modP(T1 * d * T2); // C = T1*d*T2
@@ -342,7 +323,6 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       const Y3 = modP(G * H); // Y3 = G*H
       const T3 = modP(E * H); // T3 = E*H
       const Z3 = modP(F * G); // Z3 = F*G
-
       return new Point(X3, Y3, Z3, T3);
     }
 
