@@ -42,8 +42,8 @@ import { generateData } from './_shared.js';
       fromHex: () => d.Point.fromHex(d.pub),
       hashToCurve: () => hashToCurves[name](d.msg),
       Point_add: () => d.point.add(d.point),
-      Point_multiply: () => d.point.multiply(scalar),
-      Point_multiplyUnsafe: () => d.point.multiplyUnsafe(scalar)
+      Point_mul: () => d.point.multiply(scalar),
+      Point_mulUns: () => d.point.multiplyUnsafe(scalar)
     }
   }
   compare('curve operations', {}, curves, { libDims: ['curve', 'algorithm'], dims: ['algorithm'], samples: () => 1000 })
