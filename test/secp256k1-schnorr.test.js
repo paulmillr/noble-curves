@@ -1,8 +1,8 @@
-import { bytesToHex as hex } from '@noble/hashes/utils';
+import { bytesToHex as hex } from '@noble/hashes/utils.js';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual } from 'node:assert';
 import { readFileSync } from 'node:fs';
-import { schnorr } from '../esm/secp256k1.js';
+import { schnorr } from '../secp256k1.js';
 const schCsv = readFileSync('./test/vectors/secp256k1/schnorr.csv', 'utf-8');
 
 describe('schnorr.sign()', () => {

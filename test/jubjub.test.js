@@ -1,6 +1,6 @@
 import { describe, should } from 'micro-should';
 import { deepStrictEqual, throws } from 'node:assert';
-import { findGroupHash, jubjub } from '../esm/jubjub.js';
+import { findGroupHash, jubjub } from '../jubjub.js';
 const Point = jubjub.ExtendedPoint;
 
 const G_SPEND = new Point(

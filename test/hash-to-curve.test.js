@@ -1,20 +1,19 @@
-import { bytesToHex } from '@noble/hashes/utils';
+import { bytesToHex } from '@noble/hashes/utils.js';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual } from 'node:assert';
 import { json } from './utils.js';
 // Generic tests for all curves in package
-import { sha256 } from '@noble/hashes/sha256';
-import { shake128, shake256 } from '@noble/hashes/sha3';
-import { sha512 } from '@noble/hashes/sha512';
-import { expand_message_xmd, expand_message_xof } from '../esm/abstract/hash-to-curve.js';
-import { utf8ToBytes } from '../esm/abstract/utils.js';
-import { bls12_381 } from '../esm/bls12-381.js';
-import * as ed25519 from '../esm/ed25519.js';
-import * as ed448 from '../esm/ed448.js';
-import * as secp256r1 from '../esm/p256.js';
-import * as secp384r1 from '../esm/p384.js';
-import * as secp521r1 from '../esm/p521.js';
-import * as secp256k1 from '../esm/secp256k1.js';
+import { sha256, sha512 } from '@noble/hashes/sha2.js';
+import { shake128, shake256 } from '@noble/hashes/sha3.js';
+import { expand_message_xmd, expand_message_xof } from '../abstract/hash-to-curve.js';
+import { utf8ToBytes } from '../abstract/utils.js';
+import { bls12_381 } from '../bls12-381.js';
+import * as ed25519 from '../ed25519.js';
+import * as ed448 from '../ed448.js';
+import * as secp256r1 from '../p256.js';
+import * as secp384r1 from '../p384.js';
+import * as secp521r1 from '../p521.js';
+import * as secp256k1 from '../secp256k1.js';
 // XMD
 const xmd_sha256_38 = json('./hash-to-curve/expand_message_xmd_SHA256_38.json');
 const xmd_sha256_256 = json('./hash-to-curve/expand_message_xmd_SHA256_256.json');

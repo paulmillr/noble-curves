@@ -1,4 +1,4 @@
-import { bytesToHex as hex, hexToBytes } from '@noble/hashes/utils';
+import { bytesToHex as hex, hexToBytes } from '@noble/hashes/utils.js';
 import * as fc from 'fast-check';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual, throws } from 'node:assert';
@@ -6,13 +6,13 @@ import { readFileSync } from 'node:fs';
 import { json } from './utils.js';
 // prettier-ignore
 import {
-  bytesToNumberBE,
-  mod,
-  normVerifySig,
-  numberToBytesBE,
-  secp,
-  selectHash,
-  sigFromDER, sigToDER
+    bytesToNumberBE,
+    mod,
+    normVerifySig,
+    numberToBytesBE,
+    secp,
+    selectHash,
+    sigFromDER, sigToDER
 } from './secp256k1.helpers.js';
 
 const ecdsa = json('./vectors/secp256k1/ecdsa.json');

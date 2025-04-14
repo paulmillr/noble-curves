@@ -1,8 +1,8 @@
-import { bytesToHex as hex, hexToBytes } from '@noble/hashes/utils';
+import { bytesToHex as hex, hexToBytes } from '@noble/hashes/utils.js';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual, throws } from 'node:assert';
-import { bytesToNumberLE } from '../esm/abstract/utils.js';
-import { DecafPoint, ed448, edwardsToMontgomeryPub, hash_to_decaf448 } from '../esm/ed448.js';
+import { bytesToNumberLE } from '../abstract/utils.js';
+import { DecafPoint, ed448, edwardsToMontgomeryPub, hash_to_decaf448 } from '../ed448.js';
 
 describe('decaf448', () => {
   should('follow the byte encodings of small multiples', () => {

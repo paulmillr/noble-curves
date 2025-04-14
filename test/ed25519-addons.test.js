@@ -1,8 +1,8 @@
-import { sha512 } from '@noble/hashes/sha512';
-import { bytesToHex as hex, hexToBytes } from '@noble/hashes/utils';
+import { sha512 } from '@noble/hashes/sha2.js';
+import { bytesToHex as hex, hexToBytes } from '@noble/hashes/utils.js';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual, throws } from 'node:assert';
-import { bytesToNumberLE, numberToBytesLE } from '../esm/abstract/utils.js';
+import { bytesToNumberLE, numberToBytesLE } from '../abstract/utils.js';
 import {
   ed25519,
   ed25519ctx,
@@ -12,7 +12,7 @@ import {
   hash_to_ristretto255,
   RistrettoPoint,
   x25519,
-} from '../esm/ed25519.js';
+} from '../ed25519.js';
 import { json } from './utils.js';
 const x25519vectors = json('./wycheproof/x25519_test.json');
 

@@ -1,8 +1,8 @@
 import * as fc from 'fast-check';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual, throws } from 'node:assert';
-import { invert, mod } from '../esm/abstract/modular.js';
-import { bytesToHex, concatBytes, hexToBytes } from '../esm/abstract/utils.js';
+import { invert, mod } from '../abstract/modular.js';
+import { bytesToHex, concatBytes, hexToBytes } from '../abstract/utils.js';
 import { getTypeTests } from './utils.js';
 
 describe('utils', () => {
