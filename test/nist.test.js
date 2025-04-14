@@ -1,13 +1,16 @@
-import { json } from './utils.js';
-import { deepStrictEqual, throws } from 'node:assert';
+import { sha224, sha256 } from '@noble/hashes/sha256';
+import { sha3_224, sha3_256, sha3_384, sha3_512, shake128, shake256 } from '@noble/hashes/sha3';
+import { sha384, sha512 } from '@noble/hashes/sha512';
 import { describe, should } from 'micro-should';
-import { secp192r1, secp224r1, p192, p224 } from './_more-curves.helpers.js';
+import { deepStrictEqual, throws } from 'node:assert';
+import { bytesToHex, hexToBytes } from '../esm/abstract/utils.js';
 import { DER } from '../esm/abstract/weierstrass.js';
-import { secp256r1, p256 } from '../esm/p256.js';
-import { secp384r1, p384 } from '../esm/p384.js';
-import { secp521r1, p521 } from '../esm/p521.js';
+import { p256, secp256r1 } from '../esm/p256.js';
+import { p384, secp384r1 } from '../esm/p384.js';
+import { p521, secp521r1 } from '../esm/p521.js';
 import { secp256k1 } from '../esm/secp256k1.js';
-import { hexToBytes, bytesToHex } from '../esm/abstract/utils.js';
+import { p192, p224, secp192r1, secp224r1 } from './_more-curves.helpers.js';
+import { json } from './utils.js';
 const ecdsa = json('./wycheproof/ecdsa_test.json');
 const ecdh = json('./wycheproof/ecdh_test.json');
 const rfc6979 = json('./vectors/rfc6979.json');
@@ -50,10 +53,6 @@ const secp384r1_shake256_test = json('./wycheproof/ecdsa_secp384r1_shake256_test
 const secp521r1_sha3_512_test = json('./wycheproof/ecdsa_secp521r1_sha3_512_test.json');
 const secp521r1_sha512_test = json('./wycheproof/ecdsa_secp521r1_sha512_test.json');
 const secp521r1_shake256_test = json('./wycheproof/ecdsa_secp521r1_shake256_test.json');
-
-import { sha3_224, sha3_256, sha3_384, sha3_512, shake128, shake256 } from '@noble/hashes/sha3';
-import { sha512, sha384 } from '@noble/hashes/sha512';
-import { sha224, sha256 } from '@noble/hashes/sha256';
 
 // TODO: maybe add to noble-hashes?
 const wrapShake = (shake, dkLen) => {

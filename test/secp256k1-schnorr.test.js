@@ -1,7 +1,7 @@
-import { deepStrictEqual, throws } from 'node:assert';
-import { readFileSync } from 'node:fs';
-import { should, describe } from 'micro-should';
 import { bytesToHex as hex } from '@noble/hashes/utils';
+import { describe, should } from 'micro-should';
+import { deepStrictEqual } from 'node:assert';
+import { readFileSync } from 'node:fs';
 import { schnorr } from '../esm/secp256k1.js';
 const schCsv = readFileSync('./test/vectors/secp256k1/schnorr.csv', 'utf-8');
 

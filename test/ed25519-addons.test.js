@@ -1,20 +1,20 @@
-import { json } from './utils.js';
 import { sha512 } from '@noble/hashes/sha512';
 import { bytesToHex as hex, hexToBytes } from '@noble/hashes/utils';
-import { deepStrictEqual, throws } from 'node:assert';
 import { describe, should } from 'micro-should';
+import { deepStrictEqual, throws } from 'node:assert';
 import { bytesToNumberLE, numberToBytesLE } from '../esm/abstract/utils.js';
-const x25519vectors = json('./wycheproof/x25519_test.json');
 import {
   ed25519,
   ed25519ctx,
   ed25519ph,
-  edwardsToMontgomeryPub,
   edwardsToMontgomeryPriv,
+  edwardsToMontgomeryPub,
+  hash_to_ristretto255,
   RistrettoPoint,
   x25519,
-  hash_to_ristretto255,
 } from '../esm/ed25519.js';
+import { json } from './utils.js';
+const x25519vectors = json('./wycheproof/x25519_test.json');
 
 const VECTORS_RFC8032_CTX = [
   {

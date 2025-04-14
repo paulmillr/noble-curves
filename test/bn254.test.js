@@ -1,11 +1,11 @@
-import { deepStrictEqual, throws } from 'node:assert';
-import { describe, should } from 'micro-should';
-import { bn254 } from '../esm/bn254.js';
 import { hexToBytes } from '@noble/hashes/utils';
+import { describe, should } from 'micro-should';
+import { deepStrictEqual, throws } from 'node:assert';
 import { bytesToNumberBE } from '../esm/abstract/utils.js';
-import { jsonGZ } from './utils.js';
-import { default as seda } from './bn254/seda.js';
+import { bn254 } from '../esm/bn254.js';
 import { default as ethDump } from './bn254/eth-dump.js';
+import { default as seda } from './bn254/seda.js';
+import { jsonGZ } from './utils.js';
 const CROSS_PATH_GZ = './bn254/cross1000.json.gz'; // bundler hint: readFileSync('./test/bn254/cross1000.json.gz')
 
 describe('bn254', () => {

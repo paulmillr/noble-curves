@@ -1,10 +1,10 @@
-import { json } from './utils.js';
-import { deepStrictEqual, throws } from 'node:assert';
-import { describe, should } from 'micro-should';
-import * as fc from 'fast-check';
-import { ed448, ed448ph, x448 } from '../esm/ed448.js';
 import { bytesToHex, concatBytes, hexToBytes, randomBytes } from '@noble/hashes/utils';
+import * as fc from 'fast-check';
+import { describe, should } from 'micro-should';
+import { deepStrictEqual, throws } from 'node:assert';
 import { numberToBytesLE } from '../esm/abstract/utils.js';
+import { ed448, ed448ph, x448 } from '../esm/ed448.js';
+import { json } from './utils.js';
 
 // Old vectors allow to test sign() because they include private key
 const ed448vectorsOld = json('./ed448/ed448_test_OLD.json');

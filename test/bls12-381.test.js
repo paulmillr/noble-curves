@@ -1,12 +1,12 @@
-import { json } from './utils.js';
-import { deepStrictEqual, throws } from 'node:assert';
 import * as fc from 'fast-check';
-import { readFileSync } from 'node:fs';
 import { describe, should } from 'micro-should';
+import { deepStrictEqual, throws } from 'node:assert';
+import { readFileSync } from 'node:fs';
 import { wNAF } from '../esm/abstract/curve.js';
-import { bytesToHex, utf8ToBytes, hexToBytes, bytesToNumberBE } from '../esm/abstract/utils.js';
 import { hash_to_field } from '../esm/abstract/hash-to-curve.js';
+import { bytesToHex, bytesToNumberBE, hexToBytes, utf8ToBytes } from '../esm/abstract/utils.js';
 import { bls12_381 as bls, bls12_381 } from '../esm/bls12-381.js';
+import { json } from './utils.js';
 
 import * as utils from '../esm/abstract/utils.js';
 

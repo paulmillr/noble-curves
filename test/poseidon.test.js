@@ -1,9 +1,9 @@
-import { json } from './utils.js';
+import { describe, should } from 'micro-should';
 import { deepStrictEqual } from 'node:assert';
-import { should, describe } from 'micro-should';
+import * as mod from '../esm/abstract/modular.js';
 import * as poseidon from '../esm/abstract/poseidon.js';
 import * as stark from './_poseidon.helpers.js';
-import * as mod from '../esm/abstract/modular.js';
+import { json } from './utils.js';
 const pvectors = json('./vectors/poseidon.json');
 const { st1, st2, st3, st4 } = pvectors;
 
