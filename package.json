@@ -1,6 +1,6 @@
 {
   "name": "@noble/curves",
-  "version": "1.8.1",
+  "version": "1.8.2",
   "description": "Audited & minimal JS implementation of elliptic curve cryptography",
   "files": [
     "*.js",
@@ -101,13 +101,13 @@
       "import": "./esm/bn254.js",
       "require": "./bn254.js"
     },
-    "./ed25519": {
-      "import": "./esm/ed25519.js",
-      "require": "./ed25519.js"
-    },
     "./ed448": {
       "import": "./esm/ed448.js",
       "require": "./ed448.js"
+    },
+    "./ed25519": {
+      "import": "./esm/ed25519.js",
+      "require": "./ed25519.js"
     },
     "./index": {
       "import": "./esm/index.js",
@@ -116,6 +116,10 @@
     "./jubjub": {
       "import": "./esm/jubjub.js",
       "require": "./jubjub.js"
+    },
+    "./misc": {
+      "import": "./esm/misc.js",
+      "require": "./misc.js"
     },
     "./p256": {
       "import": "./esm/p256.js",

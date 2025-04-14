@@ -1,6 +1,6 @@
 {
   "name": "@noble/curves",
-  "version": "1.8.1",
+  "version": "1.8.2",
   "exports": {
     ".": "./src/index.ts",
     "./abstract/bls": "./src/abstract/bls.ts",
@@ -16,9 +16,10 @@
     "./_shortw_utils": "./src/_shortw_utils.ts",
     "./bls12-381": "./src/bls12-381.ts",
     "./bn254": "./src/bn254.ts",
-    "./ed25519": "./src/ed25519.ts",
     "./ed448": "./src/ed448.ts",
+    "./ed25519": "./src/ed25519.ts",
     "./jubjub": "./src/jubjub.ts",
+    "./misc": "./src/misc.ts",
     "./p256": "./src/p256.ts",
     "./p384": "./src/p384.ts",
     "./p521": "./src/p521.ts",
@@ -26,7 +27,7 @@
     "./secp256k1": "./src/secp256k1.ts"
   },
   "imports": {
-    "@noble/hashes": "jsr:@noble/hashes@1.7.1"
+    "@noble/hashes": "jsr:@noble/hashes@1.7.2"
   },
   "publish": {
     "include": [
