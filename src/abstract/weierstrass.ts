@@ -25,26 +25,23 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
+// prettier-ignore
 import {
-  type AffinePoint,
-  type BasicCurve,
-  type Group,
-  type GroupConstructor,
-  pippenger,
-  validateBasic,
-  wNAF,
+  type AffinePoint, type BasicCurve, type Group, type GroupConstructor,
+  pippenger, validateBasic, wNAF,
 } from './curve.ts';
+// prettier-ignore
 import {
-  Field,
-  type IField,
-  getMinHashLength,
-  invert,
-  mapHashToField,
-  mod,
-  validateField,
+  Field, type IField, getMinHashLength, invert, mapHashToField, mod, validateField,
 } from './modular.ts';
-import * as ut from './utils.ts';
-import { type CHash, type Hex, type PrivKey, abool, ensureBytes, memoized } from './utils.ts';
+// prettier-ignore
+import {
+  type CHash, type Hex, type PrivKey,
+  aInRange, abool,
+  bitMask,
+  bytesToHex, bytesToNumberBE, concatBytes, createHmacDrbg, ensureBytes, hexToBytes,
+  inRange, isBytes, memoized, numberToBytesBE, numberToHexUnpadded, validateObject
+} from './utils.ts';
 
 export type { AffinePoint };
 type HmacFnSync = (key: Uint8Array, ...messages: Uint8Array[]) => Uint8Array;
@@ -68,7 +65,7 @@ export type BasicWCurve<T> = BasicCurve<T> & {
   clearCofactor?: (c: ProjConstructor<T>, point: ProjPointType<T>) => ProjPointType<T>;
 };
 
-type Entropy = Hex | boolean;
+export type Entropy = Hex | boolean;
 export type SignOpts = { lowS?: boolean; extraEntropy?: Entropy; prehash?: boolean };
 export type VerOpts = { lowS?: boolean; prehash?: boolean; format?: 'compact' | 'der' | undefined };
 
@@ -119,7 +116,7 @@ export type CurvePointsTypeWithLength<T> = Readonly<
 
 function validatePointOpts<T>(curve: CurvePointsType<T>): CurvePointsTypeWithLength<T> {
   const opts = validateBasic(curve);
-  ut.validateObject(
+  validateObject(
     opts,
     {
       a: 'field',
@@ -158,8 +155,6 @@ export type CurvePointsRes<T> = {
   weierstrassEquation: (x: T) => T;
   isWithinCurveOrder: (num: bigint) => boolean;
 };
-
-const { bytesToNumberBE: b2n, hexToBytes: h2b } = ut;
 
 export class DERErr extends Error {
   constructor(m = '') {
@@ -203,11 +198,11 @@ export const DER: IDER = {
       if (tag < 0 || tag > 256) throw new E('tlv.encode: wrong tag');
       if (data.length & 1) throw new E('tlv.encode: unpadded data');
       const dataLen = data.length / 2;
-      const len = ut.numberToHexUnpadded(dataLen);
+      const len = numberToHexUnpadded(dataLen);
       if ((len.length / 2) & 0b1000_0000) throw new E('tlv.encode: long form length too big');
       // length of length with long form flag
-      const lenLen = dataLen > 127 ? ut.numberToHexUnpadded((len.length / 2) | 0b1000_0000) : '';
-      const t = ut.numberToHexUnpadded(tag);
+      const lenLen = dataLen > 127 ? numberToHexUnpadded((len.length / 2) | 0b1000_0000) : '';
+      const t = numberToHexUnpadded(tag);
       return t + lenLen + len + data;
     },
     // v - value, l - left bytes (unparsed)
@@ -245,7 +240,7 @@ export const DER: IDER = {
     encode(num: bigint): string {
       const { Err: E } = DER;
       if (num < _0n) throw new E('integer: negative integers are not allowed');
-      let hex = ut.numberToHexUnpadded(num);
+      let hex = numberToHexUnpadded(num);
       // Pad with zero byte if negative flag is present
       if (Number.parseInt(hex[0], 16) & 0b1000) hex = '00' + hex;
       if (hex.length & 1) throw new E('unexpected DER parsing assertion: unpadded hex');
@@ -256,14 +251,13 @@ export const DER: IDER = {
       if (data[0] & 0b1000_0000) throw new E('invalid signature integer: negative');
       if (data[0] === 0x00 && !(data[1] & 0b1000_0000))
         throw new E('invalid signature integer: unnecessary leading zero');
-      return b2n(data);
+      return bytesToNumberBE(data);
     },
   },
   toSig(hex: string | Uint8Array): { r: bigint; s: bigint } {
     // parse DER signature
     const { Err: E, _int: int, _tlv: tlv } = DER;
-    const data = typeof hex === 'string' ? h2b(hex) : hex;
-    ut.abytes(data);
+    const data = ensureBytes('signature', hex);
     const { v: seqBytes, l: seqLeftBytes } = tlv.decode(0x30, data);
     if (seqLeftBytes.length) throw new E('invalid signature: left bytes after parsing');
     const { v: rBytes, l: rLeftBytes } = tlv.decode(0x02, seqBytes);
@@ -293,7 +287,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
     CURVE.toBytes ||
     ((_c: ProjConstructor<T>, point: ProjPointType<T>, _isCompressed: boolean) => {
       const a = point.toAffine();
-      return ut.concatBytes(Uint8Array.from([0x04]), Fp.toBytes(a.x), Fp.toBytes(a.y));
+      return concatBytes(Uint8Array.from([0x04]), Fp.toBytes(a.x), Fp.toBytes(a.y));
     });
   const fromBytes =
     CURVE.fromBytes ||
@@ -307,7 +301,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
     });
 
   /**
-   * y² = x³ + ax + b: Short weierstrass curve formula
+   * y² = x³ + ax + b: Short weierstrass curve formula. Takes x, returns y².
    * @returns y²
    */
   function weierstrassEquation(x: T): T {
@@ -325,14 +319,14 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
 
   // Valid group elements reside in range 1..n-1
   function isWithinCurveOrder(num: bigint): boolean {
-    return ut.inRange(num, _1n, CURVE.n);
+    return inRange(num, _1n, CURVE.n);
   }
   // Validates if priv key is valid and converts it to bigint.
   // Supports options allowedPrivateKeyLengths and wrapPrivateKey.
   function normPrivateKeyToScalar(key: PrivKey): bigint {
     const { allowedPrivateKeyLengths: lengths, nByteLength, wrapPrivateKey, n: N } = CURVE;
     if (lengths && typeof key !== 'bigint') {
-      if (ut.isBytes(key)) key = ut.bytesToHex(key);
+      if (isBytes(key)) key = bytesToHex(key);
       // Normalize to hex string, pad. E.g. P521 would norm 130-132 char hex to 132-char bytes
       if (typeof key !== 'string' || !lengths.includes(key.length))
         throw new Error('invalid private key');
@@ -343,18 +337,18 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
       num =
         typeof key === 'bigint'
           ? key
-          : ut.bytesToNumberBE(ensureBytes('private key', key, nByteLength));
+          : bytesToNumberBE(ensureBytes('private key', key, nByteLength));
     } catch (error) {
       throw new Error(
         'invalid private key, expected hex or ' + nByteLength + ' bytes, got ' + typeof key
       );
     }
     if (wrapPrivateKey) num = mod(num, N); // disabled by default, enabled for BLS
-    ut.aInRange('private key', num, _1n, N); // num in range [1..N-1]
+    aInRange('private key', num, _1n, N); // num in range [1..N-1]
     return num;
   }
 
-  function assertPrjPoint(other: unknown) {
+  function aprjpoint(other: unknown) {
     if (!(other instanceof Point)) throw new Error('ProjectivePoint expected');
   }
 
@@ -491,7 +485,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
      * Compare one point to another.
      */
     equals(other: Point): boolean {
-      assertPrjPoint(other);
+      aprjpoint(other);
       const { px: X1, py: Y1, pz: Z1 } = this;
       const { px: X2, py: Y2, pz: Z2 } = other;
       const U1 = Fp.eql(Fp.mul(X1, Z2), Fp.mul(X2, Z1));
@@ -554,7 +548,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
     // https://eprint.iacr.org/2015/1060, algorithm 1
     // Cost: 12M + 0S + 3*a + 3*b3 + 23add.
     add(other: Point): Point {
-      assertPrjPoint(other);
+      aprjpoint(other);
       const { px: X1, py: Y1, pz: Z1 } = this;
       const { px: X2, py: Y2, pz: Z2 } = other;
       let X3 = Fp.ZERO, Y3 = Fp.ZERO, Z3 = Fp.ZERO; // prettier-ignore
@@ -621,7 +615,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
      */
     multiplyUnsafe(sc: bigint): Point {
       const { endo, n: N } = CURVE;
-      ut.aInRange('scalar', sc, _0n, N);
+      aInRange('scalar', sc, _0n, N);
       const I = Point.ZERO;
       if (sc === _0n) return I;
       if (this.is0() || sc === _1n) return this;
@@ -659,7 +653,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
      */
     multiply(scalar: bigint): Point {
       const { endo, n: N } = CURVE;
-      ut.aInRange('scalar', scalar, _1n, N);
+      aInRange('scalar', scalar, _1n, N);
       let point: Point, fake: Point; // Fake point is used to const-time mult
       if (endo) {
         const { k1neg, k1, k2neg, k2 } = endo.splitScalar(scalar);
@@ -722,7 +716,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
 
     toHex(isCompressed = true): string {
       abool('isCompressed', isCompressed);
-      return ut.bytesToHex(this.toRawBytes(isCompressed));
+      return bytesToHex(this.toRawBytes(isCompressed));
     }
   }
   const _bits = CURVE.nBitLength;
@@ -779,7 +773,7 @@ function validateOpts(
   curve: CurveType
 ): Readonly<CurveType & { nByteLength: number; nBitLength: number }> {
   const opts = validateBasic(curve);
-  ut.validateObject(
+  validateObject(
     opts,
     {
       hash: 'hash',
@@ -841,7 +835,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     toBytes(_c, point, isCompressed: boolean): Uint8Array {
       const a = point.toAffine();
       const x = Fp.toBytes(a.x);
-      const cat = ut.concatBytes;
+      const cat = concatBytes;
       abool('isCompressed', isCompressed);
       if (isCompressed) {
         return cat(Uint8Array.from([point.hasEvenY() ? 0x02 : 0x03]), x);
@@ -855,8 +849,8 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       const tail = bytes.subarray(1);
       // this.assertValidity() is done inside of fromHex
       if (len === compressedLen && (head === 0x02 || head === 0x03)) {
-        const x = ut.bytesToNumberBE(tail);
-        if (!ut.inRange(x, _1n, Fp.ORDER)) throw new Error('Point is not on curve');
+        const x = bytesToNumberBE(tail);
+        if (!inRange(x, _1n, Fp.ORDER)) throw new Error('Point is not on curve');
         const y2 = weierstrassEquation(x); // y² = x³ + ax + b
         let y: bigint;
         try {
@@ -883,8 +877,8 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       }
     },
   });
-  const numToNByteStr = (num: bigint): string =>
-    ut.bytesToHex(ut.numberToBytesBE(num, CURVE.nByteLength));
+  const numToNByteHex = (num: bigint): string =>
+    bytesToHex(numberToBytesBE(num, CURVE.nByteLength));
 
   function isBiggerThanHalfOrder(number: bigint) {
     const HALF = CURVE_ORDER >> _1n;
@@ -895,7 +889,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     return isBiggerThanHalfOrder(s) ? modN(-s) : s;
   }
   // slice bytes num
-  const slcNum = (b: Uint8Array, from: number, to: number) => ut.bytesToNumberBE(b.slice(from, to));
+  const slcNum = (b: Uint8Array, from: number, to: number) => bytesToNumberBE(b.slice(from, to));
 
   /**
    * ECDSA signature with its (r, s) properties. Supports DER & compact representations.
@@ -927,8 +921,8 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     }
 
     assertValidity(): void {
-      ut.aInRange('r', this.r, _1n, CURVE_ORDER); // r in [1..N]
-      ut.aInRange('s', this.s, _1n, CURVE_ORDER); // s in [1..N]
+      aInRange('r', this.r, _1n, CURVE_ORDER); // r in [1..N]
+      aInRange('s', this.s, _1n, CURVE_ORDER); // s in [1..N]
     }
 
     addRecoveryBit(recovery: number): RecoveredSignature {
@@ -942,7 +936,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       const radj = rec === 2 || rec === 3 ? r + CURVE.n : r;
       if (radj >= Fp.ORDER) throw new Error('recovery id 2 or 3 invalid');
       const prefix = (rec & 1) === 0 ? '02' : '03';
-      const R = Point.fromHex(prefix + numToNByteStr(radj));
+      const R = Point.fromHex(prefix + numToNByteHex(radj));
       const ir = invN(radj); // r^-1
       const u1 = modN(-h * ir); // -hr^-1
       const u2 = modN(s * ir); // sr^-1
@@ -963,7 +957,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
 
     // DER-encoded
     toDERRawBytes() {
-      return ut.hexToBytes(this.toDERHex());
+      return hexToBytes(this.toDERHex());
     }
     toDERHex() {
       return DER.hexFromSig({ r: this.r, s: this.s });
@@ -971,10 +965,10 @@ export function weierstrass(curveDef: CurveType): CurveFn {
 
     // padded bytes of r, then padded bytes of s
     toCompactRawBytes() {
-      return ut.hexToBytes(this.toCompactHex());
+      return hexToBytes(this.toCompactHex());
     }
     toCompactHex() {
-      return numToNByteStr(this.r) + numToNByteStr(this.s);
+      return numToNByteHex(this.r) + numToNByteHex(this.s);
     }
   }
   type RecoveredSignature = Signature & { recovery: number };
@@ -1028,7 +1022,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
    * Quick and dirty check for item being public key. Does not validate hex, or being on-curve.
    */
   function isProbPub(item: PrivKey | PubKey): boolean {
-    const arr = ut.isBytes(item);
+    const arr = isBytes(item);
     const str = typeof item === 'string';
     const len = (arr || str) && (item as Hex).length;
     if (arr) return len === compressedLen || len === uncompressedLen;
@@ -1065,7 +1059,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       if (bytes.length > 8192) throw new Error('input is too large');
       // For curves with nBitLength % 8 !== 0: bits2octets(bits2octets(m)) !== bits2octets(m)
       // for some cases, since bytes.length * 8 is not actual bitLength.
-      const num = ut.bytesToNumberBE(bytes); // check for == u8 done here
+      const num = bytesToNumberBE(bytes); // check for == u8 done here
       const delta = bytes.length * 8 - CURVE.nBitLength; // truncate to nBitLength leftmost bits
       return delta > 0 ? num >> BigInt(delta) : num;
     };
@@ -1075,14 +1069,14 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       return modN(bits2int(bytes)); // can't use bytesToNumberBE here
     };
   // NOTE: pads output with zero as per spec
-  const ORDER_MASK = ut.bitMask(CURVE.nBitLength);
+  const ORDER_MASK = bitMask(CURVE.nBitLength);
   /**
    * Converts to bytes. Checks if num in `[0..ORDER_MASK-1]` e.g.: `[0..2^256-1]`.
    */
   function int2octets(num: bigint): Uint8Array {
-    ut.aInRange('num < 2^' + CURVE.nBitLength, num, _0n, ORDER_MASK);
+    aInRange('num < 2^' + CURVE.nBitLength, num, _0n, ORDER_MASK);
     // works with order, can have different size than numToField!
-    return ut.numberToBytesBE(num, CURVE.nByteLength);
+    return numberToBytesBE(num, CURVE.nByteLength);
   }
 
   // Steps A, D of RFC6979 3.2
@@ -1112,7 +1106,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       const e = ent === true ? randomBytes(Fp.BYTES) : ent; // generate random bytes OR pass as-is
       seedArgs.push(ensureBytes('extraEntropy', e)); // check for being bytes
     }
-    const seed = ut.concatBytes(...seedArgs); // Step D of RFC6979 3.2
+    const seed = concatBytes(...seedArgs); // Step D of RFC6979 3.2
     const m = h1int; // NOTE: no need to call bits2int second time here, it is inside truncateHash!
     // Converts signature params into point w r/s, checks result for validity.
     function k2sig(kBytes: Uint8Array): RecoveredSignature | undefined {
@@ -1157,7 +1151,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
   function sign(msgHash: Hex, privKey: PrivKey, opts = defaultSigOpts): RecoveredSignature {
     const { seed, k2sig } = prepSig(msgHash, privKey, opts); // Steps A, D of RFC6979 3.2.
     const C = CURVE;
-    const drbg = ut.createHmacDrbg<RecoveredSignature>(C.hash.outputLen, C.nByteLength, C.hmac);
+    const drbg = createHmacDrbg<RecoveredSignature>(C.hash.outputLen, C.nByteLength, C.hmac);
     return drbg(seed, k2sig); // Steps B, C, D, E, F, G
   }
 
@@ -1194,7 +1188,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     if ('strict' in opts) throw new Error('options.strict was renamed to lowS');
     if (format !== undefined && format !== 'compact' && format !== 'der')
       throw new Error('format must be compact or der');
-    const isHex = typeof sg === 'string' || ut.isBytes(sg);
+    const isHex = typeof sg === 'string' || isBytes(sg);
     const isObj =
       !isHex &&
       !format &&

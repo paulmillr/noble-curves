@@ -14,8 +14,11 @@ import {
   wNAF,
 } from './curve.ts';
 import { Field, mod } from './modular.ts';
-import * as ut from './utils.ts';
-import { abool, ensureBytes, type FHash, type Hex, memoized } from './utils.ts';
+// prettier-ignore
+import {
+  abool, aInRange, bytesToHex, bytesToNumberLE, concatBytes,
+  ensureBytes, type FHash, type Hex, memoized, numberToBytesLE, validateObject
+} from './utils.ts';
 
 // Be friendly to bad ECMAScript parsers by not using bigint literals
 // prettier-ignore
@@ -41,7 +44,7 @@ const VERIFY_DEFAULT = { zip215: true };
 
 function validateOpts(curve: CurveType): CurveTypeWithLength {
   const opts = validateBasic(curve);
-  ut.validateObject(
+  validateObject(
     curve,
     {
       hash: 'function',
@@ -164,10 +167,10 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
   // Coordinates larger than Fp.ORDER are allowed for zip215
   function aCoordinate(title: string, n: bigint, banZero = false) {
     const min = banZero ? _1n : _0n;
-    ut.aInRange('coordinate ' + title, n, min, MASK);
+    aInRange('coordinate ' + title, n, min, MASK);
   }
 
-  function assertPoint(other: unknown) {
+  function aextpoint(other: unknown) {
     if (!(other instanceof Point)) throw new Error('ExtendedPoint expected');
   }
   // Converts Extended point to default (x, y) coordinates.
@@ -261,7 +264,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
 
     // Compare one point to another.
     equals(other: Point): boolean {
-      assertPoint(other);
+      aextpoint(other);
       const { ex: X1, ey: Y1, ez: Z1 } = this;
       const { ex: X2, ey: Y2, ez: Z2 } = other;
       const X1Z2 = modP(X1 * Z2);
@@ -306,7 +309,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     // https://hyperelliptic.org/EFD/g1p/auto-twisted-extended.html#addition-add-2008-hwcd
     // Cost: 9M + 1*a + 1*d + 7add.
     add(other: Point) {
-      assertPoint(other);
+      aextpoint(other);
       const { a, d } = CURVE;
       const { ex: X1, ey: Y1, ez: Z1, et: T1 } = this;
       const { ex: X2, ey: Y2, ez: Z2, et: T2 } = other;
@@ -336,7 +339,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     // Constant-time multiplication.
     multiply(scalar: bigint): Point {
       const n = scalar;
-      ut.aInRange('scalar', n, _1n, CURVE_ORDER); // 1 <= scalar < L
+      aInRange('scalar', n, _1n, CURVE_ORDER); // 1 <= scalar < L
       const { p, f } = this.wNAF(n);
       return Point.normalizeZ([p, f])[0];
     }
@@ -348,7 +351,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     // Accepts optional accumulator to merge with multiply (important for sparse scalars)
     multiplyUnsafe(scalar: bigint, acc = Point.ZERO): Point {
       const n = scalar;
-      ut.aInRange('scalar', n, _0n, CURVE_ORDER); // 0 <= scalar < L
+      aInRange('scalar', n, _0n, CURVE_ORDER); // 0 <= scalar < L
       if (n === _0n) return I;
       if (this.is0() || n === _1n) return this;
       return wnaf.wNAFCachedUnsafe(this, n, Point.normalizeZ, acc);
@@ -390,14 +393,14 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       const normed = hex.slice(); // copy again, we'll manipulate it
       const lastByte = hex[len - 1]; // select last byte
       normed[len - 1] = lastByte & ~0x80; // clear last bit
-      const y = ut.bytesToNumberLE(normed);
+      const y = bytesToNumberLE(normed);
 
       // zip215=true is good for consensus-critical apps. =false follows RFC8032 / NIST186-5.
       // RFC8032 prohibits >= p, but ZIP215 doesn't
       // zip215=true:  0 <= y < MASK (2^256 for ed25519)
       // zip215=false: 0 <= y < P (2^255-19 for ed25519)
       const max = zip215 ? MASK : Fp.ORDER;
-      ut.aInRange('pointHex.y', y, _0n, max);
+      aInRange('pointHex.y', y, _0n, max);
 
       // Ed25519: x² = (y²-1)/(dy²+1) mod p. Ed448: x² = (y²-1)/(dy²-1) mod p. Generic case:
       // ax²+y²=1+dx²y² => y²-1=dx²y²-ax² => y²-1=x²(dy²-a) => x²=(y²-1)/(dy²-a)
@@ -420,12 +423,12 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     }
     toRawBytes(): Uint8Array {
       const { x, y } = this.toAffine();
-      const bytes = ut.numberToBytesLE(y, Fp.BYTES); // each y has 2 x values (x, -y)
+      const bytes = numberToBytesLE(y, Fp.BYTES); // each y has 2 x values (x, -y)
       bytes[bytes.length - 1] |= x & _1n ? 0x80 : 0; // when compressing, it's enough to store y
       return bytes; // and use the last byte to encode sign of x
     }
     toHex(): string {
-      return ut.bytesToHex(this.toRawBytes()); // Same as toRawBytes, but returns string.
+      return bytesToHex(this.toRawBytes()); // Same as toRawBytes, but returns string.
     }
   }
   const { BASE: G, ZERO: I } = Point;
@@ -436,7 +439,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
   }
   // Little-endian SHA512 with modulo n
   function modN_LE(hash: Uint8Array): bigint {
-    return modN(ut.bytesToNumberLE(hash));
+    return modN(bytesToNumberLE(hash));
   }
 
   // Get the hashed private scalar per RFC8032 5.1.5
@@ -467,7 +470,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
 
   // int('LE', SHA512(dom2(F, C) || msgs)) mod N
   function hashDomainToScalar(context: Hex = new Uint8Array(), ...msgs: Uint8Array[]) {
-    const msg = ut.concatBytes(...msgs);
+    const msg = concatBytes(...msgs);
     return modN_LE(cHash(domain(msg, ensureBytes('context', context), !!prehash)));
   }
 
@@ -480,8 +483,8 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     const R = G.multiply(r).toRawBytes(); // R = rG
     const k = hashDomainToScalar(options.context, R, pointBytes, msg); // R || A || PH(M)
     const s = modN(r + k * scalar); // S = (r + k * s) mod L
-    ut.aInRange('signature.s', s, _0n, CURVE_ORDER); // 0 <= s < l
-    const res = ut.concatBytes(R, ut.numberToBytesLE(s, Fp.BYTES));
+    aInRange('signature.s', s, _0n, CURVE_ORDER); // 0 <= s < l
+    const res = concatBytes(R, numberToBytesLE(s, Fp.BYTES));
     return ensureBytes('result', res, Fp.BYTES * 2); // 64-byte signature
   }
 
@@ -500,7 +503,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     if (zip215 !== undefined) abool('zip215', zip215);
     if (prehash) msg = prehash(msg); // for ed25519ph, etc
 
-    const s = ut.bytesToNumberLE(sig.slice(len, 2 * len));
+    const s = bytesToNumberLE(sig.slice(len, 2 * len));
     let A, R, SB;
     try {
       // zip215=true is good for consensus-critical apps. =false follows RFC8032 / NIST186-5.

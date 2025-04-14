@@ -62,7 +62,7 @@
 import { sha256 } from '@noble/hashes/sha256';
 import { randomBytes } from '@noble/hashes/utils';
 import { bls, type CurveFn } from './abstract/bls.ts';
-import * as mod from './abstract/modular.ts';
+import { Field } from './abstract/modular.ts';
 import {
   bitGet,
   bitLen,
@@ -164,7 +164,7 @@ const { Fp, Fp2, Fp6, Fp4Square, Fp12 } = tower12({
 
 // Finite field over r.
 // This particular field is not used anywhere in bls12-381, but it is still useful.
-const Fr = mod.Field(BigInt('0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001'));
+const Fr = Field(BigInt('0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001'));
 
 // END OF CURVE FIELDS
 
