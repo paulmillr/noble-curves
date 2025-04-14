@@ -4,7 +4,7 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { sha256 } from '@noble/hashes/sha2';
+import { sha256 } from '@noble/hashes/sha2.js';
 import { createCurve, type CurveFnWithCreate } from './_shortw_utils.ts';
 import { createHasher, type HTFMethod } from './abstract/hash-to-curve.ts';
 import { Field } from './abstract/modular.ts';
