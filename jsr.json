@@ -35,9 +35,6 @@
       "jsr.json",
       "LICENSE",
       "README.md"
-    ],
-    "exclude": [
-      "src/cryptoNode.ts"
     ]
   },
   "license": "MIT"
