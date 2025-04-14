@@ -7,7 +7,7 @@
     "*.js.map",
     "*.d.ts",
     "*.d.ts.map",
-    "esm",
+    "cjs",
     "src",
     "abstract"
   ],
