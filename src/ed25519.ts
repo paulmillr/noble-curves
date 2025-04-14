@@ -313,7 +313,7 @@ const htf = /* @__PURE__ */ (() =>
 export const hashToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() => htf.hashToCurve)();
 export const encodeToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() => htf.encodeToCurve)();
 
-function assertRstPoint(other: unknown) {
+function aristp(other: unknown) {
   if (!(other instanceof RistPoint)) throw new Error('RistrettoPoint expected');
 }
 
@@ -486,7 +486,7 @@ class RistPoint implements Group<RistPoint> {
 
   // Compare one point to another.
   equals(other: RistPoint): boolean {
-    assertRstPoint(other);
+    aristp(other);
     const { ex: X1, ey: Y1 } = this.ep;
     const { ex: X2, ey: Y2 } = other.ep;
     const mod = ed25519.CURVE.Fp.create;
@@ -497,12 +497,12 @@ class RistPoint implements Group<RistPoint> {
   }
 
   add(other: RistPoint): RistPoint {
-    assertRstPoint(other);
+    aristp(other);
     return new RistPoint(this.ep.add(other.ep));
   }
 
   subtract(other: RistPoint): RistPoint {
-    assertRstPoint(other);
+    aristp(other);
     return new RistPoint(this.ep.subtract(other.ep));
   }
 
@@ -536,5 +536,6 @@ export const hashToRistretto255 = (msg: Uint8Array, options: htfBasicOpts): Rist
   const P = RistPoint.hashToCurve(uniform_bytes);
   return P;
 };
+/** @deprecated */
 export const hash_to_ristretto255: (msg: Uint8Array, options: htfBasicOpts) => RistPoint =
   hashToRistretto255; // legacy

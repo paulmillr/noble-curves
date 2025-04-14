@@ -286,7 +286,7 @@ const htf = /* @__PURE__ */ (() =>
 export const hashToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() => htf.hashToCurve)();
 export const encodeToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() => htf.encodeToCurve)();
 
-function assertDcfPoint(other: unknown) {
+function adecafp(other: unknown) {
   if (!(other instanceof DcfPoint)) throw new Error('DecafPoint expected');
 }
 
@@ -456,7 +456,7 @@ class DcfPoint implements Group<DcfPoint> {
   // Compare one point to another.
   // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-ristretto255-decaf448-07#name-equals-2
   equals(other: DcfPoint): boolean {
-    assertDcfPoint(other);
+    adecafp(other);
     const { ex: X1, ey: Y1 } = this.ep;
     const { ex: X2, ey: Y2 } = other.ep;
     const mod = ed448.CURVE.Fp.create;
@@ -465,12 +465,12 @@ class DcfPoint implements Group<DcfPoint> {
   }
 
   add(other: DcfPoint): DcfPoint {
-    assertDcfPoint(other);
+    adecafp(other);
     return new DcfPoint(this.ep.add(other.ep));
   }
 
   subtract(other: DcfPoint): DcfPoint {
-    assertDcfPoint(other);
+    adecafp(other);
     return new DcfPoint(this.ep.subtract(other.ep));
   }
 
