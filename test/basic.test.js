@@ -1,29 +1,28 @@
-import { getTypeTests, json } from './utils.js';
-import { deepStrictEqual, notDeepStrictEqual, throws } from 'node:assert';
-import { should, describe } from 'micro-should';
 import * as fc from 'fast-check';
+import { describe, should } from 'micro-should';
+import { deepStrictEqual, notDeepStrictEqual, throws } from 'node:assert';
 import * as mod from '../esm/abstract/modular.js';
 import { isBytes, bytesToHex as toHex } from '../esm/abstract/utils.js';
+import { getTypeTests, json } from './utils.js';
 // Generic tests for all curves in package
-import { twistedEdwards } from '../esm/abstract/edwards.js';
+import { sha256 } from '@noble/hashes/sha256';
 import { sha512 } from '@noble/hashes/sha512';
 import { randomBytes } from '@noble/hashes/utils';
-import { secp192r1, secp224r1 } from './_more-curves.helpers.js';
+import { createCurve } from '../esm/_shortw_utils.js';
+import { precomputeMSMUnsafe } from '../esm/abstract/curve.js';
+import { twistedEdwards } from '../esm/abstract/edwards.js';
+import { Field } from '../esm/abstract/modular.js';
+import { bls12_381 } from '../esm/bls12-381.js';
+import { bn254, bn254_weierstrass } from '../esm/bn254.js';
+import { ed25519, ed25519ctx, ed25519ph, RistrettoPoint, x25519 } from '../esm/ed25519.js';
+import { DecafPoint, ed448, ed448ph } from '../esm/ed448.js';
+import { jubjub } from '../esm/jubjub.js';
 import { secp256r1 } from '../esm/p256.js';
 import { secp384r1 } from '../esm/p384.js';
 import { secp521r1 } from '../esm/p521.js';
-import { secp256k1 } from '../esm/secp256k1.js';
-import { ed25519, ed25519ctx, ed25519ph, x25519, RistrettoPoint } from '../esm/ed25519.js';
-import { ed448, ed448ph, DecafPoint } from '../esm/ed448.js';
 import { pallas, vesta } from '../esm/pasta.js';
-import { bn254_weierstrass } from '../esm/bn254.js';
-import { jubjub } from '../esm/jubjub.js';
-import { bls12_381 } from '../esm/bls12-381.js';
-import { createCurve } from '../esm/_shortw_utils.js';
-import { precomputeMSMUnsafe } from '../esm/abstract/curve.js';
-import { Field } from '../esm/abstract/modular.js';
-import { sha256 } from '@noble/hashes/sha256';
-import { bn254 } from '../esm/bn254.js';
+import { secp256k1 } from '../esm/secp256k1.js';
+import { secp192r1, secp224r1 } from './_more-curves.helpers.js';
 const wyche_curves = json('./wycheproof/ec_prime_order_curves_test.json');
 
 const NUM_RUNS = 5;
@@ -71,7 +70,6 @@ const FIELDS = {
       }),
       (Fp2, num) => Fp2.fromBigTuple([num[0], num[1]]),
     ],
-    // Fp6: [bls12_381.fields.Fp6],
     Fp12: [
       bn254.fields.Fp12,
       fc.array(fc.bigInt(1n, bn254.fields.Fp.ORDER - 1n), {
@@ -111,11 +109,13 @@ const CURVES = {
 for (const c in FIELDS) {
   const curve = FIELDS[c];
   for (const f in curve) {
-    const Fp = curve[f][0];
     const name = `${c}/${f}:`;
-    const FC_BIGINT = curve[f][1] ? curve[f][1] : fc.bigInt(1n, Fp.ORDER - 1n);
-
-    const create = curve[f][2] ? curve[f][2].bind(null, Fp) : (num) => Fp.create(num);
+    // [Fp]
+    // [Fp2, [fc.bigInt, fc.bigInt], Fp2.create]
+    const Fp_opts = curve[f];
+    const Fp = Fp_opts[0];
+    const FC_BIGINT = curve[f][1] ? Fp_opts[1] : fc.bigInt(1n, Fp.ORDER - 1n);
+    const create = Fp_opts[2] ? Fp_opts[2].bind(null, Fp) : (num) => Fp.create(num);
     describe(name, () => {
       should('equality', () => {
         fc.assert(
@@ -130,6 +130,7 @@ for (const c in FIELDS) {
       should('non-equality', () => {
         fc.assert(
           fc.property(FC_BIGINT, FC_BIGINT, (num1, num2) => {
+            // TODO: num1 === num2 is FALSE for Fp2
             const a = create(num1);
             const b = create(num2);
             deepStrictEqual(Fp.eql(a, b), num1 === num2);
