@@ -12,7 +12,7 @@
     "abstract"
   ],
   "scripts": {
-    "bench": "cd benchmark; node secp256k1.js; node curves.js; node modular.js; node ristretto-decaf.js; node bls.js",
+    "bench": "cd benchmark; node secp256k1.js; node curves.js; node utils.js; node bls.js",
     "bench:install": "cd benchmark; npm install; npm install .. --install-links",
     "build": "tsc && tsc -p tsconfig.cjs.json",
     "build:release": "npx jsbt esbuild test/build",
