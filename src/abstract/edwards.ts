@@ -105,7 +105,6 @@ export type CurveFn = {
   ExtendedPoint: ExtPointConstructor;
   utils: {
     randomPrivateKey: () => Uint8Array;
-    getPrivateScalar: (key: Hex) => { head: Uint8Array; prefix: Uint8Array; scalar: bigint };
     getExtendedPublicKey: (key: Hex) => {
       head: Uint8Array;
       prefix: Uint8Array;
@@ -525,9 +524,8 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
   G._setWindowSize(8); // Enable precomputes. Slows down first publicKey computation by 20ms.
 
   const utils = {
-    getPrivateScalar,
     getExtendedPublicKey,
-    // ed25519 private keys are uniform 32b. No need to check for modulo bias, like in secp256k1.
+    /** ed25519 priv keys are uniform 32b. No need to check for modulo bias, like in secp256k1. */
     randomPrivateKey: (): Uint8Array => randomBytes(Fp.BYTES),
 
     /**
