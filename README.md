@@ -56,7 +56,7 @@ import { p384 } from '@noble/curves/p384';
 import { p521 } from '@noble/curves/p521';
 import { bls12_381 } from '@noble/curves/bls12-381';
 import { bn254 } from '@noble/curves/bn254'; // also known as alt_bn128
-import { jubjub } from '@noble/curves/jubjub';
+import { jubjub, babyjubjub } from '@noble/curves/misc';
 import { bytesToHex, hexToBytes, concatBytes, utf8ToBytes } from '@noble/curves/abstract/utils';
 ```
 
@@ -68,6 +68,7 @@ import { bytesToHex, hexToBytes, concatBytes, utf8ToBytes } from '@noble/curves/
 - [ed448](#ed448) / [X448](#x448) / [decaf448](#decaf448)
 - [bls12-381](#bls12-381)
 - [bn254 aka alt_bn128](#bn254-aka-alt_bn128)
+- [misc curves](#misc-curves)
 - [Low-level methods](#low-level-methods)
 - [Abstract API](#abstract-api)
   - [weierstrass](#weierstrass-short-weierstrass-curve), [edwards](#edwards-twisted-edwards-curve), [montgomery](#montgomery-montgomery-curve), [bls](#bls-barreto-lynn-scott-curves)
@@ -318,6 +319,16 @@ different implementations of bn254 do it differently - there is no standard. Poi
 - Imaginary part last in G2 vs first (c0, c1 vs c1, c0)
 
 For example usage, check out [the implementation of bn254 EVM precompiles](https://github.com/paulmillr/noble-curves/blob/3ed792f8ad9932765b84d1064afea8663a255457/test/bn254.test.js#L697).
+
+#### misc curves
+
+```ts
+import { jubjub, babyjubjub } from '@noble/curves/misc';
+```
+
+Miscellaneous, rarely used curves are contained in the module.
+Jubjub curves have Fp over scalar fields of other curves. They are friendly to ZK proofs.
+jubjub Fp = bls n. babyjubjub Fp = bn254 n.
 
 #### Low-level methods
 
