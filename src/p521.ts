@@ -5,16 +5,18 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { sha512 } from '@noble/hashes/sha512';
+import { sha512 } from '@noble/hashes/sha2';
 import { createCurve, type CurveFnWithCreate } from './_shortw_utils.ts';
 import { createHasher, type HTFMethod } from './abstract/hash-to-curve.ts';
 import { Field } from './abstract/modular.ts';
 import { mapToCurveSimpleSWU } from './abstract/weierstrass.ts';
 
 // Field over which we'll do calculations.
-// prettier-ignore
-const P = BigInt('0x1ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff');
-const Fp521 = Field(P);
+const Fp521 = Field(
+  BigInt(
+    '0x1ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
+  )
+);
 
 const CURVE_A = Fp521.create(BigInt('-3'));
 const CURVE_B = BigInt(

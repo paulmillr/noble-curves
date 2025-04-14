@@ -6,7 +6,7 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { sha512 } from '@noble/hashes/sha512';
+import { sha512 } from '@noble/hashes/sha2';
 import { concatBytes, randomBytes, utf8ToBytes } from '@noble/hashes/utils';
 import { type AffinePoint, type Group, pippenger } from './abstract/curve.ts';
 import { type CurveFn, type ExtPointType, twistedEdwards } from './abstract/edwards.ts';

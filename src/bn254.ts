@@ -45,7 +45,7 @@ Ate loop size: 6x+2
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { sha256 } from '@noble/hashes/sha256';
+import { sha256 } from '@noble/hashes/sha2';
 import { randomBytes } from '@noble/hashes/utils';
 import { getHash } from './_shortw_utils.ts';
 import {

@@ -59,7 +59,7 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { sha256 } from '@noble/hashes/sha256';
+import { sha256 } from '@noble/hashes/sha2';
 import { randomBytes } from '@noble/hashes/utils';
 import { bls, type CurveFn } from './abstract/bls.ts';
 import { Field } from './abstract/modular.ts';

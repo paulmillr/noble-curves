@@ -6,8 +6,7 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { blake256 } from '@noble/hashes/blake1';
 import { blake2s } from '@noble/hashes/blake2s';
-import { sha256 } from '@noble/hashes/sha256';
-import { sha512 } from '@noble/hashes/sha512';
+import { sha256, sha512 } from '@noble/hashes/sha2';
 import { concatBytes, randomBytes, utf8ToBytes } from '@noble/hashes/utils';
 import { getHash } from './_shortw_utils.ts';
 import { type CurveFn, type ExtPointType, twistedEdwards } from './abstract/edwards.ts';
