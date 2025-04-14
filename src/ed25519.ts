@@ -27,10 +27,12 @@ import {
   numberToBytesLE,
 } from './abstract/utils.ts';
 
+// 2n**255n - 19n
 const ED25519_P = BigInt(
   '57896044618658097711785492504343953926634992332820282019728792003956564819949'
 );
 // √(-1) aka √(a) aka 2^((p-1)/4)
+// Fp.sqrt(Fp.neg(1))
 const ED25519_SQRT_M1 = /* @__PURE__ */ BigInt(
   '19681161376707505956807079304988542015446066515923890162744021073123829784752'
 );
@@ -91,7 +93,7 @@ function uvRatio(u: bigint, v: bigint): { isValid: boolean; value: bigint } {
   return { isValid: useRoot1 || useRoot2, value: x };
 }
 
-// Just in case
+/** Weird / bogus points, useful for debugging. */
 export const ED25519_TORSION_SUBGROUP: string[] = [
   '0100000000000000000000000000000000000000000000000000000000000000',
   'c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a',
@@ -107,20 +109,15 @@ const Fp = /* @__PURE__ */ (() => Field(ED25519_P, undefined, true))();
 
 const ed25519Defaults = /* @__PURE__ */ (() =>
   ({
-    // Param: a
     // Removing Fp.create() will still work, and is 10% faster on sign
     a: Fp.create(BigInt(-1)),
-    // d is equal to -121665/121666 over finite field.
-    // Negative number is P - number, and division is invert(number, P)
+    // d is -121665/121666 a.k.a. Fp.neg(121665 * Fp.inv(121666))
     d: BigInt('37095705934669439343138083508754565189542113879843219016388785533085940283555'),
-    // Finite field 𝔽p over which we'll do calculations; 2n**255n - 19n
+    // Finite field 2n**255n - 19n
     Fp,
-    // Subgroup order: how many points curve has
-    // 2n**252n + 27742317777372353535851937790883648493n;
+    // Subgroup order 2n**252n + 27742317777372353535851937790883648493n;
     n: BigInt('7237005577332262213973186563042994240857116359379907606001950938285454250989'),
-    // Cofactor
     h: _8n,
-    // Base point (x, y) aka generator point
     Gx: BigInt('15112221349535400772501151409588531511454012693041857206046113283949847762202'),
     Gy: BigInt('46316835694926478169428394003475163141307993866256225615783033603165251855960'),
     hash: sha512,
