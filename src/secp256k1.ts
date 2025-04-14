@@ -64,24 +64,26 @@ function sqrtMod(y: bigint): bigint {
 const Fpk1 = Field(secp256k1P, undefined, undefined, { sqrt: sqrtMod });
 
 /**
- * secp256k1 short weierstrass curve and ECDSA signatures over it.
+ * secp256k1 curve, ECDSA and ECDH methods.
+ *
+ * Field: `2n**256n - 2n**32n - 2n**9n - 2n**8n - 2n**7n - 2n**6n - 2n**4n - 1n`
  *
  * @example
+ * ```js
  * import { secp256k1 } from '@noble/curves/secp256k1';
- *
  * const priv = secp256k1.utils.randomPrivateKey();
  * const pub = secp256k1.getPublicKey(priv);
  * const msg = new Uint8Array(32).fill(1); // message hash (not message) in ecdsa
  * const sig = secp256k1.sign(msg, priv); // `{prehash: true}` option is available
  * const isValid = secp256k1.verify(sig, msg, pub) === true;
+ * ```
  */
 export const secp256k1: CurveFnWithCreate = createCurve(
   {
-    a: BigInt(0), // equation params: a, b
+    a: BigInt(0),
     b: BigInt(7),
-    Fp: Fpk1, // Field's prime: 2n**256n - 2n**32n - 2n**9n - 2n**8n - 2n**7n - 2n**6n - 2n**4n - 1n
-    n: secp256k1N, // Curve order, total count of valid points in the field
-    // Base point (x, y) aka generator point
+    Fp: Fpk1,
+    n: secp256k1N,
     Gx: BigInt('55066263022277343669578718895168534326250603453777594175500187360389116729240'),
     Gy: BigInt('32670510020758816978083085130507043184471273380659243275938904335757337482424'),
     h: BigInt(1), // Cofactor
@@ -242,12 +244,14 @@ export type SecpSchnorr = {
  * Schnorr signatures over secp256k1.
  * https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki
  * @example
+ * ```js
  * import { schnorr } from '@noble/curves/secp256k1';
  * const priv = schnorr.utils.randomPrivateKey();
  * const pub = schnorr.getPublicKey(priv);
  * const msg = new TextEncoder().encode('hello');
  * const sig = schnorr.sign(msg, priv);
  * const isValid = schnorr.verify(sig, msg, pub);
+ * ```
  */
 export const schnorr: SecpSchnorr = /* @__PURE__ */ (() => ({
   getPublicKey: schnorrGetPublicKey,
@@ -321,8 +325,8 @@ const htf = /* @__PURE__ */ (() =>
     }
   ))();
 
-/** secp256k1 hash-to-curve from [RFC 9380](https://www.rfc-editor.org/rfc/rfc9380). */
+/** secp256k1 hash-to-curve from RFC 9380. */
 export const hashToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() => htf.hashToCurve)();
 
-/** secp256k1 encode-to-curve from [RFC 9380](https://www.rfc-editor.org/rfc/rfc9380). */
+/** secp256k1 encode-to-curve from RFC 9380. */
 export const encodeToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() => htf.encodeToCurve)();

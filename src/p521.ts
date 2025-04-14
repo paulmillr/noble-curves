@@ -64,7 +64,7 @@ const htf = /* @__PURE__ */ (() =>
     expand: 'xmd',
     hash: sha512,
   }))();
-/** secp521r1 hash-to-curve from [RFC 9380](https://www.rfc-editor.org/rfc/rfc9380). */
+/** secp521r1 hash-to-curve from RFC 9380. */
 export const hashToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() => htf.hashToCurve)();
-/** secp521r1 encode-to-curve from [RFC 9380](https://www.rfc-editor.org/rfc/rfc9380). */
+/** secp521r1 encode-to-curve from RFC 9380. */
 export const encodeToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() => htf.encodeToCurve)();

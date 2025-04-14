@@ -1,6 +1,7 @@
 /**
- * hash-to-curve from [RFC 9380](https://www.rfc-editor.org/rfc/rfc9380).
+ * hash-to-curve from RFC 9380.
  * Hashes arbitrary-length byte strings to a list of one or more elements of a finite field F.
+ * https://www.rfc-editor.org/rfc/rfc9380
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */

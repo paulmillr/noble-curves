@@ -29,7 +29,7 @@
  * 4. Compatible with specs:
  *    [cfrg-pairing-friendly-curves-11](https://tools.ietf.org/html/draft-irtf-cfrg-pairing-friendly-curves-11),
  *    [cfrg-bls-signature-05](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-bls-signature-05),
- *    [RFC 9380](https://www.rfc-editor.org/rfc/rfc9380).
+ *    RFC 9380.
  *
  * ### Params
  * To verify curve parameters, see
