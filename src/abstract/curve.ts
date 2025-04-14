@@ -51,10 +51,9 @@ export type WOpts = {
 
 function calcWOpts(W: number, scalarBits: number): WOpts {
   validateW(W, scalarBits);
-  const pow_2_w = 2 ** W; // W=8 256
   const windows = Math.ceil(scalarBits / W) + 1; // W=8 33. Not 32, because we skip zero
   const windowSize = 2 ** (W - 1); // W=8 128. Not 256, because we skip zero
-  const maxNumber = pow_2_w; // W=8 256
+  const maxNumber = 2 ** W; // W=8 256
   const mask = bitMask(W); // W=8 255 == mask 0b11111111
   const shiftBy = BigInt(W); // W=8 8
   return { windows, windowSize, mask, maxNumber, shiftBy };
@@ -194,8 +193,10 @@ export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number): 
     wNAF(W: number, precomputes: T[], n: bigint): { p: T; f: T } {
       // Smaller version:
       // https://github.com/paulmillr/noble-secp256k1/blob/47cb1669b6e506ad66b35fe7d76132ae97465da2/index.ts#L502-L541
-      // TODO: maybe check that scalar is less than group order? wNAF behavious is undefined otherwise
-      // But need to carefully remove other checks before wNAF. ORDER == bits here
+      // TODO: check the scalar is less than group order?
+      // wNAF behavior is undefined otherwise. But have to carefully remove
+      // other checks before wNAF. ORDER == bits here.
+      // Accumulators
       let p = c.ZERO;
       let f = c.BASE;
       // This code was first written with assumption that 'f' and 'p' will never be infinity point:
@@ -205,7 +206,7 @@ export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number): 
       // It's not obvious how this can fail, but still worth investigating later.
       const wo = calcWOpts(W, bits);
       for (let window = 0; window < wo.windows; window++) {
-        // (n === 0) is still handled. isEven and offsetF are used for noise
+        // (n === _0n) is handled and not early-exited. isEven and offsetF are used for noise
         const { nextN, offset, isZero, isNeg, isNegF, offsetF } = calcOffsets(n, window, wo);
         n = nextN;
         if (isZero) {
@@ -238,7 +239,8 @@ export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number): 
         const { nextN, offset, isZero, isNeg } = calcOffsets(n, window, wo);
         n = nextN;
         if (isZero) {
-          // Early-proceed, skip zero bit
+          // Window bits are 0: skip processing.
+          // Move to next window.
           continue;
         } else {
           const item = precomputes[offset];
