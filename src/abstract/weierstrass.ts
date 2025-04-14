@@ -1,6 +1,19 @@
 /**
  * Short Weierstrass curve methods. The formula is: y² = x³ + ax + b.
  *
+ * ### Parameters
+ *
+ * To initialize a weierstrass curve, one needs to pass following params:
+ *
+ * * a: formula param
+ * * b: formula param
+ * * Fp: finite Field over which we'll do calculations. Can be complex (Fp2, Fp12)
+ * * n: Curve prime subgroup order, total count of valid points in the field
+ * * Gx: Base point (x, y) aka generator point x coordinate
+ * * Gy: ...y coordinate
+ * * h: cofactor, usually 1. h*n = curve group order (n is only subgroup order)
+ * * lowS: whether to enable (default) or disable "low-s" non-malleable signatures
+ *
  * ### Design rationale for types
  *
  * * Interaction between classes from different curves should fail:
@@ -899,10 +912,11 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     readonly s: bigint;
     readonly recovery?: number;
     constructor(r: bigint, s: bigint, recovery?: number) {
+      aInRange('r', r, _1n, CURVE_ORDER); // r in [1..N]
+      aInRange('s', s, _1n, CURVE_ORDER); // s in [1..N]
       this.r = r;
       this.s = s;
       if (recovery != null) this.recovery = recovery;
-      this.assertValidity();
       Object.freeze(this);
     }
 
@@ -920,10 +934,11 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       return new Signature(r, s);
     }
 
-    assertValidity(): void {
-      aInRange('r', this.r, _1n, CURVE_ORDER); // r in [1..N]
-      aInRange('s', this.s, _1n, CURVE_ORDER); // s in [1..N]
-    }
+    /**
+     * @todo remove
+     * @deprecated
+     */
+    assertValidity(): void {}
 
     addRecoveryBit(recovery: number): RecoveredSignature {
       return new Signature(this.r, this.s, recovery) as RecoveredSignature;
