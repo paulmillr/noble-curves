@@ -108,7 +108,8 @@ const Fp = /* @__PURE__ */ (() => Field(ED25519_P, undefined, true))();
 const ed25519Defaults = /* @__PURE__ */ (() =>
   ({
     // Param: a
-    a: BigInt(-1), // Fp.create(-1) is proper; our way still works and is faster
+    // Removing Fp.create() will still work, and is 10% faster on sign
+    a: Fp.create(BigInt(-1)),
     // d is equal to -121665/121666 over finite field.
     // Negative number is P - number, and division is invert(number, P)
     d: BigInt('37095705934669439343138083508754565189542113879843219016388785533085940283555'),
