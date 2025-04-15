@@ -47,7 +47,6 @@ Ate loop size: 6x+2
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha256 } from '@noble/hashes/sha2.js';
 import { randomBytes } from '@noble/hashes/utils.js';
-import { getHash } from './_shortw_utils.ts';
 import {
   bls,
   type CurveFn as BLSCurveFn,
@@ -58,7 +57,6 @@ import { Field } from './abstract/modular.ts';
 import type { Fp, Fp12, Fp2, Fp6 } from './abstract/tower.ts';
 import { psiFrobenius, tower12 } from './abstract/tower.ts';
 import { bitGet, bitLen, notImplemented } from './abstract/utils.ts';
-import { type CurveFn, weierstrass } from './abstract/weierstrass.ts';
 // prettier-ignore
 const _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3);
 const _6n = BigInt(6);
@@ -233,20 +231,4 @@ export const bn254: BLSCurveFn = bls({
   randomBytes,
 
   postPrecompute: _postPrecompute,
-});
-
-/**
- * bn254 weierstrass curve with ECDSA.
- * This is very rare and probably not used anywhere.
- * Instead, you should use G1 / G2, defined above.
- */
-export const bn254_weierstrass: CurveFn = weierstrass({
-  a: BigInt(0),
-  b: BigInt(3),
-  Fp,
-  n: BigInt('21888242871839275222246405745257275088548364400416034343698204186575808495617'),
-  Gx: BigInt(1),
-  Gy: BigInt(2),
-  h: BigInt(1),
-  ...getHash(sha256),
 });
