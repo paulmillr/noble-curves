@@ -8,7 +8,7 @@
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { shake256 } from '@noble/hashes/sha3.js';
-import { concatBytes, randomBytes, utf8ToBytes, wrapConstructor } from '@noble/hashes/utils.js';
+import { concatBytes, createHash, randomBytes, utf8ToBytes } from '@noble/hashes/utils.js';
 import type { AffinePoint, Group } from './abstract/curve.ts';
 import { pippenger } from './abstract/curve.ts';
 import { type CurveFn, type ExtPointType, twistedEdwards } from './abstract/edwards.ts';
@@ -29,8 +29,8 @@ import {
   numberToBytesLE,
 } from './abstract/utils.ts';
 
-const shake256_114 = wrapConstructor(() => shake256.create({ dkLen: 114 }));
-const shake256_64 = wrapConstructor(() => shake256.create({ dkLen: 64 }));
+const shake256_114 = createHash(() => shake256.create({ dkLen: 114 }));
+const shake256_64 = createHash(() => shake256.create({ dkLen: 64 }));
 const ed448P = BigInt(
   '726838724295606890549323807888004534353641360687318060281490199180612328166730772686396383698676545930088884461843637361053498018365439'
 );
