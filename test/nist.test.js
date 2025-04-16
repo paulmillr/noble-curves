@@ -117,6 +117,7 @@ function verifyECDHVector(test, curve) {
       if (e.message.startsWith('invalid Point, expected length')) return; // Ignore
       throw e;
     }
+    deepStrictEqual(curve.utils.isValidPublicKey(pubB), true);
     const shared = curve.getSharedSecret(privA, pubB).subarray(1);
     deepStrictEqual(hex(shared), test.shared, 'valid');
   } else if (test.result === 'invalid') {

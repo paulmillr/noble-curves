@@ -95,6 +95,7 @@ describe('secp256k1', () => {
         const { P, expected } = vector;
         if (expected) {
           Point.fromHex(P);
+          deepStrictEqual(secp.utils.isValidPublicKey(P), true);
         } else {
           throws(() => Point.fromHex(P));
         }

@@ -812,6 +812,7 @@ export type CurveFn = {
   utils: {
     normPrivateKeyToScalar: (key: PrivKey) => bigint;
     isValidPrivateKey(privateKey: PrivKey): boolean;
+    isValidPublicKey(publicKey: Hex): boolean;
     randomPrivateKey: () => Uint8Array;
     precompute: (windowSize?: number, point?: ProjPointType<bigint>) => ProjPointType<bigint>;
   };
@@ -985,10 +986,22 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     isValidPrivateKey(privateKey: PrivKey) {
       try {
         normPrivateKeyToScalar(privateKey);
-        return true;
       } catch (error) {
         return false;
       }
+      return true;
+    },
+    isValidPublicKey(publicKey: Hex, compressed?: boolean) {
+      try {
+        const p = ensureBytes('pointHex', publicKey);
+        const l = p.length;
+        if (compressed === true && l !== compressedLen) return false;
+        if (compressed === false && l !== uncompressedLen) return false;
+        Point.fromHex(p); // assertValidity() done inside
+      } catch (error) {
+        return false;
+      }
+      return true;
     },
     normPrivateKeyToScalar: normPrivateKeyToScalar,
 
