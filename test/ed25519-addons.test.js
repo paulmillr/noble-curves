@@ -9,7 +9,7 @@ import {
   ed25519ph,
   edwardsToMontgomeryPriv,
   edwardsToMontgomeryPub,
-  hash_to_ristretto255,
+  hashToRistretto255,
   RistrettoPoint,
   x25519,
 } from '../ed25519.js';
@@ -364,9 +364,9 @@ describe('ristretto255', () => {
     deepStrictEqual(pub.toHex(), pub2.toHex());
   });
 
-  should('hash_to_ristretto255', () => {
+  should('hashToRistretto255', () => {
     deepStrictEqual(
-      hash_to_ristretto255(new Uint8Array(10).fill(5), {
+      hashToRistretto255(new Uint8Array(10).fill(5), {
         DST: 'ristretto255_XMD:SHA-512_R255MAP_RO_',
       }).toHex(),
       'be2194e53cc014665821003f8ecf49e99b7cd16f5326e53f234ecd21c448ee6c'
