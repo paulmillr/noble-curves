@@ -441,7 +441,8 @@ export function Field(
     fromBytes: (bytes) => {
       if (bytes.length !== BYTES)
         throw new Error('Field.fromBytes: expected ' + BYTES + ' bytes, got ' + bytes.length);
-      return isLE ? bytesToNumberLE(bytes) : bytesToNumberBE(bytes);
+      const num = isLE ? bytesToNumberLE(bytes) : bytesToNumberBE(bytes);
+      return mod(num, ORDER);
     },
   } as FpField);
   return Object.freeze(f);
