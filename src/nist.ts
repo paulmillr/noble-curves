@@ -6,7 +6,7 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha224, sha256, sha384, sha512 } from '@noble/hashes/sha2.js';
 import { createCurve, type CurveFnWithCreate } from './_shortw_utils.ts';
-import { createHasher, type HTFMethod } from './abstract/hash-to-curve.ts';
+import { createHasher, type Hasher } from './abstract/hash-to-curve.ts';
 import { Field } from './abstract/modular.ts';
 import { mapToCurveSimpleSWU } from './abstract/weierstrass.ts';
 
@@ -38,7 +38,8 @@ const p256_mapSWU = /* @__PURE__ */ (() =>
     Z: Fp256.create(BigInt('-10')),
   }))();
 
-const p256_htf = /* @__PURE__ */ (() =>
+/** RFC 9380 methods. */
+export const p256_hasher: Hasher<bigint> = /* @__PURE__ */ (() =>
   createHasher(secp256r1.ProjectivePoint, (scalars: bigint[]) => p256_mapSWU(scalars[0]), {
     DST: 'P256_XMD:SHA-256_SSWU_RO_',
     encodeDST: 'P256_XMD:SHA-256_SSWU_NU_',
@@ -48,10 +49,6 @@ const p256_htf = /* @__PURE__ */ (() =>
     expand: 'xmd',
     hash: sha256,
   }))();
-/** secp256r1 hash-to-curve from RFC 9380. */
-export const hashToP256: HTFMethod<bigint> = /* @__PURE__ */ (() => p256_htf.hashToCurve)();
-/** secp256r1 encode-to-curve from RFC 9380. */
-export const encodeToP256: HTFMethod<bigint> = /* @__PURE__ */ (() => p256_htf.encodeToCurve)();
 
 // Field over which we'll do calculations.
 const Fp384 = Field(
@@ -87,7 +84,8 @@ const p384_mapSWU = /* @__PURE__ */ (() =>
     Z: Fp384.create(BigInt('-12')),
   }))();
 
-const p384_htf = /* @__PURE__ */ (() =>
+/** RFC 9380 methods. */
+export const p384_hasher: Hasher<bigint> = /* @__PURE__ */ (() =>
   createHasher(secp384r1.ProjectivePoint, (scalars: bigint[]) => p384_mapSWU(scalars[0]), {
     DST: 'P384_XMD:SHA-384_SSWU_RO_',
     encodeDST: 'P384_XMD:SHA-384_SSWU_NU_',
@@ -97,10 +95,6 @@ const p384_htf = /* @__PURE__ */ (() =>
     expand: 'xmd',
     hash: sha384,
   }))();
-/** secp384r1 hash-to-curve from RFC 9380. */
-export const hashToP384: HTFMethod<bigint> = /* @__PURE__ */ (() => p384_htf.hashToCurve)();
-/** secp384r1 encode-to-curve from RFC 9380. */
-export const encodeToP384: HTFMethod<bigint> = /* @__PURE__ */ (() => p384_htf.encodeToCurve)();
 
 // Field over which we'll do calculations.
 const Fp521 = Field(
@@ -144,7 +138,8 @@ const p521_mapSWU = /* @__PURE__ */ (() =>
     Z: Fp521.create(BigInt('-4')),
   }))();
 
-const p521_htf = /* @__PURE__ */ (() =>
+/** RFC 9380 methods. */
+export const p521_hasher: Hasher<bigint> = /* @__PURE__ */ (() =>
   createHasher(secp521r1.ProjectivePoint, (scalars: bigint[]) => p521_mapSWU(scalars[0]), {
     DST: 'P521_XMD:SHA-512_SSWU_RO_',
     encodeDST: 'P521_XMD:SHA-512_SSWU_NU_',
@@ -154,10 +149,6 @@ const p521_htf = /* @__PURE__ */ (() =>
     expand: 'xmd',
     hash: sha512,
   }))();
-/** secp521r1 hash-to-curve from RFC 9380. */
-export const hashToP521: HTFMethod<bigint> = /* @__PURE__ */ (() => p521_htf.hashToCurve)();
-/** secp521r1 encode-to-curve from RFC 9380. */
-export const encodeToP521: HTFMethod<bigint> = /* @__PURE__ */ (() => p521_htf.encodeToCurve)();
 
 /** NIST secp192r1 aka p192 curve. https://www.secg.org/sec2-v2.pdf */
 export const p192: CurveFnWithCreate = createCurve(
