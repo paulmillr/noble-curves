@@ -413,7 +413,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
    */
   class Point implements ProjPointType<T> {
     static readonly BASE = new Point(CURVE.Gx, CURVE.Gy, Fp.ONE);
-    static readonly ZERO = new Point(Fp.ZERO, Fp.ONE, Fp.ZERO);
+    static readonly ZERO = new Point(Fp.ZERO, Fp.ONE, Fp.ZERO); // 0, 1, 0
     readonly px: T;
     readonly py: T;
     readonly pz: T;
@@ -617,6 +617,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
     is0() {
       return this.equals(Point.ZERO);
     }
+
     private wNAF(n: bigint): { p: Point; f: Point } {
       return wnaf.wNAFCached(this, n, Point.normalizeZ);
     }
@@ -749,16 +750,14 @@ export interface SignatureType {
   readonly r: bigint;
   readonly s: bigint;
   readonly recovery?: number;
-  assertValidity(): void;
   addRecoveryBit(recovery: number): RecoveredSignatureType;
   hasHighS(): boolean;
   normalizeS(): SignatureType;
-  recoverPublicKey(msgHash: Hex): ProjPointType<bigint>;
+  recoverPublicKey(msgHash: Hex, isCompressed?: boolean): Uint8Array;
   toCompactRawBytes(): Uint8Array;
   toCompactHex(): string;
-  // DER-encoded
-  toDERRawBytes(isCompressed?: boolean): Uint8Array;
-  toDERHex(isCompressed?: boolean): string;
+  toDERRawBytes(): Uint8Array;
+  toDERHex(): string;
 }
 export type RecoveredSignatureType = SignatureType & {
   readonly recovery: number;
@@ -934,17 +933,11 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       return new Signature(r, s);
     }
 
-    /**
-     * @todo remove
-     * @deprecated
-     */
-    assertValidity(): void {}
-
     addRecoveryBit(recovery: number): RecoveredSignature {
       return new Signature(this.r, this.s, recovery) as RecoveredSignature;
     }
 
-    recoverPublicKey(msgHash: Hex): typeof Point.BASE {
+    recoverPublicKey(msgHash: Hex, isCompressed = true): Uint8Array {
       const { r, s, recovery: rec } = this;
       const h = bits2int_modN(ensureBytes('msgHash', msgHash)); // Truncate hash
       if (rec == null || ![0, 1, 2, 3].includes(rec)) throw new Error('recovery id invalid');
@@ -958,7 +951,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       const Q = Point.BASE.multiplyAndAddUnsafe(R, u1, u2); // (sr^-1)R-(hr^-1)G = -(hr^-1)G + (sr^-1)
       if (!Q) throw new Error('point at infinify'); // unsafe is fine: no priv data leaked
       Q.assertValidity();
-      return Q;
+      return Q.toRawBytes(isCompressed);
     }
 
     // Signatures should be low-s, to prevent malleability.
