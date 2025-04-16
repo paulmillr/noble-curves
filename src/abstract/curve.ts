@@ -443,6 +443,13 @@ export function validateBasic<FP, T>(
       p: bigint;
     }
 > {
+  // TODO
+  // curve = Object.assign({}, curve);
+  // if (typeof curve.p === 'bigint') {
+  //   if (curve.Fp) throw new Error('curve.p and curve.Fp cannot be defined at the same time');
+  //   const Fp = Field(curve.p!);
+  // }
+  // if (!curve.Fp) throw new Error('curve.p or curve.Fp must be defined');
   validateField(curve.Fp);
   validateObject(
     curve,
