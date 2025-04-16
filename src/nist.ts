@@ -4,7 +4,7 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { sha256, sha384, sha512 } from '@noble/hashes/sha2.js';
+import { sha224, sha256, sha384, sha512 } from '@noble/hashes/sha2.js';
 import { createCurve, type CurveFnWithCreate } from './_shortw_utils.ts';
 import { createHasher, type HTFMethod } from './abstract/hash-to-curve.ts';
 import { Field } from './abstract/modular.ts';
@@ -27,7 +27,6 @@ export const p256: CurveFnWithCreate = createCurve({
   Gx: BigInt('0x6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296'),
   Gy: BigInt('0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5'),
   h: BigInt(1),
-  lowS: false,
 } as const, sha256);
 /** Alias to p256. */
 export const secp256r1: CurveFnWithCreate = p256;
@@ -77,7 +76,6 @@ export const p384: CurveFnWithCreate = createCurve({
   Gx: BigInt('0xaa87ca22be8b05378eb1c71ef320ad746e1d3b628ba79b9859f741e082542a385502f25dbf55296c3a545e3872760ab7'),
   Gy: BigInt('0x3617de4a96262c6f5d9e98bf9292dc29f8f41dbd289a147ce9da3113b5f0b8c00a60b1ce1d7e819d7a431d7c90ea0e5f'),
   h: BigInt(1),
-  lowS: false,
 } as const, sha384);
 /** Alias to p384. */
 export const secp384r1: CurveFnWithCreate = p384;
@@ -135,7 +133,6 @@ export const p521: CurveFnWithCreate = createCurve({
     '0x011839296a789a3bc0045c8a5fb42c7d1bd998f54449579b446817afbd17273e662c97ee72995ef42640c550b9013fad0761353c7086a272c24088be94769fd16650'
   ),
   h: BigInt(1),
-  lowS: false,
   allowedPrivateKeyLengths: [130, 131, 132] // P521 keys are variable-length. Normalize to 132b
 } as const, sha512);
 export const secp521r1: CurveFnWithCreate = p521;
@@ -161,3 +158,33 @@ const p521_htf = /* @__PURE__ */ (() =>
 export const hashToP521: HTFMethod<bigint> = /* @__PURE__ */ (() => p521_htf.hashToCurve)();
 /** secp521r1 encode-to-curve from RFC 9380. */
 export const encodeToP521: HTFMethod<bigint> = /* @__PURE__ */ (() => p521_htf.encodeToCurve)();
+
+/** NIST secp192r1 aka p192 curve. https://www.secg.org/sec2-v2.pdf */
+export const p192: CurveFnWithCreate = createCurve(
+  {
+    a: BigInt('0xfffffffffffffffffffffffffffffffefffffffffffffffc'),
+    b: BigInt('0x64210519e59c80e70fa7e9ab72243049feb8deecc146b9b1'),
+    Fp: Field(BigInt('0xfffffffffffffffffffffffffffffffeffffffffffffffff')),
+    n: BigInt('0xffffffffffffffffffffffff99def836146bc9b1b4d22831'),
+    Gx: BigInt('0x188da80eb03090f67cbf20eb43a18800f4ff0afd82ff1012'),
+    Gy: BigInt('0x07192b95ffc8da78631011ed6b24cdd573f977a11e794811'),
+    h: BigInt(1),
+  },
+  sha256
+);
+export const secp192r1: CurveFnWithCreate = p192;
+
+/** NIST secp224r1 aka p224 curve. https://www.secg.org/sec2-v2.pdf */
+export const p224: CurveFnWithCreate = createCurve(
+  {
+    a: BigInt('0xfffffffffffffffffffffffffffffffefffffffffffffffffffffffe'),
+    b: BigInt('0xb4050a850c04b3abf54132565044b0b7d7bfd8ba270b39432355ffb4'),
+    Fp: Field(BigInt('0xffffffffffffffffffffffffffffffff000000000000000000000001')),
+    n: BigInt('0xffffffffffffffffffffffffffff16a2e0b8f03e13dd29455c5c2a3d'),
+    Gx: BigInt('0xb70e0cbd6bb4bf7f321390b94a03c1d356c21122343280d6115c1d21'),
+    Gy: BigInt('0xbd376388b5f723fb4c22dfe6cd4375a05a07476444d5819985007e34'),
+    h: BigInt(1),
+  },
+  sha224
+);
+export const secp224r1: CurveFnWithCreate = p224;
