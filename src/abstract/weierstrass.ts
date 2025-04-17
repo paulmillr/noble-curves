@@ -420,7 +420,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
 
     constructor(px: T, py: T, pz: T) {
       if (px == null || !Fp.isValid(px)) throw new Error('x required');
-      if (py == null || !Fp.isValid(py)) throw new Error('y required');
+      if (py == null || !Fp.isValid(py) || Fp.is0(py)) throw new Error('y required');
       if (pz == null || !Fp.isValid(pz)) throw new Error('z required');
       this.px = px;
       this.py = py;
