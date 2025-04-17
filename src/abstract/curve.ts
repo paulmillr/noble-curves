@@ -114,9 +114,9 @@ export type IWNAF<T extends Group<T>> = {
   precomputeWindow(elm: T, W: number): Group<T>[];
   wNAF(W: number, precomputes: T[], n: bigint): { p: T; f: T };
   wNAFUnsafe(W: number, precomputes: T[], n: bigint, acc?: T): T;
-  getPrecomputes(W: number, P: T, transform: Mapper<T>): T[];
   wNAFCached(P: T, n: bigint, transform: Mapper<T>): { p: T; f: T };
   wNAFCachedUnsafe(P: T, n: bigint, transform: Mapper<T>, prev?: T): T;
+  getPrecomputes(W: number, P: T, transform: Mapper<T>): T[];
   setWindowSize(P: T, W: number): void;
 };
 
