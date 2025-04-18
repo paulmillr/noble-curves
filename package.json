@@ -121,6 +121,10 @@
       "import": "./esm/misc.js",
       "require": "./misc.js"
     },
+    "./nist": {
+      "import": "./esm/nist.js",
+      "require": "./nist.js"
+    },
     "./p256": {
       "import": "./esm/p256.js",
       "require": "./p256.js"

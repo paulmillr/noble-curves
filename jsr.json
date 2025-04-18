@@ -20,6 +20,7 @@
     "./ed25519": "./src/ed25519.ts",
     "./jubjub": "./src/jubjub.ts",
     "./misc": "./src/misc.ts",
+    "./nist": "./src/nist.ts",
     "./p256": "./src/p256.ts",
     "./p384": "./src/p384.ts",
     "./p521": "./src/p521.ts",
