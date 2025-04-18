@@ -364,7 +364,7 @@ describe('ristretto255', () => {
     deepStrictEqual(pub.toHex(), pub2.toHex());
   });
 
-  should('hash_to_ristretto255', () => {
+  should('ristretto255_hasher', () => {
     deepStrictEqual(
       hash_to_ristretto255(new Uint8Array(10).fill(5), {
         DST: 'ristretto255_XMD:SHA-512_R255MAP_RO_',

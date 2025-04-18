@@ -1,6 +1,6 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { createCurve } from '../esm/_shortw_utils.js';
 import { sha224, sha256 } from '@noble/hashes/sha256';
+import { createCurve } from '../esm/_shortw_utils.js';
 import { Field } from '../esm/abstract/modular.js';
 
 // NIST secp192r1 aka p192

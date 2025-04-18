@@ -119,7 +119,7 @@ describe('decaf448', () => {
       'f0301c19656bce1d1cd0a474c952d196041811b63617fc8fdaacee533644e2b2d49273426c8dbb5a76033ea84fb5215b84f9ebf22bde0b0700'
     );
   });
-  should('hash_to_decaf448', () => {
+  should('decaf448_hasher', () => {
     deepStrictEqual(
       hash_to_decaf448(new Uint8Array(10).fill(5), {
         DST: 'decaf448_XOF:SHAKE256_D448MAP_RO_',
