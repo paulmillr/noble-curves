@@ -607,26 +607,36 @@ type Opts = {
 
 ### poseidon: Poseidon hash
 
-Implements [Poseidon](https://www.poseidon-hash.info) ZK-friendly hash.
+Implements [Poseidon](https://www.poseidon-hash.info) ZK-friendly hash:
+permutation and sponge.
 
 There are many poseidon variants with different constants.
 We don't provide them: you should construct them manually.
 Check out [micro-starknet](https://github.com/paulmillr/micro-starknet) package for a proper example.
 
 ```ts
-import { poseidon } from '@noble/curves/abstract/poseidon';
+import { poseidon, poseidonSponge } from '@noble/curves/abstract/poseidon';
 
-type PoseidonOpts = {
-  Fp: Field<bigint>;
-  t: number;
-  roundsFull: number;
-  roundsPartial: number;
-  sboxPower?: number;
-  reversePartialPowIdx?: boolean;
-  mds: bigint[][];
-  roundConstants: bigint[][];
+const rate = 2;
+const capacity = 1;
+const { mds, roundConstants } = poseidon.grainGenConstants({
+  Fp,
+  t: rate + capacity,
+  roundsFull: 8,
+  roundsPartial: 31,
+});
+const opts = {
+  Fp,
+  rate,
+  capacity,
+  sboxPower: 17,
+  mds,
+  roundConstants,
+  roundsFull: 8,
+  roundsPartial: 31,
 };
-const instance = poseidon(opts: PoseidonOpts);
+const permutation = poseidon.poseidon(opts);
+const sponge = poseidon.poseidonSponge(opts); // use carefully, not specced
 ```
 
 ### modular: Modular arithmetics utilities
