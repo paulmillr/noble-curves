@@ -94,17 +94,16 @@ export interface ProjPointType<T> extends Group<ProjPointType<T>> {
   readonly pz: T;
   get x(): T;
   get y(): T;
-  multiply(scalar: bigint): ProjPointType<T>;
   toAffine(iz?: T): AffinePoint<T>;
-  isTorsionFree(): boolean;
-  clearCofactor(): ProjPointType<T>;
+  toHex(isCompressed?: boolean): string;
+  toRawBytes(isCompressed?: boolean): Uint8Array;
+
   assertValidity(): void;
   hasEvenY(): boolean;
-  toRawBytes(isCompressed?: boolean): Uint8Array;
-  toHex(isCompressed?: boolean): string;
-
   multiplyUnsafe(scalar: bigint): ProjPointType<T>;
   multiplyAndAddUnsafe(Q: ProjPointType<T>, a: bigint, b: bigint): ProjPointType<T> | undefined;
+  isTorsionFree(): boolean;
+  clearCofactor(): ProjPointType<T>;
   _setWindowSize(windowSize: number): void;
 }
 // Static methods for 3d XYZ points
@@ -413,7 +412,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
    */
   class Point implements ProjPointType<T> {
     static readonly BASE = new Point(CURVE.Gx, CURVE.Gy, Fp.ONE);
-    static readonly ZERO = new Point(Fp.ZERO, Fp.ONE, Fp.ZERO);
+    static readonly ZERO = new Point(Fp.ZERO, Fp.ONE, Fp.ZERO); // 0, 1, 0
     readonly px: T;
     readonly py: T;
     readonly pz: T;
@@ -617,6 +616,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
     is0() {
       return this.equals(Point.ZERO);
     }
+
     private wNAF(n: bigint): { p: Point; f: Point } {
       return wnaf.wNAFCached(this, n, Point.normalizeZ);
     }
@@ -756,7 +756,6 @@ export interface SignatureType {
   recoverPublicKey(msgHash: Hex): ProjPointType<bigint>;
   toCompactRawBytes(): Uint8Array;
   toCompactHex(): string;
-  // DER-encoded
   toDERRawBytes(isCompressed?: boolean): Uint8Array;
   toDERHex(isCompressed?: boolean): string;
 }
