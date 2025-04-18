@@ -487,10 +487,11 @@ describe('secp256k1', () => {
     });
     should('not recover zero points', () => {
       const msgHash = '6b8d2c81b11b2d699528dde488dbdf2f94293d0d33c32e347f255fa4a6c1f0a9';
-      const sig =
+      const sigh =
         '79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f817986b8d2c81b11b2d699528dde488dbdf2f94293d0d33c32e347f255fa4a6c1f0a9';
       const recovery = 0;
-      throws(() => secp.recoverPublicKey(msgHash, sig, recovery));
+      const sig = secp.Signature.fromCompact(sigh).addRecoveryBit(recovery);
+      throws(() => sig.recoverPublicKey(msgHash));
     });
     should('handle all-zeros msghash', () => {
       const privKey = secp.utils.randomPrivateKey();

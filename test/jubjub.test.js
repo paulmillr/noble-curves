@@ -1,6 +1,6 @@
 import { describe, should } from 'micro-should';
 import { deepStrictEqual, throws } from 'node:assert';
-import { findGroupHash, jubjub } from '../esm/jubjub.js';
+import { jubjub, jubjub_findGroupHash } from '../esm/misc.js';
 const Point = jubjub.ExtendedPoint;
 
 const G_SPEND = new Point(
@@ -62,11 +62,11 @@ describe('jubjub', () => {
   });
 
   should('Find generators', () => {
-    const spend = findGroupHash(
+    const spend = jubjub_findGroupHash(
       new Uint8Array(),
       new Uint8Array([90, 99, 97, 115, 104, 95, 71, 95])
     );
-    const proof = findGroupHash(
+    const proof = jubjub_findGroupHash(
       new Uint8Array(),
       new Uint8Array([90, 99, 97, 115, 104, 95, 72, 95])
     );
