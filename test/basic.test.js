@@ -1,27 +1,23 @@
 import * as fc from 'fast-check';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual, notDeepStrictEqual, throws } from 'node:assert';
-import * as mod from '../esm/abstract/modular.js';
-import { isBytes, bytesToHex as toHex } from '../esm/abstract/utils.js';
+import * as mod from '../abstract/modular.js';
+import { isBytes, bytesToHex as toHex } from '../abstract/utils.js';
 import { getTypeTests, json } from './utils.js';
 // Generic tests for all curves in package
-import { sha256 } from '@noble/hashes/sha256';
-import { sha512 } from '@noble/hashes/sha512';
-import { randomBytes } from '@noble/hashes/utils';
-import { createCurve } from '../esm/_shortw_utils.js';
-import { precomputeMSMUnsafe } from '../esm/abstract/curve.js';
-import { twistedEdwards } from '../esm/abstract/edwards.js';
-import { Field } from '../esm/abstract/modular.js';
-import { bls12_381 } from '../esm/bls12-381.js';
-import { bn254, bn254_weierstrass } from '../esm/bn254.js';
-import { ed25519, ed25519ctx, ed25519ph, RistrettoPoint, x25519 } from '../esm/ed25519.js';
-import { DecafPoint, ed448, ed448ph } from '../esm/ed448.js';
-import { jubjub } from '../esm/jubjub.js';
-import { secp256r1 } from '../esm/p256.js';
-import { secp384r1 } from '../esm/p384.js';
-import { secp521r1 } from '../esm/p521.js';
-import { pallas, vesta } from '../esm/pasta.js';
-import { secp256k1 } from '../esm/secp256k1.js';
+import { sha256, sha512 } from '@noble/hashes/sha2.js';
+import { randomBytes } from '@noble/hashes/utils.js';
+import { createCurve } from '../_shortw_utils.js';
+import { precomputeMSMUnsafe } from '../abstract/curve.js';
+import { twistedEdwards } from '../abstract/edwards.js';
+import { Field } from '../abstract/modular.js';
+import { bls12_381 } from '../bls12-381.js';
+import { bn254 } from '../bn254.js';
+import { ed25519, ed25519ctx, ed25519ph, RistrettoPoint, x25519 } from '../ed25519.js';
+import { DecafPoint, ed448, ed448ph } from '../ed448.js';
+import { jubjub } from '../misc.js';
+import { secp256r1, secp384r1, secp521r1 } from '../nist.js';
+import { secp256k1 } from '../secp256k1.js';
 import { secp192r1, secp224r1 } from './_more-curves.helpers.js';
 const wyche_curves = json('./wycheproof/ec_prime_order_curves_test.json');
 
@@ -37,9 +33,6 @@ const FIELDS = {
   jubjub: { Fp: [jubjub.CURVE.Fp] },
   ed25519: { Fp: [ed25519.CURVE.Fp] },
   ed448: { Fp: [ed448.CURVE.Fp] },
-  bn254_weierstrass: { Fp: [bn254_weierstrass.CURVE.Fp] },
-  pallas: { Fp: [pallas.CURVE.Fp] },
-  vesta: { Fp: [vesta.CURVE.Fp] },
   bls12: {
     Fp: [bls12_381.fields.Fp],
     Fp2: [
@@ -94,9 +87,6 @@ const CURVES = {
   ed25519ph,
   ed448,
   ed448ph,
-  pallas,
-  vesta,
-  bn254: bn254_weierstrass,
   jubjub,
   bls12_381_G1: bls12_381.G1,
   bls12_381_G2: bls12_381.G2,
@@ -656,7 +646,7 @@ for (const name in CURVES) {
     });
   }
   describe(name, () => {
-    if (['bn254', 'pallas', 'vesta'].includes(name)) return;
+    if (['bn254'].includes(name)) return;
     // Generic complex things (getPublicKey/sign/verify/getSharedSecret)
     should('.getPublicKey() type check', () => {
       for (let [item, repr_] of getTypeTests()) {
@@ -788,11 +778,11 @@ for (const name in CURVES) {
             const priv = C.utils.randomPrivateKey();
             const pub = C.getPublicKey(priv);
             const sig = C.sign(msg, priv);
-            deepStrictEqual(sig.recoverPublicKey(msg).toRawBytes(), pub);
+            deepStrictEqual(sig.recoverPublicKey(msg), pub);
             const sig2 = C.Signature.fromCompact(sig.toCompactHex());
             throws(() => sig2.recoverPublicKey(msg));
             const sig3 = sig2.addRecoveryBit(sig.recovery);
-            deepStrictEqual(sig3.recoverPublicKey(msg).toRawBytes(), pub);
+            deepStrictEqual(sig3.recoverPublicKey(msg), pub);
           }),
           { numRuns: NUM_RUNS }
         )

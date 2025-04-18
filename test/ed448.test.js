@@ -1,9 +1,9 @@
-import { bytesToHex, concatBytes, hexToBytes, randomBytes } from '@noble/hashes/utils';
+import { bytesToHex, concatBytes, hexToBytes, randomBytes } from '@noble/hashes/utils.js';
 import * as fc from 'fast-check';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual, throws } from 'node:assert';
-import { numberToBytesLE } from '../esm/abstract/utils.js';
-import { ed448, ed448ph, x448 } from '../esm/ed448.js';
+import { numberToBytesLE } from '../abstract/utils.js';
+import { ed448, ed448ph, x448 } from '../ed448.js';
 import { json } from './utils.js';
 
 // Old vectors allow to test sign() because they include private key

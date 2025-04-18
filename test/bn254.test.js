@@ -1,8 +1,8 @@
-import { hexToBytes } from '@noble/hashes/utils';
+import { hexToBytes } from '@noble/hashes/utils.js';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual, throws } from 'node:assert';
-import { bytesToNumberBE } from '../esm/abstract/utils.js';
-import { bn254 } from '../esm/bn254.js';
+import { bytesToNumberBE } from '../abstract/utils.js';
+import { bn254 } from '../bn254.js';
 import { default as ethDump } from './bn254/eth-dump.js';
 import { default as seda } from './bn254/seda.js';
 import { jsonGZ } from './utils.js';

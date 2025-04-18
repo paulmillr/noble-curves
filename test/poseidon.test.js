@@ -1,7 +1,7 @@
 import { describe, should } from 'micro-should';
 import { deepStrictEqual } from 'node:assert';
-import * as mod from '../esm/abstract/modular.js';
-import * as poseidon from '../esm/abstract/poseidon.js';
+import * as mod from '../abstract/modular.js';
+import * as poseidon from '../abstract/poseidon.js';
 import * as stark from './_poseidon.helpers.js';
 import { json } from './utils.js';
 const vecp = json('./vectors/poseidon.json');

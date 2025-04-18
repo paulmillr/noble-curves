@@ -4,14 +4,12 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { blake256 } from '@noble/hashes/blake1';
-import { blake2s } from '@noble/hashes/blake2s';
-import { sha256, sha512 } from '@noble/hashes/sha2';
-import { concatBytes, randomBytes, utf8ToBytes } from '@noble/hashes/utils';
-import { getHash } from './_shortw_utils.ts';
+import { blake256 } from '@noble/hashes/blake1.js';
+import { blake2s } from '@noble/hashes/blake2.js';
+import { sha512 } from '@noble/hashes/sha2.js';
+import { concatBytes, randomBytes, utf8ToBytes } from '@noble/hashes/utils.js';
 import { type CurveFn, type ExtPointType, twistedEdwards } from './abstract/edwards.ts';
-import { Field, mod } from './abstract/modular.ts';
-import { type CurveFn as WCurveFn, weierstrass } from './abstract/weierstrass.ts';
+import { Field } from './abstract/modular.ts';
 
 // Jubjub curves have 𝔽p over scalar fields of other curves. They are friendly to ZK proofs.
 // jubjub Fp = bls n. babyjubjub Fp = bn254 n.
@@ -83,35 +81,3 @@ export function jubjub_findGroupHash(m: Uint8Array, personalization: Uint8Array)
   if (!hashes.length) throw new Error('findGroupHash tag overflow');
   return hashes[0];
 }
-
-// Pasta curves. See [Spec](https://o1-labs.github.io/proof-systems/specs/pasta.html).
-
-export const pasta_p: bigint = BigInt(
-  '0x40000000000000000000000000000000224698fc094cf91b992d30ed00000001'
-);
-export const pasta_q: bigint = BigInt(
-  '0x40000000000000000000000000000000224698fc0994a8dd8c46eb2100000001'
-);
-
-/** https://neuromancer.sk/std/other/Pallas */
-export const pallas: WCurveFn = weierstrass({
-  a: BigInt(0),
-  b: BigInt(5),
-  Fp: Field(pasta_p),
-  n: pasta_q,
-  Gx: mod(BigInt(-1), pasta_p),
-  Gy: BigInt(2),
-  h: BigInt(1),
-  ...getHash(sha256),
-});
-/** https://neuromancer.sk/std/other/Vesta */
-export const vesta: WCurveFn = weierstrass({
-  a: BigInt(0),
-  b: BigInt(5),
-  Fp: Field(pasta_q),
-  n: pasta_p,
-  Gx: mod(BigInt(-1), pasta_q),
-  Gy: BigInt(2),
-  h: BigInt(1),
-  ...getHash(sha256),
-});

@@ -1,20 +1,20 @@
-import { bytesToHex } from '@noble/hashes/utils';
+import { bytesToHex } from '@noble/hashes/utils.js';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual } from 'node:assert';
 import { json } from './utils.js';
 // Generic tests for all curves in package
-import { sha256 } from '@noble/hashes/sha256';
-import { shake128, shake256 } from '@noble/hashes/sha3';
-import { sha512 } from '@noble/hashes/sha512';
-import { expand_message_xmd, expand_message_xof } from '../esm/abstract/hash-to-curve.js';
-import { utf8ToBytes } from '../esm/abstract/utils.js';
-import { bls12_381 } from '../esm/bls12-381.js';
-import * as ed25519 from '../esm/ed25519.js';
-import * as ed448 from '../esm/ed448.js';
-import * as secp256r1 from '../esm/p256.js';
-import * as secp384r1 from '../esm/p384.js';
-import * as secp521r1 from '../esm/p521.js';
-import * as secp256k1 from '../esm/secp256k1.js';
+import { sha256, sha512 } from '@noble/hashes/sha2.js';
+import { shake128, shake256 } from '@noble/hashes/sha3.js';
+import { expand_message_xmd, expand_message_xof } from '../abstract/hash-to-curve.js';
+import { utf8ToBytes } from '../abstract/utils.js';
+import { bls12_381 } from '../bls12-381.js';
+import * as ed25519 from '../ed25519.js';
+import * as ed448 from '../ed448.js';
+import * as nist from '../nist.js';
+// import * as secp256r1 from '../p256.js';
+// import * as secp384r1 from '../p384.js';
+// import * as secp521r1 from '../p521.js';
+import * as secp256k1 from '../secp256k1.js';
 // XMD
 const xmd_sha256_38 = json('./hash-to-curve/expand_message_xmd_SHA256_38.json');
 const xmd_sha256_256 = json('./hash-to-curve/expand_message_xmd_SHA256_256.json');
@@ -104,12 +104,12 @@ function stringToFp(s) {
   return BigInt(s);
 }
 
-function testCurve(curve, ro, nu) {
+function testCurve(hasher, ro, nu) {
   describe(`${ro.curve}/${ro.ciphersuite}`, () => {
     for (let i = 0; i < ro.vectors.length; i++) {
       const t = ro.vectors[i];
       should(`(${i})`, () => {
-        const p = curve
+        const p = hasher
           .hashToCurve(utf8ToBytes(t.msg), {
             DST: ro.dst,
           })
@@ -123,7 +123,7 @@ function testCurve(curve, ro, nu) {
     for (let i = 0; i < nu.vectors.length; i++) {
       const t = nu.vectors[i];
       should(`(${i})`, () => {
-        const p = curve
+        const p = hasher
           .encodeToCurve(utf8ToBytes(t.msg), {
             DST: nu.dst,
           })
@@ -135,13 +135,13 @@ function testCurve(curve, ro, nu) {
   });
 }
 
-testCurve(secp256r1, p256_ro, p256_nu);
-testCurve(secp384r1, p384_ro, p384_nu);
-testCurve(secp521r1, p521_ro, p521_nu);
+testCurve(nist.p256_hasher, p256_ro, p256_nu);
+testCurve(nist.p384_hasher, p384_ro, p384_nu);
+testCurve(nist.p521_hasher, p521_ro, p521_nu);
 testCurve(bls12_381.G1, g1_ro, g1_nu);
 testCurve(bls12_381.G2, g2_ro, g2_nu);
-testCurve(secp256k1, secp256k1_ro, secp256k1_nu);
-testCurve(ed25519, ed25519_ro, ed25519_nu);
-testCurve(ed448, ed448_ro, ed448_nu);
+testCurve(secp256k1.secp256k1_hasher, secp256k1_ro, secp256k1_nu);
+testCurve(ed25519.ed25519_hasher, ed25519_ro, ed25519_nu);
+testCurve(ed448.ed448_hasher, ed448_ro, ed448_nu);
 
 should.runWhen(import.meta.url);

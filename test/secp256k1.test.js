@@ -1,10 +1,11 @@
-import { bytesToHex as hex, hexToBytes } from '@noble/hashes/utils';
+import { bytesToHex as hex, hexToBytes } from '@noble/hashes/utils.js';
 import * as fc from 'fast-check';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual, throws } from 'node:assert';
 import { readFileSync } from 'node:fs';
 import { json } from './utils.js';
 // prettier-ignore
+import { bytesToHex } from '../abstract/utils.js';
 import {
   bytesToNumberBE,
   mod,
@@ -12,7 +13,8 @@ import {
   numberToBytesBE,
   secp,
   selectHash,
-  sigFromDER, sigToDER
+  sigFromDER,
+  sigToDER,
 } from './secp256k1.helpers.js';
 
 const ecdsa = json('./vectors/secp256k1/ecdsa.json');
@@ -93,6 +95,7 @@ describe('secp256k1', () => {
         const { P, expected } = vector;
         if (expected) {
           Point.fromHex(P);
+          deepStrictEqual(secp.utils.isValidPublicKey(P), true);
         } else {
           throws(() => Point.fromHex(P));
         }
@@ -479,18 +482,19 @@ describe('secp256k1', () => {
       const privateKey = 123456789n;
       const publicKey = Point.fromHex(secp.getPublicKey(privateKey)).toHex(false);
       const sig = secp.sign(message, privateKey);
-      const recoveredPubkey = sig.recoverPublicKey(message);
+      const recoveredPubkey = sig.recoverPublicKey(message, false);
       // const recoveredPubkey = secp.recoverPublicKey(message, signature, recovery);
       deepStrictEqual(recoveredPubkey !== null, true);
-      deepStrictEqual(recoveredPubkey.toHex(false), publicKey);
+      deepStrictEqual(bytesToHex(recoveredPubkey), publicKey);
       deepStrictEqual(secp.verify(sig, message, publicKey), true);
     });
     should('not recover zero points', () => {
       const msgHash = '6b8d2c81b11b2d699528dde488dbdf2f94293d0d33c32e347f255fa4a6c1f0a9';
-      const sig =
+      const sigh =
         '79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f817986b8d2c81b11b2d699528dde488dbdf2f94293d0d33c32e347f255fa4a6c1f0a9';
       const recovery = 0;
-      throws(() => secp.recoverPublicKey(msgHash, sig, recovery));
+      const sig = secp.Signature.fromCompact(sigh).addRecoveryBit(recovery);
+      throws(() => sig.recoverPublicKey(msgHash));
     });
     should('handle all-zeros msghash', () => {
       const privKey = secp.utils.randomPrivateKey();
@@ -498,7 +502,7 @@ describe('secp256k1', () => {
       const zeros = '0000000000000000000000000000000000000000000000000000000000000000';
       const sig = secp.sign(zeros, privKey);
       const recoveredKey = sig.recoverPublicKey(zeros);
-      deepStrictEqual(recoveredKey.toRawBytes(), pub);
+      deepStrictEqual(recoveredKey, pub);
     });
     should('handle RFC 6979 vectors', () => {
       for (const vector of ecdsa.valid) {
@@ -506,7 +510,7 @@ describe('secp256k1', () => {
         let sig = sigToDER(usig);
         const vpub = secp.getPublicKey(vector.d);
         const recovered = usig.recoverPublicKey(vector.m);
-        deepStrictEqual(recovered.toHex(), hex(vpub));
+        deepStrictEqual(bytesToHex(recovered), hex(vpub));
       }
     });
   });

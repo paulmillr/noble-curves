@@ -13,12 +13,14 @@ const _1n = /* @__PURE__ */ BigInt(1);
 export type Hex = Uint8Array | string; // hex strings are accepted for simplicity
 export type PrivKey = Hex | bigint; // bigints are accepted to ease learning curve
 export type CHash = {
-  (message: Uint8Array | string): Uint8Array;
+  (message: Uint8Array): Uint8Array;
   blockLen: number;
   outputLen: number;
   create(opts?: { dkLen?: number }): any; // For shake
+  fromHex(msg: string): Uint8Array;
+  fromUtf8(msg: string): Uint8Array;
 };
-export type FHash = (message: Uint8Array | string) => Uint8Array;
+export type FHash = (message: Uint8Array) => Uint8Array;
 
 export function isBytes(a: unknown): a is Uint8Array {
   return a instanceof Uint8Array || (ArrayBuffer.isView(a) && a.constructor.name === 'Uint8Array');

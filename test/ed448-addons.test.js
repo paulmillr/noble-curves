@@ -1,8 +1,8 @@
-import { bytesToHex as hex, hexToBytes } from '@noble/hashes/utils';
+import { bytesToHex as hex, hexToBytes } from '@noble/hashes/utils.js';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual, throws } from 'node:assert';
-import { bytesToNumberLE } from '../esm/abstract/utils.js';
-import { DecafPoint, ed448, edwardsToMontgomeryPub, hash_to_decaf448 } from '../esm/ed448.js';
+import { bytesToNumberLE } from '../abstract/utils.js';
+import { DecafPoint, ed448, edwardsToMontgomeryPub, hashToDecaf448 } from '../ed448.js';
 
 describe('decaf448', () => {
   should('follow the byte encodings of small multiples', () => {
@@ -119,9 +119,9 @@ describe('decaf448', () => {
       'f0301c19656bce1d1cd0a474c952d196041811b63617fc8fdaacee533644e2b2d49273426c8dbb5a76033ea84fb5215b84f9ebf22bde0b0700'
     );
   });
-  should('hash_to_decaf448', () => {
+  should('hashToDecaf448', () => {
     deepStrictEqual(
-      hash_to_decaf448(new Uint8Array(10).fill(5), {
+      hashToDecaf448(new Uint8Array(10).fill(5), {
         DST: 'decaf448_XOF:SHAKE256_D448MAP_RO_',
       }).toHex(),
       '1287dea7519af966cf537a58f614e8b39b93a7c0b989bcdb4f94af8f2573ab59589accb0d2a2097b5f30c1d721619470f21e78613bbfc4b6'

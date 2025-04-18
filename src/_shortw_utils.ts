@@ -3,8 +3,8 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { hmac } from '@noble/hashes/hmac';
-import { concatBytes, randomBytes } from '@noble/hashes/utils';
+import { hmac } from '@noble/hashes/hmac.js';
+import { concatBytes, randomBytes } from '@noble/hashes/utils.js';
 import type { CHash } from './abstract/utils.ts';
 import { type CurveFn, type CurveType, weierstrass } from './abstract/weierstrass.ts';
 

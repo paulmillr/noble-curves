@@ -6,15 +6,15 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { sha512 } from '@noble/hashes/sha2';
-import { concatBytes, randomBytes, utf8ToBytes } from '@noble/hashes/utils';
+import { sha512 } from '@noble/hashes/sha2.js';
+import { concatBytes, randomBytes, utf8ToBytes } from '@noble/hashes/utils.js';
 import { type AffinePoint, type Group, pippenger } from './abstract/curve.ts';
 import { type CurveFn, type ExtPointType, twistedEdwards } from './abstract/edwards.ts';
 import {
   createHasher,
   expand_message_xmd,
+  type Hasher,
   type htfBasicOpts,
-  type HTFMethod,
 } from './abstract/hash-to-curve.ts';
 import { Field, FpSqrtEven, isNegativeLE, mod, pow2 } from './abstract/modular.ts';
 import { montgomery, type CurveFn as XCurveFn } from './abstract/montgomery.ts';
@@ -294,7 +294,8 @@ function map_to_curve_elligator2_edwards25519(u: bigint) {
   return { x: Fp.mul(xn, inv[0]), y: Fp.mul(yn, inv[1]) }; //  13. return (xn, xd, yn, yd)
 }
 
-const htf = /* @__PURE__ */ (() =>
+/** RFC 9380 methods. */
+export const ed25519_hasher: Hasher<bigint> = /* @__PURE__ */ (() =>
   createHasher(
     ed25519.ExtendedPoint,
     (scalars: bigint[]) => map_to_curve_elligator2_edwards25519(scalars[0]),
@@ -308,8 +309,6 @@ const htf = /* @__PURE__ */ (() =>
       hash: sha512,
     }
   ))();
-export const hashToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() => htf.hashToCurve)();
-export const encodeToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() => htf.encodeToCurve)();
 
 function aristp(other: unknown) {
   if (!(other instanceof RistPoint)) throw new Error('RistrettoPoint expected');
@@ -526,6 +525,7 @@ export const RistrettoPoint: typeof RistPoint = /* @__PURE__ */ (() => {
   return RistPoint;
 })();
 
+// TODO: ristretto255_hasher
 // Hashing to ristretto255. https://www.rfc-editor.org/rfc/rfc9380#appendix-B
 export const hashToRistretto255 = (msg: Uint8Array, options: htfBasicOpts): RistPoint => {
   const d = options.DST;
@@ -534,6 +534,3 @@ export const hashToRistretto255 = (msg: Uint8Array, options: htfBasicOpts): Rist
   const P = RistPoint.hashToCurve(uniform_bytes);
   return P;
 };
-/** @deprecated */
-export const hash_to_ristretto255: (msg: Uint8Array, options: htfBasicOpts) => RistPoint =
-  hashToRistretto255; // legacy

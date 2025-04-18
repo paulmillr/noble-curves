@@ -1,18 +1,18 @@
-import { sha512 } from '@noble/hashes/sha512';
-import { bytesToHex as hex, hexToBytes } from '@noble/hashes/utils';
+import { sha512 } from '@noble/hashes/sha2.js';
+import { bytesToHex as hex, hexToBytes } from '@noble/hashes/utils.js';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual, throws } from 'node:assert';
-import { bytesToNumberLE, numberToBytesLE } from '../esm/abstract/utils.js';
+import { bytesToNumberLE, numberToBytesLE } from '../abstract/utils.js';
 import {
   ed25519,
   ed25519ctx,
   ed25519ph,
   edwardsToMontgomeryPriv,
   edwardsToMontgomeryPub,
-  hash_to_ristretto255,
+  hashToRistretto255,
   RistrettoPoint,
   x25519,
-} from '../esm/ed25519.js';
+} from '../ed25519.js';
 import { json } from './utils.js';
 const x25519vectors = json('./wycheproof/x25519_test.json');
 
@@ -364,9 +364,9 @@ describe('ristretto255', () => {
     deepStrictEqual(pub.toHex(), pub2.toHex());
   });
 
-  should('hash_to_ristretto255', () => {
+  should('hashToRistretto255', () => {
     deepStrictEqual(
-      hash_to_ristretto255(new Uint8Array(10).fill(5), {
+      hashToRistretto255(new Uint8Array(10).fill(5), {
         DST: 'ristretto255_XMD:SHA-512_R255MAP_RO_',
       }).toHex(),
       'be2194e53cc014665821003f8ecf49e99b7cd16f5326e53f234ecd21c448ee6c'

@@ -2,13 +2,13 @@ import * as fc from 'fast-check';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual, throws } from 'node:assert';
 import { readFileSync } from 'node:fs';
-import { wNAF } from '../esm/abstract/curve.js';
-import { hash_to_field } from '../esm/abstract/hash-to-curve.js';
-import { bytesToHex, bytesToNumberBE, hexToBytes, utf8ToBytes } from '../esm/abstract/utils.js';
-import { bls12_381 as bls, bls12_381 } from '../esm/bls12-381.js';
+import { wNAF } from '../abstract/curve.js';
+import { hash_to_field } from '../abstract/hash-to-curve.js';
+import { bytesToHex, bytesToNumberBE, hexToBytes, utf8ToBytes } from '../abstract/utils.js';
+import { bls12_381 as bls, bls12_381 } from '../bls12-381.js';
 import { json } from './utils.js';
 
-import * as utils from '../esm/abstract/utils.js';
+import * as utils from '../abstract/utils.js';
 
 const eip2537 = json('./bls12-381/eip2537.json');
 const zkVectors = json('./bls12-381/zkcrypto/converted.json');

@@ -1,14 +1,11 @@
-import { sha224, sha256 } from '@noble/hashes/sha256';
-import { sha3_224, sha3_256, sha3_384, sha3_512, shake128, shake256 } from '@noble/hashes/sha3';
-import { sha384, sha512 } from '@noble/hashes/sha512';
+import { sha224, sha256, sha384, sha512 } from '@noble/hashes/sha2.js';
+import { sha3_224, sha3_256, sha3_384, sha3_512, shake128, shake256 } from '@noble/hashes/sha3.js';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual, throws } from 'node:assert';
-import { bytesToHex, hexToBytes } from '../esm/abstract/utils.js';
-import { DER } from '../esm/abstract/weierstrass.js';
-import { p256, secp256r1 } from '../esm/p256.js';
-import { p384, secp384r1 } from '../esm/p384.js';
-import { p521, secp521r1 } from '../esm/p521.js';
-import { secp256k1 } from '../esm/secp256k1.js';
+import { bytesToHex, hexToBytes } from '../abstract/utils.js';
+import { DER } from '../abstract/weierstrass.js';
+import { p256, p384, p521, secp256r1, secp384r1, secp521r1 } from '../nist.js';
+import { secp256k1 } from '../secp256k1.js';
 import { p192, p224, secp192r1, secp224r1 } from './_more-curves.helpers.js';
 import { json } from './utils.js';
 const ecdsa = json('./wycheproof/ecdsa_test.json');
@@ -120,6 +117,7 @@ function verifyECDHVector(test, curve) {
       if (e.message.startsWith('invalid Point, expected length')) return; // Ignore
       throw e;
     }
+    deepStrictEqual(curve.utils.isValidPublicKey(pubB), true);
     const shared = curve.getSharedSecret(privA, pubB).subarray(1);
     deepStrictEqual(hex(shared), test.shared, 'valid');
   } else if (test.result === 'invalid') {
@@ -326,7 +324,7 @@ function runWycheproof(name, CURVE, group, index) {
     const m = CURVE.CURVE.hash(hexToBytes(test.msg));
     const { sig } = test;
     if (test.result === 'valid' || test.result === 'acceptable') {
-      const verified = CURVE.verify(sig, m, pubR);
+      const verified = CURVE.verify(sig, m, pubR, { lowS: name === 'secp256k1' });
       if (name === 'secp256k1') {
         // lowS: true for secp256k1
         deepStrictEqual(verified, !CURVE.Signature.fromDER(sig).hasHighS(), `${index}: valid`);
@@ -354,6 +352,7 @@ describe('wycheproof ECDSA', () => {
       if (group.key.curve === 'secp224r1' && group.sha !== 'SHA-224') {
         if (group.sha === 'SHA-256') CURVE = CURVE.create(sha256);
       }
+      const hasLowS = group.key.curve === 'secp256k1';
       const pubKey = CURVE.ProjectivePoint.fromHex(group.key.uncompressed);
       deepStrictEqual(pubKey.x, BigInt(`0x${group.key.wx}`));
       deepStrictEqual(pubKey.y, BigInt(`0x${group.key.wy}`));
@@ -366,8 +365,8 @@ describe('wycheproof ECDSA', () => {
           test.result = 'invalid';
         const m = CURVE.CURVE.hash(hexToBytes(test.msg));
         if (test.result === 'valid' || test.result === 'acceptable') {
-          const verified = CURVE.verify(test.sig, m, pubKey.toHex());
-          if (group.key.curve === 'secp256k1') {
+          const verified = CURVE.verify(test.sig, m, pubKey.toHex(), { lowS: hasLowS });
+          if (hasLowS) {
             // lowS: true for secp256k1
             deepStrictEqual(verified, !CURVE.Signature.fromDER(test.sig).hasHighS(), `valid`);
           } else {
@@ -409,6 +408,7 @@ const hexToBigint = (hex) => BigInt(`0x${hex}`);
 describe('RFC6979', () => {
   for (const v of rfc6979) {
     should(v.curve, () => {
+      const hasLowS = v.curve === 'secp256k1';
       const curve = NIST[v.curve];
       deepStrictEqual(curve.CURVE.n, hexToBigint(v.q));
       const pubKey = curve.getPublicKey(v.private);
@@ -416,12 +416,16 @@ describe('RFC6979', () => {
       deepStrictEqual(pubPoint.x, hexToBigint(v.Ux));
       deepStrictEqual(pubPoint.y, hexToBigint(v.Uy));
       for (const c of v.cases) {
-        const h = curve.CURVE.hash(c.message);
-        const sigObj = curve.sign(h, v.private);
+        const h = curve.CURVE.hash.fromUtf8(c.message);
+        const sigObj = curve.sign(h, v.private, { lowS: hasLowS });
         deepStrictEqual(sigObj.r, hexToBigint(c.r), 'R');
         deepStrictEqual(sigObj.s, hexToBigint(c.s), 'S');
-        deepStrictEqual(curve.verify(sigObj.toDERRawBytes(), h, pubKey), true, 'verify(1)');
-        deepStrictEqual(curve.verify(sigObj, h, pubKey), true, 'verify(2)');
+        deepStrictEqual(
+          curve.verify(sigObj.toDERRawBytes(), h, pubKey, { lowS: hasLowS }),
+          true,
+          'verify(1)'
+        );
+        deepStrictEqual(curve.verify(sigObj, h, pubKey, { lowS: hasLowS }), true, 'verify(2)');
       }
     });
   }
