@@ -1,9 +1,10 @@
 node_modules
 /*.js
-/esm/*.js
+/abstract
+/esm
+/cjs
 *.d.ts
 *.d.ts.map
 *.js.map
+*.tgz
 /test/build
-/abstract
-/esm/abstract
