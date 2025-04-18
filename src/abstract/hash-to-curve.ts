@@ -212,23 +212,27 @@ export type MapToCurve<T> = (scalar: bigint[]) => AffinePoint<T>;
 export type htfBasicOpts = { DST: UnicodeOrBytes };
 export type HTFMethod<T> = (msg: Uint8Array, options?: htfBasicOpts) => H2CPoint<T>;
 export type MapMethod<T> = (scalars: bigint[]) => H2CPoint<T>;
+export type Hasher<T> = {
+  hashToCurve: HTFMethod<T>;
+  encodeToCurve: HTFMethod<T>;
+  mapToCurve: MapMethod<T>;
+  defaults: Opts & { encodeDST?: UnicodeOrBytes };
+};
 
 /** Creates hash-to-curve methods from EC Point and mapToCurve function. */
 export function createHasher<T>(
   Point: H2CPointConstructor<T>,
   mapToCurve: MapToCurve<T>,
-  def: Opts & { encodeDST?: UnicodeOrBytes }
-): {
-  hashToCurve: HTFMethod<T>;
-  encodeToCurve: HTFMethod<T>;
-  mapToCurve: MapMethod<T>;
-} {
+  defaults: Opts & { encodeDST?: UnicodeOrBytes }
+): Hasher<T> {
   if (typeof mapToCurve !== 'function') throw new Error('mapToCurve() must be defined');
   return {
+    defaults,
+
     // Encodes byte string to elliptic curve.
     // hash_to_curve from https://www.rfc-editor.org/rfc/rfc9380#section-3
     hashToCurve(msg: Uint8Array, options?: htfBasicOpts): H2CPoint<T> {
-      const u = hash_to_field(msg, 2, { ...def, DST: def.DST, ...options } as Opts);
+      const u = hash_to_field(msg, 2, { ...defaults, DST: defaults.DST, ...options } as Opts);
       const u0 = Point.fromAffine(mapToCurve(u[0]));
       const u1 = Point.fromAffine(mapToCurve(u[1]));
       const P = u0.add(u1).clearCofactor();
@@ -239,7 +243,7 @@ export function createHasher<T>(
     // Encodes byte string to elliptic curve.
     // encode_to_curve from https://www.rfc-editor.org/rfc/rfc9380#section-3
     encodeToCurve(msg: Uint8Array, options?: htfBasicOpts): H2CPoint<T> {
-      const u = hash_to_field(msg, 1, { ...def, DST: def.encodeDST, ...options } as Opts);
+      const u = hash_to_field(msg, 1, { ...defaults, DST: defaults.encodeDST, ...options } as Opts);
       const P = Point.fromAffine(mapToCurve(u[0])).clearCofactor();
       P.assertValidity();
       return P;
