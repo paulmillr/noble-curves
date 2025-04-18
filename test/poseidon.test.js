@@ -4,8 +4,9 @@ import * as mod from '../esm/abstract/modular.js';
 import * as poseidon from '../esm/abstract/poseidon.js';
 import * as stark from './_poseidon.helpers.js';
 import { json } from './utils.js';
-const pvectors = json('./vectors/poseidon.json');
-const { st1, st2, st3, st4 } = pvectors;
+const vecp = json('./vectors/poseidon.json');
+
+const parseArrBig = (arr) => arr.map((n) => BigInt(n));
 
 describe('Stark', () => {
   should('poseidonMdsMatrixUnsafe', () => {
@@ -130,7 +131,8 @@ describe('Stark', () => {
     );
   });
 });
-// Official vectors: https://extgit.iaik.tugraz.at/krypto/hadeshash/-/blob/master/code/test_vectors.txt
+// Official vectors:
+// https://extgit.iaik.tugraz.at/krypto/hadeshash/-/blob/master/code/test_vectors.txt
 
 should('poseidonperm_x5_255_3', () => {
   const Fp = mod.Field(
@@ -157,7 +159,7 @@ should('poseidonperm_x5_255_3', () => {
 
   const t = 3;
 
-  const roundConstants = poseidon.splitConstants(st1.map(BigInt), t);
+  const roundConstants = poseidon.splitConstants(vecp.st1.map(BigInt), t);
 
   const poseidon_x5_255_3 = poseidon.poseidon({
     Fp,
@@ -224,7 +226,7 @@ should('poseidonperm_x5_255_5', () => {
     ],
   ];
 
-  const roundConstants = poseidon.splitConstants(st2.map(BigInt), t);
+  const roundConstants = poseidon.splitConstants(vecp.st2.map(BigInt), t);
 
   const poseidon_x5_255_5 = poseidon.poseidon({
     Fp,
@@ -276,7 +278,7 @@ should('poseidonperm_x5_254_3', () => {
     ],
   ];
 
-  const roundConstants = poseidon.splitConstants(st3.map(BigInt), t);
+  const roundConstants = poseidon.splitConstants(vecp.st3.map(BigInt), t);
 
   const poseidon_x5_254_3 = poseidon.poseidon({
     Fp,
@@ -344,7 +346,7 @@ should('poseidonperm_x5_254_5', () => {
     ],
   ];
 
-  const roundConstants = poseidon.splitConstants(st4.map(BigInt), t);
+  const roundConstants = poseidon.splitConstants(vecp.st4.map(BigInt), t);
 
   const poseidon_x5_254_5 = poseidon.poseidon({
     Fp,
@@ -374,5 +376,268 @@ should('poseidonperm_x5_254_5', () => {
   );
 });
 // Startadperm is unsupported, since it is non prime field
+
+describe('PoseidonSponge', () => {
+  // TODO: add more tests? There maybe some more edge-cases here.
+  describe('Cross-test: ProvableHQ/snarkVM (aleo)', () => {
+    // NOTE: there is no generation code, because it required patching a lot of crates to expose private APIs.
+    const Fp = mod.Field(
+      8444461749428370424248824938781546531375899335154063827935233455917409239041n,
+      undefined,
+      false
+    );
+    should('Grain', () => {
+      const { mds, roundConstants } = poseidon.grainGenConstants({
+        Fp,
+        t: 2 + 1,
+        roundsFull: 8,
+        roundsPartial: 31,
+      });
+      deepStrictEqual(mds, [
+        [
+          6093452032963406658309134825240609333033222270199073508119142384975416392638n,
+          5968273173562867837210008744966745230923761158428968101807573098840850097286n,
+          1100466639266852149977689148055725793531897994956807001704693611715839541982n,
+        ],
+        [
+          3160983601532844171864802850648492289862147997874094785600836495095965353712n,
+          2338351297827692414112631814274572996809824929139580588221558887342663769892n,
+          3177005087903404343485399282920555615020488967881372266904325860698809358885n,
+        ],
+        [
+          2285176219817854683696635383059984246218458246545520061123961933072089703485n,
+          84377861777946561525373172505381054389617879929776365352216307785104476701n,
+          8280884008678095605415834125731826663585461281789631237939546251146561093166n,
+        ],
+      ]);
+      deepStrictEqual(roundConstants, vecp.aleo_grain_roundConstants.map(parseArrBig));
+    });
+    should('rate=2 capacity=1', () => {
+      const rate = 2;
+      const capacity = 1;
+      const { mds, roundConstants } = poseidon.grainGenConstants({
+        Fp,
+        t: rate + capacity,
+        roundsFull: 8,
+        roundsPartial: 31,
+      });
+      const sponge = poseidon.poseidonSponge({
+        Fp,
+        rate,
+        capacity,
+        sboxPower: 17,
+        mds,
+        roundConstants,
+        roundsFull: 8,
+        roundsPartial: 31,
+      });
+      const inputs = [
+        3801852864665033841774715284518384682376829752661853198612247855579120198106n,
+        8354898322875240371401674517397790035008442020361740574117886421279083828480n,
+        4810388512520169167962815122521832339992376865086300759308552937986944510606n,
+        6901184695964460143517399399785179769303979738604374595034454667750561389951n,
+        4569986992907167903298094880801044988451682407606958090985246015539197576880n,
+        1659013762488693582855478522957329119959921484276233144739847127722099836592n,
+        5873855434568679481242703448145783278614510745576299549051743569349492512978n,
+        8126778056340108742720298710864854335340160587591670858399923536543205675034n,
+        7146400424093292796305326969877508376475248301146079897262686723570477471481n,
+        4313136198840596462591029581810482612339281338296848099835538102215716458507n,
+        6282620155184535925059193831765937196673297460411024331501133151513540140819n,
+      ];
+      // absorb(3);squeeze(2)
+      const s1 = sponge();
+      s1.absorb(inputs.slice(0, 3));
+      deepStrictEqual(s1.squeeze(2), [
+        5528124139915370778497908783898741139153574846551220495957672211442474308196n,
+        2420619180129571354470214721153552874135214293988121929445742760421351812085n,
+      ]);
+      // absorb(0);squeeze(3);
+      const s2 = sponge();
+      s2.absorb([]);
+      deepStrictEqual(s2.squeeze(3), [
+        933733638681902971366883597456330506627704278683959399109999726127624278648n,
+        7947296799800775327938262145036085767367577952489561846300684316471048325151n,
+        8176130403051036805322877644409334453960127468352705414400032728890307490770n,
+      ]);
+      // absorb(2);absorb(1);squeeze(2) == absorb(3);squeeze(2)
+      const s3 = sponge();
+      s3.absorb(inputs.slice(0, 2));
+      s3.absorb([inputs[2]]);
+      deepStrictEqual(s3.squeeze(2), [
+        5528124139915370778497908783898741139153574846551220495957672211442474308196n,
+        2420619180129571354470214721153552874135214293988121929445742760421351812085n,
+      ]);
+      // absorb(3);squeeze(1);squeeze(1)
+      const s4 = sponge();
+      s4.absorb(inputs.slice(0, 3));
+      deepStrictEqual(s4.squeeze(1), [
+        5528124139915370778497908783898741139153574846551220495957672211442474308196n,
+      ]);
+      deepStrictEqual(s4.squeeze(1), [
+        2420619180129571354470214721153552874135214293988121929445742760421351812085n,
+      ]);
+      // absorb(11);squeeze(2);
+      const s5 = sponge();
+      s5.absorb(inputs);
+      deepStrictEqual(s5.squeeze(2), [
+        26553393923456202663144989311824517705110159271577366819618683341297406966n,
+        7016672899849811490358640818454305819532854937834096463294677928554860101232n,
+      ]);
+      // squeeze(2);
+      const s6 = sponge();
+      deepStrictEqual(s6.squeeze(2), [
+        933733638681902971366883597456330506627704278683959399109999726127624278648n,
+        7947296799800775327938262145036085767367577952489561846300684316471048325151n,
+      ]);
+      // absobr(3); squeeze(2); absorb(3); squeeze(2);
+      const s7 = sponge();
+      s7.absorb(inputs.slice(0, 3));
+      deepStrictEqual(s7.squeeze(2), [
+        5528124139915370778497908783898741139153574846551220495957672211442474308196n,
+        2420619180129571354470214721153552874135214293988121929445742760421351812085n,
+      ]);
+      s7.absorb(inputs.slice(3, 6));
+      deepStrictEqual(s7.squeeze(2), [
+        5588447626321408884036227149970492957886517571060242219931529251408668452862n,
+        3785030165774957122639768627564213246094662307916570387367075908156611788837n,
+      ]);
+      // absorb(3);squeeze(0);absorb(3);squeeze(2)
+      const s8 = sponge();
+      s8.absorb(inputs.slice(0, 3));
+      deepStrictEqual(s8.squeeze(0), []);
+      s8.absorb(inputs.slice(3, 6));
+      deepStrictEqual(s8.squeeze(2), [
+        6470185464793428861582857521285696840123874904819191690530167712863056078884n,
+        678032572423041477979964450039774208343357930887800030208970759669150733000n,
+      ]);
+      // absorb(3);squeeze(2);absorb(0);squeeze(2)
+      const s9 = sponge();
+      s9.absorb(inputs.slice(0, 3));
+      deepStrictEqual(s9.squeeze(2), [
+        5528124139915370778497908783898741139153574846551220495957672211442474308196n,
+        2420619180129571354470214721153552874135214293988121929445742760421351812085n,
+      ]);
+      s9.absorb([]);
+      deepStrictEqual(s9.squeeze(2), [
+        2492034033820692577660772442004599604877416958552504035222255780764492626637n,
+        3219631157933579149223017804239080280224882035858525007265472051339661711735n,
+      ]);
+      // absorb(1);squeeze(2);
+      const s10 = sponge();
+      s10.absorb(inputs.slice(0, 1));
+      deepStrictEqual(s10.squeeze(2), [
+        7644420660423831885731682109272695821257057596295339585794759757016078689547n,
+        3859905479154147442482078504776928705199511809151329003321175729702391795042n,
+      ]);
+      // absobr(3); squeeze(1); absorb(3); squeeze(1);
+      const s11 = sponge();
+      s11.absorb(inputs.slice(0, 3));
+      deepStrictEqual(s11.squeeze(1), [
+        5528124139915370778497908783898741139153574846551220495957672211442474308196n,
+      ]);
+      s11.absorb(inputs.slice(3, 6));
+      deepStrictEqual(s11.squeeze(1), [
+        5588447626321408884036227149970492957886517571060242219931529251408668452862n,
+      ]);
+    });
+    // NOTE: cannot test original with capacity=2 since parameter generation forces capacity=1
+  });
+  describe('arkworks', () => {
+    const Fp =
+      mod.Field(52435875175126190479447740508185965837690552500527637822603658699938581184513n);
+    should('Grain', () => {
+      const { mds, roundConstants } = poseidon.grainGenConstants({
+        Fp,
+        t: 2 + 1,
+        roundsFull: 8,
+        roundsPartial: 31,
+      });
+      deepStrictEqual(mds, [
+        [
+          26017457457808754696901916760153646963713419596921330311675236858336250747575n,
+          3639683834202950894361433288826233741561896854900895753431766653813988568616n,
+          10953049236150794552744618049606510050375451747770323040062198642862470543754n,
+        ],
+        [
+          3183018564195653675423838894051554438478916606994940049401425837017785750901n,
+          36645976574820377700902571812165679932959923609739614084701394317315987922520n,
+          13667371158342095156950515738523876561616032888638618897036472097355505737588n,
+        ],
+        [
+          18132402185753749320702654985017413608679949734954283116304111549041393007832n,
+          39402135980459413670418975061282080453597554822712441131542254198170946062014n,
+          13521929589998302886085098386422384259477894224415500174630722069318478944823n,
+        ],
+      ]);
+      deepStrictEqual(roundConstants, vecp.arkworks_grain_roundConstants.map(parseArrBig));
+    });
+    should('rate=2 capacity=1', () => {
+      const rate = 2;
+      const capacity = 1;
+      const { mds, roundConstants } = poseidon.grainGenConstants({
+        Fp,
+        t: rate + capacity,
+        roundsFull: 8,
+        roundsPartial: 31,
+      });
+      const sponge = poseidon.poseidonSponge({
+        Fp,
+        rate,
+        capacity,
+        sboxPower: 17,
+        mds,
+        roundConstants,
+        roundsFull: 8,
+        roundsPartial: 31,
+      });
+      const inputs = [
+        3801852864665033841774715284518384682376829752661853198612247855579120198106n,
+        8354898322875240371401674517397790035008442020361740574117886421279083828480n,
+        4810388512520169167962815122521832339992376865086300759308552937986944510606n,
+        6901184695964460143517399399785179769303979738604374595034454667750561389951n,
+        4569986992907167903298094880801044988451682407606958090985246015539197576880n,
+        1659013762488693582855478522957329119959921484276233144739847127722099836592n,
+        5873855434568679481242703448145783278614510745576299549051743569349492512978n,
+        8126778056340108742720298710864854335340160587591670858399923536543205675034n,
+        7146400424093292796305326969877508376475248301146079897262686723570477471481n,
+        4313136198840596462591029581810482612339281338296848099835538102215716458507n,
+        6282620155184535925059193831765937196673297460411024331501133151513540140819n,
+      ];
+      const s1 = sponge();
+      s1.absorb(inputs.slice(0, 3));
+      deepStrictEqual(s1.squeeze(2), [
+        25283854350347435274635030330108075556936659978586145851296361714414722574977n,
+        28603365815395435865415304087135297453074687980742616616978979944696141627335n,
+      ]);
+      // absorb(0);squeeze(3);
+      const s2 = sponge();
+      s2.absorb([]);
+      deepStrictEqual(s2.squeeze(3), [
+        22095061030825764236545407651195963259093673160236850179062763631622849581041n,
+        51147331969562634030541262163015923329074972559171117523202343735176539631092n,
+        38566017764735118620833500678934515124800416244503159365750257744180372818350n,
+      ]);
+      // absorb(11);squeeze(2);
+      const s5 = sponge();
+      s5.absorb(inputs);
+      deepStrictEqual(s5.squeeze(2), [
+        16566857174767620685802510376201107449033507070456217544270378314684407453695n,
+        449661346404481260654646786033891474020700499604872754349019325201507701381n,
+      ]);
+      // absorb(3);squeeze(2);absorb(0);squeeze(2)
+      const s9 = sponge();
+      s9.absorb(inputs.slice(0, 3));
+      deepStrictEqual(s9.squeeze(2), [
+        25283854350347435274635030330108075556936659978586145851296361714414722574977n,
+        28603365815395435865415304087135297453074687980742616616978979944696141627335n,
+      ]);
+      s9.absorb([]);
+      deepStrictEqual(s9.squeeze(2), [
+        49166328828518411259658775292174876194897505808260003840078267783408303626061n,
+        11687729391556811786970896353500121413690369995764901343770077126146977132960n,
+      ]);
+    });
+  });
+});
 
 should.runWhen(import.meta.url);
