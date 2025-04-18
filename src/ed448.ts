@@ -15,6 +15,7 @@ import { type CurveFn, type ExtPointType, twistedEdwards } from './abstract/edwa
 import {
   createHasher,
   expand_message_xof,
+  type Hasher,
   type htfBasicOpts,
   type HTFMethod,
 } from './abstract/hash-to-curve.ts';
@@ -267,7 +268,7 @@ function map_to_curve_elligator2_edwards448(u: bigint) {
   return { x: Fp.mul(xEn, inv[0]), y: Fp.mul(yEn, inv[1]) }; // 38. return (xEn, xEd, yEn, yEd)
 }
 
-const htf = /* @__PURE__ */ (() =>
+export const ed448_hasher: Hasher<bigint> = /* @__PURE__ */ (() =>
   createHasher(
     ed448.ExtendedPoint,
     (scalars: bigint[]) => map_to_curve_elligator2_edwards448(scalars[0]),
@@ -281,8 +282,15 @@ const htf = /* @__PURE__ */ (() =>
       hash: shake256,
     }
   ))();
-export const hashToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() => htf.hashToCurve)();
-export const encodeToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() => htf.encodeToCurve)();
+/**
+ * @deprecated Use `ed448_hasher`
+ */
+export const hashToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() => ed448_hasher.hashToCurve)();
+/**
+ * @deprecated Use `ed448_hasher`
+ */
+export const encodeToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() =>
+  ed448_hasher.encodeToCurve)();
 
 function adecafp(other: unknown) {
   if (!(other instanceof DcfPoint)) throw new Error('DecafPoint expected');

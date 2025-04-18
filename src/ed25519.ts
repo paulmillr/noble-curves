@@ -13,6 +13,7 @@ import { type CurveFn, type ExtPointType, twistedEdwards } from './abstract/edwa
 import {
   createHasher,
   expand_message_xmd,
+  type Hasher,
   type htfBasicOpts,
   type HTFMethod,
 } from './abstract/hash-to-curve.ts';
@@ -294,7 +295,7 @@ function map_to_curve_elligator2_edwards25519(u: bigint) {
   return { x: Fp.mul(xn, inv[0]), y: Fp.mul(yn, inv[1]) }; //  13. return (xn, xd, yn, yd)
 }
 
-const htf = /* @__PURE__ */ (() =>
+export const ed25519_hasher: Hasher<bigint> = /* @__PURE__ */ (() =>
   createHasher(
     ed25519.ExtendedPoint,
     (scalars: bigint[]) => map_to_curve_elligator2_edwards25519(scalars[0]),
@@ -308,8 +309,15 @@ const htf = /* @__PURE__ */ (() =>
       hash: sha512,
     }
   ))();
-export const hashToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() => htf.hashToCurve)();
-export const encodeToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() => htf.encodeToCurve)();
+/**
+ * @deprecated Use `ed25519_hasher`
+ */
+export const hashToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() => ed25519_hasher.hashToCurve)();
+/**
+ * @deprecated Use `ed25519_hasher`
+ */
+export const encodeToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() =>
+  ed25519_hasher.encodeToCurve)();
 
 function aristp(other: unknown) {
   if (!(other instanceof RistPoint)) throw new Error('RistrettoPoint expected');

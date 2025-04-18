@@ -239,6 +239,7 @@ export const bn254: BLSCurveFn = bls({
  * bn254 weierstrass curve with ECDSA.
  * This is very rare and probably not used anywhere.
  * Instead, you should use G1 / G2, defined above.
+ * @deprecated
  */
 export const bn254_weierstrass: CurveFn = weierstrass({
   a: BigInt(0),
