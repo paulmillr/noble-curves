@@ -726,7 +726,7 @@ for (const name in CURVES) {
         throws(() => C.sign());
         throws(() => C.sign(''));
         throws(() => C.sign('', ''));
-        throws(() => C.sign(new Uint8Array(), new Uint8Array()));
+        throws(() => C.sign(Uint8Array.of(), Uint8Array.of()));
       });
 
       describe('verify()', () => {

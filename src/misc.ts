@@ -70,7 +70,7 @@ export function jubjub_groupHash(tag: Uint8Array, personalization: Uint8Array): 
 
 // No secret data is leaked here at all.
 // It operates over public data:
-// const G_SPEND = jubjub.findGroupHash(new Uint8Array(), utf8ToBytes('Item_G_'));
+// const G_SPEND = jubjub.findGroupHash(Uint8Array.of(), utf8ToBytes('Item_G_'));
 export function jubjub_findGroupHash(m: Uint8Array, personalization: Uint8Array): ExtPointType {
   const tag = concatBytes(m, new Uint8Array([0]));
   const hashes = [];

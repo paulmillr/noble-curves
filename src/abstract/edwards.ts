@@ -469,7 +469,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
   }
 
   // int('LE', SHA512(dom2(F, C) || msgs)) mod N
-  function hashDomainToScalar(context: Hex = new Uint8Array(), ...msgs: Uint8Array[]) {
+  function hashDomainToScalar(context: Hex = Uint8Array.of(), ...msgs: Uint8Array[]) {
     const msg = concatBytes(...msgs);
     return modN_LE(cHash(domain(msg, ensureBytes('context', context), !!prehash)));
   }
