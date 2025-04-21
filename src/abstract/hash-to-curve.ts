@@ -186,7 +186,11 @@ export function isogenyMap<T, F extends IField<T>>(field: F, map: [T[], T[], T[]
     const [xNum, xDen, yNum, yDen] = COEFF.map((val) =>
       val.reduce((acc, i) => field.add(field.mul(acc, x), i))
     );
-    if (field.is0(xDen) || field.is0(yDen)) throw new Error('bad point: ZERO');
+    // 6.6.3
+    // Exceptional cases of iso_map are inputs that cause the denominator of
+    // either rational function to evaluate to zero; such cases MUST return
+    // the identity point on E.
+    if (field.is0(xDen) || field.is0(yDen)) return { x: field.ZERO, y: field.ZERO };
     x = field.div(xNum, xDen); // xNum / xDen
     y = field.mul(y, field.div(yNum, yDen)); // y * (yNum / yDev)
     return { x: x, y: y };

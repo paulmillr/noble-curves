@@ -1530,7 +1530,7 @@ describe('bls12-381 deterministic', () => {
         return curve.mapToCurve(scalars);
       } catch (e) {
         // eth stuff can also wrap other errors here?
-        if (e.message === 'bad point: ZERO') return curve.ProjectivePoint.ZERO;
+        // if (e.message === 'bad point: ZERO') return curve.ProjectivePoint.ZERO;
         throw e;
       }
     };
