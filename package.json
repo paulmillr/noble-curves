@@ -32,15 +32,15 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@noble/hashes": "1.7.2"
+    "@noble/hashes": "1.8.0"
   },
   "devDependencies": {
     "@paulmillr/jsbt": "0.3.3",
     "fast-check": "3.0.0",
-    "micro-bmark": "0.4.0",
-    "micro-should": "0.5.1",
-    "prettier": "3.5.2",
-    "typescript": "5.8.2"
+    "micro-bmark": "0.4.1",
+    "micro-should": "0.5.2",
+    "prettier": "3.5.3",
+    "typescript": "5.8.3"
   },
   "sideEffects": false,
   "main": "index.js",
