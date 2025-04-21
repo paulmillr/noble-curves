@@ -13,6 +13,15 @@ There are huge compatibility issues in the ecosystem:
    https://github.com/scipr-lab/libff/blob/a44f482e18b8ac04d034c193bd9d7df7817ad73f/libff/algebra/curves/bn128/bn128_init.cpp#L166-L169
 3. halo2curves bn256 is also incompatible and returns different outputs
 
+We don't implement Point methods toHex / toRawBytes.
+To work around this limitation, has to initialize points on their own from BigInts.
+Reason it's not implemented is because [there is no standard](https://github.com/privacy-scaling-explorations/halo2curves/issues/109).
+Points of divergence:
+
+- Endianness: LE vs BE (byte-swapped)
+- Flags as first hex bits (similar to BLS) vs no-flags
+- Imaginary part last in G2 vs first (c0, c1 vs c1, c0)
+
 The goal of our implementation is to support "Ethereum" variant of the curve,
 because it at least has specs:
 

@@ -311,8 +311,10 @@ The API mirrors [BLS](#bls12-381). The curve was previously called alt_bn128.
 The implementation is compatible with [EIP-196](https://eips.ethereum.org/EIPS/eip-196) and
 [EIP-197](https://eips.ethereum.org/EIPS/eip-197).
 
-Keep in mind that we don't implement Point methods toHex / toRawBytes. It's because
-different implementations of bn254 do it differently - there is no standard. Points of divergence:
+We don't implement Point methods toHex / toRawBytes.
+To work around this limitation, has to initialize points on their own from BigInts.
+Reason it's not implemented is because [there is no standard](https://github.com/privacy-scaling-explorations/halo2curves/issues/109).
+Points of divergence:
 
 - Endianness: LE vs BE (byte-swapped)
 - Flags as first hex bits (similar to BLS) vs no-flags
