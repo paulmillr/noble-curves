@@ -1,6 +1,6 @@
 /**
- * NIST secp256r1 aka p256.
- * https://www.secg.org/sec2-v2.pdf, https://neuromancer.sk/std/nist/P-256
+ * Internal module for NIST P256, P384, P521 curves.
+ * Do not use for now.
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
