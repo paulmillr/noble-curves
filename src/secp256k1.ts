@@ -86,7 +86,7 @@ export const secp256k1: CurveFnWithCreate = createCurve(
     n: secp256k1N,
     Gx: BigInt('55066263022277343669578718895168534326250603453777594175500187360389116729240'),
     Gy: BigInt('32670510020758816978083085130507043184471273380659243275938904335757337482424'),
-    h: BigInt(1), // Cofactor
+    h: BigInt(1),
     lowS: true, // Allow only low-S signatures by default in sign() and verify()
     endo: {
       // Endomorphism, see above
@@ -326,14 +326,8 @@ export const secp256k1_hasher: Hasher<bigint> = /* @__PURE__ */ (() =>
     } as const
   ))();
 
-/**
- * @deprecated Use `secp256k1_hasher`
- */
 export const hashToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() =>
   secp256k1_hasher.hashToCurve)();
 
-/**
- * @deprecated Use `secp256k1_hasher`
- */
 export const encodeToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() =>
   secp256k1_hasher.encodeToCurve)();

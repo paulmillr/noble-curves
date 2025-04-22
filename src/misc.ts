@@ -5,7 +5,7 @@
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { blake256 } from '@noble/hashes/blake1';
-import { blake2s } from '@noble/hashes/blake2s';
+import { blake2s } from '@noble/hashes/blake2';
 import { sha256, sha512 } from '@noble/hashes/sha2';
 import { concatBytes, randomBytes, utf8ToBytes } from '@noble/hashes/utils';
 import { getHash } from './_shortw_utils.ts';
@@ -93,7 +93,10 @@ export const pasta_q: bigint = BigInt(
   '0x40000000000000000000000000000000224698fc0994a8dd8c46eb2100000001'
 );
 
-/** https://neuromancer.sk/std/other/Pallas */
+/**
+ * https://neuromancer.sk/std/other/Pallas
+ * @deprecated
+ */
 export const pallas: WCurveFn = weierstrass({
   a: BigInt(0),
   b: BigInt(5),
@@ -104,7 +107,10 @@ export const pallas: WCurveFn = weierstrass({
   h: BigInt(1),
   ...getHash(sha256),
 });
-/** https://neuromancer.sk/std/other/Vesta */
+/**
+ * https://neuromancer.sk/std/other/Vesta
+ * @deprecated
+ */
 export const vesta: WCurveFn = weierstrass({
   a: BigInt(0),
   b: BigInt(5),

@@ -282,13 +282,7 @@ export const ed448_hasher: Hasher<bigint> = /* @__PURE__ */ (() =>
       hash: shake256,
     }
   ))();
-/**
- * @deprecated Use `ed448_hasher`
- */
 export const hashToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() => ed448_hasher.hashToCurve)();
-/**
- * @deprecated Use `ed448_hasher`
- */
 export const encodeToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() =>
   ed448_hasher.encodeToCurve)();
 

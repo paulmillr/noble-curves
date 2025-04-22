@@ -308,13 +308,7 @@ export const ed25519_hasher: Hasher<bigint> = /* @__PURE__ */ (() =>
       hash: sha512,
     }
   ))();
-/**
- * @deprecated Use `ed25519_hasher`
- */
 export const hashToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() => ed25519_hasher.hashToCurve)();
-/**
- * @deprecated Use `ed25519_hasher`
- */
 export const encodeToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() =>
   ed25519_hasher.encodeToCurve)();
 

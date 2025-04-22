@@ -736,7 +736,6 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
   }
   const _bits = CURVE.nBitLength;
   const wnaf = wNAF(Point, CURVE.endo ? Math.ceil(_bits / 2) : _bits);
-  // Validate if generator point is on curve
   return {
     CURVE,
     ProjectivePoint: Point as ProjConstructor<T>,
