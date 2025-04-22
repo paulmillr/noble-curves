@@ -61,8 +61,10 @@ function poseidonGrain(opts: PoseidonBasicOpts) {
   const writeBits = (value: bigint, bitCount: number) => {
     for (let i = bitCount - 1; i >= 0; i--) state[pos++] = Number(bitGet(value, i));
   };
-  writeBits(1n, 2); // prime field
-  writeBits(opts.isSboxInverse ? 1n : 0n, 4); // b2..b5
+  const _0n = BigInt(0);
+  const _1n = BigInt(1);
+  writeBits(_1n, 2); // prime field
+  writeBits(opts.isSboxInverse ? _1n : _0n, 4); // b2..b5
   writeBits(BigInt(Fp.BITS), 12); // b6..b17
   writeBits(BigInt(opts.t), 12); // b18..b29
   writeBits(BigInt(opts.roundsFull), 10); // b30..b39
@@ -73,10 +75,10 @@ function poseidonGrain(opts: PoseidonBasicOpts) {
     const res: bigint[] = [];
     for (let i = 0; i < count; i++) {
       while (true) {
-        let num = 0n;
+        let num = _0n;
         for (let i = 0; i < Fp.BITS; i++) {
-          num <<= 1n;
-          if (getBit()) num |= 1n;
+          num <<= _1n;
+          if (getBit()) num |= _1n;
         }
         if (reject && num >= Fp.ORDER) continue; // rejection sampling
         res.push(Fp.create(num));
