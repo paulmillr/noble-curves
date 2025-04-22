@@ -5,6 +5,7 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
+import { anumber } from '@noble/hashes/utils';
 import {
   bitMask,
   bytesToNumberBE,
@@ -30,7 +31,7 @@ export function mod(a: bigint, b: bigint): bigint {
 /**
  * Efficiently raise num to power and do modular division.
  * Unsafe in some contexts: uses ladder, so can expose bigint bits.
- * @todo use field version && remove
+ * TODO: remove.
  * @example
  * pow(2n, 6n, 11n) // 64n % 11n == 9n
  */
@@ -87,27 +88,25 @@ export function invert(number: bigint, modulo: bigint): bigint {
  * Tonelli-Shanks square root search algorithm.
  * 1. https://eprint.iacr.org/2012/685.pdf (page 12)
  * 2. Square Roots from 1; 24, 51, 10 to Dan Shanks
- * Will start an infinite loop if field order P is not prime.
  * @param P field order
  * @returns function that takes field Fp (created from P) and number n
  */
 export function tonelliShanks(P: bigint): <T>(Fp: IField<T>, n: T) => T {
-  // Legendre constant: used to calculate Legendre symbol (a | p),
-  // which denotes the value of a^((p-1)/2) (mod p).
-  // (a | p) ≡ 1    if a is a square (mod p)
-  // (a | p) ≡ -1   if a is not a square (mod p)
-  // (a | p) ≡ 0    if a ≡ 0 (mod p)
-  const legendreC = (P - _1n) / _2n;
-
-  let Q: bigint, S: number, Z: bigint;
+  // Do expensive precomputation step
   // Step 1: By factoring out powers of 2 from p - 1,
-  // find q and s such that p - 1 = q*(2^s) with q odd
-  for (Q = P - _1n, S = 0; Q % _2n === _0n; Q /= _2n, S++);
+  // find q and s such that p-1 == q*(2^s) with q odd
+  let Q: bigint = P - _1n;
+  let S: number = 0;
+  while (Q % _2n === _0n) {
+    Q /= _2n;
+    S++;
+  }
 
   // Step 2: Select a non-square z such that (z | p) ≡ -1 and set c ≡ zq
-  for (Z = _2n; Z < P && pow(Z, legendreC, P) !== P - _1n; Z++) {
-    // Crash instead of infinity loop, we cannot reasonable count until P.
-    if (Z > 1000) throw new Error('Cannot find square root: likely non-prime P');
+  let Z: bigint = _2n;
+  const _Fp = Field(P);
+  while (Z < P && FpIsSquare(_Fp, Z)) {
+    if (Z++ > 1000) throw new Error('Cannot find square root: probably non-prime P');
   }
 
   // Fast-path
@@ -119,27 +118,29 @@ export function tonelliShanks(P: bigint): <T>(Fp: IField<T>, n: T) => T {
       return root;
     };
   }
-
   // Slow-path
   const Q1div2 = (Q + _1n) / _2n;
   return function tonelliSlow<T>(Fp: IField<T>, n: T): T {
     // Step 0: Check that n is indeed a square: (n | p) should not be ≡ -1
-    if (Fp.pow(n, legendreC) === Fp.neg(Fp.ONE)) throw new Error('Cannot find square root');
+    if (!FpIsSquare(Fp, n)) throw new Error('Cannot find square root');
     let r = S;
-    // TODO: will fail at Fp2/etc
+    // TODO: test on Fp2 and others
     let g = Fp.pow(Fp.mul(Fp.ONE, Z), Q); // will update both x and b
     let x = Fp.pow(n, Q1div2); // first guess at the square root
     let b = Fp.pow(n, Q); // first guess at the fudge factor
 
     while (!Fp.eql(b, Fp.ONE)) {
-      if (Fp.eql(b, Fp.ZERO)) return Fp.ZERO; // https://en.wikipedia.org/wiki/Tonelli%E2%80%93Shanks_algorithm (4. If t = 0, return r = 0)
+      // (4. If t = 0, return r = 0)
+      // https://en.wikipedia.org/wiki/Tonelli%E2%80%93Shanks_algorithm
+      if (Fp.eql(b, Fp.ZERO)) return Fp.ZERO;
       // Find m such b^(2^m)==1
       let m = 1;
       for (let t2 = Fp.sqr(b); m < r; m++) {
         if (Fp.eql(t2, Fp.ONE)) break;
         t2 = Fp.sqr(t2); // t2 *= t2
       }
-      // NOTE: r-m-1 can be bigger than 32, need to convert to bigint before shift, otherwise there will be overflow
+      // NOTE: r-m-1 can be bigger than 32, need to convert to bigint before shift,
+      // otherwise there will be overflow.
       const ge = Fp.pow(g, _1n << BigInt(r - m - 1)); // ge = 2^(r-m-1)
       g = Fp.sqr(ge); // g = ge * ge
       x = Fp.mul(x, ge); // x *= ge
@@ -169,8 +170,8 @@ export function FpSqrt(P: bigint): <T>(Fp: IField<T>, n: T) => T {
     // const ORDER =
     //   0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaabn;
     // const NUM = 72057594037927816n;
-    const p1div4 = (P + _1n) / _4n;
     return function sqrt3mod4<T>(Fp: IField<T>, n: T) {
+      const p1div4 = (P + _1n) / _4n;
       const root = Fp.pow(n, p1div4);
       // Throw if root**2 != n
       if (!Fp.eql(Fp.sqr(root), n)) throw new Error('Cannot find square root');
@@ -180,9 +181,9 @@ export function FpSqrt(P: bigint): <T>(Fp: IField<T>, n: T) => T {
 
   // Atkin algorithm for q ≡ 5 (mod 8), https://eprint.iacr.org/2012/685.pdf (page 10)
   if (P % _8n === _5n) {
-    const c1 = (P - _5n) / _8n;
     return function sqrt5mod8<T>(Fp: IField<T>, n: T) {
       const n2 = Fp.mul(n, _2n);
+      const c1 = (P - _5n) / _8n;
       const v = Fp.pow(n2, c1);
       const nv = Fp.mul(n, v);
       const i = Fp.mul(Fp.mul(nv, _2n), v);
@@ -291,17 +292,16 @@ export function validateField<T>(field: IField<T>): IField<T> {
  * Same as `pow` but for Fp: non-constant-time.
  * Unsafe in some contexts: uses ladder, so can expose bigint bits.
  */
-export function FpPow<T>(f: IField<T>, num: T, power: bigint): T {
-  // Should have same speed as pow for bigints
-  // TODO: benchmark!
+export function FpPow<T>(Fp: IField<T>, num: T, power: bigint): T {
   if (power < _0n) throw new Error('invalid exponent, negatives unsupported');
-  if (power === _0n) return f.ONE;
+  if (power === _0n) return Fp.ONE;
   if (power === _1n) return num;
-  let p = f.ONE;
+  // @ts-ignore
+  let p = Fp.ONE;
   let d = num;
   while (power > _0n) {
-    if (power & _1n) p = f.mul(p, d);
-    d = f.sqr(d);
+    if (power & _1n) p = Fp.mul(p, d);
+    d = Fp.sqr(d);
     power >>= _1n;
   }
   return p;
@@ -311,21 +311,21 @@ export function FpPow<T>(f: IField<T>, num: T, power: bigint): T {
  * Efficiently invert an array of Field elements.
  * `inv(0)` will return `undefined` here: make sure to throw an error.
  */
-export function FpInvertBatch<T>(f: IField<T>, nums: T[]): T[] {
+export function FpInvertBatch<T>(Fp: IField<T>, nums: T[]): T[] {
   const tmp = new Array(nums.length);
   // Walk from first to last, multiply them by each other MOD p
   const lastMultiplied = nums.reduce((acc, num, i) => {
-    if (f.is0(num)) return acc;
+    if (Fp.is0(num)) return acc;
     tmp[i] = acc;
-    return f.mul(acc, num);
-  }, f.ONE);
+    return Fp.mul(acc, num);
+  }, Fp.ONE);
   // Invert last element
-  const inverted = f.inv(lastMultiplied);
+  const inverted = Fp.inv(lastMultiplied);
   // Walk from last to first, multiply them by inverted each other MOD p
   nums.reduceRight((acc, num, i) => {
-    if (f.is0(num)) return acc;
-    tmp[i] = f.mul(acc, tmp[i]);
-    return f.mul(acc, num);
+    if (Fp.is0(num)) return acc;
+    tmp[i] = Fp.mul(acc, tmp[i]);
+    return Fp.mul(acc, num);
   }, inverted);
   return tmp;
 }
@@ -334,34 +334,40 @@ export function FpInvertBatch<T>(f: IField<T>, nums: T[]): T[] {
  * Exception-free inversion which allows 0, from RFC 9380.
  * Not const-time. CT is doable with `Fp.pow(n, Fp.ORDER - BigInt(2))`, but is VERY slow.
  */
-export function FpInvertBatch0<T>(f: IField<T>, lst: T[]): T[] {
-  const nonZero = lst.map((i) => (f.is0(i) ? f.ONE : i));
-  const inverted = f.invertBatch(nonZero);
-  return inverted.map((i, j) => (f.is0(lst[j]) ? f.ZERO : i));
+export function FpInvertBatch0<T>(Fp: IField<T>, nums: T[]): T[] {
+  const nonZero = nums.map((i) => (Fp.is0(i) ? Fp.ONE : i));
+  const inverted = FpInvertBatch(Fp, nonZero);
+  return inverted.map((i, j) => (Fp.is0(nums[j]) ? Fp.ZERO : i));
 }
 
-export function FpDiv<T>(f: IField<T>, lhs: T, rhs: T | bigint): T {
-  return f.mul(lhs, typeof rhs === 'bigint' ? invert(rhs, f.ORDER) : f.inv(rhs));
+// TODO: remove
+export function FpDiv<T>(Fp: IField<T>, lhs: T, rhs: T | bigint): T {
+  return Fp.mul(lhs, typeof rhs === 'bigint' ? invert(rhs, Fp.ORDER) : Fp.inv(rhs));
 }
 
 /**
  * Legendre symbol.
+ * Legendre constant is used to calculate Legendre symbol (a | p)
+ * which denotes the value of a^((p-1)/2) (mod p)..
+ *
  * * (a | p) ≡ 1    if a is a square (mod p), quadratic residue
  * * (a | p) ≡ -1   if a is not a square (mod p), quadratic non residue
  * * (a | p) ≡ 0    if a ≡ 0 (mod p)
  */
-export function FpLegendre(order: bigint): <T>(f: IField<T>, x: T) => T {
-  const legendreConst = (order - _1n) / _2n; // Integer arithmetic
-  return <T>(f: IField<T>, x: T): T => f.pow(x, legendreConst);
+export function FpLegendre<T>(Fp: IField<T>, n: T): number {
+  const legc = (Fp.ORDER - _1n) / _2n;
+  const powered = Fp.pow(n, legc);
+  const yes = Fp.eql(powered, Fp.ONE);
+  const zero = Fp.eql(powered, Fp.ZERO);
+  const no = Fp.eql(powered, Fp.neg(Fp.ONE));
+  if (!yes && !zero && !no) throw new Error('Cannot find square root: probably non-prime P');
+  return yes ? 1 : zero ? 0 : -1;
 }
 
 // This function returns True whenever the value x is a square in the field F.
-export function FpIsSquare<T>(f: IField<T>): (x: T) => boolean {
-  const legendre = FpLegendre(f.ORDER);
-  return (x: T): boolean => {
-    const p = legendre(f, x);
-    return f.eql(p, f.ZERO) || f.eql(p, f.ONE);
-  };
+export function FpIsSquare<T>(Fp: IField<T>, n: T): boolean {
+  const l = FpLegendre(Fp, n);
+  return l === 0 || l === 1;
 }
 
 // CURVE.n lengths
@@ -373,6 +379,7 @@ export function nLength(
   nByteLength: number;
 } {
   // Bit size, byte size of CURVE.n
+  if (nBitLength !== undefined) anumber(nBitLength);
   const _nBitLength = nBitLength !== undefined ? nBitLength : n.toString(2).length;
   const nByteLength = Math.ceil(_nBitLength / 8);
   return { nBitLength: _nBitLength, nByteLength };
@@ -443,16 +450,17 @@ export function Field(
         if (!sqrtP) sqrtP = FpSqrt(ORDER);
         return sqrtP(f, n);
       }),
-    invertBatch: (lst) => FpInvertBatch(f, lst),
-    // TODO: do we really need constant cmov?
-    // We don't have const-time bigints anyway, so probably will be not very useful
-    cmov: (a, b, c) => (c ? b : a),
     toBytes: (num) => (isLE ? numberToBytesLE(num, BYTES) : numberToBytesBE(num, BYTES)),
     fromBytes: (bytes) => {
       if (bytes.length !== BYTES)
         throw new Error('Field.fromBytes: expected ' + BYTES + ' bytes, got ' + bytes.length);
       return isLE ? bytesToNumberLE(bytes) : bytesToNumberBE(bytes);
     },
+    // TODO: we don't need it here, move out to separate fn
+    invertBatch: (lst) => FpInvertBatch(f, lst),
+    // We can't move this out because Fp6, Fp12 implement it
+    // and it's unclear what to return in there.
+    cmov: (a, b, c) => (c ? b : a),
   } as FpField);
   return Object.freeze(f);
 }

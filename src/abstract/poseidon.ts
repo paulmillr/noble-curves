@@ -7,7 +7,7 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { FpPow, type IField, validateField } from './modular.ts';
+import { FpInvertBatch, FpPow, type IField, validateField } from './modular.ts';
 import { bitGet } from './utils.ts';
 
 // Grain LFSR (Linear-Feedback Shift Register): https://eprint.iacr.org/2009/109.pdf
@@ -116,7 +116,7 @@ export function grainGenConstants(opts: PoseidonGrainOpts, skipMDS: number = 0):
         throw new Error(`Error generating MDS matrix: xs[${i}] + ys[${j}] resulted in zero.`);
       row.push(xy);
     }
-    mds.push(Fp.invertBatch(row));
+    mds.push(FpInvertBatch(Fp, row));
   }
 
   return { roundConstants, mds };

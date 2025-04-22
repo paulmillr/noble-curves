@@ -282,7 +282,6 @@ for (const c in FIELDS) {
         deepStrictEqual(Fp.eql(Fp.mul(i16, inv0(i4)), i4), true); // 16/4 == 4
       });
 
-      const isSquare = mod.FpIsSquare(Fp);
       // Not implemented
       if (Fp !== bls12_381.fields.Fp12 && Fp !== bn254.fields.Fp12) {
         should('multiply/sqrt', () => {
@@ -293,10 +292,10 @@ for (const c in FIELDS) {
               try {
                 root = Fp.sqrt(a);
               } catch (e) {
-                deepStrictEqual(isSquare(a), false);
+                deepStrictEqual(mod.FpIsSquare(Fp, a), false);
                 return;
               }
-              deepStrictEqual(isSquare(a), true);
+              deepStrictEqual(mod.FpIsSquare(Fp, a), true);
               deepStrictEqual(Fp.eql(Fp.sqr(root), a), true, 'sqrt(a)^2 == a');
               deepStrictEqual(Fp.eql(Fp.sqr(Fp.neg(root)), a), true, '(-sqrt(a))^2 == a');
               // Returns odd/even element

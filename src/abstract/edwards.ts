@@ -4,20 +4,17 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
+// prettier-ignore
 import {
-  type AffinePoint,
-  type BasicCurve,
-  type Group,
-  type GroupConstructor,
-  pippenger,
-  validateBasic,
-  wNAF,
+  pippenger, validateBasic, wNAF,
+  type AffinePoint, type BasicCurve, type Group, type GroupConstructor,
 } from './curve.ts';
-import { Field, mod } from './modular.ts';
+import { Field, FpInvertBatch, mod } from './modular.ts';
 // prettier-ignore
 import {
   abool, aInRange, bytesToHex, bytesToNumberLE, concatBytes,
-  ensureBytes, type FHash, type Hex, memoized, numberToBytesLE, validateObject
+  ensureBytes, memoized, numberToBytesLE, validateObject,
+  type FHash, type Hex
 } from './utils.ts';
 
 // Be friendly to bad ECMAScript parsers by not using bigint literals
@@ -244,7 +241,10 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       return new Point(x, y, _1n, modP(x * y));
     }
     static normalizeZ(points: Point[]): Point[] {
-      const toInv = Fp.invertBatch(points.map((p) => p.ez));
+      const toInv = FpInvertBatch(
+        Fp,
+        points.map((p) => p.ez)
+      );
       return points.map((p, i) => p.toAffine(toInv[i])).map(Point.fromAffine);
     }
     // Multiscalar Multiplication

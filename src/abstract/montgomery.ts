@@ -5,7 +5,7 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { mod, pow } from './modular.ts';
+import { Field, mod } from './modular.ts';
 import {
   aInRange,
   bytesToNumberLE,
@@ -63,12 +63,13 @@ function validateOpts(curve: CurveType) {
 export function montgomery(curveDef: CurveType): CurveFn {
   const CURVE = validateOpts(curveDef);
   const { P } = CURVE;
+  const Fp = Field(P);
   const modP = (n: bigint) => mod(n, P);
   const montgomeryBits = CURVE.montgomeryBits;
   const montgomeryBytes = Math.ceil(montgomeryBits / 8);
   const fieldLen = CURVE.nByteLength;
   const adjustScalarBytes = CURVE.adjustScalarBytes || ((bytes: Uint8Array) => bytes);
-  const powPminus2 = CURVE.powPminus2 || ((x: bigint) => pow(x, P - BigInt(2), P));
+  const powPminus2 = CURVE.powPminus2 || ((x: bigint) => Fp.pow(x, P - BigInt(2)));
 
   // cswap from RFC7748. But it is not from RFC7748!
   /*

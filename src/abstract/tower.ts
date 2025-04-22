@@ -167,7 +167,6 @@ export function tower12(opts: Tower12Opts): {
   // Fp
   const Fp = mod.Field(ORDER);
   const FpNONRESIDUE = Fp.create(opts.NONRESIDUE || BigInt(-1));
-  const FpLegendre = mod.FpLegendre(ORDER);
   const Fpdiv2 = Fp.div(Fp.ONE, _2n); // 1/2
 
   // Fp2
@@ -265,14 +264,14 @@ export function tower12(opts: Tower12Opts): {
       const { c0, c1 } = num;
       if (Fp.is0(c1)) {
         // if c0 is quadratic residue
-        if (Fp.eql(FpLegendre(Fp, c0), Fp.ONE)) return Fp2.create({ c0: Fp.sqrt(c0), c1: Fp.ZERO });
+        if (mod.FpLegendre(Fp, c0) === 1) return Fp2.create({ c0: Fp.sqrt(c0), c1: Fp.ZERO });
         else return Fp2.create({ c0: Fp.ZERO, c1: Fp.sqrt(Fp.div(c0, FpNONRESIDUE)) });
       }
       const a = Fp.sqrt(Fp.sub(Fp.sqr(c0), Fp.mul(Fp.sqr(c1), FpNONRESIDUE)));
       let d = Fp.mul(Fp.add(a, c0), Fpdiv2);
-      const legendre = FpLegendre(Fp, d);
+      const legendre = mod.FpLegendre(Fp, d);
       // -1, Quadratic non residue
-      if (!Fp.is0(legendre) && !Fp.eql(legendre, Fp.ONE)) d = Fp.sub(d, a);
+      if (legendre === -1) d = Fp.sub(d, a);
       const a0 = Fp.sqrt(d);
       const candidateSqrt = Fp2.create({ c0: a0, c1: Fp.div(Fp.mul(c1, Fpdiv2), a0) });
       if (!Fp2.eql(Fp2.sqr(candidateSqrt), num)) throw new Error('Cannot find square root');
