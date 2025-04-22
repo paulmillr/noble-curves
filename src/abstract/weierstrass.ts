@@ -45,7 +45,9 @@ import {
 } from './curve.ts';
 // prettier-ignore
 import {
-  Field, type IField, getMinHashLength, invert, mapHashToField, mod, validateField,
+  Field,
+  FpInvertBatch0,
+  type IField, getMinHashLength, invert, mapHashToField, mod, validateField
 } from './modular.ts';
 // prettier-ignore
 import {
@@ -1382,7 +1384,8 @@ export function mapToCurveSimpleSWU<T>(
     y = Fp.cmov(y, value, isValid); // 22.   y = CMOV(y, y1, is_gx1_square)
     const e1 = Fp.isOdd!(u) === Fp.isOdd!(y); // 23.  e1 = sgn0(u) == sgn0(y)
     y = Fp.cmov(Fp.neg(y), y, e1); // 24.   y = CMOV(-y, y, e1)
-    x = Fp.div(x, tv4); // 25.   x = x / tv4
+    const tv4_inv = FpInvertBatch0(Fp, [tv4])[0];
+    x = Fp.mul(x, tv4_inv); // 25.   x = x / tv4
     return { x, y };
   };
 }

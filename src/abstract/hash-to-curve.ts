@@ -6,7 +6,7 @@
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import type { AffinePoint, Group, GroupConstructor } from './curve.ts';
-import { type IField, mod } from './modular.ts';
+import { FpInvertBatch0, type IField, mod } from './modular.ts';
 import type { CHash } from './utils.ts';
 import { abytes, bytesToNumberBE, concatBytes, utf8ToBytes, validateObject } from './utils.ts';
 
@@ -172,28 +172,23 @@ export function hash_to_field(msg: Uint8Array, count: number, options: Opts): bi
   return u;
 }
 
-export type XY<T> = (
-  x: T,
-  y: T
-) => {
-  x: T;
-  y: T;
-};
-export function isogenyMap<T, F extends IField<T>>(field: F, map: [T[], T[], T[], T[]]): XY<T> {
+export type XY<T> = (x: T, y: T) => { x: T; y: T };
+export type XYRatio<T> = [T[], T[], T[], T[]]; // xn/xd, yn/yd
+export function isogenyMap<T, F extends IField<T>>(field: F, map: XYRatio<T>): XY<T> {
   // Make same order as in spec
-  const COEFF = map.map((i) => Array.from(i).reverse());
+  const coeff = map.map((i) => Array.from(i).reverse());
   return (x: T, y: T) => {
-    const [xNum, xDen, yNum, yDen] = COEFF.map((val) =>
+    const [xn, xd, yn, yd] = coeff.map((val) =>
       val.reduce((acc, i) => field.add(field.mul(acc, x), i))
     );
     // 6.6.3
     // Exceptional cases of iso_map are inputs that cause the denominator of
     // either rational function to evaluate to zero; such cases MUST return
     // the identity point on E.
-    if (field.is0(xDen) || field.is0(yDen)) return { x: field.ZERO, y: field.ZERO };
-    x = field.div(xNum, xDen); // xNum / xDen
-    y = field.mul(y, field.div(yNum, yDen)); // y * (yNum / yDev)
-    return { x: x, y: y };
+    const [xd_inv, yd_inv] = FpInvertBatch0(field, [xd, yd]);
+    x = field.mul(xn, xd_inv); // xNum / xDen
+    y = field.mul(y, field.mul(yn, yd_inv)); // y * (yNum / yDev)
+    return { x, y };
   };
 }
 
@@ -230,6 +225,16 @@ export function createHasher<T>(
   defaults: Opts & { encodeDST?: UnicodeOrBytes }
 ): Hasher<T> {
   if (typeof mapToCurve !== 'function') throw new Error('mapToCurve() must be defined');
+  function map(num: bigint[]) {
+    return Point.fromAffine(mapToCurve(num));
+  }
+  function clear(initial: H2CPoint<T>) {
+    const P = initial.clearCofactor();
+    if (P.equals(Point.ZERO)) return Point.ZERO; // zero will throw in assert
+    P.assertValidity();
+    return P;
+  }
+
   return {
     defaults,
 
@@ -237,29 +242,24 @@ export function createHasher<T>(
     // hash_to_curve from https://www.rfc-editor.org/rfc/rfc9380#section-3
     hashToCurve(msg: Uint8Array, options?: htfBasicOpts): H2CPoint<T> {
       const u = hash_to_field(msg, 2, { ...defaults, DST: defaults.DST, ...options } as Opts);
-      const u0 = Point.fromAffine(mapToCurve(u[0]));
-      const u1 = Point.fromAffine(mapToCurve(u[1]));
-      const P = u0.add(u1).clearCofactor();
-      P.assertValidity();
-      return P;
+      const u0 = map(u[0]);
+      const u1 = map(u[1]);
+      return clear(u0.add(u1));
     },
 
     // Encodes byte string to elliptic curve.
     // encode_to_curve from https://www.rfc-editor.org/rfc/rfc9380#section-3
     encodeToCurve(msg: Uint8Array, options?: htfBasicOpts): H2CPoint<T> {
       const u = hash_to_field(msg, 1, { ...defaults, DST: defaults.encodeDST, ...options } as Opts);
-      const P = Point.fromAffine(mapToCurve(u[0])).clearCofactor();
-      P.assertValidity();
-      return P;
+      return clear(map(u[0]));
     },
+
     // Same as encodeToCurve, but without hash
     mapToCurve(scalars: bigint[]): H2CPoint<T> {
-      if (!Array.isArray(scalars)) throw new Error('mapToCurve: expected array of bigints');
+      if (!Array.isArray(scalars)) throw new Error('expected array of bigints');
       for (const i of scalars)
-        if (typeof i !== 'bigint') throw new Error('mapToCurve: expected array of bigints');
-      const P = Point.fromAffine(mapToCurve(scalars)).clearCofactor();
-      P.assertValidity();
-      return P;
+        if (typeof i !== 'bigint') throw new Error('expected array of bigints');
+      return clear(map(scalars));
     },
   };
 }

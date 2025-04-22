@@ -1554,15 +1554,7 @@ describe('bls12-381 deterministic', () => {
       }
     });
     should('zero point', () => {
-      /*
-      So, issue with zero point:
-      - we don't return ZERO point: it could break libs which depend on the behavior
-      - RFC 9380 spec goes to great lengths to ensure constant timeness of methods in spec.
-        Early-return of ZERO will break const-time
-      - spec uses inv0, but it is not used in ynum/yden
-      - spec doesn't have test vectors, which would've failed otherwise
-      - In any case, noble's ProjectivePoint#assertValidity will always crash on ZERO point
-      */
+      // kernel of isogeny
       const t = BigInt(
         '1006044755431560595281793557931171729984964515682961911911398807521437683216171091013202870577238485832047490326971'
       );

@@ -275,6 +275,14 @@ for (const c in FIELDS) {
         deepStrictEqual(Fp.mul(minus1, minus1), Fp.ONE);
       });
 
+      should('FpInvertBatch0', () => {
+        const inv0 = (val) => mod.FpInvertBatch0(Fp, [val])[0];
+        deepStrictEqual(inv0(Fp.ZERO), Fp.ZERO);
+        const i16 = Fp.mul(Fp.ONE, 16n);
+        const i4 = Fp.mul(Fp.ONE, 4n);
+        deepStrictEqual(Fp.eql(Fp.mul(i16, inv0(i4)), i4), true); // 16/4 == 4
+      });
+
       const isSquare = mod.FpIsSquare(Fp);
       // Not implemented
       if (Fp !== bls12_381.fields.Fp12 && Fp !== bn254.fields.Fp12) {

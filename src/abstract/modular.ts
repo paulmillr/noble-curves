@@ -330,6 +330,16 @@ export function FpInvertBatch<T>(f: IField<T>, nums: T[]): T[] {
   return tmp;
 }
 
+/**
+ * Exception-free inversion which allows 0, from RFC 9380.
+ * Not const-time. CT is doable with `Fp.pow(n, Fp.ORDER - BigInt(2))`, but is VERY slow.
+ */
+export function FpInvertBatch0<T>(f: IField<T>, lst: T[]): T[] {
+  const nonZero = lst.map((i) => (f.is0(i) ? f.ONE : i));
+  const inverted = f.invertBatch(nonZero);
+  return inverted.map((i, j) => (f.is0(lst[j]) ? f.ZERO : i));
+}
+
 export function FpDiv<T>(f: IField<T>, lhs: T, rhs: T | bigint): T {
   return f.mul(lhs, typeof rhs === 'bigint' ? invert(rhs, f.ORDER) : f.inv(rhs));
 }
