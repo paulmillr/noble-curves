@@ -1,4 +1,4 @@
-import { sha512 } from '@noble/hashes/sha512';
+import { sha512 } from '@noble/hashes/sha2';
 import { bytesToHex as hex, hexToBytes } from '@noble/hashes/utils';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual, throws } from 'node:assert';
