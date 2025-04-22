@@ -5,8 +5,7 @@ import * as mod from '../esm/abstract/modular.js';
 import { isBytes, bytesToHex as toHex } from '../esm/abstract/utils.js';
 import { getTypeTests, json } from './utils.js';
 // Generic tests for all curves in package
-import { sha256 } from '@noble/hashes/sha256';
-import { sha512 } from '@noble/hashes/sha512';
+import { sha256, sha512 } from '@noble/hashes/sha2';
 import { randomBytes } from '@noble/hashes/utils';
 import { createCurve } from '../esm/_shortw_utils.js';
 import { precomputeMSMUnsafe } from '../esm/abstract/curve.js';
@@ -16,7 +15,7 @@ import { bls12_381 } from '../esm/bls12-381.js';
 import { bn254, bn254_weierstrass } from '../esm/bn254.js';
 import { ed25519, ed25519ctx, ed25519ph, RistrettoPoint, x25519 } from '../esm/ed25519.js';
 import { DecafPoint, ed448, ed448ph } from '../esm/ed448.js';
-import { jubjub } from '../esm/jubjub.js';
+import { jubjub } from '../esm/misc.js';
 import { secp256r1, secp384r1, secp521r1 } from '../esm/nist.js';
 import { pallas, vesta } from '../esm/pasta.js';
 import { secp256k1 } from '../esm/secp256k1.js';

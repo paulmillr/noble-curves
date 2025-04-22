@@ -32,6 +32,7 @@ export function abool(title: string, value: boolean): void {
   if (typeof value !== 'boolean') throw new Error(title + ' boolean expected, got ' + value);
 }
 
+// Used in weierstrass, der
 export function numberToHexUnpadded(num: number | bigint): string {
   const hex = num.toString(16);
   return hex.length & 1 ? '0' + hex : hex;

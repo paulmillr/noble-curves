@@ -1315,6 +1315,10 @@ describe('verify()', () => {
           const signatures = privateKeys.map((privateKey) => bls.sign(message, privateKey));
           const aggregatedSignature = bls.aggregateSignatures(signatures);
           const aggregatedPublicKey = bls.aggregatePublicKeys(publicKey);
+          // TODO
+          // Error: Property failed after 9 tests
+          // { seed: 515274642, path: "8:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0", endOnFailure: true }
+          // Counterexample: ["0000000000000000000000000000000000000000000000000000000000000000",[4n,52435875175126190479447740508185965837690552500527637822603658699938581184445n,43n,75n,52435875175126190479447740508185965837690552500527637822603658699938581184459n]]
           deepStrictEqual(bls.verify(aggregatedSignature, message, aggregatedPublicKey), true);
           deepStrictEqual(
             bls.verify(bytesToHex(aggregatedSignature), message, aggregatedPublicKey),
