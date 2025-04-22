@@ -1,6 +1,6 @@
 {
   "name": "@noble/curves",
-  "version": "1.8.2",
+  "version": "1.9.0",
   "exports": {
     ".": "./src/index.ts",
     "./abstract/bls": "./src/abstract/bls.ts",
@@ -28,7 +28,7 @@
     "./secp256k1": "./src/secp256k1.ts"
   },
   "imports": {
-    "@noble/hashes": "jsr:@noble/hashes@1.7.2"
+    "@noble/hashes": "jsr:@noble/hashes@1.8.0"
   },
   "publish": {
     "include": [
