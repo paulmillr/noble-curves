@@ -6,7 +6,7 @@
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import type { AffinePoint, Group, GroupConstructor } from './curve.ts';
-import { FpInvertBatch0, type IField, mod } from './modular.ts';
+import { FpInvertBatch, type IField, mod } from './modular.ts';
 import type { CHash } from './utils.ts';
 import { abytes, bytesToNumberBE, concatBytes, utf8ToBytes, validateObject } from './utils.ts';
 
@@ -185,7 +185,7 @@ export function isogenyMap<T, F extends IField<T>>(field: F, map: XYRatio<T>): X
     // Exceptional cases of iso_map are inputs that cause the denominator of
     // either rational function to evaluate to zero; such cases MUST return
     // the identity point on E.
-    const [xd_inv, yd_inv] = FpInvertBatch0(field, [xd, yd]);
+    const [xd_inv, yd_inv] = FpInvertBatch(field, [xd, yd], true);
     x = field.mul(xn, xd_inv); // xNum / xDen
     y = field.mul(y, field.mul(yn, yd_inv)); // y * (yNum / yDev)
     return { x, y };

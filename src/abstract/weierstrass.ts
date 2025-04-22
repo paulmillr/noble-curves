@@ -41,12 +41,12 @@
 // prettier-ignore
 import {
   type AffinePoint, type BasicCurve, type Group, type GroupConstructor,
-  pippenger, validateBasic, wNAF,
+  pippenger, validateBasic, wNAF
 } from './curve.ts';
 // prettier-ignore
 import {
   Field,
-  FpInvertBatch0,
+  FpInvertBatch,
   type IField, getMinHashLength, invert, mapHashToField, mod, validateField
 } from './modular.ts';
 // prettier-ignore
@@ -455,7 +455,10 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
      * Optimization: converts a list of projective points to a list of identical points with Z=1.
      */
     static normalizeZ(points: Point[]): Point[] {
-      const toInv = Fp.invertBatch(points.map((p) => p.pz));
+      const toInv = FpInvertBatch(
+        Fp,
+        points.map((p) => p.pz)
+      );
       return points.map((p, i) => p.toAffine(toInv[i])).map(Point.fromAffine);
     }
 
@@ -1383,7 +1386,7 @@ export function mapToCurveSimpleSWU<T>(
     y = Fp.cmov(y, value, isValid); // 22.   y = CMOV(y, y1, is_gx1_square)
     const e1 = Fp.isOdd!(u) === Fp.isOdd!(y); // 23.  e1 = sgn0(u) == sgn0(y)
     y = Fp.cmov(Fp.neg(y), y, e1); // 24.   y = CMOV(-y, y, e1)
-    const tv4_inv = FpInvertBatch0(Fp, [tv4])[0];
+    const tv4_inv = FpInvertBatch(Fp, [tv4], true)[0];
     x = Fp.mul(x, tv4_inv); // 25.   x = x / tv4
     return { x, y };
   };

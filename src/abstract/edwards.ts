@@ -7,7 +7,7 @@
 // prettier-ignore
 import {
   pippenger, validateBasic, wNAF,
-  type AffinePoint, type BasicCurve, type Group, type GroupConstructor,
+  type AffinePoint, type BasicCurve, type Group, type GroupConstructor
 } from './curve.ts';
 import { Field, FpInvertBatch, mod } from './modular.ts';
 // prettier-ignore

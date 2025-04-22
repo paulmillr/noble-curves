@@ -19,7 +19,7 @@ import {
   type htfBasicOpts,
   type HTFMethod,
 } from './abstract/hash-to-curve.ts';
-import { Field, FpInvertBatch0, isNegativeLE, mod, pow2 } from './abstract/modular.ts';
+import { Field, FpInvertBatch, isNegativeLE, mod, pow2 } from './abstract/modular.ts';
 import { montgomery, type CurveFn as XCurveFn } from './abstract/montgomery.ts';
 import {
   bytesToHex,
@@ -264,7 +264,7 @@ function map_to_curve_elligator2_edwards448(u: bigint) {
   yEn = Fp.cmov(yEn, Fp.ONE, e); // 36. yEn = CMOV(yEn, 1, e)
   yEd = Fp.cmov(yEd, Fp.ONE, e); // 37. yEd = CMOV(yEd, 1, e)
 
-  const inv = FpInvertBatch0(Fp, [xEd, yEd]); // batch division
+  const inv = FpInvertBatch(Fp, [xEd, yEd], true); // batch division
   return { x: Fp.mul(xEn, inv[0]), y: Fp.mul(yEn, inv[1]) }; // 38. return (xEn, xEd, yEn, yEd)
 }
 

@@ -315,7 +315,7 @@ export function bls(CURVE: CurveType): CurveFn {
   // This up to x2 faster than just `map(({g1, g2})=>pairing({g1,g2}))`
   function pairingBatch(pairs: PairingInput[], withFinalExponent: boolean = true) {
     const res: MillerInput = [];
-    // This cache precomputed toAffine for all points
+    // Cache precomputed toAffine for all points
     G1.ProjectivePoint.normalizeZ(pairs.map(({ g1 }) => g1));
     G2.ProjectivePoint.normalizeZ(pairs.map(({ g2 }) => g2));
     for (const { g1, g2 } of pairs) {

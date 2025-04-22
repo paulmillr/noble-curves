@@ -309,35 +309,26 @@ export function FpPow<T>(Fp: IField<T>, num: T, power: bigint): T {
 
 /**
  * Efficiently invert an array of Field elements.
- * `inv(0)` will return `undefined` here: make sure to throw an error.
+ * Exception-free. Will return `undefined` for 0 elements.
+ * @param passZero map 0 to 0 (instead of undefined)
  */
-export function FpInvertBatch<T>(Fp: IField<T>, nums: T[]): T[] {
-  const tmp = new Array(nums.length);
+export function FpInvertBatch<T>(Fp: IField<T>, nums: T[], passZero = false): T[] {
+  const inverted = new Array(nums.length).fill(passZero ? Fp.ZERO : undefined);
   // Walk from first to last, multiply them by each other MOD p
-  const lastMultiplied = nums.reduce((acc, num, i) => {
+  const multipliedAcc = nums.reduce((acc, num, i) => {
     if (Fp.is0(num)) return acc;
-    tmp[i] = acc;
+    inverted[i] = acc;
     return Fp.mul(acc, num);
   }, Fp.ONE);
   // Invert last element
-  const inverted = Fp.inv(lastMultiplied);
+  const invertedAcc = Fp.inv(multipliedAcc);
   // Walk from last to first, multiply them by inverted each other MOD p
   nums.reduceRight((acc, num, i) => {
     if (Fp.is0(num)) return acc;
-    tmp[i] = Fp.mul(acc, tmp[i]);
+    inverted[i] = Fp.mul(acc, inverted[i]);
     return Fp.mul(acc, num);
-  }, inverted);
-  return tmp;
-}
-
-/**
- * Exception-free inversion which allows 0, from RFC 9380.
- * Not const-time. CT is doable with `Fp.pow(n, Fp.ORDER - BigInt(2))`, but is VERY slow.
- */
-export function FpInvertBatch0<T>(Fp: IField<T>, nums: T[]): T[] {
-  const nonZero = nums.map((i) => (Fp.is0(i) ? Fp.ONE : i));
-  const inverted = FpInvertBatch(Fp, nonZero);
-  return inverted.map((i, j) => (Fp.is0(nums[j]) ? Fp.ZERO : i));
+  }, invertedAcc);
+  return inverted;
 }
 
 // TODO: remove

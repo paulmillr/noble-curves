@@ -275,7 +275,7 @@ for (const c in FIELDS) {
       });
 
       should('FpInvertBatch0', () => {
-        const inv0 = (val) => mod.FpInvertBatch0(Fp, [val])[0];
+        const inv0 = (val) => mod.FpInvertBatch(Fp, [val], true)[0];
         deepStrictEqual(inv0(Fp.ZERO), Fp.ZERO);
         const i16 = Fp.mul(Fp.ONE, 16n);
         const i4 = Fp.mul(Fp.ONE, 4n);
