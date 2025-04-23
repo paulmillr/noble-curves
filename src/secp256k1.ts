@@ -29,6 +29,7 @@ import { mapToCurveSimpleSWU, type ProjPointType as PointType } from './abstract
 
 const secp256k1P = BigInt('0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f');
 const secp256k1N = BigInt('0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141');
+const _0n = BigInt(0);
 const _1n = BigInt(1);
 const _2n = BigInt(2);
 const divNearest = (a: bigint, b: bigint) => (a + b / _2n) / b;
@@ -80,7 +81,7 @@ const Fpk1 = Field(secp256k1P, undefined, undefined, { sqrt: sqrtMod });
  */
 export const secp256k1: CurveFnWithCreate = createCurve(
   {
-    a: BigInt(0),
+    a: _0n,
     b: BigInt(7),
     Fp: Fpk1,
     n: secp256k1N,
@@ -119,7 +120,6 @@ export const secp256k1: CurveFnWithCreate = createCurve(
 
 // Schnorr signatures are superior to ECDSA from above. Below is Schnorr-specific BIP0340 code.
 // https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki
-const _0n = BigInt(0);
 /** An object mapping tags to their tagged hash prefix of [SHA256(tag) | SHA256(tag)] */
 const TAGGED_HASH_PREFIXES: { [tag: string]: Uint8Array } = {};
 function taggedHash(tag: string, ...messages: Uint8Array[]): Uint8Array {
@@ -137,7 +137,7 @@ const pointToBytes = (point: PointType<bigint>) => point.toRawBytes(true).slice(
 const numTo32b = (n: bigint) => numberToBytesBE(n, 32);
 const modP = (x: bigint) => mod(x, secp256k1P);
 const modN = (x: bigint) => mod(x, secp256k1N);
-const Point = secp256k1.ProjectivePoint;
+const Point = /* @__PURE__ */ (() => secp256k1.ProjectivePoint)();
 const GmulAdd = (Q: PointType<bigint>, a: bigint, b: bigint) =>
   Point.BASE.multiplyAndAddUnsafe(Q, a, b);
 
