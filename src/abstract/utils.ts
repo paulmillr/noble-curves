@@ -218,6 +218,7 @@ export function aInRange(title: string, n: bigint, min: bigint, max: bigint): vo
 /**
  * Calculates amount of bits in a bigint.
  * Same as `n.toString(2).length`
+ * TODO: merge with nLength in modular
  */
 export function bitLen(n: bigint): number {
   let len;
