@@ -607,6 +607,9 @@ type Opts = {
 };
 ```
 
+BIP324 ElligatorSwift mapping for secp256k1
+is available [in a separate package](https://github.com/paulmillr/scure-btc-signer).
+
 ### poseidon: Poseidon hash
 
 Implements [Poseidon](https://www.poseidon-hash.info) ZK-friendly hash:
