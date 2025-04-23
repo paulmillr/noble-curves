@@ -144,6 +144,102 @@
     "./secp256k1": {
       "import": "./esm/secp256k1.js",
       "require": "./secp256k1.js"
+    },
+    "./abstract/bls.js": {
+      "import": "./esm/abstract/bls.js",
+      "require": "./abstract/bls.js"
+    },
+    "./abstract/curve.js": {
+      "import": "./esm/abstract/curve.js",
+      "require": "./abstract/curve.js"
+    },
+    "./abstract/edwards.js": {
+      "import": "./esm/abstract/edwards.js",
+      "require": "./abstract/edwards.js"
+    },
+    "./abstract/hash-to-curve.js": {
+      "import": "./esm/abstract/hash-to-curve.js",
+      "require": "./abstract/hash-to-curve.js"
+    },
+    "./abstract/modular.js": {
+      "import": "./esm/abstract/modular.js",
+      "require": "./abstract/modular.js"
+    },
+    "./abstract/montgomery.js": {
+      "import": "./esm/abstract/montgomery.js",
+      "require": "./abstract/montgomery.js"
+    },
+    "./abstract/poseidon.js": {
+      "import": "./esm/abstract/poseidon.js",
+      "require": "./abstract/poseidon.js"
+    },
+    "./abstract/tower.js": {
+      "import": "./esm/abstract/tower.js",
+      "require": "./abstract/tower.js"
+    },
+    "./abstract/utils.js": {
+      "import": "./esm/abstract/utils.js",
+      "require": "./abstract/utils.js"
+    },
+    "./abstract/weierstrass.js": {
+      "import": "./esm/abstract/weierstrass.js",
+      "require": "./abstract/weierstrass.js"
+    },
+    "./_shortw_utils.js": {
+      "import": "./esm/_shortw_utils.js",
+      "require": "./_shortw_utils.js"
+    },
+    "./bls12-381.js": {
+      "import": "./esm/bls12-381.js",
+      "require": "./bls12-381.js"
+    },
+    "./bn254.js": {
+      "import": "./esm/bn254.js",
+      "require": "./bn254.js"
+    },
+    "./ed448.js": {
+      "import": "./esm/ed448.js",
+      "require": "./ed448.js"
+    },
+    "./ed25519.js": {
+      "import": "./esm/ed25519.js",
+      "require": "./ed25519.js"
+    },
+    "./index.js": {
+      "import": "./esm/index.js",
+      "require": "./index.js"
+    },
+    "./jubjub.js": {
+      "import": "./esm/jubjub.js",
+      "require": "./jubjub.js"
+    },
+    "./misc.js": {
+      "import": "./esm/misc.js",
+      "require": "./misc.js"
+    },
+    "./nist.js": {
+      "import": "./esm/nist.js",
+      "require": "./nist.js"
+    },
+    "./p256.js": {
+      "import": "./esm/p256.js",
+      "require": "./p256.js"
+    },
+    "./p384.js": {
+      "import": "./esm/p384.js",
+      "require": "./p384.js"
+    },
+    "./p521.js": {
+      "import": "./esm/p521.js",
+      "require": "./p521.js"
+    },
+    "./pasta.js": {
+      "import": "./esm/pasta.js",
+      "require": "./pasta.js"
+    },
+    "./secp256k1.js": {
+      "import": "./esm/secp256k1.js",
+      "require": "./secp256k1.js"
     }
   },
   "engines": {
