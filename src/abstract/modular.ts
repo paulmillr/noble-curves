@@ -95,15 +95,15 @@ export function tonelliShanks(P: bigint): <T>(Fp: IField<T>, n: T) => T {
   // Do expensive precomputation step
   // Step 1: By factoring out powers of 2 from p - 1,
   // find q and s such that p-1 == q*(2^s) with q odd
-  let Q: bigint = P - _1n;
-  let S: number = 0;
+  let Q = P - _1n;
+  let S = 0;
   while (Q % _2n === _0n) {
     Q /= _2n;
     S++;
   }
 
   // Step 2: Select a non-square z such that (z | p) ≡ -1 and set c ≡ zq
-  let Z: bigint = _2n;
+  let Z = _2n;
   const _Fp = Field(P);
   while (Z < P && FpIsSquare(_Fp, Z)) {
     if (Z++ > 1000) throw new Error('Cannot find square root: probably non-prime P');
