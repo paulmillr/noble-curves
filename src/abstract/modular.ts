@@ -20,8 +20,6 @@ import {
 const _0n = BigInt(0), _1n = BigInt(1), _2n = /* @__PURE__ */ BigInt(2), _3n = /* @__PURE__ */ BigInt(3);
 // prettier-ignore
 const _4n = /* @__PURE__ */ BigInt(4), _5n = /* @__PURE__ */ BigInt(5), _8n = /* @__PURE__ */ BigInt(8);
-// prettier-ignore
-const _9n =/* @__PURE__ */ BigInt(9), _16n = /* @__PURE__ */ BigInt(16);
 
 // Calculates a modulo b
 export function mod(a: bigint, b: bigint): bigint {
@@ -36,16 +34,7 @@ export function mod(a: bigint, b: bigint): bigint {
  * pow(2n, 6n, 11n) // 64n % 11n == 9n
  */
 export function pow(num: bigint, power: bigint, modulo: bigint): bigint {
-  if (power < _0n) throw new Error('invalid exponent, negatives unsupported');
-  if (modulo <= _0n) throw new Error('invalid modulus');
-  if (modulo === _1n) return _0n;
-  let res = _1n;
-  while (power > _0n) {
-    if (power & _1n) res = (res * num) % modulo;
-    num = (num * num) % modulo;
-    power >>= _1n;
-  }
-  return res;
+  return FpPow(Field(modulo), num, power);
 }
 
 /** Does `x^(2^power)` mod p. `pow2(30, 4)` == `30^(2^4)` */
@@ -84,6 +73,52 @@ export function invert(number: bigint, modulo: bigint): bigint {
   return mod(x, modulo);
 }
 
+// Not all roots are possible! Example which will throw:
+// const NUM =
+// n = 72057594037927816n;
+// Fp = Field(BigInt('0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab'));
+function sqrt3mod4<T>(Fp: IField<T>, n: T) {
+  const p1div4 = (Fp.ORDER + _1n) / _4n;
+  const root = Fp.pow(n, p1div4);
+  // Throw if root^2 != n
+  if (!Fp.eql(Fp.sqr(root), n)) throw new Error('Cannot find square root');
+  return root;
+}
+
+function sqrt5mod8<T>(Fp: IField<T>, n: T) {
+  const p5div8 = (Fp.ORDER - _5n) / _8n;
+  const n2 = Fp.mul(n, _2n);
+  const v = Fp.pow(n2, p5div8);
+  const nv = Fp.mul(n, v);
+  const i = Fp.mul(Fp.mul(nv, _2n), v);
+  const root = Fp.mul(nv, Fp.sub(i, Fp.ONE));
+  if (!Fp.eql(Fp.sqr(root), n)) throw new Error('Cannot find square root');
+  return root;
+}
+
+// TODO: Commented-out for now. Provide test vectors.
+// Tonelli is too slow for extension fields Fp2.
+// That means we can't use sqrt (c1, c2...) even for initialization constants.
+// if (P % _16n === _9n) return sqrt9mod16;
+// // prettier-ignore
+// function sqrt9mod16<T>(Fp: IField<T>, n: T, p7div16?: bigint) {
+//   if (p7div16 === undefined) p7div16 = (Fp.ORDER + BigInt(7)) / _16n;
+//   const c1 = Fp.sqrt(Fp.neg(Fp.ONE)); //  1. c1 = sqrt(-1) in F, i.e., (c1^2) == -1 in F
+//   const c2 = Fp.sqrt(c1);             //  2. c2 = sqrt(c1) in F, i.e., (c2^2) == c1 in F
+//   const c3 = Fp.sqrt(Fp.neg(c1));     //  3. c3 = sqrt(-c1) in F, i.e., (c3^2) == -c1 in F
+//   const c4 = p7div16;                 //  4. c4 = (q + 7) / 16        # Integer arithmetic
+//   let tv1 = Fp.pow(n, c4);            //  1. tv1 = x^c4
+//   let tv2 = Fp.mul(c1, tv1);          //  2. tv2 = c1 * tv1
+//   const tv3 = Fp.mul(c2, tv1);        //  3. tv3 = c2 * tv1
+//   let tv4 = Fp.mul(c3, tv1);          //  4. tv4 = c3 * tv1
+//   const e1 = Fp.eql(Fp.sqr(tv2), n);  //  5.  e1 = (tv2^2) == x
+//   const e2 = Fp.eql(Fp.sqr(tv3), n);  //  6.  e2 = (tv3^2) == x
+//   tv1 = Fp.cmov(tv1, tv2, e1); //  7. tv1 = CMOV(tv1, tv2, e1)  # Select tv2 if (tv2^2) == x
+//   tv2 = Fp.cmov(tv4, tv3, e2); //  8. tv2 = CMOV(tv4, tv3, e2)  # Select tv3 if (tv3^2) == x
+//   const e3 = Fp.eql(Fp.sqr(tv2), n);  //  9.  e3 = (tv2^2) == x
+//   return Fp.cmov(tv1, tv2, e3); // 10.  z = CMOV(tv1, tv2, e3) # Select the sqrt from tv1 and tv2
+// }
+
 /**
  * Tonelli-Shanks square root search algorithm.
  * 1. https://eprint.iacr.org/2012/685.pdf (page 12)
@@ -92,9 +127,9 @@ export function invert(number: bigint, modulo: bigint): bigint {
  * @returns function that takes field Fp (created from P) and number n
  */
 export function tonelliShanks(P: bigint): <T>(Fp: IField<T>, n: T) => T {
-  // Do expensive precomputation step
-  // Step 1: By factoring out powers of 2 from p - 1,
-  // find q and s such that p-1 == q*(2^s) with q odd
+  // Initialization (precomputation).
+  if (P < BigInt(3)) throw new Error('sqrt is not defined for small field');
+  // Factor P - 1 = Q * 2^S, where Q is odd
   let Q = P - _1n;
   let S = 0;
   while (Q % _2n === _0n) {
@@ -102,120 +137,75 @@ export function tonelliShanks(P: bigint): <T>(Fp: IField<T>, n: T) => T {
     S++;
   }
 
-  // Step 2: Select a non-square z such that (z | p) ≡ -1 and set c ≡ zq
+  // Find the first quadratic non-residue Z >= 2
+  // Loop can also catch some non-primes
   let Z = _2n;
   const _Fp = Field(P);
-  while (Z < P && FpIsSquare(_Fp, Z)) {
-    if (Z++ > 1000) throw new Error('Cannot find square root: probably non-prime P');
+  while (FpLegendre(_Fp, Z) === 1) {
+    if (Z++ > 10000) throw new Error('Cannot find square root: probably non-prime P');
   }
+  if (S === 1) return sqrt3mod4; // Fast-path
 
-  // Fast-path
-  if (S === 1) {
-    const p1div4 = (P + _1n) / _4n;
-    return function tonelliFast<T>(Fp: IField<T>, n: T) {
-      const root = Fp.pow(n, p1div4);
-      if (!Fp.eql(Fp.sqr(root), n)) throw new Error('Cannot find square root');
-      return root;
-    };
-  }
   // Slow-path
+  // TODO: test on Fp2 and others
+  let cc = _Fp.pow(Z, Q); // c = z^Q
   const Q1div2 = (Q + _1n) / _2n;
   return function tonelliSlow<T>(Fp: IField<T>, n: T): T {
-    // Step 0: Check that n is indeed a square: (n | p) should not be ≡ -1
-    if (!FpIsSquare(Fp, n)) throw new Error('Cannot find square root');
-    let r = S;
-    // TODO: test on Fp2 and others
-    let g = Fp.pow(Fp.mul(Fp.ONE, Z), Q); // will update both x and b
-    let x = Fp.pow(n, Q1div2); // first guess at the square root
-    let b = Fp.pow(n, Q); // first guess at the fudge factor
+    if (Fp.is0(n)) return n;
+    // Check if n is a quadratic residue using Legendre symbol
+    if (FpLegendre(Fp, n) !== 1) throw new Error('Cannot find square root');
 
-    while (!Fp.eql(b, Fp.ONE)) {
-      // (4. If t = 0, return r = 0)
-      // https://en.wikipedia.org/wiki/Tonelli%E2%80%93Shanks_algorithm
-      if (Fp.eql(b, Fp.ZERO)) return Fp.ZERO;
-      // Find m such b^(2^m)==1
-      let m = 1;
-      for (let t2 = Fp.sqr(b); m < r; m++) {
-        if (Fp.eql(t2, Fp.ONE)) break;
-        t2 = Fp.sqr(t2); // t2 *= t2
+    // Initialize variables for the main loop
+    let M = S;
+    let c = Fp.mul(Fp.ONE, cc); // c = z^Q, move cc from field _Fp into field Fp
+    let t = Fp.pow(n, Q); // t = n^Q, first guess at the fudge factor
+    let R = Fp.pow(n, Q1div2); // R = n^((Q+1)/2), first guess at the square root
+
+    // Main loop
+    // while t != 1
+    while (!Fp.eql(t, Fp.ONE)) {
+      if (Fp.is0(t)) return Fp.ZERO; // if t=0 return R=0
+      let i = 1;
+
+      // Find the smallest i >= 1 such that t^(2^i) ≡ 1 (mod P)
+      let t_tmp = Fp.sqr(t); // t^(2^1)
+      while (!Fp.eql(t_tmp, Fp.ONE)) {
+        i++;
+        t_tmp = Fp.sqr(t_tmp); // t^(2^2)...
+        if (i === M) throw new Error('Cannot find square root');
       }
-      // NOTE: r-m-1 can be bigger than 32, need to convert to bigint before shift,
-      // otherwise there will be overflow.
-      const ge = Fp.pow(g, _1n << BigInt(r - m - 1)); // ge = 2^(r-m-1)
-      g = Fp.sqr(ge); // g = ge * ge
-      x = Fp.mul(x, ge); // x *= ge
-      b = Fp.mul(b, g); // b *= g
-      r = m;
+
+      // Calculate the exponent for b: 2^(M - i - 1)
+      const exponent = _1n << BigInt(M - i - 1); // bigint is important
+      const b = Fp.pow(c, exponent); // b = 2^(M - i - 1)
+
+      // Update variables
+      M = i;
+      c = Fp.sqr(b); // c = b^2
+      t = Fp.mul(t, c); // t = (t * b^2)
+      R = Fp.mul(R, b); // R = R*b
     }
-    return x;
+    return R;
   };
 }
 
 /**
- * Square root for a finite field. It will try to check if optimizations are applicable and fall back to 4:
+ * Square root for a finite field. Will try optimized versions first:
  *
  * 1. P ≡ 3 (mod 4)
  * 2. P ≡ 5 (mod 8)
- * 3. P ≡ 9 (mod 16)
- * 4. Tonelli-Shanks algorithm
+ * 3. Tonelli-Shanks algorithm
  *
  * Different algorithms can give different roots, it is up to user to decide which one they want.
  * For example there is FpSqrtOdd/FpSqrtEven to choice root based on oddness (used for hash-to-curve).
  */
 export function FpSqrt(P: bigint): <T>(Fp: IField<T>, n: T) => T {
-  // P ≡ 3 (mod 4)
-  // √n = n^((P+1)/4)
-  if (P % _4n === _3n) {
-    // Not all roots possible!
-    // const ORDER =
-    //   0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaabn;
-    // const NUM = 72057594037927816n;
-    return function sqrt3mod4<T>(Fp: IField<T>, n: T) {
-      const p1div4 = (P + _1n) / _4n;
-      const root = Fp.pow(n, p1div4);
-      // Throw if root**2 != n
-      if (!Fp.eql(Fp.sqr(root), n)) throw new Error('Cannot find square root');
-      return root;
-    };
-  }
-
-  // Atkin algorithm for q ≡ 5 (mod 8), https://eprint.iacr.org/2012/685.pdf (page 10)
-  if (P % _8n === _5n) {
-    return function sqrt5mod8<T>(Fp: IField<T>, n: T) {
-      const n2 = Fp.mul(n, _2n);
-      const c1 = (P - _5n) / _8n;
-      const v = Fp.pow(n2, c1);
-      const nv = Fp.mul(n, v);
-      const i = Fp.mul(Fp.mul(nv, _2n), v);
-      const root = Fp.mul(nv, Fp.sub(i, Fp.ONE));
-      if (!Fp.eql(Fp.sqr(root), n)) throw new Error('Cannot find square root');
-      return root;
-    };
-  }
-
-  // P ≡ 9 (mod 16)
-  if (P % _16n === _9n) {
-    // NOTE: tonelli is too slow for bls-Fp2 calculations even on start
-    // Means we cannot use sqrt for constants at all!
-    //
-    // const c1 = Fp.sqrt(Fp.negate(Fp.ONE)); //  1. c1 = sqrt(-1) in F, i.e., (c1^2) == -1 in F
-    // const c2 = Fp.sqrt(c1);                //  2. c2 = sqrt(c1) in F, i.e., (c2^2) == c1 in F
-    // const c3 = Fp.sqrt(Fp.negate(c1));     //  3. c3 = sqrt(-c1) in F, i.e., (c3^2) == -c1 in F
-    // const c4 = (P + _7n) / _16n;           //  4. c4 = (q + 7) / 16        # Integer arithmetic
-    // sqrt = (x) => {
-    //   let tv1 = Fp.pow(x, c4);             //  1. tv1 = x^c4
-    //   let tv2 = Fp.mul(c1, tv1);           //  2. tv2 = c1 * tv1
-    //   const tv3 = Fp.mul(c2, tv1);         //  3. tv3 = c2 * tv1
-    //   let tv4 = Fp.mul(c3, tv1);           //  4. tv4 = c3 * tv1
-    //   const e1 = Fp.equals(Fp.square(tv2), x); //  5.  e1 = (tv2^2) == x
-    //   const e2 = Fp.equals(Fp.square(tv3), x); //  6.  e2 = (tv3^2) == x
-    //   tv1 = Fp.cmov(tv1, tv2, e1); //  7. tv1 = CMOV(tv1, tv2, e1)  # Select tv2 if (tv2^2) == x
-    //   tv2 = Fp.cmov(tv4, tv3, e2); //  8. tv2 = CMOV(tv4, tv3, e2)  # Select tv3 if (tv3^2) == x
-    //   const e3 = Fp.equals(Fp.square(tv2), x); //  9.  e3 = (tv2^2) == x
-    //   return Fp.cmov(tv1, tv2, e3); //  10.  z = CMOV(tv1, tv2, e3)  # Select the sqrt from tv1 and tv2
-    // }
-  }
-  // Other cases: Tonelli-Shanks algorithm
+  // P ≡ 3 (mod 4) => √n = n^((P+1)/4)
+  if (P % _4n === _3n) return sqrt3mod4;
+  // P ≡ 5 (mod 8) => Atkin algorithm, page 10 of https://eprint.iacr.org/2012/685.pdf
+  if (P % _8n === _5n) return sqrt5mod8;
+  // P ≡ 9 (mod 16) not implemented, see above
+  // Tonelli-Shanks algorithm
   return tonelliShanks(P);
 }
 
@@ -259,7 +249,6 @@ export interface IField<T> {
   // NOTE: sgn0 is 'negative in LE', which is same as odd. And negative in LE is kinda strange definition anyway.
   isOdd?(num: T): boolean; // Odd instead of even since we have it for Fp2
   // legendre?(num: T): T;
-  pow(lhs: T, power: bigint): T;
   invertBatch: (lst: T[]) => T[];
   toBytes(num: T): Uint8Array;
   fromBytes(bytes: Uint8Array): T;
@@ -296,7 +285,6 @@ export function FpPow<T>(Fp: IField<T>, num: T, power: bigint): T {
   if (power < _0n) throw new Error('invalid exponent, negatives unsupported');
   if (power === _0n) return Fp.ONE;
   if (power === _1n) return num;
-  // @ts-ignore
   let p = Fp.ONE;
   let d = num;
   while (power > _0n) {
@@ -339,26 +327,28 @@ export function FpDiv<T>(Fp: IField<T>, lhs: T, rhs: T | bigint): T {
 /**
  * Legendre symbol.
  * Legendre constant is used to calculate Legendre symbol (a | p)
- * which denotes the value of a^((p-1)/2) (mod p)..
+ * which denotes the value of a^((p-1)/2) (mod p).
  *
  * * (a | p) ≡ 1    if a is a square (mod p), quadratic residue
  * * (a | p) ≡ -1   if a is not a square (mod p), quadratic non residue
  * * (a | p) ≡ 0    if a ≡ 0 (mod p)
  */
 export function FpLegendre<T>(Fp: IField<T>, n: T): number {
-  const legc = (Fp.ORDER - _1n) / _2n;
-  const powered = Fp.pow(n, legc);
+  // We can use 3rd argument as optional cache of this value
+  // but seems unneeded for now. The operation is very fast.
+  const p1mod2 = (Fp.ORDER - _1n) / _2n;
+  const powered = Fp.pow(n, p1mod2);
   const yes = Fp.eql(powered, Fp.ONE);
   const zero = Fp.eql(powered, Fp.ZERO);
   const no = Fp.eql(powered, Fp.neg(Fp.ONE));
-  if (!yes && !zero && !no) throw new Error('Cannot find square root: probably non-prime P');
+  if (!yes && !zero && !no) throw new Error('invalid Legendre symbol result');
   return yes ? 1 : zero ? 0 : -1;
 }
 
 // This function returns True whenever the value x is a square in the field F.
 export function FpIsSquare<T>(Fp: IField<T>, n: T): boolean {
   const l = FpLegendre(Fp, n);
-  return l === 0 || l === 1;
+  return l === 1;
 }
 
 // CURVE.n lengths
