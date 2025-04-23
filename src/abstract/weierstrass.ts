@@ -978,7 +978,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       return hexToBytes(this.toDERHex());
     }
     toDERHex() {
-      return DER.hexFromSig({ r: this.r, s: this.s });
+      return DER.hexFromSig(this);
     }
 
     // padded bytes of r, then padded bytes of s
