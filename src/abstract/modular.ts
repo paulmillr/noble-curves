@@ -138,13 +138,15 @@ export function tonelliShanks(P: bigint): <T>(Fp: IField<T>, n: T) => T {
   }
 
   // Find the first quadratic non-residue Z >= 2
-  // Loop can also catch some non-primes
   let Z = _2n;
   const _Fp = Field(P);
   while (FpLegendre(_Fp, Z) === 1) {
-    if (Z++ > 10000) throw new Error('Cannot find square root: probably non-prime P');
+    // Basic primality test for P. After x iterations, chance of
+    // not finding quadratic non-residue is 2^x, so 2^1000.
+    if (Z++ > 1000) throw new Error('Cannot find square root: probably non-prime P');
   }
-  if (S === 1) return sqrt3mod4; // Fast-path
+  // Fast-path; usually done before Z, but we do "primality test".
+  if (S === 1) return sqrt3mod4;
 
   // Slow-path
   // TODO: test on Fp2 and others
