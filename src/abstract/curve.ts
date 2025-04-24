@@ -307,18 +307,23 @@ export function pippenger<T extends Group<T>>(
   // 0 is accepted in scalars
   validateMSMPoints(points, c);
   validateMSMScalars(scalars, fieldN);
-  if (points.length !== scalars.length)
-    throw new Error('arrays of points and scalars must have equal length');
+  const plength = points.length;
+  const slength = scalars.length;
+  if (plength !== slength) throw new Error('arrays of points and scalars must have equal length');
+  // if (plength === 0) throw new Error('array must be of length >= 2');
   const zero = c.ZERO;
-  const wbits = bitLen(BigInt(points.length));
-  const windowSize = wbits > 12 ? wbits - 3 : wbits > 4 ? wbits - 2 : wbits ? 2 : 1; // in bits
+  const wbits = bitLen(BigInt(plength));
+  let windowSize = 1; // bits
+  if (wbits > 12) windowSize = wbits - 3;
+  else if (wbits > 4) windowSize = wbits - 2;
+  else if (wbits > 0) windowSize = 2;
   const MASK = bitMask(windowSize);
   const buckets = new Array(Number(MASK) + 1).fill(zero); // +1 for zero array
   const lastBits = Math.floor((fieldN.BITS - 1) / windowSize) * windowSize;
   let sum = zero;
   for (let i = lastBits; i >= 0; i -= windowSize) {
     buckets.fill(zero);
-    for (let j = 0; j < scalars.length; j++) {
+    for (let j = 0; j < slength; j++) {
       const scalar = scalars[j];
       const wbits = Number((scalar >> BigInt(i)) & MASK);
       buckets[wbits] = buckets[wbits].add(points[j]);

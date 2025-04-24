@@ -1073,7 +1073,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
   const bits2int =
     CURVE.bits2int ||
     function (bytes: Uint8Array): bigint {
-      // Our custom check "just in case"
+      // Our custom check "just in case", for protection against DoS
       if (bytes.length > 8192) throw new Error('input is too large');
       // For curves with nBitLength % 8 !== 0: bits2octets(bits2octets(m)) !== bits2octets(m)
       // for some cases, since bytes.length * 8 is not actual bitLength.
