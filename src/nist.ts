@@ -132,6 +132,7 @@ export const p521: CurveFnWithCreate = createCurve({
   lowS: false,
   allowedPrivateKeyLengths: [130, 131, 132] // P521 keys are variable-length. Normalize to 132b
 } as const, sha512);
+/** Alias to p521. */
 export const secp521r1: CurveFnWithCreate = p521;
 
 const p521_mapSWU = /* @__PURE__ */ (() =>

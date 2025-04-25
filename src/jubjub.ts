@@ -1,3 +1,7 @@
+/**
+ * @deprecated
+ * @module
+ */
 import { jubjub_findGroupHash, jubjub_groupHash, jubjub as jubjubn } from './misc.ts';
 
 /** @deprecated Use `@noble/curves/misc` module directly. */
