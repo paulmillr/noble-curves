@@ -28,12 +28,12 @@
  * 3. Curve security level is about 120 bits as per [Barbulescu-Duquesne 2017](https://hal.science/hal-01534101/file/main.pdf)
  * 4. Compatible with specs:
  *    [cfrg-pairing-friendly-curves-11](https://tools.ietf.org/html/draft-irtf-cfrg-pairing-friendly-curves-11),
- *    [cfrg-bls-signature-05](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-bls-signature-05),
+ *    [cfrg-bls-signature-05](https://www.rfc-editor.org/rfc/draft-irtf-cfrg-bls-signature-05),
  *    RFC 9380.
  *
  * ### Params
  * To verify curve parameters, see
- * [pairing-friendly-curves spec](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-pairing-friendly-curves-11).
+ * [pairing-friendly-curves spec](https://www.rfc-editor.org/rfc/draft-irtf-cfrg-pairing-friendly-curves-11).
  * Basic math is done over finite fields over p.
  * More complicated math is done over polynominal extension fields.
  * To simplify calculations in Fp12, we construct extension tower:

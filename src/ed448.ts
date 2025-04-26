@@ -313,8 +313,11 @@ const bytes448ToNumberLE = (bytes: Uint8Array) =>
 
 type ExtendedPoint = ExtPointType;
 
-// Computes Elligator map for Decaf
-// https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-ristretto255-decaf448-07#name-element-derivation-2
+/**
+ * Elligator map for hash-to-curve of decaf448.
+ * Described in [RFC9380](https://www.rfc-editor.org/rfc/rfc9380#appendix-C)
+ * and [RFC9496](https://www.rfc-editor.org/rfc/rfc9496#name-element-derivation-2).
+ */
 function calcElligatorDecafMap(r0: bigint): ExtendedPoint {
   const { d } = ed448.CURVE;
   const P = ed448.CURVE.Fp.ORDER;
@@ -349,7 +352,7 @@ function calcElligatorDecafMap(r0: bigint): ExtendedPoint {
  * a source of bugs for protocols like ring signatures. Decaf was created to solve this.
  * Decaf point operates in X:Y:Z:T extended coordinates like ExtendedPoint,
  * but it should work in its own namespace: do not combine those two.
- * https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-ristretto255-decaf448
+ * See [RFC9496](https://www.rfc-editor.org/rfc/rfc9496).
  */
 class DcfPoint implements Group<DcfPoint> {
   static BASE: DcfPoint;
@@ -369,7 +372,8 @@ class DcfPoint implements Group<DcfPoint> {
    * Takes uniform output of 112-byte hash function like shake256 and converts it to `DecafPoint`.
    * The hash-to-group operation applies Elligator twice and adds the results.
    * **Note:** this is one-way map, there is no conversion from point to hash.
-   * https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-ristretto255-decaf448-07#name-element-derivation-2
+   * Described in [RFC9380](https://www.rfc-editor.org/rfc/rfc9380#appendix-C)
+   * and [RFC9496](https://www.rfc-editor.org/rfc/rfc9496#name-element-derivation-2).
    * @param hex 112-byte output of a hash function
    */
   static hashToCurve(hex: Hex): DcfPoint {
@@ -383,7 +387,7 @@ class DcfPoint implements Group<DcfPoint> {
 
   /**
    * Converts decaf-encoded string to decaf point.
-   * https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-ristretto255-decaf448-07#name-decode-2
+   * Described in [RFC9496](https://www.rfc-editor.org/rfc/rfc9496#name-decode-2).
    * @param hex Decaf-encoded 56 bytes. Not every 56-byte string is valid decaf encoding
    */
   static fromHex(hex: Hex): DcfPoint {
@@ -423,7 +427,7 @@ class DcfPoint implements Group<DcfPoint> {
 
   /**
    * Encodes decaf point to Uint8Array.
-   * https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-ristretto255-decaf448-07#name-encode-2
+   * Described in [RFC9496](https://www.rfc-editor.org/rfc/rfc9496#name-encode-2).
    */
   toRawBytes(): Uint8Array {
     let { ex: x, ey: _y, ez: z, et: t } = this.ep;
@@ -453,8 +457,10 @@ class DcfPoint implements Group<DcfPoint> {
     return this.toHex();
   }
 
-  // Compare one point to another.
-  // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-ristretto255-decaf448-07#name-equals-2
+  /**
+   * Compare one point to another.
+   * Described in [RFC9496](https://www.rfc-editor.org/rfc/rfc9496#name-equals-2).
+   */
   equals(other: DcfPoint): boolean {
     adecafp(other);
     const { ex: X1, ey: Y1 } = this.ep;
@@ -491,6 +497,10 @@ class DcfPoint implements Group<DcfPoint> {
   }
 }
 
+/**
+ * Wrapper over Edwards Point for decaf448 from
+ * [RFC9496](https://www.rfc-editor.org/rfc/rfc9496).
+ */
 export const DecafPoint: typeof DcfPoint = /* @__PURE__ */ (() => {
   // decaf448 base point is ed448 base x 2
   // https://github.com/dalek-cryptography/curve25519-dalek/blob/59837c6ecff02b77b9d5ff84dbc239d0cf33ef90/vendor/ristretto.sage#L699
@@ -499,7 +509,10 @@ export const DecafPoint: typeof DcfPoint = /* @__PURE__ */ (() => {
   return DcfPoint;
 })();
 
-// Hashing to decaf448. https://www.rfc-editor.org/rfc/rfc9380#appendix-C
+/**
+ * hash-to-curve for decaf448.
+ * Described in [RFC9380](https://www.rfc-editor.org/rfc/rfc9380#appendix-C).
+ */
 export const hashToDecaf448 = (msg: Uint8Array, options: htfBasicOpts): DcfPoint => {
   const d = options.DST;
   const DST = typeof d === 'string' ? utf8ToBytes(d) : d;

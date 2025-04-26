@@ -9,7 +9,7 @@ Audited & minimal JS implementation of elliptic curve cryptography.
 - ➰ Short Weierstrass, Edwards, Montgomery curves
 - ✍️ ECDSA, EdDSA, Schnorr, BLS, ECDH, hashing to curves, Poseidon ZK-friendly hash
 - 🔖 SUF-CMA, SBS (non-repudiation), ZIP215 (consensus friendliness) features for ed25519 & ed448
-- 🪶 93KB for everything with hashes, 26KB (11KB gzipped) for single-curve build
+- 🪶 93KB (36KB gzipped) for everything with hashes, 26KB (11KB gzipped) for single-curve build
 
 Curves have 4KB sister projects
 [secp256k1](https://github.com/paulmillr/noble-secp256k1) & [ed25519](https://github.com/paulmillr/noble-ed25519).
@@ -51,11 +51,9 @@ A standalone file [noble-curves.js](https://github.com/paulmillr/noble-curves/re
 import { secp256k1, schnorr } from '@noble/curves/secp256k1';
 import { ed25519, ed25519ph, ed25519ctx, x25519 } from '@noble/curves/ed25519';
 import { ed448, ed448ph, ed448ctx, x448 } from '@noble/curves/ed448';
-import { p256 } from '@noble/curves/p256';
-import { p384 } from '@noble/curves/p384';
-import { p521 } from '@noble/curves/p521';
+import { p256, p384, p521 } from '@noble/curves/nist';
 import { bls12_381 } from '@noble/curves/bls12-381';
-import { bn254 } from '@noble/curves/bn254'; // also known as alt_bn128
+import { bn254 } from '@noble/curves/bn254';
 import { jubjub, babyjubjub } from '@noble/curves/misc';
 import { bytesToHex, hexToBytes, concatBytes, utf8ToBytes } from '@noble/curves/abstract/utils';
 ```
@@ -86,7 +84,7 @@ import { bytesToHex, hexToBytes, concatBytes, utf8ToBytes } from '@noble/curves/
 
 ```ts
 import { secp256k1 } from '@noble/curves/secp256k1';
-// import { p256 } from '@noble/curves/p256'; // or p384 / p521
+// import { p256 } from '@noble/curves/nist'; // or p384 / p521
 
 const priv = secp256k1.utils.randomPrivateKey();
 const pub = secp256k1.getPublicKey(priv);
@@ -526,7 +524,7 @@ For EdDSA signatures, `hash` param required.
   - Blockchains: transaction of amount X might also be valid for a different amount Y
 - Both modes have SUF-CMA (strong unforgeability under chosen message attacks).
 
-Check out [RFC9496](https://datatracker.ietf.org/doc/html/rfc9496) for description of
+Check out [RFC9496](https://www.rfc-editor.org/rfc/rfc9496) for description of
 ristretto and decaf groups which we implement.
 
 ### montgomery: Montgomery curve
@@ -685,7 +683,7 @@ Use [abstract/hash-to-curve](#hash-to-curve-hashing-strings-to-curve-points)
 if you need to hash to **public key**.
 
 ```ts
-import { p256 } from '@noble/curves/p256';
+import { p256 } from '@noble/curves/nist';
 import { sha256 } from '@noble/hashes/sha256';
 import { hkdf } from '@noble/hashes/hkdf';
 import * as mod from '@noble/curves/abstract/modular';

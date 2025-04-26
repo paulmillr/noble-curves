@@ -345,8 +345,11 @@ const bytes255ToNumberLE = (bytes: Uint8Array) =>
 
 type ExtendedPoint = ExtPointType;
 
-// Computes Elligator map for Ristretto
-// https://ristretto.group/formulas/elligator.html
+/**
+ * Computes Elligator map for Ristretto255.
+ * Described in [RFC9380](https://www.rfc-editor.org/rfc/rfc9380#appendix-B) and on
+ * the [website](https://ristretto.group/formulas/elligator.html).
+ */
 function calcElligatorRistrettoMap(r0: bigint): ExtendedPoint {
   const { d } = ed25519.CURVE;
   const P = ed25519.CURVE.Fp.ORDER;
@@ -374,7 +377,7 @@ function calcElligatorRistrettoMap(r0: bigint): ExtendedPoint {
  * a source of bugs for protocols like ring signatures. Ristretto was created to solve this.
  * Ristretto point operates in X:Y:Z:T extended coordinates like ExtendedPoint,
  * but it should work in its own namespace: do not combine those two.
- * https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-ristretto255-decaf448
+ * See [RFC9496](https://www.rfc-editor.org/rfc/rfc9496).
  */
 class RistPoint implements Group<RistPoint> {
   static BASE: RistPoint;
@@ -394,7 +397,8 @@ class RistPoint implements Group<RistPoint> {
    * Takes uniform output of 64-byte hash function like sha512 and converts it to `RistrettoPoint`.
    * The hash-to-group operation applies Elligator twice and adds the results.
    * **Note:** this is one-way map, there is no conversion from point to hash.
-   * https://ristretto.group/formulas/elligator.html
+   * Described in [RFC9380](https://www.rfc-editor.org/rfc/rfc9380#appendix-B) and on
+   * the [website](https://ristretto.group/formulas/elligator.html).
    * @param hex 64-byte output of a hash function
    */
   static hashToCurve(hex: Hex): RistPoint {
@@ -408,7 +412,7 @@ class RistPoint implements Group<RistPoint> {
 
   /**
    * Converts ristretto-encoded string to ristretto point.
-   * https://ristretto.group/formulas/decoding.html
+   * Described in [RFC9496](https://www.rfc-editor.org/rfc/rfc9496#name-decode).
    * @param hex Ristretto-encoded 32 bytes. Not every 32-byte string is valid ristretto encoding
    */
   static fromHex(hex: Hex): RistPoint {
@@ -445,7 +449,7 @@ class RistPoint implements Group<RistPoint> {
 
   /**
    * Encodes ristretto point to Uint8Array.
-   * https://ristretto.group/formulas/encoding.html
+   * Described in [RFC9496](https://www.rfc-editor.org/rfc/rfc9496#name-encode).
    */
   toRawBytes(): Uint8Array {
     let { ex: x, ey: y, ez: z, et: t } = this.ep;
@@ -483,7 +487,10 @@ class RistPoint implements Group<RistPoint> {
     return this.toHex();
   }
 
-  // Compare one point to another.
+  /**
+   * Compares two Ristretto points.
+   * Described in [RFC9496](https://www.rfc-editor.org/rfc/rfc9496#name-equals).
+   */
   equals(other: RistPoint): boolean {
     aristp(other);
     const { ex: X1, ey: Y1 } = this.ep;
@@ -521,13 +528,21 @@ class RistPoint implements Group<RistPoint> {
     return new RistPoint(this.ep.negate());
   }
 }
+
+/**
+ * Wrapper over Edwards Point for ristretto255 from
+ * [RFC9496](https://www.rfc-editor.org/rfc/rfc9496).
+ */
 export const RistrettoPoint: typeof RistPoint = /* @__PURE__ */ (() => {
   if (!RistPoint.BASE) RistPoint.BASE = new RistPoint(ed25519.ExtendedPoint.BASE);
   if (!RistPoint.ZERO) RistPoint.ZERO = new RistPoint(ed25519.ExtendedPoint.ZERO);
   return RistPoint;
 })();
 
-// Hashing to ristretto255. https://www.rfc-editor.org/rfc/rfc9380#appendix-B
+/**
+ * hash-to-curve for ristretto255.
+ * Described in [RFC9380](https://www.rfc-editor.org/rfc/rfc9380#appendix-B).
+ */
 export const hashToRistretto255 = (msg: Uint8Array, options: htfBasicOpts): RistPoint => {
   const d = options.DST;
   const DST = typeof d === 'string' ? utf8ToBytes(d) : d;
