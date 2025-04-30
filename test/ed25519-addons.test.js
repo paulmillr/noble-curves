@@ -2,7 +2,7 @@ import { sha512 } from '@noble/hashes/sha2';
 import { bytesToHex as hex, hexToBytes } from '@noble/hashes/utils';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual, throws } from 'node:assert';
-import { bytesToNumberLE, numberToBytesLE } from '../esm/abstract/utils.js';
+import { bytesToNumberLE, numberToBytesLE, utf8ToBytes } from '../esm/abstract/utils.js';
 import {
   ed25519,
   ed25519ctx,
@@ -105,7 +105,7 @@ describe('RFC8032ph', () => {
 });
 
 // x25519
-describe('RFC7748 X25519 ECDH', () => {
+describe('X25519 RFC7748 ECDH', () => {
   const rfc7748Mul = [
     {
       scalar: 'a546e36bf0527c9d3b16154b82465edd62144c0ac1fc5a18506a2244ba449ac4',
@@ -128,6 +128,7 @@ describe('RFC7748 X25519 ECDH', () => {
   const rfc7748Iter = [
     { scalar: '422c8e7a6227d7bca1350b3e2bb7279f7897b87bb6854b783c60e80311ae3079', iters: 1 },
     { scalar: '684cf59ba83309552800ef566f2f4d3c1c3887c49360e3875f2eb94d99532c51', iters: 1000 },
+    // last ran: 2025-04, ~10 min
     // { scalar: '7c3911e0ab2586fd864497297e575e6f3bc601c0883c30df5f4dd2d24f665424', iters: 1000000 },
   ];
   for (let i = 0; i < rfc7748Iter.length; i++) {
@@ -210,8 +211,7 @@ describe('RFC7748 X25519 ECDH', () => {
 
   const group = x25519vectors.testGroups[0];
   should('wycheproof', () => {
-    for (let i = 0; i < group.tests.length; i++) {
-      const v = group.tests[i];
+    group.tests.forEach((v, i) => {
       const comment = `(${i}, ${v.result}) ${v.comment}`;
       if (v.result === 'valid' || v.result === 'acceptable') {
         try {
@@ -219,7 +219,6 @@ describe('RFC7748 X25519 ECDH', () => {
           deepStrictEqual(shared, v.shared, comment);
         } catch (e) {
           // We are more strict
-          if (e.message.includes('expected valid scalar')) return;
           if (e.message.includes('invalid private or public key received')) return;
           throw e;
         }
@@ -232,16 +231,9 @@ describe('RFC7748 X25519 ECDH', () => {
         }
         deepStrictEqual(failed, true, comment);
       } else throw new Error('unknown test result');
-    }
+    });
   });
 });
-
-function utf8ToBytes(str) {
-  if (typeof str !== 'string') {
-    throw new Error(`utf8ToBytes expected string, got ${typeof str}`);
-  }
-  return new TextEncoder().encode(str);
-}
 
 describe('ristretto255', () => {
   should('follow the byte encodings of small multiples', () => {
