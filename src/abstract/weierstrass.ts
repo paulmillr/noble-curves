@@ -321,20 +321,28 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
   function weierstrassEquation(x: T): T {
     const { a, b } = CURVE;
     const x2 = Fp.sqr(x); // x * x
-    const x3 = Fp.mul(x2, x); // x2 * x
-    return Fp.add(Fp.add(x3, Fp.mul(x, a)), b); // x3 + a * x + b
+    const x3 = Fp.mul(x2, x); // x² * x
+    return Fp.add(Fp.add(x3, Fp.mul(x, a)), b); // x³ + a * x + b
   }
+
   // Validate whether the passed curve params are valid.
-  // We check if curve equation works for generator point.
-  // `assertValidity()` won't work: `isTorsionFree()` is not available at this point in bls12-381.
-  // ProjectivePoint class has not been initialized yet.
+
+  // Test 1: curve equation should work for generator point.
+  // We can't use `assertValidity()`: `isTorsionFree()` is not available here for BLS,
+  // and Point class has not been initialized yet.
   if (!Fp.eql(Fp.sqr(CURVE.Gy), weierstrassEquation(CURVE.Gx)))
     throw new Error('bad generator point: equation left != right');
+
+  // Test 2: 4a³ + 27b² should be non-zero in Fp.
+  const _4a3 = Fp.mul(Fp.pow(CURVE.a, _3n), _4n);
+  const _27b2 = Fp.mul(Fp.sqr(CURVE.b), BigInt(27));
+  if (Fp.is0(Fp.add(_4a3, _27b2))) throw new Error('bad curve params a or b');
 
   // Valid group elements reside in range 1..n-1
   function isWithinCurveOrder(num: bigint): boolean {
     return inRange(num, _1n, CURVE.n);
   }
+
   // Validates if priv key is valid and converts it to bigint.
   // Supports options allowedPrivateKeyLengths and wrapPrivateKey.
   function normPrivateKeyToScalar(key: PrivKey): bigint {
@@ -362,6 +370,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
     return num;
   }
 
+  // asserts input is point
   function aprjpoint(other: unknown) {
     if (!(other instanceof Point)) throw new Error('ProjectivePoint expected');
   }
