@@ -88,7 +88,7 @@ export function psiFrobenius(
   PSI2_X: Fp2;
   PSI2_Y: Fp2;
 } {
-  // Ψ endomorphism
+  // GLV endomorphism Ψ(P)
   const PSI_X = Fp2.pow(base, (Fp.ORDER - _1n) / _3n); // u^((p-1)/3)
   const PSI_Y = Fp2.pow(base, (Fp.ORDER - _1n) / _2n); // u^((p-1)/2)
   function psi(x: Fp2, y: Fp2): [Fp2, Fp2] {

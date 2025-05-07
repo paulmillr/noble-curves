@@ -7,9 +7,9 @@
  *
  * * a: formula param
  * * b: formula param
- * * Fp: finite Field over which we'll do calculations. Can be complex (Fp2, Fp12)
- * * n: Curve prime subgroup order, total count of valid points in the field
- * * Gx: Base point (x, y) aka generator point x coordinate
+ * * Fp: finite field of prime characteristic P; may be complex (Fp2). Arithmetics is done in field
+ * * n: order of prime subgroup a.k.a total amount of valid curve points
+ * * Gx: Base point (x, y) aka generator point. Gx = x coordinate
  * * Gy: ...y coordinate
  * * h: cofactor, usually 1. h*n = curve group order (n is only subgroup order)
  * * lowS: whether to enable (default) or disable "low-s" non-malleable signatures
@@ -60,7 +60,12 @@ import {
 
 export type { AffinePoint };
 type HmacFnSync = (key: Uint8Array, ...messages: Uint8Array[]) => Uint8Array;
-type EndomorphismOpts = {
+/**
+ * GLV endomorphism options.
+ * * beta: β ∈ Fₚ with β³ = 1, β ≠ 1.
+ * * splitScalar: decompose k → (k₁, k₂)
+ */
+export type EndomorphismOpts = {
   beta: bigint;
   splitScalar: (k: bigint) => { k1neg: boolean; k1: bigint; k2neg: boolean; k2: bigint };
 };
@@ -337,7 +342,6 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
 
   // Test 2: discriminant Δ should be non-zero: 4a³ + 27b² != 0.
   // Guarantees curve is genus-1, smooth (non-singular).
-  // Otherwise, group associativity may not be present and security may be bad.
   const _4a3 = Fp.mul(Fp.pow(CURVE.a, _3n), _4n);
   const _27b2 = Fp.mul(Fp.sqr(CURVE.b), BigInt(27));
   if (Fp.is0(Fp.add(_4a3, _27b2))) throw new Error('bad curve params: a or b');
@@ -424,7 +428,9 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
    * We're doing calculations in projective, because its operations don't require costly inversion.
    */
   class Point implements ProjPointType<T> {
+    // base / generator point
     static readonly BASE = new Point(CURVE.Gx, CURVE.Gy, Fp.ONE);
+    // zero / infinity / identity point
     static readonly ZERO = new Point(Fp.ZERO, Fp.ONE, Fp.ZERO); // 0, 1, 0
     readonly px: T;
     readonly py: T;
@@ -653,7 +659,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
       if (!endo || wnaf.hasPrecomputes(this))
         return wnaf.wNAFCachedUnsafe(this, sc, Point.normalizeZ);
 
-      // Case c: endomorphism
+      // Case c: GLV endomorphism ψ
       let { k1neg, k1, k2neg, k2 } = endo.splitScalar(sc);
       let k1p = I;
       let k2p = I;
@@ -667,6 +673,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
       }
       if (k1neg) k1p = k1p.negate();
       if (k2neg) k2p = k2p.negate();
+      // (β·x mod p, y)
       k2p = new Point(Fp.mul(k2p.px, endo.beta), k2p.py, k2p.pz);
       return k1p.add(k2p);
     }
@@ -684,6 +691,14 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
       const { endo, n: N } = CURVE;
       aInRange('scalar', scalar, _1n, N);
       let point: Point, fake: Point; // Fake point is used to const-time mult
+      // GLV endomorphism ψ transforms a point
+      // P = (x, y) ↦ ψ(P) = (β·x mod p, y)
+      // GLV scalar decomposition is used:
+      // a. k   ≡ k₁    + k₂·λ (mod n)
+      // b. k·P = k₁·P  + k₂·ψ(P)
+      //    and both k₁, k₂ are about half the bit‐length of k.
+      // c. Two half-size multiplications plus one extra point addition
+      //    is faster than one full-size multiply.
       if (endo) {
         const { k1neg, k1, k2neg, k2 } = endo.splitScalar(scalar);
         let { p: k1p, f: f1p } = this.wNAF(k1);

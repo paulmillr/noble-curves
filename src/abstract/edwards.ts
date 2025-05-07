@@ -219,7 +219,9 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
   // Extended Point works in extended coordinates: (X, Y, Z, T) ∋ (x=X/Z, y=Y/Z, T=xy).
   // https://en.wikipedia.org/wiki/Twisted_Edwards_curve#Extended_coordinates
   class Point implements ExtPointType {
+    // base / generator point
     static readonly BASE = new Point(CURVE.Gx, CURVE.Gy, _1n, modP(CURVE.Gx * CURVE.Gy));
+    // zero / infinity / identity point
     static readonly ZERO = new Point(_0n, _1n, _1n, _0n); // 0, 1, 1, 0
     readonly ex: bigint;
     readonly ey: bigint;
