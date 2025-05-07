@@ -122,8 +122,10 @@ function powMod(num, power, modulus) {
   return p;
 }
 
-// λ = Fn.pow(3n, (n-1n)/3n)
-function findLambdaForN(n) {
+// λ and β are non-trivial cube root of 1 over mod n (λ) & mod p (β).
+// λ = Fn.pow(2n, (n-1n)/3n)
+// β = Fp.pow(2n, (p-1n)/3n)
+function findNonTrivialCubeRoots(n) {
   let valid = new Set();
   for (let val = 1n; val < 15n; val++) {
     const rootCandidate = powMod(val, (n - 1n)/3n, n);
@@ -136,10 +138,13 @@ function findLambdaForN(n) {
 
 const hex = n => '0x' + n.toString(16);
 // Example usage
-function main() {
-  // secp256k1 parameters
-  const n = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141n;
-  const lambda_val = findLambdaForN(n)[1];
+function calcEndo(p, n) {
+  const betas = findNonTrivialCubeRoots(p);
+  const lambdas = findNonTrivialCubeRoots(n);
+  console.log('lambdas', lambdas.map(hex).join(', '));
+  console.log('betas  ', betas.map(hex).join(', '));
+  // 0x5363ad4cc05c30e0a5261c028812645a122e22ea20816678df02967c1b23bd72n;
+  const lambda_val = lambdas[1];
   console.log("Calculating reduced basis for GLV decomposition...");
   const basis = calculateGlvBasis(n, lambda_val);
   console.log(`Reduced basis vectors: v1=[${basis[0].map(hex)}], v2=[${basis[1].map(hex)}]`);
@@ -167,4 +172,7 @@ function main() {
   console.log(`Theoretical target: ~${Math.floor(n.toString(2).length/2)} bits (sqrt(n))`);
 }
 
-main();
+// secp256k1 parameters
+const p = 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2fn
+const n = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n;
+calcEndo(p, n);
