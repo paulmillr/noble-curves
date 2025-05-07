@@ -325,18 +325,22 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
     return Fp.add(Fp.add(x3, Fp.mul(x, a)), b); // x³ + a * x + b
   }
 
+  function isValidXY(x: T, y: T): boolean {
+    const left = Fp.sqr(y); // y²
+    const right = weierstrassEquation(x); // x³ + ax + b
+    return Fp.eql(left, right);
+  }
+
   // Validate whether the passed curve params are valid.
+  // Test 1: equation y² = x³ + ax + b should work for generator point.
+  if (!isValidXY(CURVE.Gx, CURVE.Gy)) throw new Error('bad curve params: generator point');
 
-  // Test 1: curve equation should work for generator point.
-  // We can't use `assertValidity()`: `isTorsionFree()` is not available here for BLS,
-  // and Point class has not been initialized yet.
-  if (!Fp.eql(Fp.sqr(CURVE.Gy), weierstrassEquation(CURVE.Gx)))
-    throw new Error('bad generator point: equation left != right');
-
-  // Test 2: 4a³ + 27b² should be non-zero in Fp.
+  // Test 2: discriminant Δ should be non-zero: 4a³ + 27b² != 0.
+  // Guarantees curve is genus-1, smooth (non-singular).
+  // Otherwise, group associativity may not be present and security may be bad.
   const _4a3 = Fp.mul(Fp.pow(CURVE.a, _3n), _4n);
   const _27b2 = Fp.mul(Fp.sqr(CURVE.b), BigInt(27));
-  if (Fp.is0(Fp.add(_4a3, _27b2))) throw new Error('bad curve params a or b');
+  if (Fp.is0(Fp.add(_4a3, _27b2))) throw new Error('bad curve params: a or b');
 
   // Valid group elements reside in range 1..n-1
   function isWithinCurveOrder(num: bigint): boolean {
@@ -379,7 +383,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
 
   // Converts Projective point to affine (x, y) coordinates.
   // Can accept precomputed Z^-1 - for example, from invertBatch.
-  // (x, y, z) ∋ (x=x/z, y=y/z)
+  // (X, Y, Z) ∋ (x=X/Z, y=Y/Z)
   const toAffineMemo = memoized((p: Point, iz?: T): AffinePoint<T> => {
     const { px: x, py: y, pz: z } = p;
     // Fast-path for normalized points
@@ -409,15 +413,13 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
     const { x, y } = p.toAffine();
     // Check if x, y are valid field elements
     if (!Fp.isValid(x) || !Fp.isValid(y)) throw new Error('bad point: x or y not FE');
-    const left = Fp.sqr(y); // y²
-    const right = weierstrassEquation(x); // x³ + ax + b
-    if (!Fp.eql(left, right)) throw new Error('bad point: equation left != right');
+    if (!isValidXY(x, y)) throw new Error('bad point: equation left != right');
     if (!p.isTorsionFree()) throw new Error('bad point: not in prime-order subgroup');
     return true;
   });
 
   /**
-   * Projective Point works in 3d / projective (homogeneous) coordinates: (x, y, z) ∋ (x=x/z, y=y/z)
+   * Projective Point works in 3d / projective (homogeneous) coordinates: (X, Y, Z) ∋ (x=X/Z, y=Y/Z)
    * Default Point works in 2d / affine coordinates: (x, y)
    * We're doing calculations in projective, because its operations don't require costly inversion.
    */
