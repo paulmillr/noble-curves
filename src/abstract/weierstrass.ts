@@ -702,6 +702,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
       // c. Two half-size multiplications plus one extra point addition
       //    is faster than one full-size multiply.
       // λ and β are non-trivial cube root of 1 over mod n (λ) & mod p (β).
+      // Check out `test/misc/endomorphism.js`.
       if (endo) {
         const { k1neg, k1, k2neg, k2 } = endo.splitScalar(scalar);
         let { p: k1p, f: f1p } = this.wNAF(k1);

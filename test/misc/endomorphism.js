@@ -108,12 +108,38 @@ function decomposeScalar(k, basis, n, lambda_val) {
   return [k1, k2];
 }
 
+function powMod(num, power, modulus) {
+  if (power < 0n) throw new Error('invalid exponent, negatives unsupported');
+  if (power === 0n) return 1n;
+  if (power === 1n) return num;
+  let p = 1n;
+  let d = num;
+  while (power > 0n) {
+    if (power & 1n) p = mod(p * d, modulus);
+    d = mod(d * d, modulus)
+    power >>= 1n;
+  }
+  return p;
+}
+
+// λ = Fn.pow(3n, (n-1n)/3n)
+function findLambdaForN(n) {
+  let valid = new Set();
+  for (let val = 1n; val < 15n; val++) {
+    const rootCandidate = powMod(val, (n - 1n)/3n, n);
+    if (rootCandidate !== 1n) {
+      valid.add(rootCandidate);
+    }
+  }
+  return Array.from(valid);
+}
+
 const hex = n => '0x' + n.toString(16);
 // Example usage
 function main() {
   // secp256k1 parameters
   const n = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141n;
-  const lambda_val = 0x5363ad4cc05c30e0a5261c028812645a122e22ea20816678df02967c1b23bd72n;
+  const lambda_val = findLambdaForN(n)[1];
   console.log("Calculating reduced basis for GLV decomposition...");
   const basis = calculateGlvBasis(n, lambda_val);
   console.log(`Reduced basis vectors: v1=[${basis[0].map(hex)}], v2=[${basis[1].map(hex)}]`);
