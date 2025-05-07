@@ -64,6 +64,8 @@ type HmacFnSync = (key: Uint8Array, ...messages: Uint8Array[]) => Uint8Array;
  * GLV endomorphism options.
  * * beta: β ∈ Fₚ with β³ = 1, β ≠ 1.
  * * splitScalar: decompose k → (k₁, k₂)
+ *
+ * Check out `test/misc/endomorphism.js`.
  */
 export type EndomorphismOpts = {
   beta: bigint;
@@ -691,7 +693,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
       const { endo, n: N } = CURVE;
       aInRange('scalar', scalar, _1n, N);
       let point: Point, fake: Point; // Fake point is used to const-time mult
-      // GLV endomorphism ψ transforms a point
+      // GLV endomorphism ψ transforms a point.
       // P = (x, y) ↦ ψ(P) = (β·x mod p, y)
       // GLV scalar decomposition is used:
       // a. k   ≡ k₁    + k₂·λ (mod n)
@@ -699,6 +701,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
       //    and both k₁, k₂ are about half the bit‐length of k.
       // c. Two half-size multiplications plus one extra point addition
       //    is faster than one full-size multiply.
+      // λ and β are non-trivial cube root of 1 over mod n (λ) & mod p (β).
       if (endo) {
         const { k1neg, k1, k2neg, k2 } = endo.splitScalar(scalar);
         let { p: k1p, f: f1p } = this.wNAF(k1);
