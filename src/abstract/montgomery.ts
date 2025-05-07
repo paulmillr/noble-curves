@@ -5,7 +5,7 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { Field, mod } from './modular.ts';
+import { mod } from './modular.ts';
 import {
   aInRange,
   bytesToNumberLE,
@@ -16,19 +16,15 @@ import {
 
 const _0n = BigInt(0);
 const _1n = BigInt(1);
+const _2n = BigInt(2);
 type Hex = string | Uint8Array;
 
 export type CurveType = {
   P: bigint; // finite field prime
-  nByteLength: number;
-  adjustScalarBytes?: (bytes: Uint8Array) => Uint8Array;
-  domain?: (data: Uint8Array, ctx: Uint8Array, phflag: boolean) => Uint8Array;
-  a: bigint;
-  montgomeryBits: number;
-  powPminus2?: (x: bigint) => bigint;
-  xyToU?: (x: bigint, y: bigint) => bigint;
-  Gu: bigint;
-  randomBytes?: (bytesLength?: number) => Uint8Array;
+  type: 'x25519' | 'x448';
+  adjustScalarBytes: (bytes: Uint8Array) => Uint8Array;
+  powPminus2: (x: bigint) => bigint;
+  randomBytes: (bytesLength?: number) => Uint8Array;
 };
 
 export type CurveFn = {
@@ -41,67 +37,87 @@ export type CurveFn = {
 };
 
 function validateOpts(curve: CurveType) {
-  validateObject(
-    curve,
-    {
-      a: 'bigint',
-    },
-    {
-      montgomeryBits: 'isSafeInteger',
-      nByteLength: 'isSafeInteger',
-      adjustScalarBytes: 'function',
-      domain: 'function',
-      powPminus2: 'function',
-      Gu: 'bigint',
-    }
-  );
-  // Set defaults
+  validateObject(curve, {
+    adjustScalarBytes: 'function',
+    powPminus2: 'function',
+  });
   return Object.freeze({ ...curve } as const);
 }
 
-// Uses only one coordinate instead of two
 export function montgomery(curveDef: CurveType): CurveFn {
   const CURVE = validateOpts(curveDef);
-  const { P } = CURVE;
-  const Fp = Field(P);
-  const modP = (n: bigint) => mod(n, P);
-  const montgomeryBits = CURVE.montgomeryBits;
-  const montgomeryBytes = Math.ceil(montgomeryBits / 8);
-  const fieldLen = CURVE.nByteLength;
-  const adjustScalarBytes = CURVE.adjustScalarBytes || ((bytes: Uint8Array) => bytes);
-  const powPminus2 = CURVE.powPminus2 || ((x: bigint) => Fp.pow(x, P - BigInt(2)));
+  const { P, type, adjustScalarBytes, powPminus2 } = CURVE;
+  const is25519 = type === 'x25519';
+  if (!is25519 && type !== 'x448') throw new Error('invalid type');
 
-  // cswap from RFC7748. But it is not from RFC7748!
-  /*
-    cswap(swap, x_2, x_3):
-         dummy = mask(swap) AND (x_2 XOR x_3)
-         x_2 = x_2 XOR dummy
-         x_3 = x_3 XOR dummy
-         Return (x_2, x_3)
-  Where mask(swap) is the all-1 or all-0 word of the same length as x_2
-   and x_3, computed, e.g., as mask(swap) = 0 - swap.
-  */
-  function cswap(swap: bigint, x_2: bigint, x_3: bigint): [bigint, bigint] {
-    const dummy = modP(swap * (x_2 - x_3));
-    x_2 = modP(x_2 - dummy);
-    x_3 = modP(x_3 + dummy);
-    return [x_2, x_3];
+  const montgomeryBits = is25519 ? 255 : 448;
+  const fieldLen = is25519 ? 32 : 56;
+  const Gu = is25519 ? BigInt(9) : BigInt(5);
+  // RFC 7748 #5:
+  // The constant a24 is (486662 - 2) / 4 = 121665 for curve25519/X25519 and
+  // (156326 - 2) / 4 = 39081 for curve448/X448
+  // const a = is25519 ? 156326n : 486662n;
+  const a24 = is25519 ? BigInt(121665) : BigInt(39081);
+  // RFC: x25519 "the resulting integer is of the form 2^254 plus
+  // eight times a value between 0 and 2^251 - 1 (inclusive)"
+  // x448: "2^447 plus four times a value between 0 and 2^445 - 1 (inclusive)"
+  const minScalar = is25519 ? _2n ** BigInt(254) : _2n ** BigInt(447);
+  const maxAdded = is25519
+    ? BigInt(8) * _2n ** BigInt(251) - _1n
+    : BigInt(4) * _2n ** BigInt(445) - _1n;
+  const maxScalar = minScalar + maxAdded + _1n; // (inclusive)
+  const modP = (n: bigint) => mod(n, P);
+  const GuBytes = encodeU(Gu);
+  function encodeU(u: bigint): Uint8Array {
+    return numberToBytesLE(modP(u), fieldLen);
+  }
+  function decodeU(u: Hex): bigint {
+    const _u = ensureBytes('u coordinate', u, fieldLen);
+    // RFC: When receiving such an array, implementations of X25519
+    // (but not X448) MUST mask the most significant bit in the final byte.
+    if (is25519) _u[31] &= 127; // 0b0111_1111
+    // RFC: Implementations MUST accept non-canonical values and process them as
+    // if they had been reduced modulo the field prime.  The non-canonical
+    // values are 2^255 - 19 through 2^255 - 1 for X25519 and 2^448 - 2^224
+    // - 1 through 2^448 - 1 for X448.
+    return modP(bytesToNumberLE(_u));
+  }
+  function decodeScalar(scalar: Hex): bigint {
+    return bytesToNumberLE(adjustScalarBytes(ensureBytes('scalar', scalar, fieldLen)));
+  }
+  function scalarMult(scalar: Hex, u: Hex): Uint8Array {
+    const pu = montgomeryLadder(decodeU(u), decodeScalar(scalar));
+    // Some public keys are useless, of low-order. Curve author doesn't think
+    // it needs to be validated, but we do it nonetheless.
+    // https://cr.yp.to/ecdh.html#validate
+    if (pu === _0n) throw new Error('invalid private or public key received');
+    return encodeU(pu);
+  }
+  // Computes public key from private. By doing scalar multiplication of base point.
+  function scalarMultBase(scalar: Hex): Uint8Array {
+    return scalarMult(scalar, GuBytes);
   }
 
-  // x25519 from 4
-  // The constant a24 is (486662 - 2) / 4 = 121665 for curve25519/X25519
-  const a24 = (CURVE.a - BigInt(2)) / BigInt(4);
+  // cswap from RFC7748 "example code"
+  function cswap(swap: bigint, x_2: bigint, x_3: bigint): { x_2: bigint; x_3: bigint } {
+    // dummy = mask(swap) AND (x_2 XOR x_3)
+    // Where mask(swap) is the all-1 or all-0 word of the same length as x_2
+    // and x_3, computed, e.g., as mask(swap) = 0 - swap.
+    const dummy = modP(swap * (x_2 - x_3));
+    x_2 = modP(x_2 - dummy); // x_2 = x_2 XOR dummy
+    x_3 = modP(x_3 + dummy); // x_3 = x_3 XOR dummy
+    return { x_2, x_3 };
+  }
+
   /**
-   *
+   * Montgomery x-only multiplication ladder.
    * @param pointU u coordinate (x) on Montgomery Curve 25519
    * @param scalar by which the point would be multiplied
    * @returns new Point on Montgomery curve
    */
   function montgomeryLadder(u: bigint, scalar: bigint): bigint {
     aInRange('u', u, _0n, P);
-    aInRange('scalar', scalar, _0n, P);
-    // Section 5: Implementations MUST accept non-canonical values and process them as
-    // if they had been reduced modulo the field prime.
+    aInRange('scalar', scalar, minScalar, maxScalar);
     const k = scalar;
     const x_1 = u;
     let x_2 = _1n;
@@ -109,16 +125,11 @@ export function montgomery(curveDef: CurveType): CurveFn {
     let x_3 = u;
     let z_3 = _1n;
     let swap = _0n;
-    let sw: [bigint, bigint];
     for (let t = BigInt(montgomeryBits - 1); t >= _0n; t--) {
       const k_t = (k >> t) & _1n;
       swap ^= k_t;
-      sw = cswap(swap, x_2, x_3);
-      x_2 = sw[0];
-      x_3 = sw[1];
-      sw = cswap(swap, z_2, z_3);
-      z_2 = sw[0];
-      z_3 = sw[1];
+      ({ x_2, x_3 } = cswap(swap, x_2, x_3));
+      ({ x_2: z_2, x_3: z_3 } = cswap(swap, z_2, z_3));
       swap = k_t;
 
       const A = x_2 + z_2;
@@ -137,53 +148,10 @@ export function montgomery(curveDef: CurveType): CurveFn {
       x_2 = modP(AA * BB);
       z_2 = modP(E * (AA + modP(a24 * E)));
     }
-    // (x_2, x_3) = cswap(swap, x_2, x_3)
-    sw = cswap(swap, x_2, x_3);
-    x_2 = sw[0];
-    x_3 = sw[1];
-    // (z_2, z_3) = cswap(swap, z_2, z_3)
-    sw = cswap(swap, z_2, z_3);
-    z_2 = sw[0];
-    z_3 = sw[1];
-    // z_2^(p - 2)
-    const z2 = powPminus2(z_2);
-    // Return x_2 * (z_2^(p - 2))
-    return modP(x_2 * z2);
-  }
-
-  function encodeUCoordinate(u: bigint): Uint8Array {
-    return numberToBytesLE(modP(u), montgomeryBytes);
-  }
-
-  function decodeUCoordinate(uEnc: Hex): bigint {
-    // Section 5: When receiving such an array, implementations of X25519
-    // MUST mask the most significant bit in the final byte.
-    const u = ensureBytes('u coordinate', uEnc, montgomeryBytes);
-    if (fieldLen === 32) u[31] &= 127; // 0b0111_1111
-    return bytesToNumberLE(u);
-  }
-  function decodeScalar(n: Hex): bigint {
-    const bytes = ensureBytes('scalar', n);
-    const len = bytes.length;
-    if (len !== montgomeryBytes && len !== fieldLen) {
-      let valid = '' + montgomeryBytes + ' or ' + fieldLen;
-      throw new Error('invalid scalar, expected ' + valid + ' bytes, got ' + len);
-    }
-    return bytesToNumberLE(adjustScalarBytes(bytes));
-  }
-  function scalarMult(scalar: Hex, u: Hex): Uint8Array {
-    const pointU = decodeUCoordinate(u);
-    const _scalar = decodeScalar(scalar);
-    const pu = montgomeryLadder(pointU, _scalar);
-    // The result was not contributory
-    // https://cr.yp.to/ecdh.html#validate
-    if (pu === _0n) throw new Error('invalid private or public key received');
-    return encodeUCoordinate(pu);
-  }
-  // Computes public key from private. By doing scalar multiplication of base point.
-  const GuBytes = encodeUCoordinate(CURVE.Gu);
-  function scalarMultBase(scalar: Hex): Uint8Array {
-    return scalarMult(scalar, GuBytes);
+    ({ x_2, x_3 } = cswap(swap, x_2, x_3));
+    ({ x_2: z_2, x_3: z_3 } = cswap(swap, z_2, z_3));
+    const z2 = powPminus2(z_2); // `Fp.pow(x, P - _2n)` is much slower equivalent
+    return modP(x_2 * z2); // Return x_2 * (z_2^(p - 2))
   }
 
   return {
@@ -191,7 +159,7 @@ export function montgomery(curveDef: CurveType): CurveFn {
     scalarMultBase,
     getSharedSecret: (privateKey: Hex, publicKey: Hex) => scalarMult(privateKey, publicKey),
     getPublicKey: (privateKey: Hex): Uint8Array => scalarMultBase(privateKey),
-    utils: { randomPrivateKey: () => CURVE.randomBytes!(CURVE.nByteLength) },
-    GuBytes: GuBytes,
+    utils: { randomPrivateKey: () => CURVE.randomBytes!(fieldLen) },
+    GuBytes: GuBytes.slice(),
   };
 }

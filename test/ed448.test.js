@@ -702,8 +702,7 @@ describe('ed448', () => {
 
     should('wycheproof', () => {
       const group = x448vectors.testGroups[0];
-      for (let i = 0; i < group.tests.length; i++) {
-        const v = group.tests[i];
+      group.tests.forEach((v, i) => {
         const index = `(${i}, ${v.result}) ${v.comment}`;
         if (v.result === 'valid' || v.result === 'acceptable') {
           try {
@@ -711,9 +710,7 @@ describe('ed448', () => {
             deepStrictEqual(shared, v.shared, index);
           } catch (e) {
             // We are more strict
-            if (e.message.includes('expected valid scalar')) return;
             if (e.message.includes('invalid private or public key received')) return;
-            if (e.message.includes('expected 56 bytes')) return;
             throw e;
           }
         } else if (v.result === 'invalid') {
@@ -725,7 +722,7 @@ describe('ed448', () => {
           }
           deepStrictEqual(failed, true, index);
         } else throw new Error('unknown test result');
-      }
+      });
     });
 
     should('have proper base point', () => {

@@ -30,8 +30,8 @@ import {
   numberToBytesLE,
 } from './abstract/utils.ts';
 
-const shake256_114 = wrapConstructor(() => shake256.create({ dkLen: 114 }));
-const shake256_64 = wrapConstructor(() => shake256.create({ dkLen: 64 }));
+const shake256_114 = /* @__PURE__ */ wrapConstructor(() => shake256.create({ dkLen: 114 }));
+const shake256_64 = /* @__PURE__ */ wrapConstructor(() => shake256.create({ dkLen: 64 }));
 const ed448P = BigInt(
   '726838724295606890549323807888004534353641360687318060281490199180612328166730772686396383698676545930088884461843637361053498018365439'
 );
@@ -94,47 +94,49 @@ function uvRatio(u: bigint, v: bigint): { isValid: boolean; value: bigint } {
   return { isValid: mod(x2 * v, P) === u, value: x };
 }
 
-const Fp = Field(ed448P, 456, true);
+// Finite field 2n**448n - 2n**224n - 1n
+const Fp = /* @__PURE__ */ (() => Field(ed448P, 456, true))();
 
-const ED448_DEF = {
-  // Param: a
-  a: BigInt(1),
-  // -39081 a.k.a. Fp.neg(39081)
-  d: BigInt(
-    '726838724295606890549323807888004534353641360687318060281490199180612328166730772686396383698676545930088884461843637361053498018326358'
-  ),
-  // Finite field 2n**448n - 2n**224n - 1n
-  Fp,
-  // Subgroup order
-  // 2n**446n - 13818066809895115352007386748515426880336692474882178609894547503885n
-  n: BigInt(
-    '181709681073901722637330951972001133588410340171829515070372549795146003961539585716195755291692375963310293709091662304773755859649779'
-  ),
-  // RFC 7748 has 56-byte keys, RFC 8032 has 57-byte keys
-  nBitLength: 456,
-  h: BigInt(4),
-  Gx: BigInt(
-    '224580040295924300187604334099896036246789641632564134246125461686950415467406032909029192869357953282578032075146446173674602635247710'
-  ),
-  Gy: BigInt(
-    '298819210078481492676017930443930673437544040154080242095928241372331506189835876003536878655418784733982303233503462500531545062832660'
-  ),
-  // SHAKE256(dom4(phflag,context)||x, 114)
-  hash: shake256_114,
-  randomBytes,
-  adjustScalarBytes,
-  // dom4
-  domain: (data: Uint8Array, ctx: Uint8Array, phflag: boolean) => {
-    if (ctx.length > 255) throw new Error('context must be smaller than 255, got: ' + ctx.length);
-    return concatBytes(
-      utf8ToBytes('SigEd448'),
-      new Uint8Array([phflag ? 1 : 0, ctx.length]),
-      ctx,
-      data
-    );
-  },
-  uvRatio,
-} as const;
+const ED448_DEF = /* @__PURE__ */ (() =>
+  ({
+    // Param: a
+    a: BigInt(1),
+    // -39081 a.k.a. Fp.neg(39081)
+    d: BigInt(
+      '726838724295606890549323807888004534353641360687318060281490199180612328166730772686396383698676545930088884461843637361053498018326358'
+    ),
+    // Finite field 2n**448n - 2n**224n - 1n
+    Fp,
+    // Subgroup order
+    // 2n**446n - 13818066809895115352007386748515426880336692474882178609894547503885n
+    n: BigInt(
+      '181709681073901722637330951972001133588410340171829515070372549795146003961539585716195755291692375963310293709091662304773755859649779'
+    ),
+    // RFC 7748 has 56-byte keys, RFC 8032 has 57-byte keys
+    nBitLength: 456,
+    h: BigInt(4),
+    Gx: BigInt(
+      '224580040295924300187604334099896036246789641632564134246125461686950415467406032909029192869357953282578032075146446173674602635247710'
+    ),
+    Gy: BigInt(
+      '298819210078481492676017930443930673437544040154080242095928241372331506189835876003536878655418784733982303233503462500531545062832660'
+    ),
+    // SHAKE256(dom4(phflag,context)||x, 114)
+    hash: shake256_114,
+    randomBytes,
+    adjustScalarBytes,
+    // dom4
+    domain: (data: Uint8Array, ctx: Uint8Array, phflag: boolean) => {
+      if (ctx.length > 255) throw new Error('context must be smaller than 255, got: ' + ctx.length);
+      return concatBytes(
+        utf8ToBytes('SigEd448'),
+        new Uint8Array([phflag ? 1 : 0, ctx.length]),
+        ctx,
+        data
+      );
+    },
+    uvRatio,
+  }) as const)();
 
 /**
  * ed448 EdDSA curve and methods.
@@ -146,28 +148,27 @@ const ED448_DEF = {
  * const sig = ed448.sign(msg, priv);
  * ed448.verify(sig, msg, pub);
  */
-export const ed448: CurveFn = /* @__PURE__ */ twistedEdwards(ED448_DEF);
+export const ed448: CurveFn = twistedEdwards(ED448_DEF);
 // NOTE: there is no ed448ctx, since ed448 supports ctx by default
-export const ed448ph: CurveFn = /* @__PURE__ */ twistedEdwards({
-  ...ED448_DEF,
-  prehash: shake256_64,
-});
+export const ed448ph: CurveFn = /* @__PURE__ */ (() =>
+  twistedEdwards({
+    ...ED448_DEF,
+    prehash: shake256_64,
+  }))();
 
 /**
  * ECDH using curve448 aka x448.
+ * x448 has 56-byte keys as per RFC 7748, while
+ * ed448 has 57-byte keys as per RFC 8032.
  */
 export const x448: XCurveFn = /* @__PURE__ */ (() =>
   montgomery({
-    a: BigInt(156326),
-    // RFC 7748 has 56-byte keys, RFC 8032 has 57-byte keys
-    montgomeryBits: 448,
-    nByteLength: 56,
     P: ed448P,
-    Gu: BigInt(5),
+    type: 'x448',
     powPminus2: (x: bigint): bigint => {
       const P = ed448P;
       const Pminus3div4 = ed448_pow_Pminus3div4(x);
-      const Pminus3 = pow2(Pminus3div4, BigInt(2), P);
+      const Pminus3 = pow2(Pminus3div4, _2n, P);
       return mod(Pminus3 * x, P); // Pminus3 * x = Pminus2
     },
     adjustScalarBytes,
@@ -192,8 +193,8 @@ export const edwardsToMontgomery: typeof edwardsToMontgomeryPub = edwardsToMontg
 // TODO: add edwardsToMontgomeryPriv, similar to ed25519 version
 
 // Hash To Curve Elligator2 Map
-const ELL2_C1 = (Fp.ORDER - BigInt(3)) / BigInt(4); // 1. c1 = (q - 3) / 4         # Integer arithmetic
-const ELL2_J = BigInt(156326);
+const ELL2_C1 = /* @__PURE__ */ (() => (Fp.ORDER - BigInt(3)) / BigInt(4))(); // 1. c1 = (q - 3) / 4         # Integer arithmetic
+const ELL2_J = /* @__PURE__ */ BigInt(156326);
 
 function map_to_curve_elligator2_curve448(u: bigint) {
   let tv1 = Fp.sqr(u); // 1.  tv1 = u^2
@@ -291,21 +292,21 @@ function adecafp(other: unknown) {
 }
 
 // 1-d
-const ONE_MINUS_D = BigInt('39082');
+const ONE_MINUS_D = /* @__PURE__ */ BigInt('39082');
 // 1-2d
-const ONE_MINUS_TWO_D = BigInt('78163');
+const ONE_MINUS_TWO_D = /* @__PURE__ */ BigInt('78163');
 // √(-d)
-const SQRT_MINUS_D = BigInt(
+const SQRT_MINUS_D = /* @__PURE__ */ BigInt(
   '98944233647732219769177004876929019128417576295529901074099889598043702116001257856802131563896515373927712232092845883226922417596214'
 );
 // 1 / √(-d)
-const INVSQRT_MINUS_D = BigInt(
+const INVSQRT_MINUS_D = /* @__PURE__ */ BigInt(
   '315019913931389607337177038330951043522456072897266928557328499619017160722351061360252776265186336876723201881398623946864393857820716'
 );
 // Calculates 1/√(number)
 const invertSqrt = (number: bigint) => uvRatio(_1n, number);
 
-const MAX_448B = BigInt(
+const MAX_448B = /* @__PURE__ */ BigInt(
   '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
 );
 const bytes448ToNumberLE = (bytes: Uint8Array) =>
