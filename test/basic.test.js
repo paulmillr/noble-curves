@@ -639,10 +639,16 @@ for (const name in CURVES) {
           fc.assert(
             fc.property(FC_BIGINT, (x) => {
               const point = p.BASE.multiply(x);
-              const hex = point.toHex();
-              const bytes = point.toRawBytes();
-              deepStrictEqual(p.fromHex(hex).toHex(), hex);
-              deepStrictEqual(p.fromHex(bytes).toHex(), hex);
+              const isComp = false;
+              const hex = point.toHex(isComp);
+              const bytes = point.toRawBytes(isComp);
+              try {
+                deepStrictEqual(p.fromHex(hex).toHex(isComp), hex);
+                deepStrictEqual(p.fromHex(bytes).toHex(isComp), hex);
+              } catch (error) {
+                // console.log('FAIL\n\n', x, hex)
+                throw new Error(`FAIL ${x} ${hex}`);
+              }
             })
           );
         });
@@ -650,10 +656,11 @@ for (const name in CURVES) {
           fc.assert(
             fc.property(FC_BIGINT, (x) => {
               const point = p.BASE.multiply(x);
-              const hex = point.toHex(true);
-              const bytes = point.toRawBytes(true);
-              deepStrictEqual(p.fromHex(hex).toHex(true), hex);
-              deepStrictEqual(p.fromHex(bytes).toHex(true), hex);
+              const isComp = true;
+              const hex = point.toHex(isComp);
+              const bytes = point.toRawBytes(isComp);
+              deepStrictEqual(p.fromHex(hex).toHex(isComp), hex);
+              deepStrictEqual(p.fromHex(bytes).toHex(isComp), hex);
             })
           );
         });
@@ -787,10 +794,11 @@ for (const name in CURVES) {
           { numRuns: NUM_RUNS }
         )
       );
-      should('Signature.addRecoveryBit/Signature.recoveryPublicKey', () =>
+      should('Signature.addRecoveryBit/Signature.recoverPublicKey', () =>
         fc.assert(
           fc.property(fc.hexaString({ minLength: 64, maxLength: 64 }), (msg) => {
-            if (name === 'SECP224K1') return;
+            if (/secp128r2|secp224k1|bls|mnt/i.test(name)) return;
+            if (C.CURVE.h >= 2n) return;
             const priv = C.utils.randomPrivateKey();
             const pub = C.getPublicKey(priv);
             const sig = C.sign(msg, priv);

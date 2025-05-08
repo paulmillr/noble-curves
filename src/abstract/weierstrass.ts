@@ -79,6 +79,7 @@ export type BasicWCurve<T> = BasicCurve<T> & {
 
   // Optional params
   allowedPrivateKeyLengths?: readonly number[]; // for P521
+  compressPubkeys?: boolean;
   wrapPrivateKey?: boolean; // bls12-381 requires mod(n) instead of rejecting keys >= n
   endo?: EndomorphismOpts; // Endomorphism options for Koblitz curves
   // When a cofactor != 1, there can be an effective methods to:
@@ -145,13 +146,14 @@ function validatePointOpts<T>(curve: CurvePointsType<T>): CurvePointsTypeWithLen
       b: 'field',
     },
     {
-      allowedPrivateKeyLengths: 'array',
-      wrapPrivateKey: 'boolean',
-      isTorsionFree: 'function',
-      clearCofactor: 'function',
       allowInfinityPoint: 'boolean',
+      allowedPrivateKeyLengths: 'array',
+      clearCofactor: 'function',
+      compressPubkeys: 'boolean',
       fromBytes: 'function',
+      isTorsionFree: 'function',
       toBytes: 'function',
+      wrapPrivateKey: 'boolean',
     }
   );
   const { endo, Fp, a } = opts;
@@ -304,6 +306,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
   const CURVE = validatePointOpts(opts);
   // All curves has same field / group length as for now, but they can differ
   const { Fp, h: cofactor } = CURVE;
+  const compressPubkeys = CURVE.compressPubkeys || false;
   const Fn = Field(CURVE.n, CURVE.nBitLength);
 
   const toBytes =
@@ -793,13 +796,13 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
       return this.multiplyUnsafe(cofactor);
     }
 
-    toRawBytes(isCompressed = true): Uint8Array {
+    toRawBytes(isCompressed = compressPubkeys): Uint8Array {
       abool('isCompressed', isCompressed);
       this.assertValidity();
       return toBytes(Point, this, isCompressed);
     }
 
-    toHex(isCompressed = true): string {
+    toHex(isCompressed = compressPubkeys): string {
       abool('isCompressed', isCompressed);
       return bytesToHex(this.toRawBytes(isCompressed));
     }
@@ -897,7 +900,8 @@ export type CurveFn = {
  */
 export function weierstrass(curveDef: CurveType): CurveFn {
   const CURVE = validateOpts(curveDef) as ReturnType<typeof validateOpts>;
-  const { Fp, n: CURVE_ORDER, h: cofactor, nByteLength } = CURVE;
+  const { Fp, n: CURVE_ORDER, nByteLength } = CURVE;
+  const compressPubkeys = CURVE.compressPubkeys || false;
 
   function modN(a: bigint) {
     return mod(a, CURVE_ORDER);
@@ -1053,7 +1057,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
    * @param isCompressed whether to return compact (default), or full key
    * @returns Public key, full when isCompressed=false; short when isCompressed=true
    */
-  function getPublicKey(privateKey: PrivKey, isCompressed = true): Uint8Array {
+  function getPublicKey(privateKey: PrivKey, isCompressed = compressPubkeys): Uint8Array {
     return Point.fromPrivateKey(privateKey).toRawBytes(isCompressed);
   }
 
@@ -1085,7 +1089,11 @@ export function weierstrass(curveDef: CurveType): CurveFn {
    * @param isCompressed whether to return compact (default), or full key
    * @returns shared public key
    */
-  function getSharedSecret(privateA: PrivKey, publicB: Hex, isCompressed = true): Uint8Array {
+  function getSharedSecret(
+    privateA: PrivKey,
+    publicB: Hex,
+    isCompressed = compressPubkeys
+  ): Uint8Array {
     if (isProbPub(privateA) === true) throw new Error('first arg must be private key');
     if (isProbPub(publicB) === false) throw new Error('second arg must be public key');
     const b = Point.fromHex(publicB); // check for being on-curve
@@ -1162,11 +1170,6 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       const qx = q.x;
       const r = modN(qx); // r = q.x mod n
       if (r === _0n) return;
-
-      // RFC6979 does not specify this, but we do, for `recoverPublicKey`:
-      // When cofactor is in play, restoring q.x from sig would not be possible via qx+n.
-      // Two solutions: a) allow more values in recovery bit. b) prohibit qx >= n.
-      if (cofactor > _1n && !isWithinCurveOrder(qx)) return;
 
       // Can use scalar blinding b^-1(bm + bdr) where b ∈ [1,q−1] according to
       // https://tches.iacr.org/index.php/TCHES/article/view/7337/6509. We've decided against it:

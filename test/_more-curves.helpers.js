@@ -1,7 +1,8 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { sha224, sha256 } from '@noble/hashes/sha2';
+import { sha224, sha256, sha512 } from '@noble/hashes/sha2';
 import { createCurve } from '../esm/_shortw_utils.js';
 import { Field } from '../esm/abstract/modular.js';
+import JSON_CURVES from './curves.json' with { type: 'json' };
 
 // NIST secp192r1 aka p192
 // https://www.secg.org/sec2-v2.pdf, https://neuromancer.sk/std/secg/secp192r1
@@ -380,10 +381,11 @@ const curvesRaw = {
 };
 export const miscCurves = {};
 
+const big = (str) => BigInt(str);
+
 for (let [name, e] of Object.entries(curvesRaw)) {
   // console.log(name);
   const Fp = Field(BigInt(e.p));
-  const big = (str) => BigInt(str);
   const a = big(e.a);
   const b = big(e.b);
   const Gx = big(e.Gx);
@@ -406,4 +408,30 @@ for (let [name, e] of Object.entries(curvesRaw)) {
     // norm.allowedPrivateKeyLengths = [58, 59, 60];
   }
   miscCurves[name] = createCurve(norm, sha256);
+}
+
+for (let category of JSON_CURVES) {
+  for (let curve of category.curves) {
+    if (curve.form !== 'Weierstrass') continue;
+    if (curve.field.type !== 'Prime') continue;
+    if (!curve.generator) continue;
+    const a = big(curve.params.a?.raw);
+    const b = big(curve.params.b?.raw);
+    const Gx = big(curve.generator?.x.raw);
+    const Gy = big(curve.generator?.y.raw);
+    const n = big(curve.order);
+    const h = big(curve.cofactor);
+    const p = big(curve.field.p);
+    const Fp = Field(p);
+    const norm = {
+      Fp,
+      a,
+      b,
+      Gx,
+      Gy,
+      n,
+      h,
+    };
+    miscCurves[curve.name] = createCurve(norm, sha512);
+  }
 }
