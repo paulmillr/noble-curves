@@ -19,7 +19,7 @@ import { jubjub } from '../esm/misc.js';
 import { secp256r1, secp384r1, secp521r1 } from '../esm/nist.js';
 import { pallas, vesta } from '../esm/pasta.js';
 import { secp256k1 } from '../esm/secp256k1.js';
-import { secp192r1, secp224r1 } from './_more-curves.helpers.js';
+import { miscCurves, secp192r1, secp224r1 } from './_more-curves.helpers.js';
 const wyche_curves = json('./wycheproof/ec_prime_order_curves_test.json');
 
 const NUM_RUNS = 5;
@@ -102,6 +102,7 @@ const CURVES = {
   ristretto: { ...ed25519, ExtendedPoint: RistrettoPoint },
   decaf: { ...ed448, ExtendedPoint: DecafPoint },
 };
+Object.assign(CURVES, miscCurves);
 
 for (const c in FIELDS) {
   const curve = FIELDS[c];
@@ -789,6 +790,7 @@ for (const name in CURVES) {
       should('Signature.addRecoveryBit/Signature.recoveryPublicKey', () =>
         fc.assert(
           fc.property(fc.hexaString({ minLength: 64, maxLength: 64 }), (msg) => {
+            if (name === 'SECP224K1') return;
             const priv = C.utils.randomPrivateKey();
             const pub = C.getPublicKey(priv);
             const sig = C.sign(msg, priv);

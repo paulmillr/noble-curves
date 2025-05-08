@@ -13,15 +13,15 @@ function roundBigint(num, den) {
   }
 }
 
+/**
+ * Apply Gauss lattice reduction to find a reduced basis for a 2D lattice.
+ * This is similar to the Euclidean algorithm but for 2D vectors.
+ *
+ * @param {[BigInt, BigInt]} u - First basis vector
+ * @param {[BigInt, BigInt]} v - Second basis vector
+ * @returns {[[BigInt, BigInt], [BigInt, BigInt]]} - Reduced basis vectors
+ */
 function gaussLatticeReduction(u, v) {
-  /**
-   * Apply Gauss lattice reduction to find a reduced basis for a 2D lattice.
-   * This is similar to the Euclidean algorithm but for 2D vectors.
-   *
-   * @param {[BigInt, BigInt]} u - First basis vector
-   * @param {[BigInt, BigInt]} v - Second basis vector
-   * @returns {[[BigInt, BigInt], [BigInt, BigInt]]} - Reduced basis vectors
-   */
   // Make copies to avoid modifying the inputs
   u = [u[0], u[1]];
   v = [v[0], v[1]];

@@ -40,22 +40,23 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 // prettier-ignore
 import {
-  type AffinePoint, type BasicCurve, type Group, type GroupConstructor,
-  pippenger, validateBasic, wNAF
+  pippenger, validateBasic, wNAF,
+  type AffinePoint, type BasicCurve, type Group, type GroupConstructor
 } from './curve.ts';
 // prettier-ignore
 import {
   Field,
   FpInvertBatch,
-  type IField, getMinHashLength, invert, mapHashToField, mod, validateField
+  getMinHashLength, invert, mapHashToField, mod, validateField,
+  type IField
 } from './modular.ts';
 // prettier-ignore
 import {
-  type CHash, type Hex, type PrivKey,
   aInRange, abool,
   bitMask,
   bytesToHex, bytesToNumberBE, concatBytes, createHmacDrbg, ensureBytes, hexToBytes,
-  inRange, isBytes, memoized, numberToBytesBE, numberToHexUnpadded, validateObject
+  inRange, isBytes, memoized, numberToBytesBE, numberToHexUnpadded, validateObject,
+  type CHash, type Hex, type PrivKey
 } from './utils.ts';
 
 export type { AffinePoint };
@@ -301,23 +302,26 @@ const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3), _4n = 
 
 export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T> {
   const CURVE = validatePointOpts(opts);
-  const { Fp } = CURVE; // All curves has same field / group length as for now, but they can differ
+  // All curves has same field / group length as for now, but they can differ
+  const { Fp, h: cofactor } = CURVE;
   const Fn = Field(CURVE.n, CURVE.nBitLength);
 
   const toBytes =
     CURVE.toBytes ||
     ((_c: ProjConstructor<T>, point: ProjPointType<T>, _isCompressed: boolean) => {
       const a = point.toAffine();
-      return concatBytes(Uint8Array.from([0x04]), Fp.toBytes(a.x), Fp.toBytes(a.y));
+      return concatBytes(Uint8Array.of(0x04), Fp.toBytes(a.x), Fp.toBytes(a.y));
     });
   const fromBytes =
     CURVE.fromBytes ||
     ((bytes: Uint8Array) => {
-      // const head = bytes[0];
+      const l = Fp.BYTES;
+      ensureBytes('bytes', bytes, 1 + l * 2);
+      const head = bytes[0];
       const tail = bytes.subarray(1);
-      // if (head !== 0x04) throw new Error('Only non-compressed encoding is supported');
-      const x = Fp.fromBytes(tail.subarray(0, Fp.BYTES));
-      const y = Fp.fromBytes(tail.subarray(Fp.BYTES, 2 * Fp.BYTES));
+      if (head !== 0x04) throw new Error('Only non-compressed encoding is supported');
+      const x = Fp.fromBytes(tail.subarray(0, l));
+      const y = Fp.fromBytes(tail.subarray(l, l * 2));
       return { x, y };
     });
 
@@ -744,16 +748,16 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
       return toAffineMemo(this, iz);
     }
     isTorsionFree(): boolean {
-      const { h: cofactor, isTorsionFree } = CURVE;
+      const { isTorsionFree, n: CURVE_ORDER } = CURVE;
       if (cofactor === _1n) return true; // No subgroups, always torsion-free
       if (isTorsionFree) return isTorsionFree(Point, this);
-      throw new Error('isTorsionFree() has not been declared for the elliptic curve');
+      return wnaf.unsafeLadder(this, CURVE_ORDER).is0();
     }
     clearCofactor(): Point {
-      const { h: cofactor, clearCofactor } = CURVE;
+      const { clearCofactor } = CURVE;
       if (cofactor === _1n) return this; // Fast-path
       if (clearCofactor) return clearCofactor(Point, this) as Point;
-      return this.multiplyUnsafe(CURVE.h);
+      return this.multiplyUnsafe(cofactor);
     }
 
     toRawBytes(isCompressed = true): Uint8Array {
@@ -860,7 +864,7 @@ export type CurveFn = {
  */
 export function weierstrass(curveDef: CurveType): CurveFn {
   const CURVE = validateOpts(curveDef) as ReturnType<typeof validateOpts>;
-  const { Fp, n: CURVE_ORDER } = CURVE;
+  const { Fp, n: CURVE_ORDER, h: cofactor, nByteLength } = CURVE;
   const compressedLen = Fp.BYTES + 1; // e.g. 33 for 32
   const uncompressedLen = 2 * Fp.BYTES + 1; // e.g. 65 for 32
 
@@ -884,9 +888,9 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       const cat = concatBytes;
       abool('isCompressed', isCompressed);
       if (isCompressed) {
-        return cat(Uint8Array.from([point.hasEvenY() ? 0x02 : 0x03]), x);
+        return cat(Uint8Array.of(point.hasEvenY() ? 0x02 : 0x03), x);
       } else {
-        return cat(Uint8Array.from([0x04]), x, Fp.toBytes(a.y));
+        return cat(Uint8Array.of(0x04), x, Fp.toBytes(a.y));
       }
     },
     fromBytes(bytes: Uint8Array) {
@@ -911,8 +915,9 @@ export function weierstrass(curveDef: CurveType): CurveFn {
         if (isHeadOdd !== isYOdd) y = Fp.neg(y);
         return { x, y };
       } else if (len === uncompressedLen && head === 0x04) {
-        const x = Fp.fromBytes(tail.subarray(0, Fp.BYTES));
-        const y = Fp.fromBytes(tail.subarray(Fp.BYTES, 2 * Fp.BYTES));
+        const l = Fp.BYTES;
+        const x = Fp.fromBytes(tail.subarray(0, l));
+        const y = Fp.fromBytes(tail.subarray(l, l * 2));
         return { x, y };
       } else {
         const cl = compressedLen;
@@ -923,8 +928,8 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       }
     },
   });
-  const numToNByteHex = (num: bigint): string =>
-    bytesToHex(numberToBytesBE(num, CURVE.nByteLength));
+  const numToSizedHex = (num: bigint, length: number): string =>
+    bytesToHex(numberToBytesBE(num, length));
 
   function isBiggerThanHalfOrder(number: bigint) {
     const HALF = CURVE_ORDER >> _1n;
@@ -955,7 +960,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
 
     // pair (bytes of r, bytes of s)
     static fromCompact(hex: Hex) {
-      const l = CURVE.nByteLength;
+      const l = nByteLength;
       hex = ensureBytes('compactSignature', hex, l * 2);
       return new Signature(slcNum(hex, 0, l), slcNum(hex, l, 2 * l));
     }
@@ -984,7 +989,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       const radj = rec === 2 || rec === 3 ? r + CURVE.n : r;
       if (radj >= Fp.ORDER) throw new Error('recovery id 2 or 3 invalid');
       const prefix = (rec & 1) === 0 ? '02' : '03';
-      const R = Point.fromHex(prefix + numToNByteHex(radj));
+      const R = Point.fromHex(prefix + numToSizedHex(radj, Fp.BYTES));
       const ir = invN(radj); // r^-1
       const u1 = modN(-h * ir); // -hr^-1
       const u2 = modN(s * ir); // sr^-1
@@ -1016,7 +1021,8 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       return hexToBytes(this.toCompactHex());
     }
     toCompactHex() {
-      return numToNByteHex(this.r) + numToNByteHex(this.s);
+      const l = nByteLength;
+      return numToSizedHex(this.r, l) + numToSizedHex(this.s, l);
     }
   }
   type RecoveredSignature = Signature & { recovery: number };
@@ -1069,14 +1075,16 @@ export function weierstrass(curveDef: CurveType): CurveFn {
   /**
    * Quick and dirty check for item being public key. Does not validate hex, or being on-curve.
    */
-  function isProbPub(item: PrivKey | PubKey): boolean {
-    const arr = isBytes(item);
-    const str = typeof item === 'string';
-    const len = (arr || str) && (item as Hex).length;
-    if (arr) return len === compressedLen || len === uncompressedLen;
-    if (str) return len === 2 * compressedLen || len === 2 * uncompressedLen;
+  function isProbPub(item: PrivKey | PubKey): boolean | undefined {
+    if (typeof item === 'bigint') return false;
     if (item instanceof Point) return true;
-    return false;
+    const arr = ensureBytes('key', item);
+    const len = arr.length;
+    if (CURVE.allowedPrivateKeyLengths || compressedLen === nByteLength) {
+      return undefined;
+    } else {
+      return len === compressedLen || len === uncompressedLen;
+    }
   }
 
   /**
@@ -1090,8 +1098,8 @@ export function weierstrass(curveDef: CurveType): CurveFn {
    * @returns shared public key
    */
   function getSharedSecret(privateA: PrivKey, publicB: Hex, isCompressed = true): Uint8Array {
-    if (isProbPub(privateA)) throw new Error('first arg must be private key');
-    if (!isProbPub(publicB)) throw new Error('second arg must be public key');
+    if (isProbPub(privateA) === true) throw new Error('first arg must be private key');
+    if (isProbPub(publicB) === false) throw new Error('second arg must be public key');
     const b = Point.fromHex(publicB); // check for being on-curve
     return b.multiply(normPrivateKeyToScalar(privateA)).toRawBytes(isCompressed);
   }
@@ -1124,7 +1132,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
   function int2octets(num: bigint): Uint8Array {
     aInRange('num < 2^' + CURVE.nBitLength, num, _0n, ORDER_MASK);
     // works with order, can have different size than numToField!
-    return numberToBytesBE(num, CURVE.nByteLength);
+    return numberToBytesBE(num, nByteLength);
   }
 
   // Steps A, D of RFC6979 3.2
@@ -1163,14 +1171,16 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       if (!isWithinCurveOrder(k)) return; // Important: all mod() calls here must be done over N
       const ik = invN(k); // k^-1 mod n
       const q = Point.BASE.multiply(k).toAffine(); // q = Gk
-      const r = modN(q.x); // r = q.x mod n
+      const qx = q.x;
+      const r = modN(qx); // r = q.x mod n
+      if (cofactor > _1n && !isWithinCurveOrder(qx)) return;
       if (r === _0n) return;
       // Can use scalar blinding b^-1(bm + bdr) where b ∈ [1,q−1] according to
       // https://tches.iacr.org/index.php/TCHES/article/view/7337/6509. We've decided against it:
       // a) dependency on CSPRNG b) 15% slowdown c) doesn't really help since bigints are not CT
       const s = modN(ik * modN(m + r * d)); // Not using blinding here
       if (s === _0n) return;
-      let recovery = (q.x === r ? 0 : 2) | Number(q.y & _1n); // recovery bit (2 or 3, when q.x > n)
+      let recovery = (qx === r ? 0 : 2) | Number(q.y & _1n); // recovery bit (2 or 3, when q.x > n)
       let normS = s;
       if (lowS && isBiggerThanHalfOrder(s)) {
         normS = normalizeS(s); // if lowS was passed, ensure s is always
