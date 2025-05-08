@@ -70,16 +70,16 @@ import {
   bytesToNumberBE,
   concatBytes as concatB,
   ensureBytes,
-  type Hex,
   numberToBytesBE,
+  type Hex,
 } from './abstract/utils.ts';
 // Types
 import { isogenyMap } from './abstract/hash-to-curve.ts';
 import type { Fp, Fp12, Fp2, Fp6 } from './abstract/tower.ts';
 import { psiFrobenius, tower12 } from './abstract/tower.ts';
 import {
-  type AffinePoint,
   mapToCurveSimpleSWU,
+  type AffinePoint,
   type ProjPointType,
 } from './abstract/weierstrass.ts';
 
