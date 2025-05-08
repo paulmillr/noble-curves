@@ -324,13 +324,15 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
   const fromBytes =
     CURVE.fromBytes ||
     function fromBytes_(bytes: Uint8Array) {
-      const compressedLen = Fp.BYTES + 1; // e.g. 33 for 32
-      const uncompressedLen = 2 * Fp.BYTES + 1; // e.g. 65 for 32
+      const fpl = Fp.BYTES;
+      const compLen = fpl + 1; // e.g. 33 for 32
+      const uncompLen = 2 * fpl + 1; // e.g. 65 for 32
       const len = bytes.length;
       const head = bytes[0];
       const tail = bytes.subarray(1);
       // this.assertValidity() is done inside of fromHex
-      if (len === compressedLen && (head === 0x02 || head === 0x03)) {
+      if (len === compLen && (head === 0x02 || head === 0x03)) {
+        if (typeof Fp.isOdd !== 'function') throw new Error('isOdd not defined for field');
         const x = Fp.fromBytes(tail);
         if (!Fp.isValid(x) || Fp.is0(x)) throw new Error('Point is not on curve');
         const y2 = weierstrassEquation(x); // y² = x³ + ax + b
@@ -341,21 +343,17 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
           const suffix = sqrtError instanceof Error ? ': ' + sqrtError.message : '';
           throw new Error('Point is not on curve' + suffix);
         }
-        const isYOdd = Fp.isOdd!(y);
-        // ECDSA
+        const isYOdd = Fp.isOdd(y);
         const isHeadOdd = (head & 1) === 1;
         if (isHeadOdd !== isYOdd) y = Fp.neg(y);
         return { x, y };
-      } else if (len === uncompressedLen && head === 0x04) {
-        const l = Fp.BYTES;
-        const x = Fp.fromBytes(tail.subarray(0, l));
-        const y = Fp.fromBytes(tail.subarray(l, l * 2));
+      } else if (len === uncompLen && head === 0x04) {
+        const x = Fp.fromBytes(tail.subarray(0, fpl));
+        const y = Fp.fromBytes(tail.subarray(fpl, fpl * 2));
         return { x, y };
       } else {
-        const cl = compressedLen;
-        const ul = uncompressedLen;
         throw new Error(
-          'invalid Point, expected length of ' + cl + ', or uncompressed ' + ul + ', got ' + len
+          `invalid Point, expected length of ${compLen} or uncompressed ${uncompLen}, got ${len}`
         );
       }
     };
@@ -1067,12 +1065,13 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     if (item instanceof Point) return true;
     const arr = ensureBytes('key', item);
     const len = arr.length;
-    const compressedLen = Fp.BYTES + 1; // e.g. 33 for 32
-    const uncompressedLen = 2 * Fp.BYTES + 1; // e.g. 65 for 32
-    if (CURVE.allowedPrivateKeyLengths || compressedLen === nByteLength) {
+    const fpl = Fp.BYTES;
+    const compLen = fpl + 1; // e.g. 33 for 32
+    const uncompLen = 2 * fpl + 1; // e.g. 65 for 32
+    if (CURVE.allowedPrivateKeyLengths || nByteLength === compLen) {
       return undefined;
     } else {
-      return len === compressedLen || len === uncompressedLen;
+      return len === compLen || len === uncompLen;
     }
   }
 
@@ -1162,8 +1161,13 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       const q = Point.BASE.multiply(k).toAffine(); // q = Gk
       const qx = q.x;
       const r = modN(qx); // r = q.x mod n
-      if (cofactor > _1n && !isWithinCurveOrder(qx)) return;
       if (r === _0n) return;
+
+      // RFC6979 does not specify this, but we do, for `recoverPublicKey`:
+      // When cofactor is in play, restoring q.x from sig would not be possible via qx+n.
+      // Two solutions: a) allow more values in recovery bit. b) prohibit qx >= n.
+      if (cofactor > _1n && !isWithinCurveOrder(qx)) return;
+
       // Can use scalar blinding b^-1(bm + bdr) where b ∈ [1,q−1] according to
       // https://tches.iacr.org/index.php/TCHES/article/view/7337/6509. We've decided against it:
       // a) dependency on CSPRNG b) 15% slowdown c) doesn't really help since bigints are not CT
