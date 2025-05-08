@@ -90,20 +90,24 @@ export const secp256k1: CurveFnWithCreate = createCurve(
     h: BigInt(1),
     lowS: true, // Allow only low-S signatures by default in sign() and verify()
     endo: {
-      // Endomorphism, see above
+      // GLV endomorphism. More info in `test/misc/endomorphism.js`.
+      // λ and β are non-trivial cube root of 1 over mod n (λ) & mod p (β).
       beta: BigInt('0x7ae96a2b657c07106e64479eac3434e99cf0497512f58995c1396c28719501ee'),
       splitScalar: (k: bigint) => {
+        // Decompose k → (k₁, k₂)
+        // k ≡ k₁ + k₂·λ (mod n)
         const n = secp256k1N;
+        // v₁ reduced lattice basis vector
         const a1 = BigInt('0x3086d221a7d46bcde86c90e49284eb15');
         const b1 = -_1n * BigInt('0xe4437ed6010e88286f547fa90abfe4c3');
+        // v₂ reduced basis vector
         const a2 = BigInt('0x114ca50f7a8e2f3f657c1108d9d44cfd8');
         const b2 = a1;
-        const POW_2_128 = BigInt('0x100000000000000000000000000000000'); // (2n**128n).toString(16)
-
         const c1 = divNearest(b2 * k, n);
         const c2 = divNearest(-b1 * k, n);
         let k1 = mod(k - c1 * a1 - c2 * a2, n);
         let k2 = mod(-c1 * b1 - c2 * b2, n);
+        const POW_2_128 = BigInt('0x100000000000000000000000000000000'); // (2n**128n).toString(16)
         const k1neg = k1 > POW_2_128;
         const k2neg = k2 > POW_2_128;
         if (k1neg) k1 = n - k1;
