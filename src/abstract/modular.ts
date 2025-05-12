@@ -335,7 +335,7 @@ export function FpDiv<T>(Fp: IField<T>, lhs: T, rhs: T | bigint): T {
  * * (a | p) ≡ -1   if a is not a square (mod p), quadratic non residue
  * * (a | p) ≡ 0    if a ≡ 0 (mod p)
  */
-export function FpLegendre<T>(Fp: IField<T>, n: T): number {
+export function FpLegendre<T>(Fp: IField<T>, n: T): -1 | 0 | 1 {
   // We can use 3rd argument as optional cache of this value
   // but seems unneeded for now. The operation is very fast.
   const p1mod2 = (Fp.ORDER - _1n) / _2n;

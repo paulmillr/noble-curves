@@ -70,16 +70,16 @@ import {
   bytesToNumberBE,
   concatBytes as concatB,
   ensureBytes,
-  type Hex,
   numberToBytesBE,
+  type Hex,
 } from './abstract/utils.ts';
 // Types
 import { isogenyMap } from './abstract/hash-to-curve.ts';
 import type { Fp, Fp12, Fp2, Fp6 } from './abstract/tower.ts';
 import { psiFrobenius, tower12 } from './abstract/tower.ts';
 import {
-  type AffinePoint,
   mapToCurveSimpleSWU,
+  type AffinePoint,
   type ProjPointType,
 } from './abstract/weierstrass.ts';
 
@@ -337,8 +337,7 @@ const G1_SWU = mapToCurveSimpleSWU(Fp, {
   Z: Fp.create(BigInt(11)),
 });
 
-// Endomorphisms (for fast cofactor clearing)
-// Ψ(P) endomorphism
+// GLV endomorphism Ψ(P), for fast cofactor clearing
 const { G2psi, G2psi2 } = psiFrobenius(Fp, Fp2, Fp2.div(Fp2.ONE, Fp2.NONRESIDUE)); // 1/(u+1)
 
 // Default hash_to_field options are for hash to G2.
@@ -476,28 +475,15 @@ export const bls12_381: CurveFn = bls({
     // It returns false for shitty points.
     // https://eprint.iacr.org/2021/1130.pdf
     isTorsionFree: (c, point): boolean => {
-      // φ endomorphism
-      const cubicRootOfUnityModP = BigInt(
+      // GLV endomorphism ψ(P)
+      const beta = BigInt(
         '0x5f19672fdf76ce51ba69c6076a0f77eaddb3a93be6f89688de17d813620a00022e01fffffffefffe'
       );
-      const phi = new c(Fp.mul(point.px, cubicRootOfUnityModP), point.py, point.pz);
-
-      // todo: unroll
+      const phi = new c(Fp.mul(point.px, beta), point.py, point.pz);
+      // TODO: unroll
       const xP = point.multiplyUnsafe(BLS_X).negate(); // [x]P
       const u2P = xP.multiplyUnsafe(BLS_X); // [u2]P
       return u2P.equals(phi);
-
-      // https://eprint.iacr.org/2019/814.pdf
-      // (z² − 1)/3
-      // const c1 = BigInt('0x396c8c005555e1560000000055555555');
-      // const P = this;
-      // const S = P.sigma();
-      // const Q = S.double();
-      // const S2 = S.sigma();
-      // // [(z² − 1)/3](2σ(P) − P − σ²(P)) − σ²(P) = O
-      // const left = Q.subtract(P).subtract(S2).multiplyUnsafe(c1);
-      // const C = left.subtract(S2);
-      // return C.isZero();
     },
     // Clear cofactor of G1
     // https://eprint.iacr.org/2019/403
@@ -627,14 +613,12 @@ export const bls12_381: CurveFn = bls({
     // point.isTorsionFree() should return true for valid points
     // It returns false for shitty points.
     // https://eprint.iacr.org/2021/1130.pdf
+    // Older version: https://eprint.iacr.org/2019/814.pdf
     isTorsionFree: (c, P): boolean => {
       return P.multiplyUnsafe(BLS_X).negate().equals(G2psi(c, P)); // ψ(P) == [u](P)
-      // Older version: https://eprint.iacr.org/2019/814.pdf
-      // Ψ²(P) => Ψ³(P) => [z]Ψ³(P) where z = -x => [z]Ψ³(P) - Ψ²(P) + P == O
-      // return P.psi2().psi().mulNegX().subtract(psi2).add(P).isZero();
     },
     // Maps the point into the prime-order subgroup G2.
-    // clear_cofactor_bls12381_g2 from cfrg-hash-to-curve-11
+    // clear_cofactor_bls12381_g2 from RFC 9380.
     // https://eprint.iacr.org/2017/419.pdf
     // prettier-ignore
     clearCofactor: (c, P) => {

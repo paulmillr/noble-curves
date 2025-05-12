@@ -4,10 +4,8 @@
  * Seems to be rigid (not backdoored)
  * [as per discussion](https://bitcointalk.org/index.php?topic=289795.msg3183975#msg3183975).
  *
- * secp256k1 belongs to Koblitz curves: it has efficiently computable endomorphism.
- * Endomorphism uses 2x less RAM, speeds up precomputation by 2x and ECDH / key recovery by 20%.
- * For precomputed wNAF it trades off 1/2 init time & 1/3 ram for 20% perf hit.
- * [See explanation](https://gist.github.com/paulmillr/eb670806793e84df628a7c434a873066).
+ * secp256k1 belongs to Koblitz curves, meaning it can use endomorphism to speed-up operations.
+ * See explanation in `EndomorphismOpts` of `abstract/weierstrass.ts`.
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
@@ -64,6 +62,15 @@ function sqrtMod(y: bigint): bigint {
 
 const Fpk1 = Field(secp256k1P, undefined, undefined, { sqrt: sqrtMod });
 
+// @ts-ignore
+// const _endovec = [
+//   [BigInt('0x3086d221a7d46bcde86c90e49284eb15'), -BigInt('0xe4437ed6010e88286f547fa90abfe4c3')],
+//   [BigInt('0x114ca50f7a8e2f3f657c1108d9d44cfd8'), BigInt('0x3086d221a7d46bcde86c90e49284eb15')]
+// ];
+const _endovec = [
+  [BigInt('0xe4437ed6010e88286f547fa90abfe4c3'), -BigInt('0x3086d221a7d46bcde86c90e49284eb15')],
+  [BigInt('0x3086d221a7d46bcde86c90e49284eb15'), BigInt('0x114ca50f7a8e2f3f657c1108d9d44cfd8')]
+];
 /**
  * secp256k1 curve, ECDSA and ECDH methods.
  *
@@ -89,21 +96,39 @@ export const secp256k1: CurveFnWithCreate = createCurve(
     Gy: BigInt('32670510020758816978083085130507043184471273380659243275938904335757337482424'),
     h: BigInt(1),
     lowS: true, // Allow only low-S signatures by default in sign() and verify()
+    compressPubkeys: true,
+    // See explanation in `EndomorphismOpts` of `abstract/weierstrass.ts`.
     endo: {
-      // Endomorphism, see above
-      beta: BigInt('0x7ae96a2b657c07106e64479eac3434e99cf0497512f58995c1396c28719501ee'),
+      beta: BigInt('0x851695d49a83f8ef919bb86153cbcb16630fb68aed0a766a3ec693d68e6afa40'),
       splitScalar: (k: bigint) => {
+        // Decompose k → (k₁, k₂)
+        // k ≡ k₁ + k₂·λ (mod n)
         const n = secp256k1N;
-        const a1 = BigInt('0x3086d221a7d46bcde86c90e49284eb15');
-        const b1 = -_1n * BigInt('0xe4437ed6010e88286f547fa90abfe4c3');
-        const a2 = BigInt('0x114ca50f7a8e2f3f657c1108d9d44cfd8');
-        const b2 = a1;
-        const POW_2_128 = BigInt('0x100000000000000000000000000000000'); // (2n**128n).toString(16)
+        // v₁, v₂ reduced lattice basis vectors
+        const { 0: v1, 1: v2} = _endovec;
 
-        const c1 = divNearest(b2 * k, n);
-        const c2 = divNearest(-b1 * k, n);
-        let k1 = mod(k - c1 * a1 - c2 * a2, n);
-        let k2 = mod(-c1 * b1 - c2 * b2, n);
+        // Calculate the determinant of the basis
+        const det = v1[0] * v2[1] - v1[1] * v2[0];
+
+        // Use Babai's round-off algorithm:
+        // Calculate continuous coordinates in the basis
+        const c1 = divNearest(v2[1] * k, det);
+        const c2 = divNearest(v1[1] * -k, det);
+
+        // Calculate the closest lattice point to (k, 0)
+        const b1 = c1 * v1[0] + c2 * v2[0];
+        const b2 = c1 * v1[1] + c2 * v2[1];
+
+        // Calculate k1 = k - b1 (mod n) and k2 = -b2 (mod n)
+        let k1 = mod(k - b1, n);
+        let k2 = mod(-b2, n);
+
+        // const k1neg = false;
+        // const k2neg = false;
+
+        // let k1 = mod(k - c1 * a1 - c2 * a2, n);
+        // let k2 = mod(-c1 * b1 - c2 * b2, n);
+        const POW_2_128 = BigInt('0x100000000000000000000000000000000'); // (2n**128n).toString(16)
         const k1neg = k1 > POW_2_128;
         const k2neg = k2 > POW_2_128;
         if (k1neg) k1 = n - k1;

@@ -9,7 +9,7 @@ Audited & minimal JS implementation of elliptic curve cryptography.
 - ➰ Short Weierstrass, Edwards, Montgomery curves
 - ✍️ ECDSA, EdDSA, Schnorr, BLS, ECDH, hashing to curves, Poseidon ZK-friendly hash
 - 🔖 SUF-CMA, SBS (non-repudiation), ZIP215 (consensus friendliness) features for ed25519 & ed448
-- 🪶 93KB (36KB gzipped) for everything with hashes, 26KB (11KB gzipped) for single-curve build
+- 🪶 36KB (gzipped) for everything with hashes, 11KB for single-curve build
 
 Curves have 4KB sister projects
 [secp256k1](https://github.com/paulmillr/noble-secp256k1) & [ed25519](https://github.com/paulmillr/noble-ed25519).
@@ -58,14 +58,15 @@ import { jubjub, babyjubjub } from '@noble/curves/misc';
 import { bytesToHex, hexToBytes, concatBytes, utf8ToBytes } from '@noble/curves/abstract/utils';
 ```
 
-- [ECDSA signatures over secp256k1 and others](#ecdsa-signatures-over-secp256k1-and-others)
+- [secp256k1 ECDSA signatures](#secp256k1-ecdsa-signatures)
 - [Hedged ECDSA with noise](#hedged-ecdsa-with-noise)
 - [ECDH: Diffie-Hellman shared secrets](#ecdh-diffie-hellman-shared-secrets)
 - [secp256k1 Schnorr signatures from BIP340](#secp256k1-schnorr-signatures-from-bip340)
-- [ed25519](#ed25519) / [X25519](#x25519) / [ristretto255](#ristretto255)
-- [ed448](#ed448) / [X448](#x448) / [decaf448](#decaf448)
+- [ed25519](#ed25519), [X25519](#x25519), [ristretto255](#ristretto255)
+- [ed448](#ed448), [X448](#x448), [decaf448](#decaf448)
 - [bls12-381](#bls12-381)
 - [bn254 aka alt_bn128](#bn254-aka-alt_bn128)
+- [nist curves](#nist-curves)
 - [misc curves](#misc-curves)
 - [Low-level methods](#low-level-methods)
 - [Abstract API](#abstract-api)
@@ -80,36 +81,45 @@ import { bytesToHex, hexToBytes, concatBytes, utf8ToBytes } from '@noble/curves/
 
 ### Implementations
 
-#### ECDSA signatures over secp256k1 and others
+#### secp256k1 ECDSA signatures
 
 ```ts
 import { secp256k1 } from '@noble/curves/secp256k1';
-// import { p256 } from '@noble/curves/nist'; // or p384 / p521
 
-const priv = secp256k1.utils.randomPrivateKey();
+// Get public key
+// Private key can be pre-existing or random
+import { hexToBytes } from '@noble/curves/abstract/utils';
+const priv = hexToBytes('46c930bc7bb4db7f55da20798697421b98c4175a52c630294d75a84b9c126236');
+// const priv = secp256k1.utils.randomPrivateKey();
 const pub = secp256k1.getPublicKey(priv);
-const msg = new Uint8Array(32).fill(1); // message hash (not message) in ecdsa
-const sig = secp256k1.sign(msg, priv); // `{prehash: true}` option is available
+
+// Create signature
+import { sha256 } from '@noble/hashes/sha2';
+const msgd = sha256(new TextEncoder().encode('hello, noble'));
+const sig = secp256k1.sign(msgd, priv);
+// optional serialization
+const sigC = sig.toCompactRawBytes();
+const sigD = sig.toDERRawBytes();
+
+// Verify signature
 const isValid = secp256k1.verify(sig, msg, pub) === true;
 
-// hex strings are also supported besides Uint8Array-s:
-const privHex = '46c930bc7bb4db7f55da20798697421b98c4175a52c630294d75a84b9c126236';
-const pub2 = secp256k1.getPublicKey(privHex);
-
-// public key recovery
-// let sig = secp256k1.Signature.fromCompact(sigHex); // or .fromDER(sigDERHex)
-// sig = sig.addRecoveryBit(bit); // bit is not serialized into compact / der format
-sig.recoverPublicKey(msg).toRawBytes(); // === pub; // public key recovery
+// Recover public key
+// use sig above OR construct new with
+// let bit = 1; // bit is not serialized into compact / der format
+// let sigA = secp256k1.Signature.fromCompact(sigHex).addRecoveryBit(bit);
+// let sigB = secp256k1.Signature.fromDER(sigDERHex).addRecoveryBit(bit);
+sig.recoverPublicKey(msg).toRawBytes(); // === pub;
 ```
-
-The same code would work for NIST P256 (secp256r1), P384 (secp384r1) & P521 (secp521r1).
 
 #### Hedged ECDSA with noise
 
 ```ts
-const noisySignature = secp256k1.sign(msg, priv, { extraEntropy: true });
-const ent = new Uint8Array(32).fill(3); // set custom entropy
-const noisySignature2 = secp256k1.sign(msg, priv, { extraEntropy: ent });
+// Random entropy
+const hedgedSig = secp256k1.sign(msg, priv, { extraEntropy: true });
+// Specific entropy
+const ent = new Uint8Array(32).fill(3);
+const hedgedSig = secp256k1.sign(msg, priv, { extraEntropy: ent });
 ```
 
 Hedged ECDSA is add-on, providing improved protection against fault attacks.
@@ -181,7 +191,6 @@ edwardsToMontgomeryPriv(ed25519.utils.randomPrivateKey());
 
 ```ts
 // ristretto255 from [RFC9496](https://www.rfc-editor.org/rfc/rfc9496)
-import { utf8ToBytes } from '@noble/hashes/utils';
 import { sha512 } from '@noble/hashes/sha512';
 import {
   hashToCurve,
@@ -190,7 +199,7 @@ import {
   hashToRistretto255,
 } from '@noble/curves/ed25519';
 
-const msg = utf8ToBytes('Ristretto is traditionally a short shot of espresso coffee');
+const msg = new TextEncoder().encode('Ristretto is traditionally a short shot of espresso coffee');
 hashToCurve(msg);
 
 const rp = RistrettoPoint.fromHex(
@@ -235,11 +244,10 @@ edwardsToMontgomeryPub(ed448.getPublicKey(ed448.utils.randomPrivateKey()));
 
 ```ts
 // decaf448 from [RFC9496](https://www.rfc-editor.org/rfc/rfc9496)
-import { utf8ToBytes } from '@noble/hashes/utils';
 import { shake256 } from '@noble/hashes/sha3';
 import { hashToCurve, encodeToCurve, DecafPoint, hashToDecaf448 } from '@noble/curves/ed448';
 
-const msg = utf8ToBytes('Ristretto is traditionally a short shot of espresso coffee');
+const msg = new TextEncoder().encode('Ristretto is traditionally a short shot of espresso coffee');
 hashToCurve(msg);
 
 const dp = DecafPoint.fromHex(
@@ -319,6 +327,23 @@ Points of divergence:
 - Imaginary part last in G2 vs first (c0, c1 vs c1, c0)
 
 For example usage, check out [the implementation of bn254 EVM precompiles](https://github.com/paulmillr/noble-curves/blob/3ed792f8ad9932765b84d1064afea8663a255457/test/bn254.test.js#L697).
+
+#### nist curves
+
+```ts
+import { p256, p384, p521 } from '@noble/curves/nist';
+// import { secp256r1, secp384r1, secp521r1 } from '@noble/curves/nist'; // equivalent
+import { hexToBytes } from '@noble/curves/abstract/utils';
+import { sha384 } from '@noble/hashes/sha2';
+const priv = hexToBytes('46c930bc7bb4db7f55da20798697421b98c4175a52c630294d75a84b9c126236');
+// const priv = p384.utils.randomPrivateKey();
+const pub = p384.getPublicKey(priv);
+const msgd = sha384(new TextEncoder().encode('hello, noble'));
+const sigC = p384.sign(msgd, priv).toDERRawBytes();
+```
+
+NIST curves P256 (secp256r1, prime256v1), P384 (secp384r1) & P521 (secp521r1) are provided.
+The API mirrors secp256k1.
 
 #### misc curves
 

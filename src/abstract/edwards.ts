@@ -142,6 +142,18 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
   const modP = Fp.create; // Function overrides
   const Fn = Field(CURVE.n, CURVE.nBitLength);
 
+  function isEdValidXY(x: bigint, y: bigint): boolean {
+    const x2 = Fp.sqr(x);
+    const y2 = Fp.sqr(y);
+    const left = Fp.add(Fp.mul(CURVE.a, x2), y2);
+    const right = Fp.add(Fp.ONE, Fp.mul(CURVE.d, Fp.mul(x2, y2)));
+    return Fp.eql(left, right);
+  }
+
+  // Validate whether the passed curve params are valid.
+  // equation ax² + y² = 1 + dx²y² should work for generator point.
+  if (!isEdValidXY(CURVE.Gx, CURVE.Gy)) throw new Error('bad curve params: generator point');
+
   // sqrt(u/v)
   const uvRatio =
     CURVE.uvRatio ||
@@ -204,10 +216,12 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     return true;
   });
 
-  // Extended Point works in extended coordinates: (x, y, z, t) ∋ (x=x/z, y=y/z, t=xy).
+  // Extended Point works in extended coordinates: (X, Y, Z, T) ∋ (x=X/Z, y=Y/Z, T=xy).
   // https://en.wikipedia.org/wiki/Twisted_Edwards_curve#Extended_coordinates
   class Point implements ExtPointType {
+    // base / generator point
     static readonly BASE = new Point(CURVE.Gx, CURVE.Gy, _1n, modP(CURVE.Gx * CURVE.Gy));
+    // zero / infinity / identity point
     static readonly ZERO = new Point(_0n, _1n, _1n, _0n); // 0, 1, 1, 0
     readonly ex: bigint;
     readonly ey: bigint;
