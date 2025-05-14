@@ -312,6 +312,10 @@ export const DER: IDER = {
   },
 };
 
+function numToSizedHex(num: bigint, size: number): string {
+  return bytesToHex(numberToBytesBE(num, size));
+}
+
 // Be friendly to bad ECMAScript parsers by not using bigint literals
 // prettier-ignore
 const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3), _4n = BigInt(4);
@@ -404,7 +408,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
 
   // Converts Projective point to affine (x, y) coordinates.
   // Can accept precomputed Z^-1 - for example, from invertBatch.
-  // (x, y, z) ∋ (x=x/z, y=y/z)
+  // (X, Y, Z) ∋ (x=X/Z, y=Y/Z)
   const toAffineMemo = memoized((p: Point, iz?: T): AffinePoint<T> => {
     const { px: x, py: y, pz: z } = p;
     // Fast-path for normalized points
@@ -440,12 +444,14 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
   });
 
   /**
-   * Projective Point works in 3d / projective (homogeneous) coordinates: (x, y, z) ∋ (x=x/z, y=y/z)
+   * Projective Point works in 3d / projective (homogeneous) coordinates: (X, Y, Z) ∋ (x=X/Z, y=Y/Z)
    * Default Point works in 2d / affine coordinates: (x, y)
    * We're doing calculations in projective, because its operations don't require costly inversion.
    */
   class Point implements ProjPointType<T> {
+    // base / generator point
     static readonly BASE = new Point(CURVE.Gx, CURVE.Gy, Fp.ONE);
+    // zero / infinity / identity point
     static readonly ZERO = new Point(Fp.ZERO, Fp.ONE, Fp.ZERO); // 0, 1, 0
     readonly px: T;
     readonly py: T;
@@ -675,6 +681,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
         return wnaf.wNAFCachedUnsafe(this, sc, Point.normalizeZ);
 
       // Case c: endomorphism
+      /** See docs for {@link EndomorphismOpts} */
       let { k1neg, k1, k2neg, k2 } = endo.splitScalar(sc);
       let k1p = I;
       let k2p = I;
@@ -705,6 +712,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
       const { endo, n: N } = CURVE;
       aInRange('scalar', scalar, _1n, N);
       let point: Point, fake: Point; // Fake point is used to const-time mult
+      /** See docs for {@link EndomorphismOpts} */
       if (endo) {
         const { k1neg, k1, k2neg, k2 } = endo.splitScalar(scalar);
         let { p: k1p, f: f1p } = this.wNAF(k1);
@@ -769,8 +777,8 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
       return bytesToHex(this.toRawBytes(isCompressed));
     }
   }
-  const _bits = CURVE.nBitLength;
-  const wnaf = wNAF(Point, CURVE.endo ? Math.ceil(_bits / 2) : _bits);
+  const { endo, nBitLength } = CURVE;
+  const wnaf = wNAF(Point, endo ? Math.ceil(nBitLength / 2) : nBitLength);
   return {
     CURVE,
     ProjectivePoint: Point as ProjConstructor<T>,
@@ -862,7 +870,7 @@ export type CurveFn = {
  */
 export function weierstrass(curveDef: CurveType): CurveFn {
   const CURVE = validateOpts(curveDef) as ReturnType<typeof validateOpts>;
-  const { Fp, n: CURVE_ORDER } = CURVE;
+  const { Fp, n: CURVE_ORDER, nByteLength, nBitLength } = CURVE;
   const compressedLen = Fp.BYTES + 1; // e.g. 33 for 32
   const uncompressedLen = 2 * Fp.BYTES + 1; // e.g. 65 for 32
 
@@ -925,8 +933,6 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       }
     },
   });
-  const numToNByteHex = (num: bigint): string =>
-    bytesToHex(numberToBytesBE(num, CURVE.nByteLength));
 
   function isBiggerThanHalfOrder(number: bigint) {
     const HALF = CURVE_ORDER >> _1n;
@@ -957,7 +963,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
 
     // pair (bytes of r, bytes of s)
     static fromCompact(hex: Hex) {
-      const l = CURVE.nByteLength;
+      const l = nByteLength;
       hex = ensureBytes('compactSignature', hex, l * 2);
       return new Signature(slcNum(hex, 0, l), slcNum(hex, l, 2 * l));
     }
@@ -986,7 +992,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       const radj = rec === 2 || rec === 3 ? r + CURVE.n : r;
       if (radj >= Fp.ORDER) throw new Error('recovery id 2 or 3 invalid');
       const prefix = (rec & 1) === 0 ? '02' : '03';
-      const R = Point.fromHex(prefix + numToNByteHex(radj));
+      const R = Point.fromHex(prefix + numToSizedHex(radj, Fp.BYTES));
       const ir = invN(radj); // r^-1
       const u1 = modN(-h * ir); // -hr^-1
       const u2 = modN(s * ir); // sr^-1
@@ -1018,7 +1024,8 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       return hexToBytes(this.toCompactHex());
     }
     toCompactHex() {
-      return numToNByteHex(this.r) + numToNByteHex(this.s);
+      const l = nByteLength;
+      return numToSizedHex(this.r, l) + numToSizedHex(this.s, l);
     }
   }
   type RecoveredSignature = Signature & { recovery: number };
@@ -1079,7 +1086,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     const fpl = Fp.BYTES;
     const compLen = fpl + 1; // e.g. 33 for 32
     const uncompLen = 2 * fpl + 1; // e.g. 65 for 32
-    if (CURVE.allowedPrivateKeyLengths || CURVE.nByteLength === compLen) {
+    if (CURVE.allowedPrivateKeyLengths || nByteLength === compLen) {
       return undefined;
     } else {
       return len === compLen || len === uncompLen;
@@ -1115,7 +1122,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       // For curves with nBitLength % 8 !== 0: bits2octets(bits2octets(m)) !== bits2octets(m)
       // for some cases, since bytes.length * 8 is not actual bitLength.
       const num = bytesToNumberBE(bytes); // check for == u8 done here
-      const delta = bytes.length * 8 - CURVE.nBitLength; // truncate to nBitLength leftmost bits
+      const delta = bytes.length * 8 - nBitLength; // truncate to nBitLength leftmost bits
       return delta > 0 ? num >> BigInt(delta) : num;
     };
   const bits2int_modN =
@@ -1124,14 +1131,14 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       return modN(bits2int(bytes)); // can't use bytesToNumberBE here
     };
   // NOTE: pads output with zero as per spec
-  const ORDER_MASK = bitMask(CURVE.nBitLength);
+  const ORDER_MASK = bitMask(nBitLength);
   /**
    * Converts to bytes. Checks if num in `[0..ORDER_MASK-1]` e.g.: `[0..2^256-1]`.
    */
   function int2octets(num: bigint): Uint8Array {
-    aInRange('num < 2^' + CURVE.nBitLength, num, _0n, ORDER_MASK);
+    aInRange('num < 2^' + nBitLength, num, _0n, ORDER_MASK);
     // works with order, can have different size than numToField!
-    return numberToBytesBE(num, CURVE.nByteLength);
+    return numberToBytesBE(num, nByteLength);
   }
 
   // Steps A, D of RFC6979 3.2
