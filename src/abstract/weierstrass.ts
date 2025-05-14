@@ -7,9 +7,9 @@
  *
  * * a: formula param
  * * b: formula param
- * * Fp: finite Field over which we'll do calculations. Can be complex (Fp2, Fp12)
- * * n: Curve prime subgroup order, total count of valid points in the field
- * * Gx: Base point (x, y) aka generator point x coordinate
+ * * Fp: finite field of prime characteristic P; may be complex (Fp2). Arithmetics is done in field
+ * * n: order of prime subgroup a.k.a total amount of valid curve points
+ * * Gx: Base point (x, y) aka generator point. Gx = x coordinate
  * * Gy: ...y coordinate
  * * h: cofactor, usually 1. h*n = curve group order (n is only subgroup order)
  * * lowS: whether to enable (default) or disable "low-s" non-malleable signatures
@@ -40,27 +40,51 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 // prettier-ignore
 import {
-  type AffinePoint, type BasicCurve, type Group, type GroupConstructor,
-  pippenger, validateBasic, wNAF
+  pippenger, validateBasic, wNAF,
+  type AffinePoint, type BasicCurve, type Group, type GroupConstructor
 } from './curve.ts';
 // prettier-ignore
 import {
   Field,
   FpInvertBatch,
-  type IField, getMinHashLength, invert, mapHashToField, mod, validateField
+  getMinHashLength, invert, mapHashToField, mod, validateField,
+  type IField
 } from './modular.ts';
 // prettier-ignore
 import {
-  type CHash, type Hex, type PrivKey,
   aInRange, abool,
   bitMask,
   bytesToHex, bytesToNumberBE, concatBytes, createHmacDrbg, ensureBytes, hexToBytes,
-  inRange, isBytes, memoized, numberToBytesBE, numberToHexUnpadded, validateObject
+  inRange, isBytes, memoized, numberToBytesBE, numberToHexUnpadded, validateObject,
+  type CHash, type Hex, type PrivKey
 } from './utils.ts';
 
 export type { AffinePoint };
 type HmacFnSync = (key: Uint8Array, ...messages: Uint8Array[]) => Uint8Array;
-type EndomorphismOpts = {
+/**
+ * When Weierstrass curve has `a=0`, it becomes Koblitz curve.
+ * Koblitz curves allow using **efficiently-computable GLV endomorphism ψ**.
+ * Endomorphism uses 2x less RAM, speeds up precomputation by 2x and ECDH / key recovery by 20%.
+ * For precomputed wNAF it trades off 1/2 init time & 1/3 ram for 20% perf hit.
+ *
+ * Endomorphism consists of beta, lambda and splitScalar:
+ *
+ * 1. GLV endomorphism ψ transforms a point: `P = (x, y) ↦ ψ(P) = (β·x mod p, y)`
+ * 2. GLV scalar decomposition transforms a scalar: `k ≡ k₁ + k₂·λ (mod n)`
+ * 3. Then these are combined: `k·P = k₁·P + k₂·ψ(P)`
+ * 4. Two 128-bit point-by-scalar multiplications + one point addition is faster than
+ *    one 256-bit multiplication.
+ *
+ * where
+ * * beta: β ∈ Fₚ with β³ = 1, β ≠ 1
+ * * lambda: λ ∈ Fₙ with λ³ = 1, λ ≠ 1
+ * * splitScalar decomposes k ↦ k₁, k₂, by using reduced basis vectors.
+ *   Gauss lattice reduction calculates them from initial basis vectors `(n, 0), (-λ, 0)`
+ *
+ * Check out `test/misc/endomorphism.js` and
+ * [gist](https://gist.github.com/paulmillr/eb670806793e84df628a7c434a873066).
+ */
+export type EndomorphismOpts = {
   beta: bigint;
   splitScalar: (k: bigint) => { k1neg: boolean; k1: bigint; k2neg: boolean; k2: bigint };
 };
@@ -72,7 +96,7 @@ export type BasicWCurve<T> = BasicCurve<T> & {
   // Optional params
   allowedPrivateKeyLengths?: readonly number[]; // for P521
   wrapPrivateKey?: boolean; // bls12-381 requires mod(n) instead of rejecting keys >= n
-  endo?: EndomorphismOpts; // Endomorphism options for Koblitz curves
+  endo?: EndomorphismOpts;
   // When a cofactor != 1, there can be an effective methods to:
   // 1. Determine whether a point is torsion-free
   isTorsionFree?: (c: ProjConstructor<T>, point: ProjPointType<T>) => boolean;
@@ -137,26 +161,26 @@ function validatePointOpts<T>(curve: CurvePointsType<T>): CurvePointsTypeWithLen
       b: 'field',
     },
     {
-      allowedPrivateKeyLengths: 'array',
-      wrapPrivateKey: 'boolean',
-      isTorsionFree: 'function',
-      clearCofactor: 'function',
       allowInfinityPoint: 'boolean',
+      allowedPrivateKeyLengths: 'array',
+      clearCofactor: 'function',
       fromBytes: 'function',
+      isTorsionFree: 'function',
       toBytes: 'function',
+      wrapPrivateKey: 'boolean',
     }
   );
   const { endo, Fp, a } = opts;
   if (endo) {
     if (!Fp.eql(a, Fp.ZERO)) {
-      throw new Error('invalid endomorphism, can only be defined for Koblitz curves that have a=0');
+      throw new Error('invalid endo: CURVE.a must be 0');
     }
     if (
       typeof endo !== 'object' ||
       typeof endo.beta !== 'bigint' ||
       typeof endo.splitScalar !== 'function'
     ) {
-      throw new Error('invalid endomorphism, expected beta: bigint and splitScalar: function');
+      throw new Error('invalid endo: expected "beta": bigint and "splitScalar": function');
     }
   }
   return Object.freeze({ ...opts } as const);
