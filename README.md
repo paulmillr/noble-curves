@@ -71,7 +71,10 @@ import { bytesToHex, hexToBytes, concatBytes, utf8ToBytes } from '@noble/curves/
 - [Abstract API](#abstract-api)
   - [weierstrass](#weierstrass-short-weierstrass-curve), [edwards](#edwards-twisted-edwards-curve), [montgomery](#montgomery-montgomery-curve), [bls](#bls-barreto-lynn-scott-curves)
   - [hash-to-curve](#hash-to-curve-hashing-strings-to-curve-points), [poseidon](#poseidon-poseidon-hash)
-  - [modular](#modular-modular-arithmetics-utilities), [utils](#utils-useful-utilities)
+  - [modular](#modular-modular-arithmetics-utilities)
+  - [fft](#fft-fast-fourier-transform)
+  - [Creating private keys from hashes](#creating-private-keys-from-hashes)
+  - [utils](#utils-useful-utilities)
 - [Security](#security)
 - [Speed](#speed)
 - [Upgrading](#upgrading)
@@ -668,6 +671,15 @@ Initializing a non-prime field could make your app suspectible to
 DoS (infilite loop) on Tonelli-Shanks square root calculation.
 
 Unlike `mod.inv`, `mod.invertBatch` won't throw on `0`: make sure to throw an error yourself.
+
+### fft: Fast Fourier Transform
+
+Experimental implementation of NTT / FFT (Fast Fourier Transform) over finite fields.
+API may change at any time. The code has not been audited. Feature requests are welcome.
+
+```ts
+import * as fft from '@noble/curves/abstract/fft.js';
+```
 
 #### Creating private keys from hashes
 
