@@ -1063,14 +1063,19 @@ export function weierstrass(curveDef: CurveType): CurveFn {
   /**
    * Quick and dirty check for item being public key. Does not validate hex, or being on-curve.
    */
-  function isProbPub(item: PrivKey | PubKey): boolean {
-    const arr = isBytes(item);
-    const str = typeof item === 'string';
-    const len = (arr || str) && (item as Hex).length;
-    if (arr) return len === compressedLen || len === uncompressedLen;
-    if (str) return len === 2 * compressedLen || len === 2 * uncompressedLen;
+  function isProbPub(item: PrivKey | PubKey): boolean | undefined {
+    if (typeof item === 'bigint') return false;
     if (item instanceof Point) return true;
-    return false;
+    const arr = ensureBytes('key', item);
+    const len = arr.length;
+    const fpl = Fp.BYTES;
+    const compLen = fpl + 1; // e.g. 33 for 32
+    const uncompLen = 2 * fpl + 1; // e.g. 65 for 32
+    if (CURVE.allowedPrivateKeyLengths || CURVE.nByteLength === compLen) {
+      return undefined;
+    } else {
+      return len === compLen || len === uncompLen;
+    }
   }
 
   /**
@@ -1084,8 +1089,8 @@ export function weierstrass(curveDef: CurveType): CurveFn {
    * @returns shared public key
    */
   function getSharedSecret(privateA: PrivKey, publicB: Hex, isCompressed = true): Uint8Array {
-    if (isProbPub(privateA)) throw new Error('first arg must be private key');
-    if (!isProbPub(publicB)) throw new Error('second arg must be public key');
+    if (isProbPub(privateA) === true) throw new Error('first arg must be private key');
+    if (isProbPub(publicB) === false) throw new Error('second arg must be public key');
     const b = Point.fromHex(publicB); // check for being on-curve
     return b.multiply(normPrivateKeyToScalar(privateA)).toRawBytes(isCompressed);
   }
