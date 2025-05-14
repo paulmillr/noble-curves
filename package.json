@@ -89,6 +89,10 @@
       "import": "./esm/abstract/weierstrass.js",
       "require": "./abstract/weierstrass.js"
     },
+    "./abstract/fft": {
+      "import": "./esm/abstract/fft.js",
+      "require": "./abstract/fft.js"
+    },
     "./_shortw_utils": {
       "import": "./esm/_shortw_utils.js",
       "require": "./_shortw_utils.js"
@@ -185,7 +189,7 @@
       "import": "./esm/abstract/weierstrass.js",
       "require": "./abstract/weierstrass.js"
     },
-    "./abstract/fft": {
+    "./abstract/fft.js": {
       "import": "./esm/abstract/fft.js",
       "require": "./abstract/fft.js"
     },

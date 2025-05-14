@@ -6,6 +6,7 @@
     "./abstract/bls": "./src/abstract/bls.ts",
     "./abstract/curve": "./src/abstract/curve.ts",
     "./abstract/edwards": "./src/abstract/edwards.ts",
+    "./abstract/fft": "./src/abstract/fft.ts",
     "./abstract/hash-to-curve": "./src/abstract/hash-to-curve.ts",
     "./abstract/modular": "./src/abstract/modular.ts",
     "./abstract/montgomery": "./src/abstract/montgomery.ts",
