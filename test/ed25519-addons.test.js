@@ -1,7 +1,7 @@
 import { sha512 } from '@noble/hashes/sha2';
 import { bytesToHex as hex, hexToBytes } from '@noble/hashes/utils';
 import { describe, should } from 'micro-should';
-import { deepStrictEqual, throws } from 'node:assert';
+import { deepStrictEqual as eql, throws } from 'node:assert';
 import { bytesToNumberLE, numberToBytesLE, utf8ToBytes } from '../esm/abstract/utils.js';
 import {
   ed25519,
@@ -9,7 +9,7 @@ import {
   ed25519ph,
   edwardsToMontgomeryPriv,
   edwardsToMontgomeryPub,
-  hash_to_ristretto255,
+  hashToRistretto255,
   RistrettoPoint,
   x25519,
 } from '../esm/ed25519.js';
@@ -67,15 +67,9 @@ describe('RFC8032ctx', () => {
   for (let i = 0; i < VECTORS_RFC8032_CTX.length; i++) {
     const v = VECTORS_RFC8032_CTX[i];
     should(`${i}`, () => {
-      deepStrictEqual(hex(ed25519ctx.getPublicKey(v.secretKey)), v.publicKey);
-      deepStrictEqual(
-        hex(ed25519ctx.sign(v.message, v.secretKey, { context: v.context })),
-        v.signature
-      );
-      deepStrictEqual(
-        ed25519ctx.verify(v.signature, v.message, v.publicKey, { context: v.context }),
-        true
-      );
+      eql(hex(ed25519ctx.getPublicKey(v.secretKey)), v.publicKey);
+      eql(hex(ed25519ctx.sign(v.message, v.secretKey, { context: v.context })), v.signature);
+      eql(ed25519ctx.verify(v.signature, v.message, v.publicKey, { context: v.context }), true);
     });
   }
 });
@@ -97,9 +91,9 @@ describe('RFC8032ph', () => {
   for (let i = 0; i < VECTORS_RFC8032_PH.length; i++) {
     const v = VECTORS_RFC8032_PH[i];
     should(`${i}`, () => {
-      deepStrictEqual(hex(ed25519ph.getPublicKey(v.secretKey)), v.publicKey);
-      deepStrictEqual(hex(ed25519ph.sign(v.message, v.secretKey)), v.signature);
-      deepStrictEqual(ed25519ph.verify(v.signature, v.message, v.publicKey), true);
+      eql(hex(ed25519ph.getPublicKey(v.secretKey)), v.publicKey);
+      eql(hex(ed25519ph.sign(v.message, v.secretKey)), v.signature);
+      eql(ed25519ph.verify(v.signature, v.message, v.publicKey), true);
     });
   }
 });
@@ -121,7 +115,7 @@ describe('X25519 RFC7748 ECDH', () => {
   for (let i = 0; i < rfc7748Mul.length; i++) {
     const v = rfc7748Mul[i];
     should(`scalarMult (${i})`, () => {
-      deepStrictEqual(hex(x25519.scalarMult(v.scalar, v.u)), v.outputU);
+      eql(hex(x25519.scalarMult(v.scalar, v.u)), v.outputU);
     });
   }
 
@@ -136,7 +130,7 @@ describe('X25519 RFC7748 ECDH', () => {
     should(`scalarMult iteration x${iters}`, () => {
       let k = x25519.GuBytes;
       for (let i = 0, u = k; i < iters; i++) [k, u] = [x25519.scalarMult(k, u), k];
-      deepStrictEqual(hex(k), scalar);
+      eql(hex(k), scalar);
     });
   }
 
@@ -146,10 +140,10 @@ describe('X25519 RFC7748 ECDH', () => {
     const bobPrivate = '5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb';
     const bobPublic = 'de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f';
     const shared = '4a5d9d5ba4ce2de1728e3bf480350f25e07e21c947d19e3376f09b3c1e161742';
-    deepStrictEqual(alicePublic, hex(x25519.getPublicKey(alicePrivate)));
-    deepStrictEqual(bobPublic, hex(x25519.getPublicKey(bobPrivate)));
-    deepStrictEqual(hex(x25519.scalarMult(alicePrivate, bobPublic)), shared);
-    deepStrictEqual(hex(x25519.scalarMult(bobPrivate, alicePublic)), shared);
+    eql(alicePublic, hex(x25519.getPublicKey(alicePrivate)));
+    eql(bobPublic, hex(x25519.getPublicKey(bobPrivate)));
+    eql(hex(x25519.scalarMult(alicePrivate, bobPublic)), shared);
+    eql(hex(x25519.scalarMult(bobPrivate, alicePublic)), shared);
   });
 
   should('X25519/getSharedSecret() should be commutative', () => {
@@ -159,7 +153,7 @@ describe('X25519 RFC7748 ECDH', () => {
       const bsec = x25519.utils.randomPrivateKey();
       const bpub = x25519.getPublicKey(bsec);
       try {
-        deepStrictEqual(x25519.getSharedSecret(asec, bpub), x25519.getSharedSecret(bsec, apub));
+        eql(x25519.getSharedSecret(asec, bpub), x25519.getSharedSecret(bsec, apub));
       } catch (error) {
         console.error('not commutative', { asec, apub, bsec, bpub });
         throw error;
@@ -171,15 +165,9 @@ describe('X25519 RFC7748 ECDH', () => {
     const edSecret = hexToBytes('77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a');
     const edPublic = ed25519.getPublicKey(edSecret);
     const xPrivate = edwardsToMontgomeryPriv(edSecret);
-    deepStrictEqual(
-      hex(xPrivate),
-      'a8cd44eb8e93319c0570bc11005c0e0189d34ff02f6c17773411ad191293c94f'
-    );
+    eql(hex(xPrivate), 'a8cd44eb8e93319c0570bc11005c0e0189d34ff02f6c17773411ad191293c94f');
     const xPublic = edwardsToMontgomeryPub(edPublic);
-    deepStrictEqual(
-      hex(xPublic),
-      'ed7749b4d989f6957f3bfde6c56767e988e21c9f8784d91d610011cd553f9b06'
-    );
+    eql(hex(xPublic), 'ed7749b4d989f6957f3bfde6c56767e988e21c9f8784d91d610011cd553f9b06');
   });
 
   should('edwardsToMontgomery should produce correct keyPair', () => {
@@ -188,7 +176,7 @@ describe('X25519 RFC7748 ECDH', () => {
     const xSecret = edwardsToMontgomeryPriv(edSecret);
     const expectedXPublic = x25519.getPublicKey(xSecret);
     const xPublic = edwardsToMontgomeryPub(edPublic);
-    deepStrictEqual(xPublic, expectedXPublic);
+    eql(xPublic, expectedXPublic);
   });
 
   should('ECDH through edwardsToMontgomery should be commutative', () => {
@@ -196,7 +184,7 @@ describe('X25519 RFC7748 ECDH', () => {
     const edPublic1 = ed25519.getPublicKey(edSecret1);
     const edSecret2 = ed25519.utils.randomPrivateKey();
     const edPublic2 = ed25519.getPublicKey(edSecret2);
-    deepStrictEqual(
+    eql(
       x25519.getSharedSecret(edwardsToMontgomeryPriv(edSecret1), edwardsToMontgomeryPub(edPublic2)),
       x25519.getSharedSecret(edwardsToMontgomeryPriv(edSecret2), edwardsToMontgomeryPub(edPublic1))
     );
@@ -206,7 +194,7 @@ describe('X25519 RFC7748 ECDH', () => {
     const { y } = ed25519ph.ExtendedPoint.BASE;
     const { Fp } = ed25519ph.CURVE;
     const u = Fp.create((y + 1n) * Fp.inv(1n - y));
-    deepStrictEqual(numberToBytesLE(u, 32), x25519.GuBytes);
+    eql(numberToBytesLE(u, 32), x25519.GuBytes);
   });
 
   const group = x25519vectors.testGroups[0];
@@ -216,7 +204,7 @@ describe('X25519 RFC7748 ECDH', () => {
       if (v.result === 'valid' || v.result === 'acceptable') {
         try {
           const shared = hex(x25519.scalarMult(v.private, v.public));
-          deepStrictEqual(shared, v.shared, comment);
+          eql(shared, v.shared, comment);
         } catch (e) {
           // We are more strict
           if (e.message.includes('invalid private or public key received')) return;
@@ -229,7 +217,7 @@ describe('X25519 RFC7748 ECDH', () => {
         } catch (error) {
           failed = true;
         }
-        deepStrictEqual(failed, true, comment);
+        eql(failed, true, comment);
       } else throw new Error('unknown test result');
     });
   });
@@ -261,13 +249,13 @@ describe('ristretto255', () => {
     let B = RistrettoPoint.BASE;
     let P = RistrettoPoint.ZERO;
     for (const encoded of encodingsOfSmallMultiples) {
-      deepStrictEqual(P.toHex(), encoded);
-      deepStrictEqual(RistrettoPoint.fromHex(encoded).toHex(), encoded);
-      deepStrictEqual(
+      eql(P.toHex(), encoded);
+      eql(RistrettoPoint.fromHex(encoded).toHex(), encoded);
+      eql(
         RistrettoPoint.fromAffine(RistrettoPoint.fromHex(encoded).ep.toAffine()).toHex(),
         encoded
       );
-      deepStrictEqual(RistrettoPoint.fromHex(encoded).toString(), encoded);
+      eql(RistrettoPoint.fromHex(encoded).toString(), encoded);
       P = P.add(B);
     }
   });
@@ -336,7 +324,7 @@ describe('ristretto255', () => {
     for (let i = 0; i < labels.length; i++) {
       const hash = sha512(utf8ToBytes(labels[i]));
       const point = RistrettoPoint.hashToCurve(hash);
-      deepStrictEqual(point.toHex(), encodedHashToPoints[i]);
+      eql(point.toHex(), encodedHashToPoints[i]);
     }
   });
   should('have proper equality testing', () => {
@@ -349,16 +337,16 @@ describe('ristretto255', () => {
       202, 114, 222, 139, 146, 123, 4, 125, 152, 173, 1, 7,
     ]);
     const pub = RistrettoPoint.BASE.multiply(bytes255ToNumberLE(priv));
-    deepStrictEqual(pub.equals(RistrettoPoint.ZERO), false);
+    eql(pub.equals(RistrettoPoint.ZERO), false);
 
     const pub2 = RistrettoPoint.BASE.multiplyUnsafe(bytes255ToNumberLE(priv));
-    deepStrictEqual(pub2.equals(RistrettoPoint.ZERO), false);
-    deepStrictEqual(pub.toHex(), pub2.toHex());
+    eql(pub2.equals(RistrettoPoint.ZERO), false);
+    eql(pub.toHex(), pub2.toHex());
   });
 
   should('ristretto255_hasher', () => {
-    deepStrictEqual(
-      hash_to_ristretto255(new Uint8Array(10).fill(5), {
+    eql(
+      hashToRistretto255(new Uint8Array(10).fill(5), {
         DST: 'ristretto255_XMD:SHA-512_R255MAP_RO_',
       }).toHex(),
       'be2194e53cc014665821003f8ecf49e99b7cd16f5326e53f234ecd21c448ee6c'

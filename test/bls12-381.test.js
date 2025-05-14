@@ -1,6 +1,6 @@
 import * as fc from 'fast-check';
 import { describe, should } from 'micro-should';
-import { deepStrictEqual, throws } from 'node:assert';
+import { deepStrictEqual as eql, throws } from 'node:assert';
 import { readFileSync } from 'node:fs';
 import { wNAF } from '../esm/abstract/curve.js';
 import { hash_to_field } from '../esm/abstract/hash-to-curve.js';
@@ -59,7 +59,7 @@ function replaceZeroPoint(item) {
 }
 
 function equal(a, b, comment) {
-  deepStrictEqual(a.equals(b), true, `eq(${comment})`);
+  eql(a.equals(b), true, `eq(${comment})`);
 }
 const { Fp, Fp2 } = bls.fields;
 
@@ -69,7 +69,7 @@ describe('bls12-381 Fp', () => {
 
   should('multiply/sqrt', () => {
     let sqr1 = Fp.sqrt(Fp.create(300855555557n));
-    deepStrictEqual(
+    eql(
       sqr1 && sqr1.toString(),
       '364533921369419647282142659217537440628656909375169620464770009670699095647614890229414882377952296797827799113624'
     );
@@ -88,8 +88,8 @@ describe('bls12-381 Fp2', () => {
       fc.property(FC_BIGINT_2, FC_BIGINT_2, (num1, num2) => {
         const a = Fp2.fromBigTuple([num1[0], num1[1]]);
         const b = Fp2.fromBigTuple([num2[0], num2[1]]);
-        deepStrictEqual(Fp2.eql(a, b), num1[0] === num2[0] && num1[1] === num2[1]);
-        deepStrictEqual(Fp2.eql(b, a), num1[0] === num2[0] && num1[1] === num2[1]);
+        eql(Fp2.eql(a, b), num1[0] === num2[0] && num1[1] === num2[1]);
+        eql(Fp2.eql(b, a), num1[0] === num2[0] && num1[1] === num2[1]);
       })
     );
   });
@@ -106,18 +106,18 @@ describe('bls12-381 Fp2', () => {
       1985150602287291935568054521177171638300868978215655730859378665066344726373823718423869104263333984641494340347905n,
       927553665492332455747201965776037880757740193453592970025027978793976877002675564980949289727957565575433344219582n,
     ]);
-    deepStrictEqual(Fp2.sqr(sqrt0), sqr, 'sqrt0');
-    deepStrictEqual(Fp2.sqr(sqrt1), sqr, 'sqrt1');
-    deepStrictEqual(Fp2.sqrt(sqr), sqrt0);
+    eql(Fp2.sqr(sqrt0), sqr, 'sqrt0');
+    eql(Fp2.sqr(sqrt1), sqr, 'sqrt1');
+    eql(Fp2.sqrt(sqr), sqrt0);
   });
 
   should('div/x/1=x', () => {
     fc.assert(
       fc.property(FC_BIGINT_2, (num) => {
         const a = Fp2.fromBigTuple([num[0], num[1]]);
-        deepStrictEqual(Fp2.div(a, Fp2.fromBigTuple([1n, 0n])), a);
-        deepStrictEqual(Fp2.div(a, Fp2.ONE), a);
-        deepStrictEqual(Fp2.div(a, a), Fp2.ONE);
+        eql(Fp2.div(a, Fp2.fromBigTuple([1n, 0n])), a);
+        eql(Fp2.div(a, Fp2.ONE), a);
+        eql(Fp2.div(a, a), Fp2.ONE);
       })
     );
   });
@@ -136,7 +136,7 @@ describe('bls12-381 Fp2', () => {
       0x012d1137b8a6a8374e464dea5bcfd41eb3f8afc0ee248cadbe203411c66fb3a5946ae52d684fa7ed977df6efcdaee0dbn,
     ]);
     a = Fp2.frobeniusMap(a, 0);
-    deepStrictEqual(
+    eql(
       Fp2.eql(
         a,
         Fp2.fromBigTuple([
@@ -147,7 +147,7 @@ describe('bls12-381 Fp2', () => {
       true
     );
     a = Fp2.frobeniusMap(a, 1);
-    deepStrictEqual(
+    eql(
       Fp2.eql(
         a,
         Fp2.fromBigTuple([
@@ -158,7 +158,7 @@ describe('bls12-381 Fp2', () => {
       true
     );
     a = Fp2.frobeniusMap(a, 1);
-    deepStrictEqual(
+    eql(
       Fp2.eql(
         a,
         Fp2.fromBigTuple([
@@ -169,7 +169,7 @@ describe('bls12-381 Fp2', () => {
       true
     );
     a = Fp2.frobeniusMap(a, 2);
-    deepStrictEqual(
+    eql(
       Fp2.eql(
         a,
         Fp2.fromBigTuple([
@@ -200,8 +200,8 @@ describe('bls12-381 Point', () => {
             const p2 = new PointG1(Fp.create(x2), Fp.create(y2), Fp.create(z2));
             equal(p1, p1);
             equal(p2, p2);
-            deepStrictEqual(p1.equals(p2), false);
-            deepStrictEqual(p2.equals(p1), false);
+            eql(p1.equals(p2), false);
+            eql(p2.equals(p1), false);
           }
         )
       );
@@ -345,10 +345,10 @@ describe('bls12-381 Point', () => {
               Fp2.fromBigTuple(y2),
               Fp2.fromBigTuple(z2)
             );
-            deepStrictEqual(p1.equals(p1), true);
-            deepStrictEqual(p2.equals(p2), true);
-            deepStrictEqual(p1.equals(p2), false);
-            deepStrictEqual(p2.equals(p1), false);
+            eql(p1.equals(p1), true);
+            eql(p2.equals(p2), true);
+            eql(p1.equals(p2), false);
+            eql(p2.equals(p1), false);
           }
         )
       );
@@ -498,42 +498,42 @@ describe('bls12-381 Point', () => {
       let G = PointG1.BASE.negate().negate(); // create new point
       G._setWindowSize(1);
       for (let k of wNAF_VECTORS) {
-        deepStrictEqual(G.multiply(k).equals(G.multiplyUnsafe(k)), true);
+        eql(G.multiply(k).equals(G.multiplyUnsafe(k)), true);
       }
     });
     should('(G1, W=4)', () => {
       let G = PointG1.BASE.negate().negate();
       G._setWindowSize(4);
       for (let k of wNAF_VECTORS) {
-        deepStrictEqual(G.multiply(k).equals(G.multiplyUnsafe(k)), true);
+        eql(G.multiply(k).equals(G.multiplyUnsafe(k)), true);
       }
     });
     should('(G1, W=5)', () => {
       let G = PointG1.BASE.negate().negate();
       G._setWindowSize(5);
       for (let k of wNAF_VECTORS) {
-        deepStrictEqual(G.multiply(k).equals(G.multiplyUnsafe(k)), true);
+        eql(G.multiply(k).equals(G.multiplyUnsafe(k)), true);
       }
     });
     should('(G2, W=1)', () => {
       let G = PointG2.BASE.negate().negate();
       G._setWindowSize(1);
       for (let k of wNAF_VECTORS) {
-        deepStrictEqual(G.multiply(k).equals(G.multiplyUnsafe(k)), true);
+        eql(G.multiply(k).equals(G.multiplyUnsafe(k)), true);
       }
     });
     should('(G2, W=4)', () => {
       let G = PointG2.BASE.negate().negate();
       G._setWindowSize(4);
       for (let k of wNAF_VECTORS) {
-        deepStrictEqual(G.multiply(k).equals(G.multiplyUnsafe(k)), true);
+        eql(G.multiply(k).equals(G.multiplyUnsafe(k)), true);
       }
     });
     should('(G2, W=5)', () => {
       let G = PointG2.BASE.negate().negate();
       G._setWindowSize(5);
       for (let k of wNAF_VECTORS) {
-        deepStrictEqual(G.multiply(k).equals(G.multiplyUnsafe(k)), true);
+        eql(G.multiply(k).equals(G.multiplyUnsafe(k)), true);
       }
     });
   });
@@ -598,7 +598,7 @@ describe('bls12-381 Point', () => {
     for (let p of points) {
       const ours = p.clearCofactor();
       const shouldBe = w.unsafeLadder(p, hEff);
-      deepStrictEqual(ours.equals(shouldBe), true, 'clearLast');
+      eql(ours.equals(shouldBe), true, 'clearLast');
     }
   });
 });
@@ -612,8 +612,8 @@ describe('bls12-381/basic', () => {
   should('construct point G1 from its uncompressed form (Raw Bytes)', () => {
     // Test Zero
     const g1 = G1Point.fromHex(B_192_40);
-    deepStrictEqual(g1.x, G1Point.ZERO.x);
-    deepStrictEqual(g1.y, G1Point.ZERO.y);
+    eql(g1.x, G1Point.ZERO.x);
+    eql(g1.y, G1Point.ZERO.y);
     // Test Non-Zero
     const x = Fp.create(
       BigInt(
@@ -630,16 +630,16 @@ describe('bls12-381/basic', () => {
       '17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
     );
 
-    deepStrictEqual(g1_.x, x);
-    deepStrictEqual(g1_.y, y);
+    eql(g1_.x, x);
+    eql(g1_.y, y);
   });
 
   should('construct point G1 from its uncompressed form (Hex)', () => {
     // Test Zero
     const g1 = G1Point.fromHex(B_192_40);
 
-    deepStrictEqual(g1.x, G1Point.ZERO.x);
-    deepStrictEqual(g1.y, G1Point.ZERO.y);
+    eql(g1.x, G1Point.ZERO.x);
+    eql(g1.y, G1Point.ZERO.y);
     // Test Non-Zero
     const x = Fp.create(
       BigInt(
@@ -656,15 +656,15 @@ describe('bls12-381/basic', () => {
       '17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
     );
 
-    deepStrictEqual(g1_.x, x);
-    deepStrictEqual(g1_.y, y);
+    eql(g1_.x, x);
+    eql(g1_.y, y);
   });
 
   should('construct point G2 from its uncompressed form (Raw Bytes)', () => {
     // Test Zero
     const g2 = G2Point.fromHex(B_384_40);
-    deepStrictEqual(g2.x, G2Point.ZERO.x, 'zero(x)');
-    deepStrictEqual(g2.y, G2Point.ZERO.y, 'zero(y)');
+    eql(g2.x, G2Point.ZERO.x, 'zero(x)');
+    eql(g2.y, G2Point.ZERO.y, 'zero(y)');
     // Test Non-Zero
     const x = Fp2.fromBigTuple([
       BigInt(
@@ -687,16 +687,16 @@ describe('bls12-381/basic', () => {
       '13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb80606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79be0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801'
     );
 
-    deepStrictEqual(g2_.x, x);
-    deepStrictEqual(g2_.y, y);
+    eql(g2_.x, x);
+    eql(g2_.y, y);
   });
 
   should('construct point G2 from its uncompressed form (Hex)', () => {
     // Test Zero
     const g2 = G2Point.fromHex(B_384_40);
 
-    deepStrictEqual(g2.x, G2Point.ZERO.x);
-    deepStrictEqual(g2.y, G2Point.ZERO.y);
+    eql(g2.x, G2Point.ZERO.x);
+    eql(g2.y, G2Point.ZERO.y);
     // Test Non-Zero
     const x = Fp2.fromBigTuple([
       BigInt(
@@ -719,13 +719,13 @@ describe('bls12-381/basic', () => {
       '13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb80606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79be0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801'
     );
 
-    deepStrictEqual(g2_.x, x);
-    deepStrictEqual(g2_.y, y);
+    eql(g2_.x, x);
+    eql(g2_.y, y);
   });
 
   should('get uncompressed form of point G1 (Raw Bytes)', () => {
     // Test Zero
-    deepStrictEqual(G1Point.ZERO.toHex(false), B_192_40);
+    eql(G1Point.ZERO.toHex(false), B_192_40);
     // Test Non-Zero
     const x = Fp.create(
       BigInt(
@@ -738,7 +738,7 @@ describe('bls12-381/basic', () => {
       )
     );
     const g1 = G1Point.fromAffine({ x, y });
-    deepStrictEqual(
+    eql(
       g1.toHex(false),
       '17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
     );
@@ -746,7 +746,7 @@ describe('bls12-381/basic', () => {
 
   should('get uncompressed form of point G1 (Hex)', () => {
     // Test Zero
-    deepStrictEqual(G1Point.ZERO.toHex(false), B_192_40);
+    eql(G1Point.ZERO.toHex(false), B_192_40);
     // Test Non-Zero
     const x = Fp.create(
       BigInt(
@@ -759,7 +759,7 @@ describe('bls12-381/basic', () => {
       )
     );
     const g1 = G1Point.fromAffine({ x, y });
-    deepStrictEqual(
+    eql(
       g1.toHex(false),
       '17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
     );
@@ -767,7 +767,7 @@ describe('bls12-381/basic', () => {
 
   should('get uncompressed form of point G2 (Raw Bytes)', () => {
     // Test Zero
-    deepStrictEqual(G2Point.ZERO.toHex(false), B_384_40);
+    eql(G2Point.ZERO.toHex(false), B_384_40);
     // Test Non-Zero
     const x = Fp2.fromBigTuple([
       BigInt(
@@ -786,7 +786,7 @@ describe('bls12-381/basic', () => {
       ),
     ]);
     const g2 = G2Point.fromAffine({ x, y });
-    deepStrictEqual(
+    eql(
       g2.toHex(false),
       '13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb80606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79be0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801'
     );
@@ -794,7 +794,7 @@ describe('bls12-381/basic', () => {
 
   should('get uncompressed form of point G2 (Hex)', () => {
     // Test Zero
-    deepStrictEqual(G2Point.ZERO.toHex(false), B_384_40);
+    eql(G2Point.ZERO.toHex(false), B_384_40);
 
     // Test Non-Zero
     const x = Fp2.fromBigTuple([
@@ -814,7 +814,7 @@ describe('bls12-381/basic', () => {
       ),
     ]);
     const g2 = G2Point.fromAffine({ x, y });
-    deepStrictEqual(
+    eql(
       g2.toHex(false),
       '13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb80606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79be0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801'
     );
@@ -824,7 +824,7 @@ describe('bls12-381/basic', () => {
     const priv = G1Point.fromPrivateKey(42n);
     const publicKey = priv.toHex(true);
     const decomp = G1Point.fromHex(publicKey);
-    deepStrictEqual(publicKey, decomp.toHex(true));
+    eql(publicKey, decomp.toHex(true));
   });
   should('not compress and decompress zero G1 point', () => {
     throws(() => G1Point.fromPrivateKey(0n));
@@ -833,7 +833,7 @@ describe('bls12-381/basic', () => {
     const priv = G2Point.fromPrivateKey(42n);
     const publicKey = priv.toHex(true);
     const decomp = G2Point.fromHex(publicKey);
-    deepStrictEqual(publicKey, decomp.toHex(true));
+    eql(publicKey, decomp.toHex(true));
   });
   should('not compress and decompress zero G2 point', () => {
     throws(() => G2Point.fromPrivateKey(0n));
@@ -869,11 +869,11 @@ describe('bls12-381/basic', () => {
 
   should('aggregate pubkeys', () => {
     const agg = bls.aggregatePublicKeys([VALID_G1, VALID_G1_2]).toAffine();
-    deepStrictEqual(
+    eql(
       agg.x,
       2636337749883017793009944726560363863546595464242083394883491066895536780554574413337005575305023872925406746684807n
     );
-    deepStrictEqual(
+    eql(
       agg.y,
       2200256264293372104833346444532839112556752874984721583125881868863625579979779052307146195064914375388929781136724n
     );
@@ -888,18 +888,18 @@ describe('bls12-381/basic', () => {
     for (let vector of G1_VECTORS) {
       const [priv, msg, expected] = vector;
       const sig = bls.signShortSignature(msg, priv);
-      deepStrictEqual(bytesToHex(sig), expected);
-      deepStrictEqual(bls.ShortSignature.toRawBytes(bls.ShortSignature.fromHex(sig)), sig);
-      deepStrictEqual(bls.ShortSignature.toHex(bls.ShortSignature.fromHex(sig)), bytesToHex(sig));
+      eql(bytesToHex(sig), expected);
+      eql(bls.ShortSignature.toRawBytes(bls.ShortSignature.fromHex(sig)), sig);
+      eql(bls.ShortSignature.toHex(bls.ShortSignature.fromHex(sig)), bytesToHex(sig));
     }
   });
   should(`produce correct signatures (${G2_VECTORS.length} vectors)`, () => {
     for (let vector of G2_VECTORS) {
       const [priv, msg, expected] = vector;
       const sig = bls.sign(msg, priv);
-      deepStrictEqual(bytesToHex(sig), expected);
-      deepStrictEqual(bls.Signature.toRawBytes(bls.Signature.fromHex(sig)), sig);
-      deepStrictEqual(bls.Signature.toHex(bls.Signature.fromHex(sig)), bytesToHex(sig));
+      eql(bytesToHex(sig), expected);
+      eql(bls.Signature.toRawBytes(bls.Signature.fromHex(sig)), sig);
+      eql(bls.Signature.toHex(bls.Signature.fromHex(sig)), bytesToHex(sig));
     }
   });
   should(`produce correct scalars (${SCALAR_VECTORS.length} vectors)`, () => {
@@ -913,7 +913,7 @@ describe('bls12-381/basic', () => {
       const expected = BigInt('0x' + expectedHex);
       const okm = utf8ToBytes(okmAscii);
       const scalars = hash_to_field(okm, 1, Object.assign({}, bls.G2.CURVE.htfDefaults, options));
-      deepStrictEqual(scalars[0][0], expected);
+      eql(scalars[0][0], expected);
     }
   });
   should(`produce correct scalars XMD (${SCALAR_XMD_SHA256_VECTORS.length} vectors)`, () => {
@@ -928,7 +928,7 @@ describe('bls12-381/basic', () => {
       const expected = BigInt('0x' + expectedHex);
       const okm = utf8ToBytes(okmAscii);
       const scalars = hash_to_field(okm, 1, Object.assign({}, bls.G2.CURVE.htfDefaults, options));
-      deepStrictEqual(scalars[0][0], expected);
+      eql(scalars[0][0], expected);
     }
   });
 });
@@ -942,7 +942,7 @@ describe('pairing', () => {
 
   should('vectors from https://github.com/zkcrypto/pairing', () => {
     const p1 = pairing(G1, G2);
-    deepStrictEqual(
+    eql(
       p1,
       Fp12.fromBigTwelve([
         0x1250ebd871fc0a92a7b2d83168d0d727272d441befa15c503dd8e90ce98db3e7b6d194f60839c508a84305aaca1789b6n,
@@ -975,7 +975,7 @@ describe('pairing', () => {
       2263326825947267463771741379953930448565128050766360539694662323032637428903113943692772437175107441778689006777591n,
       2975309739982292949472410540684863862532494446476557866806093059134361887381947558323102825622690771432446161524562n,
     ]);
-    deepStrictEqual(
+    eql(
       Fp12.finalExponentiate(p1),
       Fp12.fromBigTwelve([
         0x09d72c189ba2fd4b09b63da857f321b791b45f8ec589858bc6d41c8f4eb05244ad7a22aea1119a958d890a19f6cacedan,
@@ -1032,7 +1032,7 @@ describe('hash-to-curve (against Killic)', () => {
         const p = bls.G1.hashToCurve(t.msg, {
           DST: 'BLS12381G1_XMD:SHA-256_SSWU_RO_TESTGEN',
         });
-        deepStrictEqual(p.toHex(false), t.expected);
+        eql(p.toHex(false), t.expected);
       });
     }
   });
@@ -1071,7 +1071,7 @@ describe('hash-to-curve (against Killic)', () => {
         const p = bls.G1.encodeToCurve(t.msg, {
           DST: 'BLS12381G1_XMD:SHA-256_SSWU_NU_TESTGEN',
         });
-        deepStrictEqual(p.toHex(false), t.expected);
+        eql(p.toHex(false), t.expected);
       });
     }
   });
@@ -1119,7 +1119,7 @@ describe('hash-to-curve (against Killic)', () => {
         const p = bls.G2.hashToCurve(t.msg, {
           DST: 'BLS12381G2_XMD:SHA-256_SSWU_RO_TESTGEN',
         });
-        deepStrictEqual(p.toHex(false), t.expected);
+        eql(p.toHex(false), t.expected);
       });
     }
   });
@@ -1166,7 +1166,7 @@ describe('hash-to-curve (against Killic)', () => {
         const p = bls.G2.encodeToCurve(t.msg, {
           DST: 'BLS12381G2_XMD:SHA-256_SSWU_NU_TESTGEN',
         });
-        deepStrictEqual(p.toHex(false), t.expected);
+        eql(p.toHex(false), t.expected);
       });
     }
   });
@@ -1179,9 +1179,9 @@ describe('verify()', () => {
       const sig = bls.sign(msg, priv);
       const pub = bls.getPublicKey(priv);
       const res = bls.verify(sig, msg, pub);
-      deepStrictEqual(res, true, `${priv}-${msg}`);
+      eql(res, true, `${priv}-${msg}`);
       const resHex = bls.verify(bytesToHex(sig), msg, pub);
-      deepStrictEqual(resHex, true, `${priv}-${msg}-hex`);
+      eql(resHex, true, `${priv}-${msg}-hex`);
     }
   });
   should('not verify signature with wrong message', () => {
@@ -1191,7 +1191,7 @@ describe('verify()', () => {
       const sig = bls.sign(msg, priv);
       const pub = bls.getPublicKey(priv);
       const res = bls.verify(sig, invMsg, pub);
-      deepStrictEqual(res, false);
+      eql(res, false);
     }
   });
   should('not verify signature with wrong key', () => {
@@ -1201,9 +1201,9 @@ describe('verify()', () => {
       const invPriv = G2_VECTORS[i + 1][1].padStart(64, '0');
       const invPub = bls.getPublicKey(invPriv);
       const res = bls.verify(sig, msg, invPub);
-      deepStrictEqual(res, false);
+      eql(res, false);
       const resHex = bls.verify(bytesToHex(sig), msg, invPub);
-      deepStrictEqual(resHex, false);
+      eql(resHex, false);
     }
   });
   should('verify signed message (short signatures)', () => {
@@ -1212,9 +1212,9 @@ describe('verify()', () => {
       const sig = bls.signShortSignature(msg, priv);
       const pub = bls.getPublicKeyForShortSignatures(priv);
       const res = bls.verifyShortSignature(sig, msg, pub);
-      deepStrictEqual(res, true, `${priv}-${msg}`);
+      eql(res, true, `${priv}-${msg}`);
       const resHex = bls.verifyShortSignature(bytesToHex(sig), msg, pub);
-      deepStrictEqual(resHex, true, `${priv}-${msg}`);
+      eql(resHex, true, `${priv}-${msg}`);
     }
   });
   should('not verify signature with wrong message (short signatures)', () => {
@@ -1224,9 +1224,9 @@ describe('verify()', () => {
       const sig = bls.signShortSignature(msg, priv);
       const pub = bls.getPublicKeyForShortSignatures(priv);
       const res = bls.verifyShortSignature(sig, invMsg, pub);
-      deepStrictEqual(res, false);
+      eql(res, false);
       const resHex = bls.verifyShortSignature(bytesToHex(sig), invMsg, pub);
-      deepStrictEqual(resHex, false);
+      eql(resHex, false);
     }
   });
   should('not verify signature with wrong key', () => {
@@ -1236,9 +1236,9 @@ describe('verify()', () => {
       const invPriv = G1_VECTORS[i + 1][1].padStart(64, '0');
       const invPub = bls.getPublicKeyForShortSignatures(invPriv);
       const res = bls.verifyShortSignature(sig, msg, invPub);
-      deepStrictEqual(res, false);
+      eql(res, false);
       const resHex = bls.verifyShortSignature(bytesToHex(sig), msg, invPub);
-      deepStrictEqual(resHex, false);
+      eql(resHex, false);
     }
   });
   describe('batch', () => {
@@ -1250,11 +1250,8 @@ describe('verify()', () => {
           const publicKey = privateKeys.map(getPubKey);
           const signatures = messages.map((message, i) => bls.sign(message, privateKeys[i]));
           const aggregatedSignature = bls.aggregateSignatures(signatures);
-          deepStrictEqual(bls.verifyBatch(aggregatedSignature, messages, publicKey), true);
-          deepStrictEqual(
-            bls.verifyBatch(bytesToHex(aggregatedSignature), messages, publicKey),
-            true
-          );
+          eql(bls.verifyBatch(aggregatedSignature, messages, publicKey), true);
+          eql(bls.verifyBatch(bytesToHex(aggregatedSignature), messages, publicKey), true);
         })
       );
     });
@@ -1269,11 +1266,11 @@ describe('verify()', () => {
           const publicKey = privateKeys.map(getPubKey);
           const signatures = messages.map((message, i) => bls.sign(message, privateKeys[i]));
           const aggregatedSignature = bls.aggregateSignatures(signatures);
-          deepStrictEqual(
+          eql(
             bls.verifyBatch(aggregatedSignature, wrongMessages, publicKey),
             messages.every((m, i) => m === wrongMessages[i])
           );
-          deepStrictEqual(
+          eql(
             bls.verifyBatch(bytesToHex(aggregatedSignature), wrongMessages, publicKey),
             messages.every((m, i) => m === wrongMessages[i])
           );
@@ -1295,11 +1292,11 @@ describe('verify()', () => {
             const wrongPublicKeys = wrongPrivateKeys.map(getPubKey);
             const signatures = messages.map((message, i) => bls.sign(message, privateKeys[i]));
             const aggregatedSignature = bls.aggregateSignatures(signatures);
-            deepStrictEqual(
+            eql(
               bls.verifyBatch(aggregatedSignature, messages, wrongPublicKeys),
               wrongPrivateKeys.every((p, i) => p === privateKeys[i])
             );
-            deepStrictEqual(
+            eql(
               bls.verifyBatch(bytesToHex(aggregatedSignature), messages, wrongPublicKeys),
               wrongPrivateKeys.every((p, i) => p === privateKeys[i])
             );
@@ -1319,11 +1316,8 @@ describe('verify()', () => {
           // Error: Property failed after 9 tests
           // { seed: 515274642, path: "8:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0", endOnFailure: true }
           // Counterexample: ["0000000000000000000000000000000000000000000000000000000000000000",[4n,52435875175126190479447740508185965837690552500527637822603658699938581184445n,43n,75n,52435875175126190479447740508185965837690552500527637822603658699938581184459n]]
-          deepStrictEqual(bls.verify(aggregatedSignature, message, aggregatedPublicKey), true);
-          deepStrictEqual(
-            bls.verify(bytesToHex(aggregatedSignature), message, aggregatedPublicKey),
-            true
-          );
+          eql(bls.verify(aggregatedSignature, message, aggregatedPublicKey), true);
+          eql(bls.verify(bytesToHex(aggregatedSignature), message, aggregatedPublicKey), true);
         })
       );
     });
@@ -1335,11 +1329,11 @@ describe('verify()', () => {
           const signatures = privateKeys.map((privateKey) => bls.sign(message, privateKey));
           const aggregatedSignature = bls.aggregateSignatures(signatures);
           const aggregatedPublicKey = bls.aggregatePublicKeys(publicKey);
-          deepStrictEqual(
+          eql(
             bls.verify(aggregatedSignature, wrongMessage, aggregatedPublicKey),
             message === wrongMessage
           );
-          deepStrictEqual(
+          eql(
             bls.verify(bytesToHex(aggregatedSignature), wrongMessage, aggregatedPublicKey),
             message === wrongMessage
           );
@@ -1361,7 +1355,7 @@ describe('bls12-381 deterministic', () => {
 
   should('Killic based/Pairing', () => {
     const t = bls.pairing(G1Point.BASE, G2Point.BASE);
-    deepStrictEqual(
+    eql(
       bytesToHex(Fp12.toBytes(t)),
       killicHex([
         '0f41e58663bf08cf068672cbd01a7ec73baca4d72ca93544deff686bfd6df543d48eaa24afe47e1efde449383b676631',
@@ -1383,7 +1377,7 @@ describe('bls12-381 deterministic', () => {
     let p1 = G1Point.BASE;
     let p2 = G2Point.BASE;
     for (let v of pairingVectors) {
-      deepStrictEqual(
+      eql(
         bytesToHex(Fp12.toBytes(bls.pairing(p1, p2))),
         // Reverse order
         v.match(/.{96}/g).reverse().join('')
@@ -1398,14 +1392,14 @@ describe('bls12-381 deterministic', () => {
     for (let i = 0; i < zkVectors.G1_Compressed.length; i++) {
       const t = zkVectors.G1_Compressed[i];
       const P = G1Point.fromHex(t);
-      deepStrictEqual(P.toHex(true), t);
-      deepStrictEqual(P.equals(p1), true);
-      deepStrictEqual(p1.toHex(true), t);
+      eql(P.toHex(true), t);
+      eql(P.equals(p1), true);
+      eql(p1.toHex(true), t);
       p1 = p1.add(G1Point.BASE);
       if (i) {
-        deepStrictEqual(G1Point.BASE.multiply(BigInt(i)).toHex(true), t);
-        deepStrictEqual(G1Point.BASE.multiplyUnsafe(BigInt(i)).toHex(true), t);
-        deepStrictEqual(G1Point.BASE.multiply(BigInt(i)).toHex(true), t);
+        eql(G1Point.BASE.multiply(BigInt(i)).toHex(true), t);
+        eql(G1Point.BASE.multiplyUnsafe(BigInt(i)).toHex(true), t);
+        eql(G1Point.BASE.multiply(BigInt(i)).toHex(true), t);
       }
     }
   });
@@ -1414,14 +1408,14 @@ describe('bls12-381 deterministic', () => {
     for (let i = 0; i < zkVectors.G1_Uncompressed.length; i++) {
       const t = zkVectors.G1_Uncompressed[i];
       const P = G1Point.fromHex(t);
-      deepStrictEqual(P.toHex(false), t);
-      deepStrictEqual(P.equals(p1), true);
-      deepStrictEqual(p1.toHex(false), t);
+      eql(P.toHex(false), t);
+      eql(P.equals(p1), true);
+      eql(p1.toHex(false), t);
       p1 = p1.add(G1Point.BASE);
       if (i) {
-        deepStrictEqual(G1Point.BASE.multiply(BigInt(i)).toHex(false), t);
-        deepStrictEqual(G1Point.BASE.multiplyUnsafe(BigInt(i)).toHex(false), t);
-        deepStrictEqual(G1Point.BASE.multiply(BigInt(i)).toHex(false), t);
+        eql(G1Point.BASE.multiply(BigInt(i)).toHex(false), t);
+        eql(G1Point.BASE.multiplyUnsafe(BigInt(i)).toHex(false), t);
+        eql(G1Point.BASE.multiply(BigInt(i)).toHex(false), t);
       }
     }
   });
@@ -1430,15 +1424,15 @@ describe('bls12-381 deterministic', () => {
     for (let i = 0; i < zkVectors.G2_Compressed.length; i++) {
       const t = zkVectors.G2_Compressed[i];
       const P = G2Point.fromHex(t);
-      deepStrictEqual(P.toHex(true), t);
-      deepStrictEqual(P.equals(p1), true);
-      deepStrictEqual(p1.toHex(true), t);
+      eql(P.toHex(true), t);
+      eql(P.equals(p1), true);
+      eql(p1.toHex(true), t);
       p1 = p1.add(G2Point.BASE);
       if (i) {
         let n = BigInt(i);
-        deepStrictEqual(G2Point.BASE.multiply(n).toHex(true), t);
-        deepStrictEqual(G2Point.BASE.multiplyUnsafe(n).toHex(true), t);
-        deepStrictEqual(G2Point.BASE.multiply(n).toHex(true), t);
+        eql(G2Point.BASE.multiply(n).toHex(true), t);
+        eql(G2Point.BASE.multiplyUnsafe(n).toHex(true), t);
+        eql(G2Point.BASE.multiply(n).toHex(true), t);
       }
     }
   });
@@ -1447,14 +1441,14 @@ describe('bls12-381 deterministic', () => {
     for (let i = 0; i < zkVectors.G2_Uncompressed.length; i++) {
       const t = zkVectors.G2_Uncompressed[i];
       const P = G2Point.fromHex(t);
-      deepStrictEqual(P.toHex(false), t);
-      deepStrictEqual(P.equals(p1), true);
-      deepStrictEqual(p1.toHex(false), t);
+      eql(P.toHex(false), t);
+      eql(P.equals(p1), true);
+      eql(p1.toHex(false), t);
       p1 = p1.add(G2Point.BASE);
       if (i) {
-        deepStrictEqual(G2Point.BASE.multiply(BigInt(i)).toHex(false), t);
-        deepStrictEqual(G2Point.BASE.multiplyUnsafe(BigInt(i)).toHex(false), t);
-        deepStrictEqual(G2Point.BASE.multiply(BigInt(i)).toHex(false), t);
+        eql(G2Point.BASE.multiply(BigInt(i)).toHex(false), t);
+        eql(G2Point.BASE.multiplyUnsafe(BigInt(i)).toHex(false), t);
+        eql(G2Point.BASE.multiply(BigInt(i)).toHex(false), t);
       }
     }
   });
@@ -1470,12 +1464,12 @@ describe('bls12-381 deterministic', () => {
     ];
     for (const { pos, shift } of VECTORS) {
       const d = utils.numberToBytesBE(utils.bitSet(0n, pos, Boolean(true)), Fp.BYTES);
-      deepStrictEqual((d[0] >> shift) & 1, 1, `${pos}`);
+      eql((d[0] >> shift) & 1, 1, `${pos}`);
     }
     const baseC = G1Point.BASE.toRawBytes();
-    deepStrictEqual(baseC.length, 48);
+    eql(baseC.length, 48);
     const baseU = G1Point.BASE.toRawBytes(false);
-    deepStrictEqual(baseU.length, 96);
+    eql(baseU.length, 96);
     const compressedBit = baseU.slice();
     compressedBit[0] |= 0b1000_0000; // add compression bit
     throws(() => G1Point.fromHex(compressedBit), 'compressed bit'); // uncompressed point with compressed length
@@ -1501,12 +1495,12 @@ describe('bls12-381 deterministic', () => {
     ];
     for (const { pos, shift } of VECTORS) {
       const d = utils.numberToBytesBE(utils.bitSet(0n, pos, Boolean(true)), Fp.BYTES);
-      deepStrictEqual((d[0] >> shift) & 1, 1, `${pos}`);
+      eql((d[0] >> shift) & 1, 1, `${pos}`);
     }
     const baseC = G2Point.BASE.toRawBytes();
-    deepStrictEqual(baseC.length, 96);
+    eql(baseC.length, 96);
     const baseU = G2Point.BASE.toRawBytes(false);
-    deepStrictEqual(baseU.length, 192);
+    eql(baseU.length, 192);
     const compressedBit = baseU.slice();
     compressedBit[0] |= 0b1000_0000; // add compression bit
     throws(() => G2Point.fromHex(compressedBit), 'compressed bit'); // uncompressed point with compressed length
@@ -1544,7 +1538,7 @@ describe('bls12-381 deterministic', () => {
         const input = hexToBytes(v.Input);
         const { x, y } = mapToCurveEth(bls12_381.G1, [bytesToNumberBE(input)]).toAffine();
         const val = toEthHex(x) + toEthHex(y);
-        deepStrictEqual(val, v.Expected);
+        eql(val, v.Expected);
       }
     });
     should('G2', () => {
@@ -1553,7 +1547,7 @@ describe('bls12-381 deterministic', () => {
         const input2 = BigInt(`0x${v.Input.slice(128, 256)}`);
         const { x, y } = mapToCurveEth(bls12_381.G2, [input1, input2]).toAffine();
         const res = toEthHex(x.c0) + toEthHex(x.c1) + toEthHex(y.c0) + toEthHex(y.c1);
-        deepStrictEqual(res, v.Expected);
+        eql(res, v.Expected);
         // console.log('G2', res === v.Expected);
       }
     });
@@ -1562,10 +1556,7 @@ describe('bls12-381 deterministic', () => {
       const t = BigInt(
         '1006044755431560595281793557931171729984964515682961911911398807521437683216171091013202870577238485832047490326971'
       );
-      deepStrictEqual(
-        mapToCurveEth(bls12_381.G1, [t]).equals(bls12_381.G1.ProjectivePoint.ZERO),
-        true
-      );
+      eql(mapToCurveEth(bls12_381.G1, [t]).equals(bls12_381.G1.ProjectivePoint.ZERO), true);
     });
   });
 });

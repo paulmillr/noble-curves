@@ -1,6 +1,6 @@
 import * as fc from 'fast-check';
 import { describe, should } from 'micro-should';
-import { deepStrictEqual, notDeepStrictEqual, throws } from 'node:assert';
+import { deepStrictEqual as eql, notDeepStrictEqual, throws } from 'node:assert';
 import * as mod from '../esm/abstract/modular.js';
 import { isBytes, bytesToHex as toHex } from '../esm/abstract/utils.js';
 import { getTypeTests, json } from './utils.js';
@@ -119,8 +119,8 @@ for (const c in FIELDS) {
           fc.property(FC_BIGINT, (num) => {
             const a = create(num);
             const b = create(num);
-            deepStrictEqual(Fp.eql(a, b), true);
-            deepStrictEqual(Fp.eql(b, a), true);
+            eql(Fp.eql(a, b), true);
+            eql(Fp.eql(b, a), true);
           })
         );
       });
@@ -130,8 +130,8 @@ for (const c in FIELDS) {
             // TODO: num1 === num2 is FALSE for Fp2
             const a = create(num1);
             const b = create(num2);
-            deepStrictEqual(Fp.eql(a, b), num1 === num2);
-            deepStrictEqual(Fp.eql(b, a), num1 === num2);
+            eql(Fp.eql(a, b), num1 === num2);
+            eql(Fp.eql(b, a), num1 === num2);
           })
         );
       });
@@ -140,7 +140,7 @@ for (const c in FIELDS) {
           fc.property(FC_BIGINT, FC_BIGINT, (num1, num2) => {
             const a = create(num1);
             const b = create(num2);
-            deepStrictEqual(Fp.add(a, b), Fp.add(b, a));
+            eql(Fp.add(a, b), Fp.add(b, a));
           })
         );
       });
@@ -150,7 +150,7 @@ for (const c in FIELDS) {
             const a = create(num1);
             const b = create(num2);
             const c = create(num3);
-            deepStrictEqual(Fp.add(a, Fp.add(b, c)), Fp.add(Fp.add(a, b), c));
+            eql(Fp.add(a, Fp.add(b, c)), Fp.add(Fp.add(a, b), c));
           })
         );
       });
@@ -158,7 +158,7 @@ for (const c in FIELDS) {
         fc.assert(
           fc.property(FC_BIGINT, (num) => {
             const a = create(num);
-            deepStrictEqual(Fp.add(a, Fp.ZERO), a);
+            eql(Fp.add(a, Fp.ZERO), a);
           })
         );
       });
@@ -166,8 +166,8 @@ for (const c in FIELDS) {
         fc.assert(
           fc.property(FC_BIGINT, (num) => {
             const a = create(num);
-            deepStrictEqual(Fp.sub(a, Fp.ZERO), a);
-            deepStrictEqual(Fp.sub(a, a), Fp.ZERO);
+            eql(Fp.sub(a, Fp.ZERO), a);
+            eql(Fp.sub(a, a), Fp.ZERO);
           })
         );
       });
@@ -176,9 +176,9 @@ for (const c in FIELDS) {
           fc.property(FC_BIGINT, (num1) => {
             const a = create(num1);
             const b = create(num1);
-            deepStrictEqual(Fp.sub(Fp.ZERO, a), Fp.neg(a));
-            deepStrictEqual(Fp.sub(a, b), Fp.add(a, Fp.neg(b)));
-            deepStrictEqual(Fp.sub(a, b), Fp.add(a, Fp.mul(b, Fp.create(-1n))));
+            eql(Fp.sub(Fp.ZERO, a), Fp.neg(a));
+            eql(Fp.sub(a, b), Fp.add(a, Fp.neg(b)));
+            eql(Fp.sub(a, b), Fp.add(a, Fp.mul(b, Fp.create(-1n))));
           })
         );
       });
@@ -186,13 +186,13 @@ for (const c in FIELDS) {
         fc.assert(
           fc.property(FC_BIGINT, (num) => {
             const a = create(num);
-            deepStrictEqual(Fp.neg(a), Fp.sub(Fp.ZERO, a));
-            deepStrictEqual(Fp.neg(a), Fp.mul(a, Fp.create(-1n)));
+            eql(Fp.neg(a), Fp.sub(Fp.ZERO, a));
+            eql(Fp.neg(a), Fp.mul(a, Fp.create(-1n)));
           })
         );
       });
       should('negate(0)', () => {
-        deepStrictEqual(Fp.neg(Fp.ZERO), Fp.ZERO);
+        eql(Fp.neg(Fp.ZERO), Fp.ZERO);
       });
 
       should('multiply/commutativity', () => {
@@ -200,7 +200,7 @@ for (const c in FIELDS) {
           fc.property(FC_BIGINT, FC_BIGINT, (num1, num2) => {
             const a = create(num1);
             const b = create(num2);
-            deepStrictEqual(Fp.mul(a, b), Fp.mul(b, a));
+            eql(Fp.mul(a, b), Fp.mul(b, a));
           })
         );
       });
@@ -210,7 +210,7 @@ for (const c in FIELDS) {
             const a = create(num1);
             const b = create(num2);
             const c = create(num3);
-            deepStrictEqual(Fp.mul(a, Fp.mul(b, c)), Fp.mul(Fp.mul(a, b), c));
+            eql(Fp.mul(a, Fp.mul(b, c)), Fp.mul(Fp.mul(a, b), c));
           })
         );
       });
@@ -220,7 +220,7 @@ for (const c in FIELDS) {
             const a = create(num1);
             const b = create(num2);
             const c = create(num3);
-            deepStrictEqual(Fp.mul(a, Fp.add(b, c)), Fp.add(Fp.mul(b, a), Fp.mul(c, a)));
+            eql(Fp.mul(a, Fp.add(b, c)), Fp.add(Fp.mul(b, a), Fp.mul(c, a)));
           })
         );
       });
@@ -228,13 +228,13 @@ for (const c in FIELDS) {
         fc.assert(
           fc.property(FC_BIGINT, (num) => {
             const a = create(num);
-            deepStrictEqual(Fp.mul(a, 0n), Fp.ZERO);
-            deepStrictEqual(Fp.mul(a, Fp.ZERO), Fp.ZERO);
-            deepStrictEqual(Fp.mul(a, 1n), a);
-            deepStrictEqual(Fp.mul(a, Fp.ONE), a);
-            deepStrictEqual(Fp.mul(a, 2n), Fp.add(a, a));
-            deepStrictEqual(Fp.mul(a, 3n), Fp.add(Fp.add(a, a), a));
-            deepStrictEqual(Fp.mul(a, 4n), Fp.add(Fp.add(Fp.add(a, a), a), a));
+            eql(Fp.mul(a, 0n), Fp.ZERO);
+            eql(Fp.mul(a, Fp.ZERO), Fp.ZERO);
+            eql(Fp.mul(a, 1n), a);
+            eql(Fp.mul(a, Fp.ONE), a);
+            eql(Fp.mul(a, 2n), Fp.add(a, a));
+            eql(Fp.mul(a, 3n), Fp.add(Fp.add(a, a), a));
+            eql(Fp.mul(a, 4n), Fp.add(Fp.add(Fp.add(a, a), a), a));
           })
         );
       });
@@ -242,7 +242,7 @@ for (const c in FIELDS) {
         fc.assert(
           fc.property(FC_BIGINT, (num) => {
             const a = create(num);
-            deepStrictEqual(Fp.sqr(a), Fp.mul(a, a));
+            eql(Fp.sqr(a), Fp.mul(a, a));
           })
         );
       });
@@ -250,36 +250,36 @@ for (const c in FIELDS) {
         fc.assert(
           fc.property(FC_BIGINT, (num) => {
             const a = create(num);
-            deepStrictEqual(Fp.pow(a, 0n), Fp.ONE);
-            deepStrictEqual(Fp.pow(a, 1n), a);
-            deepStrictEqual(Fp.pow(a, 2n), Fp.mul(a, a));
-            deepStrictEqual(Fp.pow(a, 3n), Fp.mul(Fp.mul(a, a), a));
+            eql(Fp.pow(a, 0n), Fp.ONE);
+            eql(Fp.pow(a, 1n), a);
+            eql(Fp.pow(a, 2n), Fp.mul(a, a));
+            eql(Fp.pow(a, 3n), Fp.mul(Fp.mul(a, a), a));
           })
         );
       });
 
       should('square(0)', () => {
-        deepStrictEqual(Fp.sqr(Fp.ZERO), Fp.ZERO);
-        deepStrictEqual(Fp.mul(Fp.ZERO, Fp.ZERO), Fp.ZERO);
+        eql(Fp.sqr(Fp.ZERO), Fp.ZERO);
+        eql(Fp.mul(Fp.ZERO, Fp.ZERO), Fp.ZERO);
       });
 
       should('square(1)', () => {
-        deepStrictEqual(Fp.sqr(Fp.ONE), Fp.ONE);
-        deepStrictEqual(Fp.mul(Fp.ONE, Fp.ONE), Fp.ONE);
+        eql(Fp.sqr(Fp.ONE), Fp.ONE);
+        eql(Fp.mul(Fp.ONE, Fp.ONE), Fp.ONE);
       });
 
       should('square(-1)', () => {
         const minus1 = Fp.neg(Fp.ONE);
-        deepStrictEqual(Fp.sqr(minus1), Fp.ONE);
-        deepStrictEqual(Fp.mul(minus1, minus1), Fp.ONE);
+        eql(Fp.sqr(minus1), Fp.ONE);
+        eql(Fp.mul(minus1, minus1), Fp.ONE);
       });
 
       should('FpInvertBatch0', () => {
         const inv0 = (val) => mod.FpInvertBatch(Fp, [val], true)[0];
-        deepStrictEqual(inv0(Fp.ZERO), Fp.ZERO);
+        eql(inv0(Fp.ZERO), Fp.ZERO);
         const i16 = Fp.mul(Fp.ONE, 16n);
         const i4 = Fp.mul(Fp.ONE, 4n);
-        deepStrictEqual(Fp.eql(Fp.mul(i16, inv0(i4)), i4), true); // 16/4 == 4
+        eql(Fp.eql(Fp.mul(i16, inv0(i4)), i4), true); // 16/4 == 4
       });
 
       // Not implemented
@@ -292,29 +292,25 @@ for (const c in FIELDS) {
               try {
                 root = Fp.sqrt(a);
               } catch (e) {
-                deepStrictEqual(mod.FpIsSquare(Fp, a), false);
+                eql(mod.FpIsSquare(Fp, a), false);
                 return;
               }
-              deepStrictEqual(mod.FpIsSquare(Fp, a), true);
-              deepStrictEqual(Fp.eql(Fp.sqr(root), a), true, 'sqrt(a)^2 == a');
-              deepStrictEqual(Fp.eql(Fp.sqr(Fp.neg(root)), a), true, '(-sqrt(a))^2 == a');
+              eql(mod.FpIsSquare(Fp, a), true);
+              eql(Fp.eql(Fp.sqr(root), a), true, 'sqrt(a)^2 == a');
+              eql(Fp.eql(Fp.sqr(Fp.neg(root)), a), true, '(-sqrt(a))^2 == a');
               // Returns odd/even element
-              deepStrictEqual(Fp.isOdd(mod.FpSqrtOdd(Fp, a)), true);
-              deepStrictEqual(Fp.isOdd(mod.FpSqrtEven(Fp, a)), false);
-              deepStrictEqual(Fp.eql(Fp.sqr(mod.FpSqrtOdd(Fp, a)), a), true);
-              deepStrictEqual(Fp.eql(Fp.sqr(mod.FpSqrtEven(Fp, a)), a), true);
+              eql(Fp.isOdd(mod.FpSqrtOdd(Fp, a)), true);
+              eql(Fp.isOdd(mod.FpSqrtEven(Fp, a)), false);
+              eql(Fp.eql(Fp.sqr(mod.FpSqrtOdd(Fp, a)), a), true);
+              eql(Fp.eql(Fp.sqr(mod.FpSqrtEven(Fp, a)), a), true);
             })
           );
         });
 
         should('sqrt(0)', () => {
-          deepStrictEqual(Fp.sqrt(Fp.ZERO), Fp.ZERO);
+          eql(Fp.sqrt(Fp.ZERO), Fp.ZERO);
           const sqrt1 = Fp.sqrt(Fp.ONE);
-          deepStrictEqual(
-            Fp.eql(sqrt1, Fp.ONE) || Fp.eql(sqrt1, Fp.neg(Fp.ONE)),
-            true,
-            'sqrt(1) = 1 or -1'
-          );
+          eql(Fp.eql(sqrt1, Fp.ONE) || Fp.eql(sqrt1, Fp.neg(Fp.ONE)), true, 'sqrt(1) = 1 or -1');
         });
       }
 
@@ -323,11 +319,11 @@ for (const c in FIELDS) {
           fc.property(FC_BIGINT, (num) => {
             const a = create(num);
             if (Fp.eql(a, Fp.ZERO)) return; // No division by zero
-            deepStrictEqual(Fp.div(a, Fp.ONE), a);
-            deepStrictEqual(Fp.div(a, a), Fp.ONE);
+            eql(Fp.div(a, Fp.ONE), a);
+            eql(Fp.div(a, a), Fp.ONE);
             // FpDiv tests
-            deepStrictEqual(mod.FpDiv(Fp, a, Fp.ONE), a);
-            deepStrictEqual(mod.FpDiv(Fp, a, a), Fp.ONE);
+            eql(mod.FpDiv(Fp, a, Fp.ONE), a);
+            eql(mod.FpDiv(Fp, a, a), Fp.ONE);
           })
         );
       });
@@ -335,8 +331,8 @@ for (const c in FIELDS) {
         fc.assert(
           fc.property(FC_BIGINT, (num) => {
             const a = create(num);
-            deepStrictEqual(Fp.div(Fp.ZERO, a), Fp.ZERO);
-            deepStrictEqual(mod.FpDiv(Fp, Fp.ZERO, a), Fp.ZERO);
+            eql(Fp.div(Fp.ZERO, a), Fp.ZERO);
+            eql(mod.FpDiv(Fp, Fp.ZERO, a), Fp.ZERO);
           })
         );
       });
@@ -346,11 +342,8 @@ for (const c in FIELDS) {
             const a = create(num1);
             const b = create(num2);
             const c = create(num3);
-            deepStrictEqual(Fp.div(Fp.add(a, b), c), Fp.add(Fp.div(a, c), Fp.div(b, c)));
-            deepStrictEqual(
-              mod.FpDiv(Fp, Fp.add(a, b), c),
-              Fp.add(mod.FpDiv(Fp, a, c), mod.FpDiv(Fp, b, c))
-            );
+            eql(Fp.div(Fp.add(a, b), c), Fp.add(Fp.div(a, c), Fp.div(b, c)));
+            eql(mod.FpDiv(Fp, Fp.add(a, b), c), Fp.add(mod.FpDiv(Fp, a, c), mod.FpDiv(Fp, b, c)));
           })
         );
       });
@@ -359,7 +352,7 @@ for (const c in FIELDS) {
           fc.property(FC_BIGINT, FC_BIGINT, (num1, num2) => {
             const a = create(num1);
             const b = create(num2);
-            deepStrictEqual(Fp.div(a, b), Fp.mul(a, Fp.inv(b)));
+            eql(Fp.div(a, b), Fp.mul(a, Fp.inv(b)));
           })
         );
       });
@@ -371,12 +364,12 @@ for (const c in FIELDS) {
 const getXY = (p) => ({ x: p.x, y: p.y });
 
 function equal(a, b, comment) {
-  deepStrictEqual(a.equals(b), true, `eq(${comment})`);
+  eql(a.equals(b), true, `eq(${comment})`);
   if (a.toAffine && b.toAffine) {
-    deepStrictEqual(getXY(a.toAffine()), getXY(b.toAffine()), `eqToAffine(${comment})`);
+    eql(getXY(a.toAffine()), getXY(b.toAffine()), `eqToAffine(${comment})`);
   } else if (!a.toAffine && !b.toAffine) {
     // Already affine
-    deepStrictEqual(getXY(a), getXY(b), `eqAffine(${comment})`);
+    eql(getXY(a), getXY(b), `eqAffine(${comment})`);
   } else throw new Error('Different point types');
 }
 
@@ -519,9 +512,9 @@ for (const name in CURVES) {
         }
         throws(() => G[1].equals(0), '0');
         throws(() => G[1].equals(0n), '0n');
-        deepStrictEqual(G[1].equals(G[2]), false, '1*G != 2*G');
-        deepStrictEqual(G[1].equals(G[1]), true, '1*G == 1*G');
-        deepStrictEqual(G[2].equals(G[2]), true, '2*G == 2*G');
+        eql(G[1].equals(G[2]), false, '1*G != 2*G');
+        eql(G[1].equals(G[1]), true, '1*G == 1*G');
+        eql(G[2].equals(G[2]), true, '2*G == 2*G');
         throws(() => G[1].equals(CURVE_ORDER), 'CURVE_ORDER');
         throws(() => G[1].equals({ x: 1n, y: 1n, z: 1n, t: 1n }), '{ x: 1n, y: 1n, z: 1n, t: 1n }');
         // if (G[1].toAffine) throws(() => G[1].equals(C.Point.BASE), 'Point.equals(${pointName})');
@@ -638,10 +631,10 @@ for (const name in CURVES) {
           fc.assert(
             fc.property(FC_BIGINT, (x) => {
               const point = p.BASE.multiply(x);
-              const hex = point.toHex();
-              const bytes = point.toRawBytes();
-              deepStrictEqual(p.fromHex(hex).toHex(), hex);
-              deepStrictEqual(p.fromHex(bytes).toHex(), hex);
+              const hex1 = point.toHex();
+              const bytes1 = point.toRawBytes();
+              eql(p.fromHex(hex1).toHex(), hex1);
+              eql(p.fromHex(bytes1).toHex(), hex1);
             })
           );
         });
@@ -649,10 +642,10 @@ for (const name in CURVES) {
           fc.assert(
             fc.property(FC_BIGINT, (x) => {
               const point = p.BASE.multiply(x);
-              const hex = point.toHex(true);
-              const bytes = point.toRawBytes(true);
-              deepStrictEqual(p.fromHex(hex).toHex(true), hex);
-              deepStrictEqual(p.fromHex(bytes).toHex(true), hex);
+              const hex2 = point.toHex(true);
+              const bytes2 = point.toRawBytes(true);
+              eql(p.fromHex(hex2).toHex(true), hex2);
+              eql(p.fromHex(bytes2).toHex(true), hex2);
             })
           );
         });
@@ -684,11 +677,7 @@ for (const name in CURVES) {
             const priv = C.utils.randomPrivateKey();
             const pub = C.getPublicKey(priv);
             const sig = C.sign(msg, priv);
-            deepStrictEqual(
-              C.verify(sig, msg, pub),
-              true,
-              `priv=${toHex(priv)},pub=${toHex(pub)},msg=${msg}`
-            );
+            eql(C.verify(sig, msg, pub), true, `priv=${toHex(priv)},pub=${toHex(pub)},msg=${msg}`);
           }),
           { numRuns: NUM_RUNS }
         )
@@ -700,7 +689,7 @@ for (const name in CURVES) {
             const pub = toHex(C.getPublicKey(priv));
             const sig = C.sign(msg, priv);
             let sighex = isBytes(sig) ? toHex(sig) : sig.toCompactHex();
-            deepStrictEqual(C.verify(sighex, msg, pub), true, `priv=${priv},pub=${pub},msg=${msg}`);
+            eql(C.verify(sighex, msg, pub), true, `priv=${priv},pub=${pub},msg=${msg}`);
           }),
           { numRuns: NUM_RUNS }
         )
@@ -710,11 +699,7 @@ for (const name in CURVES) {
         const priv = C.utils.randomPrivateKey();
         const pub = C.getPublicKey(priv);
         const sig = C.sign(msg, priv);
-        deepStrictEqual(
-          C.verify(sig, msg, pub),
-          true,
-          'priv=${toHex(priv)},pub=${toHex(pub)},msg=${msg}'
-        );
+        eql(C.verify(sig, msg, pub), true, 'priv=${toHex(priv)},pub=${toHex(pub)},msg=${msg}');
       });
 
       should('.sign() type tests', () => {
@@ -742,18 +727,18 @@ for (const name in CURVES) {
           const priv = C.utils.randomPrivateKey();
           const sig = C.sign(msg, priv);
           const pub = C.getPublicKey(priv);
-          deepStrictEqual(C.verify(sig, msg, pub), true);
+          eql(C.verify(sig, msg, pub), true);
         });
         should('false for wrong messages', () => {
           const priv = C.utils.randomPrivateKey();
           const sig = C.sign(msg, priv);
           const pub = C.getPublicKey(priv);
-          deepStrictEqual(C.verify(sig, msgWrong, pub), false);
+          eql(C.verify(sig, msgWrong, pub), false);
         });
         should('false for wrong keys', () => {
           const priv = C.utils.randomPrivateKey();
           const sig = C.sign(msg, priv);
-          deepStrictEqual(C.verify(sig, msg, C.getPublicKey(C.utils.randomPrivateKey())), false);
+          eql(C.verify(sig, msg, C.getPublicKey(C.utils.randomPrivateKey())), false);
         });
         should('type tests', () => {
           const priv = C.utils.randomPrivateKey();
@@ -777,11 +762,11 @@ for (const name in CURVES) {
             const sig = C.sign(msg, priv);
             const sigRS = (sig) => ({ s: sig.s, r: sig.r });
             // Compact
-            deepStrictEqual(sigRS(C.Signature.fromCompact(sig.toCompactHex())), sigRS(sig));
-            deepStrictEqual(sigRS(C.Signature.fromCompact(sig.toCompactRawBytes())), sigRS(sig));
+            eql(sigRS(C.Signature.fromCompact(sig.toCompactHex())), sigRS(sig));
+            eql(sigRS(C.Signature.fromCompact(sig.toCompactRawBytes())), sigRS(sig));
             // DER
-            deepStrictEqual(sigRS(C.Signature.fromDER(sig.toDERHex())), sigRS(sig));
-            deepStrictEqual(sigRS(C.Signature.fromDER(sig.toDERRawBytes())), sigRS(sig));
+            eql(sigRS(C.Signature.fromDER(sig.toDERHex())), sigRS(sig));
+            eql(sigRS(C.Signature.fromDER(sig.toDERRawBytes())), sigRS(sig));
           }),
           { numRuns: NUM_RUNS }
         )
@@ -792,11 +777,11 @@ for (const name in CURVES) {
             const priv = C.utils.randomPrivateKey();
             const pub = C.getPublicKey(priv);
             const sig = C.sign(msg, priv);
-            deepStrictEqual(sig.recoverPublicKey(msg).toRawBytes(), pub);
+            eql(sig.recoverPublicKey(msg).toRawBytes(), pub);
             const sig2 = C.Signature.fromCompact(sig.toCompactHex());
             throws(() => sig2.recoverPublicKey(msg));
             const sig3 = sig2.addRecoveryBit(sig.recovery);
-            deepStrictEqual(sig3.recoverPublicKey(msg).toRawBytes(), pub);
+            eql(sig3.recoverPublicKey(msg).toRawBytes(), pub);
           }),
           { numRuns: NUM_RUNS }
         )
@@ -809,12 +794,12 @@ for (const name in CURVES) {
             const sig = C.sign(msg, priv, { lowS: false });
             if (!sig.hasHighS()) return;
             const sigNorm = sig.normalizeS();
-            deepStrictEqual(sigNorm.hasHighS(), false, 'a');
+            eql(sigNorm.hasHighS(), false, 'a');
 
-            deepStrictEqual(C.verify(sig, msg, pub, { lowS: false }), true, 'b');
-            deepStrictEqual(C.verify(sig, msg, pub, { lowS: true }), false, 'c');
-            deepStrictEqual(C.verify(sigNorm, msg, pub, { lowS: true }), true, 'd');
-            deepStrictEqual(C.verify(sigNorm, msg, pub, { lowS: false }), true, 'e');
+            eql(C.verify(sig, msg, pub, { lowS: false }), true, 'b');
+            eql(C.verify(sig, msg, pub, { lowS: true }), false, 'c');
+            eql(C.verify(sigNorm, msg, pub, { lowS: true }), true, 'd');
+            eql(C.verify(sigNorm, msg, pub, { lowS: false }), true, 'e');
           }),
           { numRuns: NUM_RUNS }
         )
@@ -852,7 +837,7 @@ for (const name in CURVES) {
           const bsec = C.utils.randomPrivateKey();
           const bpub = C.getPublicKey(bsec);
           try {
-            deepStrictEqual(C.getSharedSecret(asec, bpub), C.getSharedSecret(bsec, apub));
+            eql(C.getSharedSecret(asec, bpub), C.getSharedSecret(bsec, apub));
           } catch (error) {
             console.error('not commutative', { asec, apub, bsec, bpub });
             throw error;
@@ -878,15 +863,9 @@ describe('edge cases', () => {
     const { Fp } = secp224r1.CURVE;
     const sqrtMinus1 = Fp.sqrt(-1n);
     // Verified against sage
-    deepStrictEqual(
-      sqrtMinus1,
-      23621584063597419797792593680131996961517196803742576047493035507225n
-    );
-    deepStrictEqual(
-      Fp.neg(sqrtMinus1),
-      3338362603553219996874421406887633712040719456283732096017030791656n
-    );
-    deepStrictEqual(Fp.sqr(sqrtMinus1), Fp.create(-1n));
+    eql(sqrtMinus1, 23621584063597419797792593680131996961517196803742576047493035507225n);
+    eql(Fp.neg(sqrtMinus1), 3338362603553219996874421406887633712040719456283732096017030791656n);
+    eql(Fp.sqr(sqrtMinus1), Fp.create(-1n));
   });
 
   should('Field: prohibit non-prime sqrt. gh-168', () => {
@@ -932,13 +911,13 @@ describe('createCurve', () => {
       const CURVE = CURVES[v.name];
       if (!CURVE) continue;
       should(`${v.name} parms verify`, () => {
-        deepStrictEqual(CURVE.CURVE.Fp.ORDER, BigInt(`0x${v.p}`));
-        deepStrictEqual(CURVE.CURVE.a, BigInt(`0x${v.a}`));
-        deepStrictEqual(CURVE.CURVE.b, BigInt(`0x${v.b}`));
-        deepStrictEqual(CURVE.CURVE.n, BigInt(`0x${v.n}`));
-        deepStrictEqual(CURVE.CURVE.Gx, BigInt(`0x${v.gx}`));
-        deepStrictEqual(CURVE.CURVE.Gy, BigInt(`0x${v.gy}`));
-        deepStrictEqual(CURVE.CURVE.h, BigInt(v.h));
+        eql(CURVE.CURVE.Fp.ORDER, BigInt(`0x${v.p}`));
+        eql(CURVE.CURVE.a, BigInt(`0x${v.a}`));
+        eql(CURVE.CURVE.b, BigInt(`0x${v.b}`));
+        eql(CURVE.CURVE.n, BigInt(`0x${v.n}`));
+        eql(CURVE.CURVE.Gx, BigInt(`0x${v.gx}`));
+        eql(CURVE.CURVE.Gy, BigInt(`0x${v.gy}`));
+        eql(CURVE.CURVE.h, BigInt(v.h));
       });
     }
   });
@@ -977,22 +956,22 @@ describe('Pairings', () => {
       should('creates negative G1 pairing', () => {
         const p1 = pairing(G1, G2);
         const p2 = pairing(G1.negate(), G2);
-        deepStrictEqual(Fp12.mul(p1, p2), Fp12.ONE);
+        eql(Fp12.mul(p1, p2), Fp12.ONE);
       });
       should('creates negative G2 pairing', () => {
         const p2 = pairing(G1.negate(), G2);
         const p3 = pairing(G1, G2.negate());
-        deepStrictEqual(p2, p3);
+        eql(p2, p3);
       });
       should('creates proper pairing output order', () => {
         const p1 = pairing(G1, G2);
         const p2 = Fp12.pow(p1, CURVE_ORDER);
-        deepStrictEqual(p2, Fp12.ONE);
+        eql(p2, Fp12.ONE);
       });
       should('G1 billinearity', () => {
         const p1 = pairing(G1, G2);
         const p2 = pairing(G1.multiply(2n), G2);
-        deepStrictEqual(Fp12.mul(p1, p1), p2);
+        eql(Fp12.mul(p1, p1), p2);
       });
       should('should not degenerate', () => {
         const p1 = pairing(G1, G2);
@@ -1005,12 +984,12 @@ describe('Pairings', () => {
       should('G2 billinearity', () => {
         const p1 = pairing(G1, G2);
         const p2 = pairing(G1, G2.multiply(2n));
-        deepStrictEqual(Fp12.mul(p1, p1), p2);
+        eql(Fp12.mul(p1, p1), p2);
       });
       should('proper pairing composite check', () => {
         const p1 = pairing(G1.multiply(37n), G2.multiply(27n));
         const p2 = pairing(G1.multiply(999n), G2);
-        deepStrictEqual(p1, p2);
+        eql(p1, p2);
       });
     });
   }

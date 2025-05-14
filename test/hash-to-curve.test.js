@@ -1,6 +1,6 @@
 import { bytesToHex } from '@noble/hashes/utils';
 import { describe, should } from 'micro-should';
-import { deepStrictEqual } from 'node:assert';
+import { deepStrictEqual as eql } from 'node:assert';
 import { json } from './utils.js';
 // Generic tests for all curves in package
 import { sha256, sha512 } from '@noble/hashes/sha2';
@@ -56,7 +56,7 @@ function testExpandXMD(hash, vectors) {
           Number.parseInt(t.len_in_bytes),
           hash
         );
-        deepStrictEqual(bytesToHex(p), t.uniform_bytes);
+        eql(bytesToHex(p), t.uniform_bytes);
       });
     }
   });
@@ -80,7 +80,7 @@ function testExpandXOF(hash, vectors) {
           vectors.k,
           hash
         );
-        deepStrictEqual(bytesToHex(p), t.uniform_bytes);
+        eql(bytesToHex(p), t.uniform_bytes);
       });
     }
   });
@@ -111,8 +111,8 @@ function testCurve(hasher, ro, nu) {
             DST: ro.dst,
           })
           .toAffine();
-        deepStrictEqual(p.x, stringToFp(t.P.x), 'Px');
-        deepStrictEqual(p.y, stringToFp(t.P.y), 'Py');
+        eql(p.x, stringToFp(t.P.x), 'Px');
+        eql(p.y, stringToFp(t.P.y), 'Py');
       });
     }
   });
@@ -125,8 +125,8 @@ function testCurve(hasher, ro, nu) {
             DST: nu.dst,
           })
           .toAffine();
-        deepStrictEqual(p.x, stringToFp(t.P.x), 'Px');
-        deepStrictEqual(p.y, stringToFp(t.P.y), 'Py');
+        eql(p.x, stringToFp(t.P.x), 'Px');
+        eql(p.y, stringToFp(t.P.y), 'Py');
       });
     }
   });

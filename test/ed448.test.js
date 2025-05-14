@@ -1,7 +1,7 @@
-import { bytesToHex, concatBytes, hexToBytes, randomBytes } from '@noble/hashes/utils';
+import { concatBytes, bytesToHex as hex, hexToBytes, randomBytes } from '@noble/hashes/utils';
 import * as fc from 'fast-check';
 import { describe, should } from 'micro-should';
-import { deepStrictEqual, throws } from 'node:assert';
+import { deepStrictEqual as eql, throws } from 'node:assert';
 import { numberToBytesLE } from '../esm/abstract/utils.js';
 import { ed448, ed448ph, x448 } from '../esm/ed448.js';
 import { json } from './utils.js';
@@ -13,35 +13,34 @@ const x448vectors = json('./wycheproof/x448_test.json');
 
 describe('ed448', () => {
   const ed = ed448;
-  const hex = bytesToHex;
   ed.utils.precompute(4);
   const Point = ed.ExtendedPoint;
 
   should(`Basic`, () => {
     const G1 = Point.BASE.toAffine();
-    deepStrictEqual(
+    eql(
       G1.x,
       224580040295924300187604334099896036246789641632564134246125461686950415467406032909029192869357953282578032075146446173674602635247710n
     );
-    deepStrictEqual(
+    eql(
       G1.y,
       298819210078481492676017930443930673437544040154080242095928241372331506189835876003536878655418784733982303233503462500531545062832660n
     );
     const G2 = Point.BASE.multiply(2n).toAffine();
-    deepStrictEqual(
+    eql(
       G2.x,
       484559149530404593699549205258669689569094240458212040187660132787056912146709081364401144455726350866276831544947397859048262938744149n
     );
-    deepStrictEqual(
+    eql(
       G2.y,
       494088759867433727674302672526735089350544552303727723746126484473087719117037293890093462157703888342865036477787453078312060500281069n
     );
     const G3 = Point.BASE.multiply(3n).toAffine();
-    deepStrictEqual(
+    eql(
       G3.x,
       23839778817283171003887799738662344287085130522697782688245073320169861206004018274567429238677677920280078599146891901463786155880335n
     );
-    deepStrictEqual(
+    eql(
       G3.y,
       636046652612779686502873775776967954190574036985351036782021535703553242737829645273154208057988851307101009474686328623630835377952508n
     );
@@ -53,7 +52,7 @@ describe('ed448', () => {
     const G3 = Point.BASE.multiply(3n);
     const points = [G1, G2, G3];
     const getXY = (p) => p.toAffine();
-    for (const p of points) deepStrictEqual(getXY(Point.fromHex(p.toHex())), getXY(p));
+    for (const p of points) eql(getXY(Point.fromHex(p.toHex())), getXY(p));
   });
 
   const VECTORS_RFC8032 = [
@@ -324,9 +323,9 @@ describe('ed448', () => {
     for (let i = 0; i < VECTORS_RFC8032.length; i++) {
       const v = VECTORS_RFC8032[i];
       should(`${i}`, () => {
-        deepStrictEqual(hex(ed.getPublicKey(v.secretKey)), v.publicKey);
-        deepStrictEqual(hex(ed.sign(v.message, v.secretKey)), v.signature);
-        deepStrictEqual(ed.verify(v.signature, v.message, v.publicKey), true);
+        eql(hex(ed.getPublicKey(v.secretKey)), v.publicKey);
+        eql(hex(ed.sign(v.message, v.secretKey)), v.signature);
+        eql(ed.verify(v.signature, v.message, v.publicKey), true);
       });
     }
   });
@@ -338,8 +337,8 @@ describe('ed448', () => {
   });
 
   function to57Bytes(numOrStr) {
-    let hex = typeof numOrStr === 'string' ? numOrStr : numOrStr.toString(16);
-    return hexToBytes(hex.padStart(114, '0'));
+    let hex2 = typeof numOrStr === 'string' ? numOrStr : numOrStr.toString(16);
+    return hexToBytes(hex2.padStart(114, '0'));
   }
 
   should('verify recent signature', () => {
@@ -350,9 +349,9 @@ describe('ed448', () => {
         (message, privateKey) => {
           const publicKey = ed.getPublicKey(to57Bytes(privateKey));
           const signature = ed.sign(to57Bytes(message), to57Bytes(privateKey));
-          deepStrictEqual(publicKey.length, 57);
-          deepStrictEqual(signature.length, 114);
-          deepStrictEqual(ed.verify(signature, to57Bytes(message), publicKey), true);
+          eql(publicKey.length, 57);
+          eql(signature.length, 114);
+          eql(ed.verify(signature, to57Bytes(message), publicKey), true);
         }
       ),
       { numRuns: 5 }
@@ -370,7 +369,7 @@ describe('ed448', () => {
           const priv = to57Bytes(privateKey);
           const publicKey = ed.getPublicKey(priv);
           const signature = ed.sign(message, priv);
-          deepStrictEqual(
+          eql(
             ed.verify(signature, wrongMessage, publicKey),
             bytes.toString() === wrongBytes.toString()
           );
@@ -386,34 +385,34 @@ describe('ed448', () => {
     should('sign and verify', () => {
       const publicKey = ed.getPublicKey(privKey);
       const signature = ed.sign(msg, privKey);
-      deepStrictEqual(ed.verify(signature, msg, publicKey), true);
+      eql(ed.verify(signature, msg, publicKey), true);
     });
     should('not verify signature with wrong public key', () => {
       const publicKey = ed.getPublicKey(ed.utils.randomPrivateKey());
       const signature = ed.sign(msg, privKey);
-      deepStrictEqual(ed.verify(signature, msg, publicKey), false);
+      eql(ed.verify(signature, msg, publicKey), false);
     });
     should('not verify signature with wrong hash', () => {
       const publicKey = ed.getPublicKey(privKey);
       const signature = ed.sign(msg, privKey);
-      deepStrictEqual(ed.verify(signature, wrongMsg, publicKey), false);
+      eql(ed.verify(signature, wrongMsg, publicKey), false);
     });
   });
   describe('sync methods', () => {
     should('sign and verify', () => {
       const publicKey = ed.getPublicKey(privKey);
       const signature = ed.sign(msg, privKey);
-      deepStrictEqual(ed.verify(signature, msg, publicKey), true);
+      eql(ed.verify(signature, msg, publicKey), true);
     });
     should('not verify signature with wrong public key', () => {
       const publicKey = ed.getPublicKey(ed.utils.randomPrivateKey());
       const signature = ed.sign(msg, privKey);
-      deepStrictEqual(ed.verify(signature, msg, publicKey), false);
+      eql(ed.verify(signature, msg, publicKey), false);
     });
     should('not verify signature with wrong hash', () => {
       const publicKey = ed.getPublicKey(privKey);
       const signature = ed.sign(msg, privKey);
-      deepStrictEqual(ed.verify(signature, wrongMsg, publicKey), false);
+      eql(ed.verify(signature, wrongMsg, publicKey), false);
     });
   });
 
@@ -451,15 +450,15 @@ describe('ed448', () => {
       const group = ed448vectorsOld.testGroups[g];
       const key = group.key;
       should(`ED448(${g}, public)`, () => {
-        deepStrictEqual(hex(ed.getPublicKey(key.sk)), key.pk);
+        eql(hex(ed.getPublicKey(key.sk)), key.pk);
       });
       should(`ED448`, () => {
         for (let i = 0; i < group.tests.length; i++) {
           const v = group.tests[i];
           const index = `${g}/${i} ${v.comment}`;
           if (v.result === 'valid' || v.result === 'acceptable') {
-            deepStrictEqual(hex(ed.sign(v.msg, key.sk)), v.sig, index);
-            deepStrictEqual(ed.verify(v.sig, v.msg, key.pk), true, index);
+            eql(hex(ed.sign(v.msg, key.sk)), v.sig, index);
+            eql(ed.verify(v.sig, v.msg, key.pk), true, index);
           } else if (v.result === 'invalid') {
             let failed = false;
             try {
@@ -467,7 +466,7 @@ describe('ed448', () => {
             } catch (error) {
               failed = true;
             }
-            deepStrictEqual(failed, true, index);
+            eql(failed, true, index);
           } else throw new Error('unknown test result');
         }
       });
@@ -483,7 +482,7 @@ describe('ed448', () => {
           const v = group.tests[i];
           const index = `${g}/${i} ${v.comment}`;
           if (v.result === 'valid' || v.result === 'acceptable') {
-            deepStrictEqual(ed.verify(v.sig, v.msg, key.pk), true, index);
+            eql(ed.verify(v.sig, v.msg, key.pk), true, index);
           } else if (v.result === 'invalid') {
             let failed = false;
             try {
@@ -491,7 +490,7 @@ describe('ed448', () => {
             } catch (error) {
               failed = true;
             }
-            deepStrictEqual(failed, true, index);
+            eql(failed, true, index);
           } else throw new Error('unknown test result');
         }
       });
@@ -542,12 +541,9 @@ describe('ed448', () => {
     for (let i = 0; i < VECTORS_RFC8032_CTX.length; i++) {
       const v = VECTORS_RFC8032_CTX[i];
       should(`${i}`, () => {
-        deepStrictEqual(hex(ed.getPublicKey(v.secretKey)), v.publicKey);
-        deepStrictEqual(hex(ed.sign(v.message, v.secretKey, { context: v.context })), v.signature);
-        deepStrictEqual(
-          ed.verify(v.signature, v.message, v.publicKey, { context: v.context }),
-          true
-        );
+        eql(hex(ed.getPublicKey(v.secretKey)), v.publicKey);
+        eql(hex(ed.sign(v.message, v.secretKey, { context: v.context })), v.signature);
+        eql(ed.verify(v.signature, v.message, v.publicKey, { context: v.context }), true);
       });
     }
   });
@@ -591,15 +587,9 @@ describe('ed448', () => {
     for (let i = 0; i < VECTORS_RFC8032_PH.length; i++) {
       const v = VECTORS_RFC8032_PH[i];
       should(`${i}`, () => {
-        deepStrictEqual(hex(ed448ph.getPublicKey(v.secretKey)), v.publicKey);
-        deepStrictEqual(
-          hex(ed448ph.sign(v.message, v.secretKey, { context: v.context })),
-          v.signature
-        );
-        deepStrictEqual(
-          ed448ph.verify(v.signature, v.message, v.publicKey, { context: v.context }),
-          true
-        );
+        eql(hex(ed448ph.getPublicKey(v.secretKey)), v.publicKey);
+        eql(hex(ed448ph.sign(v.message, v.secretKey, { context: v.context })), v.signature);
+        eql(ed448ph.verify(v.signature, v.message, v.publicKey, { context: v.context }), true);
       });
     }
   });
@@ -614,7 +604,7 @@ describe('ed448', () => {
       const R = signature.slice(0, 56);
       let s = signature.slice(56, 112);
 
-      s = bytesToHex(s.slice().reverse());
+      s = hex(s.slice().reverse());
       s = BigInt('0x' + s);
       s = s + ed448.CURVE.n;
       s = numberToBytesLE(s, 56);
@@ -657,7 +647,7 @@ describe('ed448', () => {
     for (let i = 0; i < rfc7748Mul.length; i++) {
       const v = rfc7748Mul[i];
       should(`scalarMult (${i})`, () => {
-        deepStrictEqual(hex(x448.scalarMult(v.scalar, v.u)), v.outputU);
+        eql(hex(x448.scalarMult(v.scalar, v.u)), v.outputU);
       });
     }
 
@@ -679,7 +669,7 @@ describe('ed448', () => {
       should(`scalarMult iterated ${iters}x`, () => {
         let k = x448.GuBytes;
         for (let i = 0, u = k; i < iters; i++) [k, u] = [x448.scalarMult(k, u), k];
-        deepStrictEqual(hex(k), scalar);
+        eql(hex(k), scalar);
       });
     }
 
@@ -694,10 +684,10 @@ describe('ed448', () => {
         '3eb7a829b0cd20f5bcfc0b599b6feccf6da4627107bdb0d4f345b43027d8b972fc3e34fb4232a13ca706dcb57aec3dae07bdc1c67bf33609';
       const shared =
         '07fff4181ac6cc95ec1c16a94a0f74d12da232ce40a77552281d282bb60c0b56fd2464c335543936521c24403085d59a449a5037514a879d';
-      deepStrictEqual(alicePublic, hex(x448.getPublicKey(alicePrivate)));
-      deepStrictEqual(bobPublic, hex(x448.getPublicKey(bobPrivate)));
-      deepStrictEqual(hex(x448.scalarMult(alicePrivate, bobPublic)), shared);
-      deepStrictEqual(hex(x448.scalarMult(bobPrivate, alicePublic)), shared);
+      eql(alicePublic, hex(x448.getPublicKey(alicePrivate)));
+      eql(bobPublic, hex(x448.getPublicKey(bobPrivate)));
+      eql(hex(x448.scalarMult(alicePrivate, bobPublic)), shared);
+      eql(hex(x448.scalarMult(bobPrivate, alicePublic)), shared);
     });
 
     should('wycheproof', () => {
@@ -707,7 +697,7 @@ describe('ed448', () => {
         if (v.result === 'valid' || v.result === 'acceptable') {
           try {
             const shared = hex(x448.scalarMult(v.private, v.public));
-            deepStrictEqual(shared, v.shared, index);
+            eql(shared, v.shared, index);
           } catch (e) {
             // We are more strict
             if (e.message.includes('invalid private or public key received')) return;
@@ -720,7 +710,7 @@ describe('ed448', () => {
           } catch (error) {
             failed = true;
           }
-          deepStrictEqual(failed, true, index);
+          eql(failed, true, index);
         } else throw new Error('unknown test result');
       });
     });
@@ -731,7 +721,7 @@ describe('ed448', () => {
       // const invX = Fp.invert(x * x); // x²
       const u = Fp.div(Fp.create(y * y), Fp.create(x * x)); // (y²/x²)
       // const u = Fp.create(y * y * invX);
-      deepStrictEqual(numberToBytesLE(u, 56), x448.GuBytes);
+      eql(numberToBytesLE(u, 56), x448.GuBytes);
     });
   });
 });

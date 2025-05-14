@@ -1,6 +1,6 @@
 import { bytesToHex as hex } from '@noble/hashes/utils';
 import { describe, should } from 'micro-should';
-import { deepStrictEqual } from 'node:assert';
+import { deepStrictEqual as eql } from 'node:assert';
 import { readFileSync } from 'node:fs';
 import { schnorr } from '../esm/secp256k1.js';
 const schCsv = readFileSync('./test/vectors/secp256k1/schnorr.csv', 'utf-8');
@@ -15,13 +15,13 @@ describe('schnorr.sign()', () => {
     const [index, sec, pub, rnd, msg, expSig, passes, comment] = vec;
     should(`${comment || 'vector ' + index}`, () => {
       if (sec) {
-        deepStrictEqual(hex(schnorr.getPublicKey(sec)), pub.toLowerCase());
+        eql(hex(schnorr.getPublicKey(sec)), pub.toLowerCase());
         const sig = schnorr.sign(msg, sec, rnd);
-        deepStrictEqual(hex(sig), expSig.toLowerCase());
-        deepStrictEqual(schnorr.verify(sig, msg, pub), true);
+        eql(hex(sig), expSig.toLowerCase());
+        eql(schnorr.verify(sig, msg, pub), true);
       } else {
         const passed = schnorr.verify(expSig, msg, pub);
-        deepStrictEqual(passed, passes === 'TRUE');
+        eql(passed, passes === 'TRUE');
       }
     });
   }

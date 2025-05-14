@@ -1,6 +1,6 @@
 import * as fc from 'fast-check';
 import { describe, should } from 'micro-should';
-import { deepStrictEqual, throws } from 'node:assert';
+import { deepStrictEqual as eql, throws } from 'node:assert';
 import * as fft from '../esm/abstract/fft.js';
 import { bitLen } from '../esm/abstract/utils.js';
 import { bls12_381 } from '../esm/bls12-381.js';
@@ -13,87 +13,84 @@ describe('FFT', () => {
   describe('Utils', () => {
     should('isPowerOfTwo', () => {
       // this basically checks if integer is in form of '1 << X'
-      deepStrictEqual(fft.isPowerOfTwo(0), false);
-      deepStrictEqual(fft.isPowerOfTwo(1), true);
-      deepStrictEqual(fft.isPowerOfTwo(2), true);
-      deepStrictEqual(fft.isPowerOfTwo(3), false);
-      deepStrictEqual(fft.isPowerOfTwo(2 ** 31), true);
-      deepStrictEqual(fft.isPowerOfTwo(2 ** 32 - 1), false);
+      eql(fft.isPowerOfTwo(0), false);
+      eql(fft.isPowerOfTwo(1), true);
+      eql(fft.isPowerOfTwo(2), true);
+      eql(fft.isPowerOfTwo(3), false);
+      eql(fft.isPowerOfTwo(2 ** 31), true);
+      eql(fft.isPowerOfTwo(2 ** 32 - 1), false);
       throws(() => fft.isPowerOfTwo(2 ** 32));
-      for (let i = 0; i < 31; i++) deepStrictEqual(fft.isPowerOfTwo(1 << i), true);
+      for (let i = 0; i < 31; i++) eql(fft.isPowerOfTwo(1 << i), true);
     });
     should('nextPowerOfTwo', () => {
-      deepStrictEqual(fft.nextPowerOfTwo(0), 1);
-      deepStrictEqual(fft.nextPowerOfTwo(1), 1);
-      deepStrictEqual(fft.nextPowerOfTwo(2), 2);
-      deepStrictEqual(fft.nextPowerOfTwo(3), 4);
-      deepStrictEqual(fft.nextPowerOfTwo(5), 8);
-      deepStrictEqual(fft.nextPowerOfTwo(15), 16);
-      deepStrictEqual(fft.nextPowerOfTwo(16), 16);
-      deepStrictEqual(fft.nextPowerOfTwo(17), 32);
-      deepStrictEqual(fft.nextPowerOfTwo(31), 32);
-      deepStrictEqual(fft.nextPowerOfTwo(32), 32);
-      deepStrictEqual(fft.nextPowerOfTwo(33), 64);
-      deepStrictEqual(fft.nextPowerOfTwo(2 ** 30), 2 ** 30);
-      deepStrictEqual(fft.nextPowerOfTwo(2 ** 30 + 1), 2 ** 31);
+      eql(fft.nextPowerOfTwo(0), 1);
+      eql(fft.nextPowerOfTwo(1), 1);
+      eql(fft.nextPowerOfTwo(2), 2);
+      eql(fft.nextPowerOfTwo(3), 4);
+      eql(fft.nextPowerOfTwo(5), 8);
+      eql(fft.nextPowerOfTwo(15), 16);
+      eql(fft.nextPowerOfTwo(16), 16);
+      eql(fft.nextPowerOfTwo(17), 32);
+      eql(fft.nextPowerOfTwo(31), 32);
+      eql(fft.nextPowerOfTwo(32), 32);
+      eql(fft.nextPowerOfTwo(33), 64);
+      eql(fft.nextPowerOfTwo(2 ** 30), 2 ** 30);
+      eql(fft.nextPowerOfTwo(2 ** 30 + 1), 2 ** 31);
       // U32 boundary
       throws(() => fft.nextPowerOfTwo(2 ** 32));
       throws(() => fft.nextPowerOfTwo(-1));
       // nextPowerOfTwo(n) is always a power of two
       for (let i = 0; i <= 2 ** 16; i++) {
         const pow = fft.nextPowerOfTwo(i);
-        deepStrictEqual(fft.isPowerOfTwo(pow), true);
-        deepStrictEqual(pow >= i, true);
+        eql(fft.isPowerOfTwo(pow), true);
+        eql(pow >= i, true);
       }
       // nextPowerOfTwo(1 << k) == 1 << k
       for (let k = 0; k < 31; k++) {
         const val = 1 << k;
-        deepStrictEqual(fft.nextPowerOfTwo(val), val);
+        eql(fft.nextPowerOfTwo(val), val);
       }
     });
     should('reverseBits', () => {
-      deepStrictEqual(fft.reverseBits(0b0001, 4), 0b1000);
-      deepStrictEqual(fft.reverseBits(0b0010, 4), 0b0100);
-      deepStrictEqual(fft.reverseBits(0b1111, 4), 0b1111);
+      eql(fft.reverseBits(0b0001, 4), 0b1000);
+      eql(fft.reverseBits(0b0010, 4), 0b0100);
+      eql(fft.reverseBits(0b1111, 4), 0b1111);
       const x = 0b10101;
-      deepStrictEqual(fft.reverseBits(fft.reverseBits(x, 5), 5), x);
+      eql(fft.reverseBits(fft.reverseBits(x, 5), 5), x);
     });
     should('log2', () => {
       for (let i = 0; i < 32; i++) {
         const x = (1 << i) >>> 0;
-        deepStrictEqual(fft.log2(x), bitLen(BigInt(x)) - 1);
+        eql(fft.log2(x), bitLen(BigInt(x)) - 1);
       }
       throws(() => fft.log2(2 ** 32));
     });
     describe('bitReversalPermutation', () => {
       should('basic', () => {
         // identity for two elements
-        deepStrictEqual(fft.bitReversalPermutation([0, 1]), [0, 1]);
+        eql(fft.bitReversalPermutation([0, 1]), [0, 1]);
         // left part is even indices, right part is odd indices
-        deepStrictEqual(fft.bitReversalPermutation([0, 1, 2, 3]), [0, 2, 1, 3]);
+        eql(fft.bitReversalPermutation([0, 1, 2, 3]), [0, 2, 1, 3]);
         // same as before, but also applied recursively for each part:
         // [0, 1, 2, 3, 4, 5, 6, 7] ->
         // [0, 2, 4, 6, 1, 3, 5, 7] ->
         // [0, 4, 2, 6, 1, 5, 3, 7]
-        deepStrictEqual(
-          fft.bitReversalPermutation([0, 1, 2, 3, 4, 5, 6, 7]),
-          [0, 4, 2, 6, 1, 5, 3, 7]
-        );
+        eql(fft.bitReversalPermutation([0, 1, 2, 3, 4, 5, 6, 7]), [0, 4, 2, 6, 1, 5, 3, 7]);
 
         const bitPerm = (values, bits) =>
           new Array(values.length).fill(0).map((_, i) => values[fft.reverseBits(i, bits)]);
         // same as before
-        deepStrictEqual(bitPerm([0, 1, 2, 3, 4, 5, 6, 7], 3), [0, 4, 2, 6, 1, 5, 3, 7]);
+        eql(bitPerm([0, 1, 2, 3, 4, 5, 6, 7], 3), [0, 4, 2, 6, 1, 5, 3, 7]);
         // but what happens if bitreverse is smaller?
-        deepStrictEqual(bitPerm([0, 1, 2, 3, 4, 5, 6, 7], 2), [0, 2, 1, 3, 0, 2, 1, 3]);
+        eql(bitPerm([0, 1, 2, 3, 4, 5, 6, 7], 2), [0, 2, 1, 3, 0, 2, 1, 3]);
         // which is:
         const x = [0, 1, 2, 3, 4, 5, 6, 7];
         const y = fft.bitReversalPermutation(x.slice(0, 4));
-        deepStrictEqual(bitPerm([0, 1, 2, 3, 4, 5, 6, 7], 2), [...y, ...y]);
+        eql(bitPerm([0, 1, 2, 3, 4, 5, 6, 7], 2), [...y, ...y]);
         // -> do half && dup
       });
       should('kzg table example', () => {
-        deepStrictEqual(
+        eql(
           fft.bitReversalPermutation(Array.from({ length: 128 }, (_, j) => j)),
           [
             0x00, 0x40, 0x20, 0x60, 0x10, 0x50, 0x30, 0x70, 0x08, 0x48, 0x28, 0x68, 0x18, 0x58,
@@ -114,7 +111,7 @@ describe('FFT', () => {
   describe('rootsOfUnity', () => {
     should('bls12_381', () => {
       const roots = fft.rootsOfUnity(bls12_381.fields.Fr, 7n);
-      deepStrictEqual(roots.roots(3), [
+      eql(roots.roots(3), [
         1n,
         23674694431658770659612952115660802947967373701506253797663184111817857449850n,
         3465144826073652318776269530687742778270252468765361963008n,
@@ -124,7 +121,7 @@ describe('FFT', () => {
         52435875175126190475982595682112313518914282969839895044333406231173219221505n,
         43750592090951839482975286585531043674810095682058858279538876507215901405139n,
       ]);
-      deepStrictEqual(roots.brp(3), [
+      eql(roots.brp(3), [
         1n,
         52435875175126190479447740508185965837690552500527637822603658699938581184512n,
         3465144826073652318776269530687742778270252468765361963008n,
@@ -137,7 +134,7 @@ describe('FFT', () => {
     });
     should('bn254', () => {
       const roots = fft.rootsOfUnity(bn254.fields.Fr, 7n);
-      deepStrictEqual(roots.roots(3), [
+      eql(roots.roots(3), [
         1n,
         19540430494807482326159819597004422086093766032135589407132600596362845576832n,
         21888242871839275217838484774961031246007050428528088939761107053157389710902n,
@@ -147,7 +144,7 @@ describe('FFT', () => {
         4407920970296243842541313971887945403937097133418418784715n,
         8613538655231327379234925296132678673308827349856085326283699237864372525723n,
       ]);
-      deepStrictEqual(roots.brp(3), [
+      eql(roots.brp(3), [
         1n,
         21888242871839275222246405745257275088548364400416034343698204186575808495616n,
         21888242871839275217838484774961031246007050428528088939761107053157389710902n,
@@ -176,22 +173,19 @@ describe('FFT', () => {
       24568159713080105679306722441185578043115295201595828830785557693346434399898n,
     ];
 
-    deepStrictEqual(fftFr.direct(input), exp);
-    deepStrictEqual(fftFr.direct(fft.bitReversalPermutation(input), true), exp);
+    eql(fftFr.direct(input), exp);
+    eql(fftFr.direct(fft.bitReversalPermutation(input), true), exp);
     // Fails, why? scaling?
-    deepStrictEqual(fft.bitReversalPermutation(fftFr.direct(input, false, true)), exp);
-    deepStrictEqual(
+    eql(fft.bitReversalPermutation(fftFr.direct(input, false, true)), exp);
+    eql(
       fft.bitReversalPermutation(fftFr.direct(fft.bitReversalPermutation(input), true, true)),
       exp
     );
     // inverse
-    deepStrictEqual(fftFr.inverse(fftFr.direct(input)), input);
-    deepStrictEqual(fftFr.inverse(fftFr.direct(input, false, true), true), input);
-    deepStrictEqual(
-      fft.bitReversalPermutation(fftFr.inverse(fftFr.direct(input), false, true)),
-      input
-    );
-    deepStrictEqual(
+    eql(fftFr.inverse(fftFr.direct(input)), input);
+    eql(fftFr.inverse(fftFr.direct(input, false, true), true), input);
+    eql(fft.bitReversalPermutation(fftFr.inverse(fftFr.direct(input), false, true)), input);
+    eql(
       fft.bitReversalPermutation(fftFr.inverse(fftFr.direct(input, false, true), true, true)),
       input
     );
@@ -214,69 +208,69 @@ describe('FFT', () => {
 
     describe(`Polynomimal/${name}`, () => {
       should('degree', () => {
-        deepStrictEqual(P.degree([]), -1);
-        deepStrictEqual(P.degree([0n]), -1);
-        deepStrictEqual(P.degree([1n]), 0);
-        deepStrictEqual(P.degree([1n, 0n]), 0);
-        deepStrictEqual(P.degree([1n, 0n, 0n]), 0);
-        deepStrictEqual(P.degree([1n, 1n, 0n, 0n]), 1);
-        deepStrictEqual(P.degree([1n, 2n, 0n, 0n]), 1);
-        deepStrictEqual(P.degree([1n, 1n]), 1);
+        eql(P.degree([]), -1);
+        eql(P.degree([0n]), -1);
+        eql(P.degree([1n]), 0);
+        eql(P.degree([1n, 0n]), 0);
+        eql(P.degree([1n, 0n, 0n]), 0);
+        eql(P.degree([1n, 1n, 0n, 0n]), 1);
+        eql(P.degree([1n, 2n, 0n, 0n]), 1);
+        eql(P.degree([1n, 1n]), 1);
       });
       should('a + 0 = a, a - 0 = a, a - a = 0', () => {
-        deepStrictEqual(P.add([], []), []);
-        deepStrictEqual(P.add([1n], [0n]), [1n]);
-        deepStrictEqual(P.sub([1n], [0n]), [1n]);
-        deepStrictEqual(P.sub([1n], [1n]), [0n]);
+        eql(P.add([], []), []);
+        eql(P.add([1n], [0n]), [1n]);
+        eql(P.sub([1n], [0n]), [1n]);
+        eql(P.sub([1n], [1n]), [0n]);
       });
       should('a + b = b + a', () => {
         const a = [1n, 2n, 3n];
         const b = [3n, 2n, 1n];
-        deepStrictEqual(P.add(a, b), P.add(b, a));
+        eql(P.add(a, b), P.add(b, a));
       });
       should('a - b = -(b - a)', () => {
         const a = [5n, 3n, 1n];
         const b = [1n, 3n, 0n];
         const neg = P.sub(b, a).map((x) => Fr.neg(x));
-        deepStrictEqual(P.sub(a, b), neg);
+        eql(P.sub(a, b), neg);
       });
       should('eval basis', () => {
         const a = [1n, 2n, 3n]; // assume eval using basis of monomials
         const x = 2n;
         const monomialBasis = [1n, x, x ** 2n]; // 1, x, x^2
         const expected = Fr.add(Fr.add(1n, 2n * x), 3n * x * x);
-        deepStrictEqual(P.eval(a, monomialBasis), expected);
+        eql(P.eval(a, monomialBasis), expected);
       });
       for (const p of [P, Pf]) {
         should('a * 0 = 0, a * 1 = a', () => {
           const a = [1n, 2n, 3n, 4n];
-          deepStrictEqual(p.mul(a, 0n), [0n, 0n, 0n, 0n]);
-          deepStrictEqual(p.mul(a, 1n), a);
-          deepStrictEqual(p.mul(a, [0n, 0n, 0n, 0n]), [0n, 0n, 0n, 0n]);
-          deepStrictEqual(p.mul(a, [1n, 1n, 1n, 1n]), [10n, 10n, 10n, 10n]);
-          deepStrictEqual(p.convolve(a, [0n, 0n, 0n, 0n]), [0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n]);
-          deepStrictEqual(p.convolve(a, [1n, 1n, 1n, 1n]), [1n, 3n, 6n, 10n, 9n, 7n, 4n, 0n]);
+          eql(p.mul(a, 0n), [0n, 0n, 0n, 0n]);
+          eql(p.mul(a, 1n), a);
+          eql(p.mul(a, [0n, 0n, 0n, 0n]), [0n, 0n, 0n, 0n]);
+          eql(p.mul(a, [1n, 1n, 1n, 1n]), [10n, 10n, 10n, 10n]);
+          eql(p.convolve(a, [0n, 0n, 0n, 0n]), [0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n]);
+          eql(p.convolve(a, [1n, 1n, 1n, 1n]), [1n, 3n, 6n, 10n, 9n, 7n, 4n, 0n]);
         });
         should('mul small', () => {
           // (1 + 2x) * (3 + 4x) = 3 + 10x + 8x^2
-          deepStrictEqual(p.mul([1n, 2n], [3n, 4n]), [11n, 10n]);
-          deepStrictEqual(p.convolve([1n, 2n], [3n, 4n]), [3n, 10n, 8n, 0n]);
+          eql(p.mul([1n, 2n], [3n, 4n]), [11n, 10n]);
+          eql(p.convolve([1n, 2n], [3n, 4n]), [3n, 10n, 8n, 0n]);
         });
       }
       describe('monomial', () => {
         should('eval', () => {
-          deepStrictEqual(P.monomial.eval([3n, 2n, 1n], 5n), 38n); // 3 + 2x + x²
+          eql(P.monomial.eval([3n, 2n, 1n], 5n), 38n); // 3 + 2x + x²
         });
         should('monomialBasis(x, n) = [x^0, x^1...x^n-1]', () => {
-          deepStrictEqual(P.monomial.basis(2n, 0), []);
-          deepStrictEqual(P.monomial.basis(2n, 1), [1n]); // [1]
-          deepStrictEqual(P.monomial.basis(2n, 3), [1n, 2n, 4n]); // [1, x, x²]
-          deepStrictEqual(P.monomial.basis(3n, 4), [1n, 3n, 9n, 27n]); // 3⁰, 3¹, 3², 3³
+          eql(P.monomial.basis(2n, 0), []);
+          eql(P.monomial.basis(2n, 1), [1n]); // [1]
+          eql(P.monomial.basis(2n, 3), [1n, 2n, 4n]); // [1, x, x²]
+          eql(P.monomial.basis(3n, 4), [1n, 3n, 9n, 27n]); // 3⁰, 3¹, 3², 3³
         });
         should('eval(a, monomialBasis(x)) = evalMonomial(a, x)', () =>
           fc.assert(
             fc.property(FR_BIGINT_POLY, FR_BIGINT, (a, x) => {
-              deepStrictEqual(P.eval(a, P.monomial.basis(x, a.length)), P.monomial.eval(a, x));
+              eql(P.eval(a, P.monomial.basis(x, a.length)), P.monomial.eval(a, x));
             })
           )
         );
@@ -287,15 +281,15 @@ describe('FFT', () => {
       should('random/Fr', () =>
         fc.assert(
           fc.property(FR_BIGINT_POLY, (poly) => {
-            deepStrictEqual(fftFr.inverse(fftFr.direct(poly)), poly);
-            deepStrictEqual(fftFr.direct(fftFr.inverse(poly)), poly);
+            eql(fftFr.inverse(fftFr.direct(poly)), poly);
+            eql(fftFr.direct(fftFr.inverse(poly)), poly);
           })
         )
       );
       should('random/BRP', () =>
         fc.assert(
           fc.property(FR_BIGINT_POLY, (poly) => {
-            deepStrictEqual(fft.bitReversalPermutation(fft.bitReversalPermutation(poly)), poly);
+            eql(fft.bitReversalPermutation(fft.bitReversalPermutation(poly)), poly);
           })
         )
       );
@@ -304,11 +298,11 @@ describe('FFT', () => {
           fc.property(FR_BIGINT_POLY, (poly) => {
             const polyG1 = poly.map((i) => G1.BASE.multiplyUnsafe(i));
             const polyG1Affine = polyG1.map((i) => i.toAffine());
-            deepStrictEqual(
+            eql(
               fftG1.inverse(fftG1.direct(polyG1)).map((i) => i.toAffine()),
               polyG1Affine
             );
-            deepStrictEqual(
+            eql(
               fftG1.direct(fftG1.inverse(polyG1)).map((i) => i.toAffine()),
               polyG1Affine
             );
@@ -318,14 +312,14 @@ describe('FFT', () => {
       should('FFT(a + b) = FFT(a) + FFT(b)', () =>
         fc.assert(
           fc.property(FR_BIGINT_POLY, FR_BIGINT_POLY, (a, b) => {
-            deepStrictEqual(fftFr.direct(P.add(a, b)), P.add(fftFr.direct(a), fftFr.direct(b)));
+            eql(fftFr.direct(P.add(a, b)), P.add(fftFr.direct(a), fftFr.direct(b)));
           })
         )
       );
       should('FFT(c * a) = c * FFT(a)', () =>
         fc.assert(
           fc.property(FR_BIGINT_POLY, FR_BIGINT, (a, c) => {
-            deepStrictEqual(fftFr.direct(P.mul(a, c)), P.mul(fftFr.direct(a), c));
+            eql(fftFr.direct(P.mul(a, c)), P.mul(fftFr.direct(a), c));
           })
         )
       );
@@ -335,23 +329,23 @@ describe('FFT', () => {
             const N = 256;
             const poly = P.create(N, c);
             const out = fftFr.direct(poly);
-            deepStrictEqual(Fr.eql(out[0], Fr.mul(c, BigInt(N))), true);
-            for (let i = 1; i < out.length; i++) deepStrictEqual(Fr.is0(out[i]), true);
+            eql(Fr.eql(out[0], Fr.mul(c, BigInt(N))), true);
+            for (let i = 1; i < out.length; i++) eql(Fr.is0(out[i]), true);
           })
         )
       );
       should('FFT(0) = 0', () => {
         const out = fftFr.direct(P.create(256));
-        for (const x of out) deepStrictEqual(Fr.is0(x), true);
+        for (const x of out) eql(Fr.is0(x), true);
       });
       should('eval(a * b, x) = eval(a, x) * eval(b, x)', () =>
         fc.assert(
           fc.property(FR_BIGINT_POLY, FR_BIGINT_POLY, FR_BIGINT, (a, b, x) => {
             const ab = P.convolve(a, b);
-            deepStrictEqual(ab, Pf.convolve(a, b));
+            eql(ab, Pf.convolve(a, b));
             const y1 = P.monomial.eval(ab, x);
             const y2 = Fr.mul(P.monomial.eval(a, x), P.monomial.eval(b, x));
-            deepStrictEqual(y1, y2);
+            eql(y1, y2);
           })
         )
       );
@@ -360,7 +354,7 @@ describe('FFT', () => {
           fc.property(FR_BIGINT_POLY, FR_BIGINT_POLY, FR_BIGINT, (a, b, x) => {
             const y1 = P.monomial.eval(P.add(a, b), x);
             const y2 = Fr.add(P.monomial.eval(a, x), P.monomial.eval(b, x));
-            deepStrictEqual(y1, y2);
+            eql(y1, y2);
           })
         )
       );
@@ -368,10 +362,10 @@ describe('FFT', () => {
         fc.assert(
           fc.property(FR_BIGINT_POLY, FR_BIGINT_POLY, FR_BIGINT_POLY, (a, b, c) => {
             const lhs = P.convolve(a, P.add(b, c));
-            deepStrictEqual(lhs, Pf.convolve(a, Pf.add(b, c)));
+            eql(lhs, Pf.convolve(a, Pf.add(b, c)));
             const rhs = P.add(P.convolve(a, b), P.convolve(a, c));
-            deepStrictEqual(rhs, Pf.add(Pf.convolve(a, b), Pf.convolve(a, c)));
-            deepStrictEqual(lhs, rhs);
+            eql(rhs, Pf.add(Pf.convolve(a, b), Pf.convolve(a, c)));
+            eql(lhs, rhs);
           })
         )
       );
