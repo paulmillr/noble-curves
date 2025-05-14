@@ -248,7 +248,10 @@ export type FFTMethods<T> = {
  * NTT aka FFT over finite field (NOT over complex numbers).
  * Naming mirrors other libraries.
  */
-export function FFT<T>(roots: ReturnType<typeof rootsOfUnity>, opts: FFTOpts<T, bigint>): F {
+export function FFT<T>(
+  roots: ReturnType<typeof rootsOfUnity>,
+  opts: FFTOpts<T, bigint>
+): FFTMethods<T> {
   const getLoop = (
     N: number,
     roots: Polynomial<bigint>,
