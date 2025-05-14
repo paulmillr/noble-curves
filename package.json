@@ -1,6 +1,6 @@
 {
   "name": "@noble/curves",
-  "version": "1.9.0",
+  "version": "1.9.1",
   "description": "Audited & minimal JS implementation of elliptic curve cryptography",
   "files": [
     "*.js",
