@@ -4,10 +4,11 @@ on:
     types: [created]
 jobs:
   release-js:
-    name: 'jsbt v0.3.4' # Should match commit below
-    uses: paulmillr/jsbt/.github/workflows/release.yml@ce84a25be22ad27f4aa49a100def27f4c1827299
+    name: 'jsbt v0.4.0' # Should match commit below
+    uses: paulmillr/jsbt/.github/workflows/release.yml@3b4712c94bff7a5da5c968f783292061e81b218c
     with:
       build-path: test/build
+      # slow-types: false
     secrets:
       NPM_PUBLISH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
     permissions:
