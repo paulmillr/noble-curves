@@ -76,8 +76,15 @@ function findGenerator(field: IField<bigint>) {
   return G;
 }
 
+export type RootsOfUnity = {
+  roots: (bits: number) => bigint[];
+  brp(bits: number): bigint[];
+  inverse(bits: number): bigint[];
+  omega: (bits: number) => bigint;
+  clear: () => void;
+};
 /** We limit roots up to 2**31, which is a lot: 2-billion polynomimal should be rare. */
-export function rootsOfUnity(field: IField<bigint>, generator?: bigint) {
+export function rootsOfUnity(field: IField<bigint>, generator?: bigint): RootsOfUnity {
   // Factor field.ORDER-1 as oddFactor * 2^powerOfTwo
   let oddFactor = field.ORDER - _1n;
   let powerOfTwo = 0;
@@ -232,11 +239,16 @@ export const FFTCore = <T, R>(opts: FFTOpts<T, R>, coreOpts: FFTCoreOpts<R>): FF
   };
 };
 
+export type FFTMethods<T> = {
+  direct<P extends Polynomial<T>>(values: P, brpInput?: boolean, brpOutput?: boolean): P;
+  inverse<P extends Polynomial<T>>(values: P, brpInput?: boolean, brpOutput?: boolean): P;
+};
+
 /**
  * NTT aka FFT over finite field (NOT over complex numbers).
  * Naming mirrors other libraries.
  */
-export const FFT = <T>(roots: ReturnType<typeof rootsOfUnity>, opts: FFTOpts<T, bigint>) => {
+export function FFT<T>(roots: ReturnType<typeof rootsOfUnity>, opts: FFTOpts<T, bigint>): F {
   const getLoop = (
     N: number,
     roots: Polynomial<bigint>,
@@ -272,7 +284,7 @@ export const FFT = <T>(roots: ReturnType<typeof rootsOfUnity>, opts: FFTOpts<T, 
       return res;
     },
   };
-};
+}
 
 export type CreatePolyFn<P extends Polynomial<T>, T> = (len: number, elm?: T) => P;
 
