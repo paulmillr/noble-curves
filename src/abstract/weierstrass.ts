@@ -345,15 +345,25 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
   function weierstrassEquation(x: T): T {
     const { a, b } = CURVE;
     const x2 = Fp.sqr(x); // x * x
-    const x3 = Fp.mul(x2, x); // x2 * x
-    return Fp.add(Fp.add(x3, Fp.mul(x, a)), b); // x3 + a * x + b
+    const x3 = Fp.mul(x2, x); // x² * x
+    return Fp.add(Fp.add(x3, Fp.mul(x, a)), b); // x³ + a * x + b
   }
+
+  function isValidXY(x: T, y: T): boolean {
+    const left = Fp.sqr(y); // y²
+    const right = weierstrassEquation(x); // x³ + ax + b
+    return Fp.eql(left, right);
+  }
+
   // Validate whether the passed curve params are valid.
-  // We check if curve equation works for generator point.
-  // `assertValidity()` won't work: `isTorsionFree()` is not available at this point in bls12-381.
-  // ProjectivePoint class has not been initialized yet.
-  if (!Fp.eql(Fp.sqr(CURVE.Gy), weierstrassEquation(CURVE.Gx)))
-    throw new Error('bad generator point: equation left != right');
+  // Test 1: equation y² = x³ + ax + b should work for generator point.
+  if (!isValidXY(CURVE.Gx, CURVE.Gy)) throw new Error('bad curve params: generator point');
+
+  // Test 2: discriminant Δ part should be non-zero: 4a³ + 27b² != 0.
+  // Guarantees curve is genus-1, smooth (non-singular).
+  const _4a3 = Fp.mul(Fp.pow(CURVE.a, _3n), _4n);
+  const _27b2 = Fp.mul(Fp.sqr(CURVE.b), BigInt(27));
+  if (Fp.is0(Fp.add(_4a3, _27b2))) throw new Error('bad curve params: a or b');
 
   // Valid group elements reside in range 1..n-1
   function isWithinCurveOrder(num: bigint): boolean {
@@ -424,9 +434,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
     const { x, y } = p.toAffine();
     // Check if x, y are valid field elements
     if (!Fp.isValid(x) || !Fp.isValid(y)) throw new Error('bad point: x or y not FE');
-    const left = Fp.sqr(y); // y²
-    const right = weierstrassEquation(x); // x³ + ax + b
-    if (!Fp.eql(left, right)) throw new Error('bad point: equation left != right');
+    if (!isValidXY(x, y)) throw new Error('bad point: equation left != right');
     if (!p.isTorsionFree()) throw new Error('bad point: not in prime-order subgroup');
     return true;
   });
