@@ -34,19 +34,33 @@ export type BigintTwelve = [
 ];
 
 export type Fp2Bls = mod.IField<Fp2> & {
-  reim: (num: Fp2) => { re: Fp; im: Fp };
-  mulByB: (num: Fp2) => Fp2;
   frobeniusMap(num: Fp2, power: number): Fp2;
   fromBigTuple(num: [bigint, bigint]): Fp2;
+  mulByB: (num: Fp2) => Fp2;
+  mulByNonresidue: (num: Fp2) => Fp2;
+  reim: (num: Fp2) => { re: Fp; im: Fp };
+  NONRESIDUE: Fp2;
+};
+
+export type Fp6Bls = mod.IField<Fp6> & {
+  frobeniusMap(num: Fp6, power: number): Fp6;
+  fromBigSix: (tuple: BigintSix) => Fp6;
+  mul1(num: Fp6, b1: Fp2): Fp6;
+  mul01(num: Fp6, b0: Fp2, b1: Fp2): Fp6;
+  mulByFp2(lhs: Fp6, rhs: Fp2): Fp6;
+  mulByNonresidue: (num: Fp6) => Fp6;
 };
 
 export type Fp12Bls = mod.IField<Fp12> & {
   frobeniusMap(num: Fp12, power: number): Fp12;
+  fromBigTwelve: (t: BigintTwelve) => Fp12;
   mul014(num: Fp12, o0: Fp2, o1: Fp2, o4: Fp2): Fp12;
   mul034(num: Fp12, o0: Fp2, o3: Fp2, o4: Fp2): Fp12;
+  mulByFp2(lhs: Fp12, rhs: Fp2): Fp12;
   conjugate(num: Fp12): Fp12;
   finalExponentiate(num: Fp12): Fp12;
-  fromBigTwelve(num: BigintTwelve): Fp12;
+  _cyclotomicSquare(num: Fp12): Fp12;
+  _cyclotomicExp(num: Fp12, n: bigint): Fp12;
 };
 
 function calcFrobeniusCoefficients<T>(
@@ -134,34 +148,10 @@ export type Tower12Opts = {
 
 export function tower12(opts: Tower12Opts): {
   Fp: Readonly<mod.IField<bigint> & Required<Pick<mod.IField<bigint>, 'isOdd'>>>;
-  Fp2: mod.IField<Fp2> & {
-    NONRESIDUE: Fp2;
-    fromBigTuple: (tuple: BigintTuple | bigint[]) => Fp2;
-    reim: (num: Fp2) => { re: bigint; im: bigint };
-    mulByNonresidue: (num: Fp2) => Fp2;
-    mulByB: (num: Fp2) => Fp2;
-    frobeniusMap(num: Fp2, power: number): Fp2;
-  };
-  Fp6: mod.IField<Fp6> & {
-    fromBigSix: (tuple: BigintSix) => Fp6;
-    mulByNonresidue: (num: Fp6) => Fp6;
-    frobeniusMap(num: Fp6, power: number): Fp6;
-    mul1(num: Fp6, b1: Fp2): Fp6;
-    mul01(num: Fp6, b0: Fp2, b1: Fp2): Fp6;
-    mulByFp2(lhs: Fp6, rhs: Fp2): Fp6;
-  };
+  Fp2: Fp2Bls;
+  Fp6: Fp6Bls;
+  Fp12: Fp12Bls;
   Fp4Square: (a: Fp2, b: Fp2) => { first: Fp2; second: Fp2 };
-  Fp12: mod.IField<Fp12> & {
-    fromBigTwelve: (t: BigintTwelve) => Fp12;
-    frobeniusMap(num: Fp12, power: number): Fp12;
-    mul014(num: Fp12, o0: Fp2, o1: Fp2, o4: Fp2): Fp12;
-    mul034(num: Fp12, o0: Fp2, o3: Fp2, o4: Fp2): Fp12;
-    mulByFp2(lhs: Fp12, rhs: Fp2): Fp12;
-    conjugate(num: Fp12): Fp12;
-    finalExponentiate(num: Fp12): Fp12;
-    _cyclotomicSquare(num: Fp12): Fp12;
-    _cyclotomicExp(num: Fp12, n: bigint): Fp12;
-  };
 } {
   const { ORDER } = opts;
   // Fp
@@ -361,15 +351,6 @@ export function tower12(opts: Tower12Opts): {
       c2: Fp2.sub(Fp2.sub(Fp2.add(Fp2.add(t1, Fp2.sqr(Fp2.add(Fp2.sub(c0, c1), c2))), t3), t0), t4),
     };
   };
-  type Fp6Utils = {
-    fromBigSix: (tuple: BigintSix) => Fp6;
-    mulByNonresidue: (num: Fp6) => Fp6;
-    frobeniusMap(num: Fp6, power: number): Fp6;
-    mul1(num: Fp6, b1: Fp2): Fp6;
-    mul01(num: Fp6, b0: Fp2, b1: Fp2): Fp6;
-    mulByFp2(lhs: Fp6, rhs: Fp2): Fp6;
-  };
-
   const [FP6_FROBENIUS_COEFFICIENTS_1, FP6_FROBENIUS_COEFFICIENTS_2] = calcFrobeniusCoefficients(
     Fp2,
     Fp2Nonresidue,
@@ -379,7 +360,7 @@ export function tower12(opts: Tower12Opts): {
     3
   );
 
-  const Fp6: mod.IField<Fp6> & Fp6Utils = {
+  const Fp6: Fp6Bls = {
     ORDER: Fp2.ORDER, // TODO: unused, but need to verify
     isLE: Fp2.isLE,
     BITS: 3 * Fp2.BITS,
@@ -524,19 +505,8 @@ export function tower12(opts: Tower12Opts): {
       second: Fp2.sub(Fp2.sub(Fp2.sqr(Fp2.add(a, b)), a2), b2), // (a + b)² - a² - b²
     };
   }
-  type Fp12Utils = {
-    fromBigTwelve: (t: BigintTwelve) => Fp12;
-    frobeniusMap(num: Fp12, power: number): Fp12;
-    mul014(num: Fp12, o0: Fp2, o1: Fp2, o4: Fp2): Fp12;
-    mul034(num: Fp12, o0: Fp2, o3: Fp2, o4: Fp2): Fp12;
-    mulByFp2(lhs: Fp12, rhs: Fp2): Fp12;
-    conjugate(num: Fp12): Fp12;
-    finalExponentiate(num: Fp12): Fp12;
-    _cyclotomicSquare(num: Fp12): Fp12;
-    _cyclotomicExp(num: Fp12, n: bigint): Fp12;
-  };
 
-  const Fp12: mod.IField<Fp12> & Fp12Utils = {
+  const Fp12: Fp12Bls = {
     ORDER: Fp2.ORDER, // TODO: unused, but need to verify
     isLE: Fp6.isLE,
     BITS: 2 * Fp6.BITS,
@@ -646,5 +616,5 @@ export function tower12(opts: Tower12Opts): {
     finalExponentiate: opts.Fp12finalExponentiate,
   };
 
-  return { Fp, Fp2, Fp6, Fp4Square, Fp12 };
+  return { Fp, Fp2, Fp6, Fp12, Fp4Square };
 }
