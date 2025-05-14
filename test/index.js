@@ -8,6 +8,7 @@ import './ed25519-addons.test.js';
 import './ed25519.test.js';
 import './ed448-addons.test.js';
 import './ed448.test.js';
+import './fft.test.js';
 import './hash-to-curve.test.js';
 import './jubjub.test.js';
 import './nist.test.js';
