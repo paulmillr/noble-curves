@@ -277,7 +277,8 @@
     "weierstrass",
     "montgomery",
     "edwards",
-    "schnorr"
+    "schnorr",
+    "fft"
   ],
   "funding": "https://paulmillr.com/funding/"
 }
