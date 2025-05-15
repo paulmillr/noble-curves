@@ -517,7 +517,7 @@ describe('secp256k1', () => {
       // TODO: Once der is there, run all tests.
       for (const vector of ecdh.testGroups[0].tests.slice(0, 230)) {
         const priv = bytes(vector.private);
-        if (vector.result === 'invalid' || priv.length !== 64) {
+        if (vector.result === 'invalid' || priv.length !== 32) {
           throws(() => {
             secp.getSharedSecret(priv, derToPub(vector.public), true);
           });
