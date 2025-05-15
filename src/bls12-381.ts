@@ -75,7 +75,7 @@ import {
 } from './abstract/utils.ts';
 // Types
 import { isogenyMap } from './abstract/hash-to-curve.ts';
-import type { Fp, Fp12, Fp2, Fp6 } from './abstract/tower.ts';
+import type { BigintTuple, Fp, Fp12, Fp2, Fp6 } from './abstract/tower.ts';
 import { psiFrobenius, tower12 } from './abstract/tower.ts';
 import {
   mapToCurveSimpleSWU,
@@ -240,7 +240,12 @@ const isogenyMapG2 = isogenyMap(
       ],
       ['0x1', '0x0'], // LAST 1
     ],
-  ].map((i) => i.map((pair) => Fp2.fromBigTuple(pair.map(BigInt)))) as [Fp2[], Fp2[], Fp2[], Fp2[]]
+  ].map((i) => i.map((pair) => Fp2.fromBigTuple(pair.map(BigInt) as BigintTuple))) as [
+    Fp2[],
+    Fp2[],
+    Fp2[],
+    Fp2[],
+  ]
 );
 // 11-isogeny map from E' to E
 const isogenyMapG1 = isogenyMap(
@@ -606,7 +611,7 @@ export const bls12_381: CurveFn = bls({
     wrapPrivateKey: true,
     allowInfinityPoint: true,
     mapToCurve: (scalars: bigint[]) => {
-      const { x, y } = G2_SWU(Fp2.fromBigTuple(scalars));
+      const { x, y } = G2_SWU(Fp2.fromBigTuple(scalars as BigintTuple));
       return isogenyMapG2(x, y);
     },
     // Checks is the point resides in prime-order subgroup.

@@ -1,8 +1,8 @@
 import { bytesToHex as hex, hexToBytes } from '@noble/hashes/utils';
 import { describe, should } from 'micro-should';
-import { deepStrictEqual, throws } from 'node:assert';
+import { deepStrictEqual as eql, throws } from 'node:assert';
 import { bytesToNumberLE } from '../esm/abstract/utils.js';
-import { DecafPoint, ed448, edwardsToMontgomeryPub, hash_to_decaf448 } from '../esm/ed448.js';
+import { DecafPoint, ed448, edwardsToMontgomeryPub, hashToDecaf448 } from '../esm/ed448.js';
 
 describe('decaf448', () => {
   should('follow the byte encodings of small multiples', () => {
@@ -30,8 +30,8 @@ describe('decaf448', () => {
     let B = DecafPoint.BASE;
     let P = DecafPoint.ZERO;
     for (const encoded of encodingsOfSmallMultiples) {
-      deepStrictEqual(P.toHex(), encoded);
-      deepStrictEqual(DecafPoint.fromHex(encoded).toHex(), encoded);
+      eql(P.toHex(), encoded);
+      eql(DecafPoint.fromHex(encoded).toHex(), encoded);
       P = P.add(B);
     }
   });
@@ -90,7 +90,7 @@ describe('decaf448', () => {
     for (let i = 0; i < hashes.length; i++) {
       const hash = hexToBytes(hashes[i]);
       const point = DecafPoint.hashToCurve(hash);
-      deepStrictEqual(point.toHex(), encodedHashToPoints[i]);
+      eql(point.toHex(), encodedHashToPoints[i]);
     }
   });
   should('have proper equality testing', () => {
@@ -105,7 +105,7 @@ describe('decaf448', () => {
       18, 175, 191, 119, 152, 124, 223, 101, 54, 218, 76, 158, 43, 112, 151, 32,
     ]);
     const pub = DecafPoint.BASE.multiply(bytes448ToNumberLE(priv));
-    deepStrictEqual(pub.equals(DecafPoint.ZERO), false);
+    eql(pub.equals(DecafPoint.ZERO), false);
   });
 
   should('edwardsToMontgomery should produce correct output', () => {
@@ -114,14 +114,14 @@ describe('decaf448', () => {
     );
     const edPublic = ed448.getPublicKey(edSecret);
     const xPublic = edwardsToMontgomeryPub(edPublic);
-    deepStrictEqual(
+    eql(
       hex(xPublic),
       'f0301c19656bce1d1cd0a474c952d196041811b63617fc8fdaacee533644e2b2d49273426c8dbb5a76033ea84fb5215b84f9ebf22bde0b0700'
     );
   });
   should('decaf448_hasher', () => {
-    deepStrictEqual(
-      hash_to_decaf448(new Uint8Array(10).fill(5), {
+    eql(
+      hashToDecaf448(new Uint8Array(10).fill(5), {
         DST: 'decaf448_XOF:SHAKE256_D448MAP_RO_',
       }).toHex(),
       '1287dea7519af966cf537a58f614e8b39b93a7c0b989bcdb4f94af8f2573ab59589accb0d2a2097b5f30c1d721619470f21e78613bbfc4b6'

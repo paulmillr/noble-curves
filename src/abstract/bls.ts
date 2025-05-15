@@ -18,20 +18,20 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 // TODO: import { AffinePoint } from './curve.ts';
 import {
+  createHasher,
   type H2CPointConstructor,
   type htfBasicOpts,
   type Opts as HTFOpts,
   type MapToCurve,
-  createHasher,
 } from './hash-to-curve.ts';
-import { type IField, getMinHashLength, mapHashToField } from './modular.ts';
-import type { Fp12, Fp12Bls, Fp2, Fp2Bls, Fp6 } from './tower.ts';
-import { type CHash, type Hex, type PrivKey, ensureBytes, memoized } from './utils.ts';
+import { getMinHashLength, mapHashToField, type IField } from './modular.ts';
+import type { Fp12, Fp12Bls, Fp2, Fp2Bls, Fp6Bls } from './tower.ts';
+import { ensureBytes, memoized, type CHash, type Hex, type PrivKey } from './utils.ts';
 import {
+  weierstrassPoints,
   type CurvePointsRes,
   type CurvePointsType,
   type ProjPointType,
-  weierstrassPoints,
 } from './weierstrass.ts';
 
 type Fp = bigint; // Can be different field?
@@ -83,7 +83,7 @@ export type CurveType = {
     Fp: IField<Fp>;
     Fr: IField<bigint>;
     Fp2: Fp2Bls;
-    Fp6: IField<Fp6>;
+    Fp6: Fp6Bls;
     Fp12: Fp12Bls;
   };
   params: {
@@ -165,7 +165,7 @@ export type CurveFn = {
   fields: {
     Fp: IField<Fp>;
     Fp2: Fp2Bls;
-    Fp6: IField<Fp6>;
+    Fp6: Fp6Bls;
     Fp12: Fp12Bls;
     Fr: IField<bigint>;
   };

@@ -1,5 +1,5 @@
 import { describe, should } from 'micro-should';
-import { deepStrictEqual } from 'node:assert';
+import { deepStrictEqual as eql } from 'node:assert';
 import * as mod from '../esm/abstract/modular.js';
 import * as poseidon from '../esm/abstract/poseidon.js';
 import * as stark from './_poseidon.helpers.js';
@@ -28,11 +28,11 @@ describe('Stark', () => {
         2715867691630559973784374069384091521307896505826088878858115800121387149186n,
       ],
     ];
-    deepStrictEqual(stark._poseidonMDS(stark.Fp251, 'HadesMDS', 3, 0), matrix);
+    eql(stark._poseidonMDS(stark.Fp251, 'HadesMDS', 3, 0), matrix);
   });
 
   should('HadesPermutation', () => {
-    deepStrictEqual(
+    eql(
       stark.poseidonSmall([
         4379311784651118086770398084575492314150568148003994287303975907890254409956n,
         5329163686893598957822497554130545759427567507701132391649270915797304266381n,
@@ -53,7 +53,7 @@ describe('Stark', () => {
       roundsFull: 8,
       roundsPartial: 83,
     });
-    deepStrictEqual(
+    eql(
       h([
         4379311784651118086770398084575492314150568148003994287303975907890254409956n,
         5329163686893598957822497554130545759427567507701132391649270915797304266381n,
@@ -74,7 +74,7 @@ describe('Stark', () => {
       roundsFull: 8,
       roundsPartial: 83,
     });
-    deepStrictEqual(
+    eql(
       h([
         4379311784651118086770398084575492314150568148003994287303975907890254409956n,
         5329163686893598957822497554130545759427567507701132391649270915797304266381n,
@@ -88,7 +88,7 @@ describe('Stark', () => {
     );
   });
   should('PoseidonHash', () => {
-    deepStrictEqual(
+    eql(
       stark.poseidonHash(
         4379311784651118086770398084575492314150568148003994287303975907890254409956n,
         5329163686893598957822497554130545759427567507701132391649270915797304266381n
@@ -104,7 +104,7 @@ describe('Stark', () => {
       roundsFull: 8,
       roundsPartial: 83,
     });
-    deepStrictEqual(
+    eql(
       stark.poseidonHash(
         4379311784651118086770398084575492314150568148003994287303975907890254409956n,
         5329163686893598957822497554130545759427567507701132391649270915797304266381n,
@@ -121,7 +121,7 @@ describe('Stark', () => {
       roundsFull: 8,
       roundsPartial: 83,
     });
-    deepStrictEqual(
+    eql(
       stark.poseidonHash(
         4379311784651118086770398084575492314150568148003994287303975907890254409956n,
         5329163686893598957822497554130545759427567507701132391649270915797304266381n,
@@ -170,7 +170,7 @@ should('poseidonperm_x5_255_3', () => {
     mds,
     roundConstants,
   });
-  deepStrictEqual(
+  eql(
     poseidon_x5_255_3([
       0x0000000000000000000000000000000000000000000000000000000000000000n,
       0x0000000000000000000000000000000000000000000000000000000000000001n,
@@ -238,7 +238,7 @@ should('poseidonperm_x5_255_5', () => {
     roundConstants,
   });
 
-  deepStrictEqual(
+  eql(
     poseidon_x5_255_5([
       0x0000000000000000000000000000000000000000000000000000000000000000n,
       0x0000000000000000000000000000000000000000000000000000000000000001n,
@@ -290,7 +290,7 @@ should('poseidonperm_x5_254_3', () => {
     roundConstants,
   });
 
-  deepStrictEqual(
+  eql(
     poseidon_x5_254_3([
       0x0000000000000000000000000000000000000000000000000000000000000000n,
       0x0000000000000000000000000000000000000000000000000000000000000001n,
@@ -358,7 +358,7 @@ should('poseidonperm_x5_254_5', () => {
     roundConstants,
   });
 
-  deepStrictEqual(
+  eql(
     poseidon_x5_254_5([
       0x0000000000000000000000000000000000000000000000000000000000000000n,
       0x0000000000000000000000000000000000000000000000000000000000000001n,
@@ -393,7 +393,7 @@ describe('PoseidonSponge', () => {
         roundsFull: 8,
         roundsPartial: 31,
       });
-      deepStrictEqual(mds, [
+      eql(mds, [
         [
           6093452032963406658309134825240609333033222270199073508119142384975416392638n,
           5968273173562867837210008744966745230923761158428968101807573098840850097286n,
@@ -410,7 +410,7 @@ describe('PoseidonSponge', () => {
           8280884008678095605415834125731826663585461281789631237939546251146561093166n,
         ],
       ]);
-      deepStrictEqual(roundConstants, vecp.aleo_grain_roundConstants.map(parseArrBig));
+      eql(roundConstants, vecp.aleo_grain_roundConstants.map(parseArrBig));
     });
     should('rate=2 capacity=1', () => {
       const rate = 2;
@@ -447,14 +447,14 @@ describe('PoseidonSponge', () => {
       // absorb(3);squeeze(2)
       const s1 = sponge();
       s1.absorb(inputs.slice(0, 3));
-      deepStrictEqual(s1.squeeze(2), [
+      eql(s1.squeeze(2), [
         5528124139915370778497908783898741139153574846551220495957672211442474308196n,
         2420619180129571354470214721153552874135214293988121929445742760421351812085n,
       ]);
       // absorb(0);squeeze(3);
       const s2 = sponge();
       s2.absorb([]);
-      deepStrictEqual(s2.squeeze(3), [
+      eql(s2.squeeze(3), [
         933733638681902971366883597456330506627704278683959399109999726127624278648n,
         7947296799800775327938262145036085767367577952489561846300684316471048325151n,
         8176130403051036805322877644409334453960127468352705414400032728890307490770n,
@@ -463,80 +463,80 @@ describe('PoseidonSponge', () => {
       const s3 = sponge();
       s3.absorb(inputs.slice(0, 2));
       s3.absorb([inputs[2]]);
-      deepStrictEqual(s3.squeeze(2), [
+      eql(s3.squeeze(2), [
         5528124139915370778497908783898741139153574846551220495957672211442474308196n,
         2420619180129571354470214721153552874135214293988121929445742760421351812085n,
       ]);
       // absorb(3);squeeze(1);squeeze(1)
       const s4 = sponge();
       s4.absorb(inputs.slice(0, 3));
-      deepStrictEqual(s4.squeeze(1), [
+      eql(s4.squeeze(1), [
         5528124139915370778497908783898741139153574846551220495957672211442474308196n,
       ]);
-      deepStrictEqual(s4.squeeze(1), [
+      eql(s4.squeeze(1), [
         2420619180129571354470214721153552874135214293988121929445742760421351812085n,
       ]);
       // absorb(11);squeeze(2);
       const s5 = sponge();
       s5.absorb(inputs);
-      deepStrictEqual(s5.squeeze(2), [
+      eql(s5.squeeze(2), [
         26553393923456202663144989311824517705110159271577366819618683341297406966n,
         7016672899849811490358640818454305819532854937834096463294677928554860101232n,
       ]);
       // squeeze(2);
       const s6 = sponge();
-      deepStrictEqual(s6.squeeze(2), [
+      eql(s6.squeeze(2), [
         933733638681902971366883597456330506627704278683959399109999726127624278648n,
         7947296799800775327938262145036085767367577952489561846300684316471048325151n,
       ]);
       // absobr(3); squeeze(2); absorb(3); squeeze(2);
       const s7 = sponge();
       s7.absorb(inputs.slice(0, 3));
-      deepStrictEqual(s7.squeeze(2), [
+      eql(s7.squeeze(2), [
         5528124139915370778497908783898741139153574846551220495957672211442474308196n,
         2420619180129571354470214721153552874135214293988121929445742760421351812085n,
       ]);
       s7.absorb(inputs.slice(3, 6));
-      deepStrictEqual(s7.squeeze(2), [
+      eql(s7.squeeze(2), [
         5588447626321408884036227149970492957886517571060242219931529251408668452862n,
         3785030165774957122639768627564213246094662307916570387367075908156611788837n,
       ]);
       // absorb(3);squeeze(0);absorb(3);squeeze(2)
       const s8 = sponge();
       s8.absorb(inputs.slice(0, 3));
-      deepStrictEqual(s8.squeeze(0), []);
+      eql(s8.squeeze(0), []);
       s8.absorb(inputs.slice(3, 6));
-      deepStrictEqual(s8.squeeze(2), [
+      eql(s8.squeeze(2), [
         6470185464793428861582857521285696840123874904819191690530167712863056078884n,
         678032572423041477979964450039774208343357930887800030208970759669150733000n,
       ]);
       // absorb(3);squeeze(2);absorb(0);squeeze(2)
       const s9 = sponge();
       s9.absorb(inputs.slice(0, 3));
-      deepStrictEqual(s9.squeeze(2), [
+      eql(s9.squeeze(2), [
         5528124139915370778497908783898741139153574846551220495957672211442474308196n,
         2420619180129571354470214721153552874135214293988121929445742760421351812085n,
       ]);
       s9.absorb([]);
-      deepStrictEqual(s9.squeeze(2), [
+      eql(s9.squeeze(2), [
         2492034033820692577660772442004599604877416958552504035222255780764492626637n,
         3219631157933579149223017804239080280224882035858525007265472051339661711735n,
       ]);
       // absorb(1);squeeze(2);
       const s10 = sponge();
       s10.absorb(inputs.slice(0, 1));
-      deepStrictEqual(s10.squeeze(2), [
+      eql(s10.squeeze(2), [
         7644420660423831885731682109272695821257057596295339585794759757016078689547n,
         3859905479154147442482078504776928705199511809151329003321175729702391795042n,
       ]);
       // absobr(3); squeeze(1); absorb(3); squeeze(1);
       const s11 = sponge();
       s11.absorb(inputs.slice(0, 3));
-      deepStrictEqual(s11.squeeze(1), [
+      eql(s11.squeeze(1), [
         5528124139915370778497908783898741139153574846551220495957672211442474308196n,
       ]);
       s11.absorb(inputs.slice(3, 6));
-      deepStrictEqual(s11.squeeze(1), [
+      eql(s11.squeeze(1), [
         5588447626321408884036227149970492957886517571060242219931529251408668452862n,
       ]);
     });
@@ -552,7 +552,7 @@ describe('PoseidonSponge', () => {
         roundsFull: 8,
         roundsPartial: 31,
       });
-      deepStrictEqual(mds, [
+      eql(mds, [
         [
           26017457457808754696901916760153646963713419596921330311675236858336250747575n,
           3639683834202950894361433288826233741561896854900895753431766653813988568616n,
@@ -569,7 +569,7 @@ describe('PoseidonSponge', () => {
           13521929589998302886085098386422384259477894224415500174630722069318478944823n,
         ],
       ]);
-      deepStrictEqual(roundConstants, vecp.arkworks_grain_roundConstants.map(parseArrBig));
+      eql(roundConstants, vecp.arkworks_grain_roundConstants.map(parseArrBig));
     });
     should('rate=2 capacity=1', () => {
       const rate = 2;
@@ -605,14 +605,14 @@ describe('PoseidonSponge', () => {
       ];
       const s1 = sponge();
       s1.absorb(inputs.slice(0, 3));
-      deepStrictEqual(s1.squeeze(2), [
+      eql(s1.squeeze(2), [
         25283854350347435274635030330108075556936659978586145851296361714414722574977n,
         28603365815395435865415304087135297453074687980742616616978979944696141627335n,
       ]);
       // absorb(0);squeeze(3);
       const s2 = sponge();
       s2.absorb([]);
-      deepStrictEqual(s2.squeeze(3), [
+      eql(s2.squeeze(3), [
         22095061030825764236545407651195963259093673160236850179062763631622849581041n,
         51147331969562634030541262163015923329074972559171117523202343735176539631092n,
         38566017764735118620833500678934515124800416244503159365750257744180372818350n,
@@ -620,19 +620,19 @@ describe('PoseidonSponge', () => {
       // absorb(11);squeeze(2);
       const s5 = sponge();
       s5.absorb(inputs);
-      deepStrictEqual(s5.squeeze(2), [
+      eql(s5.squeeze(2), [
         16566857174767620685802510376201107449033507070456217544270378314684407453695n,
         449661346404481260654646786033891474020700499604872754349019325201507701381n,
       ]);
       // absorb(3);squeeze(2);absorb(0);squeeze(2)
       const s9 = sponge();
       s9.absorb(inputs.slice(0, 3));
-      deepStrictEqual(s9.squeeze(2), [
+      eql(s9.squeeze(2), [
         25283854350347435274635030330108075556936659978586145851296361714414722574977n,
         28603365815395435865415304087135297453074687980742616616978979944696141627335n,
       ]);
       s9.absorb([]);
-      deepStrictEqual(s9.squeeze(2), [
+      eql(s9.squeeze(2), [
         49166328828518411259658775292174876194897505808260003840078267783408303626061n,
         11687729391556811786970896353500121413690369995764901343770077126146977132960n,
       ]);

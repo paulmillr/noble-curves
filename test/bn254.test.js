@@ -1,6 +1,6 @@
 import { hexToBytes } from '@noble/hashes/utils';
 import { describe, should } from 'micro-should';
-import { deepStrictEqual, throws } from 'node:assert';
+import { deepStrictEqual as eql, throws } from 'node:assert';
 import { bytesToNumberBE } from '../esm/abstract/utils.js';
 import { bn254 } from '../esm/bn254.js';
 import { default as ethDump } from './bn254/eth-dump.js';
@@ -20,44 +20,44 @@ describe('bn254', () => {
       c1: 6755404584462298611753346784665337222239198745905936344431516651379215797104n,
     };
     const mul = Fp2.mul(x, y);
-    deepStrictEqual(mul, {
+    eql(mul, {
       c0: 14915367931151687313527782314310395056617474070176176799315072532155545111131n,
       c1: 21234748560869198098271980834340238051100753263426135951820710752881888827685n,
     });
-    deepStrictEqual(Fp2.inv(mul), {
+    eql(Fp2.inv(mul), {
       c0: 14059357043488439067899523657279480228325398861171369736421103353153531444488n,
       c1: 10653662974983088626765328812465558213584029561070266019112600033405785100357n,
     });
-    deepStrictEqual(Fp2.pow(mul, 123n), {
+    eql(Fp2.pow(mul, 123n), {
       c0: 10215561122296849292546524321406303162476266646558890975893280707450285855932n,
       c1: 4537324909364976254935527093258254296114714749851039294808365654432443471764n,
     });
-    deepStrictEqual(Fp2.mulByNonresidue(mul), {
+    eql(Fp2.mulByNonresidue(mul), {
       c0: 0x07e037c032c72fca1ad3101fe7826263823ca54d39d091e6396a2919752311abn,
       c1: 0x13f9045c1b9e7f1ef3aa2daa5d59e7e7ca826cf63a9b4ce115e4ab8f34e4c529n,
     });
-    deepStrictEqual(Fp2.frobeniusMap(mul, 0), {
+    eql(Fp2.frobeniusMap(mul, 0), {
       c0: 0x20f9cc90b32f1bf9d6b520a01b8a0c8074892df17aab86ba95305c9cf37b4a5bn,
       c1: 0x2ef27117b3e8ab2dd7f9b8f088d1544ca10ee3590bfe35e6d8a65bf8dfc19925n,
     });
-    deepStrictEqual(Fp2.frobeniusMap(mul, 1), {
+    eql(Fp2.frobeniusMap(mul, 1), {
       c0: 0x20f9cc90b32f1bf9d6b520a01b8a0c8074892df17aab86ba95305c9cf37b4a5bn,
       c1: 0x0171dd5b2d48f4fbe0568cc5f8b00410f67287385c7394a6637a301df8bb6422n,
     });
-    deepStrictEqual(Fp2.frobeniusMap(mul, 2), {
+    eql(Fp2.frobeniusMap(mul, 2), {
       c0: 0x20f9cc90b32f1bf9d6b520a01b8a0c8074892df17aab86ba95305c9cf37b4a5bn,
       c1: 0x2ef27117b3e8ab2dd7f9b8f088d1544ca10ee3590bfe35e6d8a65bf8dfc19925n,
     });
-    deepStrictEqual(Fp2.frobeniusMap(mul, 3), {
+    eql(Fp2.frobeniusMap(mul, 3), {
       c0: 0x20f9cc90b32f1bf9d6b520a01b8a0c8074892df17aab86ba95305c9cf37b4a5bn,
       c1: 0x0171dd5b2d48f4fbe0568cc5f8b00410f67287385c7394a6637a301df8bb6422n,
     });
     // deepStrictEqual(Fp2.multiplyByB(mul), {});
-    deepStrictEqual(Fp2.sqr(mul), {
+    eql(Fp2.sqr(mul), {
       c0: 0x06be9f41936b73fee167d253de7f0e5b593907af77de4ee4719c2e867d0d2935n,
       c1: 0x2771aeff417616dd85e1c7ed0f32de184f1ad8824b5cbae7d1f75bebb82c5360n,
     });
-    deepStrictEqual(
+    eql(
       Fp2.sqrt(
         Fp2.fromBigTuple([
           9539370033468661209380275700986402421887789242020002300585859967789873971892n,
@@ -69,7 +69,7 @@ describe('bn254', () => {
         13618633949391667835520719449938342187292725425802172484249840050686954616369n,
       ])
     );
-    deepStrictEqual(
+    eql(
       Fp2.sqrt(
         Fp2.fromBigTuple([
           9539370033468661209380275700986402421887789242020002300585859967789873971892n,
@@ -81,7 +81,7 @@ describe('bn254', () => {
         11474336573315612962807055017310908889127934811628703059389981608666953233848n,
       ])
     );
-    deepStrictEqual(Fp2.sqrt(Fp2.fromBigTuple([0n, 0n])), Fp2.fromBigTuple([0n, 0n]));
+    eql(Fp2.sqrt(Fp2.fromBigTuple([0n, 0n])), Fp2.fromBigTuple([0n, 0n]));
     throws(() =>
       Fp2.sqrt(
         Fp2.fromBigTuple([
@@ -90,7 +90,7 @@ describe('bn254', () => {
         ])
       )
     );
-    deepStrictEqual(
+    eql(
       Fp2.sqrt(
         Fp2.fromBigTuple([
           12352847319525355024456442719184913847134238145817530183012048714311776063934n,
@@ -133,7 +133,7 @@ describe('bn254', () => {
       },
     };
     const mul = Fp6.mul(x, y);
-    deepStrictEqual(
+    eql(
       mul,
       Fp6.fromBigSix([
         0x27e02cac09778f17790eca88049591eab8303bde8b0ce544812271ce663837f5n,
@@ -144,7 +144,7 @@ describe('bn254', () => {
         0x26b45ad7a7aaf40a62c2c33113bc6e992ff827df086bdb12a8903b67bbe87951n,
       ])
     );
-    deepStrictEqual(
+    eql(
       Fp6.inv(mul),
       Fp6.fromBigSix([
         0x157cc42ef8b45c3083066eef83ba7fdb49a15109957430cf3193fbd25e738c20n,
@@ -155,7 +155,7 @@ describe('bn254', () => {
         0x11c15de4d913051b97398c242d2b9ad3b3c1891e7a0a808077cd58cee3ac07a5n,
       ])
     );
-    deepStrictEqual(
+    eql(
       Fp6.pow(mul, 123n),
       Fp6.fromBigSix([
         0x27fd73f942655006f23e15c8a72b85c85f89268cdd3f2c924fa97f51a600bcf1n,
@@ -166,7 +166,7 @@ describe('bn254', () => {
         0x224204a78f3913b0442dbfbbf9e9a1c0a1383440c38f120fbf45cfc293debfc0n,
       ])
     );
-    deepStrictEqual(
+    eql(
       Fp6.mulByNonresidue(mul),
       Fp6.fromBigSix([
         0x104b9196e9260bd01fe2e0fdd7503942c70fb678d870b4187ed557fa0e24e47dn,
@@ -177,7 +177,7 @@ describe('bn254', () => {
         0x237401e06589ded3b91d4ea9b6f0d38fb43bba4057e0f72c0ceddc6ce6de6084n,
       ])
     );
-    deepStrictEqual(
+    eql(
       Fp6.frobeniusMap(mul, 0),
       Fp6.fromBigSix([
         0x27e02cac09778f17790eca88049591eab8303bde8b0ce544812271ce663837f5n,
@@ -188,7 +188,7 @@ describe('bn254', () => {
         0x26b45ad7a7aaf40a62c2c33113bc6e992ff827df086bdb12a8903b67bbe87951n,
       ])
     );
-    deepStrictEqual(
+    eql(
       Fp6.frobeniusMap(mul, 1),
       Fp6.fromBigSix([
         0x27e02cac09778f17790eca88049591eab8303bde8b0ce544812271ce663837f5n,
@@ -199,7 +199,7 @@ describe('bn254', () => {
         0x0e4f2d75f9f41f72c312da70c678a41644a4a1afd64c134d85f7b67b27f9b209n,
       ])
     );
-    deepStrictEqual(
+    eql(
       Fp6.frobeniusMap(mul, 2),
       Fp6.fromBigSix([
         0x27e02cac09778f17790eca88049591eab8303bde8b0ce544812271ce663837f5n,
@@ -210,7 +210,7 @@ describe('bn254', () => {
         0x044986602e372645c816c426f065bcc197b4c3f1a5049216ffe14369a7d0cdd5n,
       ])
     );
-    deepStrictEqual(
+    eql(
       Fp6.frobeniusMap(mul, 3),
       Fp6.fromBigSix([
         0x27e02cac09778f17790eca88049591eab8303bde8b0ce544812271ce663837f5n,
@@ -221,7 +221,7 @@ describe('bn254', () => {
         0x1e6a07e972f8d7a6f80815b3ae512237839afa29ec884122fd21bdc5d2e7c0f3n,
       ])
     );
-    deepStrictEqual(
+    eql(
       Fp6.frobeniusMap(mul, 6),
       Fp6.fromBigSix([
         0x27e02cac09778f17790eca88049591eab8303bde8b0ce544812271ce663837f5n,
@@ -232,7 +232,7 @@ describe('bn254', () => {
         0x26b45ad7a7aaf40a62c2c33113bc6e992ff827df086bdb12a8903b67bbe87951n,
       ])
     );
-    deepStrictEqual(
+    eql(
       Fp6.sqr(mul),
       Fp6.fromBigSix([
         0x15a40c8311cae8572c9729fc5a3e17ac6613a586d3a6e4771748db60f1b34c31n,
@@ -276,7 +276,7 @@ describe('bn254', () => {
         4565231055964369875954050676600907662092934946529352128407430527253758726453n,
       ]);
       const mul = Fp12.mul(x, y);
-      deepStrictEqual(
+      eql(
         mul,
         Fp12.fromBigTwelve([
           0x1f7e1915f79c255833f7a13152cbde37e75c7477b0e9e43bd7682159c581eb59n,
@@ -293,7 +293,7 @@ describe('bn254', () => {
           0x0aaa7b3a32f45da005612e5f1d642f4c3747672cb6e299260fc8ce90cc5a8a87n,
         ])
       );
-      deepStrictEqual(
+      eql(
         Fp12.inv(mul),
         Fp12.fromBigTwelve([
           0x05744faaa44310060263cdfbf2b1bb1f515cf33d26d7ecc7107fe6a3ec251185n,
@@ -310,7 +310,7 @@ describe('bn254', () => {
           0x168261b17bc59996e80854efc14c13ed7a44e148d694de221ff5b6460a813391n,
         ])
       );
-      deepStrictEqual(
+      eql(
         Fp12.pow(mul, 123n),
         Fp12.fromBigTwelve([
           0x1898158de89f46fc80741acd697ac74d54432740370a09042cf623af17f4ce47n,
@@ -327,7 +327,7 @@ describe('bn254', () => {
           0x258f97869ce5267a507acec85e5ad2d0acf43ff00bad850c9a7e53541b55696an,
         ])
       );
-      deepStrictEqual(
+      eql(
         Fp12.frobeniusMap(mul, 0),
         Fp12.fromBigTwelve([
           0x1f7e1915f79c255833f7a13152cbde37e75c7477b0e9e43bd7682159c581eb59n,
@@ -344,7 +344,7 @@ describe('bn254', () => {
           0x0aaa7b3a32f45da005612e5f1d642f4c3747672cb6e299260fc8ce90cc5a8a87n,
         ])
       );
-      deepStrictEqual(
+      eql(
         Fp12.frobeniusMap(mul, 1),
         Fp12.fromBigTwelve([
           0x1f7e1915f79c255833f7a13152cbde37e75c7477b0e9e43bd7682159c581eb59n,
@@ -361,7 +361,7 @@ describe('bn254', () => {
           0x04eab8c01c3f99d3706e0c1521791574304867d9a39cd35032316fdbcb3e4a61n,
         ])
       );
-      deepStrictEqual(
+      eql(
         Fp12.frobeniusMap(mul, 2),
         Fp12.fromBigTwelve([
           0x1f7e1915f79c255833f7a13152cbde37e75c7477b0e9e43bd7682159c581eb59n,
@@ -379,7 +379,7 @@ describe('bn254', () => {
         ])
       );
 
-      deepStrictEqual(
+      eql(
         Fp12.sqr(mul),
         Fp12.fromBigTwelve([
           0x17a94f86cafa37b62963f9a8370a3aa9fcc38ef685e0db12748399f0e68e2973n,
@@ -396,7 +396,7 @@ describe('bn254', () => {
           0x29b6713336cc68bbd8e13a86c8b35c4c690cf584fff0ea348ce47c57e1e53c10n,
         ])
       );
-      deepStrictEqual(
+      eql(
         Fp12._cyclotomicSquare(mul),
         Fp12.fromBigTwelve([
           0x30023f5698c9c493e21427e352f9f17dd242334f799b74eeafb66650b491496dn,
@@ -413,7 +413,7 @@ describe('bn254', () => {
           0x1aa102d0bc8d6c3cfebf6670317df90ef6d70e055fecce069451f90157ebfcd9n,
         ])
       );
-      deepStrictEqual(
+      eql(
         Fp12._cyclotomicExp(mul, 123n),
         Fp12.fromBigTwelve([
           0x20dd07451a7f327962a99e97afdf8eb9dea808fce04ae0769e354d48e3bcd95fn,
@@ -430,7 +430,7 @@ describe('bn254', () => {
           0x305b3e860b6a4988a6d717a1bd0ff611611caea2f4fcd93b96bcfc1adfa88738n,
         ])
       );
-      deepStrictEqual(
+      eql(
         Fp12._cyclotomicExp(
           Fp12.fromBigTwelve([
             0xbaf254628469e1f060f4e82859059ce008ea15740f40b92a6f5800845360fc5n,
@@ -479,7 +479,7 @@ describe('bn254', () => {
         0x1f7797b3b1b3bc1b201b49d1e6d32a3114444f43bcd8cac719fbcef72d861449n,
         0x0aaa7b3a32f45da005612e5f1d642f4c3747672cb6e299260fc8ce90cc5a8a87n,
       ]);
-      deepStrictEqual(
+      eql(
         Fp12.finalExponentiate(mul),
         Fp12.fromBigTwelve([
           6877767501181987742927301083772237622289831588906073414192853124854733488141n,
@@ -497,7 +497,7 @@ describe('bn254', () => {
         ])
       );
 
-      deepStrictEqual(
+      eql(
         Fp12.finalExponentiate(
           Fp12.fromBigTwelve([
             0x1712d92ebcd30192d088d400e73f237b316ff48a966eeb8bc137f9721700c67dn,
@@ -529,7 +529,7 @@ describe('bn254', () => {
           17766332416336874386911842842950545082144722270093565065560359187820441614652n,
         ])
       );
-      deepStrictEqual(
+      eql(
         Fp12.finalExponentiate(
           Fp12.fromBigTwelve([
             0x24ea9b007d638d0501e6388ba9de0440270dafa311387968d5b327dd75b72ff9n,
@@ -582,7 +582,7 @@ describe('bn254', () => {
         c0: 14915367931151687313527782314310395056617474070176176799315072532155545111131n,
         c1: 21234748560869198098271980834340238051100753263426135951820710752881888827685n,
       };
-      deepStrictEqual(
+      eql(
         Fp12.mul014(f12m, f2, f2, f2),
         Fp12.fromBigTwelve([
           8922703303827390308271996316386725983337485634407752198681990540008924199346n,
@@ -599,7 +599,7 @@ describe('bn254', () => {
           16042725332896518878477474934414199844982931081285372762536244621942182235661n,
         ])
       );
-      deepStrictEqual(
+      eql(
         Fp12.mul034(f12m, f2, f2, f2),
         Fp12.fromBigTwelve([
           18199611857384505633306727528588064043948891556974835246992059784383667355653n,
@@ -628,7 +628,7 @@ describe('bn254', () => {
         18097487326282793650237947474982649264364522469319914492172746413872781676n
       );
     g1.assertValidity();
-    deepStrictEqual(g1.toAffine(), {
+    eql(g1.toAffine(), {
       x: 0x16f7535f91f50bb2227f483b54850a63b38206f28e0a1a65c83d0c90762442a9n,
       y: 0x0b46dd0c40725b6b4a298576629d77b41a545060adb4358eabec939e80691a05n,
     });
@@ -637,7 +637,7 @@ describe('bn254', () => {
         20390255904278144451778773028944684152769293537511418234311120800877067946n
       );
     g2.assertValidity();
-    deepStrictEqual(g2.toAffine(), {
+    eql(g2.toAffine(), {
       x: {
         c0: 0x1ecfd2dff2aad18798b64bdb0c2b50c9d73e6c05619e04cbf5b448fd98726880n,
         c1: 0x0e16c8d96362720af0916592be1b839a26f5e6b710f3ede0d8840d9a70eaf97fn,
@@ -648,7 +648,7 @@ describe('bn254', () => {
       },
     });
 
-    deepStrictEqual(
+    eql(
       bn254.pairing(g1, g2, true),
       Fp12.fromBigTwelve([
         7520311483001723614143802378045727372643587653754534704390832890681688842501n,
@@ -688,7 +688,7 @@ describe('bn254', () => {
         });
         const fp12 = Fp12.fromBigTwelve(t.pairing.map(BigInt));
         const p = bn254.pairing(g1, g2, true);
-        deepStrictEqual(p, fp12, name);
+        eql(p, fp12, name);
       }
       // });
     }
@@ -698,9 +698,9 @@ describe('bn254', () => {
     /*
     @ethereumjs/evm depends on rustbn-wasm which is wasm for https://github.com/ewasm/ethereum-bn128.rs
     */
-    const fixHex = (hex) => {
-      if (hex.startsWith('0x')) hex = hex.slice(2);
-      return hex;
+    const fixHex = (hex2) => {
+      if (hex2.startsWith('0x')) hex2 = hex2.slice(2);
+      return hex2;
     };
     const ethNum = (hex) => {
       return bytesToNumberBE(hexToBytes(hex));
@@ -729,7 +729,7 @@ describe('bn254', () => {
       } catch (e) {
         res = { x: 0n, y: 0n };
       }
-      deepStrictEqual(res, { x: Cx, y: Cy });
+      eql(res, { x: Cx, y: Cy });
     };
     const ethMul = (input, output) => {
       const [Cx, Cy] = ethNums(output, 2);
@@ -743,7 +743,7 @@ describe('bn254', () => {
       } catch (e) {
         res = { x: 0n, y: 0n };
       }
-      deepStrictEqual(res, { x: Cx, y: Cy });
+      eql(res, { x: Cx, y: Cy });
     };
     const ethPairing = (input, output) => {
       input = fixHex(input);
@@ -792,7 +792,7 @@ describe('bn254', () => {
         f = Fp12.ZERO;
       }
       const res = Fp12.eql(f, Fp12.ONE) ? 1n : 0n;
-      deepStrictEqual(res, out);
+      eql(res, out);
     };
 
     should('add', () => {
@@ -839,7 +839,7 @@ describe('bn254', () => {
         const Cy = BigInt(`0x${t.result.slice(64)}`);
         const A = bn254.G1.ProjectivePoint.fromAffine({ x: Ax, y: Ay });
         const B = bn254.G1.ProjectivePoint.fromAffine({ x: Bx, y: By });
-        deepStrictEqual(A.add(B).toAffine(), { x: Cx, y: Cy });
+        eql(A.add(B).toAffine(), { x: Cx, y: Cy });
       }
       for (const t of seda.mul) {
         const Ax = BigInt(`0x${t.x}`);
@@ -848,7 +848,7 @@ describe('bn254', () => {
         const Cx = BigInt(`0x${t.result.slice(0, 64)}`);
         const Cy = BigInt(`0x${t.result.slice(64)}`);
         const A = bn254.G1.ProjectivePoint.fromAffine({ x: Ax, y: Ay });
-        deepStrictEqual(A.multiply(scalar).toAffine(), { x: Cx, y: Cy });
+        eql(A.multiply(scalar).toAffine(), { x: Cx, y: Cy });
       }
     });
     describe('eth dump', () => {

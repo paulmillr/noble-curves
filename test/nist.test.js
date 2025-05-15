@@ -1,8 +1,8 @@
 import { sha224, sha256, sha384, sha512 } from '@noble/hashes/sha2';
 import { sha3_224, sha3_256, sha3_384, sha3_512, shake128, shake256 } from '@noble/hashes/sha3';
 import { describe, should } from 'micro-should';
-import { deepStrictEqual, throws } from 'node:assert';
-import { bytesToHex, hexToBytes, utf8ToBytes } from '../esm/abstract/utils.js';
+import { deepStrictEqual as eql, throws } from 'node:assert';
+import { bytesToHex as hex, hexToBytes, utf8ToBytes } from '../esm/abstract/utils.js';
 import { DER } from '../esm/abstract/weierstrass.js';
 import { p256, p384, p521, secp256r1, secp384r1, secp521r1 } from '../esm/nist.js';
 import { secp256k1 } from '../esm/secp256k1.js';
@@ -65,8 +65,6 @@ const shake256_256 = wrapShake(shake256, 256 / 8);
 const shake256_384 = wrapShake(shake256, 384 / 8);
 const shake256_512 = wrapShake(shake256, 512 / 8);
 
-const hex = bytesToHex;
-
 // prettier-ignore
 const NIST = {
   secp192r1, P192: p192,
@@ -89,7 +87,7 @@ should('fields', () => {
     secp521r1:
       0x01ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffn,
   };
-  for (const n in vectors) deepStrictEqual(NIST[n].CURVE.Fp.ORDER, vectors[n]);
+  for (const n in vectors) eql(NIST[n].CURVE.Fp.ORDER, vectors[n]);
 });
 
 // We don't support ASN.1 encoding of points. For tests we've implemented quick
@@ -111,22 +109,24 @@ function verifyECDHVector(test, curve) {
     if (privA.length / 2 === fnLen + 1 && privA.startsWith('00')) privA = privA.slice(2);
     // privA = DER._int.decode(privA);
     if (!curve.utils.isValidPrivateKey(privA)) return; // Ignore invalid private key size
+    const pubB_b = hexToBytes(pubB);
     try {
-      curve.ProjectivePoint.fromHex(pubB);
+      curve.ProjectivePoint.fromHex(pubB_b);
     } catch (e) {
       if (e.message.startsWith('invalid Point, expected length')) return; // Ignore
       throw e;
     }
-    const shared = curve.getSharedSecret(privA, pubB).subarray(1);
-    deepStrictEqual(hex(shared), test.shared, 'valid');
+    const privA_b = hexToBytes(privA);
+    const shared = curve.getSharedSecret(privA_b, pubB_b).subarray(1);
+    eql(hex(shared), test.shared, 'valid');
   } else if (test.result === 'invalid') {
     let failed = false;
     try {
-      curve.getSharedSecret(test.private, test.public);
+      curve.getSharedSecret(hexToBytes(test.private), hexToBytes(test.public));
     } catch (error) {
       failed = true;
     }
-    deepStrictEqual(failed, true, 'invalid');
+    eql(failed, true, 'invalid');
   } else throw new Error('unknown test result');
 }
 
@@ -315,9 +315,10 @@ const WYCHEPROOF_ECDSA = {
 
 function runWycheproof(name, CURVE, group, index) {
   const key = group.publicKey;
-  const pubKey = CURVE.ProjectivePoint.fromHex(key.uncompressed);
-  deepStrictEqual(pubKey.x, BigInt(`0x${key.wx}`));
-  deepStrictEqual(pubKey.y, BigInt(`0x${key.wy}`));
+  const uncomp = hexToBytes(key.uncompressed);
+  const pubKey = CURVE.ProjectivePoint.fromHex(uncomp);
+  eql(pubKey.x, BigInt(`0x${key.wx}`));
+  eql(pubKey.y, BigInt(`0x${key.wy}`));
   const pubR = pubKey.toRawBytes();
   for (const test of group.tests) {
     const m = CURVE.CURVE.hash(hexToBytes(test.msg));
@@ -326,9 +327,9 @@ function runWycheproof(name, CURVE, group, index) {
       const verified = CURVE.verify(sig, m, pubR, { lowS: name === 'secp256k1' });
       if (name === 'secp256k1') {
         // lowS: true for secp256k1
-        deepStrictEqual(verified, !CURVE.Signature.fromDER(sig).hasHighS(), `${index}: valid`);
+        eql(verified, !CURVE.Signature.fromDER(sig).hasHighS(), `${index}: valid`);
       } else {
-        deepStrictEqual(verified, true, `${index}: valid`);
+        eql(verified, true, `${index}: valid`);
       }
     } else if (test.result === 'invalid') {
       let failed = false;
@@ -337,7 +338,7 @@ function runWycheproof(name, CURVE, group, index) {
       } catch (error) {
         failed = true;
       }
-      deepStrictEqual(failed, true, `${index}: invalid`);
+      eql(failed, true, `${index}: invalid`);
     } else throw new Error('unknown test result');
   }
 }
@@ -352,9 +353,10 @@ describe('wycheproof ECDSA', () => {
       if (group.key.curve === 'secp224r1' && group.sha !== 'SHA-224') {
         if (group.sha === 'SHA-256') CURVE = CURVE.create(sha256);
       }
-      const pubKey = CURVE.ProjectivePoint.fromHex(group.key.uncompressed);
-      deepStrictEqual(pubKey.x, BigInt(`0x${group.key.wx}`));
-      deepStrictEqual(pubKey.y, BigInt(`0x${group.key.wy}`));
+      const uncomp = hexToBytes(group.key.uncompressed);
+      const pubKey = CURVE.ProjectivePoint.fromHex(uncomp);
+      eql(pubKey.x, BigInt(`0x${group.key.wx}`));
+      eql(pubKey.y, BigInt(`0x${group.key.wy}`));
       for (const test of group.tests) {
         if (['Hash weaker than DL-group'].includes(test.comment)) {
           continue;
@@ -367,9 +369,9 @@ describe('wycheproof ECDSA', () => {
           const verified = CURVE.verify(test.sig, m, pubKey.toHex(), { lowS: hasLowS });
           if (hasLowS) {
             // lowS: true for secp256k1
-            deepStrictEqual(verified, !CURVE.Signature.fromDER(test.sig).hasHighS(), `valid`);
+            eql(verified, !CURVE.Signature.fromDER(test.sig).hasHighS(), `valid`);
           } else {
-            deepStrictEqual(verified, true, `valid`);
+            eql(verified, true, `valid`);
           }
         } else if (test.result === 'invalid') {
           let failed = false;
@@ -378,7 +380,7 @@ describe('wycheproof ECDSA', () => {
           } catch (error) {
             failed = true;
           }
-          deepStrictEqual(failed, true, 'invalid');
+          eql(failed, true, 'invalid');
         } else throw new Error('unknown test result');
       }
     }
@@ -409,19 +411,21 @@ describe('RFC6979', () => {
     should(v.curve, () => {
       const hasLowS = v.curve === 'secp256k1';
       const curve = NIST[v.curve];
-      deepStrictEqual(curve.CURVE.n, hexToBigint(v.q));
-      const pubKey = curve.getPublicKey(v.private);
+      eql(curve.CURVE.n, hexToBigint(v.q));
+      if (v.curve === 'P521') v.private = v.private.padStart(132, '0');
+      const priv = hexToBytes(v.private);
+      const pubKey = curve.getPublicKey(priv);
       const pubPoint = curve.ProjectivePoint.fromHex(pubKey);
-      deepStrictEqual(pubPoint.x, hexToBigint(v.Ux));
-      deepStrictEqual(pubPoint.y, hexToBigint(v.Uy));
+      eql(pubPoint.x, hexToBigint(v.Ux));
+      eql(pubPoint.y, hexToBigint(v.Uy));
       for (const c of v.cases) {
         const h = curve.CURVE.hash(utf8ToBytes(c.message));
         const opts = { lowS: hasLowS };
-        const sigObj = curve.sign(h, v.private, opts);
-        deepStrictEqual(sigObj.r, hexToBigint(c.r), 'R');
-        deepStrictEqual(sigObj.s, hexToBigint(c.s), 'S');
-        deepStrictEqual(curve.verify(sigObj.toDERRawBytes(), h, pubKey, opts), true, 'verify(1)');
-        deepStrictEqual(curve.verify(sigObj, h, pubKey, opts), true, 'verify(2)');
+        const sigObj = curve.sign(h, priv, opts);
+        eql(sigObj.r, hexToBigint(c.r), 'R');
+        eql(sigObj.s, hexToBigint(c.s), 'S');
+        eql(curve.verify(sigObj.toDERRawBytes(), h, pubKey, opts), true, 'verify(1)');
+        eql(curve.verify(sigObj, h, pubKey, opts), true, 'verify(2)');
       }
     });
   }
@@ -429,7 +433,7 @@ describe('RFC6979', () => {
 
 should('properly add leading zero to DER', () => {
   // Valid DER
-  deepStrictEqual(
+  eql(
     DER.toSig(
       '303c021c70049af31f8348673d56cece2b27e587a402f2a48f0b21a7911a480a021c2840bf24f6f66be287066b7cbf38788e1b7770b18fd1aa6a26d7c6dc'
     ),
@@ -445,7 +449,7 @@ should('properly add leading zero to DER', () => {
     )
   );
   // Correctly adds trailing zero
-  deepStrictEqual(
+  eql(
     DER.hexFromSig({
       r: 11796871166002955884468185727465595477481802908758874298363724580874n,
       s: 22720819770293592156700650145335132731295311312425682806720849797985n,
@@ -459,8 +463,8 @@ should('have proper GLV endomorphism logic in secp256k1', () => {
   for (let item of endoVectors) {
     const point = Point.fromAffine({ x: BigInt(item.ax), y: BigInt(item.ay) });
     const c = point.multiplyUnsafe(BigInt(item.scalar)).toAffine();
-    deepStrictEqual(c.x, BigInt(item.cx));
-    deepStrictEqual(c.y, BigInt(item.cy));
+    eql(c.x, BigInt(item.cx));
+    eql(c.y, BigInt(item.cy));
   }
 });
 
@@ -484,8 +488,8 @@ should('handle edge-case in P521', () => {
   //   '14e8dafcb8f6a7d59757ec8896981466d6f0eb5ca07dcaa46e6bb86eb20471e4' +
   //   '5702429ef132e0c96615';
 
-  const hex = secp521r1.sign(msg, privKey, { lowS: false, prehash: true }).toDERHex();
-  deepStrictEqual(hex, sig);
+  const hexp = secp521r1.sign(msg, privKey, { lowS: false, prehash: true }).toDERHex();
+  eql(hexp, sig);
 });
 
 should.runWhen(import.meta.url);

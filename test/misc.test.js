@@ -1,5 +1,5 @@
 import { describe, should } from 'micro-should';
-import { deepStrictEqual, throws } from 'node:assert';
+import { deepStrictEqual as eql, throws } from 'node:assert';
 import { jubjub, jubjub_findGroupHash } from '../esm/misc.js';
 const Point = jubjub.ExtendedPoint;
 
@@ -44,8 +44,8 @@ describe('jubjub', () => {
         0,
       ])
     );
-    deepStrictEqual(tmp.x, 0x8d51ccce760304d0ec030002760300000001000000000000n);
-    deepStrictEqual(tmp.y, 0n);
+    eql(tmp.x, 0x8d51ccce760304d0ec030002760300000001000000000000n);
+    eql(tmp.y, 0n);
 
     const S = G_SPEND.toRawBytes();
     const S2 = G_SPEND.double().toRawBytes();
@@ -55,10 +55,10 @@ describe('jubjub', () => {
     const S2_exp = Point.fromHex(S2);
     const P_exp = Point.fromHex(P);
     const P2_exp = Point.fromHex(P2);
-    deepStrictEqual(getXY(G_SPEND.toAffine()), getXY(S_exp));
-    deepStrictEqual(getXY(G_SPEND.double().toAffine()), getXY(S2_exp));
-    deepStrictEqual(getXY(G_PROOF.toAffine()), getXY(P_exp));
-    deepStrictEqual(getXY(G_PROOF.double().toAffine()), getXY(P2_exp));
+    eql(getXY(G_SPEND.toAffine()), getXY(S_exp));
+    eql(getXY(G_SPEND.double().toAffine()), getXY(S2_exp));
+    eql(getXY(G_PROOF.toAffine()), getXY(P_exp));
+    eql(getXY(G_PROOF.double().toAffine()), getXY(P2_exp));
   });
 
   should('Find generators', () => {
@@ -70,8 +70,8 @@ describe('jubjub', () => {
       Uint8Array.of(),
       Uint8Array.from([90, 99, 97, 115, 104, 95, 72, 95])
     );
-    deepStrictEqual(getXY(spend.toAffine()), getXY(G_SPEND.toAffine()));
-    deepStrictEqual(getXY(proof.toAffine()), getXY(G_PROOF.toAffine()));
+    eql(getXY(spend.toAffine()), getXY(G_SPEND.toAffine()));
+    eql(getXY(proof.toAffine()), getXY(G_PROOF.toAffine()));
   });
 });
 

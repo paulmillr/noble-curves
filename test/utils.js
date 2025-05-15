@@ -63,6 +63,10 @@ export const getTypeTests = () => [
   [class Test {}, 'class'],
   [Symbol.for('a'), 'symbol("a")'],
 ];
+export const getTypeTestsNonUi8a = () =>
+  getTypeTests()
+    .filter((test) => !test[1].startsWith('ui8a'))
+    .map((test) => test[0]);
 
 export function repr(item) {
   if (item && item.isProxy) return '[proxy]';
