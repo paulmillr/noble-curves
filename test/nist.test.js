@@ -109,18 +109,20 @@ function verifyECDHVector(test, curve) {
     if (privA.length / 2 === fnLen + 1 && privA.startsWith('00')) privA = privA.slice(2);
     // privA = DER._int.decode(privA);
     if (!curve.utils.isValidPrivateKey(privA)) return; // Ignore invalid private key size
+    const pubB_b = hexToBytes(pubB);
     try {
-      curve.ProjectivePoint.fromHex(pubB);
+      curve.ProjectivePoint.fromHex(pubB_b);
     } catch (e) {
       if (e.message.startsWith('invalid Point, expected length')) return; // Ignore
       throw e;
     }
-    const shared = curve.getSharedSecret(privA, pubB).subarray(1);
+    const privA_b = hexToBytes(privA);
+    const shared = curve.getSharedSecret(privA_b, pubB_b).subarray(1);
     eql(hex(shared), test.shared, 'valid');
   } else if (test.result === 'invalid') {
     let failed = false;
     try {
-      curve.getSharedSecret(test.private, test.public);
+      curve.getSharedSecret(hexToBytes(test.private), hexToBytes(test.public));
     } catch (error) {
       failed = true;
     }
@@ -313,7 +315,8 @@ const WYCHEPROOF_ECDSA = {
 
 function runWycheproof(name, CURVE, group, index) {
   const key = group.publicKey;
-  const pubKey = CURVE.ProjectivePoint.fromHex(key.uncompressed);
+  const uncomp = hexToBytes(key.uncompressed);
+  const pubKey = CURVE.ProjectivePoint.fromHex(uncomp);
   eql(pubKey.x, BigInt(`0x${key.wx}`));
   eql(pubKey.y, BigInt(`0x${key.wy}`));
   const pubR = pubKey.toRawBytes();
@@ -350,7 +353,8 @@ describe('wycheproof ECDSA', () => {
       if (group.key.curve === 'secp224r1' && group.sha !== 'SHA-224') {
         if (group.sha === 'SHA-256') CURVE = CURVE.create(sha256);
       }
-      const pubKey = CURVE.ProjectivePoint.fromHex(group.key.uncompressed);
+      const uncomp = hexToBytes(group.key.uncompressed);
+      const pubKey = CURVE.ProjectivePoint.fromHex(uncomp);
       eql(pubKey.x, BigInt(`0x${group.key.wx}`));
       eql(pubKey.y, BigInt(`0x${group.key.wy}`));
       for (const test of group.tests) {
@@ -408,14 +412,16 @@ describe('RFC6979', () => {
       const hasLowS = v.curve === 'secp256k1';
       const curve = NIST[v.curve];
       eql(curve.CURVE.n, hexToBigint(v.q));
-      const pubKey = curve.getPublicKey(v.private);
+      if (v.curve === 'P521') v.private = v.private.padStart(132, '0');
+      const priv = hexToBytes(v.private);
+      const pubKey = curve.getPublicKey(priv);
       const pubPoint = curve.ProjectivePoint.fromHex(pubKey);
       eql(pubPoint.x, hexToBigint(v.Ux));
       eql(pubPoint.y, hexToBigint(v.Uy));
       for (const c of v.cases) {
         const h = curve.CURVE.hash(utf8ToBytes(c.message));
         const opts = { lowS: hasLowS };
-        const sigObj = curve.sign(h, v.private, opts);
+        const sigObj = curve.sign(h, priv, opts);
         eql(sigObj.r, hexToBigint(c.r), 'R');
         eql(sigObj.s, hexToBigint(c.s), 'S');
         eql(curve.verify(sigObj.toDERRawBytes(), h, pubKey, opts), true, 'verify(1)');

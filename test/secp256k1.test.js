@@ -1,9 +1,9 @@
-import { bytesToHex as hex, hexToBytes } from '@noble/hashes/utils';
+import { hexToBytes as bytes, bytesToHex as hex } from '@noble/hashes/utils';
 import * as fc from 'fast-check';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql, throws } from 'node:assert';
 import { readFileSync } from 'node:fs';
-import { json } from './utils.js';
+import { getTypeTestsNonUi8a, json } from './utils.js';
 // prettier-ignore
 import {
   bytesToNumberBE,
@@ -25,11 +25,7 @@ const wp = json('./wycheproof/ecdsa_secp256k1_sha256_test.json');
 // the file is shared between noble-curves and noble-secp256k1.
 
 const Point = secp.ProjectivePoint;
-const privatesTxt = readFileSync('./test/vectors/secp256k1/privates-2.txt', 'utf-8');
-
 const FC_BIGINT = fc.bigInt(1n + 1n, secp.CURVE.n - 1n);
-// prettier-ignore
-const INVALID_ITEMS = ['deadbeef', Math.pow(2, 53), [1], 'xyzxyzxyxyzxyzxyxyzxyzxyxyzxyzxyxyzxyzxyxyzxyzxyxyzxyzxyxyzxyzxy', secp.CURVE.n + 2n];
 
 const toBEHex = (n) => n.toString(16).padStart(64, '0');
 
@@ -41,60 +37,50 @@ function hexToNumber(hex2) {
   return BigInt(`0x${hex2}`);
 }
 
+function checkPrivatesTxt() {
+  const privatesTxt = readFileSync('./test/vectors/secp256k1/privates-2.txt', 'utf-8');
+  const data = privatesTxt
+    .split('\n')
+    .filter((line) => line)
+    .map((line) => line.split(':'));
+  for (let [priv, x, y] of data) {
+    const point = Point.fromPrivateKey(BigInt(priv));
+    eql(toBEHex(point.x), x);
+    eql(toBEHex(point.y), y);
+
+    const point2 = Point.fromHex(secp.getPublicKey(toBEHex(BigInt(priv))));
+    eql(toBEHex(point2.x), x);
+    eql(toBEHex(point2.y), y);
+
+    const point3 = Point.fromHex(secp.getPublicKey(bytes(toBEHex(BigInt(priv)))));
+    eql(toBEHex(point3.x), x);
+    eql(toBEHex(point3.y), y);
+  }
+}
+
 describe('secp256k1', () => {
   should('getPublicKey()', () => {
-    const data = privatesTxt
-      .split('\n')
-      .filter((line) => line)
-      .map((line) => line.split(':'));
-    for (let [priv, x, y] of data) {
-      const point = Point.fromPrivateKey(BigInt(priv));
-      eql(toBEHex(point.x), x);
-      eql(toBEHex(point.y), y);
-
-      const point2 = Point.fromHex(secp.getPublicKey(toBEHex(BigInt(priv))));
-      eql(toBEHex(point2.x), x);
-      eql(toBEHex(point2.y), y);
-
-      const point3 = Point.fromHex(secp.getPublicKey(hexToBytes(toBEHex(BigInt(priv)))));
-      eql(toBEHex(point3.x), x);
-      eql(toBEHex(point3.y), y);
-    }
+    checkPrivatesTxt();
   });
   should('getPublicKey() rejects invalid keys', () => {
-    for (const item of INVALID_ITEMS) {
+    for (const item of getTypeTestsNonUi8a()) {
       throws(() => secp.getPublicKey(item));
     }
   });
   should('precompute', () => {
     secp.utils.precompute(4);
-    const data = privatesTxt
-      .split('\n')
-      .filter((line) => line)
-      .map((line) => line.split(':'));
-    for (let [priv, x, y] of data) {
-      const point = Point.fromPrivateKey(BigInt(priv));
-      eql(toBEHex(point.x), x);
-      eql(toBEHex(point.y), y);
-
-      const point2 = Point.fromHex(secp.getPublicKey(toBEHex(BigInt(priv))));
-      eql(toBEHex(point2.x), x);
-      eql(toBEHex(point2.y), y);
-
-      const point3 = Point.fromHex(secp.getPublicKey(hexToBytes(toBEHex(BigInt(priv)))));
-      eql(toBEHex(point3.x), x);
-      eql(toBEHex(point3.y), y);
-    }
+    checkPrivatesTxt();
   });
 
   describe('Point', () => {
     should('fromHex() assertValidity', () => {
       for (const vector of points.valid.isPoint) {
         const { P, expected } = vector;
+        const Pb = bytes(P);
         if (expected) {
-          Point.fromHex(P);
+          Point.fromHex(Pb);
         } else {
-          throws(() => Point.fromHex(P));
+          throws(() => Point.fromHex(Pb));
         }
       }
     });
@@ -110,7 +96,7 @@ describe('secp256k1', () => {
     should('#toHex(compressed)', () => {
       for (const vector of points.valid.pointCompress) {
         const { P, compress, expected } = vector;
-        let p = Point.fromHex(P);
+        let p = Point.fromHex(bytes(P));
         eql(p.toHex(compress), expected);
       }
     });
@@ -129,7 +115,7 @@ describe('secp256k1', () => {
         fc.property(FC_BIGINT, (x) => {
           const point1 = Point.fromPrivateKey(x);
           const hex1 = point1.toHex(true);
-          eql(Point.fromHex(hex1).toHex(true), hex1);
+          eql(Point.fromHex(bytes(hex1)).toHex(true), hex1);
         })
       );
     });
@@ -137,8 +123,8 @@ describe('secp256k1', () => {
     should('#add(other)', () => {
       for (const vector of points.valid.pointAdd) {
         const { P, Q, expected } = vector;
-        let p = Point.fromHex(P);
-        let q = Point.fromHex(Q);
+        let p = Point.fromHex(bytes(P));
+        let q = Point.fromHex(bytes(Q));
         if (expected) {
           eql(p.add(q).toHex(true), expected);
         } else {
@@ -152,7 +138,7 @@ describe('secp256k1', () => {
     should('#multiply(privateKey)', () => {
       for (const vector of points.valid.pointMultiply) {
         const { P, d, expected } = vector;
-        const p = Point.fromHex(P);
+        const p = Point.fromHex(bytes(P));
         if (expected) {
           eql(p.multiply(hexToNumber(d)).toHex(true), expected, P);
         } else {
@@ -163,8 +149,9 @@ describe('secp256k1', () => {
       }
 
       for (const vector of points.invalid.pointMultiply) {
-        const { P, d } = vector;
+        let { P, d } = vector;
         if (hexToNumber(d) < secp.CURVE.n) {
+          P = bytes(P);
           throws(() => {
             const p = Point.fromHex(P);
             p.multiply(hexToNumber(d)).toHex(true);
@@ -185,8 +172,8 @@ describe('secp256k1', () => {
 
     should('sign legacy options', () => {
       if ('fromDER' in secp.Signature) return; // noble-curves has no this check
-      const msg = '12'.repeat(32);
-      const priv = '34'.repeat(32);
+      const msg = bytes('12'.repeat(32));
+      const priv = bytes('34'.repeat(32));
       throws(() => {
         secp.sign(msg, priv, { der: true });
       });
@@ -230,8 +217,8 @@ describe('secp256k1', () => {
     });
 
     should('.hasHighS(), .normalizeS()', () => {
-      const priv = 'c509ae2138ddca15f6b33062cd3bf76351c79f58c82ee2c2236d835bdea19d13';
-      const msg = 'b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9';
+      const priv = bytes('c509ae2138ddca15f6b33062cd3bf76351c79f58c82ee2c2236d835bdea19d13');
+      const msg = bytes('b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9');
 
       const hi =
         'a6bf36d52da4eef85a513a88d81996a47804a2390c9910c0bd35488effca36bf8bf1f9232ab0efe4a93704ae871aa953b34d1000cef59c9d33fcc696f935108d';
@@ -311,13 +298,12 @@ describe('secp256k1', () => {
           '3045022100d18990bba7832bb283e3ecf8700b67beb39acc73f4200ed1c331247c46edccc602202e5c8bbfe47ae159512c583b30a3fa86575cddc62527a03de7756517ae4c6c73',
         ],
       ];
-      const privKey = hexToBytes(
-        '0101010101010101010101010101010101010101010101010101010101010101'
-      );
-      for (const [msg, exp] of CASES) {
+      const privKey = bytes('0101010101010101010101010101010101010101010101010101010101010101');
+      for (const [msgh, exp] of CASES) {
+        let msg = bytes(msgh);
         const res = secp.sign(msg, privKey, { extraEntropy: undefined });
         eql(sigToDER(res), exp);
-        const rs = sigFromDER(sigToDER(res)).toCompactHex();
+        const rs = sigFromDER(sigToDER(res)).toCompactRawBytes();
         eql(sigToDER(secp.Signature.fromCompact(rs)), exp);
       }
     });
@@ -329,11 +315,12 @@ describe('secp256k1', () => {
       const ent5 = 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff';
 
       for (const e of ecdsa.extraEntropy) {
-        const sign = (extraEntropy) => {
+        const sign = (enth) => {
+          const extraEntropy = bytes(enth);
           const s = secp.sign(e.m, e.d, { extraEntropy }).toCompactHex();
           return s;
         };
-        eql(sign(), e.signature);
+        eql(sign(''), e.signature);
         eql(sign(ent1), e.extraEntropy0);
         eql(sign(ent2), e.extraEntropy1);
         eql(sign(ent3), e.extraEntropyRand);
@@ -343,12 +330,10 @@ describe('secp256k1', () => {
     });
 
     should('handle one byte {extraEntropy}', () => {
-      const extraEntropy = '01';
-      const privKey = hexToBytes(
-        '0101010101010101010101010101010101010101010101010101010101010101'
-      );
-      const msg = 'd1a9dc8ed4e46a6a3e5e594615ca351d7d7ef44df1e4c94c1802f3592183794b';
-      const res = secp.sign(msg, privKey, { extraEntropy }).toCompactHex();
+      const extraEntropy = bytes('01');
+      const priv = bytes('0101010101010101010101010101010101010101010101010101010101010101');
+      const msg = bytes('d1a9dc8ed4e46a6a3e5e594615ca351d7d7ef44df1e4c94c1802f3592183794b');
+      const res = secp.sign(msg, priv, { extraEntropy }).toCompactHex();
       eql(
         res,
         'a250ec23a54bfdecf0e924cbf484077c5044410f915cdba86731cb2e4e925aaa5b1e4e3553d88be2c48a9a0d8d849ce2cc5720d25b2f97473e02f2550abe9545'
@@ -356,13 +341,12 @@ describe('secp256k1', () => {
     });
 
     should('handle 48 bytes {extraEntropy}', () => {
-      const extraEntropy =
-        '000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000001';
-      const privKey = hexToBytes(
-        '0101010101010101010101010101010101010101010101010101010101010101'
+      const extraEntropy = bytes(
+        '000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000001'
       );
-      const msg = 'd1a9dc8ed4e46a6a3e5e594615ca351d7d7ef44df1e4c94c1802f3592183794b';
-      const res = secp.sign(msg, privKey, { extraEntropy }).toCompactHex();
+      const priv = bytes('0101010101010101010101010101010101010101010101010101010101010101');
+      const msg = bytes('d1a9dc8ed4e46a6a3e5e594615ca351d7d7ef44df1e4c94c1802f3592183794b');
+      const res = secp.sign(msg, priv, { extraEntropy }).toCompactHex();
       eql(
         res,
         '2bdf40f42ac0e42ee12750d03bb12b75306dae58eb3c961c5a80d78efae93e595295b66e8eb28f1eb046bb129a976340312159ec0c20b97342667572e4a8379a'
@@ -372,8 +356,8 @@ describe('secp256k1', () => {
 
   describe('verify()', () => {
     should('verify signature', async () => {
-      const MSG = '01'.repeat(32);
-      const PRIV_KEY = 0x2n;
+      const MSG = bytes('01'.repeat(32));
+      const PRIV_KEY = bytes('02'.padStart(64, '0'));
       const publicKey = secp.getPublicKey(PRIV_KEY);
       eql(publicKey.length, 33);
       const signature = secp.sign(MSG, PRIV_KEY);
@@ -384,11 +368,11 @@ describe('secp256k1', () => {
       }
     });
     should(' not verify signature with wrong public key', async () => {
-      const MSG = '01'.repeat(32);
-      const PRIV_KEY = '01'.repeat(32);
-      const WRONG_PRIV_KEY = '02'.repeat(32);
-      const publicKey = Point.fromPrivateKey(WRONG_PRIV_KEY).toHex();
-      eql(publicKey.length, 66);
+      const MSG = bytes('01'.repeat(32));
+      const PRIV_KEY = bytes('01'.repeat(32));
+      const WRONG_PRIV_KEY = bytes('02'.repeat(32));
+      const publicKey = Point.fromPrivateKey(WRONG_PRIV_KEY).toRawBytes();
+      eql(publicKey.length, 33);
       const signature = secp.sign(MSG, PRIV_KEY);
       eql(secp.verify(signature, MSG, publicKey), false);
       if (secp.signAsync) {
@@ -397,20 +381,28 @@ describe('secp256k1', () => {
       }
     });
     should('not verify signature with wrong hash', () => {
-      const MSG = '01'.repeat(32);
-      const PRIV_KEY = 0x2n;
-      const WRONG_MSG = '11'.repeat(32);
+      const MSG = bytes('01'.repeat(32)); // 010101...
+      const PRIV_KEY = bytes('02'.padStart(64, '0')); // 0x02
+      const WRONG_MSG = bytes('11'.repeat(32)); // 111111....
       const signature = secp.sign(MSG, PRIV_KEY);
       const publicKey = secp.getPublicKey(PRIV_KEY);
       eql(publicKey.length, 33);
       eql(secp.verify(signature, WRONG_MSG, publicKey), false);
     });
+    function hexa() {
+      const items = '0123456789abcdef';
+      return fc.integer({ min: 0, max: 15 }).map((n) => items[n]);
+    }
+    function hexaString(constraints = {}) {
+      return fc.string({ ...constraints, unit: hexa() });
+    }
     should('verify random signatures', () =>
       fc.assert(
         fc.asyncProperty(
           FC_BIGINT,
-          fc.hexaString({ minLength: 64, maxLength: 64 }),
-          async (privKey, msg) => {
+          hexaString({ minLength: 64, maxLength: 64 }),
+          async (privKey, msgh) => {
+            const msg = bytes(msgh);
             const pub = secp.getPublicKey(privKey);
             const sig = secp.sign(msg, privKey);
             eql(secp.verify(sig, msg, pub), true);
@@ -439,15 +431,16 @@ describe('secp256k1', () => {
         sig.r = r;
         sig.s = s;
       });
-      const sigHex =
-        '0000000000000000000000000000000000000000000000000000000000000001fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd04917c8';
+      const sigHex = bytes(
+        '0000000000000000000000000000000000000000000000000000000000000001fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd04917c8'
+      );
 
       const verified = secp.verify(sigHex, msg, pub);
       // Verifies, but it shouldn't, because signature S > curve order
       eql(verified, false);
     });
     should('not verify msg = curve order', () => {
-      const msg = 'fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141';
+      const msg = bytes('fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141');
       const x = 55066263022277343669578718895168534326250603453777594175500187360389116729240n;
       const y = 32670510020758816978083085130507043184471273380659243275938904335757337482424n;
       const r = 104546003225722045112039007203142344920046999340768276760147352389092131869133n;
@@ -457,7 +450,7 @@ describe('secp256k1', () => {
       eql(secp.verify(sig, msg, pub), false);
     });
     should('verify non-strict msg bb5a...', () => {
-      const msg = 'bb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023';
+      const msg = bytes('bb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023');
       const x = 3252872872578928810725465493269682203671229454553002637820453004368632726370n;
       const y = 17482644437196207387910659778872952193236850502325156318830589868678978890912n;
       const r = 432420386565659656852420866390673177323n;
@@ -475,7 +468,7 @@ describe('secp256k1', () => {
   });
   describe('recoverPublicKey()', () => {
     should('recover public key from recovery bit', () => {
-      const message = '00000000000000000000000000000000000000000000000000000000deadbeef';
+      const message = bytes('00000000000000000000000000000000000000000000000000000000deadbeef');
       const privateKey = 123456789n;
       const publicKey = Point.fromHex(secp.getPublicKey(privateKey)).toHex(false);
       const sig = secp.sign(message, privateKey);
@@ -483,12 +476,13 @@ describe('secp256k1', () => {
       // const recoveredPubkey = secp.recoverPublicKey(message, signature, recovery);
       eql(recoveredPubkey !== null, true);
       eql(recoveredPubkey.toHex(false), publicKey);
-      eql(secp.verify(sig, message, publicKey), true);
+      eql(secp.verify(sig, message, bytes(publicKey)), true);
     });
     should('not recover zero points', () => {
-      const msgHash = '6b8d2c81b11b2d699528dde488dbdf2f94293d0d33c32e347f255fa4a6c1f0a9';
-      const sigh =
-        '79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f817986b8d2c81b11b2d699528dde488dbdf2f94293d0d33c32e347f255fa4a6c1f0a9';
+      const msgHash = bytes('6b8d2c81b11b2d699528dde488dbdf2f94293d0d33c32e347f255fa4a6c1f0a9');
+      const sigh = bytes(
+        '79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f817986b8d2c81b11b2d699528dde488dbdf2f94293d0d33c32e347f255fa4a6c1f0a9'
+      );
       const recovery = 0;
       const sig = secp.Signature.fromCompact(sigh).addRecoveryBit(recovery);
       throws(() => sig.recoverPublicKey(msgHash));
@@ -496,17 +490,19 @@ describe('secp256k1', () => {
     should('handle all-zeros msghash', () => {
       const privKey = secp.utils.randomPrivateKey();
       const pub = secp.getPublicKey(privKey);
-      const zeros = '0000000000000000000000000000000000000000000000000000000000000000';
+      const zeros = bytes('0000000000000000000000000000000000000000000000000000000000000000');
       const sig = secp.sign(zeros, privKey);
       const recoveredKey = sig.recoverPublicKey(zeros);
       eql(recoveredKey.toRawBytes(), pub);
     });
     should('handle RFC 6979 vectors', () => {
       for (const vector of ecdsa.valid) {
-        let usig = secp.sign(vector.m, vector.d);
+        const d = bytes(vector.d);
+        const m = bytes(vector.m);
+        let usig = secp.sign(m, d);
         let sig = sigToDER(usig);
-        const vpub = secp.getPublicKey(vector.d);
-        const recovered = usig.recoverPublicKey(vector.m);
+        const vpub = secp.getPublicKey(d);
+        const recovered = usig.recoverPublicKey(m);
         eql(recovered.toHex(), hex(vpub));
       }
     });
@@ -520,12 +516,13 @@ describe('secp256k1', () => {
     should('produce correct results', () => {
       // TODO: Once der is there, run all tests.
       for (const vector of ecdh.testGroups[0].tests.slice(0, 230)) {
-        if (vector.result === 'invalid' || vector.private.length !== 64) {
+        const priv = bytes(vector.private);
+        if (vector.result === 'invalid' || priv.length !== 64) {
           throws(() => {
-            secp.getSharedSecret(vector.private, derToPub(vector.public), true);
+            secp.getSharedSecret(priv, derToPub(vector.public), true);
           });
         } else if (vector.result === 'valid') {
-          const res = secp.getSharedSecret(vector.private, derToPub(vector.public), true);
+          const res = secp.getSharedSecret(priv, derToPub(vector.public), true);
           eql(hex(res.slice(1)), `${vector.shared}`);
         }
       }
@@ -540,7 +537,7 @@ describe('secp256k1', () => {
       }
     });
     should('reject invalid keys', () => {
-      throws(() => secp.getSharedSecret('01', '02'));
+      throws(() => secp.getSharedSecret(bytes('01'), bytes('02')));
     });
   });
 
@@ -570,13 +567,15 @@ describe('secp256k1', () => {
       },
 
       pointAddScalar: (p, tweak, isCompressed) => {
+        if (typeof p === 'string') p = bytes(p);
         const tweaked = Point.fromHex(p).add(Point.fromPrivateKey(tweak));
         if (tweaked.equals(Point.ZERO)) throw new Error('Tweaked point at infinity');
         return tweaked.toRawBytes(isCompressed);
       },
 
       pointMultiply: (p, tweak, isCompressed) => {
-        if (typeof tweak === 'string') tweak = hexToBytes(tweak);
+        if (typeof p === 'string') p = bytes(p);
+        if (typeof tweak === 'string') tweak = bytes(tweak);
         const t = bytesToNumberBE(tweak);
         return Point.fromHex(p).multiply(t).toRawBytes(isCompressed);
       },
@@ -630,7 +629,7 @@ describe('secp256k1', () => {
       for (let test of group.tests) {
         const h = selectHash(secp);
 
-        const m = h(hexToBytes(test.msg));
+        const m = h(bytes(test.msg));
         if (test.result === 'valid' || test.result === 'acceptable') {
           let sig;
           try {

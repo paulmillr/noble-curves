@@ -27,9 +27,16 @@ describe('utils', () => {
       throws(() => bytesToHex(v));
     }
   });
+  function hexa() {
+    const items = '0123456789abcdef';
+    return fc.integer({ min: 0, max: 15 }).map((n) => items[n]);
+  }
+  function hexaString(constraints = {}) {
+    return fc.string({ ...constraints, unit: hexa() });
+  }
   should('hexToBytes <=> bytesToHex roundtrip', () =>
     fc.assert(
-      fc.property(fc.hexaString({ minLength: 2, maxLength: 64 }), (hex) => {
+      fc.property(hexaString({ minLength: 2, maxLength: 64 }), (hex) => {
         if (hex.length % 2 !== 0) return;
         eql(hex, bytesToHex(hexToBytes(hex)));
         eql(hex, bytesToHex(hexToBytes(hex.toUpperCase())));

@@ -250,12 +250,10 @@ describe('ristretto255', () => {
     let P = RistrettoPoint.ZERO;
     for (const encoded of encodingsOfSmallMultiples) {
       eql(P.toHex(), encoded);
-      eql(RistrettoPoint.fromHex(encoded).toHex(), encoded);
-      eql(
-        RistrettoPoint.fromAffine(RistrettoPoint.fromHex(encoded).ep.toAffine()).toHex(),
-        encoded
-      );
-      eql(RistrettoPoint.fromHex(encoded).toString(), encoded);
+      const enc = hexToBytes(encoded);
+      eql(RistrettoPoint.fromHex(enc).toHex(), encoded);
+      eql(RistrettoPoint.fromAffine(RistrettoPoint.fromHex(enc).ep.toAffine()).toHex(), encoded);
+      eql(RistrettoPoint.fromHex(enc).toString(), encoded);
       P = P.add(B);
     }
   });

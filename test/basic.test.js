@@ -23,6 +23,16 @@ const wyche_curves = json('./wycheproof/ec_prime_order_curves_test.json');
 
 const NUM_RUNS = 5;
 
+function hexa() {
+  const items = '0123456789abcdef';
+  return fc.integer({ min: 0, max: 15 }).map((n) => items[n]);
+}
+function hexaString(constraints = {}) {
+  return fc.string({ ...constraints, unit: hexa() });
+}
+const FC_HEX = hexaString({ minLength: 64, maxLength: 64 });
+// const FC_HEX = fc.stringMatching(/[0-9a-fA-F]+/, { size: 64 });
+
 // Fields tests
 const FIELDS = {
   secp192r1: { Fp: [secp192r1.CURVE.Fp] },
@@ -621,14 +631,15 @@ for (const name in CURVES) {
       // }
       // toHex/fromHex (if available)
       if (p.fromHex && p.BASE.toHex) {
-        should('fromHex(toHex()) roundtrip', () => {
+        should('fromHex(toHex(compressed=false)) roundtrip', () => {
           fc.assert(
             fc.property(FC_BIGINT, (x) => {
               const point = p.BASE.multiply(x);
-              const hex1 = point.toHex();
-              const bytes1 = point.toRawBytes();
-              eql(p.fromHex(hex1).toHex(), hex1);
-              eql(p.fromHex(bytes1).toHex(), hex1);
+              const isComp = false;
+              const hex1 = point.toHex(isComp);
+              const bytes1 = point.toRawBytes(isComp);
+              // eql(p.fromHex(hex1).toHex(isComp), hex1);
+              eql(p.fromHex(bytes1).toHex(isComp), hex1);
             })
           );
         });
@@ -636,10 +647,11 @@ for (const name in CURVES) {
           fc.assert(
             fc.property(FC_BIGINT, (x) => {
               const point = p.BASE.multiply(x);
-              const hex2 = point.toHex(true);
-              const bytes2 = point.toRawBytes(true);
-              eql(p.fromHex(hex2).toHex(true), hex2);
-              eql(p.fromHex(bytes2).toHex(true), hex2);
+              const isComp = true;
+              const hex1 = point.toHex(isComp);
+              const bytes1 = point.toRawBytes(isComp);
+              // eql(p.fromHex(hex1).toHex(isComp), hex1);
+              eql(p.fromHex(bytes1).toHex(isComp), hex1);
             })
           );
         });
@@ -666,7 +678,7 @@ for (const name in CURVES) {
       //if (C.verify)
       should('.verify() should verify random signatures', () =>
         fc.assert(
-          fc.property(fc.hexaString({ minLength: 64, maxLength: 64 }), (msg) => {
+          fc.property(FC_HEX, (msg) => {
             const priv = C.utils.randomPrivateKey();
             const pub = C.getPublicKey(priv);
             const sig = C.sign(msg, priv);
@@ -677,7 +689,7 @@ for (const name in CURVES) {
       );
       should('.verify() should verify random signatures in hex', () =>
         fc.assert(
-          fc.property(fc.hexaString({ minLength: 64, maxLength: 64 }), (msg) => {
+          fc.property(FC_HEX, (msg) => {
             const priv = toHex(C.utils.randomPrivateKey());
             const pub = toHex(C.getPublicKey(priv));
             const sig = C.sign(msg, priv);
@@ -730,8 +742,9 @@ for (const name in CURVES) {
         });
         should('false for wrong keys', () => {
           const priv = C.utils.randomPrivateKey();
+          const pub2 = C.getPublicKey(C.utils.randomPrivateKey());
           const sig = C.sign(msg, priv);
-          eql(C.verify(sig, msg, C.getPublicKey(C.utils.randomPrivateKey())), false);
+          eql(C.verify(sig, msg, pub2), false);
         });
         should('type tests', () => {
           const priv = C.utils.randomPrivateKey();
@@ -750,7 +763,7 @@ for (const name in CURVES) {
     if (C.Signature) {
       should('Signature serialization roundtrip', () =>
         fc.assert(
-          fc.property(fc.hexaString({ minLength: 64, maxLength: 64 }), (msg) => {
+          fc.property(FC_HEX, (msg) => {
             const priv = C.utils.randomPrivateKey();
             const sig = C.sign(msg, priv);
             const sigRS = (sig) => ({ s: sig.s, r: sig.r });
@@ -766,7 +779,7 @@ for (const name in CURVES) {
       );
       should('Signature.addRecoveryBit/Signature.recoveryPublicKey', () =>
         fc.assert(
-          fc.property(fc.hexaString({ minLength: 64, maxLength: 64 }), (msg) => {
+          fc.property(FC_HEX, (msg) => {
             const priv = C.utils.randomPrivateKey();
             const pub = C.getPublicKey(priv);
             const sig = C.sign(msg, priv);
@@ -781,7 +794,7 @@ for (const name in CURVES) {
       );
       should('Signature.normalizeS', () =>
         fc.assert(
-          fc.property(fc.hexaString({ minLength: 64, maxLength: 64 }), (msg) => {
+          fc.property(FC_HEX, (msg) => {
             const priv = C.utils.randomPrivateKey();
             const pub = C.getPublicKey(priv);
             const sig = C.sign(msg, priv, { lowS: false });
@@ -844,12 +857,12 @@ for (const name in CURVES) {
 describe('edge cases', () => {
   should('bigInt private keys', () => {
     // Doesn't support bigints anymore
-    throws(() => ed25519.sign('', 123n));
+    throws(() => ed25519.sign(Uint8Array.of(), 123n));
     throws(() => ed25519.getPublicKey(123n));
     throws(() => x25519.getPublicKey(123n));
     // Weierstrass still supports
     secp256k1.getPublicKey(123n);
-    secp256k1.sign('', 123n);
+    secp256k1.sign(Uint8Array.of(), 123n);
   });
 
   should('secp224k1 sqrt bug', () => {

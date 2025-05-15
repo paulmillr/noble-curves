@@ -1,4 +1,9 @@
-import { concatBytes, bytesToHex as hex, hexToBytes, randomBytes } from '@noble/hashes/utils';
+import {
+  hexToBytes as bytes,
+  concatBytes,
+  bytesToHex as hex,
+  randomBytes,
+} from '@noble/hashes/utils';
 import * as fc from 'fast-check';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql, throws } from 'node:assert';
@@ -52,7 +57,7 @@ describe('ed448', () => {
     const G3 = Point.BASE.multiply(3n);
     const points = [G1, G2, G3];
     const getXY = (p) => p.toAffine();
-    for (const p of points) eql(getXY(Point.fromHex(p.toHex())), getXY(p));
+    for (const p of points) eql(getXY(Point.fromHex(p.toRawBytes())), getXY(p));
   });
 
   const VECTORS_RFC8032 = [
@@ -336,22 +341,30 @@ describe('ed448', () => {
     throws(() => ed.getPublicKey(invalidPriv));
   });
 
-  function to57Bytes(numOrStr) {
+  function bytes57(numOrStr) {
     let hex2 = typeof numOrStr === 'string' ? numOrStr : numOrStr.toString(16);
-    return hexToBytes(hex2.padStart(114, '0'));
+    return bytes(hex2.padStart(114, '0'));
+  }
+
+  function hexa() {
+    const items = '0123456789abcdef';
+    return fc.integer({ min: 0, max: 15 }).map((n) => items[n]);
+  }
+  function hexaString(constraints = {}) {
+    return fc.string({ ...constraints, unit: hexa() });
   }
 
   should('verify recent signature', () => {
     fc.assert(
       fc.property(
-        fc.hexaString({ minLength: 2, maxLength: 57 }),
+        hexaString({ minLength: 2, maxLength: 57 }),
         fc.bigInt(2n, ed.CURVE.n),
         (message, privateKey) => {
-          const publicKey = ed.getPublicKey(to57Bytes(privateKey));
-          const signature = ed.sign(to57Bytes(message), to57Bytes(privateKey));
+          const publicKey = ed.getPublicKey(bytes57(privateKey));
+          const signature = ed.sign(bytes57(message), bytes57(privateKey));
           eql(publicKey.length, 57);
           eql(signature.length, 114);
-          eql(ed.verify(signature, to57Bytes(message), publicKey), true);
+          eql(ed.verify(signature, bytes57(message), publicKey), true);
         }
       ),
       { numRuns: 5 }
@@ -366,7 +379,7 @@ describe('ed448', () => {
         (bytes, wrongBytes, privateKey) => {
           const message = new Uint8Array(bytes);
           const wrongMessage = new Uint8Array(wrongBytes);
-          const priv = to57Bytes(privateKey);
+          const priv = bytes57(privateKey);
           const publicKey = ed.getPublicKey(priv);
           const signature = ed.sign(message, priv);
           eql(
@@ -378,9 +391,9 @@ describe('ed448', () => {
       { numRuns: 5 }
     );
   });
-  const privKey = to57Bytes('a665a45920422f9d417e4867ef');
-  const msg = hexToBytes('874f9960c5d2b7a9b5fad383e1ba44719ebb743a');
-  const wrongMsg = hexToBytes('589d8c7f1da0a24bc07b7381ad48b1cfc211af1c');
+  const privKey = bytes57('a665a45920422f9d417e4867ef');
+  const msg = bytes('874f9960c5d2b7a9b5fad383e1ba44719ebb743a');
+  const wrongMsg = bytes('589d8c7f1da0a24bc07b7381ad48b1cfc211af1c');
   describe('basic methods', () => {
     should('sign and verify', () => {
       const publicKey = ed.getPublicKey(privKey);
@@ -587,9 +600,19 @@ describe('ed448', () => {
     for (let i = 0; i < VECTORS_RFC8032_PH.length; i++) {
       const v = VECTORS_RFC8032_PH[i];
       should(`${i}`, () => {
-        eql(hex(ed448ph.getPublicKey(v.secretKey)), v.publicKey);
-        eql(hex(ed448ph.sign(v.message, v.secretKey, { context: v.context })), v.signature);
-        eql(ed448ph.verify(v.signature, v.message, v.publicKey, { context: v.context }), true);
+        eql(hex(ed448ph.getPublicKey(bytes(v.secretKey))), v.publicKey);
+        eql(
+          hex(
+            ed448ph.sign(bytes(v.message), bytes(v.secretKey), { context: bytes(v.context || '') })
+          ),
+          v.signature
+        );
+        eql(
+          ed448ph.verify(bytes(v.signature), bytes(v.message), bytes(v.publicKey), {
+            context: v.context || '',
+          }),
+          true
+        );
       });
     }
   });

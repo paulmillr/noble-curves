@@ -44,7 +44,15 @@ const G2Point = bls.G2.ProjectivePoint;
 const G1Aff = (x, y) => G1Point.fromAffine({ x, y });
 const CURVE_ORDER = bls.params.r;
 
-const FC_MSG = fc.hexaString({ minLength: 64, maxLength: 64 });
+function hexa() {
+  const items = '0123456789abcdef';
+  return fc.integer({ min: 0, max: 15 }).map((n) => items[n]);
+}
+function hexaString(constraints = {}) {
+  return fc.string({ ...constraints, unit: hexa() });
+}
+
+const FC_MSG = hexaString({ minLength: 64, maxLength: 64 });
 const FC_MSG_5 = fc.array(FC_MSG, { minLength: 5, maxLength: 5 });
 const FC_BIGINT = fc.bigInt(1n, CURVE_ORDER - 1n);
 const FC_BIGINT_5 = fc.array(FC_BIGINT, { minLength: 5, maxLength: 5 });
@@ -611,7 +619,7 @@ describe('bls12-381 Point', () => {
 describe('bls12-381/basic', () => {
   should('construct point G1 from its uncompressed form (Raw Bytes)', () => {
     // Test Zero
-    const g1 = G1Point.fromHex(B_192_40);
+    const g1 = G1Point.fromHex(hexToBytes(B_192_40));
     eql(g1.x, G1Point.ZERO.x);
     eql(g1.y, G1Point.ZERO.y);
     // Test Non-Zero
@@ -627,7 +635,9 @@ describe('bls12-381/basic', () => {
     );
 
     const g1_ = G1Point.fromHex(
-      '17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
+      hexToBytes(
+        '17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
+      )
     );
 
     eql(g1_.x, x);
@@ -636,7 +646,7 @@ describe('bls12-381/basic', () => {
 
   should('construct point G1 from its uncompressed form (Hex)', () => {
     // Test Zero
-    const g1 = G1Point.fromHex(B_192_40);
+    const g1 = G1Point.fromHex(hexToBytes(B_192_40));
 
     eql(g1.x, G1Point.ZERO.x);
     eql(g1.y, G1Point.ZERO.y);
@@ -653,7 +663,9 @@ describe('bls12-381/basic', () => {
     );
 
     const g1_ = G1Point.fromHex(
-      '17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
+      hexToBytes(
+        '17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
+      )
     );
 
     eql(g1_.x, x);
@@ -662,7 +674,7 @@ describe('bls12-381/basic', () => {
 
   should('construct point G2 from its uncompressed form (Raw Bytes)', () => {
     // Test Zero
-    const g2 = G2Point.fromHex(B_384_40);
+    const g2 = G2Point.fromHex(hexToBytes(B_384_40));
     eql(g2.x, G2Point.ZERO.x, 'zero(x)');
     eql(g2.y, G2Point.ZERO.y, 'zero(y)');
     // Test Non-Zero
@@ -684,7 +696,9 @@ describe('bls12-381/basic', () => {
     ]);
 
     const g2_ = G2Point.fromHex(
-      '13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb80606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79be0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801'
+      hexToBytes(
+        '13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb80606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79be0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801'
+      )
     );
 
     eql(g2_.x, x);
@@ -693,7 +707,7 @@ describe('bls12-381/basic', () => {
 
   should('construct point G2 from its uncompressed form (Hex)', () => {
     // Test Zero
-    const g2 = G2Point.fromHex(B_384_40);
+    const g2 = G2Point.fromHex(hexToBytes(B_384_40));
 
     eql(g2.x, G2Point.ZERO.x);
     eql(g2.y, G2Point.ZERO.y);
@@ -716,7 +730,9 @@ describe('bls12-381/basic', () => {
     ]);
 
     const g2_ = G2Point.fromHex(
-      '13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb80606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79be0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801'
+      hexToBytes(
+        '13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb80606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79be0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801'
+      )
     );
 
     eql(g2_.x, x);
@@ -822,18 +838,18 @@ describe('bls12-381/basic', () => {
 
   should('compress and decompress G1 points', () => {
     const priv = G1Point.fromPrivateKey(42n);
-    const publicKey = priv.toHex(true);
+    const publicKey = priv.toRawBytes(true);
     const decomp = G1Point.fromHex(publicKey);
-    eql(publicKey, decomp.toHex(true));
+    eql(publicKey, decomp.toRawBytes(true));
   });
   should('not compress and decompress zero G1 point', () => {
     throws(() => G1Point.fromPrivateKey(0n));
   });
   should('compress and decompress G2 points', () => {
     const priv = G2Point.fromPrivateKey(42n);
-    const publicKey = priv.toHex(true);
+    const publicKey = priv.toRawBytes(true);
     const decomp = G2Point.fromHex(publicKey);
-    eql(publicKey, decomp.toHex(true));
+    eql(publicKey, decomp.toRawBytes(true));
   });
   should('not compress and decompress zero G2 point', () => {
     throws(() => G2Point.fromPrivateKey(0n));
@@ -1213,7 +1229,7 @@ describe('verify()', () => {
       const pub = bls.getPublicKeyForShortSignatures(priv);
       const res = bls.verifyShortSignature(sig, msg, pub);
       eql(res, true, `${priv}-${msg}`);
-      const resHex = bls.verifyShortSignature(bytesToHex(sig), msg, pub);
+      const resHex = bls.verifyShortSignature(sig, msg, pub);
       eql(resHex, true, `${priv}-${msg}`);
     }
   });
@@ -1225,7 +1241,7 @@ describe('verify()', () => {
       const pub = bls.getPublicKeyForShortSignatures(priv);
       const res = bls.verifyShortSignature(sig, invMsg, pub);
       eql(res, false);
-      const resHex = bls.verifyShortSignature(bytesToHex(sig), invMsg, pub);
+      const resHex = bls.verifyShortSignature(sig, invMsg, pub);
       eql(resHex, false);
     }
   });
@@ -1237,7 +1253,7 @@ describe('verify()', () => {
       const invPub = bls.getPublicKeyForShortSignatures(invPriv);
       const res = bls.verifyShortSignature(sig, msg, invPub);
       eql(res, false);
-      const resHex = bls.verifyShortSignature(bytesToHex(sig), msg, invPub);
+      const resHex = bls.verifyShortSignature(sig, msg, invPub);
       eql(resHex, false);
     }
   });
@@ -1391,7 +1407,7 @@ describe('bls12-381 deterministic', () => {
     let p1 = G1Point.ZERO;
     for (let i = 0; i < zkVectors.G1_Compressed.length; i++) {
       const t = zkVectors.G1_Compressed[i];
-      const P = G1Point.fromHex(t);
+      const P = G1Point.fromHex(hexToBytes(t));
       eql(P.toHex(true), t);
       eql(P.equals(p1), true);
       eql(p1.toHex(true), t);
@@ -1407,7 +1423,7 @@ describe('bls12-381 deterministic', () => {
     let p1 = G1Point.ZERO;
     for (let i = 0; i < zkVectors.G1_Uncompressed.length; i++) {
       const t = zkVectors.G1_Uncompressed[i];
-      const P = G1Point.fromHex(t);
+      const P = G1Point.fromHex(hexToBytes(t));
       eql(P.toHex(false), t);
       eql(P.equals(p1), true);
       eql(p1.toHex(false), t);
@@ -1423,7 +1439,7 @@ describe('bls12-381 deterministic', () => {
     let p1 = G2Point.ZERO;
     for (let i = 0; i < zkVectors.G2_Compressed.length; i++) {
       const t = zkVectors.G2_Compressed[i];
-      const P = G2Point.fromHex(t);
+      const P = G2Point.fromHex(hexToBytes(t));
       eql(P.toHex(true), t);
       eql(P.equals(p1), true);
       eql(p1.toHex(true), t);
@@ -1440,7 +1456,7 @@ describe('bls12-381 deterministic', () => {
     let p1 = G2Point.ZERO;
     for (let i = 0; i < zkVectors.G2_Uncompressed.length; i++) {
       const t = zkVectors.G2_Uncompressed[i];
-      const P = G2Point.fromHex(t);
+      const P = G2Point.fromHex(hexToBytes(t));
       eql(P.toHex(false), t);
       eql(P.equals(p1), true);
       eql(p1.toHex(false), t);
