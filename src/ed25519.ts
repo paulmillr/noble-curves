@@ -200,7 +200,8 @@ export const x25519: XCurveFn = /* @__PURE__ */ (() =>
  *   x25519.getSharedSecret(aPriv, edwardsToMontgomeryPub(someonesPub))
  */
 export function edwardsToMontgomeryPub(edwardsPub: Hex): Uint8Array {
-  const { y } = ed25519.ExtendedPoint.fromHex(edwardsPub);
+  const bpub = ensureBytes('pub', edwardsPub);
+  const { y } = ed25519.ExtendedPoint.fromHex(bpub);
   const _1n = BigInt(1);
   return Fp.toBytes(Fp.create((_1n + y) * Fp.inv(_1n - y)));
 }

@@ -184,7 +184,8 @@ export const x448: XCurveFn = /* @__PURE__ */ (() =>
  *   x448.getSharedSecret(edwardsToMontgomery(aPub), edwardsToMontgomery(someonesPub))
  */
 export function edwardsToMontgomeryPub(edwardsPub: string | Uint8Array): Uint8Array {
-  const { y } = ed448.ExtendedPoint.fromHex(edwardsPub);
+  const bpub = ensureBytes('pub', edwardsPub);
+  const { y } = ed448.ExtendedPoint.fromHex(bpub);
   const _1n = BigInt(1);
   return Fp.toBytes(Fp.create((y - _1n) * Fp.inv(y + _1n)));
 }
