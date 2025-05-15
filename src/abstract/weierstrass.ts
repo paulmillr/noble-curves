@@ -825,6 +825,10 @@ export type CurveType = BasicWCurve<bigint> & {
   bits2int_modN?: (bytes: Uint8Array) => bigint;
 };
 
+function prefix(hasEvenY: boolean): Uint8Array {
+  return Uint8Array.of(hasEvenY ? 0x02 : 0x03);
+}
+
 function validateOpts(
   curve: CurveType
 ): Readonly<CurveType & { nByteLength: number; nBitLength: number }> {
@@ -894,9 +898,9 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       const cat = concatBytes;
       abool('isCompressed', isCompressed);
       if (isCompressed) {
-        return cat(Uint8Array.from([point.hasEvenY() ? 0x02 : 0x03]), x);
+        return cat(prefix(point.hasEvenY()), x);
       } else {
-        return cat(Uint8Array.from([0x04]), x, Fp.toBytes(a.y));
+        return cat(Uint8Array.of(0x04), x, Fp.toBytes(a.y));
       }
     },
     fromBytes(bytes: Uint8Array) {
@@ -991,8 +995,8 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       if (rec == null || ![0, 1, 2, 3].includes(rec)) throw new Error('recovery id invalid');
       const radj = rec === 2 || rec === 3 ? r + CURVE.n : r;
       if (radj >= Fp.ORDER) throw new Error('recovery id 2 or 3 invalid');
-      const prefix = (rec & 1) === 0 ? '02' : '03';
-      const R = Point.fromHex(prefix + numToSizedHex(radj, Fp.BYTES));
+      const x = numberToBytesBE(radj, Fp.BYTES);
+      const R = Point.fromHex(concatBytes(prefix((rec & 1) === 0), x));
       const ir = invN(radj); // r^-1
       const u1 = modN(-h * ir); // -hr^-1
       const u2 = modN(s * ir); // sr^-1
