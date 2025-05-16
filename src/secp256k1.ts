@@ -1,13 +1,8 @@
 /**
- * NIST secp256k1. See [pdf](https://www.secg.org/sec2-v2.pdf).
+ * SECG secp256k1. See [pdf](https://www.secg.org/sec2-v2.pdf).
  *
- * Seems to be rigid (not backdoored)
- * [as per discussion](https://bitcointalk.org/index.php?topic=289795.msg3183975#msg3183975).
- *
- * secp256k1 belongs to Koblitz curves: it has efficiently computable endomorphism.
- * Endomorphism uses 2x less RAM, speeds up precomputation by 2x and ECDH / key recovery by 20%.
- * For precomputed wNAF it trades off 1/2 init time & 1/3 ram for 20% perf hit.
- * [See explanation](https://gist.github.com/paulmillr/eb670806793e84df628a7c434a873066).
+ * Belongs to Koblitz curves: it has efficiently-computable GLV endomorphism ψ,
+ * check out {@link EndomorphismOpts}. Because of this, seems to be rigid (not backdoored).
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
@@ -25,7 +20,11 @@ import {
   inRange,
   numberToBytesBE,
 } from './abstract/utils.ts';
-import { mapToCurveSimpleSWU, type ProjPointType as PointType } from './abstract/weierstrass.ts';
+import {
+  type EndomorphismOpts,
+  mapToCurveSimpleSWU,
+  type ProjPointType as PointType,
+} from './abstract/weierstrass.ts';
 
 const secp256k1P = BigInt('0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f');
 const secp256k1N = BigInt('0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141');
@@ -113,7 +112,7 @@ export const secp256k1: CurveFnWithCreate = createCurve(
         }
         return { k1neg, k1, k2neg, k2 };
       },
-    },
+    } satisfies EndomorphismOpts,
   },
   sha256
 );

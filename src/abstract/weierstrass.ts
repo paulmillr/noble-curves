@@ -329,6 +329,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
     if (!Fp.isOdd) throw new Error('compression is not supported: Field does not have .isOdd()');
   }
 
+  // Implements IEEE P1363 point encoding
   function pointToBytes(
     _c: ProjConstructor<T>,
     point: ProjPointType<T>,
@@ -442,6 +443,12 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
     return num;
   }
 
+  /** Asserts coordinate is valid: 0 <= n < Fp.ORDER. */
+  function acoord(title: string, n: T, banZero = false) {
+    if (!Fp.isValid(n) || (banZero && Fp.is0(n))) throw new Error(`bad point coordinate ${title}`);
+    return n;
+  }
+
   function aprjpoint(other: unknown) {
     if (!(other instanceof Point)) throw new Error('ProjectivePoint expected');
   }
@@ -478,16 +485,15 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
     }
     // Some 3rd-party test vectors require different wording between here & `fromCompressedHex`
     const { x, y } = p.toAffine();
-    // Check if x, y are valid field elements
-    if (!Fp.isValid(x) || !Fp.isValid(y)) throw new Error('bad point: x or y not FE');
+    if (!Fp.isValid(x) || !Fp.isValid(y)) throw new Error('bad point: x or y not field elements');
     if (!isValidXY(x, y)) throw new Error('bad point: equation left != right');
     if (!p.isTorsionFree()) throw new Error('bad point: not in prime-order subgroup');
     return true;
   });
 
   /**
-   * Projective Point works in 3d / projective (homogeneous) coordinates: (X, Y, Z) ∋ (x=X/Z, y=Y/Z)
-   * Default Point works in 2d / affine coordinates: (x, y)
+   * Projective Point works in 3d / projective (homogeneous) coordinates:(X, Y, Z) ∋ (x=X/Z, y=Y/Z).
+   * Default Point works in 2d / affine coordinates: (x, y).
    * We're doing calculations in projective, because its operations don't require costly inversion.
    */
   class Point implements ProjPointType<T> {
@@ -499,17 +505,15 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
     readonly py: T;
     readonly pz: T;
 
+    /** Does NOT validate if the point is valid. Use `.assertValidity()`. */
     constructor(px: T, py: T, pz: T) {
-      if (px == null || !Fp.isValid(px)) throw new Error('x required');
-      if (py == null || !Fp.isValid(py) || Fp.is0(py)) throw new Error('y required');
-      if (pz == null || !Fp.isValid(pz)) throw new Error('z required');
-      this.px = px;
-      this.py = py;
-      this.pz = pz;
+      this.px = acoord('x', px);
+      this.py = acoord('y', py, true);
+      this.pz = acoord('z', pz);
       Object.freeze(this);
     }
 
-    /** Does NOT validate if the point is on-curve. Use `.fromHex()`, or call `.assertValidity()` */
+    /** Does NOT validate if the point is valid. Use `.assertValidity()`. */
     static fromAffine(p: AffinePoint<T>): Point {
       const { x, y } = p || {};
       if (!p || !Fp.isValid(x) || !Fp.isValid(y)) throw new Error('invalid affine point');
@@ -540,32 +544,29 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
       return points.map((p, i) => p.toAffine(toInv[i])).map(Point.fromAffine);
     }
 
-    /**
-     * Converts hash string or Uint8Array to Point.
-     * @param hex short/long ECDSA hex
-     */
+    /** Converts hash string or Uint8Array to Point. */
     static fromHex(hex: Hex): Point {
       const P = Point.fromAffine(fromBytes(ensureBytes('pointHex', hex)));
       P.assertValidity();
       return P;
     }
 
-    // Multiplies generator point by privateKey.
+    /** Multiplies generator point by privateKey. */
     static fromPrivateKey(privateKey: PrivKey) {
       return Point.BASE.multiply(normPrivateKeyToScalar(privateKey));
     }
 
-    // Multiscalar Multiplication
+    /** Multiscalar Multiplication */
     static msm(points: Point[], scalars: bigint[]): Point {
       return pippenger(Point, Fn, points, scalars);
     }
 
-    // "Private method", don't use it directly
+    /** "Private method", don't use it directly */
     _setWindowSize(windowSize: number) {
       wnaf.setWindowSize(this, windowSize);
     }
 
-    // A point on curve is valid if it conforms to equation.
+    /** A point on curve is valid if it conforms to equation. */
     assertValidity(): void {
       assertValidMemo(this);
     }
@@ -576,9 +577,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
       throw new Error("Field doesn't support isOdd");
     }
 
-    /**
-     * Compare one point to another.
-     */
+    /** Compare one point to another. */
     equals(other: Point): boolean {
       aprjpoint(other);
       const { px: X1, py: Y1, pz: Z1 } = this;
@@ -588,9 +587,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
       return U1 && U2;
     }
 
-    /**
-     * Flips point to one corresponding to (x, -y) in Affine coordinates.
-     */
+    /** Flips point to one corresponding to (x, -y) in Affine coordinates. */
     negate(): Point {
       return new Point(this.px, Fp.neg(this.py), this.pz);
     }
@@ -787,15 +784,21 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
       return sum.is0() ? undefined : sum;
     }
 
-    // Converts Projective point to affine (x, y) coordinates.
-    // Can accept precomputed Z^-1 - for example, from invertBatch.
-    // (x, y, z) ∋ (x=x/z, y=y/z)
+    /**
+     * Converts Projective point to affine (x, y) coordinates.
+     * @param iz Z^-1 (inverted zero) - optional, precomputation is useful for invertBatch
+     */
     toAffine(iz?: T): AffinePoint<T> {
       return toAffineMemo(this, iz);
     }
+
+    /**
+     * Checks whether Point is free of torsion elements (is in prime subgroup).
+     * Always free for cofactor=1 curves.
+     */
     isTorsionFree(): boolean {
       const { h: cofactor, isTorsionFree } = CURVE;
-      if (cofactor === _1n) return true; // No subgroups, always torsion-free
+      if (cofactor === _1n) return true;
       if (isTorsionFree) return isTorsionFree(Point, this);
       return this.multiplyUnsafe(CURVE.n).is0();
     }

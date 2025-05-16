@@ -172,11 +172,14 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       if (ctx.length || phflag) throw new Error('Contexts/pre-hash are not supported');
       return data;
     }); // NOOP
-  // 0 <= n < MASK
-  // Coordinates larger than Fp.ORDER are allowed for zip215
-  function aCoordinate(title: string, n: bigint, banZero = false) {
+  /**
+   * Asserts coordinate is valid: 0 <= n < MASK.
+   * Coordinates >= Fp.ORDER are allowed for zip215.
+   */
+  function acoord(title: string, n: bigint, banZero = false) {
     const min = banZero ? _1n : _0n;
     aInRange('coordinate ' + title, n, min, MASK);
+    return n;
   }
 
   function aextpoint(other: unknown) {
@@ -229,14 +232,10 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     readonly et: bigint;
 
     constructor(ex: bigint, ey: bigint, ez: bigint, et: bigint) {
-      aCoordinate('x', ex);
-      aCoordinate('y', ey);
-      aCoordinate('z', ez, true);
-      aCoordinate('t', et);
-      this.ex = ex;
-      this.ey = ey;
-      this.ez = ez;
-      this.et = et;
+      this.ex = acoord('x', ex);
+      this.ey = acoord('y', ey);
+      this.ez = acoord('z', ez, true);
+      this.et = acoord('t', et);
       Object.freeze(this);
     }
 
@@ -250,8 +249,8 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     static fromAffine(p: AffinePoint<bigint>): Point {
       if (p instanceof Point) throw new Error('extended point not allowed');
       const { x, y } = p || {};
-      aCoordinate('x', x);
-      aCoordinate('y', y);
+      acoord('x', x);
+      acoord('y', y);
       return new Point(x, y, _1n, modP(x * y));
     }
     static normalizeZ(points: Point[]): Point[] {
