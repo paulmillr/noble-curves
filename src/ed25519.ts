@@ -7,7 +7,7 @@
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha512 } from '@noble/hashes/sha2';
-import { concatBytes, randomBytes, utf8ToBytes } from '@noble/hashes/utils';
+import { abytes, concatBytes, randomBytes, utf8ToBytes } from '@noble/hashes/utils';
 import { type AffinePoint, type Group, pippenger } from './abstract/curve.ts';
 import { type CurveFn, type ExtPointType, twistedEdwards } from './abstract/edwards.ts';
 import {
@@ -408,6 +408,11 @@ class RistPoint implements Group<RistPoint> {
     return new RistPoint(R1.add(R2));
   }
 
+  static fromBytes(bytes: Uint8Array): RistPoint {
+    abytes(bytes);
+    return this.fromHex(bytes);
+  }
+
   /**
    * Converts ristretto-encoded string to ristretto point.
    * Described in [RFC9496](https://www.rfc-editor.org/rfc/rfc9496#name-decode).
@@ -449,7 +454,7 @@ class RistPoint implements Group<RistPoint> {
    * Encodes ristretto point to Uint8Array.
    * Described in [RFC9496](https://www.rfc-editor.org/rfc/rfc9496#name-encode).
    */
-  toRawBytes(): Uint8Array {
+  toBytes(): Uint8Array {
     let { ex: x, ey: y, ez: z, et: t } = this.ep;
     const P = ed25519.CURVE.Fp.ORDER;
     const mod = ed25519.CURVE.Fp.create;
@@ -475,6 +480,11 @@ class RistPoint implements Group<RistPoint> {
     let s = mod((z - y) * D); // 10 (check footer's note, no sqrt(-a))
     if (isNegativeLE(s, P)) s = mod(-s);
     return numberToBytesLE(s, 32); // 11
+  }
+
+  /** @deprecated use `toBytes` */
+  toRawBytes(): Uint8Array {
+    return this.toBytes();
   }
 
   toHex(): string {

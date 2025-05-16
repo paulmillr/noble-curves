@@ -8,7 +8,13 @@
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { shake256 } from '@noble/hashes/sha3';
-import { concatBytes, randomBytes, utf8ToBytes, wrapConstructor } from '@noble/hashes/utils';
+import {
+  abytes,
+  concatBytes,
+  randomBytes,
+  utf8ToBytes,
+  wrapConstructor,
+} from '@noble/hashes/utils';
 import type { AffinePoint, Group } from './abstract/curve.ts';
 import { pippenger } from './abstract/curve.ts';
 import { type CurveFn, type ExtPointType, twistedEdwards } from './abstract/edwards.ts';
@@ -387,6 +393,11 @@ class DcfPoint implements Group<DcfPoint> {
     return new DcfPoint(R1.add(R2));
   }
 
+  static fromBytes(bytes: Uint8Array): DcfPoint {
+    abytes(bytes);
+    return this.fromHex(bytes);
+  }
+
   /**
    * Converts decaf-encoded string to decaf point.
    * Described in [RFC9496](https://www.rfc-editor.org/rfc/rfc9496#name-decode-2).
@@ -431,7 +442,7 @@ class DcfPoint implements Group<DcfPoint> {
    * Encodes decaf point to Uint8Array.
    * Described in [RFC9496](https://www.rfc-editor.org/rfc/rfc9496#name-encode-2).
    */
-  toRawBytes(): Uint8Array {
+  toBytes(): Uint8Array {
     let { ex: x, ey: _y, ez: z, et: t } = this.ep;
     const P = ed448.CURVE.Fp.ORDER;
     const mod = ed448.CURVE.Fp.create;
@@ -449,6 +460,11 @@ class DcfPoint implements Group<DcfPoint> {
     if (isNegativeLE(s, P)) s = mod(-s);
 
     return numberToBytesLE(s, 56);
+  }
+
+  /** @deprecated use `toBytes` */
+  toRawBytes(): Uint8Array {
+    return this.toBytes();
   }
 
   toHex(): string {

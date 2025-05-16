@@ -125,9 +125,10 @@ export interface ProjPointType<T> extends Group<ProjPointType<T>> {
   isTorsionFree(): boolean;
   multiplyUnsafe(scalar: bigint): ProjPointType<T>;
   multiplyAndAddUnsafe(Q: ProjPointType<T>, a: bigint, b: bigint): ProjPointType<T> | undefined;
-  toAffine(iz?: T): AffinePoint<T>;
-  // toBytes(isCompressed?: boolean): Uint8Array;
+  toAffine(invertedZ?: T): AffinePoint<T>;
+  toBytes(isCompressed?: boolean): Uint8Array;
   toHex(isCompressed?: boolean): string;
+  /** @deprecated use `toBytes` */
   toRawBytes(isCompressed?: boolean): Uint8Array;
   _setWindowSize(windowSize: number): void;
 }
@@ -135,7 +136,7 @@ export interface ProjPointType<T> extends Group<ProjPointType<T>> {
 export interface ProjConstructor<T> extends GroupConstructor<ProjPointType<T>> {
   new (x: T, y: T, z: T): ProjPointType<T>;
   fromAffine(p: AffinePoint<T>): ProjPointType<T>;
-  // fromBytes(encodedPoint: Uint8Array): ProjPointType<T>;
+  fromBytes(encodedPoint: Uint8Array): ProjPointType<T>;
   fromHex(hex: Hex): ProjPointType<T>;
   fromPrivateKey(privateKey: PrivKey): ProjPointType<T>;
   normalizeZ(points: ProjPointType<T>[]): ProjPointType<T>[];
@@ -544,6 +545,11 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
       return points.map((p, i) => p.toAffine(toInv[i])).map(Point.fromAffine);
     }
 
+    static fromBytes(bytes: Uint8Array): Point {
+      abytes(bytes);
+      return this.fromHex(bytes);
+    }
+
     /** Converts hash string or Uint8Array to Point. */
     static fromHex(hex: Hex): Point {
       const P = Point.fromAffine(fromBytes(ensureBytes('pointHex', hex)));
@@ -810,10 +816,15 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
       return this.multiplyUnsafe(cofactor);
     }
 
-    toRawBytes(isCompressed = true): Uint8Array {
+    toBytes(isCompressed = true): Uint8Array {
       abool('isCompressed', isCompressed);
       this.assertValidity();
       return toBytes(Point, this, isCompressed);
+    }
+
+    /** @deprecated use `toBytes` */
+    toRawBytes(isCompressed = true): Uint8Array {
+      return this.toBytes(isCompressed);
     }
 
     toHex(isCompressed = true): string {

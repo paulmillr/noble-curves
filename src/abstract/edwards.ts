@@ -12,7 +12,7 @@ import {
 import { Field, FpInvertBatch, mod } from './modular.ts';
 // prettier-ignore
 import {
-  abool, aInRange, bytesToHex, bytesToNumberLE, concatBytes,
+  abool, abytes, aInRange, bytesToHex, bytesToNumberLE, concatBytes,
   ensureBytes, memoized, numberToBytesLE, validateObject,
   type FHash, type Hex
 } from './utils.ts';
@@ -75,14 +75,17 @@ export interface ExtPointType extends Group<ExtPointType> {
   isTorsionFree(): boolean;
   clearCofactor(): ExtPointType;
   toAffine(iz?: bigint): AffinePoint<bigint>;
-  toRawBytes(isCompressed?: boolean): Uint8Array;
-  toHex(isCompressed?: boolean): string;
+  toBytes(): Uint8Array;
+  /** @deprecated use `toBytes` */
+  toRawBytes(): Uint8Array;
+  toHex(): string;
   _setWindowSize(windowSize: number): void;
 }
 /** Static methods of Extended Point with coordinates in X, Y, Z, T. */
 export interface ExtPointConstructor extends GroupConstructor<ExtPointType> {
   new (x: bigint, y: bigint, z: bigint, t: bigint): ExtPointType;
   fromAffine(p: AffinePoint<bigint>): ExtPointType;
+  fromBytes(bytes: Uint8Array): ExtPointType;
   fromHex(hex: Hex): ExtPointType;
   fromPrivateKey(privateKey: Hex): ExtPointType;
   msm(points: ExtPointType[], scalars: bigint[]): ExtPointType;
@@ -396,6 +399,11 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       return this.multiplyUnsafe(cofactor);
     }
 
+    static fromBytes(bytes: Uint8Array, zip215 = false): Point {
+      abytes(bytes);
+      return this.fromHex(bytes, zip215);
+    }
+
     // Converts hash string or Uint8Array to Point.
     // Uses algo from RFC8032 5.1.3.
     static fromHex(hex: Hex, zip215 = false): Point {
@@ -434,11 +442,15 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       const { scalar } = getPrivateScalar(privKey);
       return G.multiply(scalar); // reduced one call of `toRawBytes`
     }
-    toRawBytes(): Uint8Array {
+    toBytes(): Uint8Array {
       const { x, y } = this.toAffine();
       const bytes = numberToBytesLE(y, Fp.BYTES); // each y has 2 x values (x, -y)
       bytes[bytes.length - 1] |= x & _1n ? 0x80 : 0; // when compressing, it's enough to store y
       return bytes; // and use the last byte to encode sign of x
+    }
+    /** @deprecated use `toBytes` */
+    toRawBytes(): Uint8Array {
+      return this.toBytes();
     }
     toHex(): string {
       return bytesToHex(this.toRawBytes()); // Same as toRawBytes, but returns string.
