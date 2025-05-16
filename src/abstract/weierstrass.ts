@@ -467,15 +467,13 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
       Object.freeze(this);
     }
 
-    // Does not validate if the point is on-curve.
-    // Use fromHex instead, or call assertValidity() later.
+    /** Does NOT validate if the point is on-curve. Use `.fromHex()`, or call `.assertValidity()` */
     static fromAffine(p: AffinePoint<T>): Point {
       const { x, y } = p || {};
       if (!p || !Fp.isValid(x) || !Fp.isValid(y)) throw new Error('invalid affine point');
       if (p instanceof Point) throw new Error('projective point not allowed');
-      const is0 = (i: T) => Fp.eql(i, Fp.ZERO);
-      // fromAffine(x:0, y:0) would produce (x:0, y:0, z:1), but we need (x:0, y:1, z:0)
-      if (is0(x) && is0(y)) return Point.ZERO;
+      // (0, 0) would've produced (0, 0, 1) - instead, we need (0, 1, 0)
+      if (Fp.is0(x) && Fp.is0(y)) return Point.ZERO;
       return new Point(x, y, Fp.ONE);
     }
 
@@ -825,7 +823,8 @@ export type CurveType = BasicWCurve<bigint> & {
   bits2int_modN?: (bytes: Uint8Array) => bigint;
 };
 
-function prefix(hasEvenY: boolean): Uint8Array {
+// Points start with byte 0x02 when y is even; otherwise 0x03
+function pprefix(hasEvenY: boolean): Uint8Array {
   return Uint8Array.of(hasEvenY ? 0x02 : 0x03);
 }
 
@@ -895,44 +894,43 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     toBytes(_c, point, isCompressed: boolean): Uint8Array {
       const a = point.toAffine();
       const x = Fp.toBytes(a.x);
-      const cat = concatBytes;
       abool('isCompressed', isCompressed);
       if (isCompressed) {
-        return cat(prefix(point.hasEvenY()), x);
+        return concatBytes(pprefix(point.hasEvenY()), x);
       } else {
-        return cat(Uint8Array.of(0x04), x, Fp.toBytes(a.y));
+        return concatBytes(Uint8Array.of(0x04), x, Fp.toBytes(a.y));
       }
     },
     fromBytes(bytes: Uint8Array) {
+      const cl = compressedLen;
+      const ul = uncompressedLen;
       const len = bytes.length;
       const head = bytes[0];
       const tail = bytes.subarray(1);
-      // this.assertValidity() is done inside of fromHex
-      if (len === compressedLen && (head === 0x02 || head === 0x03)) {
-        const x = bytesToNumberBE(tail);
-        if (!inRange(x, _1n, Fp.ORDER)) throw new Error('Point is not on curve');
+      // No actual validation is done here: use .assertValidity()
+      if (len === cl && (head === 0x02 || head === 0x03)) {
+        const x = Fp.fromBytes(tail);
+        if (Fp.is0(x) || !Fp.isValid(x)) throw new Error('bad point: is not on curve, wrong x');
         const y2 = weierstrassEquation(x); // y² = x³ + ax + b
         let y: bigint;
         try {
           y = Fp.sqrt(y2); // y = y² ^ (p+1)/4
         } catch (sqrtError) {
-          const suffix = sqrtError instanceof Error ? ': ' + sqrtError.message : '';
-          throw new Error('Point is not on curve' + suffix);
+          const err = sqrtError instanceof Error ? ': ' + sqrtError.message : '';
+          throw new Error('bad point: is not on curve, sqrt error' + err);
         }
         const isYOdd = (y & _1n) === _1n;
-        // ECDSA
-        const isHeadOdd = (head & 1) === 1;
+        const isHeadOdd = (head & 1) === 1; // ECDSA-specific
         if (isHeadOdd !== isYOdd) y = Fp.neg(y);
         return { x, y };
-      } else if (len === uncompressedLen && head === 0x04) {
-        const x = Fp.fromBytes(tail.subarray(0, Fp.BYTES));
-        const y = Fp.fromBytes(tail.subarray(Fp.BYTES, 2 * Fp.BYTES));
+      } else if (len === ul && head === 0x04) {
+        const L = Fp.BYTES;
+        const x = Fp.fromBytes(tail.subarray(0, L));
+        const y = Fp.fromBytes(tail.subarray(L, L * 2));
         return { x, y };
       } else {
-        const cl = compressedLen;
-        const ul = uncompressedLen;
         throw new Error(
-          'invalid Point, expected length of ' + cl + ', or uncompressed ' + ul + ', got ' + len
+          `bad point: got length ${len}, expected compressed=${cl} or uncompressed=${ul}`
         );
       }
     },
@@ -996,7 +994,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
       const radj = rec === 2 || rec === 3 ? r + CURVE.n : r;
       if (radj >= Fp.ORDER) throw new Error('recovery id 2 or 3 invalid');
       const x = numberToBytesBE(radj, Fp.BYTES);
-      const R = Point.fromHex(concatBytes(prefix((rec & 1) === 0), x));
+      const R = Point.fromHex(concatBytes(pprefix((rec & 1) === 0), x));
       const ir = invN(radj); // r^-1
       const u1 = modN(-h * ir); // -hr^-1
       const u2 = modN(s * ir); // sr^-1

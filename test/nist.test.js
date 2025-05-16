@@ -113,7 +113,7 @@ function verifyECDHVector(test, curve) {
     try {
       curve.ProjectivePoint.fromHex(pubB_b);
     } catch (e) {
-      if (e.message.startsWith('invalid Point, expected length')) return; // Ignore
+      if (e.message.startsWith('bad point: got length')) return; // Ignore
       throw e;
     }
     const privA_b = hexToBytes(privA);
