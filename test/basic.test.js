@@ -638,7 +638,7 @@ for (const name in CURVES) {
               const point = p.BASE.multiply(x);
               const isComp = false;
               const hex1 = point.toHex(isComp);
-              const bytes1 = point.toRawBytes(isComp);
+              const bytes1 = point.toBytes(isComp);
               // eql(p.fromHex(hex1).toHex(isComp), hex1);
               eql(p.fromHex(bytes1).toHex(isComp), hex1);
             })
@@ -650,7 +650,7 @@ for (const name in CURVES) {
               const point = p.BASE.multiply(x);
               const isComp = true;
               const hex1 = point.toHex(isComp);
-              const bytes1 = point.toRawBytes(isComp);
+              const bytes1 = point.toBytes(isComp);
               // eql(p.fromHex(hex1).toHex(isComp), hex1);
               eql(p.fromHex(bytes1).toHex(isComp), hex1);
             })
@@ -778,7 +778,7 @@ for (const name in CURVES) {
           { numRuns: NUM_RUNS }
         )
       );
-      should('Signature.addRecoveryBit/Signature.recoveryPublicKey', () =>
+      should('Signature.addRecoveryBit/Signature.recoverPublicKey', () =>
         fc.assert(
           fc.property(FC_HEX, (msg) => {
             if (C.CURVE.h >= 2n) return;
@@ -786,11 +786,11 @@ for (const name in CURVES) {
             const priv = C.utils.randomPrivateKey();
             const pub = C.getPublicKey(priv);
             const sig = C.sign(msg, priv);
-            eql(sig.recoverPublicKey(msg).toRawBytes(), pub);
+            eql(sig.recoverPublicKey(msg).toBytes(), pub);
             const sig2 = C.Signature.fromCompact(sig.toCompactHex());
             throws(() => sig2.recoverPublicKey(msg));
             const sig3 = sig2.addRecoveryBit(sig.recovery);
-            eql(sig3.recoverPublicKey(msg).toRawBytes(), pub);
+            eql(sig3.recoverPublicKey(msg).toBytes(), pub);
           }),
           { numRuns: NUM_RUNS }
         )

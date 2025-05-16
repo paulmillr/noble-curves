@@ -619,7 +619,7 @@ describe('bls12-381 Point', () => {
 describe('bls12-381/basic', () => {
   should('construct point G1 from its uncompressed form (Raw Bytes)', () => {
     // Test Zero
-    const g1 = G1Point.fromHex(hexToBytes(B_192_40));
+    const g1 = G1Point.fromBytes(hexToBytes(B_192_40));
     eql(g1.x, G1Point.ZERO.x);
     eql(g1.y, G1Point.ZERO.y);
     // Test Non-Zero
@@ -634,7 +634,7 @@ describe('bls12-381/basic', () => {
       )
     );
 
-    const g1_ = G1Point.fromHex(
+    const g1_ = G1Point.fromBytes(
       hexToBytes(
         '17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
       )
@@ -646,7 +646,7 @@ describe('bls12-381/basic', () => {
 
   should('construct point G1 from its uncompressed form (Hex)', () => {
     // Test Zero
-    const g1 = G1Point.fromHex(hexToBytes(B_192_40));
+    const g1 = G1Point.fromBytes(hexToBytes(B_192_40));
 
     eql(g1.x, G1Point.ZERO.x);
     eql(g1.y, G1Point.ZERO.y);
@@ -662,7 +662,7 @@ describe('bls12-381/basic', () => {
       )
     );
 
-    const g1_ = G1Point.fromHex(
+    const g1_ = G1Point.fromBytes(
       hexToBytes(
         '17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
       )
@@ -674,7 +674,7 @@ describe('bls12-381/basic', () => {
 
   should('construct point G2 from its uncompressed form (Raw Bytes)', () => {
     // Test Zero
-    const g2 = G2Point.fromHex(hexToBytes(B_384_40));
+    const g2 = G2Point.fromBytes(hexToBytes(B_384_40));
     eql(g2.x, G2Point.ZERO.x, 'zero(x)');
     eql(g2.y, G2Point.ZERO.y, 'zero(y)');
     // Test Non-Zero
@@ -695,7 +695,7 @@ describe('bls12-381/basic', () => {
       ),
     ]);
 
-    const g2_ = G2Point.fromHex(
+    const g2_ = G2Point.fromBytes(
       hexToBytes(
         '13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb80606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79be0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801'
       )
@@ -707,7 +707,7 @@ describe('bls12-381/basic', () => {
 
   should('construct point G2 from its uncompressed form (Hex)', () => {
     // Test Zero
-    const g2 = G2Point.fromHex(hexToBytes(B_384_40));
+    const g2 = G2Point.fromBytes(hexToBytes(B_384_40));
 
     eql(g2.x, G2Point.ZERO.x);
     eql(g2.y, G2Point.ZERO.y);
@@ -729,7 +729,7 @@ describe('bls12-381/basic', () => {
       ),
     ]);
 
-    const g2_ = G2Point.fromHex(
+    const g2_ = G2Point.fromBytes(
       hexToBytes(
         '13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb80606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79be0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801'
       )
@@ -838,18 +838,18 @@ describe('bls12-381/basic', () => {
 
   should('compress and decompress G1 points', () => {
     const priv = G1Point.fromPrivateKey(42n);
-    const publicKey = priv.toRawBytes(true);
-    const decomp = G1Point.fromHex(publicKey);
-    eql(publicKey, decomp.toRawBytes(true));
+    const publicKey = priv.toBytes(true);
+    const decomp = G1Point.fromBytes(publicKey);
+    eql(publicKey, decomp.toBytes(true));
   });
   should('not compress and decompress zero G1 point', () => {
     throws(() => G1Point.fromPrivateKey(0n));
   });
   should('compress and decompress G2 points', () => {
     const priv = G2Point.fromPrivateKey(42n);
-    const publicKey = priv.toRawBytes(true);
-    const decomp = G2Point.fromHex(publicKey);
-    eql(publicKey, decomp.toRawBytes(true));
+    const publicKey = priv.toBytes(true);
+    const decomp = G2Point.fromBytes(publicKey);
+    eql(publicKey, decomp.toBytes(true));
   });
   should('not compress and decompress zero G2 point', () => {
     throws(() => G2Point.fromPrivateKey(0n));
@@ -905,8 +905,8 @@ describe('bls12-381/basic', () => {
       const [priv, msg, expected] = vector;
       const sig = bls.signShortSignature(msg, priv);
       eql(bytesToHex(sig), expected);
-      eql(bls.ShortSignature.toRawBytes(bls.ShortSignature.fromHex(sig)), sig);
-      eql(bls.ShortSignature.toHex(bls.ShortSignature.fromHex(sig)), bytesToHex(sig));
+      eql(bls.ShortSignature.toBytes(bls.ShortSignature.fromBytes(sig)), sig);
+      eql(bls.ShortSignature.toHex(bls.ShortSignature.fromBytes(sig)), bytesToHex(sig));
     }
   });
   should(`produce correct signatures (${G2_VECTORS.length} vectors)`, () => {
@@ -914,8 +914,8 @@ describe('bls12-381/basic', () => {
       const [priv, msg, expected] = vector;
       const sig = bls.sign(msg, priv);
       eql(bytesToHex(sig), expected);
-      eql(bls.Signature.toRawBytes(bls.Signature.fromHex(sig)), sig);
-      eql(bls.Signature.toHex(bls.Signature.fromHex(sig)), bytesToHex(sig));
+      eql(bls.Signature.toBytes(bls.Signature.fromBytes(sig)), sig);
+      eql(bls.Signature.toHex(bls.Signature.fromBytes(sig)), bytesToHex(sig));
     }
   });
   should(`produce correct scalars (${SCALAR_VECTORS.length} vectors)`, () => {
@@ -1407,7 +1407,7 @@ describe('bls12-381 deterministic', () => {
     let p1 = G1Point.ZERO;
     for (let i = 0; i < zkVectors.G1_Compressed.length; i++) {
       const t = zkVectors.G1_Compressed[i];
-      const P = G1Point.fromHex(hexToBytes(t));
+      const P = G1Point.fromBytes(hexToBytes(t));
       eql(P.toHex(true), t);
       eql(P.equals(p1), true);
       eql(p1.toHex(true), t);
@@ -1423,7 +1423,7 @@ describe('bls12-381 deterministic', () => {
     let p1 = G1Point.ZERO;
     for (let i = 0; i < zkVectors.G1_Uncompressed.length; i++) {
       const t = zkVectors.G1_Uncompressed[i];
-      const P = G1Point.fromHex(hexToBytes(t));
+      const P = G1Point.fromBytes(hexToBytes(t));
       eql(P.toHex(false), t);
       eql(P.equals(p1), true);
       eql(p1.toHex(false), t);
@@ -1439,7 +1439,7 @@ describe('bls12-381 deterministic', () => {
     let p1 = G2Point.ZERO;
     for (let i = 0; i < zkVectors.G2_Compressed.length; i++) {
       const t = zkVectors.G2_Compressed[i];
-      const P = G2Point.fromHex(hexToBytes(t));
+      const P = G2Point.fromBytes(hexToBytes(t));
       eql(P.toHex(true), t);
       eql(P.equals(p1), true);
       eql(p1.toHex(true), t);
@@ -1456,7 +1456,7 @@ describe('bls12-381 deterministic', () => {
     let p1 = G2Point.ZERO;
     for (let i = 0; i < zkVectors.G2_Uncompressed.length; i++) {
       const t = zkVectors.G2_Uncompressed[i];
-      const P = G2Point.fromHex(hexToBytes(t));
+      const P = G2Point.fromBytes(hexToBytes(t));
       eql(P.toHex(false), t);
       eql(P.equals(p1), true);
       eql(p1.toHex(false), t);
@@ -1482,22 +1482,22 @@ describe('bls12-381 deterministic', () => {
       const d = utils.numberToBytesBE(utils.bitSet(0n, pos, Boolean(true)), Fp.BYTES);
       eql((d[0] >> shift) & 1, 1, `${pos}`);
     }
-    const baseC = G1Point.BASE.toRawBytes();
+    const baseC = G1Point.BASE.toBytes();
     eql(baseC.length, 48);
-    const baseU = G1Point.BASE.toRawBytes(false);
+    const baseU = G1Point.BASE.toBytes(false);
     eql(baseU.length, 96);
     const compressedBit = baseU.slice();
     compressedBit[0] |= 0b1000_0000; // add compression bit
-    throws(() => G1Point.fromHex(compressedBit), 'compressed bit'); // uncompressed point with compressed length
+    throws(() => G1Point.fromBytes(compressedBit), 'compressed bit'); // uncompressed point with compressed length
     const uncompressedBit = baseC.slice();
     uncompressedBit[0] &= 0b0111_1111; // remove compression bit
-    throws(() => G1Point.fromHex(uncompressedBit), 'uncompressed bit');
+    throws(() => G1Point.fromBytes(uncompressedBit), 'uncompressed bit');
     const infinityUncompressed = baseU.slice();
     infinityUncompressed[0] |= 0b0100_0000;
-    throws(() => G1Point.fromHex(compressedBit), 'infinity uncompressed');
+    throws(() => G1Point.fromBytes(compressedBit), 'infinity uncompressed');
     const infinityCompressed = baseC.slice();
     infinityCompressed[0] |= 0b0100_0000;
-    throws(() => G1Point.fromHex(compressedBit), 'infinity compressed');
+    throws(() => G1Point.fromBytes(compressedBit), 'infinity compressed');
   });
   should(`zkcrypt/G2 encoding edge cases`, () => {
     const Fp = bls12_381.fields.Fp;
@@ -1513,28 +1513,28 @@ describe('bls12-381 deterministic', () => {
       const d = utils.numberToBytesBE(utils.bitSet(0n, pos, Boolean(true)), Fp.BYTES);
       eql((d[0] >> shift) & 1, 1, `${pos}`);
     }
-    const baseC = G2Point.BASE.toRawBytes();
+    const baseC = G2Point.BASE.toBytes();
     eql(baseC.length, 96);
-    const baseU = G2Point.BASE.toRawBytes(false);
+    const baseU = G2Point.BASE.toBytes(false);
     eql(baseU.length, 192);
     const compressedBit = baseU.slice();
     compressedBit[0] |= 0b1000_0000; // add compression bit
-    throws(() => G2Point.fromHex(compressedBit), 'compressed bit'); // uncompressed point with compressed length
+    throws(() => G2Point.fromBytes(compressedBit), 'compressed bit'); // uncompressed point with compressed length
     const uncompressedBit = baseC.slice();
     uncompressedBit[0] &= 0b0111_1111; // remove compression bit
-    throws(() => G2Point.fromHex(uncompressedBit), 'uncompressed bit');
+    throws(() => G2Point.fromBytes(uncompressedBit), 'uncompressed bit');
     const infinityUncompressed = baseU.slice();
     infinityUncompressed[0] |= 0b0100_0000;
-    throws(() => G2Point.fromHex(compressedBit), 'infinity uncompressed');
+    throws(() => G2Point.fromBytes(compressedBit), 'infinity uncompressed');
     const infinityCompressed = baseC.slice();
     infinityCompressed[0] |= 0b0100_0000;
-    throws(() => G2Point.fromHex(compressedBit), 'infinity compressed');
+    throws(() => G2Point.fromBytes(compressedBit), 'infinity compressed');
     infinityCompressed[0] = 0b00100000;
-    throws(() => G2Point.fromHex(compressedBit), '(!compressed && !infinity && sort)');
+    throws(() => G2Point.fromBytes(compressedBit), '(!compressed && !infinity && sort)');
     infinityCompressed[0] = 0b01100000;
-    throws(() => G2Point.fromHex(compressedBit), '(!compressed && infinity && sort)');
+    throws(() => G2Point.fromBytes(compressedBit), '(!compressed && infinity && sort)');
     infinityCompressed[0] = 0b11100000;
-    throws(() => G2Point.fromHex(compressedBit), '(sort && infinity && compressed)');
+    throws(() => G2Point.fromBytes(compressedBit), '(sort && infinity && compressed)');
   });
 
   describe('EIP2537', () => {

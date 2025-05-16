@@ -829,7 +829,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
 
     toHex(isCompressed = true): string {
       abool('isCompressed', isCompressed);
-      return bytesToHex(this.toRawBytes(isCompressed));
+      return bytesToHex(this.toBytes(isCompressed));
     }
   }
   const { endo, nBitLength } = CURVE;
@@ -1100,7 +1100,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
    * @returns Public key, full when isCompressed=false; short when isCompressed=true
    */
   function getPublicKey(privateKey: PrivKey, isCompressed = true): Uint8Array {
-    return Point.fromPrivateKey(privateKey).toRawBytes(isCompressed);
+    return Point.fromPrivateKey(privateKey).toBytes(isCompressed);
   }
 
   /**
@@ -1135,7 +1135,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     if (isProbPub(privateA) === true) throw new Error('first arg must be private key');
     if (isProbPub(publicB) === false) throw new Error('second arg must be public key');
     const b = Point.fromHex(publicB); // check for being on-curve
-    return b.multiply(normPrivateKeyToScalar(privateA)).toRawBytes(isCompressed);
+    return b.multiply(normPrivateKeyToScalar(privateA)).toBytes(isCompressed);
   }
 
   // RFC6979: ensure ECDSA msg is X bytes and < N. RFC suggests optional truncating via bits2octets.

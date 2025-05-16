@@ -111,7 +111,7 @@ function verifyECDHVector(test, curve) {
     if (!curve.utils.isValidPrivateKey(privA)) return; // Ignore invalid private key size
     const pubB_b = hexToBytes(pubB);
     try {
-      curve.ProjectivePoint.fromHex(pubB_b);
+      curve.ProjectivePoint.fromBytes(pubB_b);
     } catch (e) {
       if (e.message.startsWith('bad point: got length')) return; // Ignore
       throw e;
@@ -316,10 +316,10 @@ const WYCHEPROOF_ECDSA = {
 function runWycheproof(name, CURVE, group, index) {
   const key = group.publicKey;
   const uncomp = hexToBytes(key.uncompressed);
-  const pubKey = CURVE.ProjectivePoint.fromHex(uncomp);
+  const pubKey = CURVE.ProjectivePoint.fromBytes(uncomp);
   eql(pubKey.x, BigInt(`0x${key.wx}`));
   eql(pubKey.y, BigInt(`0x${key.wy}`));
-  const pubR = pubKey.toRawBytes();
+  const pubR = pubKey.toBytes();
   for (const test of group.tests) {
     const m = CURVE.CURVE.hash(hexToBytes(test.msg));
     const { sig } = test;
@@ -354,7 +354,7 @@ describe('wycheproof ECDSA', () => {
         if (group.sha === 'SHA-256') CURVE = CURVE.create(sha256);
       }
       const uncomp = hexToBytes(group.key.uncompressed);
-      const pubKey = CURVE.ProjectivePoint.fromHex(uncomp);
+      const pubKey = CURVE.ProjectivePoint.fromBytes(uncomp);
       eql(pubKey.x, BigInt(`0x${group.key.wx}`));
       eql(pubKey.y, BigInt(`0x${group.key.wy}`));
       for (const test of group.tests) {
@@ -415,7 +415,7 @@ describe('RFC6979', () => {
       if (v.curve === 'P521') v.private = v.private.padStart(132, '0');
       const priv = hexToBytes(v.private);
       const pubKey = curve.getPublicKey(priv);
-      const pubPoint = curve.ProjectivePoint.fromHex(pubKey);
+      const pubPoint = curve.ProjectivePoint.fromBytes(pubKey);
       eql(pubPoint.x, hexToBigint(v.Ux));
       eql(pubPoint.y, hexToBigint(v.Uy));
       for (const c of v.cases) {

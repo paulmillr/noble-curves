@@ -407,7 +407,7 @@ function setMask(
   return bytes;
 }
 
-function signatureG1ToRawBytes(point: ProjPointType<Fp>) {
+function signatureG1ToBytes(point: ProjPointType<Fp>) {
   point.assertValidity();
   const isZero = point.equals(bls12_381.G1.ProjectivePoint.ZERO);
   const { x, y } = point.toAffine();
@@ -434,7 +434,7 @@ function signatureG1FromBytes(hex: Hex): ProjPointType<Fp> {
   return point;
 }
 
-function signatureG2ToRawBytes(point: ProjPointType<Fp2>) {
+function signatureG2ToBytes(point: ProjPointType<Fp2>) {
   // NOTE: by some reasons it was missed in bls12-381, looks like bug
   point.assertValidity();
   const len = Fp.BYTES;
@@ -605,13 +605,13 @@ export const bls12_381: CurveFn = bls({
         return signatureG1FromBytes(hex);
       },
       toBytes(point: ProjPointType<Fp>) {
-        return signatureG1ToRawBytes(point);
+        return signatureG1ToBytes(point);
       },
       toRawBytes(point: ProjPointType<Fp>) {
-        return signatureG1ToRawBytes(point);
+        return signatureG1ToBytes(point);
       },
       toHex(point: ProjPointType<Fp>) {
-        return bytesToHex(signatureG1ToRawBytes(point));
+        return bytesToHex(signatureG1ToBytes(point));
       },
     },
   },
@@ -759,13 +759,13 @@ export const bls12_381: CurveFn = bls({
         return signatureG2FromBytes(hex);
       },
       toBytes(point: ProjPointType<Fp2>) {
-        return signatureG2ToRawBytes(point);
+        return signatureG2ToBytes(point);
       },
       toRawBytes(point: ProjPointType<Fp2>) {
-        return signatureG2ToRawBytes(point);
+        return signatureG2ToBytes(point);
       },
       toHex(point: ProjPointType<Fp2>) {
-        return bytesToHex(signatureG2ToRawBytes(point));
+        return bytesToHex(signatureG2ToBytes(point));
       },
     },
   },

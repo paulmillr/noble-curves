@@ -19,10 +19,10 @@ const G_PROOF = new Point(
 const getXY = (p) => ({ x: p.x, y: p.y });
 
 describe('jubjub', () => {
-  should('toHex/fromHex', () => {
+  should('toHex/fromBytes', () => {
     // More than field
     throws(() =>
-      Point.fromHex(
+      Point.fromBytes(
         new Uint8Array([
           255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
           255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
@@ -31,14 +31,14 @@ describe('jubjub', () => {
     );
     // Multiplicative generator (sqrt == null), not on curve.
     throws(() =>
-      Point.fromHex(
+      Point.fromBytes(
         new Uint8Array([
           7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
           0, 0,
         ])
       )
     );
-    const tmp = Point.fromHex(
+    const tmp = Point.fromBytes(
       new Uint8Array([
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0,
@@ -47,14 +47,14 @@ describe('jubjub', () => {
     eql(tmp.x, 0x8d51ccce760304d0ec030002760300000001000000000000n);
     eql(tmp.y, 0n);
 
-    const S = G_SPEND.toRawBytes();
-    const S2 = G_SPEND.double().toRawBytes();
-    const P = G_PROOF.toRawBytes();
-    const P2 = G_PROOF.double().toRawBytes();
-    const S_exp = Point.fromHex(S);
-    const S2_exp = Point.fromHex(S2);
-    const P_exp = Point.fromHex(P);
-    const P2_exp = Point.fromHex(P2);
+    const S = G_SPEND.toBytes();
+    const S2 = G_SPEND.double().toBytes();
+    const P = G_PROOF.toBytes();
+    const P2 = G_PROOF.double().toBytes();
+    const S_exp = Point.fromBytes(S);
+    const S2_exp = Point.fromBytes(S2);
+    const P_exp = Point.fromBytes(P);
+    const P2_exp = Point.fromBytes(P2);
     eql(getXY(G_SPEND.toAffine()), getXY(S_exp));
     eql(getXY(G_SPEND.double().toAffine()), getXY(S2_exp));
     eql(getXY(G_PROOF.toAffine()), getXY(P_exp));

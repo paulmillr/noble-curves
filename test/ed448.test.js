@@ -57,7 +57,7 @@ describe('ed448', () => {
     const G3 = Point.BASE.multiply(3n);
     const points = [G1, G2, G3];
     const getXY = (p) => p.toAffine();
-    for (const p of points) eql(getXY(Point.fromHex(p.toRawBytes())), getXY(p));
+    for (const p of points) eql(getXY(Point.fromBytes(p.toBytes())), getXY(p));
   });
 
   const VECTORS_RFC8032 = [

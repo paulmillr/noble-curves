@@ -132,7 +132,7 @@ function taggedHash(tag: string, ...messages: Uint8Array[]): Uint8Array {
 }
 
 // ECDSA compact points are 33-byte. Schnorr is 32: we strip first byte 0x02 or 0x03
-const pointToBytes = (point: PointType<bigint>) => point.toRawBytes(true).slice(1);
+const pointToBytes = (point: PointType<bigint>) => point.toBytes(true).slice(1);
 const numTo32b = (n: bigint) => numberToBytesBE(n, 32);
 const modP = (x: bigint) => mod(x, secp256k1P);
 const modN = (x: bigint) => mod(x, secp256k1N);

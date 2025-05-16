@@ -45,6 +45,7 @@ export type ShortSignatureCoder<Fp> = {
   fromBytes(bytes: Uint8Array): ProjPointType<Fp>;
   fromHex(hex: Hex): ProjPointType<Fp>;
   toBytes(point: ProjPointType<Fp>): Uint8Array;
+  /** @deprecated use `toBytes` */
   toRawBytes(point: ProjPointType<Fp>): Uint8Array;
   toHex(point: ProjPointType<Fp>): string;
 };
@@ -53,6 +54,7 @@ export type SignatureCoder<Fp> = {
   fromBytes(bytes: Uint8Array): ProjPointType<Fp>;
   fromHex(hex: Hex): ProjPointType<Fp>;
   toBytes(point: ProjPointType<Fp>): Uint8Array;
+  /** @deprecated use `toBytes` */
   toRawBytes(point: ProjPointType<Fp>): Uint8Array;
   toHex(point: ProjPointType<Fp>): string;
 };
@@ -371,13 +373,13 @@ export function bls(CURVE: CurveType): CurveFn {
   // Multiplies generator (G1) by private key.
   // P = pk x G
   function getPublicKey(privateKey: PrivKey): Uint8Array {
-    return G1.ProjectivePoint.fromPrivateKey(privateKey).toRawBytes(true);
+    return G1.ProjectivePoint.fromPrivateKey(privateKey).toBytes(true);
   }
 
   // Multiplies generator (G2) by private key.
   // P = pk x G
   function getPublicKeyForShortSignatures(privateKey: PrivKey): Uint8Array {
-    return G2.ProjectivePoint.fromPrivateKey(privateKey).toRawBytes(true);
+    return G2.ProjectivePoint.fromPrivateKey(privateKey).toBytes(true);
   }
 
   // Executes `hashToCurve` on the message and then multiplies the result by private key.
@@ -389,7 +391,7 @@ export function bls(CURVE: CurveType): CurveFn {
     msgPoint.assertValidity();
     const sigPoint = msgPoint.multiply(G1.normPrivateKeyToScalar(privateKey));
     if (message instanceof G2.ProjectivePoint) return sigPoint;
-    return Signature.toRawBytes(sigPoint);
+    return Signature.toBytes(sigPoint);
   }
 
   function signShortSignature(
@@ -407,7 +409,7 @@ export function bls(CURVE: CurveType): CurveFn {
     msgPoint.assertValidity();
     const sigPoint = msgPoint.multiply(G1.normPrivateKeyToScalar(privateKey));
     if (message instanceof G1.ProjectivePoint) return sigPoint;
-    return ShortSignature.toRawBytes(sigPoint);
+    return ShortSignature.toBytes(sigPoint);
   }
 
   // Checks if pairing of public key & hash is equal to pairing of generator & signature.
@@ -464,8 +466,8 @@ export function bls(CURVE: CurveType): CurveFn {
       aggAffine.assertValidity();
       return aggAffine;
     }
-    // toRawBytes ensures point validity
-    return aggAffine.toRawBytes(true);
+    // ensures point validity
+    return aggAffine.toBytes(true);
   }
 
   // Adds a bunch of signature points together.
@@ -479,7 +481,7 @@ export function bls(CURVE: CurveType): CurveFn {
       aggAffine.assertValidity();
       return aggAffine;
     }
-    return Signature.toRawBytes(aggAffine);
+    return Signature.toBytes(aggAffine);
   }
 
   // Adds a bunch of signature points together.
@@ -493,7 +495,7 @@ export function bls(CURVE: CurveType): CurveFn {
       aggAffine.assertValidity();
       return aggAffine;
     }
-    return ShortSignature.toRawBytes(aggAffine);
+    return ShortSignature.toBytes(aggAffine);
   }
 
   // https://ethresear.ch/t/fast-verification-of-multiple-bls-signatures/5407

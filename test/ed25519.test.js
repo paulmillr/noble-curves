@@ -71,7 +71,7 @@ describe('ed25519', () => {
         // Calculate
         const pub = ed.getPublicKey(bytes32(priv));
         eql(hex(pub), expectedPub);
-        eql(pub, Point.fromHex(pub).toRawBytes());
+        eql(pub, Point.fromBytes(pub).toBytes());
 
         const signature = hex(ed.sign(msg, priv));
         // console.log('vector', i);
@@ -261,10 +261,10 @@ describe('ed25519', () => {
       eql(zeros.equals(ed.ExtendedPoint.BASE.multiply(3n)), false);
 
       const key = ed.utils.randomPrivateKey();
-      const A = ed.ExtendedPoint.fromHex(ed.getPublicKey(key));
-      const T = ed.ExtendedPoint.fromHex(bytes(ED25519_TORSION_SUBGROUP[2]));
+      const A = ed.ExtendedPoint.fromBytes(ed.getPublicKey(key));
+      const T = ed.ExtendedPoint.fromBytes(bytes(ED25519_TORSION_SUBGROUP[2]));
       const B = A.add(T).add(A);
-      const C = ed.ExtendedPoint.fromHex(ed.getPublicKey(ed.utils.randomPrivateKey()));
+      const C = ed.ExtendedPoint.fromBytes(ed.getPublicKey(ed.utils.randomPrivateKey()));
       eql(B.equals(C), false);
 
       const sig =
@@ -313,7 +313,7 @@ describe('ed25519', () => {
     should('isTorsionFree()', () => {
       const { point } = ed.utils.getExtendedPublicKey(ed.utils.randomPrivateKey());
       for (const hex of ED25519_TORSION_SUBGROUP.slice(1)) {
-        const dirty = point.add(Point.fromHex(bytes(hex)));
+        const dirty = point.add(Point.fromBytes(bytes(hex)));
         const cleared = dirty.clearCofactor();
         strictEqual(point.isTorsionFree(), true, `orig must be torsionFree: ${hex}`);
         strictEqual(dirty.isTorsionFree(), false, `dirty must not be torsionFree: ${hex}`);
@@ -355,7 +355,7 @@ describe('ed25519', () => {
       throws(() => {
         eql(ed.verify(sig, msg1, Point.BASE), false);
       });
-      eql(ed.verify(sig, msg2, Point.BASE.toRawBytes()), false);
+      eql(ed.verify(sig, msg2, Point.BASE.toBytes()), false);
     });
   });
 

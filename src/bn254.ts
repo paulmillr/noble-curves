@@ -13,7 +13,7 @@ There are huge compatibility issues in the ecosystem:
    https://github.com/scipr-lab/libff/blob/a44f482e18b8ac04d034c193bd9d7df7817ad73f/libff/algebra/curves/bn128/bn128_init.cpp#L166-L169
 3. halo2curves bn256 is also incompatible and returns different outputs
 
-We don't implement Point methods toHex / toRawBytes.
+We don't implement Point methods toHex / toBytes.
 To work around this limitation, has to initialize points on their own from BigInts.
 Reason it's not implemented is because [there is no standard](https://github.com/privacy-scaling-explorations/halo2curves/issues/109).
 Points of divergence:

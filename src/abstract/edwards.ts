@@ -440,7 +440,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     }
     static fromPrivateKey(privKey: Hex): Point {
       const { scalar } = getPrivateScalar(privKey);
-      return G.multiply(scalar); // reduced one call of `toRawBytes`
+      return G.multiply(scalar); // reduced one call of `toBytes`
     }
     toBytes(): Uint8Array {
       const { x, y } = this.toAffine();
@@ -453,7 +453,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
       return this.toBytes();
     }
     toHex(): string {
-      return bytesToHex(this.toRawBytes()); // Same as toRawBytes, but returns string.
+      return bytesToHex(this.toBytes());
     }
   }
   const { BASE: G, ZERO: I } = Point;
@@ -484,7 +484,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
   function getExtendedPublicKey(key: Hex) {
     const { head, prefix, scalar } = getPrivateScalar(key);
     const point = G.multiply(scalar); // Point on Edwards curve aka public key
-    const pointBytes = point.toRawBytes(); // Uint8Array representation
+    const pointBytes = point.toBytes();
     return { head, prefix, scalar, point, pointBytes };
   }
 
@@ -505,7 +505,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     if (prehash) msg = prehash(msg); // for ed25519ph etc.
     const { prefix, scalar, pointBytes } = getExtendedPublicKey(privKey);
     const r = hashDomainToScalar(options.context, prefix, msg); // r = dom2(F, C) || prefix || PH(M)
-    const R = G.multiply(r).toRawBytes(); // R = rG
+    const R = G.multiply(r).toBytes(); // R = rG
     const k = hashDomainToScalar(options.context, R, pointBytes, msg); // R || A || PH(M)
     const s = modN(r + k * scalar); // S = (r + k * s) mod L
     aInRange('signature.s', s, _0n, CURVE_ORDER); // 0 <= s < l
@@ -542,7 +542,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     }
     if (!zip215 && A.isSmallOrder()) return false;
 
-    const k = hashDomainToScalar(context, R.toRawBytes(), A.toRawBytes(), msg);
+    const k = hashDomainToScalar(context, R.toBytes(), A.toBytes(), msg);
     const RkA = R.add(A.multiplyUnsafe(k));
     // Extended group equation
     // [8][S]B = [8]R + [8][k]A'

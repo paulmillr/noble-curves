@@ -468,7 +468,7 @@ class DcfPoint implements Group<DcfPoint> {
   }
 
   toHex(): string {
-    return bytesToHex(this.toRawBytes());
+    return bytesToHex(this.toBytes());
   }
 
   toString(): string {

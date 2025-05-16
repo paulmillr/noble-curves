@@ -488,7 +488,7 @@ class RistPoint implements Group<RistPoint> {
   }
 
   toHex(): string {
-    return bytesToHex(this.toRawBytes());
+    return bytesToHex(this.toBytes());
   }
 
   toString(): string {
