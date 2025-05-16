@@ -786,10 +786,10 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
 
     /**
      * Converts Projective point to affine (x, y) coordinates.
-     * @param iz Z^-1 (inverted zero) - optional, precomputation is useful for invertBatch
+     * @param invertedZ Z^-1 (inverted zero) - optional, precomputation is useful for invertBatch
      */
-    toAffine(iz?: T): AffinePoint<T> {
-      return toAffineMemo(this, iz);
+    toAffine(invertedZ?: T): AffinePoint<T> {
+      return toAffineMemo(this, invertedZ);
     }
 
     /**
@@ -802,6 +802,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
       if (isTorsionFree) return isTorsionFree(Point, this);
       return wnaf.unsafeLadder(this, CURVE.n).is0();
     }
+
     clearCofactor(): Point {
       const { h: cofactor, clearCofactor } = CURVE;
       if (cofactor === _1n) return this; // Fast-path
@@ -1098,14 +1099,14 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     if (typeof item === 'bigint') return false;
     if (item instanceof Point) return true;
     const arr = ensureBytes('key', item);
-    const len = arr.length;
-    const fpl = Fp.BYTES;
-    const compLen = fpl + 1; // e.g. 33 for 32
-    const uncompLen = 2 * fpl + 1; // e.g. 65 for 32
-    if (CURVE.allowedPrivateKeyLengths || nByteLength === compLen) {
+    const length = arr.length;
+    const L = Fp.BYTES;
+    const LC = L + 1; // e.g. 33 for 32
+    const LU = 2 * L + 1; // e.g. 65 for 32
+    if (CURVE.allowedPrivateKeyLengths || nByteLength === LC) {
       return undefined;
     } else {
-      return len === compLen || len === uncompLen;
+      return length === LC || length === LU;
     }
   }
 
