@@ -800,7 +800,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
       const { h: cofactor, isTorsionFree } = CURVE;
       if (cofactor === _1n) return true;
       if (isTorsionFree) return isTorsionFree(Point, this);
-      return this.multiplyUnsafe(CURVE.n).is0();
+      return wnaf.unsafeLadder(this, CURVE.n).is0();
     }
     clearCofactor(): Point {
       const { h: cofactor, clearCofactor } = CURVE;
@@ -989,18 +989,31 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     }
 
     recoverPublicKey(msgHash: Hex): typeof Point.BASE {
+      const { n, h: cofactor } = CURVE;
       const { r, s, recovery: rec } = this;
-      const h = bits2int_modN(ensureBytes('msgHash', msgHash)); // Truncate hash
       if (rec == null || ![0, 1, 2, 3].includes(rec)) throw new Error('recovery id invalid');
-      const radj = rec === 2 || rec === 3 ? r + CURVE.n : r;
+
+      // ECDSA recovery is hard for cofactor > 1 curves.
+      // In sign, `r = q.x mod n`, and here we recover q.x from r.
+      // While recovering q.x >= n, we need to add r+n for cofactor=1 curves.
+      // However, for cofactor>1, r+n may not get q.x:
+      // r+n*i would need to be done instead where i is unknown.
+      // To easily get i, we either need to:
+      // a. increase amount of valid recid values (4, 5...); OR
+      // b. prohibit non-prime-order signatures (recid > 1).
+      if (cofactor > 1 && rec > 1) throw new Error('recovery id is ambiguous for h>1 curve');
+
+      const radj = rec === 2 || rec === 3 ? r + n : r;
       if (radj >= Fp.ORDER) throw new Error('recovery id 2 or 3 invalid');
       const x = numberToBytesBE(radj, Fp.BYTES);
       const R = Point.fromHex(concatBytes(pprefix((rec & 1) === 0), x));
       const ir = invN(radj); // r^-1
+      const h = bits2int_modN(ensureBytes('msgHash', msgHash)); // Truncate hash
       const u1 = modN(-h * ir); // -hr^-1
       const u2 = modN(s * ir); // sr^-1
-      const Q = Point.BASE.multiplyAndAddUnsafe(R, u1, u2); // (sr^-1)R-(hr^-1)G = -(hr^-1)G + (sr^-1)
-      if (!Q) throw new Error('point at infinify'); // unsafe is fine: no priv data leaked
+      // (sr^-1)R-(hr^-1)G = -(hr^-1)G + (sr^-1). unsafe is fine: there is no private data.
+      const Q = Point.BASE.multiplyAndAddUnsafe(R, u1, u2);
+      if (!Q) throw new Error('point at infinify');
       Q.assertValidity();
       return Q;
     }
