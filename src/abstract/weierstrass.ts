@@ -52,9 +52,8 @@ import {
 } from './modular.ts';
 // prettier-ignore
 import {
-  aInRange, abool,
-  bitMask,
-  bytesToHex, bytesToNumberBE, concatBytes, createHmacDrbg, ensureBytes, hexToBytes,
+  aInRange, abool, abytes,
+  bitMask, bytesToHex, bytesToNumberBE, concatBytes, createHmacDrbg, ensureBytes, hexToBytes,
   inRange, isBytes, memoized, numberToBytesBE, numberToHexUnpadded, validateObject,
   type CHash, type Hex, type PrivKey
 } from './utils.ts';
@@ -120,22 +119,23 @@ export interface ProjPointType<T> extends Group<ProjPointType<T>> {
   readonly pz: T;
   get x(): T;
   get y(): T;
-  toAffine(iz?: T): AffinePoint<T>;
-  toHex(isCompressed?: boolean): string;
-  toRawBytes(isCompressed?: boolean): Uint8Array;
-
   assertValidity(): void;
+  clearCofactor(): ProjPointType<T>;
   hasEvenY(): boolean;
+  isTorsionFree(): boolean;
   multiplyUnsafe(scalar: bigint): ProjPointType<T>;
   multiplyAndAddUnsafe(Q: ProjPointType<T>, a: bigint, b: bigint): ProjPointType<T> | undefined;
-  isTorsionFree(): boolean;
-  clearCofactor(): ProjPointType<T>;
+  toAffine(iz?: T): AffinePoint<T>;
+  // toBytes(isCompressed?: boolean): Uint8Array;
+  toHex(isCompressed?: boolean): string;
+  toRawBytes(isCompressed?: boolean): Uint8Array;
   _setWindowSize(windowSize: number): void;
 }
 // Static methods for 3d XYZ points
 export interface ProjConstructor<T> extends GroupConstructor<ProjPointType<T>> {
   new (x: T, y: T, z: T): ProjPointType<T>;
   fromAffine(p: AffinePoint<T>): ProjPointType<T>;
+  // fromBytes(encodedPoint: Uint8Array): ProjPointType<T>;
   fromHex(hex: Hex): ProjPointType<T>;
   fromPrivateKey(privateKey: PrivKey): ProjPointType<T>;
   normalizeZ(points: ProjPointType<T>[]): ProjPointType<T>[];
@@ -143,7 +143,6 @@ export interface ProjConstructor<T> extends GroupConstructor<ProjPointType<T>> {
 }
 
 export type CurvePointsType<T> = BasicWCurve<T> & {
-  // Bytes
   fromBytes?: (bytes: Uint8Array) => AffinePoint<T>;
   toBytes?: (c: ProjConstructor<T>, point: ProjPointType<T>, isCompressed: boolean) => Uint8Array;
 };
@@ -188,6 +187,7 @@ function validatePointOpts<T>(curve: CurvePointsType<T>): CurvePointsTypeWithLen
 
 export type CurvePointsRes<T> = {
   CURVE: ReturnType<typeof validatePointOpts<T>>;
+  // Point: ProjConstructor<T>;
   ProjectivePoint: ProjConstructor<T>;
   normPrivateKeyToScalar: (key: PrivKey) => bigint;
   weierstrassEquation: (x: T) => T;
@@ -325,22 +325,63 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
   const { Fp } = CURVE; // All curves has same field / group length as for now, but they can differ
   const Fn = Field(CURVE.n, CURVE.nBitLength);
 
-  const toBytes =
-    CURVE.toBytes ||
-    ((_c: ProjConstructor<T>, point: ProjPointType<T>, _isCompressed: boolean) => {
-      const a = point.toAffine();
-      return concatBytes(Uint8Array.from([0x04]), Fp.toBytes(a.x), Fp.toBytes(a.y));
-    });
-  const fromBytes =
-    CURVE.fromBytes ||
-    ((bytes: Uint8Array) => {
-      // const head = bytes[0];
-      const tail = bytes.subarray(1);
-      // if (head !== 0x04) throw new Error('Only non-compressed encoding is supported');
-      const x = Fp.fromBytes(tail.subarray(0, Fp.BYTES));
-      const y = Fp.fromBytes(tail.subarray(Fp.BYTES, 2 * Fp.BYTES));
+  function assertCompressionIsSupported() {
+    if (!Fp.isOdd) throw new Error('compression is not supported: Field does not have .isOdd()');
+  }
+
+  function pointToBytes(
+    _c: ProjConstructor<T>,
+    point: ProjPointType<T>,
+    isCompressed: boolean
+  ): Uint8Array {
+    const a = point.toAffine();
+    const x = Fp.toBytes(a.x);
+    abool('isCompressed', isCompressed);
+    if (isCompressed) {
+      assertCompressionIsSupported();
+      return concatBytes(pprefix(point.hasEvenY()), x);
+    } else {
+      return concatBytes(Uint8Array.of(0x04), x, Fp.toBytes(a.y));
+    }
+  }
+  function pointFromBytes(bytes: Uint8Array) {
+    abytes(bytes);
+    const L = Fp.BYTES;
+    const LC = L + 1; // e.g. 33 for 32
+    const LU = 2 * L + 1; // e.g. 65 for 32
+    const length = bytes.length;
+    const head = bytes[0];
+    const tail = bytes.subarray(1);
+    // No actual validation is done here: use .assertValidity()
+    if (length === LC && (head === 0x02 || head === 0x03)) {
+      const x = Fp.fromBytes(tail);
+      if (Fp.is0(x) || !Fp.isValid(x)) throw new Error('bad point: is not on curve, wrong x');
+      const y2 = weierstrassEquation(x); // y² = x³ + ax + b
+      let y: T;
+      try {
+        y = Fp.sqrt(y2); // y = y² ^ (p+1)/4
+      } catch (sqrtError) {
+        const err = sqrtError instanceof Error ? ': ' + sqrtError.message : '';
+        throw new Error('bad point: is not on curve, sqrt error' + err);
+      }
+      assertCompressionIsSupported();
+      const isYOdd = Fp.isOdd!(y); // (y & _1n) === _1n;
+      const isHeadOdd = (head & 1) === 1; // ECDSA-specific
+      if (isHeadOdd !== isYOdd) y = Fp.neg(y);
       return { x, y };
-    });
+    } else if (length === LU && head === 0x04) {
+      const x = Fp.fromBytes(tail.subarray(0, L));
+      const y = Fp.fromBytes(tail.subarray(L, L * 2));
+      return { x, y };
+    } else {
+      throw new Error(
+        `bad point: got length ${length}, expected compressed=${LC} or uncompressed=${LU}`
+      );
+    }
+  }
+
+  const toBytes = CURVE.toBytes || pointToBytes;
+  const fromBytes = CURVE.fromBytes || pointFromBytes;
 
   /**
    * y² = x³ + ax + b: Short weierstrass curve formula. Takes x, returns y².
@@ -353,6 +394,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
     return Fp.add(Fp.add(x3, Fp.mul(x, a)), b); // x³ + a * x + b
   }
 
+  /** Checks whether equation holds for given x, y: y² == x³ + ax + b */
   function isValidXY(x: T, y: T): boolean {
     const left = Fp.sqr(y); // y²
     const right = weierstrassEquation(x); // x³ + ax + b
@@ -779,6 +821,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
   const wnaf = wNAF(Point, endo ? Math.ceil(nBitLength / 2) : nBitLength);
   return {
     CURVE,
+    // Point: Point as ProjConstructor<T>,
     ProjectivePoint: Point as ProjConstructor<T>,
     normPrivateKeyToScalar,
     weierstrassEquation,
@@ -854,6 +897,7 @@ export type CurveFn = {
   getSharedSecret: (privateA: PrivKey, publicB: Hex, isCompressed?: boolean) => Uint8Array;
   sign: (msgHash: Hex, privKey: PrivKey, opts?: SignOpts) => RecoveredSignatureType;
   verify: (signature: Hex | SignatureLike, msgHash: Hex, publicKey: Hex, opts?: VerOpts) => boolean;
+  // Point: ProjConstructor<bigint>;
   ProjectivePoint: ProjConstructor<bigint>;
   Signature: SignatureConstructor;
   utils: {
@@ -867,15 +911,15 @@ export type CurveFn = {
 /**
  * Creates short weierstrass curve and ECDSA signature methods for it.
  * @example
+ * ```js
  * import { Field } from '@noble/curves/abstract/modular';
  * // Before that, define BigInt-s: a, b, p, n, Gx, Gy
  * const curve = weierstrass({ a, b, Fp: Field(p), n, Gx, Gy, h: 1n })
+ * ```
  */
 export function weierstrass(curveDef: CurveType): CurveFn {
   const CURVE = validateOpts(curveDef) as ReturnType<typeof validateOpts>;
   const { Fp, n: CURVE_ORDER, nByteLength, nBitLength } = CURVE;
-  const compressedLen = Fp.BYTES + 1; // e.g. 33 for 32
-  const uncompressedLen = 2 * Fp.BYTES + 1; // e.g. 65 for 32
 
   function modN(a: bigint) {
     return mod(a, CURVE_ORDER);
@@ -887,54 +931,8 @@ export function weierstrass(curveDef: CurveType): CurveFn {
   const {
     ProjectivePoint: Point,
     normPrivateKeyToScalar,
-    weierstrassEquation,
     isWithinCurveOrder,
-  } = weierstrassPoints({
-    ...CURVE,
-    toBytes(_c, point, isCompressed: boolean): Uint8Array {
-      const a = point.toAffine();
-      const x = Fp.toBytes(a.x);
-      abool('isCompressed', isCompressed);
-      if (isCompressed) {
-        return concatBytes(pprefix(point.hasEvenY()), x);
-      } else {
-        return concatBytes(Uint8Array.of(0x04), x, Fp.toBytes(a.y));
-      }
-    },
-    fromBytes(bytes: Uint8Array) {
-      const cl = compressedLen;
-      const ul = uncompressedLen;
-      const len = bytes.length;
-      const head = bytes[0];
-      const tail = bytes.subarray(1);
-      // No actual validation is done here: use .assertValidity()
-      if (len === cl && (head === 0x02 || head === 0x03)) {
-        const x = Fp.fromBytes(tail);
-        if (Fp.is0(x) || !Fp.isValid(x)) throw new Error('bad point: is not on curve, wrong x');
-        const y2 = weierstrassEquation(x); // y² = x³ + ax + b
-        let y: bigint;
-        try {
-          y = Fp.sqrt(y2); // y = y² ^ (p+1)/4
-        } catch (sqrtError) {
-          const err = sqrtError instanceof Error ? ': ' + sqrtError.message : '';
-          throw new Error('bad point: is not on curve, sqrt error' + err);
-        }
-        const isYOdd = (y & _1n) === _1n;
-        const isHeadOdd = (head & 1) === 1; // ECDSA-specific
-        if (isHeadOdd !== isYOdd) y = Fp.neg(y);
-        return { x, y };
-      } else if (len === ul && head === 0x04) {
-        const L = Fp.BYTES;
-        const x = Fp.fromBytes(tail.subarray(0, L));
-        const y = Fp.fromBytes(tail.subarray(L, L * 2));
-        return { x, y };
-      } else {
-        throw new Error(
-          `bad point: got length ${len}, expected compressed=${cl} or uncompressed=${ul}`
-        );
-      }
-    },
-  });
+  } = weierstrassPoints(CURVE);
 
   function isBiggerThanHalfOrder(number: bigint) {
     const HALF = CURVE_ORDER >> _1n;
@@ -1300,6 +1298,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     getSharedSecret,
     sign,
     verify,
+    // Point: Point,
     ProjectivePoint: Point,
     Signature,
     utils,
@@ -1402,7 +1401,7 @@ export function mapToCurveSimpleSWU<T>(
   if (!Fp.isValid(opts.A) || !Fp.isValid(opts.B) || !Fp.isValid(opts.Z))
     throw new Error('mapToCurveSimpleSWU: invalid opts');
   const sqrtRatio = SWUFpSqrtRatio(Fp, opts.Z);
-  if (!Fp.isOdd) throw new Error('Fp.isOdd is not implemented!');
+  if (!Fp.isOdd) throw new Error('Field does not have .isOdd()');
   // Input: u, an element of F.
   // Output: (x, y), a point on E.
   return (u: T): { x: T; y: T } => {
