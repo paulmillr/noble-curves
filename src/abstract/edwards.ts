@@ -105,6 +105,7 @@ export type CurveFn = {
     publicKey: Hex,
     options?: { context?: Hex; zip215: boolean }
   ) => boolean;
+  Point: ExtPointConstructor;
   ExtendedPoint: ExtPointConstructor;
   utils: {
     randomPrivateKey: () => Uint8Array;
@@ -455,6 +456,10 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     toHex(): string {
       return bytesToHex(this.toBytes());
     }
+
+    toString() {
+      return `<Point ${this.is0() ? 'ZERO' : this.toHex()}>`;
+    }
   }
   const { BASE: G, ZERO: I } = Point;
   const wnaf = wNAF(Point, nByteLength * 8);
@@ -574,6 +579,7 @@ export function twistedEdwards(curveDef: CurveType): CurveFn {
     getPublicKey,
     sign,
     verify,
+    Point: Point,
     ExtendedPoint: Point,
     utils,
   };

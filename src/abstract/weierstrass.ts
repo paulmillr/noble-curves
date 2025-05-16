@@ -188,7 +188,7 @@ function validatePointOpts<T>(curve: CurvePointsType<T>): CurvePointsTypeWithLen
 
 export type CurvePointsRes<T> = {
   CURVE: ReturnType<typeof validatePointOpts<T>>;
-  // Point: ProjConstructor<T>;
+  Point: ProjConstructor<T>;
   ProjectivePoint: ProjConstructor<T>;
   normPrivateKeyToScalar: (key: PrivKey) => bigint;
   weierstrassEquation: (x: T) => T;
@@ -831,12 +831,16 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
       abool('isCompressed', isCompressed);
       return bytesToHex(this.toBytes(isCompressed));
     }
+
+    toString() {
+      return `<Point ${this.is0() ? 'ZERO' : this.toHex()}>`;
+    }
   }
   const { endo, nBitLength } = CURVE;
   const wnaf = wNAF(Point, endo ? Math.ceil(nBitLength / 2) : nBitLength);
   return {
     CURVE,
-    // Point: Point as ProjConstructor<T>,
+    Point: Point as ProjConstructor<T>,
     ProjectivePoint: Point as ProjConstructor<T>,
     normPrivateKeyToScalar,
     weierstrassEquation,
@@ -912,7 +916,7 @@ export type CurveFn = {
   getSharedSecret: (privateA: PrivKey, publicB: Hex, isCompressed?: boolean) => Uint8Array;
   sign: (msgHash: Hex, privKey: PrivKey, opts?: SignOpts) => RecoveredSignatureType;
   verify: (signature: Hex | SignatureLike, msgHash: Hex, publicKey: Hex, opts?: VerOpts) => boolean;
-  // Point: ProjConstructor<bigint>;
+  Point: ProjConstructor<bigint>;
   ProjectivePoint: ProjConstructor<bigint>;
   Signature: SignatureConstructor;
   utils: {
@@ -1326,7 +1330,7 @@ export function weierstrass(curveDef: CurveType): CurveFn {
     getSharedSecret,
     sign,
     verify,
-    // Point: Point,
+    Point: Point,
     ProjectivePoint: Point,
     Signature,
     utils,
