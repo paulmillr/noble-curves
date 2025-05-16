@@ -42,13 +42,17 @@ const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3);
 export type TwistType = 'multiplicative' | 'divisive';
 
 export type ShortSignatureCoder<Fp> = {
+  fromBytes(bytes: Uint8Array): ProjPointType<Fp>;
   fromHex(hex: Hex): ProjPointType<Fp>;
+  toBytes(point: ProjPointType<Fp>): Uint8Array;
   toRawBytes(point: ProjPointType<Fp>): Uint8Array;
   toHex(point: ProjPointType<Fp>): string;
 };
 
 export type SignatureCoder<Fp> = {
+  fromBytes(bytes: Uint8Array): ProjPointType<Fp>;
   fromHex(hex: Hex): ProjPointType<Fp>;
+  toBytes(point: ProjPointType<Fp>): Uint8Array;
   toRawBytes(point: ProjPointType<Fp>): Uint8Array;
   toHex(point: ProjPointType<Fp>): string;
 };

@@ -198,7 +198,9 @@ export const bn254: BLSCurveFn = bls({
     fromBytes: notImplemented,
     toBytes: notImplemented,
     ShortSignature: {
+      fromBytes: notImplemented,
       fromHex: notImplemented,
+      toBytes: notImplemented,
       toRawBytes: notImplemented,
       toHex: notImplemented,
     },
@@ -226,7 +228,9 @@ export const bn254: BLSCurveFn = bls({
     fromBytes: notImplemented,
     toBytes: notImplemented,
     Signature: {
+      fromBytes: notImplemented,
       fromHex: notImplemented,
+      toBytes: notImplemented,
       toRawBytes: notImplemented,
       toHex: notImplemented,
     },

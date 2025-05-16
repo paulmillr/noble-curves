@@ -60,7 +60,7 @@
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha256 } from '@noble/hashes/sha2';
-import { randomBytes } from '@noble/hashes/utils';
+import { abytes, randomBytes } from '@noble/hashes/utils';
 import { bls, type CurveFn } from './abstract/bls.ts';
 import { Field } from './abstract/modular.ts';
 import {
@@ -417,6 +417,23 @@ function signatureG1ToRawBytes(point: ProjPointType<Fp>) {
   return setMask(numberToBytesBE(x, Fp.BYTES), { compressed: true, sort });
 }
 
+function signatureG1FromBytes(hex: Hex): ProjPointType<Fp> {
+  const { infinity, sort, value } = parseMask(ensureBytes('signatureHex', hex, 48));
+  const P = Fp.ORDER;
+  const compressedValue = bytesToNumberBE(value);
+  // Zero
+  if (infinity) return bls12_381.G1.ProjectivePoint.ZERO;
+  const x = Fp.create(compressedValue & Fp.MASK);
+  const right = Fp.add(Fp.pow(x, _3n), Fp.create(bls12_381.params.G1b)); // y² = x³ + b
+  let y = Fp.sqrt(right);
+  if (!y) throw new Error('invalid compressed G1 point');
+  const aflag = BigInt(sort);
+  if ((y * _2n) / P !== aflag) y = Fp.neg(y);
+  const point = bls12_381.G1.ProjectivePoint.fromAffine({ x, y });
+  point.assertValidity();
+  return point;
+}
+
 function signatureG2ToRawBytes(point: ProjPointType<Fp2>) {
   // NOTE: by some reasons it was missed in bls12-381, looks like bug
   point.assertValidity();
@@ -433,6 +450,37 @@ function signatureG2ToRawBytes(point: ProjPointType<Fp2>) {
     setMask(numberToBytesBE(x1, len), { sort, compressed: true }),
     numberToBytesBE(z2, len)
   );
+}
+
+function signatureG2FromBytes(hex: Hex) {
+  // TODO: Optimize, it's very slow because of sqrt.
+  const { infinity, sort, value } = parseMask(ensureBytes('signatureHex', hex));
+  const P = Fp.ORDER;
+  const half = value.length / 2;
+  if (half !== 48 && half !== 96)
+    throw new Error('invalid compressed signature length, must be 96 or 192');
+  const z1 = bytesToNumberBE(value.slice(0, half));
+  const z2 = bytesToNumberBE(value.slice(half));
+  // Indicates the infinity point
+  if (infinity) return bls12_381.G2.ProjectivePoint.ZERO;
+  const x1 = Fp.create(z1 & Fp.MASK);
+  const x2 = Fp.create(z2);
+  const x = Fp2.create({ c0: x2, c1: x1 });
+  const y2 = Fp2.add(Fp2.pow(x, _3n), bls12_381.params.G2b); // y² = x³ + 4
+  // The slow part
+  let y = Fp2.sqrt(y2);
+  if (!y) throw new Error('Failed to find a square root');
+
+  // Choose the y whose leftmost bit of the imaginary part is equal to the a_flag1
+  // If y1 happens to be zero, then use the bit of y0
+  const { re: y0, im: y1 } = Fp2.reim(y);
+  const aflag1 = BigInt(sort);
+  const isGreater = y1 > _0n && (y1 * _2n) / P !== aflag1;
+  const isZero = y1 === _0n && (y0 * _2n) / P !== aflag1;
+  if (isGreater || isZero) y = Fp2.neg(y);
+  const point = bls12_381.G2.ProjectivePoint.fromAffine({ x, y });
+  point.assertValidity();
+  return point;
 }
 
 /**
@@ -549,21 +597,15 @@ export const bls12_381: CurveFn = bls({
       }
     },
     ShortSignature: {
+      fromBytes(bytes: Uint8Array) {
+        abytes(bytes);
+        return signatureG1FromBytes(bytes);
+      },
       fromHex(hex: Hex): ProjPointType<Fp> {
-        const { infinity, sort, value } = parseMask(ensureBytes('signatureHex', hex, 48));
-        const P = Fp.ORDER;
-        const compressedValue = bytesToNumberBE(value);
-        // Zero
-        if (infinity) return bls12_381.G1.ProjectivePoint.ZERO;
-        const x = Fp.create(compressedValue & Fp.MASK);
-        const right = Fp.add(Fp.pow(x, _3n), Fp.create(bls12_381.params.G1b)); // y² = x³ + b
-        let y = Fp.sqrt(right);
-        if (!y) throw new Error('invalid compressed G1 point');
-        const aflag = BigInt(sort);
-        if ((y * _2n) / P !== aflag) y = Fp.neg(y);
-        const point = bls12_381.G1.ProjectivePoint.fromAffine({ x, y });
-        point.assertValidity();
-        return point;
+        return signatureG1FromBytes(hex);
+      },
+      toBytes(point: ProjPointType<Fp>) {
+        return signatureG1ToRawBytes(point);
       },
       toRawBytes(point: ProjPointType<Fp>) {
         return signatureG1ToRawBytes(point);
@@ -709,35 +751,15 @@ export const bls12_381: CurveFn = bls({
       }
     },
     Signature: {
-      // TODO: Optimize, it's very slow because of sqrt.
+      fromBytes(bytes: Uint8Array): ProjPointType<Fp2> {
+        abytes(bytes);
+        return signatureG2FromBytes(bytes);
+      },
       fromHex(hex: Hex): ProjPointType<Fp2> {
-        const { infinity, sort, value } = parseMask(ensureBytes('signatureHex', hex));
-        const P = Fp.ORDER;
-        const half = value.length / 2;
-        if (half !== 48 && half !== 96)
-          throw new Error('invalid compressed signature length, must be 96 or 192');
-        const z1 = bytesToNumberBE(value.slice(0, half));
-        const z2 = bytesToNumberBE(value.slice(half));
-        // Indicates the infinity point
-        if (infinity) return bls12_381.G2.ProjectivePoint.ZERO;
-        const x1 = Fp.create(z1 & Fp.MASK);
-        const x2 = Fp.create(z2);
-        const x = Fp2.create({ c0: x2, c1: x1 });
-        const y2 = Fp2.add(Fp2.pow(x, _3n), bls12_381.params.G2b); // y² = x³ + 4
-        // The slow part
-        let y = Fp2.sqrt(y2);
-        if (!y) throw new Error('Failed to find a square root');
-
-        // Choose the y whose leftmost bit of the imaginary part is equal to the a_flag1
-        // If y1 happens to be zero, then use the bit of y0
-        const { re: y0, im: y1 } = Fp2.reim(y);
-        const aflag1 = BigInt(sort);
-        const isGreater = y1 > _0n && (y1 * _2n) / P !== aflag1;
-        const isZero = y1 === _0n && (y0 * _2n) / P !== aflag1;
-        if (isGreater || isZero) y = Fp2.neg(y);
-        const point = bls12_381.G2.ProjectivePoint.fromAffine({ x, y });
-        point.assertValidity();
-        return point;
+        return signatureG2FromBytes(hex);
+      },
+      toBytes(point: ProjPointType<Fp2>) {
+        return signatureG2ToRawBytes(point);
       },
       toRawBytes(point: ProjPointType<Fp2>) {
         return signatureG2ToRawBytes(point);
