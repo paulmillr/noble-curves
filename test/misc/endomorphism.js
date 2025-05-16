@@ -127,61 +127,71 @@ const hex = (n) => {
   const pref = n < 0 ? '-0x' : '0x';
   return pref + abs;
 };
+export const config = { log: true };
 const log = (...msgs) => {
-  console.log(...msgs);
+  if (config.log) console.log(...msgs);
 };
 const logarr = (title, arr_) => log(`${title} = [\n  ${arr_.map(hex).join(',\n  ')}\n]`);
 // const hex = n => n < 0 ? '-0x' + : '0x' + n.toString(16);
 // Example usage
-function calcEndo(p, n, LAMBDA_INDEX = 0) {
+export function calcEndo(p, n) {
   const start = Date.now();
   log('Non-trivial cube roots of P (betas) and N (lambdas):');
   const betas = findRootsOfUnity(p);
   const lambdas = findRootsOfUnity(n);
+  const basises = lambdas.map(l => calculateGlvBasis(n, l));
   logarr('betas', betas);
   logarr('lambdas', lambdas);
+  logarr('basises', basises);
   // log('lambdas', lambdas.map(hex).join(', '));
   // log('betas  ', betas.map(hex).join(', '));
   // 0x5363ad4cc05c30e0a5261c028812645a122e22ea20816678df02967c1b23bd72n;
-  const lambda_val = lambdas[LAMBDA_INDEX];
-  const basis = calculateGlvBasis(n, lambda_val);
+  let lambdaIndex = 0;
+  for (let lambda of lambdas) {
+    const basis = calculateGlvBasis(n, lambda);
 
-  log();
-  log(`Calculated reduced basis vectors of lambda #${LAMBDA_INDEX} for GLV decomposition:`);
-  logarr('v1', basis[0]);
-  logarr('v2', basis[1]);
-  const end = Date.now();
-  log('Calculated endomorphism in', end - start, 'ms');
+    log();
+    log(`Calculated reduced basis vectors of lambda #${lambdaIndex} for GLV decomposition:`);
+    logarr('v1', basis[0]);
+    logarr('v2', basis[1]);
+    const end = Date.now();
+    log('Calculated endomorphism in', end - start, 'ms');
 
-  // Test with a scalar
-  const k = 2n ** 255n - 19n; // Example scalar
-  const [k1, k2] = decomposeScalar(k, basis, n);
+    // Test with a scalar
+    const k = 2n ** 255n - 19n; // Example scalar
+    const [k1, k2] = decomposeScalar(k, basis, n);
 
-  log();
-  log('Decomposing scalar s:');
-  log(`s = ${hex(k)}`);
-  log(`k1 = ${hex(k1)}`);
-  log(`k2 = ${hex(k2)}`);
+    log();
+    log('Decomposing scalar s:');
+    log(`s = ${hex(k)}`);
+    log(`k1 = ${hex(k1)}`);
+    log(`k2 = ${hex(k2)}`);
 
-  // Verify: k ≡ k1 + k2*lambda (mod n)
-  const result = mod(k1 + k2 * lambda_val, n);
-  log(`\nVerification:`);
-  log(`k1 + k2*lambda (mod n) = ${hex(result)}`);
-  log(`Original k (mod n)     = ${hex(mod(k, n))}`);
-  log(`Match: ${result === mod(k, n)}`);
+    // Verify: k ≡ k1 + k2*lambda (mod n)
+    const result = mod(k1 + k2 * lambda, n);
+    log(`\nVerification:`);
+    log(`k1 + k2*lambda (mod n) = ${hex(result)}`);
+    log(`Original k (mod n)     = ${hex(mod(k, n))}`);
+    log(`Match: ${result === mod(k, n)}`);
 
-  // Check the sizes of k1 and k2 compared to k
-  log(`\nSize comparison:`);
-  log(`|k| ≈ ${k.toString(2).length} bits`);
-  log(`|k1| ≈ ${k1.toString(2).length} bits`);
-  log(`|k2| ≈ ${k2.toString(2).length} bits`);
-  log(`Theoretical target: ~${Math.floor(n.toString(2).length / 2)} bits (sqrt(n))`);
+    // Check the sizes of k1 and k2 compared to k
+    log(`\nSize comparison:`);
+    log(`|k| ≈ ${k.toString(2).length} bits`);
+    log(`|k1| ≈ ${k1.toString(2).length} bits`);
+    log(`|k2| ≈ ${k2.toString(2).length} bits`);
+    log(`Theoretical target: ~${Math.floor(n.toString(2).length / 2)} bits (sqrt(n))`);
+  }
+  return {
+    betas,
+    lambdas,
+    basises
+  }
 }
 
 // secp256k1 parameters
-const p = 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2fn;
-const n = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n;
-calcEndo(p, n, 0);
+// const p = 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2fn;
+// const n = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n;
+// calcEndo(p, n, 0);
 
 // assert BETA != F(1)
 // assert BETA^3 == F(1)
