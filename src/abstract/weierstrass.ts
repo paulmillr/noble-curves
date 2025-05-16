@@ -757,13 +757,13 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
       const { h: cofactor, isTorsionFree } = CURVE;
       if (cofactor === _1n) return true; // No subgroups, always torsion-free
       if (isTorsionFree) return isTorsionFree(Point, this);
-      throw new Error('isTorsionFree() has not been declared for the elliptic curve');
+      return this.multiplyUnsafe(CURVE.n).is0();
     }
     clearCofactor(): Point {
       const { h: cofactor, clearCofactor } = CURVE;
       if (cofactor === _1n) return this; // Fast-path
       if (clearCofactor) return clearCofactor(Point, this) as Point;
-      return this.multiplyUnsafe(CURVE.h);
+      return this.multiplyUnsafe(cofactor);
     }
 
     toRawBytes(isCompressed = true): Uint8Array {
