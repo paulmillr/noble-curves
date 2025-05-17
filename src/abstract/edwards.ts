@@ -21,6 +21,8 @@ import {
 // prettier-ignore
 const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _8n = BigInt(8);
 
+export type UVRatio = (u: bigint, v: bigint) => { isValid: boolean; value: bigint };
+
 /** Edwards curves must declare params a & d. */
 export type CurveType = BasicCurve<bigint> & {
   a: bigint; // curve param a
@@ -29,7 +31,7 @@ export type CurveType = BasicCurve<bigint> & {
   randomBytes: (bytesLength?: number) => Uint8Array; // CSPRNG
   adjustScalarBytes?: (bytes: Uint8Array) => Uint8Array; // clears bits to get valid field elemtn
   domain?: (data: Uint8Array, ctx: Uint8Array, phflag: boolean) => Uint8Array; // Used for hashing
-  uvRatio?: (u: bigint, v: bigint) => { isValid: boolean; value: bigint }; // Ratio √(u/v)
+  uvRatio?: UVRatio; // Ratio √(u/v)
   prehash?: FHash; // RFC 8032 pre-hashing of messages to sign() / verify()
   mapToCurve?: (scalar: bigint[]) => AffinePoint<bigint>; // for hash-to-curve standard
 };
@@ -85,9 +87,9 @@ export interface ExtPointType extends Group<ExtPointType> {
 export interface ExtPointConstructor extends GroupConstructor<ExtPointType> {
   new (x: bigint, y: bigint, z: bigint, t: bigint): ExtPointType;
   fromAffine(p: AffinePoint<bigint>): ExtPointType;
-  fromBytes(bytes: Uint8Array): ExtPointType;
-  fromHex(hex: Hex): ExtPointType;
-  fromPrivateKey(privateKey: Hex): ExtPointType;
+  fromBytes(bytes: Uint8Array, zip215?: boolean): ExtPointType;
+  fromHex(hex: Hex, zip215?: boolean): ExtPointType;
+  fromPrivateScalar(privScalar: bigint): ExtPointType;
   msm(points: ExtPointType[], scalars: bigint[]): ExtPointType;
 }
 
