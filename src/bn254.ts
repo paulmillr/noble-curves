@@ -63,7 +63,7 @@ import {
   type PostPrecomputeFn,
   type PostPrecomputePointAddFn,
 } from './abstract/bls.ts';
-import { Field } from './abstract/modular.ts';
+import { Field, type IField } from './abstract/modular.ts';
 import type { Fp, Fp12, Fp2, Fp6 } from './abstract/tower.ts';
 import { psiFrobenius, tower12 } from './abstract/tower.ts';
 import { bitGet, bitLen, notImplemented } from './abstract/utils.ts';
@@ -80,6 +80,8 @@ const SIX_X_SQUARED = _6n * BN_X ** _2n;
 const Fr = Field(
   BigInt('21888242871839275222246405745257275088548364400416034343698204186575808495617')
 );
+export const bn254_Fr: IField<bigint> = Fr;
+
 // Fp2.div(Fp2.mul(Fp2.ONE, _3n), Fp2.NONRESIDUE)
 const Fp2B = {
   c0: BigInt('19485874751759354771024239261021720505790618469301721065564631296452457478373'),

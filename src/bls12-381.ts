@@ -62,7 +62,7 @@
 import { sha256 } from '@noble/hashes/sha2';
 import { abytes, randomBytes } from '@noble/hashes/utils';
 import { bls, type CurveFn } from './abstract/bls.ts';
-import { Field } from './abstract/modular.ts';
+import { Field, type IField } from './abstract/modular.ts';
 import {
   bitGet,
   bitLen,
@@ -482,6 +482,8 @@ function signatureG2FromBytes(hex: Hex) {
   point.assertValidity();
   return point;
 }
+
+export const bls12_381_Fr: IField<bigint> = Fr;
 
 /**
  * bls12-381 pairing-friendly curve.

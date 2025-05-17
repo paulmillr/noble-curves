@@ -9,21 +9,16 @@ import { blake2s } from '@noble/hashes/blake2';
 import { sha256, sha512 } from '@noble/hashes/sha2';
 import { concatBytes, randomBytes, utf8ToBytes } from '@noble/hashes/utils';
 import { getHash } from './_shortw_utils.ts';
-import { type CurveFn, type ExtPointType, twistedEdwards } from './abstract/edwards.ts';
+import { twistedEdwards, type CurveFn, type ExtPointType } from './abstract/edwards.ts';
 import { Field, mod } from './abstract/modular.ts';
-import { type CurveFn as WCurveFn, weierstrass } from './abstract/weierstrass.ts';
+import { weierstrass, type CurveFn as WCurveFn } from './abstract/weierstrass.ts';
+import { bls12_381_Fr } from './bls12-381.ts';
+import { bn254_Fr } from './bn254.ts';
 
 // Jubjub curves have 𝔽p over scalar fields of other curves. They are friendly to ZK proofs.
 // jubjub Fp = bls n. babyjubjub Fp = bn254 n.
 // verify manually, check bls12-381.ts and bn254.ts.
 // https://neuromancer.sk/std/other/JubJub
-
-const bls12_381_Fr = Field(
-  BigInt('0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001')
-);
-const bn254_Fr = Field(
-  BigInt('21888242871839275222246405745257275088548364400416034343698204186575808495617')
-);
 
 /** Curve over scalar field of bls12-381. jubjub Fp = bls n */
 export const jubjub: CurveFn = /* @__PURE__ */ twistedEdwards({
