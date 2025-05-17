@@ -89,7 +89,6 @@ export interface ExtPointConstructor extends GroupConstructor<ExtPointType> {
   fromAffine(p: AffinePoint<bigint>): ExtPointType;
   fromBytes(bytes: Uint8Array, zip215?: boolean): ExtPointType;
   fromHex(hex: Hex, zip215?: boolean): ExtPointType;
-  fromPrivateScalar(privScalar: bigint): ExtPointType;
   msm(points: ExtPointType[], scalars: bigint[]): ExtPointType;
 }
 
