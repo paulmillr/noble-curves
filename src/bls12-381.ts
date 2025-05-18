@@ -1,61 +1,79 @@
 /**
  * bls12-381 is pairing-friendly Barreto-Lynn-Scott elliptic curve construction allowing to:
- * * Construct zk-SNARKs at the ~120-bit security
- * * Efficiently verify N aggregate signatures with 1 pairing and N ec additions:
- *   the Boneh-Lynn-Shacham signature scheme is orders of magnitude more efficient than Schnorr
+
+* Construct zk-SNARKs at the ~120-bit security, as per [Barbulescu-Duquesne 2017](https://hal.science/hal-01534101/file/main.pdf)
+* Efficiently verify N aggregate signatures with 1 pairing and N ec additions:
+the Boneh-Lynn-Shacham signature scheme is orders of magnitude more efficient than Schnorr
+
+BLS can mean 2 different things:
+
+* Barreto-Lynn-Scott: BLS12, a Pairing Friendly Elliptic Curve
+* Boneh-Lynn-Shacham: A Signature Scheme.
+
+### Summary
+
+1. BLS Relies on expensive bilinear pairing
+2. Private Keys: 32 bytes
+3. Public Keys: 48 OR 96 bytes - big-endian x coordinate of point on G1 OR G2 curve
+4. Signatures: 96 OR 48 bytes - big-endian x coordinate of point on G2 OR G1 curve
+5. The 12 stands for the Embedding degree.
+
+Modes of operation:
+
+* Long signatures:  48-byte keys + 96-byte sigs (G1 keys + G2 sigs).
+* Short signatures: 96-byte keys + 48-byte sigs (G2 keys + G1 sigs).
+
+### Formulas
+
+- `P = pk x G` - public keys
+- `S = pk x H(m)` - signing, uses hash-to-curve on m
+- `e(P, H(m)) == e(G, S)` - verification using pairings
+- `e(G, S) = e(G, SUM(n)(Si)) = MUL(n)(e(G, Si))` - signature aggregation
+
+### Curves
+
+G1 is ordinary elliptic curve. G2 is extension field curve, think "over complex numbers".
+
+- G1: y² = x³ + 4
+- G2: y² = x³ + 4(u + 1) where u = √−1; r-order subgroup of E'(Fp²), M-type twist
+
+### Towers
+
+Pairing G1 + G2 produces element in Fp₁₂, 12-degree polynomial.
+Fp₁₂ is usually implemented using tower of lower-degree polynomials for speed.
+
+- Fp₁₂ = Fp₆² => Fp₂³
+- Fp(u) / (u² - β) where β = -1
+- Fp₂(v) / (v³ - ξ) where ξ = u + 1
+- Fp₆(w) / (w² - γ) where γ = v
+- Fp²[u] = Fp/u²+1
+- Fp⁶[v] = Fp²/v³-1-u
+- Fp¹²[w] = Fp⁶/w²-v
+
+### Params
+
+* Embedding degree (k): 12
+* Seed is sometimes named x or t
+* t = -15132376222941642752
+* p = (t-1)² * (t⁴-t²+1)/3 + t
+* r = t⁴-t²+1
+* Ate loop size: X
+
+To verify curve parameters, see
+[pairing-friendly-curves spec](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-pairing-friendly-curves-11).
+Basic math is done over finite fields over p.
+More complicated math is done over polynominal extension fields.
+
+### Compatibility and notes
+1. It is compatible with Algorand, Chia, Dfinity, Ethereum, Filecoin, ZEC.
+Filecoin uses little endian byte arrays for private keys - make sure to reverse byte order.
+2. Make sure to correctly select mode: "long signature" or "short signature".
+3. Compatible with specs:
+   RFC 9380,
+   [cfrg-pairing-friendly-curves-11](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-pairing-friendly-curves-11),
+   [cfrg-bls-signature-05](https://datatracker.ietf.org/doc/draft-irtf-cfrg-bls-signature/).
+
  *
- * ### Summary
- * 1. BLS Relies on Bilinear Pairing (expensive)
- * 2. Private Keys: 32 bytes
- * 3. Public Keys: 48 bytes: 381 bit affine x coordinate, encoded into 48 big-endian bytes.
- * 4. Signatures: 96 bytes: two 381 bit integers (affine x coordinate), encoded into two 48 big-endian byte arrays.
- *     - The signature is a point on the G2 subgroup, which is defined over a finite field
- *       with elements twice as big as the G1 curve (G2 is over Fp2 rather than Fp. Fp2 is analogous to the
- *       complex numbers).
- *     - We also support reversed 96-byte pubkeys & 48-byte short signatures.
- * 5. The 12 stands for the Embedding degree.
- *
- * ### Formulas
- * - `P = pk x G` - public keys
- * - `S = pk x H(m)` - signing
- * - `e(P, H(m)) == e(G, S)` - verification using pairings
- * - `e(G, S) = e(G, SUM(n)(Si)) = MUL(n)(e(G, Si))` - signature aggregation
- *
- * ### Compatibility and notes
- * 1. It is compatible with Algorand, Chia, Dfinity, Ethereum, Filecoin, ZEC.
- * Filecoin uses little endian byte arrays for private keys - make sure to reverse byte order.
- * 2. Some projects use G2 for public keys and G1 for signatures. It's called "short signature".
- * 3. Curve security level is about 120 bits as per [Barbulescu-Duquesne 2017](https://hal.science/hal-01534101/file/main.pdf)
- * 4. Compatible with specs:
- *    [cfrg-pairing-friendly-curves-11](https://tools.ietf.org/html/draft-irtf-cfrg-pairing-friendly-curves-11),
- *    [cfrg-bls-signature-05](https://www.rfc-editor.org/rfc/draft-irtf-cfrg-bls-signature-05),
- *    RFC 9380.
- *
- * ### Params
- * To verify curve parameters, see
- * [pairing-friendly-curves spec](https://www.rfc-editor.org/rfc/draft-irtf-cfrg-pairing-friendly-curves-11).
- * Basic math is done over finite fields over p.
- * More complicated math is done over polynominal extension fields.
- * To simplify calculations in Fp12, we construct extension tower:
- *
- * Embedding degree (k): 12
- * Seed (X): -15132376222941642752
- * Fr:  (x⁴-x²+1)
- * Fp: ((x-1)² ⋅ r(x)/3+x)
- * (E/Fp): Y²=X³+4
- * (Eₜ/Fp²): Y² = X³+4(u+1) (M-type twist)
- * Ate loop size: X
- *
- * ### Towers
- * - Fp₁₂ = Fp₆² => Fp₂³
- * - Fp(u) / (u² - β) where β = -1
- * - Fp₂(v) / (v³ - ξ) where ξ = u + 1
- * - Fp₆(w) / (w² - γ) where γ = v
- * - Fp²[u] = Fp/u²+1
- * - Fp⁶[v] = Fp²/v³-1-u
- * - Fp¹²[w] = Fp⁶/w²-v
- *
- * @todo construct bls & bn fp/fr from seed.
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
@@ -68,7 +86,7 @@ import {
   bitLen,
   bytesToHex,
   bytesToNumberBE,
-  concatBytes as concatB,
+  concatBytes,
   ensureBytes,
   numberToBytesBE,
   type Hex,
@@ -80,6 +98,7 @@ import { psiFrobenius, tower12 } from './abstract/tower.ts';
 import {
   mapToCurveSimpleSWU,
   type AffinePoint,
+  type ProjConstructor,
   type ProjPointType,
 } from './abstract/weierstrass.ts';
 
@@ -87,16 +106,47 @@ import {
 // prettier-ignore
 const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3), _4n = BigInt(4);
 
+// To verify math:
+// https://tools.ietf.org/html/draft-irtf-cfrg-pairing-friendly-curves-11
+
 // The BLS parameter x (seed) for BLS12-381. NOTE: it is negative!
+// x = -2^63 - 2^62 - 2^60 - 2^57 - 2^48 - 2^16
 const BLS_X = BigInt('0xd201000000010000');
+// t = x (called differently in different places)
+// const t = -BLS_X;
 const BLS_X_LEN = bitLen(BLS_X);
+
+// P is characteristic of field Fp, in which curve calculations are done.
+// p = (t-1)² * (t⁴-t²+1)/3 + t
+// bls12_381_Fp = (t-1n)**2n * (t**4n - t**2n + 1n) / 3n + t
+const bls12_381_Fp = BigInt(
+  '0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab'
+);
+
+// r*h is curve order, amount of points on curve,
+// where r is order of prime subgroup and h is cofactor.
+// r = t⁴-t²+1
+// r = (t**4n - t**2n + 1n)
+export const bls12_381_Fr: IField<bigint> = Field(
+  BigInt('0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001')
+);
+const Fr = bls12_381_Fr;
+
+// cofactor h of G1: (t - 1)²/3
+// cofactorG1 = (t-1n)**2n/3n
+const cofactorG1 = BigInt('0x396c8c005555e1568c00aaab0000aaab');
+
+// cofactor h of G2
+// (t^8 - 4t^7 + 5t^6 - 4t^4 + 6t^3 - 4t^2 - 4t + 13)/9
+// cofactorG2 = (t**8n - 4n*t**7n + 5n*t**6n - 4n*t**4n + 6n*t**3n - 4n*t**2n - 4n*t+13n)/9n
+const cofactorG2 = BigInt(
+  '0x5d543a95414e7f1091d50792876a202cd91de4547085abaa68a205b2e5a7ddfa628f1cb4d9e82ef21537e293a6691ae1616ec6e786f0c70cf1c38e31c7238e5'
+);
 
 // CURVE FIELDS
 const { Fp, Fp2, Fp6, Fp4Square, Fp12 } = tower12({
   // Order of Fp
-  ORDER: BigInt(
-    '0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab'
-  ),
+  ORDER: bls12_381_Fp,
   // Finite extension field over irreducible polynominal.
   // Fp(u) / (u² - β) where β = -1
   FP2_NONRESIDUE: [_1n, _1n],
@@ -162,13 +212,424 @@ const { Fp, Fp2, Fp6, Fp4Square, Fp12 } = tower12({
   },
 });
 
-// Finite field over r.
-// This particular field is not used anywhere in bls12-381, but it is still useful.
-const Fr = Field(BigInt('0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001'));
+// GLV endomorphism Ψ(P), for fast cofactor clearing
+const { G2psi, G2psi2 } = psiFrobenius(Fp, Fp2, Fp2.div(Fp2.ONE, Fp2.NONRESIDUE)); // 1/(u+1)
 
-// END OF CURVE FIELDS
+/**
+ * Default hash_to_field / hash-to-curve for BLS.
+ * m: 1 for G1, 2 for G2
+ * k: target security level in bits
+ * hash: any function, e.g. BBS+ uses BLAKE2: see [github](https://github.com/hyperledger/aries-framework-go/issues/2247).
+ * Parameter values come from [section 8.8.2 of RFC 9380](https://www.rfc-editor.org/rfc/rfc9380#section-8.8.2).
+ */
+const htfDefaults = Object.freeze({
+  DST: 'BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_NUL_',
+  encodeDST: 'BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_NUL_',
+  p: Fp.ORDER,
+  m: 2,
+  k: 128,
+  expand: 'xmd',
+  hash: sha256,
+} as const);
 
-// HashToCurve
+// a=0, b=4
+// x = 3685416753713387016781088315183077757961620795782546409894578378688607592378376318836054947676345821548104185464507
+// y = 1339506544944476473020471379941921221584933875938349620426543736416511423956333506472724655353366534992391756441569
+const CURVE_G1 = {
+  Fp,
+  a: Fp.ZERO,
+  b: _4n,
+  n: Fr.ORDER,
+  h: cofactorG1,
+  Gx: BigInt(
+    '0x17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb'
+  ),
+  Gy: BigInt(
+    '0x08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
+  ),
+};
+
+// a=0, b=4
+// x = 3059144344244213709971259814753781636986470325476647558659373206291635324768958432433509563104347017837885763365758*u + 352701069587466618187139116011060144890029952792775240219908644239793785735715026873347600343865175952761926303160
+// y = 927553665492332455747201965776037880757740193453592970025027978793976877002675564980949289727957565575433344219582*u + 1985150602287291935568054521177171638300868978215655730859378665066344726373823718423869104263333984641494340347905
+const CURVE_G2 = {
+  Fp: Fp2,
+  a: Fp2.ZERO,
+  b: Fp2.fromBigTuple([_4n, _4n]),
+  n: Fr.ORDER,
+  h: cofactorG2,
+  Gx: Fp2.fromBigTuple([
+    BigInt(
+      '0x024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb8'
+    ),
+    BigInt(
+      '0x13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e'
+    ),
+  ]),
+  Gy: Fp2.fromBigTuple([
+    BigInt(
+      '0x0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801'
+    ),
+    BigInt(
+      '0x0606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79be'
+    ),
+  ]),
+};
+
+// Encoding utils
+// Compressed point of infinity
+// Set compressed & point-at-infinity bits
+const COMPZERO = setMask(Fp.toBytes(_0n), { infinity: true, compressed: true });
+
+function parseMask(bytes: Uint8Array) {
+  // Copy, so we can remove mask data. It will be removed also later, when Fp.create will call modulo.
+  bytes = bytes.slice();
+  const mask = bytes[0] & 0b1110_0000;
+  const compressed = !!((mask >> 7) & 1); // compression bit (0b1000_0000)
+  const infinity = !!((mask >> 6) & 1); // point at infinity bit (0b0100_0000)
+  const sort = !!((mask >> 5) & 1); // sort bit (0b0010_0000)
+  bytes[0] &= 0b0001_1111; // clear mask (zero first 3 bits)
+  return { compressed, infinity, sort, value: bytes };
+}
+
+function setMask(
+  bytes: Uint8Array,
+  mask: { compressed?: boolean; infinity?: boolean; sort?: boolean }
+) {
+  if (bytes[0] & 0b1110_0000) throw new Error('setMask: non-empty mask');
+  if (mask.compressed) bytes[0] |= 0b1000_0000;
+  if (mask.infinity) bytes[0] |= 0b0100_0000;
+  if (mask.sort) bytes[0] |= 0b0010_0000;
+  return bytes;
+}
+
+function pointG1ToBytes(_c: ProjConstructor<Fp>, point: ProjPointType<Fp>, isComp: boolean) {
+  const { BYTES: L, ORDER: P } = Fp;
+  const is0 = point.is0();
+  const { x, y } = point.toAffine();
+  if (isComp) {
+    if (is0) return COMPZERO.slice();
+    const sort = Boolean((y * _2n) / P);
+    return setMask(numberToBytesBE(x, L), { compressed: true, sort });
+  } else {
+    if (is0) {
+      return concatBytes(Uint8Array.of(0x40), new Uint8Array(2 * L - 1));
+    } else {
+      return concatBytes(numberToBytesBE(x, L), numberToBytesBE(y, L));
+    }
+  }
+}
+
+function signatureG1ToBytes(point: ProjPointType<Fp>) {
+  point.assertValidity();
+  const { BYTES: L, ORDER: P } = Fp;
+  const { x, y } = point.toAffine();
+  if (point.is0()) return COMPZERO.slice();
+  const sort = Boolean((y * _2n) / P);
+  return setMask(numberToBytesBE(x, L), { compressed: true, sort });
+}
+
+function pointG1FromBytes(bytes: Uint8Array): AffinePoint<Fp> {
+  const { compressed, infinity, sort, value } = parseMask(bytes);
+  const { BYTES: L, ORDER: P } = Fp;
+  if (value.length === 48 && compressed) {
+    const compressedValue = bytesToNumberBE(value);
+    // Zero
+    const x = Fp.create(compressedValue & Fp.MASK);
+    if (infinity) {
+      if (x !== _0n) throw new Error('invalid G1 point: non-empty, at infinity, with compression');
+      return { x: _0n, y: _0n };
+    }
+    const right = Fp.add(Fp.pow(x, _3n), Fp.create(CURVE_G1.b)); // y² = x³ + b
+    let y = Fp.sqrt(right);
+    if (!y) throw new Error('invalid G1 point: compressed point');
+    if ((y * _2n) / P !== BigInt(sort)) y = Fp.neg(y);
+    return { x: Fp.create(x), y: Fp.create(y) };
+  } else if (value.length === 96 && !compressed) {
+    // Check if the infinity flag is set
+    const x = bytesToNumberBE(value.subarray(0, L));
+    const y = bytesToNumberBE(value.subarray(L));
+    if (infinity) {
+      if (x !== _0n || y !== _0n) throw new Error('G1: non-empty point at infinity');
+      return bls12_381.G1.ProjectivePoint.ZERO.toAffine();
+    }
+    return { x: Fp.create(x), y: Fp.create(y) };
+  } else {
+    throw new Error('invalid G1 point: expected 48/96 bytes');
+  }
+}
+
+function signatureG1FromBytes(hex: Hex): ProjPointType<Fp> {
+  const { infinity, sort, value } = parseMask(ensureBytes('signatureHex', hex, 48));
+  const P = Fp.ORDER;
+  const Point = bls12_381.G1.ProjectivePoint;
+  const compressedValue = bytesToNumberBE(value);
+  // Zero
+  if (infinity) return Point.ZERO;
+  const x = Fp.create(compressedValue & Fp.MASK);
+  const right = Fp.add(Fp.pow(x, _3n), Fp.create(CURVE_G1.b)); // y² = x³ + b
+  let y = Fp.sqrt(right);
+  if (!y) throw new Error('invalid G1 point: compressed');
+  const aflag = BigInt(sort);
+  if ((y * _2n) / P !== aflag) y = Fp.neg(y);
+  const point = Point.fromAffine({ x, y });
+  point.assertValidity();
+  return point;
+}
+
+function pointG2ToBytes(_c: ProjConstructor<Fp2>, point: ProjPointType<Fp2>, isComp: boolean) {
+  const { BYTES: L, ORDER: P } = Fp;
+  const is0 = point.is0();
+  const { x, y } = point.toAffine();
+  if (isComp) {
+    if (is0) return concatBytes(COMPZERO, numberToBytesBE(_0n, L));
+    const flag = Boolean(y.c1 === _0n ? (y.c0 * _2n) / P : (y.c1 * _2n) / P);
+    return concatBytes(
+      setMask(numberToBytesBE(x.c1, L), { compressed: true, sort: flag }),
+      numberToBytesBE(x.c0, L)
+    );
+  } else {
+    if (is0) return concatBytes(Uint8Array.of(0x40), new Uint8Array(4 * L - 1));
+    const { re: x0, im: x1 } = Fp2.reim(x);
+    const { re: y0, im: y1 } = Fp2.reim(y);
+    return concatBytes(
+      numberToBytesBE(x1, L),
+      numberToBytesBE(x0, L),
+      numberToBytesBE(y1, L),
+      numberToBytesBE(y0, L)
+    );
+  }
+}
+
+function signatureG2ToBytes(point: ProjPointType<Fp2>) {
+  point.assertValidity();
+  const { BYTES: L } = Fp;
+  if (point.is0()) return concatBytes(COMPZERO, numberToBytesBE(_0n, L));
+  const { x, y } = point.toAffine();
+  const { re: x0, im: x1 } = Fp2.reim(x);
+  const { re: y0, im: y1 } = Fp2.reim(y);
+  const tmp = y1 > _0n ? y1 * _2n : y0 * _2n;
+  const sort = Boolean((tmp / Fp.ORDER) & _1n);
+  const z2 = x0;
+  return concatBytes(
+    setMask(numberToBytesBE(x1, L), { sort, compressed: true }),
+    numberToBytesBE(z2, L)
+  );
+}
+
+function pointG2FromBytes(bytes: Uint8Array): AffinePoint<Fp2> {
+  const { BYTES: L, ORDER: P } = Fp;
+  const { compressed, infinity, sort, value } = parseMask(bytes);
+  if (
+    (!compressed && !infinity && sort) || // 00100000
+    (!compressed && infinity && sort) || // 01100000
+    (sort && infinity && compressed) // 11100000
+  ) {
+    throw new Error('invalid encoding flag: ' + (bytes[0] & 0b1110_0000));
+  }
+  const slc = (b: Uint8Array, from: number, to?: number) => bytesToNumberBE(b.slice(from, to));
+  if (value.length === 96 && compressed) {
+    if (infinity) {
+      // check that all bytes are 0
+      if (value.reduce((p, c) => (p !== 0 ? c + 1 : c), 0) > 0) {
+        throw new Error('invalid G2 point: compressed');
+      }
+      return { x: Fp2.ZERO, y: Fp2.ZERO };
+    }
+    const x_1 = slc(value, 0, L);
+    const x_0 = slc(value, L, 2 * L);
+    const x = Fp2.create({ c0: Fp.create(x_0), c1: Fp.create(x_1) });
+    const right = Fp2.add(Fp2.pow(x, _3n), CURVE_G2.b); // y² = x³ + 4 * (u+1) = x³ + b
+    let y = Fp2.sqrt(right);
+    const Y_bit = y.c1 === _0n ? (y.c0 * _2n) / P : (y.c1 * _2n) / P ? _1n : _0n;
+    y = sort && Y_bit > 0 ? y : Fp2.neg(y);
+    return { x, y };
+  } else if (value.length === 192 && !compressed) {
+    if (infinity) {
+      if (value.reduce((p, c) => (p !== 0 ? c + 1 : c), 0) > 0) {
+        throw new Error('invalid G2 point: uncompressed');
+      }
+      return { x: Fp2.ZERO, y: Fp2.ZERO };
+    }
+    const x1 = slc(value, 0 * L, 1 * L);
+    const x0 = slc(value, 1 * L, 2 * L);
+    const y1 = slc(value, 2 * L, 3 * L);
+    const y0 = slc(value, 3 * L, 4 * L);
+    return { x: Fp2.fromBigTuple([x0, x1]), y: Fp2.fromBigTuple([y0, y1]) };
+  } else {
+    throw new Error('invalid G2 point: expected 96/192 bytes');
+  }
+}
+
+function signatureG2FromBytes(hex: Hex) {
+  const { ORDER: P } = Fp;
+  // TODO: Optimize, it's very slow because of sqrt.
+  const { infinity, sort, value } = parseMask(ensureBytes('signatureHex', hex));
+  const Point = bls12_381.G2.ProjectivePoint;
+  const half = value.length / 2;
+  if (half !== 48 && half !== 96)
+    throw new Error('invalid compressed signature length, expected 96/192 bytes');
+  const z1 = bytesToNumberBE(value.slice(0, half));
+  const z2 = bytesToNumberBE(value.slice(half));
+  // Indicates the infinity point
+  if (infinity) return Point.ZERO;
+  const x1 = Fp.create(z1 & Fp.MASK);
+  const x2 = Fp.create(z2);
+  const x = Fp2.create({ c0: x2, c1: x1 });
+  const y2 = Fp2.add(Fp2.pow(x, _3n), CURVE_G2.b); // y² = x³ + 4
+  // The slow part
+  let y = Fp2.sqrt(y2);
+  if (!y) throw new Error('Failed to find a square root');
+
+  // Choose the y whose leftmost bit of the imaginary part is equal to the a_flag1
+  // If y1 happens to be zero, then use the bit of y0
+  const { re: y0, im: y1 } = Fp2.reim(y);
+  const aflag1 = BigInt(sort);
+  const isGreater = y1 > _0n && (y1 * _2n) / P !== aflag1;
+  const is0 = y1 === _0n && (y0 * _2n) / P !== aflag1;
+  if (isGreater || is0) y = Fp2.neg(y);
+  const point = Point.fromAffine({ x, y });
+  point.assertValidity();
+  return point;
+}
+
+/**
+ * bls12-381 pairing-friendly curve.
+ * @example
+ * import { bls12_381 as bls } from '@noble/curves/bls12-381';
+ * // G1 keys, G2 signatures
+ * const privateKey = '67d53f170b908cabb9eb326c3c337762d59289a8fec79f7bc9254b584b73265c';
+ * const message = '64726e3da8';
+ * const publicKey = bls.getPublicKey(privateKey);
+ * const signature = bls.sign(message, privateKey);
+ * const isValid = bls.verify(signature, message, publicKey);
+ */
+export const bls12_381: CurveFn = bls({
+  // Fields
+  fields: {
+    Fp,
+    Fp2,
+    Fp6,
+    Fp12,
+    Fr: Fr,
+  },
+  // G1: y² = x³ + 4
+  G1: {
+    ...CURVE_G1,
+    htfDefaults: { ...htfDefaults, m: 1, DST: 'BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_' },
+    wrapPrivateKey: true,
+    allowInfinityPoint: true,
+    // Checks is the point resides in prime-order subgroup.
+    // point.isTorsionFree() should return true for valid points
+    // It returns false for shitty points.
+    // https://eprint.iacr.org/2021/1130.pdf
+    isTorsionFree: (c, point): boolean => {
+      // GLV endomorphism ψ(P)
+      const beta = BigInt(
+        '0x5f19672fdf76ce51ba69c6076a0f77eaddb3a93be6f89688de17d813620a00022e01fffffffefffe'
+      );
+      const phi = new c(Fp.mul(point.px, beta), point.py, point.pz);
+      // TODO: unroll
+      const xP = point.multiplyUnsafe(BLS_X).negate(); // [x]P
+      const u2P = xP.multiplyUnsafe(BLS_X); // [u2]P
+      return u2P.equals(phi);
+    },
+    // Clear cofactor of G1
+    // https://eprint.iacr.org/2019/403
+    clearCofactor: (_c, point) => {
+      // return this.multiplyUnsafe(CURVE.h);
+      return point.multiplyUnsafe(BLS_X).add(point); // x*P + P
+    },
+    mapToCurve: mapToG1,
+    fromBytes: pointG1FromBytes,
+    toBytes: pointG1ToBytes,
+    ShortSignature: {
+      fromBytes(bytes: Uint8Array) {
+        abytes(bytes);
+        return signatureG1FromBytes(bytes);
+      },
+      fromHex(hex: Hex): ProjPointType<Fp> {
+        return signatureG1FromBytes(hex);
+      },
+      toBytes(point: ProjPointType<Fp>) {
+        return signatureG1ToBytes(point);
+      },
+      toRawBytes(point: ProjPointType<Fp>) {
+        return signatureG1ToBytes(point);
+      },
+      toHex(point: ProjPointType<Fp>) {
+        return bytesToHex(signatureG1ToBytes(point));
+      },
+    },
+  },
+  G2: {
+    ...CURVE_G2,
+    // https://datatracker.ietf.org/doc/html/rfc9380#name-clearing-the-cofactor
+    // https://datatracker.ietf.org/doc/html/rfc9380#name-cofactor-clearing-for-bls12
+    hEff: BigInt(
+      '0xbc69f08f2ee75b3584c6a0ea91b352888e2a8e9145ad7689986ff031508ffe1329c2f178731db956d82bf015d1212b02ec0ec69d7477c1ae954cbc06689f6a359894c0adebbf6b4e8020005aaa95551'
+    ),
+    htfDefaults: { ...htfDefaults },
+    wrapPrivateKey: true,
+    allowInfinityPoint: true,
+    mapToCurve: mapToG2,
+    // Checks is the point resides in prime-order subgroup.
+    // point.isTorsionFree() should return true for valid points
+    // It returns false for shitty points.
+    // https://eprint.iacr.org/2021/1130.pdf
+    // Older version: https://eprint.iacr.org/2019/814.pdf
+    isTorsionFree: (c, P): boolean => {
+      return P.multiplyUnsafe(BLS_X).negate().equals(G2psi(c, P)); // ψ(P) == [u](P)
+    },
+    // Maps the point into the prime-order subgroup G2.
+    // clear_cofactor_bls12381_g2 from RFC 9380.
+    // https://eprint.iacr.org/2017/419.pdf
+    // prettier-ignore
+    clearCofactor: (c, P) => {
+      const x = BLS_X;
+      let t1 = P.multiplyUnsafe(x).negate();  // [-x]P
+      let t2 = G2psi(c, P);                   // Ψ(P)
+      let t3 = P.double();                    // 2P
+      t3 = G2psi2(c, t3);                     // Ψ²(2P)
+      t3 = t3.subtract(t2);                   // Ψ²(2P) - Ψ(P)
+      t2 = t1.add(t2);                        // [-x]P + Ψ(P)
+      t2 = t2.multiplyUnsafe(x).negate();     // [x²]P - [x]Ψ(P)
+      t3 = t3.add(t2);                        // Ψ²(2P) - Ψ(P) + [x²]P - [x]Ψ(P)
+      t3 = t3.subtract(t1);                   // Ψ²(2P) - Ψ(P) + [x²]P - [x]Ψ(P) + [x]P
+      const Q = t3.subtract(P);               // Ψ²(2P) - Ψ(P) + [x²]P - [x]Ψ(P) + [x]P - 1P
+      return Q;                               // [x²-x-1]P + [x-1]Ψ(P) + Ψ²(2P)
+    },
+    fromBytes: pointG2FromBytes,
+    toBytes: pointG2ToBytes,
+    Signature: {
+      fromBytes(bytes: Uint8Array): ProjPointType<Fp2> {
+        abytes(bytes);
+        return signatureG2FromBytes(bytes);
+      },
+      fromHex(hex: Hex): ProjPointType<Fp2> {
+        return signatureG2FromBytes(hex);
+      },
+      toBytes(point: ProjPointType<Fp2>) {
+        return signatureG2ToBytes(point);
+      },
+      toRawBytes(point: ProjPointType<Fp2>) {
+        return signatureG2ToBytes(point);
+      },
+      toHex(point: ProjPointType<Fp2>) {
+        return bytesToHex(signatureG2ToBytes(point));
+      },
+    },
+  },
+  params: {
+    ateLoopSize: BLS_X, // The BLS parameter x for BLS12-381
+    r: Fr.ORDER, // order; z⁴ − z² + 1; CURVE.n from other curves
+    xNegative: true,
+    twistType: 'multiplicative',
+  },
+  htfDefaults,
+  hash: sha256,
+  randomBytes,
+});
 
 // 3-isogeny map from E' to E https://www.rfc-editor.org/rfc/rfc9380#appendix-E.3
 const isogenyMapG2 = isogenyMap(
@@ -321,12 +782,6 @@ const isogenyMapG1 = isogenyMap(
   ].map((i) => i.map((j) => BigInt(j))) as [Fp[], Fp[], Fp[], Fp[]]
 );
 
-// SWU Map - Fp2 to G2': y² = x³ + 240i * x + 1012 + 1012i
-const G2_SWU = mapToCurveSimpleSWU(Fp2, {
-  A: Fp2.create({ c0: Fp.create(_0n), c1: Fp.create(BigInt(240)) }), // A' = 240 * I
-  B: Fp2.create({ c0: Fp.create(BigInt(1012)), c1: Fp.create(BigInt(1012)) }), // B' = 1012 * (1 + I)
-  Z: Fp2.create({ c0: Fp.create(BigInt(-2)), c1: Fp.create(BigInt(-1)) }), // Z: -(2 + I)
-});
 // Optimized SWU Map - Fp to G1
 const G1_SWU = mapToCurveSimpleSWU(Fp, {
   A: Fp.create(
@@ -341,443 +796,18 @@ const G1_SWU = mapToCurveSimpleSWU(Fp, {
   ),
   Z: Fp.create(BigInt(11)),
 });
-
-// GLV endomorphism Ψ(P), for fast cofactor clearing
-const { G2psi, G2psi2 } = psiFrobenius(Fp, Fp2, Fp2.div(Fp2.ONE, Fp2.NONRESIDUE)); // 1/(u+1)
-
-// Default hash_to_field options are for hash to G2.
-//
-// Parameter definitions are in section 5.3 of the spec unless otherwise noted.
-// Parameter values come from section 8.8.2 of the spec.
-// https://www.rfc-editor.org/rfc/rfc9380#section-8.8.2
-//
-// Base field F is GF(p^m)
-// p = 0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab
-// m = 2 (or 1 for G1 see section 8.8.1)
-// k = 128
-const htfDefaults = Object.freeze({
-  // DST: a domain separation tag
-  // defined in section 2.2.5
-  // Use utils.getDSTLabel(), utils.setDSTLabel(value)
-  DST: 'BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_NUL_',
-  encodeDST: 'BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_NUL_',
-  // p: the characteristic of F
-  //    where F is a finite field of characteristic p and order q = p^m
-  p: Fp.ORDER,
-  // m: the extension degree of F, m >= 1
-  //     where F is a finite field of characteristic p and order q = p^m
-  m: 2,
-  // k: the target security level for the suite in bits
-  // defined in section 5.1
-  k: 128,
-  // option to use a message that has already been processed by
-  // expand_message_xmd
-  expand: 'xmd',
-  // Hash functions for: expand_message_xmd is appropriate for use with a
-  // wide range of hash functions, including SHA-2, SHA-3, BLAKE2, and others.
-  // BBS+ uses blake2: https://github.com/hyperledger/aries-framework-go/issues/2247
-  hash: sha256,
-} as const);
-
-// Encoding utils
-// Point on G1 curve: (x, y)
-
-// Compressed point of infinity
-const COMPRESSED_ZERO = setMask(Fp.toBytes(_0n), { infinity: true, compressed: true }); // set compressed & point-at-infinity bits
-
-function parseMask(bytes: Uint8Array) {
-  // Copy, so we can remove mask data. It will be removed also later, when Fp.create will call modulo.
-  bytes = bytes.slice();
-  const mask = bytes[0] & 0b1110_0000;
-  const compressed = !!((mask >> 7) & 1); // compression bit (0b1000_0000)
-  const infinity = !!((mask >> 6) & 1); // point at infinity bit (0b0100_0000)
-  const sort = !!((mask >> 5) & 1); // sort bit (0b0010_0000)
-  bytes[0] &= 0b0001_1111; // clear mask (zero first 3 bits)
-  return { compressed, infinity, sort, value: bytes };
-}
-
-function setMask(
-  bytes: Uint8Array,
-  mask: { compressed?: boolean; infinity?: boolean; sort?: boolean }
-) {
-  if (bytes[0] & 0b1110_0000) throw new Error('setMask: non-empty mask');
-  if (mask.compressed) bytes[0] |= 0b1000_0000;
-  if (mask.infinity) bytes[0] |= 0b0100_0000;
-  if (mask.sort) bytes[0] |= 0b0010_0000;
-  return bytes;
-}
-
-function signatureG1ToBytes(point: ProjPointType<Fp>) {
-  point.assertValidity();
-  const isZero = point.equals(bls12_381.G1.ProjectivePoint.ZERO);
-  const { x, y } = point.toAffine();
-  if (isZero) return COMPRESSED_ZERO.slice();
-  const P = Fp.ORDER;
-  const sort = Boolean((y * _2n) / P);
-  return setMask(numberToBytesBE(x, Fp.BYTES), { compressed: true, sort });
-}
-
-function signatureG1FromBytes(hex: Hex): ProjPointType<Fp> {
-  const { infinity, sort, value } = parseMask(ensureBytes('signatureHex', hex, 48));
-  const P = Fp.ORDER;
-  const compressedValue = bytesToNumberBE(value);
-  // Zero
-  if (infinity) return bls12_381.G1.ProjectivePoint.ZERO;
-  const x = Fp.create(compressedValue & Fp.MASK);
-  const right = Fp.add(Fp.pow(x, _3n), Fp.create(bls12_381.params.G1b)); // y² = x³ + b
-  let y = Fp.sqrt(right);
-  if (!y) throw new Error('invalid compressed G1 point');
-  const aflag = BigInt(sort);
-  if ((y * _2n) / P !== aflag) y = Fp.neg(y);
-  const point = bls12_381.G1.ProjectivePoint.fromAffine({ x, y });
-  point.assertValidity();
-  return point;
-}
-
-function signatureG2ToBytes(point: ProjPointType<Fp2>) {
-  // NOTE: by some reasons it was missed in bls12-381, looks like bug
-  point.assertValidity();
-  const len = Fp.BYTES;
-  if (point.equals(bls12_381.G2.ProjectivePoint.ZERO))
-    return concatB(COMPRESSED_ZERO, numberToBytesBE(_0n, len));
-  const { x, y } = point.toAffine();
-  const { re: x0, im: x1 } = Fp2.reim(x);
-  const { re: y0, im: y1 } = Fp2.reim(y);
-  const tmp = y1 > _0n ? y1 * _2n : y0 * _2n;
-  const sort = Boolean((tmp / Fp.ORDER) & _1n);
-  const z2 = x0;
-  return concatB(
-    setMask(numberToBytesBE(x1, len), { sort, compressed: true }),
-    numberToBytesBE(z2, len)
-  );
-}
-
-function signatureG2FromBytes(hex: Hex) {
-  // TODO: Optimize, it's very slow because of sqrt.
-  const { infinity, sort, value } = parseMask(ensureBytes('signatureHex', hex));
-  const P = Fp.ORDER;
-  const half = value.length / 2;
-  if (half !== 48 && half !== 96)
-    throw new Error('invalid compressed signature length, must be 96 or 192');
-  const z1 = bytesToNumberBE(value.slice(0, half));
-  const z2 = bytesToNumberBE(value.slice(half));
-  // Indicates the infinity point
-  if (infinity) return bls12_381.G2.ProjectivePoint.ZERO;
-  const x1 = Fp.create(z1 & Fp.MASK);
-  const x2 = Fp.create(z2);
-  const x = Fp2.create({ c0: x2, c1: x1 });
-  const y2 = Fp2.add(Fp2.pow(x, _3n), bls12_381.params.G2b); // y² = x³ + 4
-  // The slow part
-  let y = Fp2.sqrt(y2);
-  if (!y) throw new Error('Failed to find a square root');
-
-  // Choose the y whose leftmost bit of the imaginary part is equal to the a_flag1
-  // If y1 happens to be zero, then use the bit of y0
-  const { re: y0, im: y1 } = Fp2.reim(y);
-  const aflag1 = BigInt(sort);
-  const isGreater = y1 > _0n && (y1 * _2n) / P !== aflag1;
-  const isZero = y1 === _0n && (y0 * _2n) / P !== aflag1;
-  if (isGreater || isZero) y = Fp2.neg(y);
-  const point = bls12_381.G2.ProjectivePoint.fromAffine({ x, y });
-  point.assertValidity();
-  return point;
-}
-
-export const bls12_381_Fr: IField<bigint> = Fr;
-
-/**
- * bls12-381 pairing-friendly curve.
- * @example
- * import { bls12_381 as bls } from '@noble/curves/bls12-381';
- * // G1 keys, G2 signatures
- * const privateKey = '67d53f170b908cabb9eb326c3c337762d59289a8fec79f7bc9254b584b73265c';
- * const message = '64726e3da8';
- * const publicKey = bls.getPublicKey(privateKey);
- * const signature = bls.sign(message, privateKey);
- * const isValid = bls.verify(signature, message, publicKey);
- */
-export const bls12_381: CurveFn = bls({
-  // Fields
-  fields: {
-    Fp,
-    Fp2,
-    Fp6,
-    Fp12,
-    Fr,
-  },
-  // G1 is the order-q subgroup of E1(Fp) : y² = x³ + 4, #E1(Fp) = h1q, where
-  // characteristic; z + (z⁴ - z² + 1)(z - 1)²/3
-  G1: {
-    Fp,
-    // cofactor; (z - 1)²/3
-    h: BigInt('0x396c8c005555e1568c00aaab0000aaab'),
-    // generator's coordinates
-    // x = 3685416753713387016781088315183077757961620795782546409894578378688607592378376318836054947676345821548104185464507
-    // y = 1339506544944476473020471379941921221584933875938349620426543736416511423956333506472724655353366534992391756441569
-    Gx: BigInt(
-      '0x17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb'
-    ),
-    Gy: BigInt(
-      '0x08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
-    ),
-    a: Fp.ZERO,
-    b: _4n,
-    htfDefaults: { ...htfDefaults, m: 1, DST: 'BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_' },
-    wrapPrivateKey: true,
-    allowInfinityPoint: true,
-    // Checks is the point resides in prime-order subgroup.
-    // point.isTorsionFree() should return true for valid points
-    // It returns false for shitty points.
-    // https://eprint.iacr.org/2021/1130.pdf
-    isTorsionFree: (c, point): boolean => {
-      // GLV endomorphism ψ(P)
-      const beta = BigInt(
-        '0x5f19672fdf76ce51ba69c6076a0f77eaddb3a93be6f89688de17d813620a00022e01fffffffefffe'
-      );
-      const phi = new c(Fp.mul(point.px, beta), point.py, point.pz);
-      // TODO: unroll
-      const xP = point.multiplyUnsafe(BLS_X).negate(); // [x]P
-      const u2P = xP.multiplyUnsafe(BLS_X); // [u2]P
-      return u2P.equals(phi);
-    },
-    // Clear cofactor of G1
-    // https://eprint.iacr.org/2019/403
-    clearCofactor: (_c, point) => {
-      // return this.multiplyUnsafe(CURVE.h);
-      return point.multiplyUnsafe(BLS_X).add(point); // x*P + P
-    },
-    mapToCurve: (scalars: bigint[]) => {
-      const { x, y } = G1_SWU(Fp.create(scalars[0]));
-      return isogenyMapG1(x, y);
-    },
-    fromBytes: (bytes: Uint8Array): AffinePoint<Fp> => {
-      const { compressed, infinity, sort, value } = parseMask(bytes);
-      if (value.length === 48 && compressed) {
-        // TODO: Fp.bytes
-        const P = Fp.ORDER;
-        const compressedValue = bytesToNumberBE(value);
-        // Zero
-        const x = Fp.create(compressedValue & Fp.MASK);
-        if (infinity) {
-          if (x !== _0n) throw new Error('G1: non-empty compressed point at infinity');
-          return { x: _0n, y: _0n };
-        }
-        const right = Fp.add(Fp.pow(x, _3n), Fp.create(bls12_381.params.G1b)); // y² = x³ + b
-        let y = Fp.sqrt(right);
-        if (!y) throw new Error('invalid compressed G1 point');
-        if ((y * _2n) / P !== BigInt(sort)) y = Fp.neg(y);
-        return { x: Fp.create(x), y: Fp.create(y) };
-      } else if (value.length === 96 && !compressed) {
-        // Check if the infinity flag is set
-        const x = bytesToNumberBE(value.subarray(0, Fp.BYTES));
-        const y = bytesToNumberBE(value.subarray(Fp.BYTES));
-        if (infinity) {
-          if (x !== _0n || y !== _0n) throw new Error('G1: non-empty point at infinity');
-          return bls12_381.G1.ProjectivePoint.ZERO.toAffine();
-        }
-        return { x: Fp.create(x), y: Fp.create(y) };
-      } else {
-        throw new Error('invalid point G1, expected 48/96 bytes');
-      }
-    },
-    toBytes: (c, point, isCompressed) => {
-      const isZero = point.equals(c.ZERO);
-      const { x, y } = point.toAffine();
-      if (isCompressed) {
-        if (isZero) return COMPRESSED_ZERO.slice();
-        const P = Fp.ORDER;
-        const sort = Boolean((y * _2n) / P);
-        return setMask(numberToBytesBE(x, Fp.BYTES), { compressed: true, sort });
-      } else {
-        if (isZero) {
-          // 2x PUBLIC_KEY_LENGTH
-          const x = concatB(new Uint8Array([0x40]), new Uint8Array(2 * Fp.BYTES - 1));
-          return x;
-        } else {
-          return concatB(numberToBytesBE(x, Fp.BYTES), numberToBytesBE(y, Fp.BYTES));
-        }
-      }
-    },
-    ShortSignature: {
-      fromBytes(bytes: Uint8Array) {
-        abytes(bytes);
-        return signatureG1FromBytes(bytes);
-      },
-      fromHex(hex: Hex): ProjPointType<Fp> {
-        return signatureG1FromBytes(hex);
-      },
-      toBytes(point: ProjPointType<Fp>) {
-        return signatureG1ToBytes(point);
-      },
-      toRawBytes(point: ProjPointType<Fp>) {
-        return signatureG1ToBytes(point);
-      },
-      toHex(point: ProjPointType<Fp>) {
-        return bytesToHex(signatureG1ToBytes(point));
-      },
-    },
-  },
-  // G2 is the order-q subgroup of E2(Fp²) : y² = x³+4(1+√−1),
-  // where Fp2 is Fp[√−1]/(x2+1). #E2(Fp2 ) = h2q, where
-  // G² - 1
-  // h2q
-  G2: {
-    Fp: Fp2,
-    // cofactor
-    h: BigInt(
-      '0x5d543a95414e7f1091d50792876a202cd91de4547085abaa68a205b2e5a7ddfa628f1cb4d9e82ef21537e293a6691ae1616ec6e786f0c70cf1c38e31c7238e5'
-    ),
-    Gx: Fp2.fromBigTuple([
-      BigInt(
-        '0x024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb8'
-      ),
-      BigInt(
-        '0x13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e'
-      ),
-    ]),
-    // y =
-    // 927553665492332455747201965776037880757740193453592970025027978793976877002675564980949289727957565575433344219582,
-    // 1985150602287291935568054521177171638300868978215655730859378665066344726373823718423869104263333984641494340347905
-    Gy: Fp2.fromBigTuple([
-      BigInt(
-        '0x0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801'
-      ),
-      BigInt(
-        '0x0606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79be'
-      ),
-    ]),
-    a: Fp2.ZERO,
-    b: Fp2.fromBigTuple([_4n, _4n]),
-    hEff: BigInt(
-      '0xbc69f08f2ee75b3584c6a0ea91b352888e2a8e9145ad7689986ff031508ffe1329c2f178731db956d82bf015d1212b02ec0ec69d7477c1ae954cbc06689f6a359894c0adebbf6b4e8020005aaa95551'
-    ),
-    htfDefaults: { ...htfDefaults },
-    wrapPrivateKey: true,
-    allowInfinityPoint: true,
-    mapToCurve: (scalars: bigint[]) => {
-      const { x, y } = G2_SWU(Fp2.fromBigTuple(scalars as BigintTuple));
-      return isogenyMapG2(x, y);
-    },
-    // Checks is the point resides in prime-order subgroup.
-    // point.isTorsionFree() should return true for valid points
-    // It returns false for shitty points.
-    // https://eprint.iacr.org/2021/1130.pdf
-    // Older version: https://eprint.iacr.org/2019/814.pdf
-    isTorsionFree: (c, P): boolean => {
-      return P.multiplyUnsafe(BLS_X).negate().equals(G2psi(c, P)); // ψ(P) == [u](P)
-    },
-    // Maps the point into the prime-order subgroup G2.
-    // clear_cofactor_bls12381_g2 from RFC 9380.
-    // https://eprint.iacr.org/2017/419.pdf
-    // prettier-ignore
-    clearCofactor: (c, P) => {
-      const x = BLS_X;
-      let t1 = P.multiplyUnsafe(x).negate();  // [-x]P
-      let t2 = G2psi(c, P);                   // Ψ(P)
-      let t3 = P.double();                    // 2P
-      t3 = G2psi2(c, t3);                     // Ψ²(2P)
-      t3 = t3.subtract(t2);                   // Ψ²(2P) - Ψ(P)
-      t2 = t1.add(t2);                        // [-x]P + Ψ(P)
-      t2 = t2.multiplyUnsafe(x).negate();     // [x²]P - [x]Ψ(P)
-      t3 = t3.add(t2);                        // Ψ²(2P) - Ψ(P) + [x²]P - [x]Ψ(P)
-      t3 = t3.subtract(t1);                   // Ψ²(2P) - Ψ(P) + [x²]P - [x]Ψ(P) + [x]P
-      const Q = t3.subtract(P);               // Ψ²(2P) - Ψ(P) + [x²]P - [x]Ψ(P) + [x]P - 1P
-      return Q;                               // [x²-x-1]P + [x-1]Ψ(P) + Ψ²(2P)
-    },
-    fromBytes: (bytes: Uint8Array): AffinePoint<Fp2> => {
-      const { compressed, infinity, sort, value } = parseMask(bytes);
-      if (
-        (!compressed && !infinity && sort) || // 00100000
-        (!compressed && infinity && sort) || // 01100000
-        (sort && infinity && compressed) // 11100000
-      ) {
-        throw new Error('invalid encoding flag: ' + (bytes[0] & 0b1110_0000));
-      }
-      const L = Fp.BYTES;
-      const slc = (b: Uint8Array, from: number, to?: number) => bytesToNumberBE(b.slice(from, to));
-      if (value.length === 96 && compressed) {
-        const b = bls12_381.params.G2b;
-        const P = Fp.ORDER;
-        if (infinity) {
-          // check that all bytes are 0
-          if (value.reduce((p, c) => (p !== 0 ? c + 1 : c), 0) > 0) {
-            throw new Error('invalid compressed G2 point');
-          }
-          return { x: Fp2.ZERO, y: Fp2.ZERO };
-        }
-        const x_1 = slc(value, 0, L);
-        const x_0 = slc(value, L, 2 * L);
-        const x = Fp2.create({ c0: Fp.create(x_0), c1: Fp.create(x_1) });
-        const right = Fp2.add(Fp2.pow(x, _3n), b); // y² = x³ + 4 * (u+1) = x³ + b
-        let y = Fp2.sqrt(right);
-        const Y_bit = y.c1 === _0n ? (y.c0 * _2n) / P : (y.c1 * _2n) / P ? _1n : _0n;
-        y = sort && Y_bit > 0 ? y : Fp2.neg(y);
-        return { x, y };
-      } else if (value.length === 192 && !compressed) {
-        if (infinity) {
-          if (value.reduce((p, c) => (p !== 0 ? c + 1 : c), 0) > 0) {
-            throw new Error('invalid uncompressed G2 point');
-          }
-          return { x: Fp2.ZERO, y: Fp2.ZERO };
-        }
-        const x1 = slc(value, 0, L);
-        const x0 = slc(value, L, 2 * L);
-        const y1 = slc(value, 2 * L, 3 * L);
-        const y0 = slc(value, 3 * L, 4 * L);
-        return { x: Fp2.fromBigTuple([x0, x1]), y: Fp2.fromBigTuple([y0, y1]) };
-      } else {
-        throw new Error('invalid point G2, expected 96/192 bytes');
-      }
-    },
-    toBytes: (c, point, isCompressed) => {
-      const { BYTES: len, ORDER: P } = Fp;
-      const isZero = point.equals(c.ZERO);
-      const { x, y } = point.toAffine();
-      if (isCompressed) {
-        if (isZero) return concatB(COMPRESSED_ZERO, numberToBytesBE(_0n, len));
-        const flag = Boolean(y.c1 === _0n ? (y.c0 * _2n) / P : (y.c1 * _2n) / P);
-        return concatB(
-          setMask(numberToBytesBE(x.c1, len), { compressed: true, sort: flag }),
-          numberToBytesBE(x.c0, len)
-        );
-      } else {
-        if (isZero) return concatB(new Uint8Array([0x40]), new Uint8Array(4 * len - 1)); // bytes[0] |= 1 << 6;
-        const { re: x0, im: x1 } = Fp2.reim(x);
-        const { re: y0, im: y1 } = Fp2.reim(y);
-        return concatB(
-          numberToBytesBE(x1, len),
-          numberToBytesBE(x0, len),
-          numberToBytesBE(y1, len),
-          numberToBytesBE(y0, len)
-        );
-      }
-    },
-    Signature: {
-      fromBytes(bytes: Uint8Array): ProjPointType<Fp2> {
-        abytes(bytes);
-        return signatureG2FromBytes(bytes);
-      },
-      fromHex(hex: Hex): ProjPointType<Fp2> {
-        return signatureG2FromBytes(hex);
-      },
-      toBytes(point: ProjPointType<Fp2>) {
-        return signatureG2ToBytes(point);
-      },
-      toRawBytes(point: ProjPointType<Fp2>) {
-        return signatureG2ToBytes(point);
-      },
-      toHex(point: ProjPointType<Fp2>) {
-        return bytesToHex(signatureG2ToBytes(point));
-      },
-    },
-  },
-  params: {
-    ateLoopSize: BLS_X, // The BLS parameter x for BLS12-381
-    r: Fr.ORDER, // order; z⁴ − z² + 1; CURVE.n from other curves
-    xNegative: true,
-    twistType: 'multiplicative',
-  },
-  htfDefaults,
-  hash: sha256,
-  randomBytes,
+// SWU Map - Fp2 to G2': y² = x³ + 240i * x + 1012 + 1012i
+const G2_SWU = mapToCurveSimpleSWU(Fp2, {
+  A: Fp2.create({ c0: Fp.create(_0n), c1: Fp.create(BigInt(240)) }), // A' = 240 * I
+  B: Fp2.create({ c0: Fp.create(BigInt(1012)), c1: Fp.create(BigInt(1012)) }), // B' = 1012 * (1 + I)
+  Z: Fp2.create({ c0: Fp.create(BigInt(-2)), c1: Fp.create(BigInt(-1)) }), // Z: -(2 + I)
 });
+
+function mapToG1(scalars: bigint[]) {
+  const { x, y } = G1_SWU(Fp.create(scalars[0]));
+  return isogenyMapG1(x, y);
+}
+function mapToG2(scalars: bigint[]) {
+  const { x, y } = G2_SWU(Fp2.fromBigTuple(scalars as BigintTuple));
+  return isogenyMapG2(x, y);
+}

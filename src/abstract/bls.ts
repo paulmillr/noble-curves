@@ -75,12 +75,12 @@ export type PostPrecomputeFn = (
   pointAdd: PostPrecomputePointAddFn
 ) => void;
 export type CurveType = {
-  G1: Omit<CurvePointsType<Fp>, 'n'> & {
+  G1: CurvePointsType<Fp> & {
     ShortSignature: SignatureCoder<Fp>;
     mapToCurve: MapToCurve<Fp>;
     htfDefaults: HTFOpts;
   };
-  G2: Omit<CurvePointsType<Fp2>, 'n'> & {
+  G2: CurvePointsType<Fp2> & {
     Signature: SignatureCoder<Fp2>;
     mapToCurve: MapToCurve<Fp2>;
     htfDefaults: HTFOpts;
@@ -98,7 +98,7 @@ export type CurveType = {
     // Can be different from 'X' (seed) param!
     ateLoopSize: bigint;
     xNegative: boolean;
-    r: bigint;
+    r: bigint; // TODO: remove
     twistType: TwistType; // BLS12-381: Multiplicative, BN254: Divisive
   };
   htfDefaults: HTFOpts;
@@ -201,7 +201,7 @@ export function bls(CURVE: CurveType): CurveFn {
   const BLS_X_IS_NEGATIVE = CURVE.params.xNegative;
   const TWIST: TwistType = CURVE.params.twistType;
   // Point on G1 curve: (x, y)
-  const G1_ = weierstrassPoints({ n: Fr.ORDER, ...CURVE.G1 });
+  const G1_ = weierstrassPoints(CURVE.G1);
   const G1 = Object.assign(
     G1_,
     createHasher(G1_.ProjectivePoint, CURVE.G1.mapToCurve, {
@@ -210,7 +210,7 @@ export function bls(CURVE: CurveType): CurveFn {
     })
   );
   // Point on G2 curve (complex numbers): (x₁, x₂+i), (y₁, y₂+i)
-  const G2_ = weierstrassPoints({ n: Fr.ORDER, ...CURVE.G2 });
+  const G2_ = weierstrassPoints(CURVE.G2);
   const G2 = Object.assign(
     G2_,
     createHasher(G2_.ProjectivePoint as H2CPointConstructor<Fp2>, CURVE.G2.mapToCurve, {

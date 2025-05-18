@@ -77,10 +77,10 @@ const BN_X_LEN = bitLen(BN_X);
 const SIX_X_SQUARED = _6n * BN_X ** _2n;
 
 // Finite field over r. It's for convenience and is not used in the code below.
-const Fr = Field(
+export const bn254_Fr: IField<bigint> = Field(
   BigInt('21888242871839275222246405745257275088548364400416034343698204186575808495617')
 );
-export const bn254_Fr: IField<bigint> = Fr;
+const Fr = bn254_Fr;
 
 // Fp2.div(Fp2.mul(Fp2.ONE, _3n), Fp2.NONRESIDUE)
 const Fp2B = {
@@ -179,6 +179,33 @@ export const _postPrecompute: PostPrecomputeFn = (
   pointAdd(Rx, Ry, Rz, q2[0], Fp2.neg(q2[1]));
 };
 
+const CURVE_G1 = {
+  Fp,
+  a: Fp.ZERO,
+  b: _3n,
+  n: Fr.ORDER,
+  h: BigInt(1),
+  Gx: BigInt(1),
+  Gy: BigInt(2),
+};
+
+const CURVE_G2 = {
+  Fp: Fp2,
+  a: Fp2.ZERO,
+  b: Fp2B,
+  n: Fr.ORDER,
+  // cofactor: (36 * X^4) + (36 * X^3) + (30 * X^2) + 6*X + 1
+  h: BigInt('21888242871839275222246405745257275088844257914179612981679871602714643921549'),
+  Gx: Fp2.fromBigTuple([
+    BigInt('10857046999023057135944570762232829481370756359578518086990519993285655852781'),
+    BigInt('11559732032986387107991004021392285783925812861821192530917403151452391805634'),
+  ]),
+  Gy: Fp2.fromBigTuple([
+    BigInt('8495653923123431417604973247489272438418190587263600148770280649306958101930'),
+    BigInt('4082367875863433681332203403145435568316851327593401208105741076214120093531'),
+  ]),
+};
+
 /**
  * bn254 (a.k.a. alt_bn128) pairing-friendly curve.
  * Contains G1 / G2 operations and pairings.
@@ -187,12 +214,7 @@ export const bn254: BLSCurveFn = bls({
   // Fields
   fields: { Fp, Fp2, Fp6, Fp12, Fr },
   G1: {
-    Fp,
-    h: BigInt(1),
-    Gx: BigInt(1),
-    Gy: BigInt(2),
-    a: Fp.ZERO,
-    b: _3n,
+    ...CURVE_G1,
     htfDefaults: { ...htfDefaults, m: 1, DST: 'BN254G2_XMD:SHA-256_SVDW_RO_' },
     wrapPrivateKey: true,
     allowInfinityPoint: true,
@@ -208,19 +230,7 @@ export const bn254: BLSCurveFn = bls({
     },
   },
   G2: {
-    Fp: Fp2,
-    // cofactor: (36 * X^4) + (36 * X^3) + (30 * X^2) + 6*X + 1
-    h: BigInt('21888242871839275222246405745257275088844257914179612981679871602714643921549'),
-    Gx: Fp2.fromBigTuple([
-      BigInt('10857046999023057135944570762232829481370756359578518086990519993285655852781'),
-      BigInt('11559732032986387107991004021392285783925812861821192530917403151452391805634'),
-    ]),
-    Gy: Fp2.fromBigTuple([
-      BigInt('8495653923123431417604973247489272438418190587263600148770280649306958101930'),
-      BigInt('4082367875863433681332203403145435568316851327593401208105741076214120093531'),
-    ]),
-    a: Fp2.ZERO,
-    b: Fp2B,
+    ...CURVE_G2,
     hEff: BigInt('21888242871839275222246405745257275088844257914179612981679871602714643921549'),
     htfDefaults: { ...htfDefaults },
     wrapPrivateKey: true,
@@ -239,14 +249,12 @@ export const bn254: BLSCurveFn = bls({
   },
   params: {
     ateLoopSize: BN_X * _6n + _2n,
-    r: Fr.ORDER,
     xNegative: false,
     twistType: 'divisive',
   },
   htfDefaults,
   hash: sha256,
   randomBytes,
-
   postPrecompute: _postPrecompute,
 });
 
