@@ -122,6 +122,7 @@ export interface ProjPointType<T> extends Group<ProjPointType<T>> {
   assertValidity(): void;
   clearCofactor(): ProjPointType<T>;
   hasEvenY(): boolean;
+  is0(): boolean;
   isTorsionFree(): boolean;
   multiplyUnsafe(scalar: bigint): ProjPointType<T>;
   multiplyAndAddUnsafe(Q: ProjPointType<T>, a: bigint, b: bigint): ProjPointType<T> | undefined;
