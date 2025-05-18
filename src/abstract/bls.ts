@@ -15,7 +15,6 @@
  * @module
  **/
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-// TODO: import { AffinePoint } from './curve.ts';
 import {
   createHasher,
   type H2CPointConstructor,
@@ -353,9 +352,22 @@ export function bls(CURVE: CurveType): CurveFn {
 
   // NEW code
 
+  // TODO: add verifyBatch, fix types, Export Signature property,
+  // actually expose the generated APIs
   function createBls<P, S>(PubCurve: any, SigCurve: any) {
     type PubPoint = ProjPointType<P>;
     type SigPoint = ProjPointType<S>;
+
+    function apub(p: unknown) {
+      if (!(p instanceof PubCurve.ProjectivePoint))
+        throw new Error('expected valid point on pubkey curve');
+    }
+
+    function asig(p: unknown) {
+      if (!(p instanceof SigCurve.ProjectivePoint))
+        throw new Error('expected valid point on signature curve');
+    }
+
     // TODO: is this always ok?
     const longSigs = PubCurve.CURVE.Fp.BYTES < SigCurve.CURVE.Fp.BYTES;
     return {
@@ -365,6 +377,7 @@ export function bls(CURVE: CurveType): CurveFn {
       },
       // S = pk x H(m)
       sign(message: SigPoint, privateKey: PrivKey): SigPoint {
+        asig(message);
         message.assertValidity();
         return message.multiply(PubCurve.normPrivateKeyToScalar(privateKey));
       },
@@ -372,10 +385,16 @@ export function bls(CURVE: CurveType): CurveFn {
       // e(P, H(m)) == e(G, S)
       // e(S, G) == e(H(m), P)
       verify(signature: SigPoint, message: SigPoint, publicKey: PubPoint): boolean {
+        asig(signature);
+        asig(message);
+        apub(publicKey);
         const P = publicKey.negate();
         const G = PubCurve.ProjectivePoint.BASE;
         const Hm = message;
         const S = signature;
+        // This code was changed in 1.9.x:
+        // Before it was G.negate() in G2, now it's always pubKey.negate
+        // TODO: understand if this is OK?
         // prettier-ignore
         const exp_ = longSigs ? [
           { g1: P, g2: Hm },
@@ -394,24 +413,24 @@ export function bls(CURVE: CurveType): CurveFn {
       // pk1 + pk2 + pk3 = pkA
       aggregatePublicKeys(publicKeys: PubPoint[]): PubPoint {
         aNonEmpty(publicKeys);
+        publicKeys.forEach(apub);
         const agg = publicKeys.reduce((sum, p) => sum.add(p), PubCurve.ProjectivePoint.ZERO);
-        //.toAffine();
         agg.assertValidity();
         return agg;
       },
 
+      // Adds a bunch of signature points together.
+      // pk1 + pk2 + pk3 = pkA
       aggregateSignatures(signatures: SigPoint[]): SigPoint {
         aNonEmpty(signatures);
+        signatures.forEach(asig);
         const agg = signatures.reduce((sum, s) => sum.add(s), SigCurve.ProjectivePoint.ZERO);
-        //.toAffine();
         agg.assertValidity();
         return agg;
       },
     };
   }
 
-  // TODO: expose these new APIs
-  // TODO: Export Signature property on each
   const longSignatures = createBls<bigint, Fp2>(G1, G2);
   const shortSignatures = createBls<Fp2, bigint>(G2, G1);
 
