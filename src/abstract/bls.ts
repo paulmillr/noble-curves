@@ -1,5 +1,4 @@
 /**
- * BLS (Barreto-Lynn-Scott) family of pairing-friendly curves.
  * BLS != BLS.
  * The file implements BLS (Boneh-Lynn-Shacham) signatures.
  * Used in both BLS (Barreto-Lynn-Scott) and BN (Barreto-Naehrig)
@@ -10,9 +9,9 @@
  * - Gt, created by bilinear (ate) pairing e(G1, G2), consists of p-th roots of unity in
  *   Fq^k where k is embedding degree. Only degree 12 is currently supported, 24 is not.
  * Pairing is used to aggregate and verify signatures.
- * There are two main ways to use it:
- * 1. Fp for short private keys, Fp₂ for signatures
- * 2. Fp for short signatures, Fp₂ for private keys
+ * There are two modes of operation:
+ * - Long signatures:  X-byte keys + 2X-byte sigs (G1 keys + G2 sigs).
+ * - Short signatures: 2X-byte keys + X-byte sigs (G2 keys + G1 sigs).
  * @module
  **/
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */

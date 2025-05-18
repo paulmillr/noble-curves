@@ -249,6 +249,7 @@ export const bn254: BLSCurveFn = bls({
   },
   params: {
     ateLoopSize: BN_X * _6n + _2n,
+    r: bn254_Fr.ORDER,
     xNegative: false,
     twistType: 'divisive',
   },
