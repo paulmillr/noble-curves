@@ -347,6 +347,75 @@ export function bls(CURVE: CurveType): CurveFn {
     calcPairingPrecomputes,
   };
 
+  function aNonEmpty(arr: any[]) {
+    if (!Array.isArray(arr) || arr.length === 0) throw new Error('expected non-empty array');
+  }
+
+  // NEW code
+
+  function createBls<P, S>(PubCurve: any, SigCurve: any) {
+    type PubPoint = ProjPointType<P>;
+    type SigPoint = ProjPointType<S>;
+    // TODO: is this always ok?
+    const longSigs = PubCurve.CURVE.Fp.BYTES < SigCurve.CURVE.Fp.BYTES;
+    return {
+      // P = pk x G
+      getPublicKey(privateKey: PrivKey): PubPoint {
+        return PubCurve.ProjectivePoint.fromPrivateKey(privateKey);
+      },
+      // S = pk x H(m)
+      sign(message: SigPoint, privateKey: PrivKey): SigPoint {
+        message.assertValidity();
+        return message.multiply(PubCurve.normPrivateKeyToScalar(privateKey));
+      },
+      // Checks if pairing of public key & hash is equal to pairing of generator & signature.
+      // e(P, H(m)) == e(G, S)
+      // e(S, G) == e(H(m), P)
+      verify(signature: SigPoint, message: SigPoint, publicKey: PubPoint): boolean {
+        const P = publicKey.negate();
+        const G = PubCurve.ProjectivePoint.BASE;
+        const Hm = message;
+        const S = signature;
+        // prettier-ignore
+        const exp_ = longSigs ? [
+          { g1: P, g2: Hm },
+          { g1: G, g2: S }
+        ] : [
+          { g1: Hm, g2: P },
+          { g1: S, g2: G }
+        ];
+        // TODO
+        // @ts-ignore
+        const exp = pairingBatch(exp_);
+        return Fp12.eql(exp, Fp12.ONE);
+      },
+
+      // Adds a bunch of public key points together.
+      // pk1 + pk2 + pk3 = pkA
+      aggregatePublicKeys(publicKeys: PubPoint[]): PubPoint {
+        aNonEmpty(publicKeys);
+        const agg = publicKeys.reduce((sum, p) => sum.add(p), PubCurve.ProjectivePoint.ZERO);
+        //.toAffine();
+        agg.assertValidity();
+        return agg;
+      },
+
+      aggregateSignatures(signatures: SigPoint[]): SigPoint {
+        aNonEmpty(signatures);
+        const agg = signatures.reduce((sum, s) => sum.add(s), SigCurve.ProjectivePoint.ZERO);
+        //.toAffine();
+        agg.assertValidity();
+        return agg;
+      },
+    };
+  }
+
+  // TODO: expose these new APIs
+  // TODO: Export Signature property on each
+  const longSignatures = createBls<bigint, Fp2>(G1, G2);
+  const shortSignatures = createBls<Fp2, bigint>(G2, G1);
+
+  // LEGACY code
   const { ShortSignature } = CURVE.G1;
   const { Signature } = CURVE.G2;
 
@@ -369,30 +438,19 @@ export function bls(CURVE: CurveType): CurveFn {
       : (G2.hashToCurve(ensureBytes('point', point), htfOpts) as G2);
   }
 
-  // Multiplies generator (G1) by private key.
-  // P = pk x G
   function getPublicKey(privateKey: PrivKey): Uint8Array {
-    return G1.ProjectivePoint.fromPrivateKey(privateKey).toBytes(true);
+    return longSignatures.getPublicKey(privateKey).toBytes(true);
   }
-
-  // Multiplies generator (G2) by private key.
-  // P = pk x G
   function getPublicKeyForShortSignatures(privateKey: PrivKey): Uint8Array {
-    return G2.ProjectivePoint.fromPrivateKey(privateKey).toBytes(true);
+    return shortSignatures.getPublicKey(privateKey).toBytes(true);
   }
-
-  // Executes `hashToCurve` on the message and then multiplies the result by private key.
-  // S = pk x H(m)
   function sign(message: Hex, privateKey: PrivKey, htfOpts?: htfBasicOpts): Uint8Array;
   function sign(message: G2, privateKey: PrivKey, htfOpts?: htfBasicOpts): G2;
   function sign(message: G2Hex, privateKey: PrivKey, htfOpts?: htfBasicOpts): Uint8Array | G2 {
-    const msgPoint = normP2Hash(message, htfOpts);
-    msgPoint.assertValidity();
-    const sigPoint = msgPoint.multiply(G1.normPrivateKeyToScalar(privateKey));
-    if (message instanceof G2.ProjectivePoint) return sigPoint;
-    return Signature.toBytes(sigPoint);
+    const Hm = normP2Hash(message, htfOpts);
+    const S = longSignatures.sign(Hm, privateKey);
+    return message instanceof G2.ProjectivePoint ? S : Signature.toBytes(S);
   }
-
   function signShortSignature(
     message: Hex,
     privateKey: PrivKey,
@@ -404,15 +462,10 @@ export function bls(CURVE: CurveType): CurveFn {
     privateKey: PrivKey,
     htfOpts?: htfBasicOpts
   ): Uint8Array | G1 {
-    const msgPoint = normP1Hash(message, htfOpts);
-    msgPoint.assertValidity();
-    const sigPoint = msgPoint.multiply(G1.normPrivateKeyToScalar(privateKey));
-    if (message instanceof G1.ProjectivePoint) return sigPoint;
-    return ShortSignature.toBytes(sigPoint);
+    const Hm = normP1Hash(message, htfOpts);
+    const S = shortSignatures.sign(Hm, privateKey);
+    return message instanceof G1.ProjectivePoint ? S : ShortSignature.toBytes(S);
   }
-
-  // Checks if pairing of public key & hash is equal to pairing of generator & signature.
-  // e(P, H(m)) == e(G, S)
   function verify(
     signature: G2Hex,
     message: G2Hex,
@@ -421,17 +474,9 @@ export function bls(CURVE: CurveType): CurveFn {
   ): boolean {
     const P = normP1(publicKey);
     const Hm = normP2Hash(message, htfOpts);
-    const G = G1.ProjectivePoint.BASE;
     const S = normP2(signature);
-    const exp = pairingBatch([
-      { g1: P.negate(), g2: Hm }, // ePHM = pairing(P.negate(), Hm, false);
-      { g1: G, g2: S }, // eGS = pairing(G, S, false);
-    ]);
-    return Fp12.eql(exp, Fp12.ONE);
+    return longSignatures.verify(S, Hm, P);
   }
-
-  // Checks if pairing of public key & hash is equal to pairing of generator & signature.
-  // e(S, G) == e(H(m), P)
   function verifyShortSignature(
     signature: G1Hex,
     message: G1Hex,
@@ -440,68 +485,33 @@ export function bls(CURVE: CurveType): CurveFn {
   ): boolean {
     const P = normP2(publicKey);
     const Hm = normP1Hash(message, htfOpts);
-    const G = G2.ProjectivePoint.BASE;
     const S = normP1(signature);
-    const exp = pairingBatch([
-      { g1: Hm, g2: P }, // eHmP = pairing(Hm, P, false);
-      { g1: S, g2: G.negate() }, // eSG = pairing(S, G.negate(), false);
-    ]);
-    return Fp12.eql(exp, Fp12.ONE);
+    return shortSignatures.verify(S, Hm, P);
   }
-
-  function aNonEmpty(arr: any[]) {
-    if (!Array.isArray(arr) || arr.length === 0) throw new Error('expected non-empty array');
-  }
-
-  // Adds a bunch of public key points together.
-  // pk1 + pk2 + pk3 = pkA
   function aggregatePublicKeys(publicKeys: Hex[]): Uint8Array;
   function aggregatePublicKeys(publicKeys: G1[]): G1;
   function aggregatePublicKeys(publicKeys: G1Hex[]): Uint8Array | G1 {
-    aNonEmpty(publicKeys);
-    const agg = publicKeys.map(normP1).reduce((sum, p) => sum.add(p), G1.ProjectivePoint.ZERO);
-    const aggAffine = agg; //.toAffine();
-    if (publicKeys[0] instanceof G1.ProjectivePoint) {
-      aggAffine.assertValidity();
-      return aggAffine;
-    }
-    // ensures point validity
-    return aggAffine.toBytes(true);
+    const agg = longSignatures.aggregatePublicKeys(publicKeys.map(normP1));
+    return publicKeys[0] instanceof G1.ProjectivePoint ? agg : agg.toBytes(true);
   }
-
-  // Adds a bunch of signature points together.
   function aggregateSignatures(signatures: Hex[]): Uint8Array;
   function aggregateSignatures(signatures: G2[]): G2;
   function aggregateSignatures(signatures: G2Hex[]): Uint8Array | G2 {
-    aNonEmpty(signatures);
-    const agg = signatures.map(normP2).reduce((sum, s) => sum.add(s), G2.ProjectivePoint.ZERO);
-    const aggAffine = agg; //.toAffine();
-    if (signatures[0] instanceof G2.ProjectivePoint) {
-      aggAffine.assertValidity();
-      return aggAffine;
-    }
-    return Signature.toBytes(aggAffine);
+    const agg = longSignatures.aggregateSignatures(signatures.map(normP2));
+    return signatures[0] instanceof G2.ProjectivePoint ? agg : Signature.toBytes(agg);
   }
-
-  // Adds a bunch of signature points together.
   function aggregateShortSignatures(signatures: Hex[]): Uint8Array;
   function aggregateShortSignatures(signatures: G1[]): G1;
   function aggregateShortSignatures(signatures: G1Hex[]): Uint8Array | G1 {
-    aNonEmpty(signatures);
-    const agg = signatures.map(normP1).reduce((sum, s) => sum.add(s), G1.ProjectivePoint.ZERO);
-    const aggAffine = agg; //.toAffine();
-    if (signatures[0] instanceof G1.ProjectivePoint) {
-      aggAffine.assertValidity();
-      return aggAffine;
-    }
-    return ShortSignature.toBytes(aggAffine);
+    const agg = shortSignatures.aggregateSignatures(signatures.map(normP1));
+    return signatures[0] instanceof G1.ProjectivePoint ? agg : ShortSignature.toBytes(agg);
   }
 
   // https://ethresear.ch/t/fast-verification-of-multiple-bls-signatures/5407
   // e(G, S) = e(G, SUM(n)(Si)) = MUL(n)(e(G, Si))
+  // TODO: maybe `{message: G2Hex, publicKey: G1Hex}[]` instead?
   function verifyBatch(
     signature: G2Hex,
-    // TODO: maybe `{message: G2Hex, publicKey: G1Hex}[]` instead?
     messages: G2Hex[],
     publicKeys: G1Hex[],
     htfOpts?: htfBasicOpts
