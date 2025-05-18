@@ -573,6 +573,7 @@ export function weierstrassPoints<T>(opts: CurvePointsType<T>): CurvePointsRes<T
       wnaf.setWindowSize(this, windowSize);
     }
 
+    // TODO: return `this`
     /** A point on curve is valid if it conforms to equation. */
     assertValidity(): void {
       assertValidMemo(this);
