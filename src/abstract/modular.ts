@@ -1,6 +1,6 @@
 /**
- * Utils for modular division and finite fields.
- * A finite field over 11 is integer number operations `mod 11`.
+ * Utils for modular division and fields.
+ * Field over 11 is a finite (Galois) field is integer number operations `mod 11`.
  * There is no division: it is replaced by modular multiplicative inverse.
  * @module
  */
@@ -19,7 +19,8 @@ import {
 // prettier-ignore
 const _0n = BigInt(0), _1n = BigInt(1), _2n = /* @__PURE__ */ BigInt(2), _3n = /* @__PURE__ */ BigInt(3);
 // prettier-ignore
-const _4n = /* @__PURE__ */ BigInt(4), _5n = /* @__PURE__ */ BigInt(5), _8n = /* @__PURE__ */ BigInt(8);
+const _4n = /* @__PURE__ */ BigInt(4), _5n = /* @__PURE__ */ BigInt(5);
+const _8n = /* @__PURE__ */ BigInt(8);
 
 // Calculates a modulo b
 export function mod(a: bigint, b: bigint): bigint {
@@ -369,19 +370,24 @@ export function nLength(
 }
 
 type FpField = IField<bigint> & Required<Pick<IField<bigint>, 'isOdd'>>;
+
 /**
- * Initializes a finite field over prime.
- * Major performance optimizations:
- * * a) denormalized operations like mulN instead of mul
- * * b) same object shape: never add or remove keys
- * * c) Object.freeze
+ * Creates a finite field. Major performance optimizations:
+ * * 1. Denormalized operations like mulN instead of mul.
+ * * 2. Identical object shape: never add or remove keys.
+ * * 3. `Object.freeze`.
  * Fragile: always run a benchmark on a change.
  * Security note: operations don't check 'isValid' for all elements for performance reasons,
  * it is caller responsibility to check this.
  * This is low-level code, please make sure you know what you're doing.
- * @param ORDER prime positive bigint
+ *
+ * Note about field properties:
+ * * CHARACTERISTIC p = prime number, number of elements in main subgroup.
+ * * ORDER q = similar to cofactor in curves, may be composite `q = p^m`.
+ *
+ * @param ORDER field order, probably prime, or could be composite
  * @param bitLen how many bits the field consumes
- * @param isLE (def: false) if encoding / decoding should be in little-endian
+ * @param isLE (default: false) if encoding / decoding should be in little-endian
  * @param redef optional faster redefinitions of sqrt and other methods
  */
 export function Field(
