@@ -421,8 +421,8 @@ class RistPoint implements Group<RistPoint> {
   static fromHex(hex: Hex): RistPoint {
     hex = ensureBytes('ristrettoHex', hex, 32);
     const { a, d } = ed25519.CURVE;
-    const P = ed25519.CURVE.Fp.ORDER;
-    const mod = ed25519.CURVE.Fp.create;
+    const P = Fp.ORDER;
+    const mod = Fp.create;
     const emsg = 'RistrettoPoint.fromHex: the hex is not valid encoding of RistrettoPoint';
     const s = bytes255ToNumberLE(hex);
     // 1. Check that s_bytes is the canonical encoding of a field element, or else abort.
@@ -456,8 +456,8 @@ class RistPoint implements Group<RistPoint> {
    */
   toBytes(): Uint8Array {
     let { ex: x, ey: y, ez: z, et: t } = this.ep;
-    const P = ed25519.CURVE.Fp.ORDER;
-    const mod = ed25519.CURVE.Fp.create;
+    const P = Fp.ORDER;
+    const mod = Fp.create;
     const u1 = mod(mod(z + y) * mod(z - y)); // 1
     const u2 = mod(x * y); // 2
     // Square root always exists
@@ -503,7 +503,7 @@ class RistPoint implements Group<RistPoint> {
     aristp(other);
     const { ex: X1, ey: Y1 } = this.ep;
     const { ex: X2, ey: Y2 } = other.ep;
-    const mod = ed25519.CURVE.Fp.create;
+    const mod = Fp.create;
     // (x1 * y2 == y1 * x2) | (y1 * y2 == x1 * x2)
     const one = mod(X1 * Y2) === mod(Y1 * X2);
     const two = mod(Y1 * Y2) === mod(X1 * X2);

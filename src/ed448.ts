@@ -316,8 +316,7 @@ const invertSqrt = (number: bigint) => uvRatio(_1n, number);
 const MAX_448B = /* @__PURE__ */ BigInt(
   '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
 );
-const bytes448ToNumberLE = (bytes: Uint8Array) =>
-  ed448.CURVE.Fp.create(bytesToNumberLE(bytes) & MAX_448B);
+const bytes448ToNumberLE = (bytes: Uint8Array) => Fp.create(bytesToNumberLE(bytes) & MAX_448B);
 
 type ExtendedPoint = ExtPointType;
 
@@ -328,8 +327,8 @@ type ExtendedPoint = ExtPointType;
  */
 function calcElligatorDecafMap(r0: bigint): ExtendedPoint {
   const { d } = ed448.CURVE;
-  const P = ed448.CURVE.Fp.ORDER;
-  const mod = ed448.CURVE.Fp.create;
+  const P = Fp.ORDER;
+  const mod = Fp.create;
 
   const r = mod(-(r0 * r0)); // 1
   const u0 = mod(d * (r - _1n)); // 2
@@ -406,8 +405,8 @@ class DcfPoint implements Group<DcfPoint> {
   static fromHex(hex: Hex): DcfPoint {
     hex = ensureBytes('decafHex', hex, 56);
     const { d } = ed448.CURVE;
-    const P = ed448.CURVE.Fp.ORDER;
-    const mod = ed448.CURVE.Fp.create;
+    const P = Fp.ORDER;
+    const mod = Fp.create;
     const emsg = 'DecafPoint.fromHex: the hex is not valid encoding of DecafPoint';
     const s = bytes448ToNumberLE(hex);
 
@@ -444,8 +443,8 @@ class DcfPoint implements Group<DcfPoint> {
    */
   toBytes(): Uint8Array {
     let { ex: x, ey: _y, ez: z, et: t } = this.ep;
-    const P = ed448.CURVE.Fp.ORDER;
-    const mod = ed448.CURVE.Fp.create;
+    const P = Fp.ORDER;
+    const mod = Fp.create;
 
     const u1 = mod(mod(x + t) * mod(x - t)); // 1
     const x2 = mod(x * x);
@@ -483,7 +482,7 @@ class DcfPoint implements Group<DcfPoint> {
     adecafp(other);
     const { ex: X1, ey: Y1 } = this.ep;
     const { ex: X2, ey: Y2 } = other.ep;
-    const mod = ed448.CURVE.Fp.create;
+    const mod = Fp.create;
     // (x1 * y2 == y1 * x2)
     return mod(X1 * Y2) === mod(Y1 * X2);
   }
