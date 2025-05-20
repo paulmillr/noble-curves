@@ -186,23 +186,19 @@ export function tower12(opts: Tower12Opts): {
     const c = Fp.add(c0, c0);
     return { c0: Fp.mul(a, b), c1: Fp.mul(c, c1) };
   };
-  type Fp2Utils = {
-    NONRESIDUE: Fp2;
-    fromBigTuple: (tuple: BigintTuple | bigint[]) => Fp2;
-    reim: (num: Fp2) => { re: bigint; im: bigint };
-    mulByNonresidue: (num: Fp2) => Fp2;
-    mulByB: (num: Fp2) => Fp2;
-    frobeniusMap(num: Fp2, power: number): Fp2;
-  };
   const Fp2fromBigTuple = (tuple: BigintTuple | bigint[]) => {
     if (tuple.length !== 2) throw new Error('invalid tuple');
     const fps = tuple.map((n) => Fp.create(n)) as [Fp, Fp];
     return { c0: fps[0], c1: fps[1] };
   };
 
+  function isValidC(num: bigint, ORDER: bigint) {
+    return typeof num === 'bigint' && _0n <= num && num < ORDER;
+  }
+
   const FP2_ORDER = ORDER * ORDER;
   const Fp2Nonresidue = Fp2fromBigTuple(opts.FP2_NONRESIDUE);
-  const Fp2: mod.IField<Fp2> & Fp2Utils = {
+  const Fp2: Fp2Bls = {
     ORDER: FP2_ORDER,
     isLE: Fp.isLE,
     NONRESIDUE: Fp2Nonresidue,
@@ -212,7 +208,7 @@ export function tower12(opts: Tower12Opts): {
     ZERO: { c0: Fp.ZERO, c1: Fp.ZERO },
     ONE: { c0: Fp.ONE, c1: Fp.ZERO },
     create: (num) => num,
-    isValid: ({ c0, c1 }) => typeof c0 === 'bigint' && typeof c1 === 'bigint',
+    isValid: ({ c0, c1 }) => isValidC(c0, FP2_ORDER) && isValidC(c1, FP2_ORDER),
     is0: ({ c0, c1 }) => Fp.is0(c0) && Fp.is0(c1),
     eql: ({ c0, c1 }: Fp2, { c0: r0, c1: r1 }: Fp2) => Fp.eql(c0, r0) && Fp.eql(c1, r1),
     neg: ({ c0, c1 }) => ({ c0: Fp.neg(c0), c1: Fp.neg(c1) }),
@@ -420,9 +416,9 @@ export function tower12(opts: Tower12Opts): {
     fromBigSix: (t: BigintSix): Fp6 => {
       if (!Array.isArray(t) || t.length !== 6) throw new Error('invalid Fp6 usage');
       return {
-        c0: Fp2.fromBigTuple(t.slice(0, 2)),
-        c1: Fp2.fromBigTuple(t.slice(2, 4)),
-        c2: Fp2.fromBigTuple(t.slice(4, 6)),
+        c0: Fp2.fromBigTuple(t.slice(0, 2) as BigintTuple),
+        c1: Fp2.fromBigTuple(t.slice(2, 4) as BigintTuple),
+        c2: Fp2.fromBigTuple(t.slice(4, 6) as BigintTuple),
       };
     },
     frobeniusMap: ({ c0, c1, c2 }, power: number) => ({
