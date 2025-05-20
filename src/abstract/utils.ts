@@ -357,6 +357,27 @@ export function validateObject<T extends Record<string, any>>(
 // const z3 = validateObject(o, { test: 'boolean', z: 'bug' });
 // const z4 = validateObject(o, { a: 'boolean', z: 'bug' });
 
+export function isHash(val: CHash): boolean {
+  return typeof val === 'function' && Number.isSafeInteger(val.outputLen);
+}
+export function _validateObject(
+  object: Record<string, any>,
+  fields: Record<string, string>,
+  optFields: Record<string, string> = {}
+): void {
+  if (!object || typeof object !== 'object') throw new Error('expected valid options object');
+  type Item = keyof typeof object;
+  function checkField(fieldName: Item, expectedType: string, isOpt: boolean) {
+    const val = object[fieldName];
+    if (isOpt && val === undefined) return;
+    const current = typeof val;
+    if (current !== expectedType || val === null)
+      throw new Error(`param "${fieldName}" is invalid: expected ${expectedType}, got ${current}`);
+  }
+  Object.entries(fields).forEach(([k, v]) => checkField(k, v, false));
+  Object.entries(optFields).forEach(([k, v]) => checkField(k, v, true));
+}
+
 /**
  * throws not implemented error
  */
