@@ -327,9 +327,9 @@ function runWycheproof(name, CURVE, group, index) {
       const verified = CURVE.verify(sig, m, pubR, { lowS: name === 'secp256k1' });
       if (name === 'secp256k1') {
         // lowS: true for secp256k1
-        eql(verified, !CURVE.Signature.fromDER(sig).hasHighS(), `${index}: valid`);
+        eql(verified, !CURVE.Signature.fromDER(sig).hasHighS(), `${index}: verify invalid`);
       } else {
-        eql(verified, true, `${index}: valid`);
+        eql(verified, true, `${index}: verify invalid`);
       }
     } else if (test.result === 'invalid') {
       let failed = false;
@@ -338,7 +338,7 @@ function runWycheproof(name, CURVE, group, index) {
       } catch (error) {
         failed = true;
       }
-      eql(failed, true, `${index}: invalid`);
+      eql(failed, true, `${index}: verify valid, must be invalid`);
     } else throw new Error('unknown test result');
   }
 }
