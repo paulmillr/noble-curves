@@ -8,7 +8,7 @@
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { FpInvertBatch, FpPow, type IField, validateField } from './modular.ts';
-import { bitGet } from './utils.ts';
+import { _validateObject, bitGet } from './utils.ts';
 
 // Grain LFSR (Linear-Feedback Shift Register): https://eprint.iacr.org/2009/109.pdf
 function grainLFSR(state: number[]): () => boolean {
@@ -41,20 +41,28 @@ export type PoseidonBasicOpts = {
   isSboxInverse?: boolean;
 };
 
-function validateBasicOpts(opts: PoseidonBasicOpts) {
+function assertValidPosOpts(opts: PoseidonBasicOpts) {
   const { Fp, roundsFull } = opts;
   validateField(Fp);
+  _validateObject(
+    opts,
+    {
+      t: 'number',
+      roundsFull: 'number',
+      roundsPartial: 'number',
+    },
+    {
+      isSboxInverse: 'boolean',
+    }
+  );
   for (const i of ['t', 'roundsFull', 'roundsPartial'] as const) {
-    if (typeof opts[i] !== 'number' || !Number.isSafeInteger(opts[i]))
-      throw new Error('invalid number ' + i);
+    if (!Number.isSafeInteger(opts[i]) || opts[i] < 1) throw new Error('invalid number ' + i);
   }
-  if (opts.isSboxInverse !== undefined && typeof opts.isSboxInverse !== 'boolean')
-    throw new Error(`Poseidon: invalid param isSboxInverse=${opts.isSboxInverse}`);
   if (roundsFull & 1) throw new Error('roundsFull is not even' + roundsFull);
 }
 
 function poseidonGrain(opts: PoseidonBasicOpts) {
-  validateBasicOpts(opts);
+  assertValidPosOpts(opts);
   const { Fp } = opts;
   const state = Array(80).fill(1);
   let pos = 0;
@@ -140,7 +148,7 @@ export function validateOpts(opts: PoseidonOpts): Readonly<{
   sboxPower?: number;
   reversePartialPowIdx?: boolean; // Hack for stark
 }> {
-  validateBasicOpts(opts);
+  assertValidPosOpts(opts);
   const { Fp, mds, reversePartialPowIdx: rev, roundConstants: rc } = opts;
   const { roundsFull, roundsPartial, sboxPower, t } = opts;
 
@@ -196,12 +204,13 @@ export function splitConstants(rc: bigint[], t: number): bigint[][] {
   return res;
 }
 
-/** Poseidon NTT-friendly hash. */
-export function poseidon(opts: PoseidonOpts): {
+export type PoseidonFn = {
   (values: bigint[]): bigint[];
   // For verification in tests
   roundConstants: bigint[][];
-} {
+};
+/** Poseidon NTT-friendly hash. */
+export function poseidon(opts: PoseidonOpts): PoseidonFn {
   const _opts = validateOpts(opts);
   const { Fp, mds, roundConstants, rounds: totalRounds, roundsPartial, sboxFn, t } = _opts;
   const halfRoundsFull = _opts.roundsFull / 2;
@@ -242,17 +251,12 @@ export class PoseidonSponge {
   private Fp: IField<bigint>;
   readonly rate: number;
   readonly capacity: number;
-  readonly hash: ReturnType<typeof poseidon>;
+  readonly hash: PoseidonFn;
   private state: bigint[]; // [...capacity, ...rate]
   private pos = 0;
   private isAbsorbing = true;
 
-  constructor(
-    Fp: IField<bigint>,
-    rate: number,
-    capacity: number,
-    hash: ReturnType<typeof poseidon>
-  ) {
+  constructor(Fp: IField<bigint>, rate: number, capacity: number, hash: PoseidonFn) {
     this.Fp = Fp;
     this.hash = hash;
     this.rate = rate;

@@ -8,7 +8,15 @@
 import type { AffinePoint, Group, GroupConstructor } from './curve.ts';
 import { FpInvertBatch, type IField, mod } from './modular.ts';
 import type { CHash } from './utils.ts';
-import { abytes, bytesToNumberBE, concatBytes, utf8ToBytes, validateObject } from './utils.ts';
+import {
+  _validateObject,
+  abytes,
+  bytesToNumberBE,
+  concatBytes,
+  isBytes,
+  isHash,
+  utf8ToBytes,
+} from './utils.ts';
 
 export type UnicodeOrBytes = string | Uint8Array;
 
@@ -134,14 +142,16 @@ export function expand_message_xof(
  * @returns [u_0, ..., u_(count - 1)], a list of field elements.
  */
 export function hash_to_field(msg: Uint8Array, count: number, options: Opts): bigint[][] {
-  validateObject(options, {
-    DST: 'stringOrUint8Array',
+  _validateObject(options, {
     p: 'bigint',
-    m: 'isSafeInteger',
-    k: 'isSafeInteger',
-    hash: 'hash',
+    m: 'number',
+    k: 'number',
+    hash: 'function',
   });
   const { p, k, m, hash, expand, DST: _DST } = options;
+  if (!isBytes(_DST) && typeof _DST !== 'string')
+    throw new Error('DST must be string or uint8array');
+  if (!isHash(options.hash)) throw new Error('expected valid hash');
   abytes(msg);
   anum(count);
   const DST = typeof _DST === 'string' ? utf8ToBytes(_DST) : _DST;
@@ -238,7 +248,7 @@ export function createHasher<T>(
   return {
     defaults,
 
-    // Encodes byte string to elliptic curve.
+    // Encodes RANDOM byte string to elliptic curve.
     // hash_to_curve from https://www.rfc-editor.org/rfc/rfc9380#section-3
     hashToCurve(msg: Uint8Array, options?: htfBasicOpts): H2CPoint<T> {
       const u = hash_to_field(msg, 2, { ...defaults, DST: defaults.DST, ...options } as Opts);
@@ -247,7 +257,7 @@ export function createHasher<T>(
       return clear(u0.add(u1));
     },
 
-    // Encodes byte string to elliptic curve.
+    // Encodes NON-UNIFORM byte string to elliptic curve.
     // encode_to_curve from https://www.rfc-editor.org/rfc/rfc9380#section-3
     encodeToCurve(msg: Uint8Array, options?: htfBasicOpts): H2CPoint<T> {
       const u = hash_to_field(msg, 1, { ...defaults, DST: defaults.encodeDST, ...options } as Opts);

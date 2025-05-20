@@ -7,13 +7,13 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { anumber } from '@noble/hashes/utils';
 import {
+  _validateObject,
   bitMask,
   bytesToNumberBE,
   bytesToNumberLE,
   ensureBytes,
   numberToBytesBE,
   numberToBytesLE,
-  validateObject,
 } from './utils.ts';
 
 // prettier-ignore
@@ -129,6 +129,7 @@ function sqrt5mod8<T>(Fp: IField<T>, n: T) {
  */
 export function tonelliShanks(P: bigint): <T>(Fp: IField<T>, n: T) => T {
   // Initialization (precomputation).
+  // Caching initialization could boost perf by 7%.
   if (P < BigInt(3)) throw new Error('sqrt is not defined for small field');
   // Factor P - 1 = Q * 2^S, where Q is odd
   let Q = P - _1n;
@@ -268,14 +269,18 @@ export function validateField<T>(field: IField<T>): IField<T> {
   const initial = {
     ORDER: 'bigint',
     MASK: 'bigint',
-    BYTES: 'isSafeInteger',
-    BITS: 'isSafeInteger',
+    BYTES: 'number',
+    BITS: 'number',
   } as Record<string, string>;
   const opts = FIELD_FIELDS.reduce((map, val: string) => {
     map[val] = 'function';
     return map;
   }, initial);
-  return validateObject(field, opts);
+  _validateObject(field, opts);
+  // const max = 16384;
+  // if (field.BYTES < 1 || field.BYTES > max) throw new Error('invalid field');
+  // if (field.BITS < 1 || field.BITS > 8 * max) throw new Error('invalid field');
+  return field;
 }
 
 // Generic field functions
@@ -354,14 +359,9 @@ export function FpIsSquare<T>(Fp: IField<T>, n: T): boolean {
   return l === 1;
 }
 
+export type NLength = { nByteLength: number; nBitLength: number };
 // CURVE.n lengths
-export function nLength(
-  n: bigint,
-  nBitLength?: number
-): {
-  nBitLength: number;
-  nByteLength: number;
-} {
+export function nLength(n: bigint, nBitLength?: number): NLength {
   // Bit size, byte size of CURVE.n
   if (nBitLength !== undefined) anumber(nBitLength);
   const _nBitLength = nBitLength !== undefined ? nBitLength : n.toString(2).length;
