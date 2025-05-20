@@ -201,7 +201,7 @@ describe('FFT', () => {
       add: (a, b) => a.add(b),
       sub: (a, b) => a.subtract(b),
       mul: (a, scalar) => a.multiplyUnsafe(scalar),
-      inv: Fr.inv,
+      inv: (a) => Fr.inv(a),
     });
     const P = fft.poly(Fr, roots);
     const Pf = fft.poly(Fr, roots, undefined, fftFr);

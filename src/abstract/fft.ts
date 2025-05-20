@@ -193,8 +193,7 @@ export type FFTCoreLoop<T> = <P extends Polynomial<T>>(values: P) => P;
  * Cyclic NTT: Rq = Zq[x]/(x^n-1). butterfly_DIT+loop_DIT OR butterfly_DIF+loop_DIT, roots are omega
  * Negacyclic NTT: Rq = Zq[x]/(x^n+1). butterfly_DIT+loop_DIF, at least for mlkem / mldsa
  */
-export const FFTCore = <T, R>(opts: FFTOpts<T, R>, coreOpts: FFTCoreOpts<R>): FFTCoreLoop<T> => {
-  const { add, sub, mul } = opts; // inline to butteflies
+export const FFTCore = <T, R>(F: FFTOpts<T, R>, coreOpts: FFTCoreOpts<R>): FFTCoreLoop<T> => {
   const { N, roots, dit, invertButterflies = false, skipStages = 0, brp = true } = coreOpts;
   const bits = log2(N);
   if (!isPowerOfTwo(N)) throw new Error('FFT: Polynomial size should be power of two');
@@ -221,15 +220,15 @@ export const FFTCore = <T, R>(opts: FFTOpts<T, R>, coreOpts: FFTCoreOpts<R>): FF
           const a = values[i0];
           // Inlining gives us 10% perf in kyber vs functions
           if (isDit) {
-            const t = mul(b, omega); // Standard DIT butterfly
-            values[i0] = add(a, t);
-            values[i1] = sub(a, t);
+            const t = F.mul(b, omega); // Standard DIT butterfly
+            values[i0] = F.add(a, t);
+            values[i1] = F.sub(a, t);
           } else if (invertButterflies) {
-            values[i0] = add(b, a); // DIT loop + inverted butterflies (Kyber decode)
-            values[i1] = mul(sub(b, a), omega);
+            values[i0] = F.add(b, a); // DIT loop + inverted butterflies (Kyber decode)
+            values[i1] = F.mul(F.sub(b, a), omega);
           } else {
-            values[i0] = add(a, b); // Standard DIF butterfly
-            values[i1] = mul(sub(a, b), omega);
+            values[i0] = F.add(a, b); // Standard DIF butterfly
+            values[i1] = F.mul(F.sub(a, b), omega);
           }
         }
       }
@@ -248,10 +247,7 @@ export type FFTMethods<T> = {
  * NTT aka FFT over finite field (NOT over complex numbers).
  * Naming mirrors other libraries.
  */
-export function FFT<T>(
-  roots: ReturnType<typeof rootsOfUnity>,
-  opts: FFTOpts<T, bigint>
-): FFTMethods<T> {
+export function FFT<T>(roots: RootsOfUnity, opts: FFTOpts<T, bigint>): FFTMethods<T> {
   const getLoop = (
     N: number,
     roots: Polynomial<bigint>,
@@ -292,7 +288,7 @@ export function FFT<T>(
 export type CreatePolyFn<P extends Polynomial<T>, T> = (len: number, elm?: T) => P;
 
 export type PolyFn<P extends Polynomial<T>, T> = {
-  roots: ReturnType<typeof rootsOfUnity>;
+  roots: RootsOfUnity;
   create: CreatePolyFn<P, T>;
   length?: number; // optional enforced size
 
@@ -333,23 +329,23 @@ export type PolyFn<P extends Polynomial<T>, T> = {
  */
 export function poly<T>(
   field: IField<T>,
-  roots: ReturnType<typeof rootsOfUnity>,
+  roots: RootsOfUnity,
   create?: undefined,
-  fft?: ReturnType<typeof FFT<T>>,
+  fft?: FFTMethods<T>,
   length?: number
 ): PolyFn<T[], T>;
 export function poly<T, P extends Polynomial<T>>(
   field: IField<T>,
-  roots: ReturnType<typeof rootsOfUnity>,
+  roots: RootsOfUnity,
   create: CreatePolyFn<P, T>,
-  fft?: ReturnType<typeof FFT<T>>,
+  fft?: FFTMethods<T>,
   length?: number
 ): PolyFn<P, T>;
 export function poly<T, P extends Polynomial<T>>(
   field: IField<T>,
-  roots: ReturnType<typeof rootsOfUnity>,
+  roots: RootsOfUnity,
   create?: CreatePolyFn<P, T>,
-  fft?: ReturnType<typeof FFT<T>>,
+  fft?: FFTMethods<T>,
   length?: number
 ): PolyFn<any, T> {
   const F = field;
