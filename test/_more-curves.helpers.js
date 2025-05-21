@@ -60,6 +60,6 @@ for (let category of JSON_CATEGORIES) {
       n,
       h,
     };
-    miscCurves[c.name] = createCurve(norm, sha512);
+    miscCurves['misc_' + c.name] = createCurve(norm, sha512);
   }
 }

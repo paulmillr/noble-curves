@@ -412,6 +412,7 @@ for (const name in CURVES) {
             const p = G[i];
             equal(p, p.add(G[0]), `${i}*G + 0 = ${i}*G`);
             equal(G[0].multiply(BigInt(i + 1)), G[0], `${i + 1}*0 = 0`);
+            equal(G[0].multiplyUnsafe(BigInt(i + 1)), G[0], `${i + 1}*0 = 0`);
           }
         });
         should('one', () => {
@@ -433,6 +434,7 @@ for (const name in CURVES) {
         });
         should('multiply', () => {
           equal(G[2].multiply(3n), G[6], '(2*G).multiply(3) = 6*G');
+          equal(G[2].multiplyUnsafe(3n), G[6], '(2*G).multiplyUnsafe(3) = 6*G');
         });
         should('add same-point', () => {
           equal(G[3].add(G[3]), G[6], '3*G + 3*G = 6*G');
@@ -445,6 +447,9 @@ for (const name in CURVES) {
           equal(G[1].multiply(CURVE_ORDER - 1n).add(G[1]), G[0], '(N-1)*G + G = 0');
           equal(G[1].multiply(CURVE_ORDER - 1n).add(G[2]), G[1], '(N-1)*G + 2*G = 1*G');
           equal(G[1].multiply(CURVE_ORDER - 2n).add(G[2]), G[0], '(N-2)*G + 2*G = 0');
+          equal(G[1].multiplyUnsafe(CURVE_ORDER - 1n).add(G[1]), G[0], '(N-1)*G + G = 0');
+          equal(G[1].multiplyUnsafe(CURVE_ORDER - 1n).add(G[2]), G[1], '(N-1)*G + 2*G = 1*G');
+          equal(G[1].multiplyUnsafe(CURVE_ORDER - 2n).add(G[2]), G[0], '(N-2)*G + 2*G = 0');
           const half = CURVE_ORDER / 2n;
           const carry = CURVE_ORDER % 2n === 1n ? G[1] : G[0];
           equal(G[1].multiply(half).double().add(carry), G[0], '((N/2) * G).double() = 0');
@@ -465,6 +470,9 @@ for (const name in CURVES) {
               const pA = G[1].multiply(a);
               const pB = G[1].multiply(b);
               const pC = G[1].multiply(c);
+              equal(pA, G[1].multiplyUnsafe(a), 'multiplyUnsafe(a)');
+              equal(pB, G[1].multiplyUnsafe(b), 'multiplyUnsafe(b)');
+              equal(pC, G[1].multiplyUnsafe(c), 'multiplyUnsafe(c)');
               equal(pA.add(pB), pB.add(pA), 'pA + pB = pB + pA');
               equal(pA.add(pB), pC, 'pA + pB = pC');
             }),
@@ -477,6 +485,8 @@ for (const name in CURVES) {
               const c = mod.mod(a * b, CURVE_ORDER);
               const pA = G[1].multiply(a);
               const pB = G[1].multiply(b);
+              equal(pA, G[1].multiplyUnsafe(a), 'multiplyUnsafe(a)');
+              equal(pB, G[1].multiplyUnsafe(b), 'multiplyUnsafe(b)');
               equal(pA.multiply(b), pB.multiply(a), 'b*pA = a*pB');
               equal(pA.multiply(b), G[1].multiply(c), 'b*pA = c*G');
             }),
