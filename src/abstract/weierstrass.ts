@@ -1,19 +1,6 @@
 /**
  * Short Weierstrass curve methods. The formula is: y² = x³ + ax + b.
  *
- * ### Parameters
- *
- * To initialize a weierstrass curve, one needs to pass following params:
- *
- * * a: formula param
- * * b: formula param
- * * Fp: finite field of prime characteristic P; may be complex (Fp2). Arithmetics is done in field
- * * n: order of prime subgroup a.k.a total amount of valid curve points
- * * Gx: x coordinate of generator point a.k.a. base point
- * * Gy: y coordinate of generator point
- * * h: cofactor, usually 1. h*n = curve group order (n is only subgroup order)
- * * lowS: whether to enable (default) or disable "low-s" non-malleable signatures
- *
  * ### Design rationale for types
  *
  * * Interaction between classes from different curves should fail:
@@ -40,8 +27,12 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 // prettier-ignore
 import {
-  _createCurveFields, pippenger, wNAF,
-  type AffinePoint, type BasicCurve, type Group, type GroupConstructor,
+  _createCurveFields,
+  mulEndo,
+  negateCt,
+  normalizeZ,
+  pippenger, wNAF,
+  type AffinePoint, type BasicCurve, type Group, type GroupConstructor
 } from './curve.ts';
 // prettier-ignore
 import {
@@ -110,37 +101,51 @@ function validateSigVerOpts(opts: SignOpts | VerOpts) {
   if (opts.prehash !== undefined) abool('prehash', opts.prehash);
 }
 
-// Instance for 3d XYZ points
+/** Instance methods for 3D XYZ points. */
 export interface ProjPointType<T> extends Group<ProjPointType<T>> {
+  /** projective x coordinate. Note: different from .x */
   readonly px: T;
+  /** projective y coordinate. Note: different from .y */
   readonly py: T;
+  /** projective z coordinate */
   readonly pz: T;
+  /** affine x coordinate */
   get x(): T;
+  /** affine y coordinate */
   get y(): T;
   assertValidity(): void;
   clearCofactor(): ProjPointType<T>;
-  hasEvenY(): boolean;
   is0(): boolean;
   isTorsionFree(): boolean;
   multiplyUnsafe(scalar: bigint): ProjPointType<T>;
-  multiplyAndAddUnsafe(Q: ProjPointType<T>, a: bigint, b: bigint): ProjPointType<T> | undefined;
+  precompute(windowSize: number): ProjPointType<T>;
+
+  /** Converts 3D XYZ projective point to 2D xy affine coordinates */
   toAffine(invertedZ?: T): AffinePoint<T>;
+  /** Encodes point using IEEE P1363 (DER) encoding. First byte is 2/3/4. Default = isCompressed. */
   toBytes(isCompressed?: boolean): Uint8Array;
   toHex(isCompressed?: boolean): string;
+
   /** @deprecated use `toBytes` */
   toRawBytes(isCompressed?: boolean): Uint8Array;
+  /** @deprecated use `multiplyUnsafe` */
+  multiplyAndAddUnsafe(Q: ProjPointType<T>, a: bigint, b: bigint): ProjPointType<T> | undefined;
+  /** @deprecated use `p.y % 2n === 0n` */
+  hasEvenY(): boolean;
   _setWindowSize(windowSize: number): void;
 }
-// Static methods for 3d XYZ points
+
+/** Static methods for 3D XYZ points. */
 export interface ProjConstructor<T> extends GroupConstructor<ProjPointType<T>> {
-  new (x: T, y: T, z: T): ProjPointType<T>;
   Fp: IField<T>;
   Fn: IField<bigint>;
+  /** Does NOT validate if the point is valid. Use `.assertValidity()`. */
+  new (x: T, y: T, z: T): ProjPointType<T>;
+  /** Does NOT validate if the point is valid. Use `.assertValidity()`. */
   fromAffine(p: AffinePoint<T>): ProjPointType<T>;
   fromBytes(encodedPoint: Uint8Array): ProjPointType<T>;
   fromHex(hex: Hex): ProjPointType<T>;
   fromPrivateKey(privateKey: PrivKey): ProjPointType<T>;
-  fromPrivateScalar(privateScalar: bigint): ProjPointType<T>;
   normalizeZ(points: ProjPointType<T>[]): ProjPointType<T>[];
   msm(points: ProjPointType<T>[], scalars: bigint[]): ProjPointType<T>;
 }
@@ -199,6 +204,7 @@ export type WeierstrassOpts<T> = Readonly<{
 export type WeierstrassExtraOpts<T> = Partial<{
   Fp: IField<T>;
   Fn: IField<bigint>;
+  // TODO: remove
   allowedPrivateKeyLengths: readonly number[]; // for P521
   allowInfinityPoint: boolean;
   endo: EndomorphismOpts;
@@ -209,7 +215,9 @@ export type WeierstrassExtraOpts<T> = Partial<{
   toBytes: (c: ProjConstructor<T>, point: ProjPointType<T>, isCompressed: boolean) => Uint8Array;
 }>;
 
-// CHash not FHash because we need outputLen for DRBG
+/**
+ * Options for ECDSA signatures over a Weierstrass curve.
+ */
 export type ECDSAOpts = {
   hash: CHash;
   hmac: HmacFnSync;
@@ -219,7 +227,7 @@ export type ECDSAOpts = {
   bits2int_modN?: (bytes: Uint8Array) => bigint;
 };
 
-// ECDSA is only supported for ordinary fields. Extension fields (Fp2) is not supported.
+/** ECDSA is only supported for prime fields, not Fp2 (extension fields). */
 export interface ECDSA {
   getPublicKey: (privateKey: PrivKey, isCompressed?: boolean) => Uint8Array;
   getSharedSecret: (privateA: PrivKey, publicB: Hex, isCompressed?: boolean) => Uint8Array;
@@ -449,14 +457,15 @@ export function weierstrassN<T>(
     point: ProjPointType<T>,
     isCompressed: boolean
   ): Uint8Array {
-    const a = point.toAffine();
-    const x = Fp.toBytes(a.x);
+    const { x, y } = point.toAffine();
+    const bx = Fp.toBytes(x);
     abool('isCompressed', isCompressed);
     if (isCompressed) {
       assertCompressionIsSupported();
-      return concatBytes(pprefix(point.hasEvenY()), x);
+      const hasEvenY = !Fp.isOdd!(y);
+      return concatBytes(pprefix(hasEvenY), bx);
     } else {
-      return concatBytes(Uint8Array.of(0x04), x, Fp.toBytes(a.y));
+      return concatBytes(Uint8Array.of(0x04), bx, Fp.toBytes(y));
     }
   }
   function pointFromBytes(bytes: Uint8Array) {
@@ -489,6 +498,7 @@ export function weierstrassN<T>(
       // TODO: more checks
       const x = Fp.fromBytes(tail.subarray(L * 0, L * 1));
       const y = Fp.fromBytes(tail.subarray(L * 1, L * 2));
+      if (!isValidXY(x, y)) throw new Error('bad point: is not on curve');
       return { x, y };
     } else {
       throw new Error(
@@ -567,6 +577,19 @@ export function weierstrassN<T>(
     return true;
   });
 
+  function finishEndo(
+    endoBeta: EndomorphismOpts['beta'],
+    k1p: Point,
+    k2p: Point,
+    k1neg: boolean,
+    k2neg: boolean
+  ) {
+    k2p = new Point(Fp.mul(k2p.px, endoBeta), k2p.py, k2p.pz);
+    k1p = negateCt(k1neg, k1p);
+    k2p = negateCt(k2neg, k2p);
+    return k1p.add(k2p);
+  }
+
   /**
    * Projective Point works in 3d / projective (homogeneous) coordinates:(X, Y, Z) ∋ (x=X/Z, y=Y/Z).
    * Default Point works in 2d / affine coordinates: (x, y).
@@ -610,23 +633,13 @@ export function weierstrassN<T>(
       return this.toAffine().y;
     }
 
-    /**
-     * Takes a bunch of Projective Points but executes only one
-     * inversion on all of them. Inversion is very slow operation,
-     * so this improves performance massively.
-     * Optimization: converts a list of projective points to a list of identical points with Z=1.
-     */
     static normalizeZ(points: Point[]): Point[] {
-      const toInv = FpInvertBatch(
-        Fp,
-        points.map((p) => p.pz)
-      );
-      return points.map((p, i) => p.toAffine(toInv[i])).map(Point.fromAffine);
+      return normalizeZ(Point, 'pz', points);
     }
 
     static fromBytes(bytes: Uint8Array): Point {
       abytes(bytes);
-      return this.fromHex(bytes);
+      return Point.fromHex(bytes);
     }
 
     /** Converts hash string or Uint8Array to Point. */
@@ -643,11 +656,7 @@ export function weierstrassN<T>(
         curveOpts.allowedPrivateKeyLengths,
         curveOpts.wrapPrivateKey
       );
-      return this.fromPrivateScalar(normPrivateKeyToScalar(privateKey));
-    }
-
-    static fromPrivateScalar(privateScalar: bigint) {
-      return Point.BASE.multiply(privateScalar);
+      return Point.BASE.multiply(normPrivateKeyToScalar(privateKey));
     }
 
     /** Multiscalar Multiplication */
@@ -655,9 +664,15 @@ export function weierstrassN<T>(
       return pippenger(Point, Fn, points, scalars);
     }
 
+    precompute(windowSize: number, isLazy = true): Point {
+      wnaf.setWindowSize(this, windowSize);
+      if (!isLazy) this.multiply(_3n); // random number
+      return this;
+    }
+
     /** "Private method", don't use it directly */
     _setWindowSize(windowSize: number) {
-      wnaf.setWindowSize(this, windowSize);
+      this.precompute(windowSize);
     }
 
     // TODO: return `this`
@@ -668,8 +683,8 @@ export function weierstrassN<T>(
 
     hasEvenY(): boolean {
       const { y } = this.toAffine();
-      if (Fp.isOdd) return !Fp.isOdd(y);
-      throw new Error("Field doesn't support isOdd");
+      if (!Fp.isOdd) throw new Error("Field doesn't support isOdd");
+      return !Fp.isOdd(y);
     }
 
     /** Compare one point to another. */
@@ -788,47 +803,8 @@ export function weierstrassN<T>(
       return this.add(other.negate());
     }
 
-    is0() {
+    is0(): boolean {
       return this.equals(Point.ZERO);
-    }
-
-    private wNAF(n: bigint): { p: Point; f: Point } {
-      return wnaf.wNAFCached(this, n, Point.normalizeZ);
-    }
-
-    /**
-     * Non-constant-time multiplication. Uses double-and-add algorithm.
-     * It's faster, but should only be used when you don't care about
-     * an exposed private key e.g. sig verification, which works over *public* keys.
-     */
-    multiplyUnsafe(sc: bigint): Point {
-      const { endo } = curveOpts;
-      if (!Fn.isValid(sc)) throw new Error('invalid scalar: out of range'); // 0 is valid
-      const I = Point.ZERO;
-      if (sc === _0n) return I;
-      if (this.is0() || sc === _1n) return this;
-
-      // Case a: no endomorphism. Case b: has precomputes.
-      if (!endo || wnaf.hasPrecomputes(this))
-        return wnaf.wNAFCachedUnsafe(this, sc, Point.normalizeZ);
-
-      // Case c: endomorphism
-      /** See docs for {@link EndomorphismOpts} */
-      let { k1neg, k1, k2neg, k2 } = endo.splitScalar(sc);
-      let k1p = I;
-      let k2p = I;
-      let d: Point = this;
-      while (k1 > _0n || k2 > _0n) {
-        if (k1 & _1n) k1p = k1p.add(d);
-        if (k2 & _1n) k2p = k2p.add(d);
-        d = d.double();
-        k1 >>= _1n;
-        k2 >>= _1n;
-      }
-      if (k1neg) k1p = k1p.negate();
-      if (k2neg) k2p = k2p.negate();
-      k2p = new Point(Fp.mul(k2p.px, endo.beta), k2p.py, k2p.pz);
-      return k1p.add(k2p);
     }
 
     /**
@@ -841,21 +817,20 @@ export function weierstrassN<T>(
      * @returns New point
      */
     multiply(scalar: bigint): Point {
+      // console.log('mul ', this.toString(), scalar);
       const { endo } = curveOpts;
       if (!Fn.isValidNot0(scalar)) throw new Error('invalid scalar: out of range'); // 0 is invalid
       let point: Point, fake: Point; // Fake point is used to const-time mult
+      const mul = (n: bigint) => wnaf.wNAFCached(this, n, Point.normalizeZ);
       /** See docs for {@link EndomorphismOpts} */
       if (endo) {
         const { k1neg, k1, k2neg, k2 } = endo.splitScalar(scalar);
-        let { p: k1p, f: f1p } = this.wNAF(k1);
-        let { p: k2p, f: f2p } = this.wNAF(k2);
-        k1p = wnaf.constTimeNegate(k1neg, k1p);
-        k2p = wnaf.constTimeNegate(k2neg, k2p);
-        k2p = new Point(Fp.mul(k2p.px, endo.beta), k2p.py, k2p.pz);
-        point = k1p.add(k2p);
-        fake = f1p.add(f2p);
+        const { p: k1p, f: k1f } = mul(k1);
+        const { p: k2p, f: k2f } = mul(k2);
+        fake = k1f.add(k2f);
+        point = finishEndo(endo.beta, k1p, k2p, k1neg, k2neg);
       } else {
-        const { p, f } = this.wNAF(scalar);
+        const { p, f } = mul(scalar);
         point = p;
         fake = f;
       }
@@ -864,18 +839,30 @@ export function weierstrassN<T>(
     }
 
     /**
-     * Efficiently calculate `aP + bQ`. Unsafe, can expose private key, if used incorrectly.
-     * Not using Strauss-Shamir trick: precomputation tables are faster.
-     * The trick could be useful if both P and Q are not G (not in our case).
-     * @returns non-zero affine point
+     * Non-constant-time multiplication. Uses double-and-add algorithm.
+     * It's faster, but should only be used when you don't care about
+     * an exposed private key e.g. sig verification, which works over *public* keys.
      */
+    multiplyUnsafe(sc: bigint): Point {
+      // console.log('mul uns', this.toString(), sc);
+      const { endo } = curveOpts;
+      const p = this;
+      if (!Fn.isValid(sc)) throw new Error('invalid scalar: out of range'); // 0 is valid
+      if (sc === _0n || p.is0()) return Point.ZERO;
+      if (sc === _1n) return p; // fast-path
+      if (wnaf.hasPrecomputes(this)) return this.multiply(sc);
+      if (endo) {
+        const { k1neg, k1, k2neg, k2 } = endo.splitScalar(sc);
+        // `wNAFCachedUnsafe` is 30% slower
+        const { p1, p2 } = mulEndo(Point, p, k1, k2);
+        return finishEndo(endo.beta, p1, p2, k1neg, k2neg);
+      } else {
+        return wnaf.wNAFCachedUnsafe(p, sc);
+      }
+    }
+
     multiplyAndAddUnsafe(Q: Point, a: bigint, b: bigint): Point | undefined {
-      const G = Point.BASE; // No Strauss-Shamir trick: we have 10% faster G precomputes
-      const mul = (
-        P: Point,
-        a: bigint // Select faster multiply() method
-      ) => (a === _0n || a === _1n || !P.equals(G) ? P.multiplyUnsafe(a) : P.multiply(a));
-      const sum = mul(this, a).add(mul(Q, b));
+      const sum = this.multiplyUnsafe(a).add(Q.multiplyUnsafe(b));
       return sum.is0() ? undefined : sum;
     }
 
@@ -889,7 +876,7 @@ export function weierstrassN<T>(
 
     /**
      * Checks whether Point is free of torsion elements (is in prime subgroup).
-     * Always free for cofactor=1 curves.
+     * Always torsion-free for cofactor=1 curves.
      */
     isTorsionFree(): boolean {
       const { isTorsionFree } = curveOpts;
@@ -925,7 +912,8 @@ export function weierstrassN<T>(
       return `<Point ${this.is0() ? 'ZERO' : this.toHex()}>`;
     }
   }
-  const wnaf = wNAF(Point, curveOpts.endo ? Math.ceil(Fn.BITS / 2) : Fn.BITS);
+  const bits = Fn.BITS;
+  const wnaf = wNAF(Point, curveOpts.endo ? Math.ceil(bits / 2) : bits);
   return Point;
 }
 
@@ -1092,8 +1080,8 @@ export function ecdsa(
       const u1 = Fn.create(-h * ir); // -hr^-1
       const u2 = Fn.create(s * ir); // sr^-1
       // (sr^-1)R-(hr^-1)G = -(hr^-1)G + (sr^-1). unsafe is fine: there is no private data.
-      const Q = Point.BASE.multiplyAndAddUnsafe(R, u1, u2);
-      if (!Q) throw new Error('point at infinify');
+      const Q = Point.BASE.multiplyUnsafe(u1).add(R.multiplyUnsafe(u2));
+      if (Q.is0()) throw new Error('point at infinify');
       Q.assertValidity();
       return Q;
     }
@@ -1160,7 +1148,7 @@ export function ecdsa(
      * fast.multiply(privKey); // much faster ECDH now
      */
     precompute(windowSize = 8, point = Point.BASE): typeof Point.BASE {
-      point._setWindowSize(windowSize);
+      point.precompute(windowSize);
       point.multiply(BigInt(3)); // 3 is arbitrary, just need any number here
       return point;
     },
@@ -1320,7 +1308,7 @@ export function ecdsa(
   }
 
   // Enable precomputes. Slows down first publicKey computation by 20ms.
-  Point.BASE._setWindowSize(8);
+  Point.BASE.precompute(8);
   // utils.precompute(8, ProjectivePoint.BASE)
 
   /**
@@ -1390,8 +1378,8 @@ export function ecdsa(
     const is = Fn.inv(s); // s^-1
     const u1 = Fn.create(h * is); // u1 = hs^-1 mod n
     const u2 = Fn.create(r * is); // u2 = rs^-1 mod n
-    const R = Point.BASE.multiplyAndAddUnsafe(P, u1, u2)?.toAffine(); // R = u1⋅G + u2⋅P
-    if (!R) return false;
+    const R = Point.BASE.multiplyUnsafe(u1).add(P.multiplyUnsafe(u2));
+    if (R.is0()) return false;
     const v = Fn.create(R.x); // v = r.x mod n
     return v === r;
   }
