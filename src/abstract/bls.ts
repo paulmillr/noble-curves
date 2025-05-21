@@ -15,6 +15,7 @@
  * @module
  **/
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
+import { normalizeZ } from './curve.ts';
 import {
   createHasher,
   type H2CPointConstructor,
@@ -320,11 +321,18 @@ export function bls(CURVE: CurveType): CurveFn {
   function pairingBatch(pairs: PairingInput[], withFinalExponent: boolean = true) {
     const res: MillerInput = [];
     // Cache precomputed toAffine for all points
-    G1.ProjectivePoint.normalizeZ(pairs.map(({ g1 }) => g1));
-    G2.ProjectivePoint.normalizeZ(pairs.map(({ g2 }) => g2));
+    normalizeZ(
+      G1.ProjectivePoint,
+      'pz',
+      pairs.map(({ g1 }) => g1)
+    );
+    normalizeZ(
+      G2.ProjectivePoint,
+      'pz',
+      pairs.map(({ g2 }) => g2)
+    );
     for (const { g1, g2 } of pairs) {
-      if (g1.equals(G1.ProjectivePoint.ZERO) || g2.equals(G2.ProjectivePoint.ZERO))
-        throw new Error('pairing is not available for ZERO point');
+      if (g1.is0() || g2.is0()) throw new Error('pairing is not available for ZERO point');
       // This uses toAffine inside
       g1.assertValidity();
       g2.assertValidity();
