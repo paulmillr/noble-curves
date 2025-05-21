@@ -94,7 +94,11 @@ export type BasicWCurve<T> = BasicCurve<T> & {
 
 export type Entropy = Hex | boolean;
 export type SignOpts = { lowS?: boolean; extraEntropy?: Entropy; prehash?: boolean };
-export type VerOpts = { lowS?: boolean; prehash?: boolean; format?: 'compact' | 'der' | undefined };
+export type VerOpts = {
+  lowS?: boolean;
+  prehash?: boolean;
+  format?: 'compact' | 'der' | 'js' | undefined;
+};
 
 function validateSigVerOpts(opts: SignOpts | VerOpts) {
   if (opts.lowS !== undefined) abool('lowS', opts.lowS);
@@ -118,7 +122,16 @@ export interface ProjPointType<T> extends Group<ProjPointType<T>> {
   is0(): boolean;
   isTorsionFree(): boolean;
   multiplyUnsafe(scalar: bigint): ProjPointType<T>;
-  precompute(windowSize: number): ProjPointType<T>;
+  /**
+   * Massively speeds up `p.multiply(n)` by using wnaf precompute tables (caching).
+   * Table generation takes 30MB of ram and 10ms on high-end CPU, but may take
+   * much longer on slow devices.
+   * Actual generation will happen on first call of `.multiply()`.
+   * By default, BASE point is precomputed.
+   * @param windowSize - table window size
+   * @param isLazy - (default true) allows to defer generation
+   */
+  precompute(windowSize: number, isLazy?: boolean): ProjPointType<T>;
 
   /** Converts 3D XYZ projective point to 2D xy affine coordinates */
   toAffine(invertedZ?: T): AffinePoint<T>;
@@ -240,6 +253,7 @@ export interface ECDSA {
     randomPrivateKey: () => Uint8Array;
     // TODO: deprecate those two
     normPrivateKeyToScalar: (key: PrivKey) => bigint;
+    /** @deprecated */
     precompute: (windowSize?: number, point?: ProjPointType<bigint>) => ProjPointType<bigint>;
   };
 }
@@ -664,6 +678,12 @@ export function weierstrassN<T>(
       return pippenger(Point, Fn, points, scalars);
     }
 
+    /**
+     *
+     * @param windowSize
+     * @param isLazy true will defer table computation until the first multiplication
+     * @returns
+     */
     precompute(windowSize: number, isLazy = true): Point {
       wnaf.setWindowSize(this, windowSize);
       if (!isLazy) this.multiply(_3n); // random number
@@ -1137,14 +1157,6 @@ export function ecdsa(
       return mapHashToField(ecdsaOpts.randomBytes(getMinHashLength(n)), n);
     },
 
-    /**
-     * Creates precompute table for an arbitrary EC point. Makes point "cached".
-     * Allows to massively speed-up `point.multiply(scalar)`.
-     * @returns cached point
-     * @example
-     * const fast = utils.precompute(8, ProjectivePoint.fromHex(someonesPubKey));
-     * fast.multiply(privKey); // much faster ECDH now
-     */
     precompute(windowSize = 8, point = Point.BASE): typeof Point.BASE {
       point.precompute(windowSize);
       point.multiply(BigInt(3)); // 3 is arbitrary, just need any number here
@@ -1307,7 +1319,6 @@ export function ecdsa(
 
   // Enable precomputes. Slows down first publicKey computation by 20ms.
   Point.BASE.precompute(8);
-  // utils.precompute(8, ProjectivePoint.BASE)
 
   /**
    * Verifies a signature against message hash and public key.
@@ -1336,7 +1347,7 @@ export function ecdsa(
     // Verify opts, deduce signature format
     validateSigVerOpts(opts);
     if ('strict' in opts) throw new Error('options.strict was renamed to lowS');
-    if (format !== undefined && format !== 'compact' && format !== 'der')
+    if (format !== undefined && !['compact', 'der', 'js'].includes(format))
       throw new Error('format must be compact or der');
     const isHex = typeof sg === 'string' || isBytes(sg);
     const isObj =
@@ -1348,11 +1359,16 @@ export function ecdsa(
       typeof sg.s === 'bigint';
     if (!isHex && !isObj)
       throw new Error('invalid signature, expected Uint8Array, hex string or Signature instance');
-
     let _sig: Signature | undefined = undefined;
     let P: ProjPointType<bigint>;
     try {
-      if (isObj) _sig = new Signature(sg.r, sg.s);
+      if (isObj) {
+        if (format === undefined || format === 'js') {
+          _sig = new Signature(sg.r, sg.s);
+        } else {
+          throw new Error('invalid format');
+        }
+      }
       if (isHex) {
         // Signature can be represented in 2 ways: compact (2*nByteLength) & DER (variable-length).
         // Since DER can also be 2*nByteLength bytes, we check for it first.
