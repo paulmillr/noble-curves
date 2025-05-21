@@ -30,7 +30,6 @@ export function mod(a: bigint, b: bigint): bigint {
 /**
  * Efficiently raise num to power and do modular division.
  * Unsafe in some contexts: uses ladder, so can expose bigint bits.
- * TODO: remove.
  * @example
  * pow(2n, 6n, 11n) // 64n % 11n == 9n
  */
