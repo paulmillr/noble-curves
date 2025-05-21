@@ -255,8 +255,11 @@ export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number): 
       let comp = pointPrecomputes.get(P);
       if (!comp) {
         comp = this.precomputeWindow(P, W) as T[];
-        if (typeof transform === 'function') comp = transform(comp);
-        if (W !== 1) pointPrecomputes.set(P, comp);
+        if (W !== 1) {
+          // Doing transform outside of if brings 15% perf hit
+          if (typeof transform === 'function') comp = transform(comp);
+          pointPrecomputes.set(P, comp);
+        }
       }
       return comp;
     },
