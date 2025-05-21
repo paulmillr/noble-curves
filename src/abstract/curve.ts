@@ -4,7 +4,7 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { type IField, nLength, validateField } from './modular.ts';
+import { Field, type IField, nLength, validateField } from './modular.ts';
 import { bitLen, bitMask, validateObject } from './utils.ts';
 
 const _0n = BigInt(0);
@@ -30,7 +30,7 @@ export type GroupConstructor<T> = {
 };
 export type Mapper<T> = (i: T[]) => T[];
 
-function constTimeNegate<T extends Group<T>>(condition: boolean, item: T): T {
+export function negateCt<T extends Group<T>>(condition: boolean, item: T): T {
   const neg = item.negate();
   return condition ? neg : item;
 }
@@ -112,11 +112,11 @@ export type IWNAF<T extends Group<T>> = {
   hasPrecomputes(elm: T): boolean;
   unsafeLadder(elm: T, n: bigint, p?: T): T;
   precomputeWindow(elm: T, W: number): Group<T>[];
-  getPrecomputes(W: number, P: T, transform: Mapper<T>): T[];
+  getPrecomputes(W: number, P: T, transform?: Mapper<T>): T[];
   wNAF(W: number, precomputes: T[], n: bigint): { p: T; f: T };
   wNAFUnsafe(W: number, precomputes: T[], n: bigint, acc?: T): T;
-  wNAFCached(P: T, n: bigint, transform: Mapper<T>): { p: T; f: T };
-  wNAFCachedUnsafe(P: T, n: bigint, transform: Mapper<T>, prev?: T): T;
+  wNAFCached(P: T, n: bigint, transform?: Mapper<T>): { p: T; f: T };
+  wNAFCachedUnsafe(P: T, n: bigint, transform?: Mapper<T>, prev?: T): T;
   setWindowSize(P: T, W: number): void;
 };
 
@@ -136,7 +136,7 @@ export type IWNAF<T extends Group<T>> = {
  */
 export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number): IWNAF<T> {
   return {
-    constTimeNegate,
+    constTimeNegate: negateCt,
 
     hasPrecomputes(elm: T) {
       return getW(elm) !== 1;
@@ -212,10 +212,10 @@ export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number): 
         if (isZero) {
           // bits are 0: add garbage to fake point
           // Important part for const-time getPublicKey: add random "noise" point to f.
-          f = f.add(constTimeNegate(isNegF, precomputes[offsetF]));
+          f = f.add(negateCt(isNegF, precomputes[offsetF]));
         } else {
           // bits are 1: add to result point
-          p = p.add(constTimeNegate(isNeg, precomputes[offset]));
+          p = p.add(negateCt(isNeg, precomputes[offset]));
         }
       }
       // Return both real and fake points: JIT won't eliminate f.
@@ -250,22 +250,23 @@ export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number): 
       return acc;
     },
 
-    getPrecomputes(W: number, P: T, transform: Mapper<T>): T[] {
+    getPrecomputes(W: number, P: T, transform?: Mapper<T>): T[] {
       // Calculate precomputes on a first run, reuse them after
       let comp = pointPrecomputes.get(P);
       if (!comp) {
         comp = this.precomputeWindow(P, W) as T[];
-        if (W !== 1) pointPrecomputes.set(P, transform(comp));
+        if (typeof transform === 'function') comp = transform(comp);
+        if (W !== 1) pointPrecomputes.set(P, comp);
       }
       return comp;
     },
 
-    wNAFCached(P: T, n: bigint, transform: Mapper<T>): { p: T; f: T } {
+    wNAFCached(P: T, n: bigint, transform?: Mapper<T>): { p: T; f: T } {
       const W = getW(P);
       return this.wNAF(W, this.getPrecomputes(W, P, transform), n);
     },
 
-    wNAFCachedUnsafe(P: T, n: bigint, transform: Mapper<T>, prev?: T): T {
+    wNAFCachedUnsafe(P: T, n: bigint, transform?: Mapper<T>, prev?: T): T {
       const W = getW(P);
       if (W === 1) return this.unsafeLadder(P, n, prev); // For W=1 ladder is ~x2 faster
       return this.wNAFUnsafe(W, this.getPrecomputes(W, P, transform), n, prev);
@@ -437,6 +438,8 @@ export type BasicCurve<T> = {
   allowInfinityPoint?: boolean; // bls12-381 requires it. ZERO point is valid, but invalid pubkey
 };
 
+// TODO: remove
+/** @deprecated */
 export function validateBasic<FP, T>(
   curve: BasicCurve<FP> & T
 ): Readonly<
@@ -468,4 +471,47 @@ export function validateBasic<FP, T>(
     ...curve,
     ...{ p: curve.Fp.ORDER },
   } as const);
+}
+
+export type ValidCurveParams<T> = {
+  a: T;
+  p: bigint;
+  n: bigint;
+  h: bigint;
+  Gx: T;
+  Gy: T;
+} & ({ b: T } | { d: T });
+
+function createField<T>(order: bigint, field?: IField<T>): IField<T> {
+  if (field) {
+    if (field.ORDER !== order) throw new Error('Field.ORDER must match order: Fp == p, Fn == n');
+    validateField(field);
+    return field;
+  } else {
+    return Field(order) as unknown as IField<T>;
+  }
+}
+export type FpFn<T> = { Fp: IField<T>; Fn: IField<bigint> };
+/** Validates CURVE opts and creates fields */
+export function _createCurveFields<T>(
+  type: 'weierstrass' | 'edwards',
+  CURVE: ValidCurveParams<T>,
+  curveOpts: Partial<FpFn<T>> = {}
+): FpFn<T> {
+  if (!CURVE || typeof CURVE !== 'object') throw new Error(`expected valid ${type} CURVE object`);
+  for (const p of ['p', 'n', 'h'] as const) {
+    const val = CURVE[p];
+    if (!(typeof val === 'bigint' && val > _0n))
+      throw new Error(`CURVE.${p} must be positive bigint`);
+  }
+  const Fp = createField(CURVE.p, curveOpts.Fp);
+  const Fn = createField(CURVE.n, curveOpts.Fn);
+  const _b: 'b' | 'd' = type === 'weierstrass' ? 'b' : 'd';
+  const params = ['Gx', 'Gy', 'a', _b] as const;
+  for (const p of params) {
+    // @ts-ignore
+    if (!Fp.isValid(CURVE[p]))
+      throw new Error(`CURVE.${p} must be valid field element of CURVE.Fp`);
+  }
+  return { Fp, Fn };
 }
