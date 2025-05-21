@@ -8,11 +8,12 @@
 // prettier-ignore
 import {
   _createCurveFields,
+  normalizeZ,
   pippenger,
   wNAF,
   type AffinePoint, type BasicCurve, type Group, type GroupConstructor
 } from './curve.ts';
-import { Field, FpInvertBatch, type IField, type NLength } from './modular.ts';
+import { Field, type IField, type NLength } from './modular.ts';
 // prettier-ignore
 import {
   _validateObject,
@@ -57,6 +58,7 @@ export interface ExtPointType extends Group<ExtPointType> {
   assertValidity(): void;
   multiply(scalar: bigint): ExtPointType;
   multiplyUnsafe(scalar: bigint): ExtPointType;
+  is0(): boolean;
   isSmallOrder(): boolean;
   isTorsionFree(): boolean;
   clearCofactor(): ExtPointType;
@@ -307,11 +309,7 @@ export function edwards(CURVE: EdwardsOpts, curveOpts: EdwardsExtraOpts = {}): E
       return new Point(x, y, _1n, modP(x * y));
     }
     static normalizeZ(points: Point[]): Point[] {
-      const toInv = FpInvertBatch(
-        Fp,
-        points.map((p) => p.ez)
-      );
-      return points.map((p, i) => p.toAffine(toInv[i])).map(Point.fromAffine);
+      return normalizeZ(Point, 'ez', points);
     }
     // Multiscalar Multiplication
     static msm(points: Point[], scalars: bigint[]): Point {
@@ -398,15 +396,11 @@ export function edwards(CURVE: EdwardsOpts, curveOpts: EdwardsExtraOpts = {}): E
       return this.add(other.negate());
     }
 
-    private wNAF(n: bigint): { p: Point; f: Point } {
-      return wnaf.wNAFCached(this, n, Point.normalizeZ);
-    }
-
     // Constant-time multiplication.
     multiply(scalar: bigint): Point {
       const n = scalar;
       aInRange('scalar', n, _1n, CURVE_ORDER); // 1 <= scalar < L
-      const { p, f } = this.wNAF(n);
+      const { p, f } = wnaf.wNAFCached(this, n, Point.normalizeZ);
       return Point.normalizeZ([p, f])[0];
     }
 
@@ -632,7 +626,7 @@ export function eddsa(Point: ExtPointConstructor, eddsaOpts: EdDSAOpts): EdDSA {
     const RkA = R.add(A.multiplyUnsafe(k));
     // Extended group equation
     // [8][S]B = [8]R + [8][k]A'
-    return RkA.subtract(SB).clearCofactor().equals(Point.ZERO);
+    return RkA.subtract(SB).clearCofactor().is0();
   }
 
   G._setWindowSize(8); // Enable precomputes. Slows down first publicKey computation by 20ms.
