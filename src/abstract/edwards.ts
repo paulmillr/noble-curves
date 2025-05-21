@@ -12,7 +12,7 @@ import {
   wNAF,
   type AffinePoint, type BasicCurve, type Group, type GroupConstructor
 } from './curve.ts';
-import { Field, FpInvertBatch, mod, type IField, type NLength } from './modular.ts';
+import { Field, FpInvertBatch, type IField, type NLength } from './modular.ts';
 // prettier-ignore
 import {
   _validateObject,
@@ -544,10 +544,11 @@ export function eddsa(Point: ExtPointConstructor, eddsaOpts: EdDSAOpts): EdDSA {
     }); // NOOP
 
   function modN(a: bigint) {
-    return mod(a, CURVE_ORDER);
+    return Fn.create(a);
   }
   // Little-endian SHA512 with modulo n
   function modN_LE(hash: Uint8Array): bigint {
+    // Not using Fn.fromBytes: hash can be 2*Fn.BYTES
     return modN(bytesToNumberLE(hash));
   }
 
@@ -593,8 +594,9 @@ export function eddsa(Point: ExtPointConstructor, eddsaOpts: EdDSAOpts): EdDSA {
     const k = hashDomainToScalar(options.context, R, pointBytes, msg); // R || A || PH(M)
     const s = modN(r + k * scalar); // S = (r + k * s) mod L
     aInRange('signature.s', s, _0n, CURVE_ORDER); // 0 <= s < l
-    const res = concatBytes(R, numberToBytesLE(s, Fp.BYTES));
-    return ensureBytes('result', res, Fp.BYTES * 2); // 64-byte signature
+    const L = Fp.BYTES;
+    const res = concatBytes(R, numberToBytesLE(s, L));
+    return ensureBytes('result', res, L * 2); // 64-byte signature
   }
 
   const verifyOpts: { context?: Hex; zip215?: boolean } = VERIFY_DEFAULT;

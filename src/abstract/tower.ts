@@ -210,6 +210,7 @@ export function tower12(opts: Tower12Opts): {
     create: (num) => num,
     isValid: ({ c0, c1 }) => isValidC(c0, FP2_ORDER) && isValidC(c1, FP2_ORDER),
     is0: ({ c0, c1 }) => Fp.is0(c0) && Fp.is0(c1),
+    isValidNot0: (num) => !Fp2.is0(num) && Fp2.isValid(num),
     eql: ({ c0, c1 }: Fp2, { c0: r0, c1: r1 }: Fp2) => Fp.eql(c0, r0) && Fp.eql(c1, r1),
     neg: ({ c0, c1 }) => ({ c0: Fp.neg(c0), c1: Fp.neg(c1) }),
     pow: (num, power) => mod.FpPow(Fp2, num, power),
@@ -367,6 +368,7 @@ export function tower12(opts: Tower12Opts): {
     create: (num) => num,
     isValid: ({ c0, c1, c2 }) => Fp2.isValid(c0) && Fp2.isValid(c1) && Fp2.isValid(c2),
     is0: ({ c0, c1, c2 }) => Fp2.is0(c0) && Fp2.is0(c1) && Fp2.is0(c2),
+    isValidNot0: (num) => !Fp6.is0(num) && Fp6.isValid(num),
     neg: ({ c0, c1, c2 }) => ({ c0: Fp2.neg(c0), c1: Fp2.neg(c1), c2: Fp2.neg(c2) }),
     eql: ({ c0, c1, c2 }, { c0: r0, c1: r1, c2: r2 }) =>
       Fp2.eql(c0, r0) && Fp2.eql(c1, r1) && Fp2.eql(c2, r2),
@@ -513,6 +515,7 @@ export function tower12(opts: Tower12Opts): {
     create: (num) => num,
     isValid: ({ c0, c1 }) => Fp6.isValid(c0) && Fp6.isValid(c1),
     is0: ({ c0, c1 }) => Fp6.is0(c0) && Fp6.is0(c1),
+    isValidNot0: (num) => !Fp12.is0(num) && Fp12.isValid(num),
     neg: ({ c0, c1 }) => ({ c0: Fp6.neg(c0), c1: Fp6.neg(c1) }),
     eql: ({ c0, c1 }, { c0: r0, c1: r1 }) => Fp6.eql(c0, r0) && Fp6.eql(c1, r1),
     sqrt: notImplemented,

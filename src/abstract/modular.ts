@@ -229,6 +229,7 @@ export interface IField<T> {
   create: (num: T) => T;
   isValid: (num: T) => boolean;
   is0: (num: T) => boolean;
+  isValidNot0: (num: T) => boolean;
   neg(num: T): T;
   inv(num: T): T;
   sqrt(num: T): T;
@@ -414,6 +415,8 @@ export function Field(
       return _0n <= num && num < ORDER; // 0 is valid element, but it's not invertible
     },
     is0: (num) => num === _0n,
+    // is valid and invertible
+    isValidNot0: (num: bigint) => !f.is0(num) && f.isValid(num),
     isOdd: (num) => (num & _1n) === _1n,
     neg: (num) => mod(-num, ORDER),
     eql: (lhs, rhs) => lhs === rhs,
