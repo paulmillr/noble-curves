@@ -817,7 +817,6 @@ export function weierstrassN<T>(
      * @returns New point
      */
     multiply(scalar: bigint): Point {
-      // console.log('mul ', this.toString(), scalar);
       const { endo } = curveOpts;
       if (!Fn.isValidNot0(scalar)) throw new Error('invalid scalar: out of range'); // 0 is invalid
       let point: Point, fake: Point; // Fake point is used to const-time mult
@@ -844,7 +843,6 @@ export function weierstrassN<T>(
      * an exposed private key e.g. sig verification, which works over *public* keys.
      */
     multiplyUnsafe(sc: bigint): Point {
-      // console.log('mul uns', this.toString(), sc);
       const { endo } = curveOpts;
       const p = this;
       if (!Fn.isValid(sc)) throw new Error('invalid scalar: out of range'); // 0 is valid
