@@ -137,14 +137,13 @@ const numTo32b = (n: bigint) => numberToBytesBE(n, 32);
 const modP = (x: bigint) => mod(x, secp256k1P);
 const modN = (x: bigint) => mod(x, secp256k1N);
 const Point = /* @__PURE__ */ (() => secp256k1.ProjectivePoint)();
-const GmulAdd = (Q: PointType<bigint>, a: bigint, b: bigint) =>
-  Point.BASE.multiplyAndAddUnsafe(Q, a, b);
+const hasEven = (y: bigint) => y % _2n === _0n;
 
 // Calculate point, scalar and bytes
 function schnorrGetExtPubKey(priv: PrivKey) {
   let d_ = secp256k1.utils.normPrivateKeyToScalar(priv); // same method executed in fromPrivateKey
   let p = Point.fromPrivateKey(d_); // P = d'⋅G; 0 < d' < n check is done inside
-  const scalar = p.hasEvenY() ? d_ : modN(-d_);
+  const scalar = hasEven(p.y) ? d_ : modN(-d_);
   return { scalar: scalar, bytes: pointToBytes(p) };
 }
 /**
@@ -156,8 +155,8 @@ function lift_x(x: bigint): PointType<bigint> {
   const xx = modP(x * x);
   const c = modP(xx * x + BigInt(7)); // Let c = x³ + 7 mod p.
   let y = sqrtMod(c); // Let y = c^(p+1)/4 mod p.
-  if (y % _2n !== _0n) y = modP(-y); // Return the unique point P such that x(P) = x and
-  const p = new Point(x, y, _1n); // y(P) = y if y mod 2 = 0 or y(P) = p-y otherwise.
+  if (!hasEven(y)) y = modP(-y); // Return the unique point P such that x(P) = x and
+  const p = Point.fromAffine({ x, y }); // y(P) = y if y mod 2 = 0 or y(P) = p-y otherwise.
   p.assertValidity();
   return p;
 }
@@ -217,9 +216,12 @@ function schnorrVerify(signature: Hex, message: Hex, publicKey: Hex): boolean {
     const s = num(sig.subarray(32, 64)); // Let s = int(sig[32:64]); fail if s ≥ n.
     if (!inRange(s, _1n, secp256k1N)) return false;
     const e = challenge(numTo32b(r), pointToBytes(P), m); // int(challenge(bytes(r)||bytes(P)||m))%n
-    const R = GmulAdd(P, s, modN(-e)); // R = s⋅G - e⋅P
-    if (!R || !R.hasEvenY() || R.toAffine().x !== r) return false; // -eP == (n-e)P
-    return true; // Fail if is_infinite(R) / not has_even_y(R) / x(R) ≠ r.
+    // R = s⋅G - e⋅P, where -eP == (n-e)P
+    const R = Point.BASE.multiplyUnsafe(s).add(P.multiplyUnsafe(modN(-e)));
+    const { x, y } = R.toAffine();
+    // Fail if is_infinite(R) / not has_even_y(R) / x(R) ≠ r.
+    if (R.is0() || !hasEven(y) || x !== r) return false;
+    return true;
   } catch (error) {
     return false;
   }
