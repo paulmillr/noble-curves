@@ -588,7 +588,7 @@ for (const name in CURVES) {
         );
         should('precomputeMSMUnsafe basic', () => {
           return;
-          const Point = C.Point || C.ExtendedPoint || C.ProjectivePoint;
+          const Point = C.Point || C.Point || C.Point;
           if (!Point) throw new Error('Unknown point');
           const field = Field(CURVE_ORDER);
 
@@ -604,7 +604,7 @@ for (const name in CURVES) {
           fc.assert(
             fc.property(fc.array(fc.tuple(FC_BIGINT, FC_BIGINT)), FC_BIGINT, (pairs) => {
               return;
-              const Point = C.Point || C.ExtendedPoint || C.ProjectivePoint;
+              const Point = C.Point || C.Point || C.Point;
               if (!Point) throw new Error('Unknown point');
               const field = Field(CURVE_ORDER);
 
@@ -968,8 +968,8 @@ describe('Pairings', () => {
     describe(name, () => {
       const { pairing } = curve;
       const { Fp12 } = curve.fields;
-      const G1Point = curve.G1.ProjectivePoint;
-      const G2Point = curve.G2.ProjectivePoint;
+      const G1Point = curve.G1.Point;
+      const G2Point = curve.G2.Point;
       const CURVE_ORDER = curve.ORDER;
       const G1 = G1Point.BASE;
       const G2 = G2Point.BASE;

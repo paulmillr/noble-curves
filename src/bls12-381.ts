@@ -351,7 +351,7 @@ function pointG1FromBytes(bytes: Uint8Array): AffinePoint<Fp> {
     const y = bytesToNumberBE(value.subarray(L));
     if (infinity) {
       if (x !== _0n || y !== _0n) throw new Error('G1: non-empty point at infinity');
-      return bls12_381.G1.ProjectivePoint.ZERO.toAffine();
+      return bls12_381.G1.Point.ZERO.toAffine();
     }
     return { x: Fp.create(x), y: Fp.create(y) };
   } else {
@@ -362,7 +362,7 @@ function pointG1FromBytes(bytes: Uint8Array): AffinePoint<Fp> {
 function signatureG1FromBytes(hex: Hex): ProjPointType<Fp> {
   const { infinity, sort, value } = parseMask(ensureBytes('signatureHex', hex, 48));
   const P = Fp.ORDER;
-  const Point = bls12_381.G1.ProjectivePoint;
+  const Point = bls12_381.G1.Point;
   const compressedValue = bytesToNumberBE(value);
   // Zero
   if (infinity) return Point.ZERO;
@@ -465,7 +465,7 @@ function signatureG2FromBytes(hex: Hex) {
   const { ORDER: P } = Fp;
   // TODO: Optimize, it's very slow because of sqrt.
   const { infinity, sort, value } = parseMask(ensureBytes('signatureHex', hex));
-  const Point = bls12_381.G2.ProjectivePoint;
+  const Point = bls12_381.G2.Point;
   const half = value.length / 2;
   if (half !== 48 && half !== 96)
     throw new Error('invalid compressed signature length, expected 96/192 bytes');

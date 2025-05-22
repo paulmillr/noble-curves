@@ -136,7 +136,7 @@ const pointToBytes = (point: PointType<bigint>) => point.toBytes(true).slice(1);
 const numTo32b = (n: bigint) => numberToBytesBE(n, 32);
 const modP = (x: bigint) => mod(x, secp256k1P);
 const modN = (x: bigint) => mod(x, secp256k1N);
-const Point = /* @__PURE__ */ (() => secp256k1.ProjectivePoint)();
+const Point = /* @__PURE__ */ (() => secp256k1.Point)();
 const hasEven = (y: bigint) => y % _2n === _0n;
 
 // Calculate point, scalar and bytes
@@ -311,7 +311,7 @@ const mapSWU = /* @__PURE__ */ (() =>
 /** Hashing / encoding to secp256k1 points / field. RFC 9380 methods. */
 export const secp256k1_hasher: Hasher<bigint> = /* @__PURE__ */ (() =>
   createHasher(
-    secp256k1.ProjectivePoint,
+    secp256k1.Point,
     (scalars: bigint[]) => {
       const { x, y } = mapSWU(Fpk1.create(scalars[0]));
       return isoMap(x, y);

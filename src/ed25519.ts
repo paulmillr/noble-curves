@@ -199,7 +199,7 @@ export const x25519: XCurveFn = /* @__PURE__ */ (() =>
  */
 export function edwardsToMontgomeryPub(edwardsPub: Hex): Uint8Array {
   const bpub = ensureBytes('pub', edwardsPub);
-  const { y } = ed25519.ExtendedPoint.fromHex(bpub);
+  const { y } = ed25519.Point.fromHex(bpub);
   const _1n = BigInt(1);
   return Fp.toBytes(Fp.create((_1n + y) * Fp.inv(_1n - y)));
 }
@@ -292,7 +292,7 @@ function map_to_curve_elligator2_edwards25519(u: bigint) {
 
 export const ed25519_hasher: Hasher<bigint> = /* @__PURE__ */ (() =>
   createHasher(
-    ed25519.ExtendedPoint,
+    ed25519.Point,
     (scalars: bigint[]) => map_to_curve_elligator2_edwards25519(scalars[0]),
     {
       DST: 'edwards25519_XMD:SHA-512_ELL2_RO_',
@@ -365,7 +365,7 @@ function calcElligatorRistrettoMap(r0: bigint): ExtendedPoint {
   const W1 = mod(Nt * SQRT_AD_MINUS_ONE); // 11
   const W2 = mod(_1n - s2); // 12
   const W3 = mod(_1n + s2); // 13
-  return new ed25519.ExtendedPoint(mod(W0 * W3), mod(W2 * W1), mod(W1 * W3), mod(W0 * W2));
+  return new ed25519.Point(mod(W0 * W3), mod(W2 * W1), mod(W1 * W3), mod(W0 * W2));
 }
 
 /**
@@ -386,7 +386,7 @@ class RistPoint implements Group<RistPoint> {
   }
 
   static fromAffine(ap: AffinePoint<bigint>): RistPoint {
-    return new RistPoint(ed25519.ExtendedPoint.fromAffine(ap));
+    return new RistPoint(ed25519.Point.fromAffine(ap));
   }
 
   /**
@@ -440,7 +440,7 @@ class RistPoint implements Group<RistPoint> {
     const y = mod(u1 * Dy); // 11
     const t = mod(x * y); // 12
     if (!isValid || isNegativeLE(t, P) || y === _0n) throw new Error(emsg);
-    return new RistPoint(new ed25519.ExtendedPoint(x, y, _1n, t));
+    return new RistPoint(new ed25519.Point(x, y, _1n, t));
   }
 
   static msm(points: RistPoint[], scalars: bigint[]): RistPoint {
@@ -540,8 +540,8 @@ class RistPoint implements Group<RistPoint> {
  * [RFC9496](https://www.rfc-editor.org/rfc/rfc9496).
  */
 export const RistrettoPoint: typeof RistPoint = /* @__PURE__ */ (() => {
-  if (!RistPoint.BASE) RistPoint.BASE = new RistPoint(ed25519.ExtendedPoint.BASE);
-  if (!RistPoint.ZERO) RistPoint.ZERO = new RistPoint(ed25519.ExtendedPoint.ZERO);
+  if (!RistPoint.BASE) RistPoint.BASE = new RistPoint(ed25519.Point.BASE);
+  if (!RistPoint.ZERO) RistPoint.ZERO = new RistPoint(ed25519.Point.ZERO);
   return RistPoint;
 })();
 

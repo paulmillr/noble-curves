@@ -41,7 +41,7 @@ const p256_mapSWU = /* @__PURE__ */ (() =>
 
 /** Hashing / encoding to p256 points / field. RFC 9380 methods. */
 export const p256_hasher: Hasher<bigint> = /* @__PURE__ */ (() =>
-  createHasher(secp256r1.ProjectivePoint, (scalars: bigint[]) => p256_mapSWU(scalars[0]), {
+  createHasher(secp256r1.Point, (scalars: bigint[]) => p256_mapSWU(scalars[0]), {
     DST: 'P256_XMD:SHA-256_SSWU_RO_',
     encodeDST: 'P256_XMD:SHA-256_SSWU_NU_',
     p: Fp256.ORDER,
@@ -88,7 +88,7 @@ const p384_mapSWU = /* @__PURE__ */ (() =>
 
 /** Hashing / encoding to p384 points / field. RFC 9380 methods. */
 export const p384_hasher: Hasher<bigint> = /* @__PURE__ */ (() =>
-  createHasher(secp384r1.ProjectivePoint, (scalars: bigint[]) => p384_mapSWU(scalars[0]), {
+  createHasher(secp384r1.Point, (scalars: bigint[]) => p384_mapSWU(scalars[0]), {
     DST: 'P384_XMD:SHA-384_SSWU_RO_',
     encodeDST: 'P384_XMD:SHA-384_SSWU_NU_',
     p: Fp384.ORDER,
@@ -144,7 +144,7 @@ const p521_mapSWU = /* @__PURE__ */ (() =>
 
 /** Hashing / encoding to p521 points / field. RFC 9380 methods. */
 export const p521_hasher: Hasher<bigint> = /* @__PURE__ */ (() =>
-  createHasher(secp521r1.ProjectivePoint, (scalars: bigint[]) => p521_mapSWU(scalars[0]), {
+  createHasher(secp521r1.Point, (scalars: bigint[]) => p521_mapSWU(scalars[0]), {
     DST: 'P521_XMD:SHA-512_SSWU_RO_',
     encodeDST: 'P521_XMD:SHA-512_SSWU_NU_',
     p: Fp521.ORDER,

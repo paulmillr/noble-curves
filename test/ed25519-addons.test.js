@@ -191,7 +191,7 @@ describe('X25519 RFC7748 ECDH', () => {
   });
 
   should('base point', () => {
-    const { y } = ed25519ph.ExtendedPoint.BASE;
+    const { y } = ed25519ph.Point.BASE;
     const { Fp } = ed25519ph.CURVE;
     const u = Fp.create((y + 1n) * Fp.inv(1n - y));
     eql(numberToBytesLE(u, 32), x25519.GuBytes);

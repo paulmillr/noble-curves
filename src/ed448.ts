@@ -183,7 +183,7 @@ export const x448: XCurveFn = /* @__PURE__ */ (() =>
  */
 export function edwardsToMontgomeryPub(edwardsPub: string | Uint8Array): Uint8Array {
   const bpub = ensureBytes('pub', edwardsPub);
-  const { y } = ed448.ExtendedPoint.fromHex(bpub);
+  const { y } = ed448.Point.fromHex(bpub);
   const _1n = BigInt(1);
   return Fp.toBytes(Fp.create((y - _1n) * Fp.inv(y + _1n)));
 }
@@ -269,19 +269,15 @@ function map_to_curve_elligator2_edwards448(u: bigint) {
 }
 
 export const ed448_hasher: Hasher<bigint> = /* @__PURE__ */ (() =>
-  createHasher(
-    ed448.ExtendedPoint,
-    (scalars: bigint[]) => map_to_curve_elligator2_edwards448(scalars[0]),
-    {
-      DST: 'edwards448_XOF:SHAKE256_ELL2_RO_',
-      encodeDST: 'edwards448_XOF:SHAKE256_ELL2_NU_',
-      p: Fp.ORDER,
-      m: 1,
-      k: 224,
-      expand: 'xof',
-      hash: shake256,
-    }
-  ))();
+  createHasher(ed448.Point, (scalars: bigint[]) => map_to_curve_elligator2_edwards448(scalars[0]), {
+    DST: 'edwards448_XOF:SHAKE256_ELL2_RO_',
+    encodeDST: 'edwards448_XOF:SHAKE256_ELL2_NU_',
+    p: Fp.ORDER,
+    m: 1,
+    k: 224,
+    expand: 'xof',
+    hash: shake256,
+  }))();
 export const hashToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() => ed448_hasher.hashToCurve)();
 export const encodeToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() =>
   ed448_hasher.encodeToCurve)();
@@ -343,7 +339,7 @@ function calcElligatorDecafMap(r0: bigint): ExtendedPoint {
   const W1 = mod(s2 + _1n); // 9
   const W2 = mod(s2 - _1n); // 10
   const W3 = mod(v_prime * s * (r - _1n) * ONE_MINUS_TWO_D + sgn); // 11
-  return new ed448.ExtendedPoint(mod(W0 * W3), mod(W2 * W1), mod(W1 * W3), mod(W0 * W2));
+  return new ed448.Point(mod(W0 * W3), mod(W2 * W1), mod(W1 * W3), mod(W0 * W2));
 }
 
 /**
@@ -364,7 +360,7 @@ class DcfPoint implements Group<DcfPoint> {
   }
 
   static fromAffine(ap: AffinePoint<bigint>): DcfPoint {
-    return new DcfPoint(ed448.ExtendedPoint.fromAffine(ap));
+    return new DcfPoint(ed448.Point.fromAffine(ap));
   }
 
   /**
@@ -421,7 +417,7 @@ class DcfPoint implements Group<DcfPoint> {
     const t = mod(x * y); // 8
 
     if (!isValid) throw new Error(emsg);
-    return new DcfPoint(new ed448.ExtendedPoint(x, y, _1n, t));
+    return new DcfPoint(new ed448.Point(x, y, _1n, t));
   }
 
   static msm(points: DcfPoint[], scalars: bigint[]): DcfPoint {
@@ -513,8 +509,8 @@ class DcfPoint implements Group<DcfPoint> {
 export const DecafPoint: typeof DcfPoint = /* @__PURE__ */ (() => {
   // decaf448 base point is ed448 base x 2
   // https://github.com/dalek-cryptography/curve25519-dalek/blob/59837c6ecff02b77b9d5ff84dbc239d0cf33ef90/vendor/ristretto.sage#L699
-  if (!DcfPoint.BASE) DcfPoint.BASE = new DcfPoint(ed448.ExtendedPoint.BASE).multiply(_2n);
-  if (!DcfPoint.ZERO) DcfPoint.ZERO = new DcfPoint(ed448.ExtendedPoint.ZERO);
+  if (!DcfPoint.BASE) DcfPoint.BASE = new DcfPoint(ed448.Point.BASE).multiply(_2n);
+  if (!DcfPoint.ZERO) DcfPoint.ZERO = new DcfPoint(ed448.Point.ZERO);
   return DcfPoint;
 })();
 
