@@ -182,6 +182,7 @@ export type CurveFn = {
     options?: { context?: Hex; zip215: boolean }
   ) => boolean;
   Point: ExtPointConstructor;
+  /** @deprecated use `Point` */
   ExtendedPoint: ExtPointConstructor;
   utils: {
     randomPrivateKey: () => Uint8Array;
