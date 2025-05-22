@@ -195,11 +195,16 @@ export type CurvePointsTypeWithLength<T> = Readonly<CurvePointsType<T> & Partial
 
 // LegacyWeierstrass
 export type CurvePointsRes<T> = {
+/** @deprecated import individual CURVE params */
   CURVE: CurvePointsType<T>;
   Point: ProjConstructor<T>;
+  /** @deprecated use `Point` */
   ProjectivePoint: ProjConstructor<T>;
+  /** @deprecated */
   normPrivateKeyToScalar: (key: PrivKey) => bigint;
+  /** @deprecated */
   weierstrassEquation: (x: T) => T;
+  /** @deprecated use `Point.Fn.isValidNot0(num)` */
   isWithinCurveOrder: (num: bigint) => boolean;
 };
 
