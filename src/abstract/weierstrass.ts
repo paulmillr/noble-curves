@@ -397,20 +397,18 @@ export function _legacyHelperNormPriv(
   allowedPrivateKeyLengths?: readonly number[],
   wrapPrivateKey?: boolean
 ): (key: PrivKey) => bigint {
-  const { BYTES: nByteLength } = Fn;
+  const { BYTES: expected } = Fn;
   // Validates if priv key is valid and converts it to bigint.
   function normPrivateKeyToScalar(key: PrivKey): bigint {
-    // const { allowedPrivateKeyLengths: lengths, wrapPrivateKey } = curveOpts;
     let num: bigint;
     if (typeof key === 'bigint') {
       num = key;
     } else {
-      // new
       let bytes = ensureBytes('private key', key);
       if (allowedPrivateKeyLengths) {
-        if (!allowedPrivateKeyLengths.includes(key.length * 2))
+        if (!allowedPrivateKeyLengths.includes(bytes.length * 2))
           throw new Error('invalid private key');
-        const padded = new Uint8Array(nByteLength);
+        const padded = new Uint8Array(expected);
         padded.set(bytes, padded.length - bytes.length);
         bytes = padded;
       }
@@ -418,7 +416,7 @@ export function _legacyHelperNormPriv(
         num = Fn.fromBytes(bytes);
       } catch (error) {
         throw new Error(
-          'invalid private key, expected hex or ' + nByteLength + ' bytes, got ' + typeof key
+          `invalid private key: expected ui8a of size ${expected}, got ${typeof key}`
         );
       }
     }
