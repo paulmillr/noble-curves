@@ -195,7 +195,7 @@ export type CurvePointsTypeWithLength<T> = Readonly<CurvePointsType<T> & Partial
 
 // LegacyWeierstrass
 export type CurvePointsRes<T> = {
-/** @deprecated import individual CURVE params */
+  /** @deprecated import individual CURVE params */
   CURVE: CurvePointsType<T>;
   Point: ProjConstructor<T>;
   /** @deprecated use `Point` */
