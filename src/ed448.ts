@@ -125,25 +125,24 @@ function uvRatio(u: bigint, v: bigint): { isValid: boolean; value: bigint } {
 const Fp = /* @__PURE__ */ (() => Field(ed448_CURVE.p, 456, true))();
 // RFC 7748 has 56-byte keys, RFC 8032 has 57-byte keys
 // SHAKE256(dom4(phflag,context)||x, 114)
-const ED448_DEF = /* @__PURE__ */ (() =>
-  ({
-    ...ed448_CURVE,
-    Fp,
-    nBitLength: 456,
-    hash: shake256_114,
-    adjustScalarBytes,
-    // dom4
-    domain: (data: Uint8Array, ctx: Uint8Array, phflag: boolean) => {
-      if (ctx.length > 255) throw new Error('context must be smaller than 255, got: ' + ctx.length);
-      return concatBytes(
-        utf8ToBytes('SigEd448'),
-        new Uint8Array([phflag ? 1 : 0, ctx.length]),
-        ctx,
-        data
-      );
-    },
-    uvRatio,
-  }))();
+const ED448_DEF = /* @__PURE__ */ (() => ({
+  ...ed448_CURVE,
+  Fp,
+  nBitLength: 456,
+  hash: shake256_114,
+  adjustScalarBytes,
+  // dom4
+  domain: (data: Uint8Array, ctx: Uint8Array, phflag: boolean) => {
+    if (ctx.length > 255) throw new Error('context must be smaller than 255, got: ' + ctx.length);
+    return concatBytes(
+      utf8ToBytes('SigEd448'),
+      new Uint8Array([phflag ? 1 : 0, ctx.length]),
+      ctx,
+      data
+    );
+  },
+  uvRatio,
+}))();
 
 /**
  * ed448 EdDSA curve and methods.

@@ -124,17 +124,16 @@ export const ED25519_TORSION_SUBGROUP: string[] = [
 
 const Fp = /* @__PURE__ */ (() => Field(ed25519_CURVE.p, undefined, true))();
 
-const ed25519Defaults = /* @__PURE__ */ (() =>
-  ({
-    ...ed25519_CURVE,
-    Fp,
-    hash: sha512,
-    adjustScalarBytes,
-    // dom2
-    // Ratio of u to v. Allows us to combine inversion and square root. Uses algo from RFC8032 5.1.3.
-    // Constant-time, u/√v
-    uvRatio,
-  }))();
+const ed25519Defaults = /* @__PURE__ */ (() => ({
+  ...ed25519_CURVE,
+  Fp,
+  hash: sha512,
+  adjustScalarBytes,
+  // dom2
+  // Ratio of u to v. Allows us to combine inversion and square root. Uses algo from RFC8032 5.1.3.
+  // Constant-time, u/√v
+  uvRatio,
+}))();
 
 /**
  * ed25519 curve with EdDSA signatures.
