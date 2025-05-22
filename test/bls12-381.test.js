@@ -45,8 +45,8 @@ const SCALAR_XMD_SHA256_VECTORS = readFileSync(
 const NUM_RUNS = Number(globalThis.process?.env?.RUNS_COUNT || 10); // reduce to 1 to shorten test time
 fc.configureGlobal({ numRuns: NUM_RUNS });
 
-const G1Point = bls.G1.ProjectivePoint;
-const G2Point = bls.G2.ProjectivePoint;
+const G1Point = bls.G1.Point;
+const G2Point = bls.G2.Point;
 const G1Aff = (x, y) => G1Point.fromAffine({ x, y });
 const CURVE_ORDER = bls.params.r;
 
@@ -619,8 +619,8 @@ describe('bls12-381 Point', () => {
 
 // index.ts
 
-// bls.G1.ProjectivePoint.BASE.clearMultiplyPrecomputes();
-// bls.G1.ProjectivePoint.BASE.calcMultiplyPrecomputes(4);
+// bls.G1.Point.BASE.clearMultiplyPrecomputes();
+// bls.G1.Point.BASE.calcMultiplyPrecomputes(4);
 
 describe('bls12-381/basic', () => {
   should('construct point G1 from its uncompressed form (Raw Bytes)', () => {
@@ -1579,7 +1579,7 @@ describe('bls12-381 deterministic', () => {
         return curve.mapToCurve(scalars);
       } catch (e) {
         // eth stuff can also wrap other errors here?
-        // if (e.message === 'bad point: ZERO') return curve.ProjectivePoint.ZERO;
+        // if (e.message === 'bad point: ZERO') return curve.Point.ZERO;
         throw e;
       }
     };
@@ -1607,7 +1607,7 @@ describe('bls12-381 deterministic', () => {
       const t = BigInt(
         '1006044755431560595281793557931171729984964515682961911911398807521437683216171091013202870577238485832047490326971'
       );
-      eql(mapToCurveEth(bls12_381.G1, [t]).equals(bls12_381.G1.ProjectivePoint.ZERO), true);
+      eql(mapToCurveEth(bls12_381.G1, [t]).equals(bls12_381.G1.Point.ZERO), true);
     });
   });
 });

@@ -624,7 +624,7 @@ describe('bn254', () => {
 
     // Ok, this seems correct?
     const g1 =
-      bn254.G1.ProjectivePoint.BASE.multiply(
+      bn254.G1.Point.BASE.multiply(
         18097487326282793650237947474982649264364522469319914492172746413872781676n
       );
     g1.assertValidity();
@@ -633,7 +633,7 @@ describe('bn254', () => {
       y: 0x0b46dd0c40725b6b4a298576629d77b41a545060adb4358eabec939e80691a05n,
     });
     const g2 =
-      bn254.G2.ProjectivePoint.BASE.multiply(
+      bn254.G2.Point.BASE.multiply(
         20390255904278144451778773028944684152769293537511418234311120800877067946n
       );
     g2.assertValidity();
@@ -678,11 +678,11 @@ describe('bn254', () => {
       // should(`${name}`, () => {
       for (const t of vectors) {
         // TODO: projective stuff is somewhat broken on export?
-        const g1 = bn254.G1.ProjectivePoint.fromAffine({
+        const g1 = bn254.G1.Point.fromAffine({
           x: Fp.create(BigInt(t.g1.x[0])),
           y: Fp.create(BigInt(t.g1.y[0])),
         });
-        const g2 = bn254.G2.ProjectivePoint.fromAffine({
+        const g2 = bn254.G2.Point.fromAffine({
           x: Fp2.fromBigTuple(t.g2.x.map(BigInt)),
           y: Fp2.fromBigTuple(t.g2.y.map(BigInt)),
         });
@@ -721,8 +721,8 @@ describe('bn254', () => {
       let res;
       const [Ax, Ay, Bx, By] = ethNums(input, 4);
       try {
-        let A = bn254.G1.ProjectivePoint.fromAffine({ x: Ax, y: Ay });
-        let B = bn254.G1.ProjectivePoint.fromAffine({ x: Bx, y: By });
+        let A = bn254.G1.Point.fromAffine({ x: Ax, y: Ay });
+        let B = bn254.G1.Point.fromAffine({ x: Bx, y: By });
         A = A.add(B);
         A.assertValidity();
         res = A.toAffine();
@@ -736,7 +736,7 @@ describe('bn254', () => {
       const [Ax, Ay, scalar] = ethNums(input, 3);
       let res;
       try {
-        let A = bn254.G1.ProjectivePoint.fromAffine({ x: Ax, y: Ay });
+        let A = bn254.G1.Point.fromAffine({ x: Ax, y: Ay });
         A = A.multiply(scalar % bn254.G1.CURVE.n);
         A.assertValidity();
         res = A.toAffine();
@@ -768,23 +768,21 @@ describe('bn254', () => {
           for (const i of [Ax, Ay, Bay, Bby, Bbx])
             if (Fp.create(i) !== i) throw new Error('failed');
           const A =
-            Fp.is0(Ax) && Fp.is0(Ay)
-              ? G1.ProjectivePoint.ZERO
-              : G1.ProjectivePoint.fromAffine({ x: Ax, y: Ay });
+            Fp.is0(Ax) && Fp.is0(Ay) ? G1.Point.ZERO : G1.Point.fromAffine({ x: Ax, y: Ay });
 
           const ba = Fp2.fromBigTuple([Bax, Bay]);
           const bb = Fp2.fromBigTuple([Bbx, Bby]);
           const B =
             Fp2.is0(ba) && Fp2.is0(bb)
-              ? G2.ProjectivePoint.ZERO
-              : G2.ProjectivePoint.fromAffine({
+              ? G2.Point.ZERO
+              : G2.Point.fromAffine({
                   x: ba,
                   y: bb,
                 });
           A.assertValidity();
           B.assertValidity();
           // zero is just skipped (was set to Fp12.ONE before)
-          if (A.equals(G1.ProjectivePoint.ZERO) || B.equals(G2.ProjectivePoint.ZERO)) continue;
+          if (A.equals(G1.Point.ZERO) || B.equals(G2.Point.ZERO)) continue;
           pairs.push({ g1: A, g2: B });
         }
         f = bn254.pairingBatch(pairs);
@@ -837,8 +835,8 @@ describe('bn254', () => {
         const By = BigInt(`0x${t.y2}`);
         const Cx = BigInt(`0x${t.result.slice(0, 64)}`);
         const Cy = BigInt(`0x${t.result.slice(64)}`);
-        const A = bn254.G1.ProjectivePoint.fromAffine({ x: Ax, y: Ay });
-        const B = bn254.G1.ProjectivePoint.fromAffine({ x: Bx, y: By });
+        const A = bn254.G1.Point.fromAffine({ x: Ax, y: Ay });
+        const B = bn254.G1.Point.fromAffine({ x: Bx, y: By });
         eql(A.add(B).toAffine(), { x: Cx, y: Cy });
       }
       for (const t of seda.mul) {
@@ -847,7 +845,7 @@ describe('bn254', () => {
         const scalar = BigInt(`0x${t.scalar}`) % bn254.G1.CURVE.n;
         const Cx = BigInt(`0x${t.result.slice(0, 64)}`);
         const Cy = BigInt(`0x${t.result.slice(64)}`);
-        const A = bn254.G1.ProjectivePoint.fromAffine({ x: Ax, y: Ay });
+        const A = bn254.G1.Point.fromAffine({ x: Ax, y: Ay });
         eql(A.multiply(scalar).toAffine(), { x: Cx, y: Cy });
       }
     });

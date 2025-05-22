@@ -20,7 +20,7 @@ const edgeCases = json('./ed25519/edge-cases.json');
 // the file is shared between noble-curves and noble-ed25519.
 
 describe('ed25519', () => {
-  const Point = ed.ExtendedPoint;
+  const Point = ed.Point;
 
   function bytes32(numOrStr) {
     let hex2 = typeof numOrStr === 'string' ? numOrStr : numOrStr.toString(16);
@@ -254,17 +254,17 @@ describe('ed25519', () => {
     });
 
     should('not accept point with z=0', () => {
-      throws(() => new ed.ExtendedPoint(0n, 0n, 0n, 0n));
-      throws(() => new ed.ExtendedPoint(1n, 1n, 0n, 1n));
+      throws(() => new ed.Point(0n, 0n, 0n, 0n));
+      throws(() => new ed.Point(1n, 1n, 0n, 1n));
 
-      const zeros = ed.ExtendedPoint.fromAffine({ x: 0n, y: 0n });
-      eql(zeros.equals(ed.ExtendedPoint.BASE.multiply(3n)), false);
+      const zeros = ed.Point.fromAffine({ x: 0n, y: 0n });
+      eql(zeros.equals(ed.Point.BASE.multiply(3n)), false);
 
       const key = ed.utils.randomPrivateKey();
-      const A = ed.ExtendedPoint.fromBytes(ed.getPublicKey(key));
-      const T = ed.ExtendedPoint.fromBytes(bytes(ED25519_TORSION_SUBGROUP[2]));
+      const A = ed.Point.fromBytes(ed.getPublicKey(key));
+      const T = ed.Point.fromBytes(bytes(ED25519_TORSION_SUBGROUP[2]));
       const B = A.add(T).add(A);
-      const C = ed.ExtendedPoint.fromBytes(ed.getPublicKey(ed.utils.randomPrivateKey()));
+      const C = ed.Point.fromBytes(ed.getPublicKey(ed.utils.randomPrivateKey()));
       eql(B.equals(C), false);
 
       const sig =

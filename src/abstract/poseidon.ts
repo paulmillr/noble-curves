@@ -7,8 +7,8 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
+import { _validateObject, bitGet } from '../utils.ts';
 import { FpInvertBatch, FpPow, type IField, validateField } from './modular.ts';
-import { _validateObject, bitGet } from './utils.ts';
 
 // Grain LFSR (Linear-Feedback Shift Register): https://eprint.iacr.org/2009/109.pdf
 function grainLFSR(state: number[]): () => boolean {

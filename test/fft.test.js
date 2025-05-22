@@ -192,7 +192,7 @@ describe('FFT', () => {
   });
   for (const [name, curve] of Object.entries({ bls12_381, bn254 })) {
     const Fr = curve.fields.Fr;
-    const G1 = curve.G1.ProjectivePoint;
+    const G1 = curve.G1.Point;
     const FR_BIGINT = fc.bigInt(1n, Fr.ORDER - 1n);
     const FR_BIGINT_POLY = fc.array(FR_BIGINT, { minLength: 8, maxLength: 8 });
     const roots = fft.rootsOfUnity(Fr, 7n);
