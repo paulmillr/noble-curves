@@ -36,6 +36,7 @@
   },
   "devDependencies": {
     "@paulmillr/jsbt": "0.4.0",
+    "@types/node": "22.15.21",
     "fast-check": "4.1.1",
     "micro-bmark": "0.4.1",
     "micro-should": "0.5.3",
