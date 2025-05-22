@@ -5,14 +5,14 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { mod } from './modular.ts';
 import {
   _validateObject,
   aInRange,
   bytesToNumberLE,
   ensureBytes,
   numberToBytesLE,
-} from './utils.ts';
+} from '../utils.ts';
+import { mod } from './modular.ts';
 
 const _0n = BigInt(0);
 const _1n = BigInt(1);

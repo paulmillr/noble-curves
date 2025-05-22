@@ -45,7 +45,7 @@ import {
   bitMask, bytesToHex, bytesToNumberBE, concatBytes, createHmacDrbg,
   ensureBytes, hexToBytes, inRange, isBytes, memoized, numberToHexUnpadded,
   type CHash, type Hex, type PrivKey
-} from './utils.ts';
+} from '../utils.ts';
 
 export type { AffinePoint };
 export type HmacFnSync = (key: Uint8Array, ...messages: Uint8Array[]) => Uint8Array;

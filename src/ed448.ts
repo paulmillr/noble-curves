@@ -34,7 +34,7 @@ import {
   equalBytes,
   type Hex,
   numberToBytesLE,
-} from './abstract/utils.ts';
+} from './utils.ts';
 
 const shake256_114 = /* @__PURE__ */ wrapConstructor(() => shake256.create({ dkLen: 114 }));
 const shake256_64 = /* @__PURE__ */ wrapConstructor(() => shake256.create({ dkLen: 64 }));

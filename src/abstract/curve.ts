@@ -4,8 +4,8 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
+import { bitLen, bitMask, validateObject } from '../utils.ts';
 import { Field, FpInvertBatch, type IField, nLength, validateField } from './modular.ts';
-import { bitLen, bitMask, validateObject } from './utils.ts';
 
 const _0n = BigInt(0);
 const _1n = BigInt(1);

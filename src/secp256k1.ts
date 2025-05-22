@@ -11,7 +11,12 @@ import { randomBytes } from '@noble/hashes/utils';
 import { createCurve, type CurveFnWithCreate } from './_shortw_utils.ts';
 import { createHasher, type Hasher, type HTFMethod, isogenyMap } from './abstract/hash-to-curve.ts';
 import { Field, mod, pow2 } from './abstract/modular.ts';
-import type { Hex, PrivKey } from './abstract/utils.ts';
+import {
+  type EndomorphismOpts,
+  mapToCurveSimpleSWU,
+  type ProjPointType as PointType,
+} from './abstract/weierstrass.ts';
+import type { Hex, PrivKey } from './utils.ts';
 import {
   aInRange,
   bytesToNumberBE,
@@ -19,12 +24,7 @@ import {
   ensureBytes,
   inRange,
   numberToBytesBE,
-} from './abstract/utils.ts';
-import {
-  type EndomorphismOpts,
-  mapToCurveSimpleSWU,
-  type ProjPointType as PointType,
-} from './abstract/weierstrass.ts';
+} from './utils.ts';
 
 const secp256k1P = BigInt('0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f');
 const secp256k1N = BigInt('0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141');

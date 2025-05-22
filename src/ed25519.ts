@@ -26,7 +26,7 @@ import {
   equalBytes,
   type Hex,
   numberToBytesLE,
-} from './abstract/utils.ts';
+} from './utils.ts';
 
 // 2n**255n - 19n
 const ED25519_P = BigInt(

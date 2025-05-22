@@ -10,8 +10,8 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
+import { bitLen, bitMask, concatBytes, notImplemented } from '../utils.ts';
 import * as mod from './modular.ts';
-import { bitLen, bitMask, concatBytes, notImplemented } from './utils.ts';
 import type { ProjConstructor, ProjPointType } from './weierstrass.ts';
 
 // Be friendly to bad ECMAScript parsers by not using bigint literals

@@ -21,7 +21,7 @@ import {
   bytesToHex, bytesToNumberLE, concatBytes,
   ensureBytes, memoized, numberToBytesLE,
   type FHash, type Hex
-} from './utils.ts';
+} from '../utils.ts';
 
 // Be friendly to bad ECMAScript parsers by not using bigint literals
 // prettier-ignore

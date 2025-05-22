@@ -66,8 +66,8 @@ import {
 import { Field, type IField } from './abstract/modular.ts';
 import type { Fp, Fp12, Fp2, Fp6 } from './abstract/tower.ts';
 import { psiFrobenius, tower12 } from './abstract/tower.ts';
-import { bitGet, bitLen, notImplemented } from './abstract/utils.ts';
 import { type CurveFn, weierstrass } from './abstract/weierstrass.ts';
+import { bitGet, bitLen, notImplemented } from './utils.ts';
 // prettier-ignore
 const _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3);
 const _6n = BigInt(6);

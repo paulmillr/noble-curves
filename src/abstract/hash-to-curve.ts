@@ -5,9 +5,7 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import type { AffinePoint, Group, GroupConstructor } from './curve.ts';
-import { FpInvertBatch, type IField, mod } from './modular.ts';
-import type { CHash } from './utils.ts';
+import type { CHash } from '../utils.ts';
 import {
   _validateObject,
   abytes,
@@ -16,7 +14,9 @@ import {
   isBytes,
   isHash,
   utf8ToBytes,
-} from './utils.ts';
+} from '../utils.ts';
+import type { AffinePoint, Group, GroupConstructor } from './curve.ts';
+import { FpInvertBatch, type IField, mod } from './modular.ts';
 
 export type UnicodeOrBytes = string | Uint8Array;
 

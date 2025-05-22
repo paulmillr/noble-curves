@@ -15,6 +15,7 @@
  * @module
  **/
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
+import { ensureBytes, memoized, type CHash, type Hex, type PrivKey } from '../utils.ts';
 import { normalizeZ } from './curve.ts';
 import {
   createHasher,
@@ -25,7 +26,6 @@ import {
 } from './hash-to-curve.ts';
 import { getMinHashLength, mapHashToField, type IField } from './modular.ts';
 import type { Fp12, Fp12Bls, Fp2, Fp2Bls, Fp6Bls } from './tower.ts';
-import { ensureBytes, memoized, type CHash, type Hex, type PrivKey } from './utils.ts';
 import {
   weierstrassPoints,
   type CurvePointsRes,

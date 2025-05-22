@@ -90,7 +90,7 @@ import {
   ensureBytes,
   numberToBytesBE,
   type Hex,
-} from './abstract/utils.ts';
+} from './utils.ts';
 // Types
 import { isogenyMap } from './abstract/hash-to-curve.ts';
 import type { BigintTuple, Fp, Fp12, Fp2, Fp6 } from './abstract/tower.ts';
