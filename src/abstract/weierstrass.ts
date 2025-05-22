@@ -219,20 +219,20 @@ export type CurvePointsRes<T> = {
 /**
  * Weierstrass curve options.
  *
- * * a: formula param
- * * b: formula param
  * * p: prime characteristic (order) of finite field, in which arithmetics is done
  * * n: order of prime subgroup a.k.a total amount of valid curve points
  * * h: cofactor, usually 1. h*n is group order; n is subgroup order
+ * * a: formula param, must be in field of p
+ * * b: formula param, must be in field of p
  * * Gx: x coordinate of generator point a.k.a. base point
  * * Gy: y coordinate of generator point
  */
 export type WeierstrassOpts<T> = Readonly<{
-  a: T;
-  b: T;
   p: bigint;
   n: bigint;
   h: bigint;
+  a: T;
+  b: T;
   Gx: T;
   Gy: T;
 }>;

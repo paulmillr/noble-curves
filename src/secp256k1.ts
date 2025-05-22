@@ -15,6 +15,7 @@ import {
   type EndomorphismOpts,
   mapToCurveSimpleSWU,
   type ProjPointType as PointType,
+  type WeierstrassOpts,
 } from './abstract/weierstrass.ts';
 import type { Hex, PrivKey } from './utils.ts';
 import {
@@ -26,8 +27,15 @@ import {
   numberToBytesBE,
 } from './utils.ts';
 
-const secp256k1P = BigInt('0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f');
-const secp256k1N = BigInt('0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141');
+const secp256k1_CURVE: WeierstrassOpts<bigint> = {
+  p: BigInt('0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f'),
+  n: BigInt('0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141'),
+  h: BigInt(1),
+  a: BigInt(0),
+  b: BigInt(7),
+  Gx: BigInt('0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'),
+  Gy: BigInt('0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8'),
+};
 const _0n = BigInt(0);
 const _1n = BigInt(1);
 const _2n = BigInt(2);
@@ -38,7 +46,7 @@ const divNearest = (a: bigint, b: bigint) => (a + b / _2n) / b;
  * (P+1n/4n).toString(2) would produce bits [223x 1, 0, 22x 1, 4x 0, 11, 00]
  */
 function sqrtMod(y: bigint): bigint {
-  const P = secp256k1P;
+  const P = secp256k1_CURVE.p;
   // prettier-ignore
   const _3n = BigInt(3), _6n = BigInt(6), _11n = BigInt(11), _22n = BigInt(22);
   // prettier-ignore
@@ -61,7 +69,7 @@ function sqrtMod(y: bigint): bigint {
   return root;
 }
 
-const Fpk1 = Field(secp256k1P, undefined, undefined, { sqrt: sqrtMod });
+const Fpk1 = Field(secp256k1_CURVE.p, undefined, undefined, { sqrt: sqrtMod });
 
 /**
  * secp256k1 curve, ECDSA and ECDH methods.
@@ -80,19 +88,14 @@ const Fpk1 = Field(secp256k1P, undefined, undefined, { sqrt: sqrtMod });
  */
 export const secp256k1: CurveFnWithCreate = createCurve(
   {
-    a: _0n,
-    b: BigInt(7),
+    ...secp256k1_CURVE,
     Fp: Fpk1,
-    n: secp256k1N,
-    Gx: BigInt('0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'),
-    Gy: BigInt('0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8'),
-    h: BigInt(1),
     lowS: true, // Allow only low-S signatures by default in sign() and verify()
     endo: {
       // Endomorphism, see above
       beta: BigInt('0x7ae96a2b657c07106e64479eac3434e99cf0497512f58995c1396c28719501ee'),
       splitScalar: (k: bigint) => {
-        const n = secp256k1N;
+        const n = secp256k1_CURVE.n;
         const a1 = BigInt('0x3086d221a7d46bcde86c90e49284eb15');
         const b1 = -_1n * BigInt('0xe4437ed6010e88286f547fa90abfe4c3');
         const a2 = BigInt('0x114ca50f7a8e2f3f657c1108d9d44cfd8');
@@ -134,8 +137,8 @@ function taggedHash(tag: string, ...messages: Uint8Array[]): Uint8Array {
 // ECDSA compact points are 33-byte. Schnorr is 32: we strip first byte 0x02 or 0x03
 const pointToBytes = (point: PointType<bigint>) => point.toBytes(true).slice(1);
 const numTo32b = (n: bigint) => numberToBytesBE(n, 32);
-const modP = (x: bigint) => mod(x, secp256k1P);
-const modN = (x: bigint) => mod(x, secp256k1N);
+const modP = (x: bigint) => mod(x, secp256k1_CURVE.p);
+const modN = (x: bigint) => mod(x, secp256k1_CURVE.n);
 const Point = /* @__PURE__ */ (() => secp256k1.Point)();
 const hasEven = (y: bigint) => y % _2n === _0n;
 
@@ -151,7 +154,7 @@ function schnorrGetExtPubKey(priv: PrivKey) {
  * @returns valid point checked for being on-curve
  */
 function lift_x(x: bigint): PointType<bigint> {
-  aInRange('x', x, _1n, secp256k1P); // Fail if x ≥ p.
+  aInRange('x', x, _1n, secp256k1_CURVE.p); // Fail if x ≥ p.
   const xx = modP(x * x);
   const c = modP(xx * x + BigInt(7)); // Let c = x³ + 7 mod p.
   let y = sqrtMod(c); // Let y = c^(p+1)/4 mod p.
@@ -212,9 +215,9 @@ function schnorrVerify(signature: Hex, message: Hex, publicKey: Hex): boolean {
   try {
     const P = lift_x(num(pub)); // P = lift_x(int(pk)); fail if that fails
     const r = num(sig.subarray(0, 32)); // Let r = int(sig[0:32]); fail if r ≥ p.
-    if (!inRange(r, _1n, secp256k1P)) return false;
+    if (!inRange(r, _1n, secp256k1_CURVE.p)) return false;
     const s = num(sig.subarray(32, 64)); // Let s = int(sig[32:64]); fail if s ≥ n.
-    if (!inRange(s, _1n, secp256k1N)) return false;
+    if (!inRange(s, _1n, secp256k1_CURVE.n)) return false;
     const e = challenge(numTo32b(r), pointToBytes(P), m); // int(challenge(bytes(r)||bytes(P)||m))%n
     // R = s⋅G - e⋅P, where -eP == (n-e)P
     const R = Point.BASE.multiplyUnsafe(s).add(P.multiplyUnsafe(modN(-e)));
@@ -324,7 +327,7 @@ export const secp256k1_hasher: Hasher<bigint> = /* @__PURE__ */ (() =>
       k: 128,
       expand: 'xmd',
       hash: sha256,
-    } as const
+    }
   ))();
 
 export const hashToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() =>

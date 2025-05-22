@@ -11,7 +11,12 @@ import { shake256 } from '@noble/hashes/sha3';
 import { abytes, concatBytes, utf8ToBytes, wrapConstructor } from '@noble/hashes/utils';
 import type { AffinePoint, Group } from './abstract/curve.ts';
 import { pippenger } from './abstract/curve.ts';
-import { type CurveFn, type ExtPointType, twistedEdwards } from './abstract/edwards.ts';
+import {
+  type CurveFn,
+  type EdwardsOpts,
+  type ExtPointType,
+  twistedEdwards,
+} from './abstract/edwards.ts';
 import {
   createHasher,
   expand_message_xof,
@@ -30,11 +35,33 @@ import {
   numberToBytesLE,
 } from './utils.ts';
 
+// a = 1n
+// d = Fp.neg(39081n)
+// Finite field 2n**448n - 2n**224n - 1n
+// Subgroup order
+// 2n**446n - 13818066809895115352007386748515426880336692474882178609894547503885n
+const ed448_CURVE: EdwardsOpts = {
+  p: BigInt(
+    '0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffeffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
+  ),
+  n: BigInt(
+    '0x3fffffffffffffffffffffffffffffffffffffffffffffffffffffff7cca23e9c44edb49aed63690216cc2728dc58f552378c292ab5844f3'
+  ),
+  h: BigInt(4),
+  a: BigInt(1),
+  d: BigInt(
+    '0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffeffffffffffffffffffffffffffffffffffffffffffffffffffff6756'
+  ),
+  Gx: BigInt(
+    '0x4f1970c66bed0ded221d15a622bf36da9e146570470f1767ea6de324a3d3a46412ae1af72ab66511433b80e18b00938e2626a82bc70cc05e'
+  ),
+  Gy: BigInt(
+    '0x693f46716eb6bc248876203756c9c7624bea73736ca3984087789c1e05a0c2d73ad3ff1ce67c39c4fdbd132c4ed7c8ad9808795bf230fa14'
+  ),
+};
+
 const shake256_114 = /* @__PURE__ */ wrapConstructor(() => shake256.create({ dkLen: 114 }));
 const shake256_64 = /* @__PURE__ */ wrapConstructor(() => shake256.create({ dkLen: 64 }));
-const ed448P = BigInt(
-  '726838724295606890549323807888004534353641360687318060281490199180612328166730772686396383698676545930088884461843637361053498018365439'
-);
 
 // prettier-ignore
 const _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3), _4n = BigInt(4), _11n = BigInt(11);
@@ -45,7 +72,7 @@ const _22n = BigInt(22), _44n = BigInt(44), _88n = BigInt(88), _223n = BigInt(22
 // Used for efficient square root calculation.
 // ((P-3)/4).toString(2) would produce bits [223x 1, 0, 222x 1]
 function ed448_pow_Pminus3div4(x: bigint): bigint {
-  const P = ed448P;
+  const P = ed448_CURVE.p;
   const b2 = (x * x * x) % P;
   const b3 = (b2 * b2 * x) % P;
   const b6 = (pow2(b3, _3n, P) * b3) % P;
@@ -75,7 +102,7 @@ function adjustScalarBytes(bytes: Uint8Array): Uint8Array {
 // Constant-time ratio of u to v. Allows to combine inversion and square root u/√v.
 // Uses algo from RFC8032 5.1.3.
 function uvRatio(u: bigint, v: bigint): { isValid: boolean; value: bigint } {
-  const P = ed448P;
+  const P = ed448_CURVE.p;
   // https://www.rfc-editor.org/rfc/rfc8032#section-5.2.3
   // To compute the square root of (u/v), the first step is to compute the
   //   candidate root x = (u/v)^((p+1)/4).  This can be done using the
@@ -95,33 +122,14 @@ function uvRatio(u: bigint, v: bigint): { isValid: boolean; value: bigint } {
 }
 
 // Finite field 2n**448n - 2n**224n - 1n
-const Fp = /* @__PURE__ */ (() => Field(ed448P, 456, true))();
-
+const Fp = /* @__PURE__ */ (() => Field(ed448_CURVE.p, 456, true))();
+// RFC 7748 has 56-byte keys, RFC 8032 has 57-byte keys
+// SHAKE256(dom4(phflag,context)||x, 114)
 const ED448_DEF = /* @__PURE__ */ (() =>
   ({
-    // Param: a
-    a: BigInt(1),
-    // -39081 a.k.a. Fp.neg(39081)
-    d: BigInt(
-      '0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffeffffffffffffffffffffffffffffffffffffffffffffffffffff6756'
-    ),
-    // Finite field 2n**448n - 2n**224n - 1n
+    ...ed448_CURVE,
     Fp,
-    // Subgroup order
-    // 2n**446n - 13818066809895115352007386748515426880336692474882178609894547503885n
-    n: BigInt(
-      '0x3fffffffffffffffffffffffffffffffffffffffffffffffffffffff7cca23e9c44edb49aed63690216cc2728dc58f552378c292ab5844f3'
-    ),
-    // RFC 7748 has 56-byte keys, RFC 8032 has 57-byte keys
     nBitLength: 456,
-    h: BigInt(4),
-    Gx: BigInt(
-      '0x4f1970c66bed0ded221d15a622bf36da9e146570470f1767ea6de324a3d3a46412ae1af72ab66511433b80e18b00938e2626a82bc70cc05e'
-    ),
-    Gy: BigInt(
-      '0x693f46716eb6bc248876203756c9c7624bea73736ca3984087789c1e05a0c2d73ad3ff1ce67c39c4fdbd132c4ed7c8ad9808795bf230fa14'
-    ),
-    // SHAKE256(dom4(phflag,context)||x, 114)
     hash: shake256_114,
     adjustScalarBytes,
     // dom4
@@ -135,7 +143,7 @@ const ED448_DEF = /* @__PURE__ */ (() =>
       );
     },
     uvRatio,
-  }) as const)();
+  }))();
 
 /**
  * ed448 EdDSA curve and methods.
@@ -160,18 +168,19 @@ export const ed448ph: CurveFn = /* @__PURE__ */ (() =>
  * x448 has 56-byte keys as per RFC 7748, while
  * ed448 has 57-byte keys as per RFC 8032.
  */
-export const x448: XCurveFn = /* @__PURE__ */ (() =>
-  montgomery({
-    P: ed448P,
+export const x448: XCurveFn = /* @__PURE__ */ (() => {
+  const P = ed448_CURVE.p;
+  return montgomery({
+    P,
     type: 'x448',
     powPminus2: (x: bigint): bigint => {
-      const P = ed448P;
       const Pminus3div4 = ed448_pow_Pminus3div4(x);
       const Pminus3 = pow2(Pminus3div4, _2n, P);
       return mod(Pminus3 * x, P); // Pminus3 * x = Pminus2
     },
     adjustScalarBytes,
-  }))();
+  });
+})();
 
 /**
  * Converts edwards448 public key to x448 public key. Uses formula:
