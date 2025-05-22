@@ -370,7 +370,8 @@ export function nLength(n: bigint, nBitLength?: number): NLength {
 }
 
 type FpField = IField<bigint> & Required<Pick<IField<bigint>, 'isOdd'>>;
-
+type SqrtFn = (n: bigint) => bigint;
+type FieldOpts = Partial<{ sqrt: SqrtFn; isLE: boolean; BITS: number }>;
 /**
  * Creates a finite field. Major performance optimizations:
  * * 1. Denormalized operations like mulN instead of mul.
@@ -392,12 +393,24 @@ type FpField = IField<bigint> & Required<Pick<IField<bigint>, 'isOdd'>>;
  */
 export function Field(
   ORDER: bigint,
-  bitLen?: number,
+  bitLenOrOpts?: number | FieldOpts,
   isLE = false,
-  redef: Partial<IField<bigint>> = {}
+  opts: { sqrt?: SqrtFn } = {}
 ): Readonly<FpField> {
   if (ORDER <= _0n) throw new Error('invalid field: expected ORDER > 0, got ' + ORDER);
-  const { nBitLength: BITS, nByteLength: BYTES } = nLength(ORDER, bitLen);
+  let _nbitLength: number | undefined = undefined;
+  let _sqrt: SqrtFn | undefined = undefined;
+  if (typeof bitLenOrOpts === 'object' && bitLenOrOpts != null) {
+    if (opts.sqrt || isLE) throw new Error('cannot specify opts in two arguments');
+    const _opts = bitLenOrOpts;
+    if (_opts.BITS) _nbitLength = _opts.BITS;
+    if (_opts.sqrt) _sqrt = _opts.sqrt;
+    if (typeof _opts.isLE === 'boolean') isLE = _opts.isLE;
+  } else {
+    if (typeof bitLenOrOpts === 'number') _nbitLength = bitLenOrOpts;
+    if (opts.sqrt) _sqrt = opts.sqrt;
+  }
+  const { nBitLength: BITS, nByteLength: BYTES } = nLength(ORDER, _nbitLength);
   if (BYTES > 2048) throw new Error('invalid field: expected ORDER of <= 2048 bytes');
   let sqrtP: ReturnType<typeof FpSqrt>; // cached sqrtP
   const f: Readonly<FpField> = Object.freeze({
@@ -436,7 +449,7 @@ export function Field(
 
     inv: (num) => invert(num, ORDER),
     sqrt:
-      redef.sqrt ||
+      _sqrt ||
       ((n) => {
         if (!sqrtP) sqrtP = FpSqrt(ORDER);
         return sqrtP(f, n);
