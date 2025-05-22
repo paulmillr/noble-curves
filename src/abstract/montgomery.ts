@@ -11,6 +11,7 @@ import {
   bytesToNumberLE,
   ensureBytes,
   numberToBytesLE,
+  randomBytes,
 } from '../utils.ts';
 import { mod } from './modular.ts';
 
@@ -24,7 +25,7 @@ export type CurveType = {
   type: 'x25519' | 'x448';
   adjustScalarBytes: (bytes: Uint8Array) => Uint8Array;
   powPminus2: (x: bigint) => bigint;
-  randomBytes: (bytesLength?: number) => Uint8Array;
+  randomBytes?: (bytesLength?: number) => Uint8Array;
 };
 
 export type CurveFn = {
@@ -46,9 +47,10 @@ function validateOpts(curve: CurveType) {
 
 export function montgomery(curveDef: CurveType): CurveFn {
   const CURVE = validateOpts(curveDef);
-  const { P, type, adjustScalarBytes, powPminus2 } = CURVE;
+  const { P, type, adjustScalarBytes, powPminus2, randomBytes: rand } = CURVE;
   const is25519 = type === 'x25519';
   if (!is25519 && type !== 'x448') throw new Error('invalid type');
+  const randomBytes_ = rand || randomBytes;
 
   const montgomeryBits = is25519 ? 255 : 448;
   const fieldLen = is25519 ? 32 : 56;
@@ -159,7 +161,7 @@ export function montgomery(curveDef: CurveType): CurveFn {
     scalarMultBase,
     getSharedSecret: (privateKey: Hex, publicKey: Hex) => scalarMult(privateKey, publicKey),
     getPublicKey: (privateKey: Hex): Uint8Array => scalarMultBase(privateKey),
-    utils: { randomPrivateKey: () => CURVE.randomBytes!(fieldLen) },
+    utils: { randomPrivateKey: () => randomBytes_(fieldLen) },
     GuBytes: GuBytes.slice(),
   };
 }

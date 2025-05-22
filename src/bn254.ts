@@ -55,7 +55,6 @@ Ate loop size: 6x+2
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha256 } from '@noble/hashes/sha2';
-import { randomBytes } from '@noble/hashes/utils';
 import { getHash } from './_shortw_utils.ts';
 import {
   bls,
@@ -255,7 +254,6 @@ export const bn254: BLSCurveFn = bls({
   },
   htfDefaults,
   hash: sha256,
-  randomBytes,
   postPrecompute: _postPrecompute,
 });
 

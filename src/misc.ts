@@ -7,7 +7,7 @@
 import { blake256 } from '@noble/hashes/blake1';
 import { blake2s } from '@noble/hashes/blake2';
 import { sha256, sha512 } from '@noble/hashes/sha2';
-import { concatBytes, randomBytes, utf8ToBytes } from '@noble/hashes/utils';
+import { concatBytes, utf8ToBytes } from '@noble/hashes/utils';
 import { getHash } from './_shortw_utils.ts';
 import { twistedEdwards, type CurveFn, type ExtPointType } from './abstract/edwards.ts';
 import { Field, mod } from './abstract/modular.ts';
@@ -30,7 +30,6 @@ export const jubjub: CurveFn = /* @__PURE__ */ twistedEdwards({
   Gx: BigInt('0x11dafe5d23e1218086a365b99fbf3d3be72f6afd7d1f72623e6b071492d1122b'),
   Gy: BigInt('0x1d523cf1ddab1a1793132e78c866c0c33e26ba5cc220fed7cc3f870e59d292aa'),
   hash: sha512,
-  randomBytes,
 } as const);
 
 /** Curve over scalar field of bn254. babyjubjub Fp = bn254 n */
@@ -43,7 +42,6 @@ export const babyjubjub: CurveFn = /* @__PURE__ */ twistedEdwards({
   Gx: BigInt('995203441582195749578291179787384436505546430278305826713579947235728471134'),
   Gy: BigInt('5472060717959818805561601436314318772137091100104008585924551046643952123905'),
   hash: blake256,
-  randomBytes,
 } as const);
 
 const jubjub_gh_first_block = utf8ToBytes(

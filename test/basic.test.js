@@ -6,7 +6,6 @@ import { isBytes, bytesToHex as toHex } from '../esm/abstract/utils.js';
 import { getTypeTests, json } from './utils.js';
 // Generic tests for all curves in package
 import { sha256, sha512 } from '@noble/hashes/sha2';
-import { randomBytes } from '@noble/hashes/utils';
 import { createCurve } from '../esm/_shortw_utils.js';
 import { precomputeMSMUnsafe } from '../esm/abstract/curve.js';
 import { twistedEdwards } from '../esm/abstract/edwards.js';
@@ -18,6 +17,7 @@ import { DecafPoint, ed448, ed448ph } from '../esm/ed448.js';
 import { jubjub } from '../esm/misc.js';
 import { secp256r1, secp384r1, secp521r1 } from '../esm/nist.js';
 import { secp256k1 } from '../esm/secp256k1.js';
+import { randomBytes } from '../esm/utils.js';
 import { miscCurves, secp192r1, secp224r1 } from './_more-curves.helpers.js';
 const wyche_curves = json('./wycheproof/ec_prime_order_curves_test.json');
 

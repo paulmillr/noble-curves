@@ -25,27 +25,49 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-// prettier-ignore
+import { hmac } from '@noble/hashes/hmac';
+import {
+  _validateObject,
+  abool,
+  abytes,
+  aInRange,
+  bitMask,
+  bytesToHex,
+  bytesToNumberBE,
+  concatBytes,
+  createHmacDrbg,
+  ensureBytes,
+  hexToBytes,
+  inRange,
+  isBytes,
+  memoized,
+  numberToHexUnpadded,
+  randomBytes,
+  type CHash,
+  type Hex,
+  type PrivKey,
+} from '../utils.ts';
 import {
   _createCurveFields,
   mulEndo,
   negateCt,
   normalizeZ,
-  pippenger, wNAF,
-  type AffinePoint, type BasicCurve, type Group, type GroupConstructor
+  pippenger,
+  wNAF,
+  type AffinePoint,
+  type BasicCurve,
+  type Group,
+  type GroupConstructor,
 } from './curve.ts';
-// prettier-ignore
 import {
-  Field, FpInvertBatch, getMinHashLength, mapHashToField, validateField,
-  type IField, type NLength
+  Field,
+  FpInvertBatch,
+  getMinHashLength,
+  mapHashToField,
+  validateField,
+  type IField,
+  type NLength,
 } from './modular.ts';
-// prettier-ignore
-import {
-  _validateObject, abool, abytes, aInRange,
-  bitMask, bytesToHex, bytesToNumberBE, concatBytes, createHmacDrbg,
-  ensureBytes, hexToBytes, inRange, isBytes, memoized, numberToHexUnpadded,
-  type CHash, type Hex, type PrivKey
-} from '../utils.ts';
 
 export type { AffinePoint };
 export type HmacFnSync = (key: Uint8Array, ...messages: Uint8Array[]) => Uint8Array;
@@ -233,8 +255,8 @@ export type WeierstrassExtraOpts<T> = Partial<{
  */
 export type ECDSAOpts = {
   hash: CHash;
-  hmac: HmacFnSync;
-  randomBytes: (bytesLength?: number) => Uint8Array;
+  hmac?: HmacFnSync;
+  randomBytes?: (bytesLength?: number) => Uint8Array;
   lowS?: boolean;
   bits2int?: (bytes: Uint8Array) => bigint;
   bits2int_modN?: (bytes: Uint8Array) => bigint;
@@ -969,8 +991,8 @@ export type PubKey = Hex | ProjPointType<bigint>;
 
 export type CurveType = BasicWCurve<bigint> & {
   hash: CHash; // CHash not FHash because we need outputLen for DRBG
-  hmac: HmacFnSync;
-  randomBytes: (bytesLength?: number) => Uint8Array;
+  hmac?: HmacFnSync;
+  randomBytes?: (bytesLength?: number) => Uint8Array;
   lowS?: boolean;
   bits2int?: (bytes: Uint8Array) => bigint;
   bits2int_modN?: (bytes: Uint8Array) => bigint;
@@ -1005,8 +1027,9 @@ export function ecdsa(
 ): ECDSA {
   _validateObject(
     ecdsaOpts,
-    { hash: 'function', hmac: 'function' },
+    { hash: 'function' },
     {
+      hmac: 'function',
       lowS: 'boolean',
       randomBytes: 'function',
       bits2int: 'function',
@@ -1014,8 +1037,13 @@ export function ecdsa(
     }
   );
 
+  const randomBytes_ = ecdsaOpts.randomBytes || randomBytes;
+  const hmac_: HmacFnSync =
+    ecdsaOpts.hmac ||
+    (((key, ...msgs) => hmac(ecdsaOpts.hash, key, concatBytes(...msgs))) satisfies HmacFnSync);
+
   const { Fp, Fn } = Point;
-  const { ORDER: CURVE_ORDER, BYTES: nByteLength, BITS: nBitLength } = Fn;
+  const { ORDER: CURVE_ORDER, BITS: fnBits } = Fn;
 
   function isBiggerThanHalfOrder(number: bigint) {
     const HALF = CURVE_ORDER >> _1n;
@@ -1152,7 +1180,7 @@ export function ecdsa(
      */
     randomPrivateKey: (): Uint8Array => {
       const n = CURVE_ORDER;
-      return mapHashToField(ecdsaOpts.randomBytes(getMinHashLength(n)), n);
+      return mapHashToField(randomBytes_(getMinHashLength(n)), n);
     },
 
     precompute(windowSize = 8, point = Point.BASE): typeof Point.BASE {
@@ -1183,7 +1211,7 @@ export function ecdsa(
     const L = Fp.BYTES;
     const LC = L + 1; // e.g. 33 for 32
     const LU = 2 * L + 1; // e.g. 65 for 32
-    if (curveOpts.allowedPrivateKeyLengths || nByteLength === LC) {
+    if (curveOpts.allowedPrivateKeyLengths || Fn.BYTES === LC) {
       return undefined;
     } else {
       return length === LC || length === LU;
@@ -1219,7 +1247,7 @@ export function ecdsa(
       // For curves with nBitLength % 8 !== 0: bits2octets(bits2octets(m)) !== bits2octets(m)
       // for some cases, since bytes.length * 8 is not actual bitLength.
       const num = bytesToNumberBE(bytes); // check for == u8 done here
-      const delta = bytes.length * 8 - nBitLength; // truncate to nBitLength leftmost bits
+      const delta = bytes.length * 8 - fnBits; // truncate to nBitLength leftmost bits
       return delta > 0 ? num >> BigInt(delta) : num;
     };
   const bits2int_modN =
@@ -1228,13 +1256,13 @@ export function ecdsa(
       return Fn.create(bits2int(bytes)); // can't use bytesToNumberBE here
     };
   // NOTE: pads output with zero as per spec
-  const ORDER_MASK = bitMask(nBitLength);
+  const ORDER_MASK = bitMask(fnBits);
   /**
    * Converts to bytes. Checks if num in `[0..ORDER_MASK-1]` e.g.: `[0..2^256-1]`.
    */
   function int2octets(num: bigint): Uint8Array {
     // IMPORTANT: the check ensures working for case `Fn.BYTES != Fn.BITS * 8`
-    aInRange('num < 2^' + nBitLength, num, _0n, ORDER_MASK);
+    aInRange('num < 2^' + fnBits, num, _0n, ORDER_MASK);
     return Fn.toBytes(num);
   }
 
@@ -1246,7 +1274,7 @@ export function ecdsa(
   function prepSig(msgHash: Hex, privateKey: PrivKey, opts = defaultSigOpts) {
     if (['recovered', 'canonical'].some((k) => k in opts))
       throw new Error('sign() legacy options not supported');
-    const { hash, randomBytes } = ecdsaOpts;
+    const { hash } = ecdsaOpts;
     let { lowS, prehash, extraEntropy: ent } = opts; // generates low-s sigs by default
     if (lowS == null) lowS = true; // RFC6979 3.2: we skip step A, because we already provide hash
     msgHash = ensureBytes('msgHash', msgHash);
@@ -1254,7 +1282,7 @@ export function ecdsa(
     if (prehash) msgHash = ensureBytes('prehashed msgHash', hash(msgHash));
 
     // We can't later call bits2octets, since nested bits2int is broken for curves
-    // with nBitLength % 8 !== 0. Because of that, we unwrap it here as int2octets call.
+    // with fnBits % 8 !== 0. Because of that, we unwrap it here as int2octets call.
     // const bits2octets = (bits) => int2octets(bits2int_modN(bits))
     const h1int = bits2int_modN(msgHash);
     const d = normPrivateKeyToScalar(privateKey); // validate private key, convert to bigint
@@ -1262,7 +1290,7 @@ export function ecdsa(
     // extraEntropy. RFC6979 3.6: additional k' (optional).
     if (ent != null && ent !== false) {
       // K = HMAC_K(V || 0x00 || int2octets(x) || bits2octets(h1) || k')
-      const e = ent === true ? randomBytes(Fp.BYTES) : ent; // generate random bytes OR pass as-is
+      const e = ent === true ? randomBytes_(Fp.BYTES) : ent; // generate random bytes OR pass as-is
       seedArgs.push(ensureBytes('extraEntropy', e)); // check for being bytes
     }
     const seed = concatBytes(...seedArgs); // Step D of RFC6979 3.2
@@ -1310,8 +1338,7 @@ export function ecdsa(
    */
   function sign(msgHash: Hex, privKey: PrivKey, opts = defaultSigOpts): RecoveredSignature {
     const { seed, k2sig } = prepSig(msgHash, privKey, opts); // Steps A, D of RFC6979 3.2.
-    const C = ecdsaOpts;
-    const drbg = createHmacDrbg<RecoveredSignature>(C.hash.outputLen, nByteLength, C.hmac);
+    const drbg = createHmacDrbg<RecoveredSignature>(ecdsaOpts.hash.outputLen, Fn.BYTES, hmac_);
     return drbg(seed, k2sig); // Steps B, C, D, E, F, G
   }
 
@@ -1368,8 +1395,9 @@ export function ecdsa(
         }
       }
       if (isHex) {
-        // Signature can be represented in 2 ways: compact (2*nByteLength) & DER (variable-length).
-        // Since DER can also be 2*nByteLength bytes, we check for it first.
+        // TODO: remove this malleable check
+        // Signature can be represented in 2 ways: compact (2*Fn.BYTES) & DER (variable-length).
+        // Since DER can also be 2*Fn.BYTES bytes, we check for it first.
         try {
           if (format !== 'compact') _sig = Signature.fromDER(sg);
         } catch (derError) {

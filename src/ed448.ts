@@ -8,13 +8,7 @@
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { shake256 } from '@noble/hashes/sha3';
-import {
-  abytes,
-  concatBytes,
-  randomBytes,
-  utf8ToBytes,
-  wrapConstructor,
-} from '@noble/hashes/utils';
+import { abytes, concatBytes, utf8ToBytes, wrapConstructor } from '@noble/hashes/utils';
 import type { AffinePoint, Group } from './abstract/curve.ts';
 import { pippenger } from './abstract/curve.ts';
 import { type CurveFn, type ExtPointType, twistedEdwards } from './abstract/edwards.ts';
@@ -129,7 +123,6 @@ const ED448_DEF = /* @__PURE__ */ (() =>
     ),
     // SHAKE256(dom4(phflag,context)||x, 114)
     hash: shake256_114,
-    randomBytes,
     adjustScalarBytes,
     // dom4
     domain: (data: Uint8Array, ctx: Uint8Array, phflag: boolean) => {
@@ -178,7 +171,6 @@ export const x448: XCurveFn = /* @__PURE__ */ (() =>
       return mod(Pminus3 * x, P); // Pminus3 * x = Pminus2
     },
     adjustScalarBytes,
-    randomBytes,
   }))();
 
 /**

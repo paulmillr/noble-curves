@@ -5,23 +5,32 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-// prettier-ignore
+import {
+  _validateObject,
+  abool,
+  abytes,
+  aInRange,
+  bytesToHex,
+  bytesToNumberLE,
+  concatBytes,
+  ensureBytes,
+  memoized,
+  numberToBytesLE,
+  randomBytes,
+  type FHash,
+  type Hex,
+} from '../utils.ts';
 import {
   _createCurveFields,
   normalizeZ,
   pippenger,
   wNAF,
-  type AffinePoint, type BasicCurve, type Group, type GroupConstructor
+  type AffinePoint,
+  type BasicCurve,
+  type Group,
+  type GroupConstructor,
 } from './curve.ts';
 import { Field, type IField, type NLength } from './modular.ts';
-// prettier-ignore
-import {
-  _validateObject,
-  abool, abytes, aInRange,
-  bytesToHex, bytesToNumberLE, concatBytes,
-  ensureBytes, memoized, numberToBytesLE,
-  type FHash, type Hex
-} from '../utils.ts';
 
 // Be friendly to bad ECMAScript parsers by not using bigint literals
 // prettier-ignore
@@ -34,7 +43,7 @@ export type CurveType = BasicCurve<bigint> & {
   a: bigint; // curve param a
   d: bigint; // curve param d
   hash: FHash; // Hashing
-  randomBytes: (bytesLength?: number) => Uint8Array; // CSPRNG
+  randomBytes?: (bytesLength?: number) => Uint8Array; // CSPRNG
   adjustScalarBytes?: (bytes: Uint8Array) => Uint8Array; // clears bits to get valid field elemtn
   domain?: (data: Uint8Array, ctx: Uint8Array, phflag: boolean) => Uint8Array; // Used for hashing
   uvRatio?: UVRatio; // Ratio √(u/v)
@@ -524,10 +533,11 @@ export function eddsa(Point: ExtPointConstructor, eddsaOpts: EdDSAOpts): EdDSA {
     }
   );
 
-  const { prehash, hash: cHash, randomBytes } = eddsaOpts;
+  const { prehash, hash: cHash } = eddsaOpts;
   const { BASE: G, Fp, Fn } = Point;
   const CURVE_ORDER = Fn.ORDER;
 
+  const randomBytes_ = eddsaOpts.randomBytes || randomBytes;
   const adjustScalarBytes = eddsaOpts.adjustScalarBytes || ((bytes: Uint8Array) => bytes); // NOOP
   const domain =
     eddsaOpts.domain ||
@@ -634,7 +644,7 @@ export function eddsa(Point: ExtPointConstructor, eddsaOpts: EdDSAOpts): EdDSA {
   const utils = {
     getExtendedPublicKey,
     /** ed25519 priv keys are uniform 32b. No need to check for modulo bias, like in secp256k1. */
-    randomPrivateKey: (): Uint8Array => randomBytes!(Fp.BYTES),
+    randomPrivateKey: (): Uint8Array => randomBytes_!(Fp.BYTES),
 
     /**
      * We're doing scalar multiplication (used in getPublicKey etc) with precomputed BASE_POINT

@@ -15,7 +15,14 @@
  * @module
  **/
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { ensureBytes, memoized, type CHash, type Hex, type PrivKey } from '../utils.ts';
+import {
+  ensureBytes,
+  memoized,
+  randomBytes,
+  type CHash,
+  type Hex,
+  type PrivKey,
+} from '../utils.ts';
 import { normalizeZ } from './curve.ts';
 import {
   createHasher,
@@ -102,7 +109,7 @@ export type CurveType = {
   };
   htfDefaults: HTFOpts;
   hash: CHash; // Because we need outputLen for DRBG
-  randomBytes: (bytesLength?: number) => Uint8Array;
+  randomBytes?: (bytesLength?: number) => Uint8Array;
   // This is super ugly hack for untwist point in BN254 after miller loop
   postPrecompute?: PostPrecomputeFn;
 };
@@ -346,10 +353,12 @@ export function bls(CURVE: CurveType): CurveFn {
     return pairingBatch([{ g1: Q, g2: P }], withFinalExponent);
   }
 
+  const rand = CURVE.randomBytes || randomBytes;
+
   const utils = {
     randomPrivateKey: (): Uint8Array => {
       const length = getMinHashLength(Fr.ORDER);
-      return mapHashToField(CURVE.randomBytes(length), Fr.ORDER);
+      return mapHashToField(rand(length), Fr.ORDER);
     },
     calcPairingPrecomputes,
   };

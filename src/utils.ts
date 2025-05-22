@@ -3,7 +3,7 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-
+import { randomBytes as rand } from '@noble/hashes/utils';
 // 100 lines of code in the file are duplicated from noble-hashes (utils).
 // This is OK: `abstract` directory does not use noble-hashes.
 // User may opt-in into using different hashing library. This way, noble-hashes
@@ -24,8 +24,11 @@ export function isBytes(a: unknown): a is Uint8Array {
   return a instanceof Uint8Array || (ArrayBuffer.isView(a) && a.constructor.name === 'Uint8Array');
 }
 
-export function abytes(item: unknown): void {
-  if (!isBytes(item)) throw new Error('Uint8Array expected');
+/** Asserts something is Uint8Array. */
+export function abytes(b: Uint8Array | undefined, ...lengths: number[]): void {
+  if (!isBytes(b)) throw new Error('Uint8Array expected');
+  if (lengths.length > 0 && !lengths.includes(b.length))
+    throw new Error('Uint8Array expected of length ' + lengths + ', got length=' + b.length);
 }
 
 export function abool(title: string, value: boolean): void {
@@ -401,3 +404,5 @@ export function memoized<T extends object, R, O extends any[]>(
     return computed;
   };
 }
+
+export const randomBytes: typeof rand = rand;

@@ -78,10 +78,10 @@ Filecoin uses little endian byte arrays for private keys - make sure to reverse 
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha256 } from '@noble/hashes/sha2';
-import { abytes, randomBytes } from '@noble/hashes/utils';
 import { bls, type CurveFn } from './abstract/bls.ts';
 import { Field, type IField } from './abstract/modular.ts';
 import {
+  abytes,
   bitGet,
   bitLen,
   bytesToHex,
@@ -628,7 +628,6 @@ export const bls12_381: CurveFn = bls({
   },
   htfDefaults,
   hash: sha256,
-  randomBytes,
 });
 
 // 3-isogeny map from E' to E https://www.rfc-editor.org/rfc/rfc9380#appendix-E.3

@@ -7,7 +7,7 @@
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha512 } from '@noble/hashes/sha2';
-import { abytes, concatBytes, randomBytes, utf8ToBytes } from '@noble/hashes/utils';
+import { abytes, concatBytes, utf8ToBytes } from '@noble/hashes/utils';
 import { type AffinePoint, type Group, pippenger } from './abstract/curve.ts';
 import { type CurveFn, type ExtPointType, twistedEdwards } from './abstract/edwards.ts';
 import {
@@ -113,7 +113,7 @@ const ed25519Defaults = /* @__PURE__ */ (() =>
     // Removing Fp.create() will still work, and is 10% faster on sign
     a: Fp.create(BigInt(-1)),
     // d is -121665/121666 a.k.a. Fp.neg(121665 * Fp.inv(121666))
-    d: BigInt('37095705934669439343138083508754565189542113879843219016388785533085940283555'),
+    d: BigInt('0x52036cee2b700000000000000000000000000000000000000000000000000000'),
     // Finite field 2n**255n - 19n
     Fp,
     // Subgroup order 2n**252n + 27742317777372353535851937790883648493n;
@@ -122,7 +122,6 @@ const ed25519Defaults = /* @__PURE__ */ (() =>
     Gx: BigInt('15112221349535400772501151409588531511454012693041857206046113283949847762202'),
     Gy: BigInt('46316835694926478169428394003475163141307993866256225615783033603165251855960'),
     hash: sha512,
-    randomBytes,
     adjustScalarBytes,
     // dom2
     // Ratio of u to v. Allows us to combine inversion and square root. Uses algo from RFC8032 5.1.3.
@@ -187,7 +186,6 @@ export const x25519: XCurveFn = /* @__PURE__ */ (() =>
       return mod(pow2(pow_p_5_8, _3n, P) * b2, P);
     },
     adjustScalarBytes,
-    randomBytes,
   }))();
 
 /**
