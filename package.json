@@ -206,6 +206,14 @@
       "import": "./esm/bn254.js",
       "require": "./bn254.js"
     },
+    "./utils.js": {
+      "import": "./esm/utils.js",
+      "require": "./utils.js"
+    },
+    "./utils": {
+      "import": "./esm/utils.js",
+      "require": "./utils.js"
+    },
     "./ed448.js": {
       "import": "./esm/ed448.js",
       "require": "./ed448.js"
