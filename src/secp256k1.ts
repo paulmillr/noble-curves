@@ -2,7 +2,7 @@
  * SECG secp256k1. See [pdf](https://www.secg.org/sec2-v2.pdf).
  *
  * Belongs to Koblitz curves: it has efficiently-computable GLV endomorphism ψ,
- * check out {@link EndomorphismOpts}. Because of this, seems to be rigid (not backdoored).
+ * check out {@link EndomorphismOpts}. Seems to be rigid (not backdoored).
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
@@ -27,6 +27,9 @@ import {
   numberToBytesBE,
 } from './utils.ts';
 
+// Seems like generator was produced from some seed:
+// `Point.BASE.multiply(Point.Fn.inv(2n, N)).toAffine().x`
+// // gives short x 0x3b78ce563f89a0ed9414f5aa28ad0d96d6795f9c63n
 const secp256k1_CURVE: WeierstrassOpts<bigint> = {
   p: BigInt('0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f'),
   n: BigInt('0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141'),
