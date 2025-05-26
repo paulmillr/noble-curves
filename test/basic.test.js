@@ -288,7 +288,7 @@ for (const c in FIELDS) {
       });
 
       // Not implemented
-      if (Fp !== bls12_381.fields.Fp12 && Fp !== bn254.fields.Fp12) {
+      if (!(Fp === bls12_381.fields.Fp12 || Fp === bn254.fields.Fp12)) {
         should('multiply/sqrt', () => {
           fc.assert(
             fc.property(FC_BIGINT, (num) => {
@@ -587,7 +587,6 @@ for (const name in CURVES) {
           )
         );
         should('precomputeMSMUnsafe basic', () => {
-          return;
           const Point = C.Point || C.Point || C.Point;
           if (!Point) throw new Error('Unknown point');
           const field = Field(CURVE_ORDER);
@@ -603,7 +602,6 @@ for (const name in CURVES) {
         should('precomputeMSMUnsafe random', () =>
           fc.assert(
             fc.property(fc.array(fc.tuple(FC_BIGINT, FC_BIGINT)), FC_BIGINT, (pairs) => {
-              return;
               const Point = C.Point || C.Point || C.Point;
               if (!Point) throw new Error('Unknown point');
               const field = Field(CURVE_ORDER);
