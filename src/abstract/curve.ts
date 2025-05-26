@@ -321,7 +321,7 @@ export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number): 
  * Endomorphism-specific multiplication for Koblitz curves.
  * Cost: 128 dbl, 0-256 adds.
  */
-export function mulEndo<T extends Group<T>>(
+export function mulEndoUnsafe<T extends Group<T>>(
   c: GroupConstructor<T>,
   point: T,
   k1: bigint,

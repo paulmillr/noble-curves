@@ -76,6 +76,8 @@ export interface ExtPointType extends Group<ExtPointType> {
   /** @deprecated use `toBytes` */
   toRawBytes(): Uint8Array;
   toHex(): string;
+  precompute(windowSize?: number, isLazy?: boolean): ExtPointType;
+  /** @deprecated use `p.precompute(windowSize)` */
   _setWindowSize(windowSize: number): void;
 }
 /** Static methods of Extended Point with coordinates in X, Y, Z, T. */
@@ -166,6 +168,7 @@ export interface EdDSA {
       point: ExtPointType;
       pointBytes: Uint8Array;
     };
+    /** @deprecated use `point.precompute()` */
     precompute: (windowSize?: number, point?: ExtPointType) => ExtPointType;
   };
 }
@@ -328,7 +331,12 @@ export function edwards(CURVE: EdwardsOpts, curveOpts: EdwardsExtraOpts = {}): E
 
     // "Private method", don't use it directly
     _setWindowSize(windowSize: number) {
+      this.precompute(windowSize);
+    }
+    precompute(windowSize: number = 8, isLazy = true) {
       wnaf.setWindowSize(this, windowSize);
+      if (!isLazy) this.multiply(_2n); // random number
+      return this;
     }
     // Not required for fromHex(), which always creates valid points.
     // Could be useful for fromAffine().
@@ -640,7 +648,7 @@ export function eddsa(Point: ExtPointConstructor, eddsaOpts: EdDSAOpts): EdDSA {
     return RkA.subtract(SB).clearCofactor().is0();
   }
 
-  G._setWindowSize(8); // Enable precomputes. Slows down first publicKey computation by 20ms.
+  G.precompute(8); // Enable precomputes. Slows down first publicKey computation by 20ms.
 
   const utils = {
     getExtendedPublicKey,
@@ -654,9 +662,7 @@ export function eddsa(Point: ExtPointConstructor, eddsaOpts: EdDSAOpts): EdDSA {
      * @param windowSize 2, 4, 8, 16
      */
     precompute(windowSize = 8, point: ExtPointType = Point.BASE): ExtPointType {
-      point._setWindowSize(windowSize);
-      point.multiply(BigInt(3));
-      return point;
+      return point.precompute(windowSize, false);
     },
   };
 

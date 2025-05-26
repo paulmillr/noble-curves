@@ -49,7 +49,7 @@ import {
 } from '../utils.ts';
 import {
   _createCurveFields,
-  mulEndo,
+  mulEndoUnsafe,
   negateCt,
   normalizeZ,
   pippenger,
@@ -153,7 +153,7 @@ export interface ProjPointType<T> extends Group<ProjPointType<T>> {
    * @param windowSize - table window size
    * @param isLazy - (default true) allows to defer generation
    */
-  precompute(windowSize: number, isLazy?: boolean): ProjPointType<T>;
+  precompute(windowSize?: number, isLazy?: boolean): ProjPointType<T>;
 
   /** Converts 3D XYZ projective point to 2D xy affine coordinates */
   toAffine(invertedZ?: T): AffinePoint<T>;
@@ -167,6 +167,7 @@ export interface ProjPointType<T> extends Group<ProjPointType<T>> {
   multiplyAndAddUnsafe(Q: ProjPointType<T>, a: bigint, b: bigint): ProjPointType<T> | undefined;
   /** @deprecated use `p.y % 2n === 0n` */
   hasEvenY(): boolean;
+  /** @deprecated use `p.precompute(windowSize)` */
   _setWindowSize(windowSize: number): void;
 }
 
@@ -709,7 +710,7 @@ export function weierstrassN<T>(
      * @param isLazy true will defer table computation until the first multiplication
      * @returns
      */
-    precompute(windowSize: number, isLazy = true): Point {
+    precompute(windowSize: number = 8, isLazy = true): Point {
       wnaf.setWindowSize(this, windowSize);
       if (!isLazy) this.multiply(_3n); // random number
       return this;
@@ -897,7 +898,7 @@ export function weierstrassN<T>(
       if (endo) {
         const { k1neg, k1, k2neg, k2 } = endo.splitScalar(sc);
         // `wNAFCachedUnsafe` is 30% slower
-        const { p1, p2 } = mulEndo(Point, p, k1, k2);
+        const { p1, p2 } = mulEndoUnsafe(Point, p, k1, k2);
         return finishEndo(endo.beta, p1, p2, k1neg, k2neg);
       } else {
         return wnaf.wNAFCachedUnsafe(p, sc);
@@ -961,6 +962,7 @@ export function weierstrassN<T>(
 }
 
 // _legacyWeierstrass
+/** @deprecated use `weierstrassN` */
 export function weierstrassPoints<T>(c: CurvePointsTypeWithLength<T>): CurvePointsRes<T> {
   const { CURVE, curveOpts } = _weierstrass_legacy_opts_to_new(c);
   const Point = weierstrassN(CURVE, curveOpts);
@@ -1190,9 +1192,7 @@ export function ecdsa(
     },
 
     precompute(windowSize = 8, point = Point.BASE): typeof Point.BASE {
-      point.precompute(windowSize);
-      point.multiply(BigInt(3)); // 3 is arbitrary, just need any number here
-      return point;
+      return point.precompute(windowSize, false);
     },
   };
 
@@ -1373,13 +1373,16 @@ export function ecdsa(
     const sg = signature;
     msgHash = ensureBytes('msgHash', msgHash);
     publicKey = ensureBytes('publicKey', publicKey);
+
+    // Verify opts
+    validateSigVerOpts(opts);
     const { lowS, prehash, format } = opts;
 
-    // Verify opts, deduce signature format
-    validateSigVerOpts(opts);
+    // TODO: remove
     if ('strict' in opts) throw new Error('options.strict was renamed to lowS');
+
     if (format !== undefined && !['compact', 'der', 'js'].includes(format))
-      throw new Error('format must be compact or der');
+      throw new Error('format must be "compact", "der" or "js"');
     const isHex = typeof sg === 'string' || isBytes(sg);
     const isObj =
       !isHex &&
@@ -1392,7 +1395,18 @@ export function ecdsa(
       throw new Error('invalid signature, expected Uint8Array, hex string or Signature instance');
     let _sig: Signature | undefined = undefined;
     let P: ProjPointType<bigint>;
+
+    // deduce signature format
     try {
+      if (format === 'js') {
+        if (sg != null && !isBytes(sg)) _sig = new Signature(sg.r, sg.s);
+      } else if (format === 'compact') {
+        _sig = Signature.fromCompact(sg);
+      } else if (format === 'der') {
+        _sig = Signature.fromDER(sg);
+      } else {
+        throw new Error('invalid format');
+      }
       if (isObj) {
         if (format === undefined || format === 'js') {
           _sig = new Signature(sg.r, sg.s);
