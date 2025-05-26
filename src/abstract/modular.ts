@@ -5,9 +5,9 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { anumber } from '@noble/hashes/utils';
 import {
   _validateObject,
+  anumber,
   bitMask,
   bytesToNumberBE,
   bytesToNumberLE,

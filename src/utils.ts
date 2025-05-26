@@ -3,7 +3,24 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { randomBytes as rand } from '@noble/hashes/utils';
+import {
+  bytesToHex as bytesToHex_,
+  hexToBytes as hexToBytes_,
+  concatBytes as concatBytes_,
+  abytes as abytes_,
+  isBytes as isBytes_,
+} from '@noble/hashes/utils.js';
+export {
+  abytes,
+  anumber,
+  bytesToHex,
+  hexToBytes,
+  isBytes,
+  bytesToUtf8,
+  utf8ToBytes,
+  concatBytes,
+  randomBytes,
+} from '@noble/hashes/utils.js';
 // 100 lines of code in the file are duplicated from noble-hashes (utils).
 // This is OK: `abstract` directory does not use noble-hashes.
 // User may opt-in into using different hashing library. This way, noble-hashes
@@ -20,17 +37,6 @@ export type CHash = {
 };
 export type FHash = (message: Uint8Array | string) => Uint8Array;
 
-export function isBytes(a: unknown): a is Uint8Array {
-  return a instanceof Uint8Array || (ArrayBuffer.isView(a) && a.constructor.name === 'Uint8Array');
-}
-
-/** Asserts something is Uint8Array. */
-export function abytes(b: Uint8Array | undefined, ...lengths: number[]): void {
-  if (!isBytes(b)) throw new Error('Uint8Array expected');
-  if (lengths.length > 0 && !lengths.includes(b.length))
-    throw new Error('Uint8Array expected of length ' + lengths + ', got length=' + b.length);
-}
-
 export function abool(title: string, value: boolean): void {
   if (typeof value !== 'boolean') throw new Error(title + ' boolean expected, got ' + value);
 }
@@ -46,83 +52,24 @@ export function hexToNumber(hex: string): bigint {
   return hex === '' ? _0n : BigInt('0x' + hex); // Big Endian
 }
 
-// Built-in hex conversion https://caniuse.com/mdn-javascript_builtins_uint8array_fromhex
-const hasHexBuiltin: boolean =
-  // @ts-ignore
-  typeof Uint8Array.from([]).toHex === 'function' && typeof Uint8Array.fromHex === 'function';
-
-// Array where index 0xf0 (240) is mapped to string 'f0'
-const hexes = /* @__PURE__ */ Array.from({ length: 256 }, (_, i) =>
-  i.toString(16).padStart(2, '0')
-);
-
-/**
- * Convert byte array to hex string. Uses built-in function, when available.
- * @example bytesToHex(Uint8Array.from([0xca, 0xfe, 0x01, 0x23])) // 'cafe0123'
- */
-export function bytesToHex(bytes: Uint8Array): string {
-  abytes(bytes);
-  // @ts-ignore
-  if (hasHexBuiltin) return bytes.toHex();
-  // pre-caching improves the speed 6x
-  let hex = '';
-  for (let i = 0; i < bytes.length; i++) {
-    hex += hexes[bytes[i]];
-  }
-  return hex;
-}
-
-// We use optimized technique to convert hex string to byte array
-const asciis = { _0: 48, _9: 57, A: 65, F: 70, a: 97, f: 102 } as const;
-function asciiToBase16(ch: number): number | undefined {
-  if (ch >= asciis._0 && ch <= asciis._9) return ch - asciis._0; // '2' => 50-48
-  if (ch >= asciis.A && ch <= asciis.F) return ch - (asciis.A - 10); // 'B' => 66-(65-10)
-  if (ch >= asciis.a && ch <= asciis.f) return ch - (asciis.a - 10); // 'b' => 98-(97-10)
-  return;
-}
-
-/**
- * Convert hex string to byte array. Uses built-in function, when available.
- * @example hexToBytes('cafe0123') // Uint8Array.from([0xca, 0xfe, 0x01, 0x23])
- */
-export function hexToBytes(hex: string): Uint8Array {
-  if (typeof hex !== 'string') throw new Error('hex string expected, got ' + typeof hex);
-  // @ts-ignore
-  if (hasHexBuiltin) return Uint8Array.fromHex(hex);
-  const hl = hex.length;
-  const al = hl / 2;
-  if (hl % 2) throw new Error('hex string expected, got unpadded hex of length ' + hl);
-  const array = new Uint8Array(al);
-  for (let ai = 0, hi = 0; ai < al; ai++, hi += 2) {
-    const n1 = asciiToBase16(hex.charCodeAt(hi));
-    const n2 = asciiToBase16(hex.charCodeAt(hi + 1));
-    if (n1 === undefined || n2 === undefined) {
-      const char = hex[hi] + hex[hi + 1];
-      throw new Error('hex string expected, got non-hex character "' + char + '" at index ' + hi);
-    }
-    array[ai] = n1 * 16 + n2; // multiply first octet, e.g. 'a3' => 10*16+3 => 160 + 3 => 163
-  }
-  return array;
-}
-
 // BE: Big Endian, LE: Little Endian
 export function bytesToNumberBE(bytes: Uint8Array): bigint {
-  return hexToNumber(bytesToHex(bytes));
+  return hexToNumber(bytesToHex_(bytes));
 }
 export function bytesToNumberLE(bytes: Uint8Array): bigint {
-  abytes(bytes);
-  return hexToNumber(bytesToHex(Uint8Array.from(bytes).reverse()));
+  abytes_(bytes);
+  return hexToNumber(bytesToHex_(Uint8Array.from(bytes).reverse()));
 }
 
 export function numberToBytesBE(n: number | bigint, len: number): Uint8Array {
-  return hexToBytes(n.toString(16).padStart(len * 2, '0'));
+  return hexToBytes_(n.toString(16).padStart(len * 2, '0'));
 }
 export function numberToBytesLE(n: number | bigint, len: number): Uint8Array {
   return numberToBytesBE(n, len).reverse();
 }
 // Unpadded, rarely used
 export function numberToVarBytesBE(n: number | bigint): Uint8Array {
-  return hexToBytes(numberToHexUnpadded(n));
+  return hexToBytes_(numberToHexUnpadded(n));
 }
 
 /**
@@ -138,11 +85,11 @@ export function ensureBytes(title: string, hex: Hex, expectedLength?: number): U
   let res: Uint8Array;
   if (typeof hex === 'string') {
     try {
-      res = hexToBytes(hex);
+      res = hexToBytes_(hex);
     } catch (e) {
       throw new Error(title + ' must be hex string or Uint8Array, cause: ' + e);
     }
-  } else if (isBytes(hex)) {
+  } else if (isBytes_(hex)) {
     // Uint8Array.from() instead of hash.slice() because node.js Buffer
     // is instance of Uint8Array, and its slice() creates **mutable** copy
     res = Uint8Array.from(hex);
@@ -155,25 +102,6 @@ export function ensureBytes(title: string, hex: Hex, expectedLength?: number): U
   return res;
 }
 
-/**
- * Copies several Uint8Arrays into one.
- */
-export function concatBytes(...arrays: Uint8Array[]): Uint8Array {
-  let sum = 0;
-  for (let i = 0; i < arrays.length; i++) {
-    const a = arrays[i];
-    abytes(a);
-    sum += a.length;
-  }
-  const res = new Uint8Array(sum);
-  for (let i = 0, pad = 0; i < arrays.length; i++) {
-    const a = arrays[i];
-    res.set(a, pad);
-    pad += a.length;
-  }
-  return res;
-}
-
 // Compares 2 u8a-s in kinda constant time
 export function equalBytes(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) return false;
@@ -182,17 +110,15 @@ export function equalBytes(a: Uint8Array, b: Uint8Array): boolean {
   return diff === 0;
 }
 
-// Global symbols in both browsers and Node.js since v11
-// See https://github.com/microsoft/TypeScript/issues/31535
-declare const TextEncoder: any;
-
 /**
  * @example utf8ToBytes('abc') // new Uint8Array([97, 98, 99])
  */
-export function utf8ToBytes(str: string): Uint8Array {
-  if (typeof str !== 'string') throw new Error('string expected');
-  return new Uint8Array(new TextEncoder().encode(str)); // https://bugzil.la/1681809
-}
+// export const utf8ToBytes: typeof utf8ToBytes_ = utf8ToBytes_;
+/**
+ * Converts bytes to string using UTF8 encoding.
+ * @example bytesToUtf8(Uint8Array.from([97, 98, 99])) // 'abc'
+ */
+// export const bytesToUtf8: typeof bytesToUtf8_ = bytesToUtf8_;
 
 // Is positive bigint
 const isPosBig = (n: bigint) => typeof n === 'bigint' && _0n <= n;
@@ -300,7 +226,7 @@ export function createHmacDrbg<T>(
       out.push(sl);
       len += v.length;
     }
-    return concatBytes(...out);
+    return concatBytes_(...out);
   };
   const genUntil = (seed: Uint8Array, pred: Pred<T>): T => {
     reset();
@@ -320,7 +246,7 @@ const validatorFns = {
   function: (val: any): boolean => typeof val === 'function',
   boolean: (val: any): boolean => typeof val === 'boolean',
   string: (val: any): boolean => typeof val === 'string',
-  stringOrUint8Array: (val: any): boolean => typeof val === 'string' || isBytes(val),
+  stringOrUint8Array: (val: any): boolean => typeof val === 'string' || isBytes_(val),
   isSafeInteger: (val: any): boolean => Number.isSafeInteger(val),
   array: (val: any): boolean => Array.isArray(val),
   field: (val: any, object: any): any => (object as any).Fp.isValid(val),
@@ -404,5 +330,3 @@ export function memoized<T extends object, R, O extends any[]>(
     return computed;
   };
 }
-
-export const randomBytes: typeof rand = rand;
