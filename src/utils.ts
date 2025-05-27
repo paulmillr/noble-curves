@@ -4,22 +4,22 @@
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import {
-  bytesToHex as bytesToHex_,
-  hexToBytes as hexToBytes_,
-  concatBytes as concatBytes_,
   abytes as abytes_,
+  bytesToHex as bytesToHex_,
+  concatBytes as concatBytes_,
+  hexToBytes as hexToBytes_,
   isBytes as isBytes_,
 } from '@noble/hashes/utils.js';
 export {
   abytes,
   anumber,
   bytesToHex,
+  bytesToUtf8,
+  concatBytes,
   hexToBytes,
   isBytes,
-  bytesToUtf8,
-  utf8ToBytes,
-  concatBytes,
   randomBytes,
+  utf8ToBytes,
 } from '@noble/hashes/utils.js';
 // 100 lines of code in the file are duplicated from noble-hashes (utils).
 // This is OK: `abstract` directory does not use noble-hashes.

@@ -5,7 +5,7 @@ import * as mod from '../esm/abstract/modular.js';
 import { isBytes, bytesToHex as toHex } from '../esm/abstract/utils.js';
 import { getTypeTests, json } from './utils.js';
 // Generic tests for all curves in package
-import { sha256, sha512 } from '@noble/hashes/sha2';
+import { sha256, sha512 } from '@noble/hashes/sha2.js';
 import { createCurve } from '../esm/_shortw_utils.js';
 import { precomputeMSMUnsafe } from '../esm/abstract/curve.js';
 import { twistedEdwards } from '../esm/abstract/edwards.js';

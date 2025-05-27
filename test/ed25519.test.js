@@ -3,7 +3,7 @@ import {
   concatBytes,
   bytesToHex as hex,
   randomBytes,
-} from '@noble/hashes/utils';
+} from '@noble/hashes/utils.js';
 import * as fc from 'fast-check';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql, strictEqual, throws } from 'node:assert';

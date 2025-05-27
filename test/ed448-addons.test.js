@@ -1,4 +1,4 @@
-import { bytesToHex as hex, hexToBytes } from '@noble/hashes/utils';
+import { bytesToHex as hex, hexToBytes } from '@noble/hashes/utils.js';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql, throws } from 'node:assert';
 import { bytesToNumberLE } from '../esm/abstract/utils.js';

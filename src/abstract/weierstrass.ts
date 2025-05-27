@@ -25,7 +25,7 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { hmac } from '@noble/hashes/hmac';
+import { hmac } from '@noble/hashes/hmac.js';
 import {
   _validateObject,
   abool,

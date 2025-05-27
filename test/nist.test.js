@@ -1,5 +1,5 @@
-import { sha224, sha256, sha384, sha512 } from '@noble/hashes/sha2';
-import { sha3_224, sha3_256, sha3_384, sha3_512, shake128, shake256 } from '@noble/hashes/sha3';
+import { sha224, sha256, sha384, sha512 } from '@noble/hashes/sha2.js';
+import { sha3_224, sha3_256, sha3_384, sha3_512, shake128, shake256 } from '@noble/hashes/sha3.js';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql, throws } from 'node:assert';
 import { bytesToHex as hex, hexToBytes, utf8ToBytes } from '../esm/abstract/utils.js';

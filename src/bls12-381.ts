@@ -77,7 +77,7 @@ Filecoin uses little endian byte arrays for private keys - make sure to reverse 
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { sha256 } from '@noble/hashes/sha2';
+import { sha256 } from '@noble/hashes/sha2.js';
 import { bls, type CurveFn } from './abstract/bls.ts';
 import { Field, type IField } from './abstract/modular.ts';
 import {

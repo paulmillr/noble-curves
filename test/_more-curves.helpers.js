@@ -1,5 +1,5 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { sha224, sha256, sha512 } from '@noble/hashes/sha2';
+import { sha224, sha256, sha512 } from '@noble/hashes/sha2.js';
 import { createCurve } from '../esm/_shortw_utils.js';
 import { Field } from '../esm/abstract/modular.js';
 import curvesInit from './vectors/curves-init.json' with { type: 'json' };

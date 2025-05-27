@@ -1,4 +1,4 @@
-import { sha256 } from '@noble/hashes/sha2';
+import { sha256 } from '@noble/hashes/sha2.js';
 import { createCurve } from '../esm/_shortw_utils.js';
 import { Field } from '../esm/abstract/modular.js';
 import { calcEndo, config } from './misc/endomorphism.js';
