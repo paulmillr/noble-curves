@@ -7,8 +7,13 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { shake256 } from '@noble/hashes/sha3';
-import { abytes, concatBytes, utf8ToBytes, wrapConstructor } from '@noble/hashes/utils';
+import { shake256 } from '@noble/hashes/sha3.js';
+import {
+  abytes,
+  concatBytes,
+  utf8ToBytes,
+  createHasher as wrapConstructor,
+} from '@noble/hashes/utils.js';
 import type { AffinePoint, Group } from './abstract/curve.ts';
 import { pippenger } from './abstract/curve.ts';
 import {
