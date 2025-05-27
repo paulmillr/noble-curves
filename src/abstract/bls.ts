@@ -367,21 +367,30 @@ export function bls(CURVE: CurveType): CurveFn {
     if (!Array.isArray(arr) || arr.length === 0) throw new Error('expected non-empty array');
   }
 
-  // NEW code
+  type G1Hex = Hex | G1;
+  type G2Hex = Hex | G2;
+  function normP1(point: G1Hex): G1 {
+    return point instanceof G1.Point ? (point as G1) : G1.Point.fromHex(point);
+  }
+  function normP2(point: G2Hex): G2 {
+    return point instanceof G2.Point ? point : Signature.fromHex(point);
+  }
 
   // TODO: add verifyBatch, fix types, Export Signature property,
   // actually expose the generated APIs
   function createBls<P, S>(PubCurve: any, SigCurve: any) {
     type PubPoint = ProjPointType<P>;
     type SigPoint = ProjPointType<S>;
-
-    function apub(p: unknown) {
-      if (!(p instanceof PubCurve.Point)) throw new Error('expected valid point on pubkey curve');
+    function normPub(point: PubPoint | Hex): PubPoint {
+      return point instanceof PubCurve.Point ? (point as PubPoint) : PubCurve.Point.fromHex(point);
     }
-
-    function asig(p: unknown) {
+    function normSig(point: SigPoint | Hex): SigPoint {
+      return point instanceof SigCurve.Point ? (point as SigPoint) : SigCurve.Point.fromHex(point);
+    }
+    function asig(p: unknown): SigPoint {
       if (!(p instanceof SigCurve.Point))
         throw new Error('expected valid point on signature curve');
+      return p as any;
     }
 
     // TODO: is this always ok?
@@ -393,20 +402,18 @@ export function bls(CURVE: CurveType): CurveFn {
       },
       // S = pk x H(m)
       sign(message: SigPoint, privateKey: PrivKey): SigPoint {
-        asig(message);
-        message.assertValidity();
+        asig(message).assertValidity();
         return message.multiply(PubCurve.normPrivateKeyToScalar(privateKey));
       },
       // Checks if pairing of public key & hash is equal to pairing of generator & signature.
       // e(P, H(m)) == e(G, S)
       // e(S, G) == e(H(m), P)
-      verify(signature: SigPoint, message: SigPoint, publicKey: PubPoint): boolean {
-        asig(signature);
-        asig(message);
-        apub(publicKey);
+      verify(signature: SigPoint | Hex, message: SigPoint, publicKey: PubPoint | Hex): boolean {
+        signature = normSig(signature);
+        publicKey = normPub(publicKey);
         const P = publicKey.negate();
         const G = PubCurve.Point.BASE;
-        const Hm = message;
+        const Hm = asig(message);
         const S = signature;
         // This code was changed in 1.9.x:
         // Before it was G.negate() in G2, now it's always pubKey.negate
@@ -427,9 +434,9 @@ export function bls(CURVE: CurveType): CurveFn {
 
       // Adds a bunch of public key points together.
       // pk1 + pk2 + pk3 = pkA
-      aggregatePublicKeys(publicKeys: PubPoint[]): PubPoint {
+      aggregatePublicKeys(publicKeys: (PubPoint | Hex)[]): PubPoint {
         aNonEmpty(publicKeys);
-        publicKeys.forEach(apub);
+        publicKeys = publicKeys.map((pub) => normPub(pub));
         const agg = publicKeys.reduce((sum, p) => sum.add(p), PubCurve.Point.ZERO);
         agg.assertValidity();
         return agg;
@@ -437,9 +444,9 @@ export function bls(CURVE: CurveType): CurveFn {
 
       // Adds a bunch of signature points together.
       // pk1 + pk2 + pk3 = pkA
-      aggregateSignatures(signatures: SigPoint[]): SigPoint {
+      aggregateSignatures(signatures: (SigPoint | Hex)[]): SigPoint {
         aNonEmpty(signatures);
-        signatures.forEach(asig);
+        signatures = signatures.map((sig) => normSig(sig));
         const agg = signatures.reduce((sum, s) => sum.add(s), SigCurve.Point.ZERO);
         agg.assertValidity();
         return agg;
@@ -454,18 +461,10 @@ export function bls(CURVE: CurveType): CurveFn {
   const { ShortSignature } = CURVE.G1;
   const { Signature } = CURVE.G2;
 
-  type G1Hex = Hex | G1;
-  type G2Hex = Hex | G2;
-  function normP1(point: G1Hex): G1 {
-    return point instanceof G1.Point ? (point as G1) : G1.Point.fromHex(point);
-  }
   function normP1Hash(point: G1Hex, htfOpts?: htfBasicOpts): G1 {
     return point instanceof G1.Point
       ? point
       : (G1.hashToCurve(ensureBytes('point', point), htfOpts) as G1);
-  }
-  function normP2(point: G2Hex): G2 {
-    return point instanceof G2.Point ? point : Signature.fromHex(point);
   }
   function normP2Hash(point: G2Hex, htfOpts?: htfBasicOpts): G2 {
     return point instanceof G2.Point
@@ -507,10 +506,8 @@ export function bls(CURVE: CurveType): CurveFn {
     publicKey: G1Hex,
     htfOpts?: htfBasicOpts
   ): boolean {
-    const P = normP1(publicKey);
     const Hm = normP2Hash(message, htfOpts);
-    const S = normP2(signature);
-    return longSignatures.verify(S, Hm, P);
+    return longSignatures.verify(signature, Hm, publicKey);
   }
   function verifyShortSignature(
     signature: G1Hex,
@@ -518,27 +515,25 @@ export function bls(CURVE: CurveType): CurveFn {
     publicKey: G2Hex,
     htfOpts?: htfBasicOpts
   ): boolean {
-    const P = normP2(publicKey);
     const Hm = normP1Hash(message, htfOpts);
-    const S = normP1(signature);
-    return shortSignatures.verify(S, Hm, P);
+    return shortSignatures.verify(signature, Hm, publicKey);
   }
   function aggregatePublicKeys(publicKeys: Hex[]): Uint8Array;
   function aggregatePublicKeys(publicKeys: G1[]): G1;
   function aggregatePublicKeys(publicKeys: G1Hex[]): Uint8Array | G1 {
-    const agg = longSignatures.aggregatePublicKeys(publicKeys.map(normP1));
+    const agg = longSignatures.aggregatePublicKeys(publicKeys);
     return publicKeys[0] instanceof G1.Point ? agg : agg.toBytes(true);
   }
   function aggregateSignatures(signatures: Hex[]): Uint8Array;
   function aggregateSignatures(signatures: G2[]): G2;
   function aggregateSignatures(signatures: G2Hex[]): Uint8Array | G2 {
-    const agg = longSignatures.aggregateSignatures(signatures.map(normP2));
+    const agg = longSignatures.aggregateSignatures(signatures);
     return signatures[0] instanceof G2.Point ? agg : Signature.toBytes(agg);
   }
   function aggregateShortSignatures(signatures: Hex[]): Uint8Array;
   function aggregateShortSignatures(signatures: G1[]): G1;
   function aggregateShortSignatures(signatures: G1Hex[]): Uint8Array | G1 {
-    const agg = shortSignatures.aggregateSignatures(signatures.map(normP1));
+    const agg = shortSignatures.aggregateSignatures(signatures);
     return signatures[0] instanceof G1.Point ? agg : ShortSignature.toBytes(agg);
   }
 
@@ -582,7 +577,7 @@ export function bls(CURVE: CurveType): CurveFn {
     }
   }
 
-  G1.Point.BASE._setWindowSize(4);
+  G1.Point.BASE.precompute(4);
 
   return {
     getPublicKey,
@@ -595,6 +590,8 @@ export function bls(CURVE: CurveType): CurveFn {
     aggregatePublicKeys,
     aggregateSignatures,
     aggregateShortSignatures,
+    // longSignatures,
+    // shortSignatures,
     millerLoopBatch,
     pairing,
     pairingBatch,

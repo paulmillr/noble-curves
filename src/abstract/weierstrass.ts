@@ -1398,15 +1398,15 @@ export function ecdsa(
 
     // deduce signature format
     try {
-      if (format === 'js') {
-        if (sg != null && !isBytes(sg)) _sig = new Signature(sg.r, sg.s);
-      } else if (format === 'compact') {
-        _sig = Signature.fromCompact(sg);
-      } else if (format === 'der') {
-        _sig = Signature.fromDER(sg);
-      } else {
-        throw new Error('invalid format');
-      }
+      // if (format === 'js') {
+      //   if (sg != null && !isBytes(sg)) _sig = new Signature(sg.r, sg.s);
+      // } else if (format === 'compact') {
+      //   _sig = Signature.fromCompact(sg);
+      // } else if (format === 'der') {
+      //   _sig = Signature.fromDER(sg);
+      // } else {
+      //   throw new Error('invalid format');
+      // }
       if (isObj) {
         if (format === undefined || format === 'js') {
           _sig = new Signature(sg.r, sg.s);

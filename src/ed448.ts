@@ -13,7 +13,9 @@ import type { AffinePoint, Group } from './abstract/curve.ts';
 import { pippenger } from './abstract/curve.ts';
 import {
   type CurveFn,
+  edwards,
   type EdwardsOpts,
+  type ExtPointConstructor,
   type ExtPointType,
   twistedEdwards,
 } from './abstract/edwards.ts';
@@ -60,20 +62,23 @@ const ed448_CURVE: EdwardsOpts = {
   ),
 };
 
+// E448 != Edwards448 used in ed448
 // E448 is defined by NIST
 // It's birationally equivalent to edwards448
 // d = 39082/39081
 // Gx = 3/2
-const E448_CURVE: EdwardsOpts = {
-  p: ed448_CURVE.p,
-  n: ed448_CURVE.n,
-  h: ed448_CURVE.h,
-  a: ed448_CURVE.a,
-  d: BigInt('0xd78b4bdc7f0daf19f24f38c29373a2ccad46157242a50f37809b1da3412a12e79ccc9c81264cfe9ad080997058fb61c4243cc32dbaa156b9'),
-  Gx: BigInt('0x79a70b2b70400553ae7c9df416c792c61128751ac92969240c25a07d728bdc93e21f7787ed6972249de732f38496cd11698713093e9c04fc'
+const E448_CURVE: EdwardsOpts = Object.assign({}, ed448_CURVE, {
+  d: BigInt(
+    '0xd78b4bdc7f0daf19f24f38c29373a2ccad46157242a50f37809b1da3412a12e79ccc9c81264cfe9ad080997058fb61c4243cc32dbaa156b9'
   ),
-  Gy: BigInt('0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffff80000000000000000000000000000000000000000000000000000001')
-};
+  Gx: BigInt(
+    '0x79a70b2b70400553ae7c9df416c792c61128751ac92969240c25a07d728bdc93e21f7787ed6972249de732f38496cd11698713093e9c04fc'
+  ),
+  Gy: BigInt(
+    '0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffff80000000000000000000000000000000000000000000000000000001'
+  ),
+});
+export const E448: ExtPointConstructor = edwards(E448_CURVE);
 
 const shake256_114 = /* @__PURE__ */ wrapConstructor(() => shake256.create({ dkLen: 114 }));
 const shake256_64 = /* @__PURE__ */ wrapConstructor(() => shake256.create({ dkLen: 64 }));
