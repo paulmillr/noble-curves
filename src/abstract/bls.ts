@@ -16,6 +16,7 @@
  **/
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import {
+  abytes,
   ensureBytes,
   memoized,
   randomBytes,
@@ -118,22 +119,30 @@ type PrecomputeSingle = [Fp2, Fp2, Fp2][];
 type Precompute = PrecomputeSingle[];
 
 export type CurveFn = {
+  longSignatures: BLSSigs<bigint, Fp2>;
+  shortSignatures: BLSSigs<Fp2, bigint>;
+  /** @deprecated use `longSignatures.getPublicKey` */
   getPublicKey: (privateKey: PrivKey) => Uint8Array;
+  /** @deprecated use `shortSignatures.getPublicKey` */
   getPublicKeyForShortSignatures: (privateKey: PrivKey) => Uint8Array;
+  /** @deprecated use `longSignatures.sign` */
   sign: {
     (message: Hex, privateKey: PrivKey, htfOpts?: htfBasicOpts): Uint8Array;
     (message: ProjPointType<Fp2>, privateKey: PrivKey, htfOpts?: htfBasicOpts): ProjPointType<Fp2>;
   };
+  /** @deprecated use `shortSignatures.sign` */
   signShortSignature: {
     (message: Hex, privateKey: PrivKey, htfOpts?: htfBasicOpts): Uint8Array;
     (message: ProjPointType<Fp>, privateKey: PrivKey, htfOpts?: htfBasicOpts): ProjPointType<Fp>;
   };
+  /** @deprecated use `longSignatures.verify` */
   verify: (
     signature: Hex | ProjPointType<Fp2>,
     message: Hex | ProjPointType<Fp2>,
     publicKey: Hex | ProjPointType<Fp>,
     htfOpts?: htfBasicOpts
   ) => boolean;
+  /** @deprecated use `shortSignatures.verify` */
   verifyShortSignature: (
     signature: Hex | ProjPointType<Fp>,
     message: Hex | ProjPointType<Fp>,
@@ -146,14 +155,17 @@ export type CurveFn = {
     publicKeys: (Hex | ProjPointType<Fp>)[],
     htfOpts?: htfBasicOpts
   ) => boolean;
+  /** @deprecated use `longSignatures.aggregatePublicKeys` */
   aggregatePublicKeys: {
     (publicKeys: Hex[]): Uint8Array;
     (publicKeys: ProjPointType<Fp>[]): ProjPointType<Fp>;
   };
+  /** @deprecated use `longSignatures.aggregateSignatures` */
   aggregateSignatures: {
     (signatures: Hex[]): Uint8Array;
     (signatures: ProjPointType<Fp2>[]): ProjPointType<Fp2>;
   };
+  /** @deprecated use `shortSignatures.aggregateSignatures` */
   aggregateShortSignatures: {
     (signatures: Hex[]): Uint8Array;
     (signatures: ProjPointType<Fp>[]): ProjPointType<Fp>;
@@ -186,6 +198,21 @@ export type CurveFn = {
     calcPairingPrecomputes: (p: ProjPointType<Fp2>) => Precompute;
   };
 };
+
+type BLSInput = Hex | Uint8Array;
+export interface BLSSigs<P, S> {
+  getPublicKey(privateKey: PrivKey): ProjPointType<P>;
+  sign(message: ProjPointType<S>, privateKey: PrivKey): ProjPointType<S>;
+  verify(
+    signature: ProjPointType<S> | BLSInput,
+    message: ProjPointType<S>,
+    publicKey: ProjPointType<P> | BLSInput
+  ): boolean;
+  aggregatePublicKeys(publicKeys: (ProjPointType<P> | BLSInput)[]): ProjPointType<P>;
+  aggregateSignatures(signatures: (ProjPointType<S> | BLSInput)[]): ProjPointType<S>;
+  hashToSig(sigBytes: Uint8Array, DST?: string | Uint8Array): ProjPointType<S>;
+  Signature: SignatureCoder<S>;
+}
 
 // Not used with BLS12-381 (no sequential `11` in X). Useful for other curves.
 function NAfDecomposition(a: bigint) {
@@ -378,48 +405,55 @@ export function bls(CURVE: CurveType): CurveFn {
 
   // TODO: add verifyBatch, fix types, Export Signature property,
   // actually expose the generated APIs
-  function createBls<P, S>(PubCurve: any, SigCurve: any) {
+  function createBls<P, S>(PubCurve: any, SigCurve: any): BLSSigs<P, S> {
     type PubPoint = ProjPointType<P>;
     type SigPoint = ProjPointType<S>;
-    function normPub(point: PubPoint | Hex): PubPoint {
+    function normPub(point: PubPoint | BLSInput): PubPoint {
       return point instanceof PubCurve.Point ? (point as PubPoint) : PubCurve.Point.fromHex(point);
     }
-    function normSig(point: SigPoint | Hex): SigPoint {
+    function normSig(point: SigPoint | BLSInput): SigPoint {
       return point instanceof SigCurve.Point ? (point as SigPoint) : SigCurve.Point.fromHex(point);
     }
-    function asig(p: unknown): SigPoint {
-      if (!(p instanceof SigCurve.Point))
-        throw new Error('expected valid point on signature curve');
-      return p as any;
+    function amsg(m: unknown): SigPoint {
+      if (!(m instanceof SigCurve.Point))
+        throw new Error(`expected valid message hashed to ${isLongSigs ? 'G2' : 'G1'} curve`);
+      return m as any;
     }
 
     // TODO: is this always ok?
-    const longSigs = PubCurve.CURVE.Fp.BYTES < SigCurve.CURVE.Fp.BYTES;
+    const isLongSigs = SigCurve.Point.Fp.BYTES > PubCurve.Point.Fp.BYTES;
     return {
       // P = pk x G
       getPublicKey(privateKey: PrivKey): PubPoint {
         return PubCurve.Point.fromPrivateKey(privateKey);
       },
       // S = pk x H(m)
-      sign(message: SigPoint, privateKey: PrivKey): SigPoint {
-        asig(message).assertValidity();
+      sign(message: SigPoint, privateKey: PrivKey, unusedArg?: any): SigPoint {
+        if (unusedArg != null) throw new Error('sign() expects 2 arguments');
+        amsg(message).assertValidity();
         return message.multiply(PubCurve.normPrivateKeyToScalar(privateKey));
       },
       // Checks if pairing of public key & hash is equal to pairing of generator & signature.
       // e(P, H(m)) == e(G, S)
       // e(S, G) == e(H(m), P)
-      verify(signature: SigPoint | Hex, message: SigPoint, publicKey: PubPoint | Hex): boolean {
+      verify(
+        signature: SigPoint | BLSInput,
+        message: SigPoint,
+        publicKey: PubPoint | BLSInput,
+        unusedArg?: any
+      ): boolean {
+        if (unusedArg != null) throw new Error('verify() expects 3 arguments');
         signature = normSig(signature);
         publicKey = normPub(publicKey);
         const P = publicKey.negate();
         const G = PubCurve.Point.BASE;
-        const Hm = asig(message);
+        const Hm = amsg(message);
         const S = signature;
         // This code was changed in 1.9.x:
         // Before it was G.negate() in G2, now it's always pubKey.negate
         // TODO: understand if this is OK?
         // prettier-ignore
-        const exp_ = longSigs ? [
+        const exp_ = isLongSigs ? [
           { g1: P, g2: Hm },
           { g1: G, g2: S }
         ] : [
@@ -434,7 +468,7 @@ export function bls(CURVE: CurveType): CurveFn {
 
       // Adds a bunch of public key points together.
       // pk1 + pk2 + pk3 = pkA
-      aggregatePublicKeys(publicKeys: (PubPoint | Hex)[]): PubPoint {
+      aggregatePublicKeys(publicKeys: (PubPoint | BLSInput)[]): PubPoint {
         aNonEmpty(publicKeys);
         publicKeys = publicKeys.map((pub) => normPub(pub));
         const agg = publicKeys.reduce((sum, p) => sum.add(p), PubCurve.Point.ZERO);
@@ -444,13 +478,23 @@ export function bls(CURVE: CurveType): CurveFn {
 
       // Adds a bunch of signature points together.
       // pk1 + pk2 + pk3 = pkA
-      aggregateSignatures(signatures: (SigPoint | Hex)[]): SigPoint {
+      aggregateSignatures(signatures: (SigPoint | BLSInput)[]): SigPoint {
         aNonEmpty(signatures);
         signatures = signatures.map((sig) => normSig(sig));
         const agg = signatures.reduce((sum, s) => sum.add(s), SigCurve.Point.ZERO);
         agg.assertValidity();
         return agg;
       },
+
+      hashToSig(sigBytes: Uint8Array, DST?: string | Uint8Array): SigPoint {
+        abytes(sigBytes);
+        const opts = DST ? { DST } : undefined;
+        return SigCurve.hashToCurve(sigBytes, opts);
+      },
+
+      // @ts-ignore
+      Signature: isLongSigs ? CURVE.G2.Signature : CURVE.G1.ShortSignature,
+      // Signature: isLongSigs ? CURVE.G1.ShortSignature : CURVE.G2.Signature
     };
   }
 
@@ -464,12 +508,12 @@ export function bls(CURVE: CurveType): CurveFn {
   function normP1Hash(point: G1Hex, htfOpts?: htfBasicOpts): G1 {
     return point instanceof G1.Point
       ? point
-      : (G1.hashToCurve(ensureBytes('point', point), htfOpts) as G1);
+      : shortSignatures.hashToSig(ensureBytes('point', point), htfOpts?.DST);
   }
   function normP2Hash(point: G2Hex, htfOpts?: htfBasicOpts): G2 {
     return point instanceof G2.Point
       ? point
-      : (G2.hashToCurve(ensureBytes('point', point), htfOpts) as G2);
+      : longSignatures.hashToSig(ensureBytes('point', point), htfOpts?.DST);
   }
 
   function getPublicKey(privateKey: PrivKey): Uint8Array {
@@ -580,6 +624,8 @@ export function bls(CURVE: CurveType): CurveFn {
   G1.Point.BASE.precompute(4);
 
   return {
+    longSignatures,
+    shortSignatures,
     getPublicKey,
     getPublicKeyForShortSignatures,
     sign,
@@ -590,8 +636,6 @@ export function bls(CURVE: CurveType): CurveFn {
     aggregatePublicKeys,
     aggregateSignatures,
     aggregateShortSignatures,
-    // longSignatures,
-    // shortSignatures,
     millerLoopBatch,
     pairing,
     pairingBatch,
