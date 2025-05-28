@@ -654,7 +654,7 @@ for (const name in CURVES) {
         );
       });
       // GOST curve from misc_ has Gx=0, which makes our checks throw
-      if (!name.includes('GOST')) {
+      if (!name.toLowerCase().includes('gost')) {
         should('fromHex(toHex(compressed=true)) roundtrip', () => {
           fc.assert(
             fc.property(FC_BIGINT, (x) => {
