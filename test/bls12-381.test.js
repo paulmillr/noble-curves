@@ -65,7 +65,12 @@ const FC_BIGINT_5 = fc.array(FC_BIGINT, { minLength: 5, maxLength: 5 });
 const B_192_40 = '40'.padEnd(192, '0');
 const B_384_40 = '40'.padEnd(384, '0'); // [0x40, 0, 0...]
 
-const getPubKey = (priv) => bls.getPublicKey(priv);
+const getPubKey = (priv) => blsl.getPublicKey(priv);
+/**
+ *
+ * @param {string} item
+ * @returns string
+ */
 function replaceZeroPoint(item) {
   const zeros = '0000000000000000000000000000000000000000000000000000000000000000';
   const ones = '1000000000000000000000000000000000000000000000000000000000000001';
@@ -76,6 +81,8 @@ function equal(a, b, comment) {
   eql(a.equals(b), true, `eq(${comment})`);
 }
 const { Fp, Fp2 } = bls.fields;
+const blss = bls.shortSignatures;
+const blsl = bls.longSignatures;
 
 // Fp
 describe('bls12-381 Fp', () => {
@@ -510,42 +517,42 @@ describe('bls12-381 Point', () => {
   describe('wNAF multiplication same as unsafe', () => {
     should('(G1, W=1)', () => {
       let G = PointG1.BASE.negate().negate(); // create new point
-      G._setWindowSize(1);
+      G.precompute(1);
       for (let k of wNAF_VECTORS) {
         eql(G.multiply(k).equals(G.multiplyUnsafe(k)), true);
       }
     });
     should('(G1, W=4)', () => {
       let G = PointG1.BASE.negate().negate();
-      G._setWindowSize(4);
+      G.precompute(4);
       for (let k of wNAF_VECTORS) {
         eql(G.multiply(k).equals(G.multiplyUnsafe(k)), true);
       }
     });
     should('(G1, W=5)', () => {
       let G = PointG1.BASE.negate().negate();
-      G._setWindowSize(5);
+      G.precompute(5);
       for (let k of wNAF_VECTORS) {
         eql(G.multiply(k).equals(G.multiplyUnsafe(k)), true);
       }
     });
     should('(G2, W=1)', () => {
       let G = PointG2.BASE.negate().negate();
-      G._setWindowSize(1);
+      G.precompute(1);
       for (let k of wNAF_VECTORS) {
         eql(G.multiply(k).equals(G.multiplyUnsafe(k)), true);
       }
     });
     should('(G2, W=4)', () => {
       let G = PointG2.BASE.negate().negate();
-      G._setWindowSize(4);
+      G.precompute(4);
       for (let k of wNAF_VECTORS) {
         eql(G.multiply(k).equals(G.multiplyUnsafe(k)), true);
       }
     });
     should('(G2, W=5)', () => {
       let G = PointG2.BASE.negate().negate();
-      G._setWindowSize(5);
+      G.precompute(5);
       for (let k of wNAF_VECTORS) {
         eql(G.multiply(k).equals(G.multiplyUnsafe(k)), true);
       }
@@ -890,7 +897,7 @@ describe('bls12-381/basic', () => {
   );
 
   should('aggregate pubkeys', () => {
-    const agg = bls.aggregatePublicKeys([VALID_G1, VALID_G1_2]).toAffine();
+    const agg = blsl.aggregatePublicKeys([VALID_G1, VALID_G1_2]).toAffine();
     eql(
       agg.x,
       2636337749883017793009944726560363863546595464242083394883491066895536780554574413337005575305023872925406746684807n
@@ -902,26 +909,37 @@ describe('bls12-381/basic', () => {
   });
 
   should('not aggregate invalid pubkeys', () => {
-    throws(() => bls.aggregatePublicKeys([VALID_G1, INVALID_G1]));
+    throws(() => blsl.aggregatePublicKeys([VALID_G1, INVALID_G1]));
   });
   // should aggregate signatures
 
   should(`produce correct short signatures (${G1_VECTORS.length} vectors)`, () => {
     for (let vector of G1_VECTORS) {
-      const [priv, msg, expected] = vector;
-      const sig = bls.signShortSignature(msg, priv);
-      eql(bytesToHex(sig), expected);
-      eql(bls.ShortSignature.toBytes(bls.ShortSignature.fromBytes(sig)), sig);
-      eql(bls.ShortSignature.toHex(bls.ShortSignature.fromBytes(sig)), bytesToHex(sig));
+      const [priv, msgs, expected] = vector;
+      const msg = blss.hashToSig(hexToBytes(msgs.slice()));
+      const sig = blss.sign(msg, priv);
+      const sigb = blss.Signature.toBytes(sig);
+      eql(blss.Signature.toHex(sig), expected);
+      eql(blss.Signature.toBytes(blss.Signature.fromBytes(sigb)), sigb);
+      eql(blss.Signature.toHex(blss.Signature.fromBytes(sigb)), bytesToHex(sigb));
     }
   });
-  should(`produce correct signatures (${G2_VECTORS.length} vectors)`, () => {
+  should(`produce correct long signatures (${G2_VECTORS.length} vectors)`, () => {
     for (let vector of G2_VECTORS) {
-      const [priv, msg, expected] = vector;
-      const sig = bls.sign(msg, priv);
-      eql(bytesToHex(sig), expected);
-      eql(bls.Signature.toBytes(bls.Signature.fromBytes(sig)), sig);
-      eql(bls.Signature.toHex(bls.Signature.fromBytes(sig)), bytesToHex(sig));
+      const [priv, msgs, expected] = vector;
+
+      const sigo = bls.sign(msgs, priv);
+      eql(bytesToHex(sigo), expected);
+      eql(bls.Signature.toBytes(bls.Signature.fromBytes(sigo)), sigo);
+      eql(bls.Signature.toHex(bls.Signature.fromBytes(sigo)), bytesToHex(sigo));
+
+      const msg = blsl.hashToSig(hexToBytes(msgs));
+      const sig = blsl.sign(msg, priv);
+      const sigb = blsl.Signature.toBytes(sig);
+      eql(blsl.Signature.toHex(sig), expected, 'h');
+      eql(bytesToHex(sigb), expected, 'b');
+      eql(blsl.Signature.toBytes(blsl.Signature.fromBytes(sigb)), sigb, 'b round');
+      eql(blsl.Signature.toHex(blsl.Signature.fromBytes(sigb)), bytesToHex(sigb), 'h round');
     }
   });
   should(`produce correct scalars (${SCALAR_VECTORS.length} vectors)`, () => {
@@ -1197,45 +1215,50 @@ describe('hash-to-curve (against Killic)', () => {
 describe('verify()', () => {
   should('verify signed message', () => {
     for (let i = 0; i < NUM_RUNS; i++) {
-      const [priv, msg] = G2_VECTORS[i];
-      const sig = bls.sign(msg, priv);
-      const pub = bls.getPublicKey(priv);
-      const res = bls.verify(sig, msg, pub);
+      const [priv, msgs] = G2_VECTORS[i];
+      const msg = blsl.hashToSig(hexToBytes(msgs));
+      const sig = blsl.sign(msg, priv);
+      const pub = blsl.getPublicKey(priv);
+      const res = blsl.verify(sig, msg, pub);
       eql(res, true, `${priv}-${msg}`);
-      const resHex = bls.verify(bytesToHex(sig), msg, pub);
+      const resHex = blsl.verify(sig, msg, pub);
       eql(resHex, true, `${priv}-${msg}-hex`);
     }
   });
   should('not verify signature with wrong message', () => {
     for (let i = 0; i < NUM_RUNS; i++) {
-      const [priv, msg] = G2_VECTORS[i];
-      const invMsg = G2_VECTORS[i + 1][1];
-      const sig = bls.sign(msg, priv);
-      const pub = bls.getPublicKey(priv);
-      const res = bls.verify(sig, invMsg, pub);
+      const [priv, msgs] = G2_VECTORS[i];
+      const invMsgs = G2_VECTORS[i + 1][1];
+      const msg = blsl.hashToSig(hexToBytes(msgs));
+      const invMsg = blsl.hashToSig(hexToBytes(invMsgs));
+      const sig = blsl.sign(msg, priv);
+      const pub = blsl.getPublicKey(priv);
+      const res = blsl.verify(sig, invMsg, pub);
       eql(res, false);
     }
   });
   should('not verify signature with wrong key', () => {
     for (let i = 0; i < NUM_RUNS; i++) {
-      const [priv, msg] = G2_VECTORS[i];
-      const sig = bls.sign(msg, priv);
+      const [priv, msgs] = G2_VECTORS[i];
+      const msg = blsl.hashToSig(hexToBytes(msgs));
+      const sig = blsl.sign(msg, priv);
       const invPriv = G2_VECTORS[i + 1][1].padStart(64, '0');
-      const invPub = bls.getPublicKey(invPriv);
-      const res = bls.verify(sig, msg, invPub);
+      const invPub = blsl.getPublicKey(invPriv);
+      const res = blsl.verify(sig, msg, invPub);
       eql(res, false);
-      const resHex = bls.verify(bytesToHex(sig), msg, invPub);
+      const resHex = blsl.verify(blsl.Signature.toBytes(sig), msg, invPub);
       eql(resHex, false);
     }
   });
   should('verify signed message (short signatures)', () => {
     for (let i = 0; i < NUM_RUNS; i++) {
       const [priv, msg] = G1_VECTORS[i];
-      const sig = bls.signShortSignature(msg, priv);
-      const pub = bls.getPublicKeyForShortSignatures(priv);
-      const res = bls.verifyShortSignature(sig, msg, pub);
+      const hmsg = blss.hashToSig(hexToBytes(msg));
+      const sig = blss.sign(hmsg, priv);
+      const pub = blss.getPublicKey(priv);
+      const res = blss.verify(sig, hmsg, pub);
       eql(res, true, `${priv}-${msg}`);
-      const resHex = bls.verifyShortSignature(sig, msg, pub);
+      const resHex = blss.verify(sig, hmsg, pub);
       eql(resHex, true, `${priv}-${msg}`);
     }
   });
@@ -1249,80 +1272,85 @@ describe('verify()', () => {
     const signatureHex =
       '987db5406ce297e729c8564a106dc896943b00216a095fe9c5d32a16a330c02eb80e6f468ede83cde5462b5145b58f65';
     const message = utf8ToBytes('message');
-
-    const options = {
-      DST: 'BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_AUG_',
-    };
+    const DST = 'BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_AUG_';
 
     const publicKey = G2Point.fromHex(publicKeyHex);
     const signature = G1Point.fromHex(signatureHex);
 
     const publicKeyBytes = hexToBytes(publicKeyHex);
     const publicKeyAndMessage = concatBytes(publicKeyBytes, message);
+    const pubMsg = blss.hashToSig(publicKeyAndMessage, DST);
 
-    const isValid = bls.verifyShortSignature(
-      signature,
-      publicKeyAndMessage,
-      publicKey,
-      Object.assign({}, bls.G1.CURVE.htfDefaults, options)
-    );
+    const isValid = blss.verify(signature, pubMsg, publicKey);
     eql(isValid, true, 'accepted augmented signature');
   });
   should('not verify signature with wrong message (short signatures)', () => {
     for (let i = 0; i < NUM_RUNS; i++) {
-      const [priv, msg] = G1_VECTORS[i];
-      const invMsg = G1_VECTORS[i + 1][1];
-      const sig = bls.signShortSignature(msg, priv);
-      const pub = bls.getPublicKeyForShortSignatures(priv);
-      const res = bls.verifyShortSignature(sig, invMsg, pub);
+      const [priv, msgs] = G1_VECTORS[i];
+      const invMsgs = G1_VECTORS[i + 1][1];
+      const msg = blss.hashToSig(hexToBytes(msgs));
+      const invMsg = blss.hashToSig(hexToBytes(invMsgs));
+      const sig = blss.sign(msg, priv);
+      const pub = blss.getPublicKey(priv);
+      const res = blss.verify(sig, invMsg, pub);
       eql(res, false);
-      const resHex = bls.verifyShortSignature(sig, invMsg, pub);
+      const resHex = blss.verify(sig, invMsg, pub);
       eql(resHex, false);
     }
   });
   should('not verify signature with wrong key', () => {
     for (let i = 0; i < NUM_RUNS; i++) {
-      const [priv, msg] = G1_VECTORS[i];
-      const sig = bls.signShortSignature(msg, priv);
+      const [priv, msgs] = G1_VECTORS[i];
+      const msg = blss.hashToSig(hexToBytes(msgs));
+      const sig = blss.sign(msg, priv);
       const invPriv = G1_VECTORS[i + 1][1].padStart(64, '0');
-      const invPub = bls.getPublicKeyForShortSignatures(invPriv);
-      const res = bls.verifyShortSignature(sig, msg, invPub);
+      const invPub = blss.getPublicKey(invPriv);
+      const res = blss.verify(sig, msg, invPub);
       eql(res, false);
-      const resHex = bls.verifyShortSignature(sig, msg, invPub);
+      const resHex = blss.verify(sig, msg, invPub);
       eql(resHex, false);
     }
   });
   describe('batch', () => {
     should('verify multi-signature', () => {
       fc.assert(
-        fc.property(FC_MSG_5, FC_BIGINT_5, (messages, privateKeys) => {
-          privateKeys = privateKeys.slice(0, messages.length);
-          messages = messages.slice(0, privateKeys.length);
+        // @ts-ignore
+        fc.property(FC_MSG_5, FC_BIGINT_5, (messagesS, privateKeys) => {
+          privateKeys = privateKeys.slice(0, messagesS.length);
+          const messages = messagesS
+            .slice(0, privateKeys.length)
+            .map((m) => blsl.hashToSig(hexToBytes(m)));
           const publicKey = privateKeys.map(getPubKey);
-          const signatures = messages.map((message, i) => bls.sign(message, privateKeys[i]));
-          const aggregatedSignature = bls.aggregateSignatures(signatures);
-          eql(bls.verifyBatch(aggregatedSignature, messages, publicKey), true);
-          eql(bls.verifyBatch(bytesToHex(aggregatedSignature), messages, publicKey), true);
+          const signatures = messages.map((message, i) => blsl.sign(message, privateKeys[i]));
+          const aggregatedSignature = blsl.aggregateSignatures(signatures);
+          eql(bls.verifyBatch(aggregatedSignature, messagesS, publicKey), true);
+          eql(
+            bls.verifyBatch(blsl.Signature.toHex(aggregatedSignature), messagesS, publicKey),
+            true
+          );
         })
       );
     });
     should('batch verify multi-signatures', () => {
       fc.assert(
-        fc.property(FC_MSG_5, FC_MSG_5, FC_BIGINT_5, (messages, wrongMessages, privateKeys) => {
-          privateKeys = privateKeys.slice(0, messages.length);
-          messages = messages.slice(0, privateKeys.length);
-          wrongMessages = messages.map((a, i) =>
-            typeof wrongMessages[i] === 'undefined' ? a : wrongMessages[i]
-          );
+        // @ts-ignore
+        fc.property(FC_MSG_5, FC_MSG_5, FC_BIGINT_5, (messagesS, wrongMessagesS, privateKeys) => {
+          privateKeys = privateKeys.slice(0, messagesS.length);
+          const messages = messagesS
+            .slice(0, privateKeys.length)
+            .map((m) => blsl.hashToSig(hexToBytes(m)));
+          const wrongMessages = messagesS
+            .map((a, i) => (typeof wrongMessagesS[i] === 'undefined' ? a : wrongMessagesS[i]))
+            .map((m) => blsl.hashToSig(hexToBytes(m)));
           const publicKey = privateKeys.map(getPubKey);
-          const signatures = messages.map((message, i) => bls.sign(message, privateKeys[i]));
-          const aggregatedSignature = bls.aggregateSignatures(signatures);
+          const signatures = messages.map((message, i) => blsl.sign(message, privateKeys[i]));
+          const aggregatedSignature = blsl.aggregateSignatures(signatures);
           eql(
             bls.verifyBatch(aggregatedSignature, wrongMessages, publicKey),
             messages.every((m, i) => m === wrongMessages[i])
           );
           eql(
-            bls.verifyBatch(bytesToHex(aggregatedSignature), wrongMessages, publicKey),
+            bls.verifyBatch(blsl.Signature.toHex(aggregatedSignature), wrongMessages, publicKey),
             messages.every((m, i) => m === wrongMessages[i])
           );
         })
@@ -1330,25 +1358,29 @@ describe('verify()', () => {
     });
     should('not verify multi-signature with wrong public keys', () => {
       fc.assert(
+        // @ts-ignore
         fc.property(
           FC_MSG_5,
+          // @ts-ignore
           FC_BIGINT_5,
           FC_BIGINT_5,
-          (messages, privateKeys, wrongPrivateKeys) => {
-            privateKeys = privateKeys.slice(0, messages.length);
+          (messagesS, privateKeys, wrongPrivateKeys) => {
+            privateKeys = privateKeys.slice(0, messagesS.length);
             wrongPrivateKeys = privateKeys.map((a, i) =>
               wrongPrivateKeys[i] !== undefined ? wrongPrivateKeys[i] : a
             );
-            messages = messages.slice(0, privateKeys.length);
+            const messages = messagesS
+              .slice(0, privateKeys.length)
+              .map((m) => blsl.hashToSig(hexToBytes(m)));
             const wrongPublicKeys = wrongPrivateKeys.map(getPubKey);
-            const signatures = messages.map((message, i) => bls.sign(message, privateKeys[i]));
-            const aggregatedSignature = bls.aggregateSignatures(signatures);
+            const signatures = messages.map((message, i) => blsl.sign(message, privateKeys[i]));
+            const aggregatedSignature = blsl.aggregateSignatures(signatures);
             eql(
               bls.verifyBatch(aggregatedSignature, messages, wrongPublicKeys),
               wrongPrivateKeys.every((p, i) => p === privateKeys[i])
             );
             eql(
-              bls.verifyBatch(bytesToHex(aggregatedSignature), messages, wrongPublicKeys),
+              bls.verifyBatch(blsl.Signature.toHex(aggregatedSignature), messages, wrongPublicKeys),
               wrongPrivateKeys.every((p, i) => p === privateKeys[i])
             );
           }
@@ -1357,35 +1389,45 @@ describe('verify()', () => {
     });
     should('verify multi-signature as simple signature', () => {
       fc.assert(
-        fc.property(FC_MSG, FC_BIGINT_5, (message, privateKeys) => {
-          message = replaceZeroPoint(message);
+        // @ts-ignore
+        fc.property(FC_MSG, FC_BIGINT_5, (messageS, privateKeys) => {
+          const message = blsl.hashToSig(hexToBytes(replaceZeroPoint(messageS)));
           const publicKey = privateKeys.map(getPubKey);
-          const signatures = privateKeys.map((privateKey) => bls.sign(message, privateKey));
-          const aggregatedSignature = bls.aggregateSignatures(signatures);
-          const aggregatedPublicKey = bls.aggregatePublicKeys(publicKey);
+          const signatures = privateKeys.map((privateKey) => blsl.sign(message, privateKey));
+          const aggregatedSignature = blsl.aggregateSignatures(signatures);
+          const aggregatedPublicKey = blsl.aggregatePublicKeys(publicKey);
           // TODO
           // Error: Property failed after 9 tests
           // { seed: 515274642, path: "8:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0", endOnFailure: true }
           // Counterexample: ["0000000000000000000000000000000000000000000000000000000000000000",[4n,52435875175126190479447740508185965837690552500527637822603658699938581184445n,43n,75n,52435875175126190479447740508185965837690552500527637822603658699938581184459n]]
-          eql(bls.verify(aggregatedSignature, message, aggregatedPublicKey), true);
-          eql(bls.verify(bytesToHex(aggregatedSignature), message, aggregatedPublicKey), true);
+          eql(blsl.verify(aggregatedSignature, message, aggregatedPublicKey), true);
+          eql(
+            blsl.verify(blsl.Signature.toHex(aggregatedSignature), message, aggregatedPublicKey),
+            true
+          );
         })
       );
     });
     should('not verify wrong multi-signature as simple signature', () => {
       fc.assert(
-        fc.property(FC_MSG, FC_MSG, FC_BIGINT_5, (message, wrongMessage, privateKeys) => {
-          message = replaceZeroPoint(message);
+        // @ts-ignore
+        fc.property(FC_MSG, FC_MSG, FC_BIGINT_5, (messageS, wrongMessageS, privateKeys) => {
+          const message = blsl.hashToSig(hexToBytes(replaceZeroPoint(messageS)));
+          const wrongMessage = blsl.hashToSig(hexToBytes(wrongMessageS));
           const publicKey = privateKeys.map(getPubKey);
-          const signatures = privateKeys.map((privateKey) => bls.sign(message, privateKey));
-          const aggregatedSignature = bls.aggregateSignatures(signatures);
-          const aggregatedPublicKey = bls.aggregatePublicKeys(publicKey);
+          const signatures = privateKeys.map((privateKey) => blsl.sign(message, privateKey));
+          const aggregatedSignature = blsl.aggregateSignatures(signatures);
+          const aggregatedPublicKey = blsl.aggregatePublicKeys(publicKey);
           eql(
-            bls.verify(aggregatedSignature, wrongMessage, aggregatedPublicKey),
+            blsl.verify(aggregatedSignature, wrongMessage, aggregatedPublicKey),
             message === wrongMessage
           );
           eql(
-            bls.verify(bytesToHex(aggregatedSignature), wrongMessage, aggregatedPublicKey),
+            blsl.verify(
+              blsl.Signature.toHex(aggregatedSignature),
+              wrongMessage,
+              aggregatedPublicKey
+            ),
             message === wrongMessage
           );
         })
