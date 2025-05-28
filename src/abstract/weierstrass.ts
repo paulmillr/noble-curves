@@ -1450,9 +1450,9 @@ export function ecdsa(
     getSharedSecret,
     sign,
     verify,
-    Signature,
     utils,
     Point,
+    Signature,
   });
 }
 

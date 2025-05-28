@@ -21,10 +21,6 @@ export {
   randomBytes,
   utf8ToBytes,
 } from '@noble/hashes/utils.js';
-// 100 lines of code in the file are duplicated from noble-hashes (utils).
-// This is OK: `abstract` directory does not use noble-hashes.
-// User may opt-in into using different hashing library. This way, noble-hashes
-// won't be included into their bundle.
 const _0n = /* @__PURE__ */ BigInt(0);
 const _1n = /* @__PURE__ */ BigInt(1);
 export type Hex = Uint8Array | string; // hex strings are accepted for simplicity

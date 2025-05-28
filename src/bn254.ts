@@ -55,7 +55,6 @@ Ate loop size: 6x+2
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha256 } from '@noble/hashes/sha2.js';
-import { getHash } from './_shortw_utils.ts';
 import {
   bls,
   type CurveFn as BLSCurveFn,
@@ -271,5 +270,5 @@ export const bn254_weierstrass: CurveFn = weierstrass({
   Gx: BigInt(1),
   Gy: BigInt(2),
   h: BigInt(1),
-  ...getHash(sha256),
+  hash: sha256,
 });

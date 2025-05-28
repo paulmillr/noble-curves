@@ -8,7 +8,6 @@ import { blake256 } from '@noble/hashes/blake1.js';
 import { blake2s } from '@noble/hashes/blake2.js';
 import { sha256, sha512 } from '@noble/hashes/sha2.js';
 import { concatBytes, utf8ToBytes } from '@noble/hashes/utils.js';
-import { getHash } from './_shortw_utils.ts';
 import {
   twistedEdwards,
   type CurveFn,
@@ -111,7 +110,7 @@ export const pallas: WCurveFn = weierstrass({
   Gx: mod(BigInt(-1), pasta_p),
   Gy: BigInt(2),
   h: BigInt(1),
-  ...getHash(sha256),
+  hash: sha256,
 });
 /**
  * https://neuromancer.sk/std/other/Vesta
@@ -125,5 +124,5 @@ export const vesta: WCurveFn = weierstrass({
   Gx: mod(BigInt(-1), pasta_q),
   Gy: BigInt(2),
   h: BigInt(1),
-  ...getHash(sha256),
+  hash: sha256,
 });
