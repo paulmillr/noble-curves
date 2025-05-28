@@ -28,6 +28,7 @@ import { normalizeZ } from './curve.ts';
 import {
   createHasher,
   type H2CPointConstructor,
+  type Hasher,
   type htfBasicOpts,
   type Opts as HTFOpts,
   type MapToCurve,
@@ -38,6 +39,7 @@ import {
   weierstrassPoints,
   type CurvePointsRes,
   type CurvePointsType,
+  type ProjConstructor,
   type ProjPointType,
 } from './weierstrass.ts';
 
@@ -121,6 +123,14 @@ type Precompute = PrecomputeSingle[];
 export type CurveFn = {
   longSignatures: BLSSigs<bigint, Fp2>;
   shortSignatures: BLSSigs<Fp2, bigint>;
+
+  millerLoopBatch: (pairs: [Precompute, Fp, Fp][]) => Fp12;
+  pairing: (P: ProjPointType<Fp>, Q: ProjPointType<Fp2>, withFinalExponent?: boolean) => Fp12;
+  pairingBatch: (
+    pairs: { g1: ProjPointType<Fp>; g2: ProjPointType<Fp2> }[],
+    withFinalExponent?: boolean
+  ) => Fp12;
+
   /** @deprecated use `longSignatures.getPublicKey` */
   getPublicKey: (privateKey: PrivKey) => Uint8Array;
   /** @deprecated use `shortSignatures.getPublicKey` */
@@ -170,21 +180,25 @@ export type CurveFn = {
     (signatures: Hex[]): Uint8Array;
     (signatures: ProjPointType<Fp>[]): ProjPointType<Fp>;
   };
-  millerLoopBatch: (pairs: [Precompute, Fp, Fp][]) => Fp12;
-  pairing: (P: ProjPointType<Fp>, Q: ProjPointType<Fp2>, withFinalExponent?: boolean) => Fp12;
-  pairingBatch: (
-    pairs: { g1: ProjPointType<Fp>; g2: ProjPointType<Fp2> }[],
-    withFinalExponent?: boolean
-  ) => Fp12;
-  G1: CurvePointsRes<Fp> & ReturnType<typeof createHasher<Fp>>;
-  G2: CurvePointsRes<Fp2> & ReturnType<typeof createHasher<Fp2>>;
+  /** @deprecated use `curves.G1` and `curves.G2` */
+  G1: CurvePointsRes<Fp> & Hasher<Fp>;
+  G2: CurvePointsRes<Fp2> & Hasher<Fp2>;
+  /** @deprecated use `longSignatures.Signature` */
   Signature: SignatureCoder<Fp2>;
+  /** @deprecated use `shortSignatures.Signature` */
   ShortSignature: ShortSignatureCoder<Fp>;
   params: {
     ateLoopSize: bigint;
     r: bigint;
+    twistType: TwistType;
+    /** @deprecated */
     G1b: bigint;
+    /** @deprecated */
     G2b: Fp2;
+  };
+  curves: {
+    G1: ProjConstructor<bigint>;
+    G2: ProjConstructor<Fp2>;
   };
   fields: {
     Fp: IField<Fp>;
@@ -202,7 +216,7 @@ export type CurveFn = {
 type BLSInput = Hex | Uint8Array;
 export interface BLSSigs<P, S> {
   getPublicKey(privateKey: PrivKey): ProjPointType<P>;
-  sign(message: ProjPointType<S>, privateKey: PrivKey): ProjPointType<S>;
+  sign(hashedMessage: ProjPointType<S>, privateKey: PrivKey): ProjPointType<S>;
   verify(
     signature: ProjPointType<S> | BLSInput,
     message: ProjPointType<S>,
@@ -210,7 +224,7 @@ export interface BLSSigs<P, S> {
   ): boolean;
   aggregatePublicKeys(publicKeys: (ProjPointType<P> | BLSInput)[]): ProjPointType<P>;
   aggregateSignatures(signatures: (ProjPointType<S> | BLSInput)[]): ProjPointType<S>;
-  hashToSig(sigBytes: Uint8Array, DST?: string | Uint8Array): ProjPointType<S>;
+  hash(messageBytes: Uint8Array, DST?: string | Uint8Array): ProjPointType<S>;
   Signature: SignatureCoder<S>;
 }
 
@@ -228,6 +242,7 @@ function NAfDecomposition(a: bigint) {
   return res;
 }
 
+// G1_Point: ProjConstructor<bigint>, G2_Point: ProjConstructor<Fp2>,
 export function bls(CURVE: CurveType): CurveFn {
   // Fields are specific for curve, so for now we'll need to pass them with opts
   const { Fp, Fr, Fp2, Fp6, Fp12 } = CURVE.fields;
@@ -486,10 +501,10 @@ export function bls(CURVE: CurveType): CurveFn {
         return agg;
       },
 
-      hashToSig(sigBytes: Uint8Array, DST?: string | Uint8Array): SigPoint {
-        abytes(sigBytes);
+      hash(messageBytes: Uint8Array, DST?: string | Uint8Array): SigPoint {
+        abytes(messageBytes);
         const opts = DST ? { DST } : undefined;
-        return SigCurve.hashToCurve(sigBytes, opts);
+        return SigCurve.hashToCurve(messageBytes, opts);
       },
 
       // @ts-ignore
@@ -508,12 +523,12 @@ export function bls(CURVE: CurveType): CurveFn {
   function normP1Hash(point: G1Hex, htfOpts?: htfBasicOpts): G1 {
     return point instanceof G1.Point
       ? point
-      : shortSignatures.hashToSig(ensureBytes('point', point), htfOpts?.DST);
+      : shortSignatures.hash(ensureBytes('point', point), htfOpts?.DST);
   }
   function normP2Hash(point: G2Hex, htfOpts?: htfBasicOpts): G2 {
     return point instanceof G2.Point
       ? point
-      : longSignatures.hashToSig(ensureBytes('point', point), htfOpts?.DST);
+      : longSignatures.hash(ensureBytes('point', point), htfOpts?.DST);
   }
 
   function getPublicKey(privateKey: PrivKey): Uint8Array {
@@ -626,23 +641,15 @@ export function bls(CURVE: CurveType): CurveFn {
   return {
     longSignatures,
     shortSignatures,
-    getPublicKey,
-    getPublicKeyForShortSignatures,
-    sign,
-    signShortSignature,
-    verify,
-    verifyBatch,
-    verifyShortSignature,
-    aggregatePublicKeys,
-    aggregateSignatures,
-    aggregateShortSignatures,
     millerLoopBatch,
     pairing,
     pairingBatch,
-    G1,
-    G2,
-    Signature,
-    ShortSignature,
+    // TODO!!!
+    verifyBatch,
+    curves: {
+      G1: G1_.Point,
+      G2: G2_.Point,
+    },
     fields: {
       Fr,
       Fp,
@@ -652,10 +659,27 @@ export function bls(CURVE: CurveType): CurveFn {
     },
     params: {
       ateLoopSize: CURVE.params.ateLoopSize,
+      twistType: CURVE.params.twistType,
+      // deprecated
       r: CURVE.params.r,
       G1b: CURVE.G1.b,
       G2b: CURVE.G2.b,
     },
     utils,
+
+    // deprecated
+    getPublicKey,
+    getPublicKeyForShortSignatures,
+    sign,
+    signShortSignature,
+    verify,
+    verifyShortSignature,
+    aggregatePublicKeys,
+    aggregateSignatures,
+    aggregateShortSignatures,
+    G1,
+    G2,
+    Signature,
+    ShortSignature,
   };
 }

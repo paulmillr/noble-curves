@@ -259,39 +259,36 @@ hashToDecaf448(msg, { DST: 'decaf448_XOF:SHAKE256_D448MAP_RO_' });
 #### bls12-381
 
 ```ts
-import { bls12_381 as bls } from '@noble/curves/bls12-381';
+import { bls12_381 } from '@noble/curves/bls12-381';
+import { hexToBytes, utf8ToBytes } from '@noble/curves/abstract/utils';
 
-// G1 keys, G2 signatures
+// private keys are 32 bytes
+const privKey = hexToBytes('67d53f170b908cabb9eb326c3c337762d59289a8fec79f7bc9254b584b73265c');
+// const privKey = bls12_381.utils.randomPrivateKey();
 
+// Long signatures (G2), short public keys (G1)
+const blsl = bls12_381.longSignatures;
+const publicKey = blsl.getPublicKey(privateKey);
+// Sign msg with custom (Ethereum) DST
+const msg = utf8ToBytes('hello');
 const DST = 'BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_';
-const privKey = Uint8Array.fromHex('67d53f170b908cabb9eb326c3c337762d59289a8fec79f7bc9254b584b73265c');
-const message = bls.G2.hashToCurve(
-  Uint8Array.fromHex('64726e3da8'),
-  'BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_'
-);
-// bls.G2.hashToCurve(message);
-// bls.longSigs.hashToCurve(message);
-const publicKey = bls.longSignatures.getPublicKey(privateKey);
-// const publicKey = bls.getPublicKey(privateKey);
-const signature = bls.sign(message, privateKey);
-const isValid = bls.verify(signature, message, publicKey);
+const msgp = blsl.hash(msg, DST);
+const signature = blsl.sign(msgp, privateKey);
+const isValid = blsl.verify(signature, msgp, publicKey);
 console.log({ publicKey, signature, isValid });
 
-// G2 keys, G1 signatures
-// getPublicKeyForShortSignatures(privateKey)
-// signShortSignature(message, privateKey)
-// verifyShortSignature(signature, message, publicKey)
-// aggregateShortSignatures(signatures)
-
-// Custom DST
-const htfEthereum = { DST: 'BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_' };
-const signatureEth = bls.sign(message, privateKey, htfEthereum);
-const isValidEth = bls.verify(signature, message, publicKey, htfEthereum);
+// Short signatures (G1), long public keys (G2)
+const blss = bls12_381.shortSignatures;
+const publicKey2 = blss.getPublicKey(privateKey);
+const msgp2 = blss.hash(utf8ToBytes('hello'), 'BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_')
+const signature2 = blss.sign(msgp2, privateKey);
+const isValid2 = blss.verify(signature2, msgp2, publicKey);
+console.log({ publicKey2, signature2, isValid2 });
 
 // Aggregation
-const aggregatedKey = bls.aggregatePublicKeys([
-  bls.utils.randomPrivateKey(),
-  bls.utils.randomPrivateKey(),
+const aggregatedKey = bls12_381.longSignatures.aggregatePublicKeys([
+  bls12_381.utils.randomPrivateKey(),
+  bls12_381.utils.randomPrivateKey(),
 ]);
 // const aggregatedSig = bls.aggregateSignatures(sigs)
 
