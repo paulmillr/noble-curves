@@ -948,7 +948,6 @@ export function weierstrassN<T>(
     }
 
     toHex(isCompressed = true): string {
-      abool('isCompressed', isCompressed);
       return bytesToHex(this.toBytes(isCompressed));
     }
 
