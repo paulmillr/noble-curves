@@ -1,5 +1,5 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { sha224, sha256, sha512 } from '@noble/hashes/sha2';
+import { sha224, sha256, sha512 } from '@noble/hashes/sha2.js';
 import { createCurve } from '../esm/_shortw_utils.js';
 import { Field } from '../esm/abstract/modular.js';
 import curvesInit from './vectors/curves-init.json' with { type: 'json' };
@@ -60,6 +60,7 @@ for (let category of JSON_CATEGORIES) {
       n,
       h,
     };
-    miscCurves[c.name] = createCurve(norm, sha512);
+    if (c.name === 'secp521r1') norm.allowedPrivateKeyLengths = [130, 131, 132];
+    miscCurves['misc_' + c.name] = createCurve(norm, sha512);
   }
 }

@@ -259,31 +259,36 @@ hashToDecaf448(msg, { DST: 'decaf448_XOF:SHAKE256_D448MAP_RO_' });
 #### bls12-381
 
 ```ts
-import { bls12_381 as bls } from '@noble/curves/bls12-381';
+import { bls12_381 } from '@noble/curves/bls12-381';
+import { hexToBytes, utf8ToBytes } from '@noble/curves/abstract/utils';
 
-// G1 keys, G2 signatures
-const privateKey = '67d53f170b908cabb9eb326c3c337762d59289a8fec79f7bc9254b584b73265c';
-const message = '64726e3da8';
-const publicKey = bls.getPublicKey(privateKey);
-const signature = bls.sign(message, privateKey);
-const isValid = bls.verify(signature, message, publicKey);
+// private keys are 32 bytes
+const privKey = hexToBytes('67d53f170b908cabb9eb326c3c337762d59289a8fec79f7bc9254b584b73265c');
+// const privKey = bls12_381.utils.randomPrivateKey();
+
+// Long signatures (G2), short public keys (G1)
+const blsl = bls12_381.longSignatures;
+const publicKey = blsl.getPublicKey(privateKey);
+// Sign msg with custom (Ethereum) DST
+const msg = utf8ToBytes('hello');
+const DST = 'BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_';
+const msgp = blsl.hash(msg, DST);
+const signature = blsl.sign(msgp, privateKey);
+const isValid = blsl.verify(signature, msgp, publicKey);
 console.log({ publicKey, signature, isValid });
 
-// G2 keys, G1 signatures
-// getPublicKeyForShortSignatures(privateKey)
-// signShortSignature(message, privateKey)
-// verifyShortSignature(signature, message, publicKey)
-// aggregateShortSignatures(signatures)
-
-// Custom DST
-const htfEthereum = { DST: 'BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_' };
-const signatureEth = bls.sign(message, privateKey, htfEthereum);
-const isValidEth = bls.verify(signature, message, publicKey, htfEthereum);
+// Short signatures (G1), long public keys (G2)
+const blss = bls12_381.shortSignatures;
+const publicKey2 = blss.getPublicKey(privateKey);
+const msgp2 = blss.hash(utf8ToBytes('hello'), 'BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_')
+const signature2 = blss.sign(msgp2, privateKey);
+const isValid2 = blss.verify(signature2, msgp2, publicKey);
+console.log({ publicKey2, signature2, isValid2 });
 
 // Aggregation
-const aggregatedKey = bls.aggregatePublicKeys([
-  bls.utils.randomPrivateKey(),
-  bls.utils.randomPrivateKey(),
+const aggregatedKey = bls12_381.longSignatures.aggregatePublicKeys([
+  bls12_381.utils.randomPrivateKey(),
+  bls12_381.utils.randomPrivateKey(),
 ]);
 // const aggregatedSig = bls.aggregateSignatures(sigs)
 
@@ -763,6 +768,30 @@ constant-timeness_. Even statically typed Rust, a language without GC,
 for some cases. If your goal is absolute security, don't use any JS lib — including bindings to native ones.
 Use low-level libraries & languages.
 
+### Memory dumping
+
+Use low-level languages instead of JS / WASM if your goal is absolute security.
+
+The library mostly uses Uint8Arrays and bigints.
+
+- Uint8Arrays have `.fill(0)` which instructs to fill content with zeroes
+  but there are no guarantees in JS
+- bigints are immutable and don't have a method to zeroize their content:
+  a user needs to wait until the next garbage collection cycle
+- hex strings are also immutable: there is no way to zeroize them
+- `await fn()` will write all internal variables to memory. With
+  async functions there are no guarantees when the code
+  chunk would be executed. Which means attacker can have
+  plenty of time to read data from memory.
+
+This means some secrets could stay in memory longer than anticipated.
+However, if an attacker can read application memory, it's doomed anyway:
+there is no way to guarantee anything about zeroizing sensitive data without
+complex tests-suite which will dump process memory and verify that there is
+no sensitive data left. For JS it means testing all browsers (including mobile).
+And, of course, it will be useless without using the same
+test-suite in the actual application that consumes the library.
+
 ### Supply chain security
 
 - **Commits** are signed with PGP keys, to prevent forgery. Make sure to verify commit signatures
@@ -807,10 +836,12 @@ NIST prohibits classical cryptography (RSA, DSA, ECDSA, ECDH) [after 2035](https
 npm run bench:install && npm run bench
 ```
 
-During first call of most methods, `init` is done, which calculates base point precomputes.
-The method consumes 20MB+ of memory and takes some time.
-You can adjust how many precomputes are generated,
-by using `_setWindowSize`. Check out the source code.
+noble-curves spends 10+ ms to generate 20MB+ of base point precomputes.
+This is done **one-time** per curve.
+
+The generation is deferred until any method (pubkey, sign, verify) is called.
+User can force precompute generation by manually calling `Point.BASE.precompute(windowSize, false)`.
+Check out the source code.
 
 Benchmark results on Apple M4:
 

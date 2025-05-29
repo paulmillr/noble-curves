@@ -6,16 +6,21 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { sha512 } from '@noble/hashes/sha2';
-import { abytes, concatBytes, randomBytes, utf8ToBytes } from '@noble/hashes/utils';
+import { sha512 } from '@noble/hashes/sha2.js';
+import { abytes, concatBytes, utf8ToBytes } from '@noble/hashes/utils.js';
 import { type AffinePoint, type Group, pippenger } from './abstract/curve.ts';
-import { type CurveFn, type ExtPointType, twistedEdwards } from './abstract/edwards.ts';
+import {
+  type CurveFn,
+  type EdwardsOpts,
+  type ExtPointType,
+  twistedEdwards,
+} from './abstract/edwards.ts';
 import {
   createHasher,
   expand_message_xmd,
-  type Hasher,
+  type H2CHasher,
+  type H2CMethod,
   type htfBasicOpts,
-  type HTFMethod,
 } from './abstract/hash-to-curve.ts';
 import { Field, FpInvertBatch, FpSqrtEven, isNegativeLE, mod, pow2 } from './abstract/modular.ts';
 import { montgomery, type CurveFn as XCurveFn } from './abstract/montgomery.ts';
@@ -26,27 +31,33 @@ import {
   equalBytes,
   type Hex,
   numberToBytesLE,
-} from './abstract/utils.ts';
-
-// 2n**255n - 19n
-const ED25519_P = BigInt(
-  '57896044618658097711785492504343953926634992332820282019728792003956564819949'
-);
-// √(-1) aka √(a) aka 2^((p-1)/4)
-// Fp.sqrt(Fp.neg(1))
-const ED25519_SQRT_M1 = /* @__PURE__ */ BigInt(
-  '19681161376707505956807079304988542015446066515923890162744021073123829784752'
-);
+} from './utils.ts';
 
 // prettier-ignore
 const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3);
 // prettier-ignore
 const _5n = BigInt(5), _8n = BigInt(8);
 
+// 2n**255n - 19n
+// Removing Fp.create() will still work, and is 10% faster on sign
+//     a: Fp.create(BigInt(-1)),
+// d is -121665/121666 a.k.a. Fp.neg(121665 * Fp.inv(121666))
+// Finite field 2n**255n - 19n
+// Subgroup order 2n**252n + 27742317777372353535851937790883648493n;
+const ed25519_CURVE: EdwardsOpts = {
+  p: BigInt('0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed'),
+  n: BigInt('0x1000000000000000000000000000000014def9dea2f79cd65812631a5cf5d3ed'),
+  h: _8n,
+  a: BigInt('0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffec'),
+  d: BigInt('0x52036cee2b6ffe738cc740797779e89800700a4d4141d8ab75eb4dca135978a3'),
+  Gx: BigInt('0x216936d3cd6e53fec0a4e231fdd6dc5c692cc7609525a7b2c9562d608f25d51a'),
+  Gy: BigInt('0x6666666666666666666666666666666666666666666666666666666666666658'),
+};
+
 function ed25519_pow_2_252_3(x: bigint) {
   // prettier-ignore
   const _10n = BigInt(10), _20n = BigInt(20), _40n = BigInt(40), _80n = BigInt(80);
-  const P = ED25519_P;
+  const P = ed25519_CURVE.p;
   const x2 = (x * x) % P;
   const b2 = (x2 * x) % P; // x^3, 11
   const b4 = (pow2(b2, _2n, P) * b2) % P; // x^15, 1111
@@ -74,9 +85,14 @@ function adjustScalarBytes(bytes: Uint8Array): Uint8Array {
   return bytes;
 }
 
+// √(-1) aka √(a) aka 2^((p-1)/4)
+// Fp.sqrt(Fp.neg(1))
+const ED25519_SQRT_M1 = /* @__PURE__ */ BigInt(
+  '19681161376707505956807079304988542015446066515923890162744021073123829784752'
+);
 // sqrt(u/v)
 function uvRatio(u: bigint, v: bigint): { isValid: boolean; value: bigint } {
-  const P = ED25519_P;
+  const P = ed25519_CURVE.p;
   const v3 = mod(v * v * v, P); // v³
   const v7 = mod(v3 * v3 * v, P); // v⁷
   // (p+3)/8 and (p-5)/8
@@ -106,29 +122,18 @@ export const ED25519_TORSION_SUBGROUP: string[] = [
   'c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa',
 ];
 
-const Fp = /* @__PURE__ */ (() => Field(ED25519_P, undefined, true))();
+const Fp = /* @__PURE__ */ (() => Field(ed25519_CURVE.p, undefined, true))();
 
-const ed25519Defaults = /* @__PURE__ */ (() =>
-  ({
-    // Removing Fp.create() will still work, and is 10% faster on sign
-    a: Fp.create(BigInt(-1)),
-    // d is -121665/121666 a.k.a. Fp.neg(121665 * Fp.inv(121666))
-    d: BigInt('37095705934669439343138083508754565189542113879843219016388785533085940283555'),
-    // Finite field 2n**255n - 19n
-    Fp,
-    // Subgroup order 2n**252n + 27742317777372353535851937790883648493n;
-    n: BigInt('7237005577332262213973186563042994240857116359379907606001950938285454250989'),
-    h: _8n,
-    Gx: BigInt('15112221349535400772501151409588531511454012693041857206046113283949847762202'),
-    Gy: BigInt('46316835694926478169428394003475163141307993866256225615783033603165251855960'),
-    hash: sha512,
-    randomBytes,
-    adjustScalarBytes,
-    // dom2
-    // Ratio of u to v. Allows us to combine inversion and square root. Uses algo from RFC8032 5.1.3.
-    // Constant-time, u/√v
-    uvRatio,
-  }) as const)();
+const ed25519Defaults = /* @__PURE__ */ (() => ({
+  ...ed25519_CURVE,
+  Fp,
+  hash: sha512,
+  adjustScalarBytes,
+  // dom2
+  // Ratio of u to v. Allows us to combine inversion and square root. Uses algo from RFC8032 5.1.3.
+  // Constant-time, u/√v
+  uvRatio,
+}))();
 
 /**
  * ed25519 curve with EdDSA signatures.
@@ -176,19 +181,19 @@ export const ed25519ph: CurveFn = /* @__PURE__ */ (() =>
  * x25519.getPublicKey(priv) === x25519.scalarMultBase(priv);
  * x25519.getPublicKey(x25519.utils.randomPrivateKey());
  */
-export const x25519: XCurveFn = /* @__PURE__ */ (() =>
-  montgomery({
-    P: ED25519_P,
+export const x25519: XCurveFn = /* @__PURE__ */ (() => {
+  const P = ed25519_CURVE.p;
+  return montgomery({
+    P,
     type: 'x25519',
     powPminus2: (x: bigint): bigint => {
-      const P = ED25519_P;
       // x^(p-2) aka x^(2^255-21)
       const { pow_p_5_8, b2 } = ed25519_pow_2_252_3(x);
       return mod(pow2(pow_p_5_8, _3n, P) * b2, P);
     },
     adjustScalarBytes,
-    randomBytes,
-  }))();
+  });
+})();
 
 /**
  * Converts ed25519 public key to x25519 public key. Uses formula:
@@ -201,7 +206,7 @@ export const x25519: XCurveFn = /* @__PURE__ */ (() =>
  */
 export function edwardsToMontgomeryPub(edwardsPub: Hex): Uint8Array {
   const bpub = ensureBytes('pub', edwardsPub);
-  const { y } = ed25519.ExtendedPoint.fromHex(bpub);
+  const { y } = ed25519.Point.fromHex(bpub);
   const _1n = BigInt(1);
   return Fp.toBytes(Fp.create((_1n + y) * Fp.inv(_1n - y)));
 }
@@ -292,9 +297,9 @@ function map_to_curve_elligator2_edwards25519(u: bigint) {
   return { x: Fp.mul(xn, xd_inv), y: Fp.mul(yn, yd_inv) }; //  13. return (xn, xd, yn, yd)
 }
 
-export const ed25519_hasher: Hasher<bigint> = /* @__PURE__ */ (() =>
+export const ed25519_hasher: H2CHasher<bigint> = /* @__PURE__ */ (() =>
   createHasher(
-    ed25519.ExtendedPoint,
+    ed25519.Point,
     (scalars: bigint[]) => map_to_curve_elligator2_edwards25519(scalars[0]),
     {
       DST: 'edwards25519_XMD:SHA-512_ELL2_RO_',
@@ -306,8 +311,8 @@ export const ed25519_hasher: Hasher<bigint> = /* @__PURE__ */ (() =>
       hash: sha512,
     }
   ))();
-export const hashToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() => ed25519_hasher.hashToCurve)();
-export const encodeToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() =>
+export const hashToCurve: H2CMethod<bigint> = /* @__PURE__ */ (() => ed25519_hasher.hashToCurve)();
+export const encodeToCurve: H2CMethod<bigint> = /* @__PURE__ */ (() =>
   ed25519_hasher.encodeToCurve)();
 
 function aristp(other: unknown) {
@@ -367,7 +372,7 @@ function calcElligatorRistrettoMap(r0: bigint): ExtendedPoint {
   const W1 = mod(Nt * SQRT_AD_MINUS_ONE); // 11
   const W2 = mod(_1n - s2); // 12
   const W3 = mod(_1n + s2); // 13
-  return new ed25519.ExtendedPoint(mod(W0 * W3), mod(W2 * W1), mod(W1 * W3), mod(W0 * W2));
+  return new ed25519.Point(mod(W0 * W3), mod(W2 * W1), mod(W1 * W3), mod(W0 * W2));
 }
 
 /**
@@ -388,7 +393,7 @@ class RistPoint implements Group<RistPoint> {
   }
 
   static fromAffine(ap: AffinePoint<bigint>): RistPoint {
-    return new RistPoint(ed25519.ExtendedPoint.fromAffine(ap));
+    return new RistPoint(ed25519.Point.fromAffine(ap));
   }
 
   /**
@@ -442,7 +447,7 @@ class RistPoint implements Group<RistPoint> {
     const y = mod(u1 * Dy); // 11
     const t = mod(x * y); // 12
     if (!isValid || isNegativeLE(t, P) || y === _0n) throw new Error(emsg);
-    return new RistPoint(new ed25519.ExtendedPoint(x, y, _1n, t));
+    return new RistPoint(new ed25519.Point(x, y, _1n, t));
   }
 
   static msm(points: RistPoint[], scalars: bigint[]): RistPoint {
@@ -542,8 +547,8 @@ class RistPoint implements Group<RistPoint> {
  * [RFC9496](https://www.rfc-editor.org/rfc/rfc9496).
  */
 export const RistrettoPoint: typeof RistPoint = /* @__PURE__ */ (() => {
-  if (!RistPoint.BASE) RistPoint.BASE = new RistPoint(ed25519.ExtendedPoint.BASE);
-  if (!RistPoint.ZERO) RistPoint.ZERO = new RistPoint(ed25519.ExtendedPoint.ZERO);
+  if (!RistPoint.BASE) RistPoint.BASE = new RistPoint(ed25519.Point.BASE);
+  if (!RistPoint.ZERO) RistPoint.ZERO = new RistPoint(ed25519.Point.ZERO);
   return RistPoint;
 })();
 

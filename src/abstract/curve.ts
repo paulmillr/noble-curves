@@ -4,8 +4,8 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { Field, type IField, nLength, validateField } from './modular.ts';
-import { bitLen, bitMask, validateObject } from './utils.ts';
+import { bitLen, bitMask, validateObject } from '../utils.ts';
+import { Field, FpInvertBatch, type IField, nLength, validateField } from './modular.ts';
 
 const _0n = BigInt(0);
 const _1n = BigInt(1);
@@ -22,17 +22,41 @@ export interface Group<T extends Group<T>> {
   subtract(other: T): T;
   equals(other: T): boolean;
   multiply(scalar: bigint): T;
+  toAffine?(invertedZ?: any): AffinePoint<any>;
 }
 
 export type GroupConstructor<T> = {
   BASE: T;
   ZERO: T;
 };
+export type ExtendedGroupConstructor<T> = GroupConstructor<T> & {
+  Fp: IField<any>;
+  Fn: IField<bigint>;
+  fromAffine(ap: AffinePoint<any>): T;
+};
 export type Mapper<T> = (i: T[]) => T[];
 
 export function negateCt<T extends Group<T>>(condition: boolean, item: T): T {
   const neg = item.negate();
   return condition ? neg : item;
+}
+
+/**
+ * Takes a bunch of Projective Points but executes only one
+ * inversion on all of them. Inversion is very slow operation,
+ * so this improves performance massively.
+ * Optimization: converts a list of projective points to a list of identical points with Z=1.
+ */
+export function normalizeZ<T>(
+  c: ExtendedGroupConstructor<T>,
+  property: 'pz' | 'ez',
+  points: T[]
+): T[] {
+  const getz = property === 'pz' ? (p: any) => p.pz : (p: any) => p.ez;
+  const toInv = FpInvertBatch(c.Fp, points.map(getz));
+  // @ts-ignore
+  const affined = points.map((p, i) => p.toAffine(toInv[i]));
+  return affined.map(c.fromAffine);
 }
 
 function validateW(W: number, bits: number) {
@@ -105,6 +129,10 @@ const pointWindowSizes = new WeakMap<any, number>();
 
 function getW(P: any): number {
   return pointWindowSizes.get(P) || 1;
+}
+
+function assert0(n: bigint): void {
+  if (n !== _0n) throw new Error('invalid wNAF');
 }
 
 export type IWNAF<T extends Group<T>> = {
@@ -218,6 +246,7 @@ export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number): 
           p = p.add(negateCt(isNeg, precomputes[offset]));
         }
       }
+      assert0(n);
       // Return both real and fake points: JIT won't eliminate f.
       // At this point there is a way to F be infinity-point even if p is not,
       // which makes it less const-time: around 1 bigint multiply.
@@ -247,6 +276,7 @@ export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number): 
           acc = acc.add(isNeg ? item.negate() : item); // Re-using acc allows to save adds in MSM
         }
       }
+      assert0(n);
       return acc;
     },
 
@@ -285,6 +315,29 @@ export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number): 
       pointPrecomputes.delete(P);
     },
   };
+}
+
+/**
+ * Endomorphism-specific multiplication for Koblitz curves.
+ * Cost: 128 dbl, 0-256 adds.
+ */
+export function mulEndoUnsafe<T extends Group<T>>(
+  c: GroupConstructor<T>,
+  point: T,
+  k1: bigint,
+  k2: bigint
+): { p1: T; p2: T } {
+  let acc = point;
+  let p1 = c.ZERO;
+  let p2 = c.ZERO;
+  while (k1 > _0n || k2 > _0n) {
+    if (k1 & _1n) p1 = p1.add(acc);
+    if (k2 & _1n) p2 = p2.add(acc);
+    acc = acc.double();
+    k1 >>= _1n;
+    k2 >>= _1n;
+  }
+  return { p1, p2 };
 }
 
 /**

@@ -1,10 +1,10 @@
-import { bytesToHex } from '@noble/hashes/utils';
+import { bytesToHex } from '@noble/hashes/utils.js';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql } from 'node:assert';
 import { json } from './utils.js';
 // Generic tests for all curves in package
-import { sha256, sha512 } from '@noble/hashes/sha2';
-import { shake128, shake256 } from '@noble/hashes/sha3';
+import { sha256, sha512 } from '@noble/hashes/sha2.js';
+import { shake128, shake256 } from '@noble/hashes/sha3.js';
 import { expand_message_xmd, expand_message_xof } from '../esm/abstract/hash-to-curve.js';
 import { utf8ToBytes } from '../esm/abstract/utils.js';
 import { bls12_381 } from '../esm/bls12-381.js';

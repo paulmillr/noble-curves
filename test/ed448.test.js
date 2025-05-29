@@ -3,7 +3,7 @@ import {
   concatBytes,
   bytesToHex as hex,
   randomBytes,
-} from '@noble/hashes/utils';
+} from '@noble/hashes/utils.js';
 import * as fc from 'fast-check';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql, throws } from 'node:assert';
@@ -19,7 +19,7 @@ const x448vectors = json('./wycheproof/x448_test.json');
 describe('ed448', () => {
   const ed = ed448;
   ed.utils.precompute(4);
-  const Point = ed.ExtendedPoint;
+  const Point = ed.Point;
 
   should(`Basic`, () => {
     const G1 = Point.BASE.toAffine();
@@ -431,7 +431,7 @@ describe('ed448', () => {
 
   should('BASE_POINT.multiply() throws in Point#multiply on TEST 5', () => {
     for (const num of [0n, 0, -1n, -1, 1.1]) {
-      throws(() => ed.ExtendedPoint.BASE.multiply(num));
+      throws(() => ed.Point.BASE.multiply(num));
     }
   });
 

@@ -5,16 +5,16 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { anumber } from '@noble/hashes/utils';
 import {
   _validateObject,
+  anumber,
   bitMask,
   bytesToNumberBE,
   bytesToNumberLE,
   ensureBytes,
   numberToBytesBE,
   numberToBytesLE,
-} from './utils.ts';
+} from '../utils.ts';
 
 // prettier-ignore
 const _0n = BigInt(0), _1n = BigInt(1), _2n = /* @__PURE__ */ BigInt(2), _3n = /* @__PURE__ */ BigInt(3);
@@ -229,6 +229,7 @@ export interface IField<T> {
   create: (num: T) => T;
   isValid: (num: T) => boolean;
   is0: (num: T) => boolean;
+  isValidNot0: (num: T) => boolean;
   neg(num: T): T;
   inv(num: T): T;
   sqrt(num: T): T;
@@ -369,7 +370,8 @@ export function nLength(n: bigint, nBitLength?: number): NLength {
 }
 
 type FpField = IField<bigint> & Required<Pick<IField<bigint>, 'isOdd'>>;
-
+type SqrtFn = (n: bigint) => bigint;
+type FieldOpts = Partial<{ sqrt: SqrtFn; isLE: boolean; BITS: number }>;
 /**
  * Creates a finite field. Major performance optimizations:
  * * 1. Denormalized operations like mulN instead of mul.
@@ -391,12 +393,24 @@ type FpField = IField<bigint> & Required<Pick<IField<bigint>, 'isOdd'>>;
  */
 export function Field(
   ORDER: bigint,
-  bitLen?: number,
+  bitLenOrOpts?: number | FieldOpts,
   isLE = false,
-  redef: Partial<IField<bigint>> = {}
+  opts: { sqrt?: SqrtFn } = {}
 ): Readonly<FpField> {
   if (ORDER <= _0n) throw new Error('invalid field: expected ORDER > 0, got ' + ORDER);
-  const { nBitLength: BITS, nByteLength: BYTES } = nLength(ORDER, bitLen);
+  let _nbitLength: number | undefined = undefined;
+  let _sqrt: SqrtFn | undefined = undefined;
+  if (typeof bitLenOrOpts === 'object' && bitLenOrOpts != null) {
+    if (opts.sqrt || isLE) throw new Error('cannot specify opts in two arguments');
+    const _opts = bitLenOrOpts;
+    if (_opts.BITS) _nbitLength = _opts.BITS;
+    if (_opts.sqrt) _sqrt = _opts.sqrt;
+    if (typeof _opts.isLE === 'boolean') isLE = _opts.isLE;
+  } else {
+    if (typeof bitLenOrOpts === 'number') _nbitLength = bitLenOrOpts;
+    if (opts.sqrt) _sqrt = opts.sqrt;
+  }
+  const { nBitLength: BITS, nByteLength: BYTES } = nLength(ORDER, _nbitLength);
   if (BYTES > 2048) throw new Error('invalid field: expected ORDER of <= 2048 bytes');
   let sqrtP: ReturnType<typeof FpSqrt>; // cached sqrtP
   const f: Readonly<FpField> = Object.freeze({
@@ -414,6 +428,8 @@ export function Field(
       return _0n <= num && num < ORDER; // 0 is valid element, but it's not invertible
     },
     is0: (num) => num === _0n,
+    // is valid and invertible
+    isValidNot0: (num: bigint) => !f.is0(num) && f.isValid(num),
     isOdd: (num) => (num & _1n) === _1n,
     neg: (num) => mod(-num, ORDER),
     eql: (lhs, rhs) => lhs === rhs,
@@ -433,7 +449,7 @@ export function Field(
 
     inv: (num) => invert(num, ORDER),
     sqrt:
-      redef.sqrt ||
+      _sqrt ||
       ((n) => {
         if (!sqrtP) sqrtP = FpSqrt(ORDER);
         return sqrtP(f, n);

@@ -77,11 +77,11 @@ Filecoin uses little endian byte arrays for private keys - make sure to reverse 
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { sha256 } from '@noble/hashes/sha2';
-import { abytes, randomBytes } from '@noble/hashes/utils';
+import { sha256 } from '@noble/hashes/sha2.js';
 import { bls, type CurveFn } from './abstract/bls.ts';
 import { Field, type IField } from './abstract/modular.ts';
 import {
+  abytes,
   bitGet,
   bitLen,
   bytesToHex,
@@ -90,7 +90,7 @@ import {
   ensureBytes,
   numberToBytesBE,
   type Hex,
-} from './abstract/utils.ts';
+} from './utils.ts';
 // Types
 import { isogenyMap } from './abstract/hash-to-curve.ts';
 import type { BigintTuple, Fp, Fp12, Fp2, Fp6 } from './abstract/tower.ts';
@@ -100,6 +100,7 @@ import {
   type AffinePoint,
   type ProjConstructor,
   type ProjPointType,
+  type WeierstrassOpts,
 } from './abstract/weierstrass.ts';
 
 // Be friendly to bad ECMAScript parsers by not using bigint literals
@@ -116,37 +117,39 @@ const BLS_X = BigInt('0xd201000000010000');
 // const t = -BLS_X;
 const BLS_X_LEN = bitLen(BLS_X);
 
+// a=0, b=4
 // P is characteristic of field Fp, in which curve calculations are done.
 // p = (t-1)² * (t⁴-t²+1)/3 + t
 // bls12_381_Fp = (t-1n)**2n * (t**4n - t**2n + 1n) / 3n + t
-const bls12_381_Fp = BigInt(
-  '0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab'
-);
-
 // r*h is curve order, amount of points on curve,
 // where r is order of prime subgroup and h is cofactor.
 // r = t⁴-t²+1
 // r = (t**4n - t**2n + 1n)
-export const bls12_381_Fr: IField<bigint> = Field(
-  BigInt('0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001')
-);
-const Fr = bls12_381_Fr;
-
 // cofactor h of G1: (t - 1)²/3
 // cofactorG1 = (t-1n)**2n/3n
-const cofactorG1 = BigInt('0x396c8c005555e1568c00aaab0000aaab');
-
-// cofactor h of G2
-// (t^8 - 4t^7 + 5t^6 - 4t^4 + 6t^3 - 4t^2 - 4t + 13)/9
-// cofactorG2 = (t**8n - 4n*t**7n + 5n*t**6n - 4n*t**4n + 6n*t**3n - 4n*t**2n - 4n*t+13n)/9n
-const cofactorG2 = BigInt(
-  '0x5d543a95414e7f1091d50792876a202cd91de4547085abaa68a205b2e5a7ddfa628f1cb4d9e82ef21537e293a6691ae1616ec6e786f0c70cf1c38e31c7238e5'
-);
+// x = 3685416753713387016781088315183077757961620795782546409894578378688607592378376318836054947676345821548104185464507
+// y = 1339506544944476473020471379941921221584933875938349620426543736416511423956333506472724655353366534992391756441569
+const bls12_381_CURVE_G1: WeierstrassOpts<bigint> = {
+  p: BigInt(
+    '0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab'
+  ),
+  n: BigInt('0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001'),
+  h: BigInt('0x396c8c005555e1568c00aaab0000aaab'),
+  a: _0n,
+  b: _4n,
+  Gx: BigInt(
+    '0x17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb'
+  ),
+  Gy: BigInt(
+    '0x08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
+  ),
+};
 
 // CURVE FIELDS
+export const bls12_381_Fr: IField<bigint> = Field(bls12_381_CURVE_G1.n);
 const { Fp, Fp2, Fp6, Fp4Square, Fp12 } = tower12({
   // Order of Fp
-  ORDER: bls12_381_Fp,
+  ORDER: bls12_381_CURVE_G1.p,
   // Finite extension field over irreducible polynominal.
   // Fp(u) / (u² - β) where β = -1
   FP2_NONRESIDUE: [_1n, _1n],
@@ -230,34 +233,22 @@ const htfDefaults = Object.freeze({
   k: 128,
   expand: 'xmd',
   hash: sha256,
-} as const);
+});
 
 // a=0, b=4
-// x = 3685416753713387016781088315183077757961620795782546409894578378688607592378376318836054947676345821548104185464507
-// y = 1339506544944476473020471379941921221584933875938349620426543736416511423956333506472724655353366534992391756441569
-const CURVE_G1 = {
-  Fp,
-  a: Fp.ZERO,
-  b: _4n,
-  n: Fr.ORDER,
-  h: cofactorG1,
-  Gx: BigInt(
-    '0x17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb'
-  ),
-  Gy: BigInt(
-    '0x08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
-  ),
-};
-
-// a=0, b=4
+// cofactor h of G2
+// (t^8 - 4t^7 + 5t^6 - 4t^4 + 6t^3 - 4t^2 - 4t + 13)/9
+// cofactorG2 = (t**8n - 4n*t**7n + 5n*t**6n - 4n*t**4n + 6n*t**3n - 4n*t**2n - 4n*t+13n)/9n
 // x = 3059144344244213709971259814753781636986470325476647558659373206291635324768958432433509563104347017837885763365758*u + 352701069587466618187139116011060144890029952792775240219908644239793785735715026873347600343865175952761926303160
 // y = 927553665492332455747201965776037880757740193453592970025027978793976877002675564980949289727957565575433344219582*u + 1985150602287291935568054521177171638300868978215655730859378665066344726373823718423869104263333984641494340347905
-const CURVE_G2 = {
-  Fp: Fp2,
+const bls12_381_CURVE_G2 = {
+  p: Fp2.ORDER,
+  n: bls12_381_CURVE_G1.n,
+  h: BigInt(
+    '0x5d543a95414e7f1091d50792876a202cd91de4547085abaa68a205b2e5a7ddfa628f1cb4d9e82ef21537e293a6691ae1616ec6e786f0c70cf1c38e31c7238e5'
+  ),
   a: Fp2.ZERO,
   b: Fp2.fromBigTuple([_4n, _4n]),
-  n: Fr.ORDER,
-  h: cofactorG2,
   Gx: Fp2.fromBigTuple([
     BigInt(
       '0x024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb8'
@@ -340,7 +331,7 @@ function pointG1FromBytes(bytes: Uint8Array): AffinePoint<Fp> {
       if (x !== _0n) throw new Error('invalid G1 point: non-empty, at infinity, with compression');
       return { x: _0n, y: _0n };
     }
-    const right = Fp.add(Fp.pow(x, _3n), Fp.create(CURVE_G1.b)); // y² = x³ + b
+    const right = Fp.add(Fp.pow(x, _3n), Fp.create(bls12_381_CURVE_G1.b)); // y² = x³ + b
     let y = Fp.sqrt(right);
     if (!y) throw new Error('invalid G1 point: compressed point');
     if ((y * _2n) / P !== BigInt(sort)) y = Fp.neg(y);
@@ -351,7 +342,7 @@ function pointG1FromBytes(bytes: Uint8Array): AffinePoint<Fp> {
     const y = bytesToNumberBE(value.subarray(L));
     if (infinity) {
       if (x !== _0n || y !== _0n) throw new Error('G1: non-empty point at infinity');
-      return bls12_381.G1.ProjectivePoint.ZERO.toAffine();
+      return bls12_381.G1.Point.ZERO.toAffine();
     }
     return { x: Fp.create(x), y: Fp.create(y) };
   } else {
@@ -362,12 +353,12 @@ function pointG1FromBytes(bytes: Uint8Array): AffinePoint<Fp> {
 function signatureG1FromBytes(hex: Hex): ProjPointType<Fp> {
   const { infinity, sort, value } = parseMask(ensureBytes('signatureHex', hex, 48));
   const P = Fp.ORDER;
-  const Point = bls12_381.G1.ProjectivePoint;
+  const Point = bls12_381.G1.Point;
   const compressedValue = bytesToNumberBE(value);
   // Zero
   if (infinity) return Point.ZERO;
   const x = Fp.create(compressedValue & Fp.MASK);
-  const right = Fp.add(Fp.pow(x, _3n), Fp.create(CURVE_G1.b)); // y² = x³ + b
+  const right = Fp.add(Fp.pow(x, _3n), Fp.create(bls12_381_CURVE_G1.b)); // y² = x³ + b
   let y = Fp.sqrt(right);
   if (!y) throw new Error('invalid G1 point: compressed');
   const aflag = BigInt(sort);
@@ -439,7 +430,7 @@ function pointG2FromBytes(bytes: Uint8Array): AffinePoint<Fp2> {
     const x_1 = slc(value, 0, L);
     const x_0 = slc(value, L, 2 * L);
     const x = Fp2.create({ c0: Fp.create(x_0), c1: Fp.create(x_1) });
-    const right = Fp2.add(Fp2.pow(x, _3n), CURVE_G2.b); // y² = x³ + 4 * (u+1) = x³ + b
+    const right = Fp2.add(Fp2.pow(x, _3n), bls12_381_CURVE_G2.b); // y² = x³ + 4 * (u+1) = x³ + b
     let y = Fp2.sqrt(right);
     const Y_bit = y.c1 === _0n ? (y.c0 * _2n) / P : (y.c1 * _2n) / P ? _1n : _0n;
     y = sort && Y_bit > 0 ? y : Fp2.neg(y);
@@ -465,7 +456,7 @@ function signatureG2FromBytes(hex: Hex) {
   const { ORDER: P } = Fp;
   // TODO: Optimize, it's very slow because of sqrt.
   const { infinity, sort, value } = parseMask(ensureBytes('signatureHex', hex));
-  const Point = bls12_381.G2.ProjectivePoint;
+  const Point = bls12_381.G2.Point;
   const half = value.length / 2;
   if (half !== 48 && half !== 96)
     throw new Error('invalid compressed signature length, expected 96/192 bytes');
@@ -476,7 +467,7 @@ function signatureG2FromBytes(hex: Hex) {
   const x1 = Fp.create(z1 & Fp.MASK);
   const x2 = Fp.create(z2);
   const x = Fp2.create({ c0: x2, c1: x1 });
-  const y2 = Fp2.add(Fp2.pow(x, _3n), CURVE_G2.b); // y² = x³ + 4
+  const y2 = Fp2.add(Fp2.pow(x, _3n), bls12_381_CURVE_G2.b); // y² = x³ + 4
   // The slow part
   let y = Fp2.sqrt(y2);
   if (!y) throw new Error('Failed to find a square root');
@@ -511,11 +502,12 @@ export const bls12_381: CurveFn = bls({
     Fp2,
     Fp6,
     Fp12,
-    Fr: Fr,
+    Fr: bls12_381_Fr,
   },
   // G1: y² = x³ + 4
   G1: {
-    ...CURVE_G1,
+    ...bls12_381_CURVE_G1,
+    Fp,
     htfDefaults: { ...htfDefaults, m: 1, DST: 'BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_' },
     wrapPrivateKey: true,
     allowInfinityPoint: true,
@@ -563,7 +555,8 @@ export const bls12_381: CurveFn = bls({
     },
   },
   G2: {
-    ...CURVE_G2,
+    ...bls12_381_CURVE_G2,
+    Fp: Fp2,
     // https://datatracker.ietf.org/doc/html/rfc9380#name-clearing-the-cofactor
     // https://datatracker.ietf.org/doc/html/rfc9380#name-cofactor-clearing-for-bls12
     hEff: BigInt(
@@ -622,13 +615,12 @@ export const bls12_381: CurveFn = bls({
   },
   params: {
     ateLoopSize: BLS_X, // The BLS parameter x for BLS12-381
-    r: Fr.ORDER, // order; z⁴ − z² + 1; CURVE.n from other curves
+    r: bls12_381_CURVE_G1.n, // order; z⁴ − z² + 1; CURVE.n from other curves
     xNegative: true,
     twistType: 'multiplicative',
   },
   htfDefaults,
   hash: sha256,
-  randomBytes,
 });
 
 // 3-isogeny map from E' to E https://www.rfc-editor.org/rfc/rfc9380#appendix-E.3

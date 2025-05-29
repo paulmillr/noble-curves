@@ -54,9 +54,7 @@ Ate loop size: 6x+2
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { sha256 } from '@noble/hashes/sha2';
-import { randomBytes } from '@noble/hashes/utils';
-import { getHash } from './_shortw_utils.ts';
+import { sha256 } from '@noble/hashes/sha2.js';
 import {
   bls,
   type CurveFn as BLSCurveFn,
@@ -66,21 +64,29 @@ import {
 import { Field, type IField } from './abstract/modular.ts';
 import type { Fp, Fp12, Fp2, Fp6 } from './abstract/tower.ts';
 import { psiFrobenius, tower12 } from './abstract/tower.ts';
-import { bitGet, bitLen, notImplemented } from './abstract/utils.ts';
-import { type CurveFn, weierstrass } from './abstract/weierstrass.ts';
+import { type CurveFn, weierstrass, type WeierstrassOpts } from './abstract/weierstrass.ts';
+import { bitGet, bitLen, notImplemented } from './utils.ts';
 // prettier-ignore
-const _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3);
+const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3);
 const _6n = BigInt(6);
 
 const BN_X = BigInt('4965661367192848881');
 const BN_X_LEN = bitLen(BN_X);
 const SIX_X_SQUARED = _6n * BN_X ** _2n;
 
+const bn254_G1_CURVE: WeierstrassOpts<bigint> = {
+  p: BigInt('0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47'),
+  n: BigInt('0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001'),
+  h: _1n,
+  a: _0n,
+  b: _3n,
+  Gx: _1n,
+  Gy: BigInt(2),
+};
+
+// r == n
 // Finite field over r. It's for convenience and is not used in the code below.
-export const bn254_Fr: IField<bigint> = Field(
-  BigInt('21888242871839275222246405745257275088548364400416034343698204186575808495617')
-);
-const Fr = bn254_Fr;
+export const bn254_Fr: IField<bigint> = Field(bn254_G1_CURVE.n);
 
 // Fp2.div(Fp2.mul(Fp2.ONE, _3n), Fp2.NONRESIDUE)
 const Fp2B = {
@@ -89,7 +95,7 @@ const Fp2B = {
 };
 
 const { Fp, Fp2, Fp6, Fp4Square, Fp12 } = tower12({
-  ORDER: BigInt('21888242871839275222246405745257275088696311157297823662689037894645226208583'),
+  ORDER: bn254_G1_CURVE.p,
   FP2_NONRESIDUE: [BigInt(9), _1n],
   Fp2mulByB: (num) => Fp2.mul(num, Fp2B),
   // The result of any pairing is in a cyclotomic subgroup
@@ -163,7 +169,7 @@ const htfDefaults = Object.freeze({
   k: 128,
   expand: 'xmd',
   hash: sha256,
-} as const);
+});
 
 export const _postPrecompute: PostPrecomputeFn = (
   Rx: Fp2,
@@ -179,23 +185,13 @@ export const _postPrecompute: PostPrecomputeFn = (
   pointAdd(Rx, Ry, Rz, q2[0], Fp2.neg(q2[1]));
 };
 
-const CURVE_G1 = {
-  Fp,
-  a: Fp.ZERO,
-  b: _3n,
-  n: Fr.ORDER,
-  h: BigInt(1),
-  Gx: BigInt(1),
-  Gy: BigInt(2),
-};
-
-const CURVE_G2 = {
-  Fp: Fp2,
+// cofactor: (36 * X^4) + (36 * X^3) + (30 * X^2) + 6*X + 1
+const bn254_G2_CURVE: WeierstrassOpts<Fp2> = {
+  p: Fp2.ORDER,
+  n: bn254_G1_CURVE.n,
+  h: BigInt('0x30644e72e131a029b85045b68181585e06ceecda572a2489345f2299c0f9fa8d'),
   a: Fp2.ZERO,
   b: Fp2B,
-  n: Fr.ORDER,
-  // cofactor: (36 * X^4) + (36 * X^3) + (30 * X^2) + 6*X + 1
-  h: BigInt('21888242871839275222246405745257275088844257914179612981679871602714643921549'),
   Gx: Fp2.fromBigTuple([
     BigInt('10857046999023057135944570762232829481370756359578518086990519993285655852781'),
     BigInt('11559732032986387107991004021392285783925812861821192530917403151452391805634'),
@@ -212,9 +208,10 @@ const CURVE_G2 = {
  */
 export const bn254: BLSCurveFn = bls({
   // Fields
-  fields: { Fp, Fp2, Fp6, Fp12, Fr },
+  fields: { Fp, Fp2, Fp6, Fp12, Fr: bn254_Fr },
   G1: {
-    ...CURVE_G1,
+    ...bn254_G1_CURVE,
+    Fp,
     htfDefaults: { ...htfDefaults, m: 1, DST: 'BN254G2_XMD:SHA-256_SVDW_RO_' },
     wrapPrivateKey: true,
     allowInfinityPoint: true,
@@ -230,7 +227,8 @@ export const bn254: BLSCurveFn = bls({
     },
   },
   G2: {
-    ...CURVE_G2,
+    ...bn254_G2_CURVE,
+    Fp: Fp2,
     hEff: BigInt('21888242871839275222246405745257275088844257914179612981679871602714643921549'),
     htfDefaults: { ...htfDefaults },
     wrapPrivateKey: true,
@@ -255,7 +253,6 @@ export const bn254: BLSCurveFn = bls({
   },
   htfDefaults,
   hash: sha256,
-  randomBytes,
   postPrecompute: _postPrecompute,
 });
 
@@ -273,5 +270,5 @@ export const bn254_weierstrass: CurveFn = weierstrass({
   Gx: BigInt(1),
   Gy: BigInt(2),
   h: BigInt(1),
-  ...getHash(sha256),
+  hash: sha256,
 });

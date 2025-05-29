@@ -1,5 +1,5 @@
-import { sha512 } from '@noble/hashes/sha2';
-import { bytesToHex as hex, hexToBytes } from '@noble/hashes/utils';
+import { sha512 } from '@noble/hashes/sha2.js';
+import { bytesToHex as hex, hexToBytes } from '@noble/hashes/utils.js';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql, throws } from 'node:assert';
 import { bytesToNumberLE, numberToBytesLE, utf8ToBytes } from '../esm/abstract/utils.js';
@@ -191,7 +191,7 @@ describe('X25519 RFC7748 ECDH', () => {
   });
 
   should('base point', () => {
-    const { y } = ed25519ph.ExtendedPoint.BASE;
+    const { y } = ed25519ph.Point.BASE;
     const { Fp } = ed25519ph.CURVE;
     const u = Fp.create((y + 1n) * Fp.inv(1n - y));
     eql(numberToBytesLE(u, 32), x25519.GuBytes);

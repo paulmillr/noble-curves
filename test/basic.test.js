@@ -5,8 +5,7 @@ import * as mod from '../esm/abstract/modular.js';
 import { isBytes, bytesToHex as toHex } from '../esm/abstract/utils.js';
 import { getTypeTests, json } from './utils.js';
 // Generic tests for all curves in package
-import { sha256, sha512 } from '@noble/hashes/sha2';
-import { randomBytes } from '@noble/hashes/utils';
+import { sha256, sha512 } from '@noble/hashes/sha2.js';
 import { createCurve } from '../esm/_shortw_utils.js';
 import { precomputeMSMUnsafe } from '../esm/abstract/curve.js';
 import { twistedEdwards } from '../esm/abstract/edwards.js';
@@ -18,6 +17,7 @@ import { DecafPoint, ed448, ed448ph } from '../esm/ed448.js';
 import { jubjub } from '../esm/misc.js';
 import { secp256r1, secp384r1, secp521r1 } from '../esm/nist.js';
 import { secp256k1 } from '../esm/secp256k1.js';
+import { randomBytes } from '../esm/utils.js';
 import { miscCurves, secp192r1, secp224r1 } from './_more-curves.helpers.js';
 const wyche_curves = json('./wycheproof/ec_prime_order_curves_test.json');
 
@@ -288,7 +288,7 @@ for (const c in FIELDS) {
       });
 
       // Not implemented
-      if (Fp !== bls12_381.fields.Fp12 && Fp !== bn254.fields.Fp12) {
+      if (!(Fp === bls12_381.fields.Fp12 || Fp === bn254.fields.Fp12)) {
         should('multiply/sqrt', () => {
           fc.assert(
             fc.property(FC_BIGINT, (num) => {
@@ -412,6 +412,7 @@ for (const name in CURVES) {
             const p = G[i];
             equal(p, p.add(G[0]), `${i}*G + 0 = ${i}*G`);
             equal(G[0].multiply(BigInt(i + 1)), G[0], `${i + 1}*0 = 0`);
+            equal(G[0].multiplyUnsafe(BigInt(i + 1)), G[0], `${i + 1}*0 = 0`);
           }
         });
         should('one', () => {
@@ -433,6 +434,7 @@ for (const name in CURVES) {
         });
         should('multiply', () => {
           equal(G[2].multiply(3n), G[6], '(2*G).multiply(3) = 6*G');
+          equal(G[2].multiplyUnsafe(3n), G[6], '(2*G).multiplyUnsafe(3) = 6*G');
         });
         should('add same-point', () => {
           equal(G[3].add(G[3]), G[6], '3*G + 3*G = 6*G');
@@ -445,6 +447,9 @@ for (const name in CURVES) {
           equal(G[1].multiply(CURVE_ORDER - 1n).add(G[1]), G[0], '(N-1)*G + G = 0');
           equal(G[1].multiply(CURVE_ORDER - 1n).add(G[2]), G[1], '(N-1)*G + 2*G = 1*G');
           equal(G[1].multiply(CURVE_ORDER - 2n).add(G[2]), G[0], '(N-2)*G + 2*G = 0');
+          equal(G[1].multiplyUnsafe(CURVE_ORDER - 1n).add(G[1]), G[0], '(N-1)*G + G = 0');
+          equal(G[1].multiplyUnsafe(CURVE_ORDER - 1n).add(G[2]), G[1], '(N-1)*G + 2*G = 1*G');
+          equal(G[1].multiplyUnsafe(CURVE_ORDER - 2n).add(G[2]), G[0], '(N-2)*G + 2*G = 0');
           const half = CURVE_ORDER / 2n;
           const carry = CURVE_ORDER % 2n === 1n ? G[1] : G[0];
           equal(G[1].multiply(half).double().add(carry), G[0], '((N/2) * G).double() = 0');
@@ -465,6 +470,9 @@ for (const name in CURVES) {
               const pA = G[1].multiply(a);
               const pB = G[1].multiply(b);
               const pC = G[1].multiply(c);
+              equal(pA, G[1].multiplyUnsafe(a), 'multiplyUnsafe(a)');
+              equal(pB, G[1].multiplyUnsafe(b), 'multiplyUnsafe(b)');
+              equal(pC, G[1].multiplyUnsafe(c), 'multiplyUnsafe(c)');
               equal(pA.add(pB), pB.add(pA), 'pA + pB = pB + pA');
               equal(pA.add(pB), pC, 'pA + pB = pC');
             }),
@@ -477,6 +485,8 @@ for (const name in CURVES) {
               const c = mod.mod(a * b, CURVE_ORDER);
               const pA = G[1].multiply(a);
               const pB = G[1].multiply(b);
+              equal(pA, G[1].multiplyUnsafe(a), 'multiplyUnsafe(a)');
+              equal(pB, G[1].multiplyUnsafe(b), 'multiplyUnsafe(b)');
               equal(pA.multiply(b), pB.multiply(a), 'b*pA = a*pB');
               equal(pA.multiply(b), G[1].multiply(c), 'b*pA = c*G');
             }),
@@ -577,8 +587,7 @@ for (const name in CURVES) {
           )
         );
         should('precomputeMSMUnsafe basic', () => {
-          return;
-          const Point = C.Point || C.ExtendedPoint || C.ProjectivePoint;
+          const Point = C.Point || C.Point || C.Point;
           if (!Point) throw new Error('Unknown point');
           const field = Field(CURVE_ORDER);
 
@@ -593,8 +602,7 @@ for (const name in CURVES) {
         should('precomputeMSMUnsafe random', () =>
           fc.assert(
             fc.property(fc.array(fc.tuple(FC_BIGINT, FC_BIGINT)), FC_BIGINT, (pairs) => {
-              return;
-              const Point = C.Point || C.ExtendedPoint || C.ProjectivePoint;
+              const Point = C.Point || C.Point || C.Point;
               if (!Point) throw new Error('Unknown point');
               const field = Field(CURVE_ORDER);
 
@@ -633,19 +641,20 @@ for (const name in CURVES) {
       //   });
       // }
       // toHex/fromHex (if available)
-      if (p.fromHex && p.BASE.toHex) {
-        should('fromHex(toHex(compressed=false)) roundtrip', () => {
-          fc.assert(
-            fc.property(FC_BIGINT, (x) => {
-              const point = p.BASE.multiply(x);
-              const isComp = false;
-              const hex1 = point.toHex(isComp);
-              const bytes1 = point.toBytes(isComp);
-              // eql(p.fromHex(hex1).toHex(isComp), hex1);
-              eql(p.fromHex(bytes1).toHex(isComp), hex1);
-            })
-          );
-        });
+      should('fromHex(toHex(compressed=false)) roundtrip', () => {
+        fc.assert(
+          fc.property(FC_BIGINT, (x) => {
+            const point = p.BASE.multiply(x);
+            const isComp = false;
+            const hex1 = point.toHex(isComp);
+            const bytes1 = point.toBytes(isComp);
+            // eql(p.fromHex(hex1).toHex(isComp), hex1);
+            eql(p.fromHex(bytes1).toHex(isComp), hex1);
+          })
+        );
+      });
+      // GOST curve from misc_ has Gx=0, which makes our checks throw
+      if (!name.toLowerCase().includes('gost')) {
         should('fromHex(toHex(compressed=true)) roundtrip', () => {
           fc.assert(
             fc.property(FC_BIGINT, (x) => {
@@ -958,8 +967,8 @@ describe('Pairings', () => {
     describe(name, () => {
       const { pairing } = curve;
       const { Fp12 } = curve.fields;
-      const G1Point = curve.G1.ProjectivePoint;
-      const G2Point = curve.G2.ProjectivePoint;
+      const G1Point = curve.G1.Point;
+      const G2Point = curve.G2.Point;
       const CURVE_ORDER = curve.ORDER;
       const G1 = G1Point.BASE;
       const G2 = G2Point.BASE;

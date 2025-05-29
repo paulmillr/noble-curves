@@ -1,4 +1,4 @@
-import { hexToBytes as bytes, bytesToHex as hex } from '@noble/hashes/utils';
+import { hexToBytes as bytes, bytesToHex as hex } from '@noble/hashes/utils.js';
 import * as fc from 'fast-check';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql, throws } from 'node:assert';
@@ -6,13 +6,13 @@ import { readFileSync } from 'node:fs';
 import { getTypeTestsNonUi8a, json } from './utils.js';
 // prettier-ignore
 import {
-  bytesToNumberBE,
-  mod,
-  normVerifySig,
-  numberToBytesBE,
-  secp,
-  selectHash,
-  sigFromDER, sigToDER
+    bytesToNumberBE,
+    mod,
+    normVerifySig,
+    numberToBytesBE,
+    secp,
+    selectHash,
+    sigFromDER, sigToDER
 } from './secp256k1.helpers.js';
 
 const ecdsa = json('./vectors/secp256k1/ecdsa.json');
@@ -24,7 +24,7 @@ const wp = json('./wycheproof/ecdsa_secp256k1_sha256_test.json');
 // Any changes to the file will need to be aware of the fact
 // the file is shared between noble-curves and noble-secp256k1.
 
-const Point = secp.ProjectivePoint;
+const Point = secp.Point;
 const FC_BIGINT = fc.bigInt(1n + 1n, secp.CURVE.n - 1n);
 
 const toBEHex = (n) => n.toString(16).padStart(64, '0');
@@ -188,14 +188,14 @@ describe('secp256k1', () => {
 
   // multiply() should equal multiplyUnsafe()
   // should('ProjectivePoint#multiplyUnsafe', () => {
-  //   const p0 = new secp.ProjectivePoint(
+  //   const p0 = new secp.Point(
   //     55066263022277343669578718895168534326250603453777594175500187360389116729240n,
   //     32670510020758816978083085130507043184471273380659243275938904335757337482424n,
   //     1n
   //   );
   //   const z = 106011723082030650010038151861333186846790370053628296836951575624442507889495n;
   //   console.log(p0.multiply(z));
-  //   console.log(secp.ProjectivePoint.normalizeZ([p0.multiplyUnsafe(z)])[0])
+  //   console.log(secp.Point.normalizeZ([p0.multiplyUnsafe(z)])[0])
   // });
   describe('Signature', () => {
     should('.fromCompactHex() roundtrip', () => {

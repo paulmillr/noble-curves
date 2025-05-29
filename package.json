@@ -36,6 +36,7 @@
   },
   "devDependencies": {
     "@paulmillr/jsbt": "0.4.0",
+    "@types/node": "22.15.21",
     "fast-check": "4.1.1",
     "micro-bmark": "0.4.1",
     "micro-should": "0.5.3",
@@ -204,6 +205,14 @@
     "./bn254.js": {
       "import": "./esm/bn254.js",
       "require": "./bn254.js"
+    },
+    "./utils.js": {
+      "import": "./esm/utils.js",
+      "require": "./utils.js"
+    },
+    "./utils": {
+      "import": "./esm/utils.js",
+      "require": "./utils.js"
     },
     "./ed448.js": {
       "import": "./esm/ed448.js",
