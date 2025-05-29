@@ -18,9 +18,9 @@ import {
 import {
   createHasher,
   expand_message_xmd,
-  type Hasher,
+  type H2CHasher,
+  type H2CMethod,
   type htfBasicOpts,
-  type HTFMethod,
 } from './abstract/hash-to-curve.ts';
 import { Field, FpInvertBatch, FpSqrtEven, isNegativeLE, mod, pow2 } from './abstract/modular.ts';
 import { montgomery, type CurveFn as XCurveFn } from './abstract/montgomery.ts';
@@ -297,7 +297,7 @@ function map_to_curve_elligator2_edwards25519(u: bigint) {
   return { x: Fp.mul(xn, xd_inv), y: Fp.mul(yn, yd_inv) }; //  13. return (xn, xd, yn, yd)
 }
 
-export const ed25519_hasher: Hasher<bigint> = /* @__PURE__ */ (() =>
+export const ed25519_hasher: H2CHasher<bigint> = /* @__PURE__ */ (() =>
   createHasher(
     ed25519.Point,
     (scalars: bigint[]) => map_to_curve_elligator2_edwards25519(scalars[0]),
@@ -311,8 +311,8 @@ export const ed25519_hasher: Hasher<bigint> = /* @__PURE__ */ (() =>
       hash: sha512,
     }
   ))();
-export const hashToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() => ed25519_hasher.hashToCurve)();
-export const encodeToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() =>
+export const hashToCurve: H2CMethod<bigint> = /* @__PURE__ */ (() => ed25519_hasher.hashToCurve)();
+export const encodeToCurve: H2CMethod<bigint> = /* @__PURE__ */ (() =>
   ed25519_hasher.encodeToCurve)();
 
 function aristp(other: unknown) {

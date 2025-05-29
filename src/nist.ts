@@ -6,10 +6,11 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha256, sha384, sha512 } from '@noble/hashes/sha2.js';
 import { createCurve, type CurveFnWithCreate } from './_shortw_utils.ts';
-import { createHasher, type Hasher } from './abstract/hash-to-curve.ts';
-import { Field } from './abstract/modular.ts';
+import { createHasher, type H2CHasher } from './abstract/hash-to-curve.ts';
+import { Field, type IField } from './abstract/modular.ts';
 import { mapToCurveSimpleSWU, type WeierstrassOpts } from './abstract/weierstrass.ts';
 
+// p = 2n**224n * (2n**32n-1n) + 2n**192n + 2n**96n - 1n
 // a = Fp256.create(BigInt('-3'));
 const p256_CURVE: WeierstrassOpts<bigint> = {
   p: BigInt('0xffffffff00000001000000000000000000000000ffffffffffffffffffffffff'),
@@ -21,6 +22,7 @@ const p256_CURVE: WeierstrassOpts<bigint> = {
   Gy: BigInt('0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5'),
 };
 
+// p = 2n**384n - 2n**128n - 2n**96n + 2n**32n - 1n
 const p384_CURVE: WeierstrassOpts<bigint> = {
   p: BigInt(
     '0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffeffffffff0000000000000000ffffffff'
@@ -43,6 +45,7 @@ const p384_CURVE: WeierstrassOpts<bigint> = {
   ),
 };
 
+// p = 2n**521n - 1n
 const p521_CURVE: WeierstrassOpts<bigint> = {
   p: BigInt(
     '0x1ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
@@ -68,93 +71,96 @@ const p521_CURVE: WeierstrassOpts<bigint> = {
 const Fp256 = Field(p256_CURVE.p);
 const Fp384 = Field(p384_CURVE.p);
 const Fp521 = Field(p521_CURVE.p);
+type SwuOpts = {
+  A: bigint;
+  B: bigint;
+  Z: bigint;
+};
+function createSWU(field: IField<bigint>, opts: SwuOpts) {
+  const map = mapToCurveSimpleSWU(field, opts);
+  return (scalars: bigint[]) => map(scalars[0]);
+}
 
-/**
- * secp256r1 curve, ECDSA and ECDH methods.
- * Field: `2n**224n * (2n**32n-1n) + 2n**192n + 2n**96n-1n`
- */
+/** NIST P256 (aka secp256r1, prime256v1) curve, ECDSA and ECDH methods. */
 export const p256: CurveFnWithCreate = createCurve(
   { ...p256_CURVE, Fp: Fp256, lowS: false },
   sha256
 );
 /** Alias to p256. */
 export const secp256r1: CurveFnWithCreate = p256;
-
-const p256_mapSWU = /* @__PURE__ */ (() =>
-  mapToCurveSimpleSWU(Fp256, {
-    A: p256_CURVE.a,
-    B: p256_CURVE.b,
-    Z: Fp256.create(BigInt('-10')),
-  }))();
-
 /** Hashing / encoding to p256 points / field. RFC 9380 methods. */
-export const p256_hasher: Hasher<bigint> = /* @__PURE__ */ (() =>
-  createHasher(p256.Point, (scalars: bigint[]) => p256_mapSWU(scalars[0]), {
-    DST: 'P256_XMD:SHA-256_SSWU_RO_',
-    encodeDST: 'P256_XMD:SHA-256_SSWU_NU_',
-    p: Fp256.ORDER,
-    m: 1,
-    k: 128,
-    expand: 'xmd',
-    hash: sha256,
-  }))();
+export const p256_hasher: H2CHasher<bigint> = /* @__PURE__ */ (() => {
+  return createHasher(
+    p256.Point,
+    createSWU(Fp256, {
+      A: p256_CURVE.a,
+      B: p256_CURVE.b,
+      Z: Fp256.create(BigInt('-10')),
+    }),
+    {
+      DST: 'P256_XMD:SHA-256_SSWU_RO_',
+      encodeDST: 'P256_XMD:SHA-256_SSWU_NU_',
+      p: p256_CURVE.p,
+      m: 1,
+      k: 128,
+      expand: 'xmd',
+      hash: sha256,
+    }
+  );
+})();
 
-// Field over which we'll do calculations.
-
-/**
- * secp384r1 curve, ECDSA and ECDH methods.
- * Field: `2n**384n - 2n**128n - 2n**96n + 2n**32n - 1n`.
- * */
-// prettier-ignore
-export const p384: CurveFnWithCreate = createCurve({...p384_CURVE, Fp: Fp384, lowS: false}, sha384);
+/** NIST P384 (aka secp384r1) curve, ECDSA and ECDH methods. */
+export const p384: CurveFnWithCreate = createCurve(
+  { ...p384_CURVE, Fp: Fp384, lowS: false },
+  sha384
+);
 /** Alias to p384. */
 export const secp384r1: CurveFnWithCreate = p384;
-
-const p384_mapSWU = /* @__PURE__ */ (() =>
-  mapToCurveSimpleSWU(Fp384, {
-    A: p384_CURVE.a,
-    B: p384_CURVE.b,
-    Z: Fp384.create(BigInt('-12')),
-  }))();
-
 /** Hashing / encoding to p384 points / field. RFC 9380 methods. */
-export const p384_hasher: Hasher<bigint> = /* @__PURE__ */ (() =>
-  createHasher(p384.Point, (scalars: bigint[]) => p384_mapSWU(scalars[0]), {
-    DST: 'P384_XMD:SHA-384_SSWU_RO_',
-    encodeDST: 'P384_XMD:SHA-384_SSWU_NU_',
-    p: Fp384.ORDER,
-    m: 1,
-    k: 192,
-    expand: 'xmd',
-    hash: sha384,
-  }))();
+export const p384_hasher: H2CHasher<bigint> = /* @__PURE__ */ (() => {
+  return createHasher(
+    p384.Point,
+    createSWU(Fp384, {
+      A: p384_CURVE.a,
+      B: p384_CURVE.b,
+      Z: Fp384.create(BigInt('-12')),
+    }),
+    {
+      DST: 'P384_XMD:SHA-384_SSWU_RO_',
+      encodeDST: 'P384_XMD:SHA-384_SSWU_NU_',
+      p: p384_CURVE.p,
+      m: 1,
+      k: 192,
+      expand: 'xmd',
+      hash: sha384,
+    }
+  );
+})();
 
-/**
- * NIST secp521r1 aka p521 curve, ECDSA and ECDH methods.
- * Field: `2n**521n - 1n`.
- */
-// prettier-ignore
+/** NIST P521 (aka secp521r1) curve, ECDSA and ECDH methods. */
 export const p521: CurveFnWithCreate = createCurve(
-  {...p521_CURVE, Fp: Fp521, lowS: false, allowedPrivateKeyLengths: [130, 131, 132]},
-sha512);
+  { ...p521_CURVE, Fp: Fp521, lowS: false, allowedPrivateKeyLengths: [130, 131, 132] },
+  sha512
+);
 /** Alias to p521. */
 export const secp521r1: CurveFnWithCreate = p521;
-
-const p521_mapSWU = /* @__PURE__ */ (() =>
-  mapToCurveSimpleSWU(Fp521, {
-    A: p521_CURVE.a,
-    B: p521_CURVE.b,
-    Z: Fp521.create(BigInt('-4')),
-  }))();
-
 /** Hashing / encoding to p521 points / field. RFC 9380 methods. */
-export const p521_hasher: Hasher<bigint> = /* @__PURE__ */ (() =>
-  createHasher(p521.Point, (scalars: bigint[]) => p521_mapSWU(scalars[0]), {
-    DST: 'P521_XMD:SHA-512_SSWU_RO_',
-    encodeDST: 'P521_XMD:SHA-512_SSWU_NU_',
-    p: Fp521.ORDER,
-    m: 1,
-    k: 256,
-    expand: 'xmd',
-    hash: sha512,
-  }))();
+export const p521_hasher: H2CHasher<bigint> = /* @__PURE__ */ (() => {
+  return createHasher(
+    p521.Point,
+    createSWU(Fp521, {
+      A: p521_CURVE.a,
+      B: p521_CURVE.b,
+      Z: Fp521.create(BigInt('-4')),
+    }),
+    {
+      DST: 'P521_XMD:SHA-512_SSWU_RO_',
+      encodeDST: 'P521_XMD:SHA-512_SSWU_NU_',
+      p: p521_CURVE.p,
+      m: 1,
+      k: 256,
+      expand: 'xmd',
+      hash: sha512,
+    }
+  );
+})();

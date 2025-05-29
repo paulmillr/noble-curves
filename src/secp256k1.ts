@@ -9,7 +9,12 @@
 import { sha256 } from '@noble/hashes/sha2.js';
 import { randomBytes } from '@noble/hashes/utils.js';
 import { createCurve, type CurveFnWithCreate } from './_shortw_utils.ts';
-import { createHasher, type Hasher, type HTFMethod, isogenyMap } from './abstract/hash-to-curve.ts';
+import {
+  createHasher,
+  type H2CHasher,
+  type H2CMethod,
+  isogenyMap,
+} from './abstract/hash-to-curve.ts';
 import { Field, mod, pow2 } from './abstract/modular.ts';
 import {
   type EndomorphismOpts,
@@ -315,7 +320,7 @@ const mapSWU = /* @__PURE__ */ (() =>
     Z: Fpk1.create(BigInt('-11')),
   }))();
 /** Hashing / encoding to secp256k1 points / field. RFC 9380 methods. */
-export const secp256k1_hasher: Hasher<bigint> = /* @__PURE__ */ (() =>
+export const secp256k1_hasher: H2CHasher<bigint> = /* @__PURE__ */ (() =>
   createHasher(
     secp256k1.Point,
     (scalars: bigint[]) => {
@@ -333,8 +338,8 @@ export const secp256k1_hasher: Hasher<bigint> = /* @__PURE__ */ (() =>
     }
   ))();
 
-export const hashToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() =>
+export const hashToCurve: H2CMethod<bigint> = /* @__PURE__ */ (() =>
   secp256k1_hasher.hashToCurve)();
 
-export const encodeToCurve: HTFMethod<bigint> = /* @__PURE__ */ (() =>
+export const encodeToCurve: H2CMethod<bigint> = /* @__PURE__ */ (() =>
   secp256k1_hasher.encodeToCurve)();

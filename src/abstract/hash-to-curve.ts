@@ -28,14 +28,20 @@ export type UnicodeOrBytes = string | Uint8Array;
  * * `expand` is `xmd` (SHA2, SHA3, BLAKE) or `xof` (SHAKE, BLAKE-XOF)
  * * `hash` conforming to `utils.CHash` interface, with `outputLen` / `blockLen` props
  */
-export type Opts = {
+export type H2COpts = {
   DST: UnicodeOrBytes;
+  expand: 'xmd' | 'xof';
+  hash: CHash;
   p: bigint;
   m: number;
   k: number;
+};
+export type H2CHashOpts = {
   expand: 'xmd' | 'xof';
   hash: CHash;
 };
+// todo: remove
+export type Opts = H2COpts;
 
 // Octet Stream to Integer. "spec" implementation of os2ip is 2.5x slower vs bytesToNumberBE.
 const os2ip = bytesToNumberBE;
@@ -141,7 +147,7 @@ export function expand_message_xof(
  * @param options `{DST: string, p: bigint, m: number, k: number, expand: 'xmd' | 'xof', hash: H}`, see above
  * @returns [u_0, ..., u_(count - 1)], a list of field elements.
  */
-export function hash_to_field(msg: Uint8Array, count: number, options: Opts): bigint[][] {
+export function hash_to_field(msg: Uint8Array, count: number, options: H2COpts): bigint[][] {
   _validateObject(options, {
     p: 'bigint',
     m: 'number',
@@ -219,21 +225,32 @@ export type MapToCurve<T> = (scalar: bigint[]) => AffinePoint<T>;
 // Separated from initialization opts, so users won't accidentally change per-curve parameters
 // (changing DST is ok!)
 export type htfBasicOpts = { DST: UnicodeOrBytes };
-export type HTFMethod<T> = (msg: Uint8Array, options?: htfBasicOpts) => H2CPoint<T>;
+export type H2CMethod<T> = (msg: Uint8Array, options?: htfBasicOpts) => H2CPoint<T>;
+// TODO: remove
+export type HTFMethod<T> = H2CMethod<T>;
 export type MapMethod<T> = (scalars: bigint[]) => H2CPoint<T>;
-export type Hasher<T> = {
-  hashToCurve: HTFMethod<T>;
-  encodeToCurve: HTFMethod<T>;
+/**
+ * RFC 9380 methods, with cofactor clearing. See https://www.rfc-editor.org/rfc/rfc9380#section-3.
+ *
+ * * hashToCurve: `map(hash(input))`, encodes RANDOM bytes to curve (WITH hashing)
+ * * encodeToCurve: `map(hash(input))`, encodes NON-UNIFORM bytes to curve (WITH hashing)
+ * * mapToCurve: `map(scalars)`, encodes NON-UNIFORM scalars to curve (NO hashing)
+ */
+export type H2CHasher<T> = {
+  hashToCurve: H2CMethod<T>;
+  encodeToCurve: H2CMethod<T>;
   mapToCurve: MapMethod<T>;
-  defaults: Opts & { encodeDST?: UnicodeOrBytes };
+  defaults: H2COpts & { encodeDST?: UnicodeOrBytes };
 };
+// TODO: remove
+export type Hasher<T> = H2CHasher<T>;
 
-/** Creates hash-to-curve methods from EC Point and mapToCurve function. */
+/** Creates hash-to-curve methods from EC Point and mapToCurve function. See {@link H2CHasher}. */
 export function createHasher<T>(
   Point: H2CPointConstructor<T>,
   mapToCurve: MapToCurve<T>,
-  defaults: Opts & { encodeDST?: UnicodeOrBytes }
-): Hasher<T> {
+  defaults: H2COpts & { encodeDST?: UnicodeOrBytes }
+): H2CHasher<T> {
   if (typeof mapToCurve !== 'function') throw new Error('mapToCurve() must be defined');
   function map(num: bigint[]) {
     return Point.fromAffine(mapToCurve(num));
@@ -247,24 +264,21 @@ export function createHasher<T>(
 
   return {
     defaults,
-
-    // Encodes RANDOM byte string to elliptic curve.
-    // hash_to_curve from https://www.rfc-editor.org/rfc/rfc9380#section-3
     hashToCurve(msg: Uint8Array, options?: htfBasicOpts): H2CPoint<T> {
-      const u = hash_to_field(msg, 2, { ...defaults, DST: defaults.DST, ...options } as Opts);
+      const dst = defaults.DST ? defaults.DST : {};
+      const opts = Object.assign({}, defaults, dst, options);
+      const u = hash_to_field(msg, 2, opts);
       const u0 = map(u[0]);
       const u1 = map(u[1]);
       return clear(u0.add(u1));
     },
-
-    // Encodes NON-UNIFORM byte string to elliptic curve.
-    // encode_to_curve from https://www.rfc-editor.org/rfc/rfc9380#section-3
     encodeToCurve(msg: Uint8Array, options?: htfBasicOpts): H2CPoint<T> {
-      const u = hash_to_field(msg, 1, { ...defaults, DST: defaults.encodeDST, ...options } as Opts);
+      const dst = defaults.encodeDST ? defaults.encodeDST : {};
+      const opts = Object.assign({}, defaults, dst, options);
+      const u = hash_to_field(msg, 1, opts);
       return clear(map(u[0]));
     },
-
-    // Same as encodeToCurve, but without hash
+    /** See {@link H2CHasher} */
     mapToCurve(scalars: bigint[]): H2CPoint<T> {
       if (!Array.isArray(scalars)) throw new Error('expected array of bigints');
       for (const i of scalars)

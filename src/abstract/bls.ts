@@ -27,10 +27,11 @@ import {
 import { normalizeZ } from './curve.ts';
 import {
   createHasher,
+  type H2CHasher,
+  type H2CHashOpts,
+  type H2COpts,
   type H2CPointConstructor,
-  type Hasher,
   type htfBasicOpts,
-  type Opts as HTFOpts,
   type MapToCurve,
 } from './hash-to-curve.ts';
 import { getMinHashLength, mapHashToField, type IField } from './modular.ts';
@@ -87,12 +88,12 @@ export type CurveType = {
   G1: CurvePointsType<Fp> & {
     ShortSignature: SignatureCoder<Fp>;
     mapToCurve: MapToCurve<Fp>;
-    htfDefaults: HTFOpts;
+    htfDefaults: H2COpts;
   };
   G2: CurvePointsType<Fp2> & {
     Signature: SignatureCoder<Fp2>;
     mapToCurve: MapToCurve<Fp2>;
-    htfDefaults: HTFOpts;
+    htfDefaults: H2COpts;
   };
   fields: {
     Fp: IField<Fp>;
@@ -110,7 +111,7 @@ export type CurveType = {
     r: bigint; // TODO: remove
     twistType: TwistType; // BLS12-381: Multiplicative, BN254: Divisive
   };
-  htfDefaults: HTFOpts;
+  htfDefaults: H2COpts;
   hash: CHash; // Because we need outputLen for DRBG
   randomBytes?: (bytesLength?: number) => Uint8Array;
   // This is super ugly hack for untwist point in BN254 after miller loop
@@ -181,8 +182,8 @@ export type CurveFn = {
     (signatures: ProjPointType<Fp>[]): ProjPointType<Fp>;
   };
   /** @deprecated use `curves.G1` and `curves.G2` */
-  G1: CurvePointsRes<Fp> & Hasher<Fp>;
-  G2: CurvePointsRes<Fp2> & Hasher<Fp2>;
+  G1: CurvePointsRes<Fp> & H2CHasher<Fp>;
+  G2: CurvePointsRes<Fp2> & H2CHasher<Fp2>;
   /** @deprecated use `longSignatures.Signature` */
   Signature: SignatureCoder<Fp2>;
   /** @deprecated use `shortSignatures.Signature` */
@@ -224,7 +225,7 @@ export interface BLSSigs<P, S> {
   ): boolean;
   aggregatePublicKeys(publicKeys: (ProjPointType<P> | BLSInput)[]): ProjPointType<P>;
   aggregateSignatures(signatures: (ProjPointType<S> | BLSInput)[]): ProjPointType<S>;
-  hash(messageBytes: Uint8Array, DST?: string | Uint8Array): ProjPointType<S>;
+  hash(message: Uint8Array, DST?: string | Uint8Array, hashOpts?: H2CHashOpts): ProjPointType<S>;
   Signature: SignatureCoder<S>;
 }
 
@@ -509,7 +510,6 @@ export function bls(CURVE: CurveType): CurveFn {
 
       // @ts-ignore
       Signature: isLongSigs ? CURVE.G2.Signature : CURVE.G1.ShortSignature,
-      // Signature: isLongSigs ? CURVE.G1.ShortSignature : CURVE.G2.Signature
     };
   }
 
