@@ -520,7 +520,7 @@ export function weierstrassN<T>(
     if (length === LC && (head === 0x02 || head === 0x03)) {
       const x = Fp.fromBytes(tail);
       // TODO: what about curves with valid point at x=0?
-      if (!Fp.isValidNot0(x)) throw new Error('bad point: is not on curve, wrong x');
+      if (!Fp.isValid(x)) throw new Error('bad point: is not on curve, wrong x');
       const y2 = weierstrassEquation(x); // y² = x³ + ax + b
       let y: T;
       try {

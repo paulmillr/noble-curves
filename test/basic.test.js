@@ -654,20 +654,20 @@ for (const name in CURVES) {
         );
       });
       // GOST curve from misc_ has Gx=0, which makes our checks throw
-      if (!name.toLowerCase().includes('gost')) {
-        should('fromHex(toHex(compressed=true)) roundtrip', () => {
-          fc.assert(
-            fc.property(FC_BIGINT, (x) => {
-              const point = p.BASE.multiply(x);
-              const isComp = true;
-              const hex1 = point.toHex(isComp);
-              const bytes1 = point.toBytes(isComp);
-              // eql(p.fromHex(hex1).toHex(isComp), hex1);
-              eql(p.fromHex(bytes1).toHex(isComp), hex1);
-            })
-          );
-        });
-      }
+      // if (!name.toLowerCase().includes('gost')) {
+      should('fromHex(toHex(compressed=true)) roundtrip', () => {
+        fc.assert(
+          fc.property(FC_BIGINT, (x) => {
+            const point = p.BASE.multiply(x);
+            const isComp = true;
+            const hex1 = point.toHex(isComp);
+            const bytes1 = point.toBytes(isComp);
+            // eql(p.fromHex(hex1).toHex(isComp), hex1);
+            eql(p.fromHex(bytes1).toHex(isComp), hex1);
+          })
+        );
+      });
+      // }
     });
   }
   describe(name, () => {
