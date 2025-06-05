@@ -1,4 +1,4 @@
-import { bytesToHex } from '@noble/hashes/utils';
+import { bytesToHex } from '@noble/hashes/utils.js';
 import { readFileSync } from 'node:fs';
 import { dirname, join as joinPath } from 'node:path';
 import { fileURLToPath } from 'node:url';
