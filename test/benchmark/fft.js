@@ -2,7 +2,7 @@ import * as fft from '@noble/curves/abstract/fft';
 import { bls12_381 } from '@noble/curves/bls12-381';
 
 import mark from 'micro-bmark';
-import { generateData, title } from './_shared.js';
+import { title } from './_shared.js';
 
 (async () => {
   title('fft');
@@ -22,6 +22,6 @@ import { generateData, title } from './_shared.js';
     inv: Fr.inv,
   });
 
-  await mark('fftFt', 1_000_000, () => fftFr.direct(pFR));
-  await mark('fftG1', 1000, () => fftG1.direct(pG1));
+  await mark('fftFt', () => fftFr.direct(pFR));
+  await mark('fftG1', () => fftG1.direct(pG1));
 })();

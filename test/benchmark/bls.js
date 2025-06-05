@@ -41,11 +41,11 @@ const G2_VECTORS = readFileSync(
   const sig32 = sig512.slice(0, 32);
   const sig128 = sig512.slice(0, 128);
   const sig2048 = sig512.concat(sig512, sig512, sig512);
-  await bench('getPublicKey 1-bit', 1000, () => bls.getPublicKey('2'.padStart(64, '0')));
-  await bench('getPublicKey', 1000, () => bls.getPublicKey(priv));
-  await bench('sign', 50, () => bls.sign('09', priv));
-  await bench('verify', 50, () => bls.verify(sig, '09', pub));
-  await bench('pairing', 100, () => bls.pairing(p1, p2));
+  await bench('getPublicKey 1-bit', () => bls.getPublicKey('2'.padStart(64, '0')));
+  await bench('getPublicKey', () => bls.getPublicKey(priv));
+  await bench('sign', () => bls.sign('09', priv));
+  await bench('verify', () => bls.verify(sig, '09', pub));
+  await bench('pairing', () => bls.pairing(p1, p2));
 
   const scalars1 = Array(4096)
     .fill(0)
@@ -74,14 +74,14 @@ const G2_VECTORS = readFileSync(
     }
   });
 
-  await bench('aggregatePublicKeys/8', 100, () => bls.aggregatePublicKeys(pubs.slice(0, 8)));
-  await bench('aggregatePublicKeys/32', 50, () => bls.aggregatePublicKeys(pub32));
-  await bench('aggregatePublicKeys/128', 20, () => bls.aggregatePublicKeys(pub128));
-  await bench('aggregatePublicKeys/512', 10, () => bls.aggregatePublicKeys(pub512));
-  await bench('aggregatePublicKeys/2048', 5, () => bls.aggregatePublicKeys(pub2048));
-  await bench('aggregateSignatures/8', 100, () => bls.aggregateSignatures(sigs.slice(0, 8)));
-  await bench('aggregateSignatures/32', 50, () => bls.aggregateSignatures(sig32));
-  await bench('aggregateSignatures/128', 20, () => bls.aggregateSignatures(sig128));
-  await bench('aggregateSignatures/512', 10, () => bls.aggregateSignatures(sig512));
-  await bench('aggregateSignatures/2048', 5, () => bls.aggregateSignatures(sig2048));
+  await bench('aggregatePublicKeys/8', () => bls.aggregatePublicKeys(pubs.slice(0, 8)));
+  await bench('aggregatePublicKeys/32', () => bls.aggregatePublicKeys(pub32));
+  await bench('aggregatePublicKeys/128', () => bls.aggregatePublicKeys(pub128));
+  await bench('aggregatePublicKeys/512', () => bls.aggregatePublicKeys(pub512));
+  await bench('aggregatePublicKeys/2048', () => bls.aggregatePublicKeys(pub2048));
+  await bench('aggregateSignatures/8', () => bls.aggregateSignatures(sigs.slice(0, 8)));
+  await bench('aggregateSignatures/32', () => bls.aggregateSignatures(sig32));
+  await bench('aggregateSignatures/128', () => bls.aggregateSignatures(sig128));
+  await bench('aggregateSignatures/512', () => bls.aggregateSignatures(sig512));
+  await bench('aggregateSignatures/2048', () => bls.aggregateSignatures(sig2048));
 })();

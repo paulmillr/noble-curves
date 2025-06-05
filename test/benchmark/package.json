@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "bench": "node index.js",
-    "bench:install": "npm install; npm install .. --install-links"
+    "bench:install": "npm install; npm install ../.. --install-links"
   },
   "dependencies": {
-    "@noble/curves": "file:.."
+    "@noble/curves": "file:../.."
   }
 }
