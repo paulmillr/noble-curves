@@ -979,8 +979,9 @@ export interface SignatureType {
   recoverPublicKey(msgHash: Hex): ProjPointType<bigint>;
   toCompactRawBytes(): Uint8Array;
   toCompactHex(): string;
-  toDERRawBytes(isCompressed?: boolean): Uint8Array;
-  toDERHex(isCompressed?: boolean): string;
+  toDERRawBytes(): Uint8Array;
+  toDERHex(): string;
+  // toBytes(format?: string): Uint8Array;
 }
 export type RecoveredSignatureType = SignatureType & {
   readonly recovery: number;
@@ -1145,20 +1146,26 @@ export function ecdsa(
       return this.hasHighS() ? new Signature(this.r, Fn.neg(this.s), this.recovery) : this;
     }
 
+    toBytes(format: 'compact' | 'der') {
+      if (format === 'compact') return concatBytes(Fn.toBytes(this.r), Fn.toBytes(this.s));
+      if (format === 'der') return hexToBytes(DER.hexFromSig(this));
+      throw new Error('invalid format');
+    }
+
     // DER-encoded
     toDERRawBytes() {
-      return hexToBytes(this.toDERHex());
+      return this.toBytes('der');
     }
     toDERHex() {
-      return DER.hexFromSig(this);
+      return bytesToHex(this.toBytes('der'));
     }
 
     // padded bytes of r, then padded bytes of s
     toCompactRawBytes() {
-      return concatBytes(Fn.toBytes(this.r), Fn.toBytes(this.s));
+      return this.toBytes('compact');
     }
     toCompactHex() {
-      return bytesToHex(this.toCompactRawBytes());
+      return bytesToHex(this.toBytes('compact'));
     }
   }
   type RecoveredSignature = Signature & { recovery: number };
