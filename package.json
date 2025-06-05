@@ -150,6 +150,10 @@
       "import": "./esm/secp256k1.js",
       "require": "./secp256k1.js"
     },
+    "./utils": {
+      "import": "./esm/utils.js",
+      "require": "./utils.js"
+    },
     "./abstract/bls.js": {
       "import": "./esm/abstract/bls.js",
       "require": "./abstract/bls.js"
@@ -207,10 +211,6 @@
       "require": "./bn254.js"
     },
     "./utils.js": {
-      "import": "./esm/utils.js",
-      "require": "./utils.js"
-    },
-    "./utils": {
       "import": "./esm/utils.js",
       "require": "./utils.js"
     },
