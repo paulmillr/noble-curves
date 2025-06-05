@@ -1,9 +1,14 @@
+import { bytesToHex } from '@noble/hashes/utils';
 import { readFileSync } from 'node:fs';
 import { dirname, join as joinPath } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gunzipSync } from 'node:zlib';
 
 const _dirname = dirname(fileURLToPath(import.meta.url));
+
+function readUtf8(path) {
+  return readFileSync(joinPath(_dirname, path), { encoding: 'utf-8' });
+}
 
 export function jsonGZ(path) {
   const unz = gunzipSync(readFileSync(joinPath(_dirname, path)));
@@ -13,13 +18,21 @@ export function jsonGZ(path) {
 export function json(path) {
   try {
     // Node.js
-    return JSON.parse(readFileSync(joinPath(_dirname, path), { encoding: 'utf-8' }));
+    return JSON.parse(readUtf8(path));
   } catch {
     // Bundler
     const file = path.replace(/^\.\//, '').replace(/\.json$/, '');
     if (path !== './' + file + '.json') throw new Error('Can not load non-json file');
+    console.log(file);
     return require('./' + file + '.json'); // in this form so that bundler can glob this
   }
+}
+
+export function txt(path, separator = ':') {
+  return readUtf8(path)
+    .trim()
+    .split('\n')
+    .map((l) => l.split(separator));
 }
 
 export const getTypeTests = () => [
@@ -72,4 +85,8 @@ export function repr(item) {
   if (item && item.isProxy) return '[proxy]';
   if (typeof item === 'symbol') return item.toString();
   return `${item}`;
+}
+
+export function phex(point) {
+  return bytesToHex(point.toBytes());
 }

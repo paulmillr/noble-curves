@@ -1,7 +1,6 @@
 import * as fc from 'fast-check';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql, throws } from 'node:assert';
-import { readFileSync } from 'node:fs';
 import { wNAF } from '../esm/abstract/curve.js';
 import { hash_to_field } from '../esm/abstract/hash-to-curve.js';
 import {
@@ -12,35 +11,21 @@ import {
   utf8ToBytes,
 } from '../esm/abstract/utils.js';
 import { bls12_381 as bls, bls12_381 } from '../esm/bls12-381.js';
-import { json } from './utils.js';
+import { json, txt } from './utils.js';
 
 import * as utils from '../esm/abstract/utils.js';
 
-const eip2537 = json('./bls12-381/eip2537.json');
-const zkVectors = json('./bls12-381/zkcrypto/converted.json');
-const pairingVectors = json('./bls12-381/go_pairing_vectors/pairing.json');
-const G1_VECTORS = readFileSync('./test/bls12-381/bls12-381-g1-test-vectors.txt', 'utf-8')
-  .trim()
-  .split('\n')
-  .map((l) => l.split(':'));
-const G2_VECTORS = readFileSync('./test/bls12-381/bls12-381-g2-test-vectors.txt', 'utf-8')
-  .trim()
-  .split('\n')
-  .map((l) => l.split(':'));
+const eip2537 = json('./vectors/bls12-381/eip2537.json');
+const zkVectors = json('./vectors/bls12-381/zkcrypto/converted.json');
+const pairingVectors = json('./vectors/bls12-381/go_pairing_vectors/pairing.json');
+const G1_VECTORS = txt('vectors/bls12-381/bls12-381-g1-test-vectors.txt');
+const G2_VECTORS = txt('vectors/bls12-381/bls12-381-g2-test-vectors.txt');
 // Vectors come from
 // https://github.com/zkcrypto/bls12-381/blob/e501265cd36849a4981fe55e10dc87c38ee2213d/src/hash_to_curve/map_scalar.rs#L20
-const SCALAR_VECTORS = readFileSync('./test/bls12-381/bls12-381-scalar-test-vectors.txt', 'utf-8')
-  .trim()
-  .split('\n')
-  .map((l) => l.split(':'));
-const SCALAR_XMD_SHA256_VECTORS = readFileSync(
-  './test/bls12-381/bls12-381-scalar-xmd-sha256-test-vectors.txt',
-  'utf-8'
-)
-  .trim()
-  .split('\n')
-  .map((l) => l.split(':'));
-
+const SCALAR_VECTORS = txt('vectors/bls12-381/bls12-381-scalar-test-vectors.txt');
+const SCALAR_XMD_SHA256_VECTORS = txt(
+  'vectors/bls12-381/bls12-381-scalar-xmd-sha256-test-vectors.txt'
+);
 const H2C_KILLIC_G1 = [
   {
     msg: utf8ToBytes(''),
@@ -797,7 +782,7 @@ describe('bls12-381 encoding', () => {
     eql(g1_.y, y);
   });
 
-  should('G1.fromHex', () => {
+  should('G1.fromBytes', () => {
     // Test Zero
     const g1 = G1Point.fromBytes(hexToBytes(B_192_40));
 
@@ -858,7 +843,7 @@ describe('bls12-381 encoding', () => {
     eql(g2_.y, y);
   });
 
-  should('G2.fromHex', () => {
+  should('G2.fromBytes', () => {
     // Test Zero
     const g2 = G2Point.fromBytes(hexToBytes(B_384_40));
 
@@ -1632,32 +1617,10 @@ describe('bls12-381 deterministic', () => {
   });
   describe('EIP2537', () => {
     const toEthHex = (n) => n.toString(16).padStart(128, '0');
-<<<<<<< Updated upstream
-||||||| Stash base
-    const mapToCurveEth = (curve, scalars) => {
-      try {
-        return curve.mapToCurve(scalars);
-      } catch (e) {
-        // eth stuff can also wrap other errors here?
-        // if (e.message === 'bad point: ZERO') return curve.ProjectivePoint.ZERO;
-        throw e;
-      }
-    };
-
-=======
-
->>>>>>> Stashed changes
     should('G1', () => {
       for (const v of eip2537.G1) {
         const input = hexToBytes(v.Input);
-<<<<<<< Updated upstream
-
         const { x, y } = bls12_381.G1.mapToCurve([bytesToNumberBE(input)]).toAffine();
-||||||| Stash base
-        const { x, y } = mapToCurveEth(bls12_381.G1, [bytesToNumberBE(input)]).toAffine();
-=======
-        const { x, y } = bls12_381.G1.mapToCurve([bytesToNumberBE(input)]).toAffine();
->>>>>>> Stashed changes
         const val = toEthHex(x) + toEthHex(y);
         eql(val, v.Expected);
       }
@@ -1676,16 +1639,7 @@ describe('bls12-381 deterministic', () => {
       const t = BigInt(
         '1006044755431560595281793557931171729984964515682961911911398807521437683216171091013202870577238485832047490326971'
       );
-<<<<<<< Updated upstream
-      eql(bls12_381.G1.mapToCurve([t]).equals(bls12_381.G1.Point.ZERO), true);
-||||||| Stash base
-      deepStrictEqual(
-        mapToCurveEth(bls12_381.G1, [t]).equals(bls12_381.G1.ProjectivePoint.ZERO),
-        true
-      );
-=======
-      deepStrictEqual(bls12_381.G1.mapToCurve([t]).equals(bls12_381.G1.ProjectivePoint.ZERO), true);
->>>>>>> Stashed changes
+      eql(bls12_381.G1.mapToCurve([t]).equals(bls12_381.G1.ProjectivePoint.ZERO), true);
     });
   });
 });

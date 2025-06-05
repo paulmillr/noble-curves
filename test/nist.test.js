@@ -2,54 +2,56 @@ import { sha224, sha256, sha384, sha512 } from '@noble/hashes/sha2.js';
 import { sha3_224, sha3_256, sha3_384, sha3_512, shake128, shake256 } from '@noble/hashes/sha3.js';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql, throws } from 'node:assert';
-import { bytesToHex as hex, hexToBytes, utf8ToBytes } from '../esm/abstract/utils.js';
+import { bytesToHex, hexToBytes, utf8ToBytes } from '../esm/abstract/utils.js';
 import { DER } from '../esm/abstract/weierstrass.js';
 import { p256, p384, p521, secp256r1, secp384r1, secp521r1 } from '../esm/nist.js';
 import { secp256k1 } from '../esm/secp256k1.js';
 import { p192, p224, secp192r1, secp224r1 } from './_more-curves.helpers.js';
 import { json } from './utils.js';
-const ecdsa = json('./wycheproof/ecdsa_test.json');
-const ecdh = json('./wycheproof/ecdh_test.json');
+
 const rfc6979 = json('./vectors/rfc6979.json');
 const endoVectors = json('./vectors/secp256k1/endomorphism.json');
 
-const ecdh_secp224r1_test = json('./wycheproof/ecdh_secp224r1_test.json');
-const ecdh_secp256r1_test = json('./wycheproof/ecdh_secp256r1_test.json');
-const ecdh_secp256k1_test = json('./wycheproof/ecdh_secp256k1_test.json');
-const ecdh_secp384r1_test = json('./wycheproof/ecdh_secp384r1_test.json');
-const ecdh_secp521r1_test = json('./wycheproof/ecdh_secp521r1_test.json');
+const PREFIX = './vectors/wycheproof/';
+const ecdsa = json(PREFIX + 'ecdsa_test.json');
+const ecdh = json(PREFIX + 'ecdh_test.json');
+const ecdh_secp224r1_test = json(PREFIX + 'ecdh_secp224r1_test.json');
+const ecdh_secp256r1_test = json(PREFIX + 'ecdh_secp256r1_test.json');
+const ecdh_secp256k1_test = json(PREFIX + 'ecdh_secp256k1_test.json');
+const ecdh_secp384r1_test = json(PREFIX + 'ecdh_secp384r1_test.json');
+const ecdh_secp521r1_test = json(PREFIX + 'ecdh_secp521r1_test.json');
 // Tests with custom hashes
-const secp224r1_sha224_test = json('./wycheproof/ecdsa_secp224r1_sha224_test.json');
-const secp224r1_sha256_test = json('./wycheproof/ecdsa_secp224r1_sha256_test.json');
-const secp224r1_sha3_224_test = json('./wycheproof/ecdsa_secp224r1_sha3_224_test.json');
-const secp224r1_sha3_256_test = json('./wycheproof/ecdsa_secp224r1_sha3_256_test.json');
-const secp224r1_sha3_512_test = json('./wycheproof/ecdsa_secp224r1_sha3_512_test.json');
-const secp224r1_sha512_test = json('./wycheproof/ecdsa_secp224r1_sha512_test.json');
-const secp224r1_shake128_test = json('./wycheproof/ecdsa_secp224r1_shake128_test.json');
+const secp224r1_sha224_test = json(PREFIX + 'ecdsa_secp224r1_sha224_test.json');
+const secp224r1_sha256_test = json(PREFIX + 'ecdsa_secp224r1_sha256_test.json');
+const secp224r1_sha3_224_test = json(PREFIX + 'ecdsa_secp224r1_sha3_224_test.json');
+const secp224r1_sha3_256_test = json(PREFIX + 'ecdsa_secp224r1_sha3_256_test.json');
+const secp224r1_sha3_512_test = json(PREFIX + 'ecdsa_secp224r1_sha3_512_test.json');
+const secp224r1_sha512_test = json(PREFIX + 'ecdsa_secp224r1_sha512_test.json');
+const secp224r1_shake128_test = json(PREFIX + 'ecdsa_secp224r1_shake128_test.json');
 
-const secp256k1_sha256_bitcoin_test = json('./wycheproof/ecdsa_secp256k1_sha256_bitcoin_test.json');
-const secp256k1_sha256_test = json('./wycheproof/ecdsa_secp256k1_sha256_test.json');
-const secp256k1_sha3_256_test = json('./wycheproof/ecdsa_secp256k1_sha3_256_test.json');
-const secp256k1_sha3_512_test = json('./wycheproof/ecdsa_secp256k1_sha3_512_test.json');
-const secp256k1_sha512_test = json('./wycheproof/ecdsa_secp256k1_sha512_test.json');
-const secp256k1_shake128_test = json('./wycheproof/ecdsa_secp256k1_shake128_test.json');
-const secp256k1_shake256_test = json('./wycheproof/ecdsa_secp256k1_shake256_test.json');
+const secp256k1_sha256_bitcoin_test = json(PREFIX + 'ecdsa_secp256k1_sha256_bitcoin_test.json');
+const secp256k1_sha256_test = json(PREFIX + 'ecdsa_secp256k1_sha256_test.json');
+const secp256k1_sha3_256_test = json(PREFIX + 'ecdsa_secp256k1_sha3_256_test.json');
+const secp256k1_sha3_512_test = json(PREFIX + 'ecdsa_secp256k1_sha3_512_test.json');
+const secp256k1_sha512_test = json(PREFIX + 'ecdsa_secp256k1_sha512_test.json');
+const secp256k1_shake128_test = json(PREFIX + 'ecdsa_secp256k1_shake128_test.json');
+const secp256k1_shake256_test = json(PREFIX + 'ecdsa_secp256k1_shake256_test.json');
 
-const secp256r1_sha256_test = json('./wycheproof/ecdsa_secp256r1_sha256_test.json');
-const secp256r1_sha3_256_test = json('./wycheproof/ecdsa_secp256r1_sha3_256_test.json');
-const secp256r1_sha3_512_test = json('./wycheproof/ecdsa_secp256r1_sha3_512_test.json');
-const secp256r1_sha512_test = json('./wycheproof/ecdsa_secp256r1_sha512_test.json');
-const secp256r1_shake128_test = json('./wycheproof/ecdsa_secp256r1_shake128_test.json');
+const secp256r1_sha256_test = json(PREFIX + 'ecdsa_secp256r1_sha256_test.json');
+const secp256r1_sha3_256_test = json(PREFIX + 'ecdsa_secp256r1_sha3_256_test.json');
+const secp256r1_sha3_512_test = json(PREFIX + 'ecdsa_secp256r1_sha3_512_test.json');
+const secp256r1_sha512_test = json(PREFIX + 'ecdsa_secp256r1_sha512_test.json');
+const secp256r1_shake128_test = json(PREFIX + 'ecdsa_secp256r1_shake128_test.json');
 
-const secp384r1_sha384_test = json('./wycheproof/ecdsa_secp384r1_sha384_test.json');
-const secp384r1_sha3_384_test = json('./wycheproof/ecdsa_secp384r1_sha3_384_test.json');
-const secp384r1_sha3_512_test = json('./wycheproof/ecdsa_secp384r1_sha3_512_test.json');
-const secp384r1_sha512_test = json('./wycheproof/ecdsa_secp384r1_sha512_test.json');
-const secp384r1_shake256_test = json('./wycheproof/ecdsa_secp384r1_shake256_test.json');
+const secp384r1_sha384_test = json(PREFIX + 'ecdsa_secp384r1_sha384_test.json');
+const secp384r1_sha3_384_test = json(PREFIX + 'ecdsa_secp384r1_sha3_384_test.json');
+const secp384r1_sha3_512_test = json(PREFIX + 'ecdsa_secp384r1_sha3_512_test.json');
+const secp384r1_sha512_test = json(PREFIX + 'ecdsa_secp384r1_sha512_test.json');
+const secp384r1_shake256_test = json(PREFIX + 'ecdsa_secp384r1_shake256_test.json');
 
-const secp521r1_sha3_512_test = json('./wycheproof/ecdsa_secp521r1_sha3_512_test.json');
-const secp521r1_sha512_test = json('./wycheproof/ecdsa_secp521r1_sha512_test.json');
-const secp521r1_shake256_test = json('./wycheproof/ecdsa_secp521r1_shake256_test.json');
+const secp521r1_sha3_512_test = json(PREFIX + 'ecdsa_secp521r1_sha3_512_test.json');
+const secp521r1_sha512_test = json(PREFIX + 'ecdsa_secp521r1_sha512_test.json');
+const secp521r1_shake256_test = json(PREFIX + 'ecdsa_secp521r1_shake256_test.json');
 
 // TODO: maybe add to noble-hashes?
 const wrapShake = (shake, dkLen) => {
@@ -118,7 +120,7 @@ function verifyECDHVector(test, curve) {
     }
     const privA_b = hexToBytes(privA);
     const shared = curve.getSharedSecret(privA_b, pubB_b).subarray(1);
-    eql(hex(shared), test.shared, 'valid');
+    eql(bytesToHex(shared), test.shared, 'valid');
   } else if (test.result === 'invalid') {
     let failed = false;
     try {
@@ -366,7 +368,7 @@ describe('wycheproof ECDSA', () => {
           test.result = 'invalid';
         const m = CURVE.CURVE.hash(hexToBytes(test.msg));
         if (test.result === 'valid' || test.result === 'acceptable') {
-          const verified = CURVE.verify(test.sig, m, pubKey.toHex(), { lowS: hasLowS });
+          const verified = CURVE.verify(test.sig, m, pubKey.toBytes(), { lowS: hasLowS });
           if (hasLowS) {
             // lowS: true for secp256k1
             eql(verified, !CURVE.Signature.fromDER(test.sig).hasHighS(), `valid`);
@@ -376,7 +378,7 @@ describe('wycheproof ECDSA', () => {
         } else if (test.result === 'invalid') {
           let failed = false;
           try {
-            failed = !CURVE.verify(test.sig, m, pubKey.toHex());
+            failed = !CURVE.verify(test.sig, m, pubKey.toBytes());
           } catch (error) {
             failed = true;
           }

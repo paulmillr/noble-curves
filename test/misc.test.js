@@ -19,7 +19,7 @@ const G_PROOF = new Point(
 const getXY = (p) => ({ x: p.x, y: p.y });
 
 describe('jubjub', () => {
-  should('toHex/fromBytes', () => {
+  should('toBytes/fromBytes', () => {
     // More than field
     throws(() =>
       Point.fromBytes(

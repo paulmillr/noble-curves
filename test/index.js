@@ -4,16 +4,14 @@ import { should } from 'micro-should';
 import './basic.test.js';
 import './bls12-381.test.js';
 import './bn254.test.js';
-import './ed25519-addons.test.js';
 import './ed25519.test.js';
-import './ed448-addons.test.js';
 import './ed448.test.js';
 import './fft.test.js';
-import './hash-to-curve.test.js';
 import './misc.test.js';
 import './nist.test.js';
 import './poseidon.test.js';
-import './secp256k1-schnorr.test.js';
+import './rfc9380-hash-to-curve.test.js';
+import './rfc9496-ristretto-decaf.test.js';
 import './secp256k1.test.js';
 import './utils.test.js';
 

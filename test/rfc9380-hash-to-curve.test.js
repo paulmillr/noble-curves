@@ -12,38 +12,39 @@ import { ed25519_hasher } from '../esm/ed25519.js';
 import { ed448_hasher } from '../esm/ed448.js';
 import * as nist from '../esm/nist.js';
 import { secp256k1_hasher } from '../esm/secp256k1.js';
+const PREFIX = './vectors/rfc9380-hash-to-curve/';
 // XMD
-const xmd_sha256_38 = json('./hash-to-curve/expand_message_xmd_SHA256_38.json');
-const xmd_sha256_256 = json('./hash-to-curve/expand_message_xmd_SHA256_256.json');
-const xmd_sha512_38 = json('./hash-to-curve/expand_message_xmd_SHA512_38.json');
+const xmd_sha256_38 = json(PREFIX + 'expand_message_xmd_SHA256_38.json');
+const xmd_sha256_256 = json(PREFIX + 'expand_message_xmd_SHA256_256.json');
+const xmd_sha512_38 = json(PREFIX + 'expand_message_xmd_SHA512_38.json');
 // XOF
-const xof_shake128_36 = json('./hash-to-curve/expand_message_xof_SHAKE128_36.json');
-const xof_shake128_256 = json('./hash-to-curve/expand_message_xof_SHAKE128_256.json');
-const xof_shake256_36 = json('./hash-to-curve/expand_message_xof_SHAKE256_36.json');
+const xof_shake128_36 = json(PREFIX + 'expand_message_xof_SHAKE128_36.json');
+const xof_shake128_256 = json(PREFIX + 'expand_message_xof_SHAKE128_256.json');
+const xof_shake256_36 = json(PREFIX + 'expand_message_xof_SHAKE256_36.json');
 // P256
-const p256_ro = json('./hash-to-curve/P256_XMD_SHA-256_SSWU_RO_.json');
-const p256_nu = json('./hash-to-curve/P256_XMD_SHA-256_SSWU_NU_.json');
+const p256_ro = json(PREFIX + 'P256_XMD_SHA-256_SSWU_RO_.json');
+const p256_nu = json(PREFIX + 'P256_XMD_SHA-256_SSWU_NU_.json');
 // P384
-const p384_ro = json('./hash-to-curve/P384_XMD_SHA-384_SSWU_RO_.json');
-const p384_nu = json('./hash-to-curve/P384_XMD_SHA-384_SSWU_NU_.json');
+const p384_ro = json(PREFIX + 'P384_XMD_SHA-384_SSWU_RO_.json');
+const p384_nu = json(PREFIX + 'P384_XMD_SHA-384_SSWU_NU_.json');
 // P521
-const p521_ro = json('./hash-to-curve/P521_XMD_SHA-512_SSWU_RO_.json');
-const p521_nu = json('./hash-to-curve/P521_XMD_SHA-512_SSWU_NU_.json');
+const p521_ro = json(PREFIX + 'P521_XMD_SHA-512_SSWU_RO_.json');
+const p521_nu = json(PREFIX + 'P521_XMD_SHA-512_SSWU_NU_.json');
 // secp256k1
-const secp256k1_ro = json('./hash-to-curve/secp256k1_XMD_SHA-256_SSWU_RO_.json');
-const secp256k1_nu = json('./hash-to-curve/secp256k1_XMD_SHA-256_SSWU_NU_.json');
+const secp256k1_ro = json(PREFIX + 'secp256k1_XMD_SHA-256_SSWU_RO_.json');
+const secp256k1_nu = json(PREFIX + 'secp256k1_XMD_SHA-256_SSWU_NU_.json');
 // bls-G1
-const g1_ro = json('./hash-to-curve/BLS12381G1_XMD_SHA-256_SSWU_RO_.json');
-const g1_nu = json('./hash-to-curve/BLS12381G1_XMD_SHA-256_SSWU_NU_.json');
+const g1_ro = json(PREFIX + 'BLS12381G1_XMD_SHA-256_SSWU_RO_.json');
+const g1_nu = json(PREFIX + 'BLS12381G1_XMD_SHA-256_SSWU_NU_.json');
 // bls-G2
-const g2_ro = json('./hash-to-curve/BLS12381G2_XMD_SHA-256_SSWU_RO_.json');
-const g2_nu = json('./hash-to-curve/BLS12381G2_XMD_SHA-256_SSWU_NU_.json');
+const g2_ro = json(PREFIX + 'BLS12381G2_XMD_SHA-256_SSWU_RO_.json');
+const g2_nu = json(PREFIX + 'BLS12381G2_XMD_SHA-256_SSWU_NU_.json');
 // ed25519
-const ed25519_ro = json('./hash-to-curve/edwards25519_XMD_SHA-512_ELL2_RO_.json');
-const ed25519_nu = json('./hash-to-curve/edwards25519_XMD_SHA-512_ELL2_NU_.json');
+const ed25519_ro = json(PREFIX + 'edwards25519_XMD_SHA-512_ELL2_RO_.json');
+const ed25519_nu = json(PREFIX + 'edwards25519_XMD_SHA-512_ELL2_NU_.json');
 // ed448
-const ed448_ro = json('./hash-to-curve/edwards448_XOF_SHAKE256_ELL2_RO_.json');
-const ed448_nu = json('./hash-to-curve/edwards448_XOF_SHAKE256_ELL2_NU_.json');
+const ed448_ro = json(PREFIX + 'edwards448_XOF_SHAKE256_ELL2_RO_.json');
+const ed448_nu = json(PREFIX + 'edwards448_XOF_SHAKE256_ELL2_NU_.json');
 
 function testExpandXMD(hash, vectors) {
   describe(`${vectors.hash}/${vectors.DST.length}`, () => {

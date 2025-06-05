@@ -2,7 +2,7 @@ import * as fc from 'fast-check';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql, notDeepStrictEqual, throws } from 'node:assert';
 import * as mod from '../esm/abstract/modular.js';
-import { isBytes, bytesToHex as toHex } from '../esm/abstract/utils.js';
+import { bytesToHex as hex, isBytes } from '../esm/abstract/utils.js';
 import { getTypeTests, json } from './utils.js';
 // Generic tests for all curves in package
 import { sha256, sha512 } from '@noble/hashes/sha2.js';
@@ -19,7 +19,7 @@ import { secp256r1, secp384r1, secp521r1 } from '../esm/nist.js';
 import { secp256k1 } from '../esm/secp256k1.js';
 import { randomBytes } from '../esm/utils.js';
 import { miscCurves, secp192r1, secp224r1 } from './_more-curves.helpers.js';
-const wyche_curves = json('./wycheproof/ec_prime_order_curves_test.json');
+const wyche_curves = json('./vectors/wycheproof/ec_prime_order_curves_test.json');
 
 const NUM_RUNS = 5;
 
@@ -641,29 +641,31 @@ for (const name in CURVES) {
       //   });
       // }
       // toHex/fromHex (if available)
-      should('fromHex(toHex(compressed=false)) roundtrip', () => {
+      should('fromBytes(toBytes()) roundtrip', () => {
         fc.assert(
           fc.property(FC_BIGINT, (x) => {
             const point = p.BASE.multiply(x);
-            const isComp = false;
-            const hex1 = point.toHex(isComp);
-            const bytes1 = point.toBytes(isComp);
-            // eql(p.fromHex(hex1).toHex(isComp), hex1);
-            eql(p.fromHex(bytes1).toHex(isComp), hex1);
+            let c = false; // compressed
+            const bu = point.toBytes(c);
+            eql(p.fromBytes(bu).toBytes(c), bu);
+
+            c = true;
+            const bc = point.toBytes(c);
+            eql(p.fromBytes(bc).toBytes(c), bc);
           })
         );
       });
-      // GOST curve from misc_ has Gx=0, which makes our checks throw
-      // if (!name.toLowerCase().includes('gost')) {
-      should('fromHex(toHex(compressed=true)) roundtrip', () => {
+      should('fromHex(toHex()) roundtrip', () => {
         fc.assert(
           fc.property(FC_BIGINT, (x) => {
             const point = p.BASE.multiply(x);
-            const isComp = true;
-            const hex1 = point.toHex(isComp);
-            const bytes1 = point.toBytes(isComp);
-            // eql(p.fromHex(hex1).toHex(isComp), hex1);
-            eql(p.fromHex(bytes1).toHex(isComp), hex1);
+            let c = false; // compressed
+            const hu = point.toHex(c);
+            eql(p.fromHex(hu).toHex(c), hu);
+
+            c = true;
+            const hc = point.toHex(c);
+            eql(p.fromHex(hc).toHex(c), hc);
           })
         );
       });
@@ -687,14 +689,13 @@ for (const name in CURVES) {
     });
 
     if (C.verify) {
-      //if (C.verify)
       should('.verify() should verify random signatures', () =>
         fc.assert(
           fc.property(FC_HEX, (msg) => {
             const priv = C.utils.randomPrivateKey();
             const pub = C.getPublicKey(priv);
             const sig = C.sign(msg, priv);
-            eql(C.verify(sig, msg, pub), true, `priv=${toHex(priv)},pub=${toHex(pub)},msg=${msg}`);
+            eql(C.verify(sig, msg, pub), true, `priv=${hex(priv)},pub=${hex(pub)},msg=${msg}`);
           }),
           { numRuns: NUM_RUNS }
         )
@@ -702,10 +703,10 @@ for (const name in CURVES) {
       should('.verify() should verify random signatures in hex', () =>
         fc.assert(
           fc.property(FC_HEX, (msg) => {
-            const priv = toHex(C.utils.randomPrivateKey());
-            const pub = toHex(C.getPublicKey(priv));
+            const priv = hex(C.utils.randomPrivateKey());
+            const pub = hex(C.getPublicKey(priv));
             const sig = C.sign(msg, priv);
-            let sighex = isBytes(sig) ? toHex(sig) : sig.toCompactHex();
+            let sighex = isBytes(sig) ? hex(sig) : sig.toCompactHex();
             eql(C.verify(sighex, msg, pub), true, `priv=${priv},pub=${pub},msg=${msg}`);
           }),
           { numRuns: NUM_RUNS }
@@ -716,7 +717,7 @@ for (const name in CURVES) {
         const priv = C.utils.randomPrivateKey();
         const pub = C.getPublicKey(priv);
         const sig = C.sign(msg, priv);
-        eql(C.verify(sig, msg, pub), true, 'priv=${toHex(priv)},pub=${toHex(pub)},msg=${msg}');
+        eql(C.verify(sig, msg, pub), true, `priv=${hex(priv)},pub=${hex(pub)},msg=${msg}`);
       });
 
       should('.sign() type tests', () => {

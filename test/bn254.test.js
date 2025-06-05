@@ -3,10 +3,10 @@ import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql, throws } from 'node:assert';
 import { bytesToNumberBE } from '../esm/abstract/utils.js';
 import { bn254 } from '../esm/bn254.js';
-import { default as ethDump } from './bn254/eth-dump.js';
-import { default as seda } from './bn254/seda.js';
 import { jsonGZ } from './utils.js';
-const CROSS_PATH_GZ = './bn254/cross1000.json.gz'; // bundler hint: readFileSync('./test/bn254/cross1000.json.gz')
+import { default as ethDump } from './vectors/bn254/eth-dump.js';
+import { default as seda } from './vectors/bn254/seda.js';
+const CROSS_PATH_GZ = './vectors/bn254/cross1000.json.gz'; // bundler hint: readFileSync('./test/bn254/cross1000.json.gz')
 
 describe('bn254', () => {
   const { Fp2, Fp6, Fp12 } = bn254.fields;
