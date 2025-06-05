@@ -519,7 +519,6 @@ export function weierstrassN<T>(
     // No actual validation is done here: use .assertValidity()
     if (length === LC && (head === 0x02 || head === 0x03)) {
       const x = Fp.fromBytes(tail);
-      // TODO: what about curves with valid point at x=0?
       if (!Fp.isValid(x)) throw new Error('bad point: is not on curve, wrong x');
       const y2 = weierstrassEquation(x); // y² = x³ + ax + b
       let y: T;
@@ -988,7 +987,7 @@ export type RecoveredSignatureType = SignatureType & {
 };
 // Static methods
 export type SignatureConstructor = {
-  new (r: bigint, s: bigint): SignatureType;
+  new (r: bigint, s: bigint, recovery?: number): SignatureType;
   fromCompact(hex: Hex): SignatureType;
   fromDER(hex: Hex): SignatureType;
 };

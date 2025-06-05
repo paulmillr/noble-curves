@@ -1632,11 +1632,32 @@ describe('bls12-381 deterministic', () => {
   });
   describe('EIP2537', () => {
     const toEthHex = (n) => n.toString(16).padStart(128, '0');
+<<<<<<< Updated upstream
+||||||| Stash base
+    const mapToCurveEth = (curve, scalars) => {
+      try {
+        return curve.mapToCurve(scalars);
+      } catch (e) {
+        // eth stuff can also wrap other errors here?
+        // if (e.message === 'bad point: ZERO') return curve.ProjectivePoint.ZERO;
+        throw e;
+      }
+    };
+
+=======
+
+>>>>>>> Stashed changes
     should('G1', () => {
       for (const v of eip2537.G1) {
         const input = hexToBytes(v.Input);
+<<<<<<< Updated upstream
 
         const { x, y } = bls12_381.G1.mapToCurve([bytesToNumberBE(input)]).toAffine();
+||||||| Stash base
+        const { x, y } = mapToCurveEth(bls12_381.G1, [bytesToNumberBE(input)]).toAffine();
+=======
+        const { x, y } = bls12_381.G1.mapToCurve([bytesToNumberBE(input)]).toAffine();
+>>>>>>> Stashed changes
         const val = toEthHex(x) + toEthHex(y);
         eql(val, v.Expected);
       }
@@ -1655,7 +1676,16 @@ describe('bls12-381 deterministic', () => {
       const t = BigInt(
         '1006044755431560595281793557931171729984964515682961911911398807521437683216171091013202870577238485832047490326971'
       );
+<<<<<<< Updated upstream
       eql(bls12_381.G1.mapToCurve([t]).equals(bls12_381.G1.Point.ZERO), true);
+||||||| Stash base
+      deepStrictEqual(
+        mapToCurveEth(bls12_381.G1, [t]).equals(bls12_381.G1.ProjectivePoint.ZERO),
+        true
+      );
+=======
+      deepStrictEqual(bls12_381.G1.mapToCurve([t]).equals(bls12_381.G1.ProjectivePoint.ZERO), true);
+>>>>>>> Stashed changes
     });
   });
 });
