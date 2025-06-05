@@ -47,51 +47,35 @@ const ed448_ro = json(PREFIX + 'edwards448_XOF_SHAKE256_ELL2_RO_.json');
 const ed448_nu = json(PREFIX + 'edwards448_XOF_SHAKE256_ELL2_NU_.json');
 
 function testExpandXMD(hash, vectors) {
-  describe(`${vectors.hash}/${vectors.DST.length}`, () => {
+  should(`${vectors.hash}/${vectors.DST.length}`, () => {
     for (let i = 0; i < vectors.tests.length; i++) {
       const t = vectors.tests[i];
-      should(`${vectors.hash}/${vectors.DST.length}/${i}`, () => {
-        const p = expand_message_xmd(
-          utf8ToBytes(t.msg),
-          utf8ToBytes(vectors.DST),
-          Number.parseInt(t.len_in_bytes),
-          hash
-        );
-        eql(bytesToHex(p), t.uniform_bytes);
-      });
+      const p = expand_message_xmd(
+        utf8ToBytes(t.msg),
+        utf8ToBytes(vectors.DST),
+        Number.parseInt(t.len_in_bytes),
+        hash
+      );
+      eql(bytesToHex(p), t.uniform_bytes);
     }
   });
 }
-
-describe('expand_message_xmd', () => {
-  testExpandXMD(sha256, xmd_sha256_38);
-  testExpandXMD(sha256, xmd_sha256_256);
-  testExpandXMD(sha512, xmd_sha512_38);
-});
 
 function testExpandXOF(hash, vectors) {
-  describe(`${vectors.hash}/${vectors.DST.length}`, () => {
+  should(`${vectors.hash}/${vectors.DST.length}`, () => {
     for (let i = 0; i < vectors.tests.length; i++) {
       const t = vectors.tests[i];
-      should(`${i}`, () => {
-        const p = expand_message_xof(
-          utf8ToBytes(t.msg),
-          utf8ToBytes(vectors.DST),
-          Number.parseInt(t.len_in_bytes),
-          vectors.k,
-          hash
-        );
-        eql(bytesToHex(p), t.uniform_bytes);
-      });
+      const p = expand_message_xof(
+        utf8ToBytes(t.msg),
+        utf8ToBytes(vectors.DST),
+        Number.parseInt(t.len_in_bytes),
+        vectors.k,
+        hash
+      );
+      eql(bytesToHex(p), t.uniform_bytes, i.toString());
     }
   });
 }
-
-describe('expand_message_xof', () => {
-  testExpandXOF(shake128, xof_shake128_36);
-  testExpandXOF(shake128, xof_shake128_256);
-  testExpandXOF(shake256, xof_shake256_36);
-});
 
 function stringToFp(s) {
   // bls-G2 support
@@ -103,43 +87,51 @@ function stringToFp(s) {
 }
 
 function testCurve(hasher, ro, nu) {
-  describe(`${ro.curve}/${ro.ciphersuite}`, () => {
+  should(`${ro.curve}/${ro.ciphersuite}`, () => {
     for (let i = 0; i < ro.vectors.length; i++) {
       const t = ro.vectors[i];
-      should(`(${i})`, () => {
-        const p = hasher
-          .hashToCurve(utf8ToBytes(t.msg), {
-            DST: ro.dst,
-          })
-          .toAffine();
-        eql(p.x, stringToFp(t.P.x), 'Px');
-        eql(p.y, stringToFp(t.P.y), 'Py');
-      });
+      const p = hasher
+        .hashToCurve(utf8ToBytes(t.msg), {
+          DST: ro.dst,
+        })
+        .toAffine();
+      eql(p.x, stringToFp(t.P.x), 'Px');
+      eql(p.y, stringToFp(t.P.y), 'Py');
     }
   });
-  describe(`${nu.curve}/${nu.ciphersuite}`, () => {
+  should(`${nu.curve}/${nu.ciphersuite}`, () => {
     for (let i = 0; i < nu.vectors.length; i++) {
       const t = nu.vectors[i];
-      should(`(${i})`, () => {
-        const p = hasher
-          .encodeToCurve(utf8ToBytes(t.msg), {
-            DST: nu.dst,
-          })
-          .toAffine();
-        eql(p.x, stringToFp(t.P.x), 'Px');
-        eql(p.y, stringToFp(t.P.y), 'Py');
-      });
+      const p = hasher
+        .encodeToCurve(utf8ToBytes(t.msg), {
+          DST: nu.dst,
+        })
+        .toAffine();
+      eql(p.x, stringToFp(t.P.x), 'Px');
+      eql(p.y, stringToFp(t.P.y), 'Py');
     }
   });
 }
 
-testCurve(nist.p256_hasher, p256_ro, p256_nu);
-testCurve(nist.p384_hasher, p384_ro, p384_nu);
-testCurve(nist.p521_hasher, p521_ro, p521_nu);
-testCurve(bls12_381.G1, g1_ro, g1_nu);
-testCurve(bls12_381.G2, g2_ro, g2_nu);
-testCurve(secp256k1_hasher, secp256k1_ro, secp256k1_nu);
-testCurve(ed25519_hasher, ed25519_ro, ed25519_nu);
-testCurve(ed448_hasher, ed448_ro, ed448_nu);
+describe('RFC9380 hash-to-curve', () => {
+  describe('expand_message_xmd', () => {
+    testExpandXMD(sha256, xmd_sha256_38);
+    testExpandXMD(sha256, xmd_sha256_256);
+    testExpandXMD(sha512, xmd_sha512_38);
+  });
+  describe('expand_message_xof', () => {
+    testExpandXOF(shake128, xof_shake128_36);
+    testExpandXOF(shake128, xof_shake128_256);
+    testExpandXOF(shake256, xof_shake256_36);
+  });
+  testCurve(nist.p256_hasher, p256_ro, p256_nu);
+  testCurve(nist.p384_hasher, p384_ro, p384_nu);
+  testCurve(nist.p521_hasher, p521_ro, p521_nu);
+  testCurve(bls12_381.G1, g1_ro, g1_nu);
+  testCurve(bls12_381.G2, g2_ro, g2_nu);
+  testCurve(secp256k1_hasher, secp256k1_ro, secp256k1_nu);
+  testCurve(ed25519_hasher, ed25519_ro, ed25519_nu);
+  testCurve(ed448_hasher, ed448_ro, ed448_nu);
+});
 
 should.runWhen(import.meta.url);
