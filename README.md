@@ -946,6 +946,17 @@ aggregateSignatures/2048 x 0 ops/sec @ 2823ms/op
 
 ## Upgrading
 
+Supported node.js versions:
+
+- v2: v20.19+ (ESM-only)
+- v1: v14.21+ (ESM & CJS)
+
+### curves v1 => curves v2
+
+WIP. Changelog of v2, when upgrading from curves v1.
+
+### noble-secp256k1 v1 => curves v1
+
 Previously, the library was split into single-feature packages
 [noble-secp256k1](https://github.com/paulmillr/noble-secp256k1),
 [noble-ed25519](https://github.com/paulmillr/noble-ed25519) and
@@ -954,10 +965,6 @@ Previously, the library was split into single-feature packages
 Curves continue their original work. The single-feature packages changed their
 direction towards providing minimal 4kb implementations of cryptography,
 which means they have less features.
-
-Upgrading from noble-secp256k1 2.0 or noble-ed25519 2.0: no changes, libraries are compatible.
-
-Upgrading from noble-secp256k1 1.7:
 
 - `getPublicKey`
   - now produce 33-byte compressed signatures by default
@@ -985,6 +992,8 @@ Upgrading from noble-secp256k1 1.7:
 - `utils` were split into `utils` (same api as in noble-curves) and
   `etc` (`hmacSha256Sync` and others)
 
+### noble-ed25519 v1 => curves v1
+
 Upgrading from [@noble/ed25519](https://github.com/paulmillr/noble-ed25519) 1.7:
 
 - Methods are now sync by default
@@ -995,6 +1004,8 @@ Upgrading from [@noble/ed25519](https://github.com/paulmillr/noble-ed25519) 1.7:
   `etc` (`sha512Sync` and others)
 - `getSharedSecret` was moved to `x25519` module
 - `toX25519` has been moved to `edwardsToMontgomeryPub` and `edwardsToMontgomeryPriv` methods
+
+### noble-bls12-381 => curves v1
 
 Upgrading from [@noble/bls12-381](https://github.com/paulmillr/noble-bls12-381):
 
