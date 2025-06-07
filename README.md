@@ -48,14 +48,14 @@ A standalone file [noble-curves.js](https://github.com/paulmillr/noble-curves/re
 
 ```ts
 // import * from '@noble/curves'; // Error: use sub-imports, to ensure small app size
-import { secp256k1, schnorr } from '@noble/curves/secp256k1';
-import { ed25519, ed25519ph, ed25519ctx, x25519 } from '@noble/curves/ed25519';
-import { ed448, ed448ph, ed448ctx, x448 } from '@noble/curves/ed448';
-import { p256, p384, p521 } from '@noble/curves/nist';
-import { bls12_381 } from '@noble/curves/bls12-381';
-import { bn254 } from '@noble/curves/bn254';
-import { jubjub, babyjubjub } from '@noble/curves/misc';
-import { bytesToHex, hexToBytes, concatBytes, utf8ToBytes } from '@noble/curves/abstract/utils';
+import { secp256k1, schnorr } from '@noble/curves/secp256k1.js';
+import { ed25519, ed25519ph, ed25519ctx, x25519 } from '@noble/curves/ed25519.js';
+import { ed448, ed448ph, ed448ctx, x448 } from '@noble/curves/ed448.js';
+import { p256, p384, p521 } from '@noble/curves/nist.js';
+import { bls12_381 } from '@noble/curves/bls12-381.js';
+import { bn254 } from '@noble/curves/bn254.js';
+import { jubjub, babyjubjub } from '@noble/curves/misc.js';
+import { bytesToHex, hexToBytes, concatBytes, utf8ToBytes } from '@noble/curves/abstract/utils.js';
 ```
 
 - [ECDSA signatures over secp256k1 and others](#ecdsa-signatures-over-secp256k1-and-others)
@@ -86,8 +86,8 @@ import { bytesToHex, hexToBytes, concatBytes, utf8ToBytes } from '@noble/curves/
 #### ECDSA signatures over secp256k1 and others
 
 ```ts
-import { secp256k1 } from '@noble/curves/secp256k1';
-// import { p256 } from '@noble/curves/nist'; // or p384 / p521
+import { secp256k1 } from '@noble/curves/secp256k1.js';
+// import { p256 } from '@noble/curves/nist.js'; // or p384 / p521
 
 const priv = secp256k1.utils.randomPrivateKey();
 const pub = secp256k1.getPublicKey(priv);
@@ -134,7 +134,7 @@ const shared = secp256k1.getSharedSecret(priv, someonesPub);
 #### secp256k1 Schnorr signatures from BIP340
 
 ```ts
-import { schnorr } from '@noble/curves/secp256k1';
+import { schnorr } from '@noble/curves/secp256k1.js';
 const priv = schnorr.utils.randomPrivateKey();
 const pub = schnorr.getPublicKey(priv);
 const msg = new TextEncoder().encode('hello');
@@ -145,7 +145,7 @@ const isValid = schnorr.verify(sig, msg, pub);
 #### ed25519
 
 ```ts
-import { ed25519 } from '@noble/curves/ed25519';
+import { ed25519 } from '@noble/curves/ed25519.js';
 const priv = ed25519.utils.randomPrivateKey();
 const pub = ed25519.getPublicKey(priv);
 const msg = new TextEncoder().encode('hello');
@@ -154,7 +154,7 @@ ed25519.verify(sig, msg, pub); // Default mode: follows ZIP215
 ed25519.verify(sig, msg, pub, { zip215: false }); // SBS / e-voting / RFC8032 / FIPS 186-5
 
 // Variants from RFC8032: with context, prehashed
-import { ed25519ctx, ed25519ph } from '@noble/curves/ed25519';
+import { ed25519ctx, ed25519ph } from '@noble/curves/ed25519.js';
 ```
 
 Default `verify` behavior follows ZIP215 and
@@ -167,7 +167,7 @@ Both options have SUF-CMA (strong unforgeability under chosen message attacks).
 
 ```ts
 // X25519 aka ECDH on Curve25519 from [RFC7748](https://www.rfc-editor.org/rfc/rfc7748)
-import { x25519 } from '@noble/curves/ed25519';
+import { x25519 } from '@noble/curves/ed25519.js';
 const priv = 'a546e36bf0527c9d3b16154b82465edd62144c0ac1fc5a18506a2244ba449ac4';
 const pub = 'e6db6867583030db3594c1a424b15f7c726624ec26b3353b10a903a6d0ab1c4c';
 x25519.getSharedSecret(priv, pub) === x25519.scalarMult(priv, pub); // aliases
@@ -175,7 +175,7 @@ x25519.getPublicKey(priv) === x25519.scalarMultBase(priv);
 x25519.getPublicKey(x25519.utils.randomPrivateKey());
 
 // ed25519 => x25519 conversion
-import { edwardsToMontgomeryPub, edwardsToMontgomeryPriv } from '@noble/curves/ed25519';
+import { edwardsToMontgomeryPub, edwardsToMontgomeryPriv } from '@noble/curves/ed25519.js';
 edwardsToMontgomeryPub(ed25519.getPublicKey(ed25519.utils.randomPrivateKey()));
 edwardsToMontgomeryPriv(ed25519.utils.randomPrivateKey());
 ```
@@ -191,7 +191,7 @@ import {
   encodeToCurve,
   RistrettoPoint,
   hashToRistretto255,
-} from '@noble/curves/ed25519';
+} from '@noble/curves/ed25519.js';
 
 const msg = utf8ToBytes('Ristretto is traditionally a short shot of espresso coffee');
 hashToCurve(msg);
@@ -210,7 +210,7 @@ hashToRistretto255(msg, { DST: 'ristretto255_XMD:SHA-512_R255MAP_RO_' });
 #### ed448
 
 ```ts
-import { ed448 } from '@noble/curves/ed448';
+import { ed448 } from '@noble/curves/ed448.js';
 const priv = ed448.utils.randomPrivateKey();
 const pub = ed448.getPublicKey(priv);
 const msg = new TextEncoder().encode('whatsup');
@@ -218,19 +218,19 @@ const sig = ed448.sign(msg, priv);
 ed448.verify(sig, msg, pub);
 
 // Variants from RFC8032: prehashed
-import { ed448ph } from '@noble/curves/ed448';
+import { ed448ph } from '@noble/curves/ed448.js';
 ```
 
 #### X448
 
 ```ts
 // X448 aka ECDH on Curve448 from [RFC7748](https://www.rfc-editor.org/rfc/rfc7748)
-import { x448 } from '@noble/curves/ed448';
+import { x448 } from '@noble/curves/ed448.js';
 x448.getSharedSecret(priv, pub) === x448.scalarMult(priv, pub); // aliases
 x448.getPublicKey(priv) === x448.scalarMultBase(priv);
 
 // ed448 => x448 conversion
-import { edwardsToMontgomeryPub } from '@noble/curves/ed448';
+import { edwardsToMontgomeryPub } from '@noble/curves/ed448.js';
 edwardsToMontgomeryPub(ed448.getPublicKey(ed448.utils.randomPrivateKey()));
 ```
 
@@ -240,7 +240,7 @@ edwardsToMontgomeryPub(ed448.getPublicKey(ed448.utils.randomPrivateKey()));
 // decaf448 from [RFC9496](https://www.rfc-editor.org/rfc/rfc9496)
 import { utf8ToBytes } from '@noble/hashes/utils';
 import { shake256 } from '@noble/hashes/sha3';
-import { hashToCurve, encodeToCurve, DecafPoint, hashToDecaf448 } from '@noble/curves/ed448';
+import { hashToCurve, encodeToCurve, DecafPoint, hashToDecaf448 } from '@noble/curves/ed448.js';
 
 const msg = utf8ToBytes('Ristretto is traditionally a short shot of espresso coffee');
 hashToCurve(msg);
@@ -259,8 +259,8 @@ hashToDecaf448(msg, { DST: 'decaf448_XOF:SHAKE256_D448MAP_RO_' });
 #### bls12-381
 
 ```ts
-import { bls12_381 } from '@noble/curves/bls12-381';
-import { hexToBytes, utf8ToBytes } from '@noble/curves/abstract/utils';
+import { bls12_381 } from '@noble/curves/bls12-381.js';
+import { hexToBytes, utf8ToBytes } from '@noble/curves/abstract/utils.js';
 
 // private keys are 32 bytes
 const privKey = hexToBytes('67d53f170b908cabb9eb326c3c337762d59289a8fec79f7bc9254b584b73265c');
@@ -308,7 +308,7 @@ For example usage, check out [the implementation of BLS EVM precompiles](https:/
 #### bn254 aka alt_bn128
 
 ```ts
-import { bn254 } from '@noble/curves/bn254';
+import { bn254 } from '@noble/curves/bn254.js';
 
 console.log(bn254.G1, bn254.G2, bn254.pairing);
 ```
@@ -331,7 +331,7 @@ For example usage, check out [the implementation of bn254 EVM precompiles](https
 #### misc curves
 
 ```ts
-import { jubjub, babyjubjub } from '@noble/curves/misc';
+import { jubjub, babyjubjub } from '@noble/curves/misc.js';
 ```
 
 Miscellaneous, rarely used curves are contained in the module.
@@ -341,7 +341,7 @@ jubjub Fp = bls n. babyjubjub Fp = bn254 n.
 #### Low-level methods
 
 ```ts
-import { secp256k1 } from '@noble/curves/secp256k1';
+import { secp256k1 } from '@noble/curves/secp256k1.js';
 
 // Curve's variables
 // Every curve has `CURVE` object that contains its parameters, field, and others
@@ -376,8 +376,8 @@ method: check out examples.
 ### weierstrass: Short Weierstrass curve
 
 ```ts
-import { weierstrass } from '@noble/curves/abstract/weierstrass';
-import { Field } from '@noble/curves/abstract/modular';
+import { weierstrass } from '@noble/curves/abstract/weierstrass.js';
+import { Field } from '@noble/curves/abstract/modular.js';
 import { sha256 } from '@noble/hashes/sha256';
 import { hmac } from '@noble/hashes/hmac';
 import { concatBytes, randomBytes } from '@noble/hashes/utils';
@@ -477,8 +477,8 @@ fast.multiply(privKey); // much faster ECDH now
 ### edwards: Twisted Edwards curve
 
 ```ts
-import { twistedEdwards } from '@noble/curves/abstract/edwards';
-import { Field } from '@noble/curves/abstract/modular';
+import { twistedEdwards } from '@noble/curves/abstract/edwards.js';
+import { Field } from '@noble/curves/abstract/modular.js';
 import { sha512 } from '@noble/hashes/sha512';
 import { randomBytes } from '@noble/hashes/utils';
 
@@ -562,13 +562,13 @@ The module allows to hash arbitrary strings to elliptic curve points. Implements
 Every curve has exported `hashToCurve` and `encodeToCurve` methods. You should always prefer `hashToCurve` for security:
 
 ```ts
-import { hashToCurve, encodeToCurve } from '@noble/curves/secp256k1';
+import { hashToCurve, encodeToCurve } from '@noble/curves/secp256k1.js';
 import { randomBytes } from '@noble/hashes/utils';
 hashToCurve('0102abcd');
 console.log(hashToCurve(randomBytes()));
 console.log(encodeToCurve(randomBytes()));
 
-import { bls12_381 } from '@noble/curves/bls12-381';
+import { bls12_381 } from '@noble/curves/bls12-381.js';
 bls12_381.G1.hashToCurve(randomBytes(), { DST: 'another' });
 bls12_381.G2.hashToCurve(randomBytes(), { DST: 'custom' });
 ```
@@ -623,7 +623,7 @@ We don't provide them: you should construct them manually.
 Check out [micro-starknet](https://github.com/paulmillr/micro-starknet) package for a proper example.
 
 ```ts
-import { poseidon, poseidonSponge } from '@noble/curves/abstract/poseidon';
+import { poseidon, poseidonSponge } from '@noble/curves/abstract/poseidon.js';
 
 const rate = 2;
 const capacity = 1;
@@ -650,7 +650,7 @@ const sponge = poseidon.poseidonSponge(opts); // use carefully, not specced
 ### modular: Modular arithmetics utilities
 
 ```ts
-import * as mod from '@noble/curves/abstract/modular';
+import * as mod from '@noble/curves/abstract/modular.js';
 
 // Finite Field utils
 const fp = mod.Field(2n ** 255n - 19n); // Finite field over 2^255-19
@@ -700,10 +700,10 @@ Use [abstract/hash-to-curve](#hash-to-curve-hashing-strings-to-curve-points)
 if you need to hash to **public key**.
 
 ```ts
-import { p256 } from '@noble/curves/nist';
+import { p256 } from '@noble/curves/nist.js';
 import { sha256 } from '@noble/hashes/sha256';
 import { hkdf } from '@noble/hashes/hkdf';
-import * as mod from '@noble/curves/abstract/modular';
+import * as mod from '@noble/curves/abstract/modular.js';
 const someKey = new Uint8Array(32).fill(2); // Needs to actually be random, not .fill(2)
 const derived = hkdf(sha256, someKey, undefined, 'application', 48); // 48 bytes for 32-byte priv
 const validPrivateKey = mod.hashToPrivateScalar(derived, p256.CURVE.n);
@@ -712,7 +712,7 @@ const validPrivateKey = mod.hashToPrivateScalar(derived, p256.CURVE.n);
 ### utils: Useful utilities
 
 ```ts
-import * as utils from '@noble/curves/abstract/utils';
+import * as utils from '@noble/curves/abstract/utils.js';
 
 utils.bytesToHex(Uint8Array.from([0xde, 0xad, 0xbe, 0xef]));
 utils.hexToBytes('deadbeef');
