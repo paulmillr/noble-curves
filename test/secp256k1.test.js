@@ -203,8 +203,8 @@ describe('secp256k1 static vectors', () => {
       for (const e of VECTORS_ecdsa.extraEntropy) {
         const sign = (enth) => {
           const extraEntropy = hexToBytes(enth);
-          const s = secp.sign(e.m, e.d, { extraEntropy }).toCompactHex();
-          return s;
+          const s = secp.sign(e.m, e.d, { extraEntropy }).toCompactRawBytes();
+          return bytesToHex(s);
         };
         eql(sign(''), e.signature);
         eql(sign(ent1), e.extraEntropy0);
@@ -219,9 +219,9 @@ describe('secp256k1 static vectors', () => {
       const extraEntropy = hexToBytes('01');
       const priv = hexToBytes('0101010101010101010101010101010101010101010101010101010101010101');
       const msg = hexToBytes('d1a9dc8ed4e46a6a3e5e594615ca351d7d7ef44df1e4c94c1802f3592183794b');
-      const res = secp.sign(msg, priv, { extraEntropy }).toCompactHex();
+      const res = secp.sign(msg, priv, { extraEntropy }).toCompactRawBytes();
       eql(
-        res,
+        bytesToHex(res),
         'a250ec23a54bfdecf0e924cbf484077c5044410f915cdba86731cb2e4e925aaa5b1e4e3553d88be2c48a9a0d8d849ce2cc5720d25b2f97473e02f2550abe9545'
       );
     });
@@ -232,9 +232,9 @@ describe('secp256k1 static vectors', () => {
       );
       const priv = hexToBytes('0101010101010101010101010101010101010101010101010101010101010101');
       const msg = hexToBytes('d1a9dc8ed4e46a6a3e5e594615ca351d7d7ef44df1e4c94c1802f3592183794b');
-      const res = secp.sign(msg, priv, { extraEntropy }).toCompactHex();
+      const res = secp.sign(msg, priv, { extraEntropy }).toCompactRawBytes();
       eql(
-        res,
+        bytesToHex(res),
         '2bdf40f42ac0e42ee12750d03bb12b75306dae58eb3c961c5a80d78efae93e595295b66e8eb28f1eb046bb129a976340312159ec0c20b97342667572e4a8379a'
       );
     });
@@ -416,7 +416,7 @@ describe('secp256k1', () => {
       Point.fromPrivateKey(
         88572218780422190464634044548753414301110513745532121983949500266768436236425n
       );
-    eql(Point.fromBytes(p1.toBytes(true)), p1);
+    eql(Point.fromBytes(p1.toBytes(true)).equals(p1), true);
   });
 
   should('#toBytes() roundtrip', () => {
@@ -472,7 +472,7 @@ describe('Signature', () => {
     fc.assert(
       fc.property(FC_BIGINT, FC_BIGINT, (r, s) => {
         const sig = new secp.Signature(r, s);
-        eql(secp.Signature.fromCompact(sig.toCompactHex()), sig);
+        eql(secp.Signature.fromCompact(sig.toCompactRawBytes()), sig);
       })
     );
   });
@@ -509,12 +509,12 @@ describe('Signature', () => {
     const sig = secp.sign(msg, priv, { lowS: false });
     eql(sig.hasHighS(), true);
     eql(sig, hi_);
-    eql(sig.toCompactHex(), hi);
+    eql(bytesToHex(sig.toCompactRawBytes()), hi);
 
     const lowSig = sig.normalizeS();
     eql(lowSig.hasHighS(), false);
     eql(lowSig, lo_);
-    eql(lowSig.toCompactHex(), lo);
+    eql(bytesToHex(lowSig.toCompactRawBytes()), lo);
 
     eql(secp.verify(sig, msg, pub, { lowS: false }), true);
     eql(secp.verify(sig, msg, pub, { lowS: true }), false);
@@ -656,15 +656,19 @@ describe('verify()', () => {
 });
 
 describe('secp256k1 schnorr.sign()', () => {
+  if (!schnorr) return;
   // index,secret key,public key,aux_rand,message,signature,verification result,comment
   const VECTORS_bip340 = txt('vectors/secp256k1/schnorr.csv', ',').slice(1, -1);
   for (let vec of VECTORS_bip340) {
-    const [index, sec, pub, rnd, msg, expSig, passes, comment] = vec;
+    const index = vec[0];
+    const [sec, pub, rnd, msg, expSig] = vec.slice(1, 6).map((item) => hexToBytes(item));
+    const passes = vec[6];
+    const comment = vec[7];
     should(`${comment || 'vector ' + index}`, () => {
-      if (sec) {
-        eql(bytesToHex(schnorr.getPublicKey(sec)), pub.toLowerCase());
+      if (sec.length > 0) {
+        eql(schnorr.getPublicKey(sec), pub);
         const sig = schnorr.sign(msg, sec, rnd);
-        eql(bytesToHex(sig), expSig.toLowerCase());
+        eql(sig, expSig);
         eql(schnorr.verify(sig, msg, pub), true);
       } else {
         const passed = schnorr.verify(expSig, msg, pub);
