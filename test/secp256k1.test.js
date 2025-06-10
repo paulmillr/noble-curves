@@ -344,7 +344,7 @@ describe('secp256k1 static vectors', () => {
 
   describe('tweak utilities (legacy)', () => {
     const normPriv = (n) => {
-      if (typeof n === 'bigint') return (n);
+      if (typeof n === 'bigint') return n;
       if (typeof n === 'string') return hexToNumber(n);
       if (isBytes(n)) return bytesToNumberBE(n);
       throw new Error('invalid priv type');
@@ -353,7 +353,7 @@ describe('secp256k1 static vectors', () => {
       if (typeof p === 'string') return hexToBytes(p);
       if (isBytes(p)) return p;
       throw new Error('invalid pub type');
-    }
+    };
     const tweakUtils = {
       privateAdd: (privateKey, tweak) => {
         return numberToBytesBE(mod(normPriv(privateKey) + normPriv(tweak), secp.CURVE.n), 32);
@@ -432,10 +432,12 @@ describe('secp256k1', () => {
 
   should('#toBytes() roundtrip (failed case)', () => {
     // todo: fromPrivateScalar
-    const p1 =
-      Point.fromPrivateKey(
-        numberToBytesBE(88572218780422190464634044548753414301110513745532121983949500266768436236425n, 32)
-      );
+    const p1 = Point.fromPrivateKey(
+      numberToBytesBE(
+        88572218780422190464634044548753414301110513745532121983949500266768436236425n,
+        32
+      )
+    );
     eql(Point.fromBytes(p1.toBytes(true)).equals(p1), true);
   });
 
