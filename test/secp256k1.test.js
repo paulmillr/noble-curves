@@ -1,4 +1,4 @@
-import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
+import { bytesToHex, hexToBytes, isBytes } from '@noble/hashes/utils.js';
 import * as fc from 'fast-check';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql, throws } from 'node:assert';
@@ -33,10 +33,9 @@ export function phex(point) {
 
 const Point = secp.Point;
 const FC_BIGINT = fc.bigInt(1n + 1n, secp.CURVE.n - 1n);
-const toBEHex = (n) => n.toString(16).padStart(64, '0');
 // TODO: Real implementation.
 function derToPub(der) {
-  return der.slice(46);
+  return hexToBytes(der.slice(46));
 }
 function hexToNumber(hex2) {
   if (typeof hex2 !== 'string') {
@@ -48,18 +47,25 @@ function hexToNumber(hex2) {
 
 function checkPrivatesTxt() {
   const data = txt('vectors/secp256k1/privates-2.txt').filter((l) => l[0]);
-  for (let [priv, x, y] of data) {
-    const point = Point.fromPrivateKey(BigInt(priv));
+  const toBEHex = (n) => n.toString(16).padStart(64, '0');
+
+  for (let [privNumStr, x, y] of data) {
+    const privScalar = BigInt(privNumStr);
+    const priv = numberToBytesBE(privScalar, 32);
+    // bytes, getPublicKey
+    const point = Point.fromBytes(secp.getPublicKey(priv));
     eql(toBEHex(point.x), x);
     eql(toBEHex(point.y), y);
 
-    const point2 = Point.fromBytes(secp.getPublicKey(toBEHex(BigInt(priv))));
-    eql(toBEHex(point2.x), x);
-    eql(toBEHex(point2.y), y);
+    // // bigint, Point.fromPrivateKey
+    // const pointN = Point.fromPrivateKey(privScalar);
+    // eql(toBEHex(pointN.x), x);
+    // eql(toBEHex(pointN.y), y);
 
-    const point3 = Point.fromBytes(secp.getPublicKey(hexToBytes(toBEHex(BigInt(priv)))));
-    eql(toBEHex(point3.x), x);
-    eql(toBEHex(point3.y), y);
+    // // hex, fromBytes, getPublicKey
+    // const pointH = Point.fromBytes(secp.getPublicKey(toBEHex(privScalar)));
+    // eql(toBEHex(pointH.x), x);
+    // eql(toBEHex(pointH.y), y);
   }
 }
 
@@ -203,7 +209,9 @@ describe('secp256k1 static vectors', () => {
       for (const e of VECTORS_ecdsa.extraEntropy) {
         const sign = (enth) => {
           const extraEntropy = hexToBytes(enth);
-          const s = secp.sign(e.m, e.d, { extraEntropy }).toCompactRawBytes();
+          const m = hexToBytes(e.m);
+          const d = hexToBytes(e.d);
+          const s = secp.sign(m, d, { extraEntropy }).toCompactRawBytes();
           return bytesToHex(s);
         };
         eql(sign(''), e.signature);
@@ -244,7 +252,7 @@ describe('secp256k1 static vectors', () => {
     for (let group of VECTORS_wp.testGroups) {
       // const pubKey = Point.fromBytes().toBytes();
       const key = group.publicKey;
-      const pubKey = key.uncompressed;
+      const pubKey = hexToBytes(key.uncompressed);
 
       for (let test of group.tests) {
         const h = selectHash(secp);
@@ -318,7 +326,7 @@ describe('secp256k1 static vectors', () => {
   should('utils.isValidPrivateKey()', () => {
     for (const vector of VECTORS_privates.valid.isPrivate) {
       const { d, expected } = vector;
-      eql(secp.utils.isValidPrivateKey(d), expected);
+      eql(secp.utils.isValidPrivateKey(hexToBytes(d)), expected);
     }
   });
 
@@ -335,26 +343,37 @@ describe('secp256k1 static vectors', () => {
   });
 
   describe('tweak utilities (legacy)', () => {
-    const normal = secp.utils.normPrivateKeyToScalar;
+    const normPriv = (n) => {
+      if (typeof n === 'bigint') return (n);
+      if (typeof n === 'string') return hexToNumber(n);
+      if (isBytes(n)) return bytesToNumberBE(n);
+      throw new Error('invalid priv type');
+    };
+    const normPub = (p) => {
+      if (typeof p === 'string') return hexToBytes(p);
+      if (isBytes(p)) return p;
+      throw new Error('invalid pub type');
+    }
     const tweakUtils = {
       privateAdd: (privateKey, tweak) => {
-        return numberToBytesBE(mod(normal(privateKey) + normal(tweak), secp.CURVE.n), 32);
+        return numberToBytesBE(mod(normPriv(privateKey) + normPriv(tweak), secp.CURVE.n), 32);
       },
 
       privateNegate: (privateKey) => {
-        return numberToBytesBE(mod(-normal(privateKey), secp.CURVE.n), 32);
+        return numberToBytesBE(mod(-normPriv(privateKey), secp.CURVE.n), 32);
       },
 
       pointAddScalar: (p, tweak, isCompressed) => {
-        if (typeof p === 'string') p = hexToBytes(p);
+        p = normPub(p);
+        tweak = normPub(tweak);
         const tweaked = Point.fromBytes(p).add(Point.fromPrivateKey(tweak));
-        if (tweaked.equals(Point.ZERO)) throw new Error('Tweaked point at infinity');
+        if (tweaked.is0()) throw new Error('Tweaked point at infinity');
         return tweaked.toBytes(isCompressed);
       },
 
       pointMultiply: (p, tweak, isCompressed) => {
-        if (typeof p === 'string') p = hexToBytes(p);
-        if (typeof tweak === 'string') tweak = hexToBytes(tweak);
+        p = normPub(p);
+        tweak = normPub(tweak);
         const t = bytesToNumberBE(tweak);
         return Point.fromBytes(p).multiply(t).toBytes(isCompressed);
       },
@@ -412,9 +431,10 @@ describe('secp256k1', () => {
   });
 
   should('#toBytes() roundtrip (failed case)', () => {
+    // todo: fromPrivateScalar
     const p1 =
       Point.fromPrivateKey(
-        88572218780422190464634044548753414301110513745532121983949500266768436236425n
+        numberToBytesBE(88572218780422190464634044548753414301110513745532121983949500266768436236425n, 32)
       );
     eql(Point.fromBytes(p1.toBytes(true)).equals(p1), true);
   });
@@ -422,7 +442,7 @@ describe('secp256k1', () => {
   should('#toBytes() roundtrip', () => {
     fc.assert(
       fc.property(FC_BIGINT, (x) => {
-        const p1 = Point.fromPrivateKey(x);
+        const p1 = Point.fromPrivateKey(numberToBytesBE(x, 32));
         const b1 = p1.toBytes(true);
         eql(Point.fromBytes(b1).toBytes(true), b1);
       })
@@ -432,27 +452,12 @@ describe('secp256k1', () => {
   should('.fromAffine', () => {
     const xy = { x: 0n, y: 0n };
     const p = Point.fromAffine(xy);
-    eql(p, Point.ZERO);
+    eql(p.is0(), true);
     eql(p.toAffine(), xy);
   });
 
   should('getSharedSecret rejects invalid keys', () => {
     throws(() => secp.getSharedSecret(hexToBytes('01'), hexToBytes('02')));
-  });
-
-  should('sign legacy options', () => {
-    if ('fromDER' in secp.Signature) return; // noble-curves has no this check
-    const msg = hexToBytes('12'.repeat(32));
-    const priv = hexToBytes('34'.repeat(32));
-    throws(() => {
-      secp.sign(msg, priv, { der: true });
-    });
-    throws(() => {
-      secp.sign(msg, priv, { canonical: true });
-    });
-    throws(() => {
-      secp.sign(msg, priv, { recovered: true });
-    });
   });
 });
 
@@ -616,7 +621,7 @@ describe('verify()', () => {
       const message = hexToBytes(
         '00000000000000000000000000000000000000000000000000000000deadbeef'
       );
-      const privateKey = 123456789n;
+      const privateKey = numberToBytesBE(123456789n, 32);
       const publicKey = Point.fromBytes(secp.getPublicKey(privateKey)).toBytes(false);
       const sig = secp.sign(message, privateKey);
       const recoveredPubkey = sig.recoverPublicKey(message);
