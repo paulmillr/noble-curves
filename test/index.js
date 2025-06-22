@@ -6,6 +6,7 @@ import './bls12-381.test.js';
 import './bn254.test.js';
 import './ed25519.test.js';
 import './ed448.test.js';
+import './endomorphism.test.js';
 import './fft.test.js';
 import './misc.test.js';
 import './nist.test.js';

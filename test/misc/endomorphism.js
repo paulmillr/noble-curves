@@ -1,44 +1,247 @@
+export const config = { log: true };
+
 // Proper modulo function for BigInt (handles negative numbers correctly)
 function mod(a, b) {
   const result = a % b;
   return result >= 0n ? result : b + result;
 }
 
-// mod-div a bigint num over den, to nearest integer
-function divNearest(num, den) {
-  if (num >= 0n) {
-    return (num + den / 2n) / den;
-  } else {
-    return (num - den / 2n) / den;
+function bigIntSqrt(value) {
+  if (value < 0n) throw new Error('Cannot compute square root of negative number');
+  if (value === 0n) return 0n;
+  if (value === 1n) return 1n;
+
+  let x = value;
+  let y = (x + 1n) / 2n;
+
+  while (y < x) {
+    x = y;
+    y = (x + value / x) / 2n;
+  }
+
+  return x;
+}
+
+/**
+ * Gaussian Lattice Reduction for 2D lattice basis vectors using BigInt arithmetic
+ * Reduces a basis {u, v} to find a shorter, more orthogonal basis
+ * Uses BigInt for exact integer arithmetic, crucial for cryptographic applications
+ */
+class Vector2D {
+  constructor(x, y) {
+    this.x = BigInt(x);
+    this.y = BigInt(y);
+  }
+
+  // Dot product
+  dot(other) {
+    return this.x * other.x + this.y * other.y;
+  }
+
+  // Squared length (norm squared)
+  normSquared() {
+    return this.x * this.x + this.y * this.y;
+  }
+
+  // Length (norm) - returns BigInt approximation
+  norm() {
+    return bigIntSqrt(this.normSquared());
+  }
+
+  // Subtract another vector
+  subtract(other) {
+    return new Vector2D(this.x - other.x, this.y - other.y);
+  }
+
+  // Add another vector
+  add(other) {
+    return new Vector2D(this.x + other.x, this.y + other.y);
+  }
+
+  // Scalar multiplication
+  multiply(scalar) {
+    const bigScalar = BigInt(scalar);
+    return new Vector2D(this.x * bigScalar, this.y * bigScalar);
+  }
+
+  // Copy vector
+  copy() {
+    return new Vector2D(this.x, this.y);
+  }
+
+  toString() {
+    return `(${this.x.toString()}, ${this.y.toString()})`;
+  }
+
+  // Convert to regular numbers for display (with potential precision loss warning)
+  toNumber() {
+    const xNum = Number(this.x);
+    const yNum = Number(this.y);
+
+    // Check for precision loss
+    if (
+      this.x > Number.MAX_SAFE_INTEGER ||
+      this.y > Number.MAX_SAFE_INTEGER ||
+      this.x < Number.MIN_SAFE_INTEGER ||
+      this.y < Number.MIN_SAFE_INTEGER
+    ) {
+      console.warn('Warning: Precision loss when converting BigInt to Number');
+    }
+
+    return { x: xNum, y: yNum };
   }
 }
 
 /**
- * Apply Gauss lattice reduction to find a reduced basis for a 2D lattice.
- * This is similar to the Euclidean algorithm but for 2D vectors.
- *
- * @param {[BigInt, BigInt]} u - First basis vector
- * @param {[BigInt, BigInt]} v - Second basis vector
- * @returns {[[BigInt, BigInt], [BigInt, BigInt]]} - Reduced basis vectors
+ * Round division for BigInt (rounds to nearest integer)
+ * Computes round(numerator / denominator)
+ * @param {BigInt} numerator
+ * @param {BigInt} denominator
+ */
+function roundDivisionBigInt(numerator, denominator) {
+  if (denominator === 0n) throw new Error('Division by zero');
+
+  const quotient = numerator / denominator;
+  const remainder = numerator % denominator;
+  const halfDenominator = denominator / 2n;
+
+  // Handle negative numbers correctly
+  if (denominator > 0n) {
+    if (remainder > halfDenominator || (remainder === halfDenominator && quotient % 2n !== 0n)) {
+      return quotient + 1n;
+    } else if (
+      remainder < -halfDenominator ||
+      (remainder === -halfDenominator && quotient % 2n !== 0n)
+    ) {
+      return quotient - 1n;
+    }
+  } else {
+    if (remainder < halfDenominator || (remainder === halfDenominator && quotient % 2n !== 0n)) {
+      return quotient + 1n;
+    } else if (
+      remainder > -halfDenominator ||
+      (remainder === -halfDenominator && quotient % 2n !== 0n)
+    ) {
+      return quotient - 1n;
+    }
+  }
+
+  return quotient;
+}
+
+/**
+ * Gaussian Lattice Reduction Algorithm using BigInt
+ * @param {Vector2D} u - First basis vector
+ * @param {Vector2D} v - Second basis vector
+ * @returns {Object} - Object containing reduced basis vectors and transformation matrix
  */
 function gaussLatticeReduction(u, v) {
-  u = [u[0], u[1]]; v = [v[0], v[1]]; // copy
+  // Work with copies to avoid modifying original vectors
+  let u1 = u.copy();
+  let v1 = v.copy();
+
+  // Keep track of the transformation matrix (BigInt)
+  let transformMatrix = {
+    a: 1n,
+    b: 0n, // coefficients for u1 in terms of original basis
+    c: 0n,
+    d: 1n, // coefficients for v1 in terms of original basis
+  };
+
+  const steps = [];
+  let iteration = 0;
+
   while (true) {
-    // Ensure |u| <= |v|, swap if necessary
-    const uNormSquared = u[0] * u[0] + u[1] * u[1];
-    const vNormSquared = v[0] * v[0] + v[1] * v[1];
-    if (uNormSquared > vNormSquared) [u, v] = [v, u];
-    const dot = u[0] * v[0] + u[1] * v[1]; // dot product u·v
-    const uNormSquared2 = u[0] * u[0] + u[1] * u[1]; // |u|^2
-    // If vectors are nearly orthogonal, we're done
-    // 2|u·v| <= |u|^2 means: 60° < angle_between_u_and_v < 120°
-    if (2n * (dot < 0n ? -dot : dot) <= uNormSquared2) break;
-    const m = divNearest(dot, uNormSquared2); // m = round(u·v / |u|^2)
-    v[0] = v[0] - m * u[0]; // Update v = v - m*u
-    v[1] = v[1] - m * u[1];
+    iteration++;
+
+    // Step 1: Ensure |u1|² <= |v1|²
+    if (u1.normSquared() > v1.normSquared()) {
+      // Swap u1 and v1
+      [u1, v1] = [v1, u1];
+      // Update transformation matrix
+      [transformMatrix.a, transformMatrix.c] = [transformMatrix.c, transformMatrix.a];
+      [transformMatrix.b, transformMatrix.d] = [transformMatrix.d, transformMatrix.b];
+
+      steps.push({
+        step: `Iteration ${iteration}: Swap vectors`,
+        u: u1.copy(),
+        v: v1.copy(),
+        reason: 'Ensuring |u|² <= |v|²',
+      });
+    }
+
+    // Step 2: Compute the Gram coefficient using rounded division
+    const numerator = v1.dot(u1);
+    const denominator = u1.normSquared();
+
+    if (denominator === 0n) {
+      throw new Error('Zero vector encountered in basis');
+    }
+
+    const mu = roundDivisionBigInt(numerator, denominator);
+
+    if (mu === 0n) {
+      // Basis is already reduced
+      steps.push({
+        step: `Iteration ${iteration}: Complete`,
+        u: u1.copy(),
+        v: v1.copy(),
+        reason: 'μ = 0, basis is reduced',
+      });
+      break;
+    }
+
+    // Step 3: Reduce v1 by subtracting μ * u1
+    const oldV1 = v1.copy();
+    v1 = v1.subtract(u1.multiply(mu));
+
+    // Update transformation matrix
+    transformMatrix.c -= mu * transformMatrix.a;
+    transformMatrix.d -= mu * transformMatrix.b;
+
+    steps.push({
+      step: `Iteration ${iteration}: Reduce v`,
+      u: u1.copy(),
+      v: v1.copy(),
+      mu: mu,
+      oldV: oldV1,
+      reason: `v := v - ${mu.toString()} * u`,
+    });
+
+    // Check for infinite loop protection
+    if (iteration > 1000) {
+      console.warn('Maximum iterations reached, stopping reduction');
+      break;
+    }
   }
-  return [u, v];
+
+  return {
+    reducedBasis: { u: u1, v: v1 },
+    originalBasis: { u: u, v: v },
+    transformationMatrix: transformMatrix,
+    steps: steps,
+    iterations: iteration,
+  };
 }
+
+export function calculateScalarBound(basis) {
+  const [v1, v2] = basis;
+  const [v1x, v1y] = v1;
+  const [v2x, v2y] = v2;
+  // Calculate the squared Euclidean norms using BigInt arithmetic
+  const v1NormSq = v1x * v1x + v1y * v1y;
+  const v2NormSq = v2x * v2x + v2y * v2y;
+  // Calculate the Euclidean norms using a BigInt square root function
+  const v1Norm = bigIntSqrt(v1NormSq);
+  const v2Norm = bigIntSqrt(v2NormSq);
+  // The bound is 0.5 * (||v1|| + ||v2||), which is (||v1|| + ||v2||) / 2
+  const bound = (v1Norm + v2Norm) / 2n;
+  return bound;
+}
+
+// Run demonstration if script is executed directly
+// demonstrateGaussianReductionBigInt();
+// testRandomLargeBases(3);
 
 /**
  * Calculate a reduced basis for the GLV endomorphism on secp256k1.
@@ -47,45 +250,37 @@ function gaussLatticeReduction(u, v) {
  * @param {BigInt} lambda - The endomorphism value lambda
  * @returns {[[BigInt, BigInt], [BigInt, BigInt]]} - Reduced basis vectors
  */
-function calculateGlvBasis(n, lambda) {
+export function calculateGlvBasis(n, lambda) {
+  // console.log({n, lambda})
   // Initial basis vectors for the lattice L:
   // v1 = (n, 0): This is valid because n ≡ 0 (mod n), so n + 0*lambda ≡ 0 (mod n)
   // v2 = (-lambda, 1): This is valid because -lambda + 1*lambda ≡ 0 (mod n)
-  const v1 = [n, 0n];
-  const v2 = [mod(-lambda, n), 1n];
+  // const v1 = [n, 0n];
+  // const v2 = [mod(-lambda, n), 1n];
+  const v1 = new Vector2D(n, 0n);
+  const v2 = new Vector2D(mod(-lambda, n), 1n);
+  // console.log({
+  //   v1, v2
+  // })
   // Apply Gauss lattice reduction to find a reduced basis
   // gauss lattice reduction of initial basis vectors `(n, 0), -(λ, 0)`
-  return gaussLatticeReduction(v1, v2);
-}
-
-/**
- * Decompose scalar k into k1 and k2 using the GLV method.
- *
- * @param {BigInt} k - The scalar to decompose
- * @param {[[BigInt, BigInt], [BigInt, BigInt]]} basis - The reduced basis vectors
- * @param {BigInt} n - The order of the curve
- * @returns {[BigInt, BigInt]} - A tuple (k1, k2) such that k ≡ k1 + k2*lambda (mod n)
- */
-function decomposeScalar(k, basis, n) {
-  const [v1, v2] = basis;
-
-  // Calculate the determinant of the basis
-  const det = v1[0] * v2[1] - v1[1] * v2[0];
-
-  // Use Babai's round-off algorithm:
-  // Calculate continuous coordinates in the basis
-  const c1 = divNearest(k * v2[1], det);
-  const c2 = divNearest(-k * v1[1], det);
-
-  // Calculate the closest lattice point to (k, 0)
-  const b1 = c1 * v1[0] + c2 * v2[0];
-  const b2 = c1 * v1[1] + c2 * v2[1];
-
-  // Calculate k1 = k - b1 (mod n) and k2 = -b2 (mod n)
-  const k1 = mod(k - b1, n);
-  const k2 = mod(-b2, n);
-
-  return [k1, k2];
+  let { v, u } = gaussLatticeReduction(v1, v2).reducedBasis;
+  // b) Ensure positive orientation (make sure det === n)
+  const det = u.x * v.y - u.y * v.x;
+  if (det < 0n) {
+    // Negating one vector flips the determinant's sign.
+    // Negating v is a safe choice as it preserves the length ordering.
+    v = { x: -v.x, y: -v.y };
+  }
+  // Now the basis is fully canonical. The determinant will be `n`.
+  const finalBasis = [
+    [u.x, u.y],
+    [v.x, v.y],
+  ];
+  // This check will now always pass with `det === n`
+  const finalDet = finalBasis[0][0] * finalBasis[1][1] - finalBasis[0][1] * finalBasis[1][0];
+  if (finalDet !== n) throw new Error(`Canonicalization failed! Final det: ${finalDet}`);
+  return finalBasis;
 }
 
 function powMod(num, power, modulus) {
@@ -108,96 +303,33 @@ function powMod(num, power, modulus) {
 // β is ∛1 mod p: `β = x^(p-1)/3`
 // λ is ∛1 mod n: `λ = x^(n-1)/3`
 function findRootsOfUnity(fieldOrder) {
-  let roots;
   let i = 2n;
-  while (!roots) {
-    const rootCandidate = powMod(i++, (fieldOrder - 1n) / 3n, fieldOrder);
-    if (rootCandidate !== 1n) {
-      const root = rootCandidate;
-      const root2 = mod(root * root, fieldOrder);
-      roots = [root, root2]
-    }
+  while (true) {
+    const root = powMod(i++, (fieldOrder - 1n) / 3n, fieldOrder);
+    if (root === 1n) continue; // primitive root
+    if (powMod(root, 3n, fieldOrder) !== 1n) continue; // check if it is real cube root
+    return [root, mod(root * root, fieldOrder)];
   }
-  return roots;
 }
 
-const hex = (n) => {
-  const _16 = n.toString(16);
-  const abs = n < 0 ? _16.slice(1) : _16;
-  const pref = n < 0 ? '-0x' : '0x';
-  return pref + abs;
-};
-export const config = { log: true };
-const log = (...msgs) => {
-  if (config.log) console.log(...msgs);
-};
-const logarr = (title, arr_) => log(`${title} = [\n  ${arr_.map(hex).join(',\n  ')}\n]`);
-// const hex = n => n < 0 ? '-0x' + : '0x' + n.toString(16);
-// Example usage
-export function calcEndo(p, n) {
-  const start = Date.now();
-  log('Non-trivial cube roots of P (betas) and N (lambdas):');
+// Find correspoding pairs of lambda-beta. This should work for GLV stuff, but generically checking
+// actual EC stuff would be better.
+export function findEndoPairs(p, n) {
   const betas = findRootsOfUnity(p);
   const lambdas = findRootsOfUnity(n);
-  const basises = lambdas.map(l => calculateGlvBasis(n, l));
-  logarr('betas', betas);
-  logarr('lambdas', lambdas);
-  logarr('basises', basises);
-  // log('lambdas', lambdas.map(hex).join(', '));
-  // log('betas  ', betas.map(hex).join(', '));
-  // 0x5363ad4cc05c30e0a5261c028812645a122e22ea20816678df02967c1b23bd72n;
-  let lambdaIndex = 0;
-  for (let lambda of lambdas) {
-    const basis = calculateGlvBasis(n, lambda);
-
-    log();
-    log(`Calculated reduced basis vectors of lambda #${lambdaIndex} for GLV decomposition:`);
-    logarr('v1', basis[0]);
-    logarr('v2', basis[1]);
-    const end = Date.now();
-    log('Calculated endomorphism in', end - start, 'ms');
-
-    // Test with a scalar
-    const k = 2n ** 255n - 19n; // Example scalar
-    const [k1, k2] = decomposeScalar(k, basis, n);
-
-    log();
-    log('Decomposing scalar s:');
-    log(`s = ${hex(k)}`);
-    log(`k1 = ${hex(k1)}`);
-    log(`k2 = ${hex(k2)}`);
-
-    // Verify: k ≡ k1 + k2*lambda (mod n)
-    const result = mod(k1 + k2 * lambda, n);
-    log(`\nVerification:`);
-    log(`k1 + k2*lambda (mod n) = ${hex(result)}`);
-    log(`Original k (mod n)     = ${hex(mod(k, n))}`);
-    log(`Match: ${result === mod(k, n)}`);
-
-    // Check the sizes of k1 and k2 compared to k
-    log(`\nSize comparison:`);
-    log(`|k| ≈ ${k.toString(2).length} bits`);
-    log(`|k1| ≈ ${k1.toString(2).length} bits`);
-    log(`|k2| ≈ ${k2.toString(2).length} bits`);
-    log(`Theoretical target: ~${Math.floor(n.toString(2).length / 2)} bits (sqrt(n))`);
-  }
-  return {
-    betas,
-    lambdas,
-    basises
-  }
+  const pairs = [
+    { beta: betas[0], lambda: lambdas[1] },
+    { beta: betas[1], lambda: lambdas[0] },
+  ];
+  return pairs;
 }
 
-// secp256k1 parameters
-// const p = 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2fn;
-// const n = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n;
-// calcEndo(p, n, 0);
+export function calcEndo(p, n) {
+  const res = [];
+  for (const pair of findEndoPairs(p, n)) {
+    const basis = calculateGlvBasis(n, pair.lambda);
+    res.push({ ...pair, basis });
+  }
+  return res;
+}
 
-// assert BETA != F(1)
-// assert BETA^3 == F(1)
-// assert BETA^2 + BETA + 1 == 0
-
-// assert LAMBDA != Z(1)
-// assert LAMBDA^3 == Z(1)
-// assert LAMBDA^2 + LAMBDA + 1 == 0
-// assert Integer(LAMBDA)*G == C(BETA*G[0], G[1])

@@ -31,6 +31,7 @@ import {
   abool,
   abytes,
   aInRange,
+  bitLen,
   bitMask,
   bytesToHex,
   bytesToNumberBE,
@@ -71,6 +72,8 @@ import {
 
 export type { AffinePoint };
 export type HmacFnSync = (key: Uint8Array, ...messages: Uint8Array[]) => Uint8Array;
+
+type EndoBasis = [[bigint, bigint], [bigint, bigint]];
 /**
  * When Weierstrass curve has `a=0`, it becomes Koblitz curve.
  * Koblitz curves allow using **efficiently-computable GLV endomorphism ψ**.
@@ -96,7 +99,8 @@ export type HmacFnSync = (key: Uint8Array, ...messages: Uint8Array[]) => Uint8Ar
  */
 export type EndomorphismOpts = {
   beta: bigint;
-  splitScalar: (k: bigint) => { k1neg: boolean; k1: bigint; k2neg: boolean; k2: bigint };
+  basises?: EndoBasis;
+  splitScalar?: (k: bigint) => { k1neg: boolean; k1: bigint; k2neg: boolean; k2: bigint };
 };
 export type BasicWCurve<T> = BasicCurve<T> & {
   // Params: a, b
@@ -113,6 +117,38 @@ export type BasicWCurve<T> = BasicCurve<T> & {
   // 2. Clear torsion component
   clearCofactor?: (c: ProjConstructor<T>, point: ProjPointType<T>) => ProjPointType<T>;
 };
+
+// We construct basis in such way that den is always positive and equals n, but num sign depends on basis (not on secret value)
+const divNearest = (num: bigint, den: bigint) => (num + (num >= 0 ? den : -den) / _2n) / den;
+
+export type ScalarEndoParts = { k1neg: boolean; k1: bigint; k2neg: boolean; k2: bigint };
+
+/**
+ * Splits scalar for GLV endomorphism.
+ */
+export function _splitEndoScalar(k: bigint, basis: EndoBasis, n: bigint): ScalarEndoParts {
+  // Split scalar into two such that part is ~half bits: `abs(part) < sqrt(N)`
+  // Since part can be negative, we need to do this on point.
+  // TODO: verifyScalar function which consumes lambda
+  const [[a1, b1], [a2, b2]] = basis;
+  const c1 = divNearest(b2 * k, n);
+  const c2 = divNearest(-b1 * k, n);
+  // |k1|/|k2| is < sqrt(N), but can be negative.
+  // If we do `k1 mod N`, we'll get big scalar (`> sqrt(N)`): so, we do cheaper negation instead.
+  let k1 = k - c1 * a1 - c2 * a2;
+  let k2 = -c1 * b1 - c2 * b2;
+  const k1neg = k1 < _0n;
+  const k2neg = k2 < _0n;
+  if (k1neg) k1 = -k1;
+  if (k2neg) k2 = -k2;
+  // Double check that resulting scalar less than half bits of N: otherwise wNAF will fail.
+  // This should only happen on wrong basises. Also, math inside is too complex and I don't trust it.
+  const MAX_NUM = bitMask(Math.ceil(bitLen(n) / 2)) + _1n; // Half bits of N
+  if (k1 < _0n || k1 >= MAX_NUM || k2 < _0n || k2 >= MAX_NUM) {
+    throw new Error('splitScalar (endomorphism): failed, k=' + k);
+  }
+  return { k1neg, k1, k2neg, k2 };
+}
 
 export type Entropy = Hex | boolean;
 export type SignOpts = { lowS?: boolean; extraEntropy?: Entropy; prehash?: boolean };
@@ -478,12 +514,8 @@ export function weierstrassN<T>(
   const { endo } = curveOpts;
   if (endo) {
     // validateObject(endo, { beta: 'bigint', splitScalar: 'function' });
-    if (
-      !Fp.is0(CURVE.a) ||
-      typeof endo.beta !== 'bigint' ||
-      typeof endo.splitScalar !== 'function'
-    ) {
-      throw new Error('invalid endo: expected "beta": bigint and "splitScalar": function');
+    if (!Fp.is0(CURVE.a) || typeof endo.beta !== 'bigint' || !Array.isArray(endo.basises)) {
+      throw new Error('invalid endo: expected "beta": bigint and "basises": array');
     }
   }
 
@@ -576,6 +608,11 @@ export function weierstrassN<T>(
 
   function aprjpoint(other: unknown) {
     if (!(other instanceof Point)) throw new Error('ProjectivePoint expected');
+  }
+
+  function splitEndoScalarN(k: bigint) {
+    if (!endo || !endo.basises) throw new Error('no endo');
+    return _splitEndoScalar(k, endo.basises, Fn.ORDER);
   }
 
   // Memoized toAffine / validity check. They are heavy. Points are immutable.
@@ -868,7 +905,7 @@ export function weierstrassN<T>(
       const mul = (n: bigint) => wnaf.wNAFCached(this, n, Point.normalizeZ);
       /** See docs for {@link EndomorphismOpts} */
       if (endo) {
-        const { k1neg, k1, k2neg, k2 } = endo.splitScalar(scalar);
+        const { k1neg, k1, k2neg, k2 } = splitEndoScalarN(scalar);
         const { p: k1p, f: k1f } = mul(k1);
         const { p: k2p, f: k2f } = mul(k2);
         fake = k1f.add(k2f);
@@ -895,7 +932,7 @@ export function weierstrassN<T>(
       if (sc === _1n) return p; // fast-path
       if (wnaf.hasPrecomputes(this)) return this.multiply(sc);
       if (endo) {
-        const { k1neg, k1, k2neg, k2 } = endo.splitScalar(sc);
+        const { k1neg, k1, k2neg, k2 } = splitEndoScalarN(sc);
         // `wNAFCachedUnsafe` is 30% slower
         const { p1, p2 } = mulEndoUnsafe(Point, p, k1, k2);
         return finishEndo(endo.beta, p1, p2, k1neg, k2neg);
