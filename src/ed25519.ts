@@ -38,12 +38,10 @@ const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3);
 // prettier-ignore
 const _5n = BigInt(5), _8n = BigInt(8);
 
-// 2n**255n - 19n
-// Removing Fp.create() will still work, and is 10% faster on sign
-//     a: Fp.create(BigInt(-1)),
-// d is -121665/121666 a.k.a. Fp.neg(121665 * Fp.inv(121666))
-// Finite field 2n**255n - 19n
-// Subgroup order 2n**252n + 27742317777372353535851937790883648493n;
+// P = 2n**255n - 19n
+// N = 2n**252n + 27742317777372353535851937790883648493n
+// a = Fp.create(BigInt(-1))
+// d = -121665/121666 a.k.a. Fp.neg(121665 * Fp.inv(121666))
 const ed25519_CURVE: EdwardsOpts = {
   p: BigInt('0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed'),
   n: BigInt('0x1000000000000000000000000000000014def9dea2f79cd65812631a5cf5d3ed'),

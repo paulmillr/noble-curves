@@ -1307,6 +1307,10 @@ export function ecdsa(
     const seed = concatBytes(...seedArgs); // Step D of RFC6979 3.2
     const m = h1int; // NOTE: no need to call bits2int second time here, it is inside truncateHash!
     // Converts signature params into point w r/s, checks result for validity.
+    // To transform k => Signature:
+    // q = k⋅G
+    // r = q.x mod n
+    // s = k^-1(m + rd) mod n
     // Can use scalar blinding b^-1(bm + bdr) where b ∈ [1,q−1] according to
     // https://tches.iacr.org/index.php/TCHES/article/view/7337/6509. We've decided against it:
     // a) dependency on CSPRNG b) 15% slowdown c) doesn't really help since bigints are not CT
@@ -1316,7 +1320,7 @@ export function ecdsa(
       const k = bits2int(kBytes); // Cannot use fields methods, since it is group element
       if (!Fn.isValidNot0(k)) return; // Valid scalars (including k) must be in 1..N-1
       const ik = Fn.inv(k); // k^-1 mod n
-      const q = Point.BASE.multiply(k).toAffine(); // q = Gk
+      const q = Point.BASE.multiply(k).toAffine(); // q = k⋅G
       const r = Fn.create(q.x); // r = q.x mod n
       if (r === _0n) return;
       const s = Fn.create(ik * Fn.create(m + r * d)); // Not using blinding here, see comment above
