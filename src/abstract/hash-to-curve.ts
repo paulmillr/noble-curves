@@ -16,7 +16,7 @@ import {
   utf8ToBytes,
 } from '../utils.ts';
 import type { AffinePoint, Group, GroupConstructor } from './curve.ts';
-import { FpInvertBatch, type IField, mod } from './modular.ts';
+import { FpInvertBatch, mod, type IField } from './modular.ts';
 
 export type UnicodeOrBytes = string | Uint8Array;
 
@@ -71,19 +71,24 @@ function anum(item: unknown): void {
   if (!Number.isSafeInteger(item)) throw new Error('number expected');
 }
 
+function normDST(DST: UnicodeOrBytes): Uint8Array {
+  if (!isBytes(DST) && typeof DST !== 'string') throw new Error('DST must be Uint8Array or string');
+  return typeof DST === 'string' ? utf8ToBytes(DST) : DST;
+}
+
 /**
  * Produces a uniformly random byte string using a cryptographic hash function H that outputs b bits.
  * [RFC 9380 5.3.1](https://www.rfc-editor.org/rfc/rfc9380#section-5.3.1).
  */
 export function expand_message_xmd(
   msg: Uint8Array,
-  DST: Uint8Array,
+  DST: UnicodeOrBytes,
   lenInBytes: number,
   H: CHash
 ): Uint8Array {
   abytes(msg);
-  abytes(DST);
   anum(lenInBytes);
+  DST = normDST(DST);
   // https://www.rfc-editor.org/rfc/rfc9380#section-5.3.3
   if (DST.length > 255) DST = H(concatBytes(utf8ToBytes('H2C-OVERSIZE-DST-'), DST));
   const { outputLen: b_in_bytes, blockLen: r_in_bytes } = H;
@@ -112,14 +117,14 @@ export function expand_message_xmd(
  */
 export function expand_message_xof(
   msg: Uint8Array,
-  DST: Uint8Array,
+  DST: UnicodeOrBytes,
   lenInBytes: number,
   k: number,
   H: CHash
 ): Uint8Array {
   abytes(msg);
-  abytes(DST);
   anum(lenInBytes);
+  DST = normDST(DST);
   // https://www.rfc-editor.org/rfc/rfc9380#section-5.3.3
   // DST = H('H2C-OVERSIZE-DST-' || a_very_long_DST, Math.ceil((lenInBytes * k) / 8));
   if (DST.length > 255) {
@@ -154,13 +159,10 @@ export function hash_to_field(msg: Uint8Array, count: number, options: H2COpts):
     k: 'number',
     hash: 'function',
   });
-  const { p, k, m, hash, expand, DST: _DST } = options;
-  if (!isBytes(_DST) && typeof _DST !== 'string')
-    throw new Error('DST must be string or uint8array');
+  const { p, k, m, hash, expand, DST } = options;
   if (!isHash(options.hash)) throw new Error('expected valid hash');
   abytes(msg);
   anum(count);
-  const DST = typeof _DST === 'string' ? utf8ToBytes(_DST) : _DST;
   const log2p = p.toString(2).length;
   const L = Math.ceil((log2p + k) / 8); // section 5.1 of ietf draft link above
   const len_in_bytes = count * m * L;
@@ -229,6 +231,10 @@ export type H2CMethod<T> = (msg: Uint8Array, options?: htfBasicOpts) => H2CPoint
 // TODO: remove
 export type HTFMethod<T> = H2CMethod<T>;
 export type MapMethod<T> = (scalars: bigint[]) => H2CPoint<T>;
+export type H2CHasherBase<T> = {
+  hashToCurve: H2CMethod<T>;
+  hashToScalar: (msg: Uint8Array, options: htfBasicOpts) => bigint;
+};
 /**
  * RFC 9380 methods, with cofactor clearing. See https://www.rfc-editor.org/rfc/rfc9380#section-3.
  *
@@ -236,14 +242,15 @@ export type MapMethod<T> = (scalars: bigint[]) => H2CPoint<T>;
  * * encodeToCurve: `map(hash(input))`, encodes NON-UNIFORM bytes to curve (WITH hashing)
  * * mapToCurve: `map(scalars)`, encodes NON-UNIFORM scalars to curve (NO hashing)
  */
-export type H2CHasher<T> = {
-  hashToCurve: H2CMethod<T>;
+export type H2CHasher<T> = H2CHasherBase<T> & {
   encodeToCurve: H2CMethod<T>;
   mapToCurve: MapMethod<T>;
   defaults: H2COpts & { encodeDST?: UnicodeOrBytes };
 };
 // TODO: remove
 export type Hasher<T> = H2CHasher<T>;
+
+export const _scalarDST: Uint8Array = utf8ToBytes('HashToScalar-');
 
 /** Creates hash-to-curve methods from EC Point and mapToCurve function. See {@link H2CHasher}. */
 export function createHasher<T>(
@@ -264,19 +271,20 @@ export function createHasher<T>(
 
   return {
     defaults,
+
     hashToCurve(msg: Uint8Array, options?: htfBasicOpts): H2CPoint<T> {
-      const dst = defaults.DST ? defaults.DST : {};
-      const opts = Object.assign({}, defaults, dst, options);
+      const opts = Object.assign({}, defaults, options);
       const u = hash_to_field(msg, 2, opts);
       const u0 = map(u[0]);
       const u1 = map(u[1]);
       return clear(u0.add(u1));
     },
     encodeToCurve(msg: Uint8Array, options?: htfBasicOpts): H2CPoint<T> {
-      const dst = defaults.encodeDST ? defaults.encodeDST : {};
-      const opts = Object.assign({}, defaults, dst, options);
+      const optsDst = defaults.encodeDST ? { DST: defaults.encodeDST } : {};
+      const opts = Object.assign({}, defaults, optsDst, options);
       const u = hash_to_field(msg, 1, opts);
-      return clear(map(u[0]));
+      const u0 = map(u[0]);
+      return clear(u0);
     },
     /** See {@link H2CHasher} */
     mapToCurve(scalars: bigint[]): H2CPoint<T> {
@@ -284,6 +292,15 @@ export function createHasher<T>(
       for (const i of scalars)
         if (typeof i !== 'bigint') throw new Error('expected array of bigints');
       return clear(map(scalars));
+    },
+
+    // hash_to_scalar can produce 0: https://www.rfc-editor.org/errata/eid8393
+    // RFC 9380, draft-irtf-cfrg-bbs-signatures-08
+    hashToScalar(msg: Uint8Array, options?: htfBasicOpts): bigint {
+      // @ts-ignore
+      const N = Point.Fn.ORDER;
+      const opts = Object.assign({}, defaults, { p: N, m: 1, DST: _scalarDST }, options);
+      return hash_to_field(msg, 1, opts)[0][0];
     },
   };
 }

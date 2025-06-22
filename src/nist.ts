@@ -109,6 +109,14 @@ export const p256_hasher: H2CHasher<bigint> = /* @__PURE__ */ (() => {
   );
 })();
 
+// export const p256_OPRF: OPRF = createORPF({
+//   name: 'P256-SHA256',
+//   Point: p256.Point,
+//   hash: sha256,
+//   hashToGroup: p256_hasher.hashToCurve,
+//   hashToScalar: p256_hasher.hashToScalar,
+// });
+
 /** NIST P384 (aka secp384r1) curve, ECDSA and ECDH methods. */
 export const p384: CurveFnWithCreate = createCurve(
   { ...p384_CURVE, Fp: Fp384, lowS: false },
@@ -137,6 +145,14 @@ export const p384_hasher: H2CHasher<bigint> = /* @__PURE__ */ (() => {
   );
 })();
 
+// export const p384_OPRF: OPRF = createORPF({
+//   name: 'P384-SHA384',
+//   Point: p384.Point,
+//   hash: sha384,
+//   hashToGroup: p384_hasher.hashToCurve,
+//   hashToScalar: p384_hasher.hashToScalar,
+// });
+
 /** NIST P521 (aka secp521r1) curve, ECDSA and ECDH methods. */
 export const p521: CurveFnWithCreate = createCurve(
   { ...p521_CURVE, Fp: Fp521, lowS: false, allowedPrivateKeyLengths: [130, 131, 132] },
@@ -164,3 +180,11 @@ export const p521_hasher: H2CHasher<bigint> = /* @__PURE__ */ (() => {
     }
   );
 })();
+
+// export const p521_OPRF: OPRF = createORPF({
+//   name: 'P521-SHA512',
+//   Point: p521.Point,
+//   hash: sha512,
+//   hashToGroup: p521_hasher.hashToCurve,
+//   hashToScalar: p521_hasher.hashToScalar, // produces L=98 just like in RFC
+// });

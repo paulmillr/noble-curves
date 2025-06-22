@@ -462,7 +462,7 @@ export function edwards(CURVE: EdwardsOpts, curveOpts: EdwardsExtraOpts = {}): E
 
     static fromBytes(bytes: Uint8Array, zip215 = false): Point {
       abytes(bytes);
-      return this.fromHex(bytes, zip215);
+      return Point.fromHex(bytes, zip215);
     }
 
     // Converts hash string or Uint8Array to Point.

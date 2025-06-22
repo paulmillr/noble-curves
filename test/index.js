@@ -13,6 +13,7 @@ import './nist.test.js';
 import './poseidon.test.js';
 import './rfc9380-hash-to-curve.test.js';
 import './rfc9496-ristretto-decaf.test.js';
+// import './rfc9497-oprf.test.js';
 import './secp256k1.test.js';
 import './utils.test.js';
 

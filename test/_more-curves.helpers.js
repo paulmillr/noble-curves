@@ -6,7 +6,7 @@ import curvesInit from './vectors/curves-init.json' with { type: 'json' };
 const { categories: JSON_CATEGORIES } = curvesInit;
 
 // NIST secp192r1 aka p192
-// https://www.secg.org/sec2-v2.pdf, https://neuromancer.sk/std/secg/secp192r1
+// https://www.secg.org/sec2-v2.pdf
 export const p192 = createCurve(
   {
     a: BigInt('0xfffffffffffffffffffffffffffffffefffffffffffffffc'),

@@ -22,8 +22,6 @@ import { bn254_Fr } from './bn254.ts';
 // Jubjub curves have 𝔽p over scalar fields of other curves. They are friendly to ZK proofs.
 // jubjub Fp = bls n. babyjubjub Fp = bn254 n.
 // verify manually, check bls12-381.ts and bn254.ts.
-// https://neuromancer.sk/std/other/JubJub
-
 const jubjub_CURVE: EdwardsOpts = {
   p: bls12_381_Fr.ORDER,
   n: BigInt('0xe7db4ea6533afa906673b0101343b00a6682093ccc81082d0970e5ed6f72cb7'),
@@ -99,7 +97,6 @@ export const pasta_q: bigint = BigInt(
 );
 
 /**
- * https://neuromancer.sk/std/other/Pallas
  * @deprecated
  */
 export const pallas: WCurveFn = weierstrass({
@@ -113,7 +110,6 @@ export const pallas: WCurveFn = weierstrass({
   hash: sha256,
 });
 /**
- * https://neuromancer.sk/std/other/Vesta
  * @deprecated
  */
 export const vesta: WCurveFn = weierstrass({

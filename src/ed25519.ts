@@ -8,29 +8,39 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha512 } from '@noble/hashes/sha2.js';
 import { abytes, concatBytes, utf8ToBytes } from '@noble/hashes/utils.js';
-import { type AffinePoint, type Group, pippenger } from './abstract/curve.ts';
+import { pippenger, type AffinePoint, type Group } from './abstract/curve.ts';
 import {
+  twistedEdwards,
   type CurveFn,
   type EdwardsOpts,
   type ExtPointType,
-  twistedEdwards,
 } from './abstract/edwards.ts';
 import {
+  _scalarDST,
   createHasher,
   expand_message_xmd,
   type H2CHasher,
+  type H2CHasherBase,
   type H2CMethod,
   type htfBasicOpts,
 } from './abstract/hash-to-curve.ts';
-import { Field, FpInvertBatch, FpSqrtEven, isNegativeLE, mod, pow2 } from './abstract/modular.ts';
+import {
+  Field,
+  FpInvertBatch,
+  FpSqrtEven,
+  isNegativeLE,
+  mod,
+  pow2,
+  type IField,
+} from './abstract/modular.ts';
 import { montgomery, type CurveFn as XCurveFn } from './abstract/montgomery.ts';
 import {
   bytesToHex,
   bytesToNumberLE,
   ensureBytes,
   equalBytes,
-  type Hex,
   numberToBytesLE,
+  type Hex,
 } from './utils.ts';
 
 // prettier-ignore
@@ -120,7 +130,8 @@ export const ED25519_TORSION_SUBGROUP: string[] = [
   'c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa',
 ];
 
-const Fp = /* @__PURE__ */ (() => Field(ed25519_CURVE.p, undefined, true))();
+const Fp = /* @__PURE__ */ (() => Field(ed25519_CURVE.p, { isLE: true }))();
+const Fn = /* @__PURE__ */ (() => Field(ed25519_CURVE.n, { isLE: true }))();
 
 const ed25519Defaults = /* @__PURE__ */ (() => ({
   ...ed25519_CURVE,
@@ -373,6 +384,15 @@ function calcElligatorRistrettoMap(r0: bigint): ExtendedPoint {
   return new ed25519.Point(mod(W0 * W3), mod(W2 * W1), mod(W1 * W3), mod(W0 * W2));
 }
 
+function ristretto255_map(bytes: Uint8Array): RistPoint {
+  abytes(bytes, 64);
+  const r1 = bytes255ToNumberLE(bytes.subarray(0, 32));
+  const R1 = calcElligatorRistrettoMap(r1);
+  const r2 = bytes255ToNumberLE(bytes.subarray(32, 64));
+  const R2 = calcElligatorRistrettoMap(r2);
+  return new RistPoint(R1.add(R2));
+}
+
 /**
  * Each ed25519/ExtendedPoint has 8 different equivalent points. This can be
  * a source of bugs for protocols like ring signatures. Ristretto was created to solve this.
@@ -383,6 +403,7 @@ function calcElligatorRistrettoMap(r0: bigint): ExtendedPoint {
 class RistPoint implements Group<RistPoint> {
   static BASE: RistPoint;
   static ZERO: RistPoint;
+  static Fn: IField<bigint> = Fn;
   private readonly ep: ExtendedPoint;
   // Private property to discourage combining ExtendedPoint + RistrettoPoint
   // Always use Ristretto encoding/decoding instead.
@@ -403,34 +424,19 @@ class RistPoint implements Group<RistPoint> {
    * @param hex 64-byte output of a hash function
    */
   static hashToCurve(hex: Hex): RistPoint {
-    hex = ensureBytes('ristrettoHash', hex, 64);
-    const r1 = bytes255ToNumberLE(hex.slice(0, 32));
-    const R1 = calcElligatorRistrettoMap(r1);
-    const r2 = bytes255ToNumberLE(hex.slice(32, 64));
-    const R2 = calcElligatorRistrettoMap(r2);
-    return new RistPoint(R1.add(R2));
+    return ristretto255_map(ensureBytes('ristrettoHash', hex, 64));
   }
 
   static fromBytes(bytes: Uint8Array): RistPoint {
-    abytes(bytes);
-    return this.fromHex(bytes);
-  }
-
-  /**
-   * Converts ristretto-encoded string to ristretto point.
-   * Described in [RFC9496](https://www.rfc-editor.org/rfc/rfc9496#name-decode).
-   * @param hex Ristretto-encoded 32 bytes. Not every 32-byte string is valid ristretto encoding
-   */
-  static fromHex(hex: Hex): RistPoint {
-    hex = ensureBytes('ristrettoHex', hex, 32);
+    abytes(bytes, 32);
     const { a, d } = ed25519.CURVE;
     const P = Fp.ORDER;
     const mod = Fp.create;
-    const emsg = 'RistrettoPoint.fromHex: the hex is not valid encoding of RistrettoPoint';
-    const s = bytes255ToNumberLE(hex);
+    const s = bytes255ToNumberLE(bytes);
     // 1. Check that s_bytes is the canonical encoding of a field element, or else abort.
     // 3. Check that s is non-negative, or else abort
-    if (!equalBytes(numberToBytesLE(s, 32), hex) || isNegativeLE(s, P)) throw new Error(emsg);
+    if (!equalBytes(numberToBytesLE(s, 32), bytes) || isNegativeLE(s, P))
+      throw new Error('invalid ristretto255 encoding 1');
     const s2 = mod(s * s);
     const u1 = mod(_1n + a * s2); // 4 (a is -1)
     const u2 = mod(_1n - a * s2); // 5
@@ -444,13 +450,35 @@ class RistPoint implements Group<RistPoint> {
     if (isNegativeLE(x, P)) x = mod(-x); // 10
     const y = mod(u1 * Dy); // 11
     const t = mod(x * y); // 12
-    if (!isValid || isNegativeLE(t, P) || y === _0n) throw new Error(emsg);
+    if (!isValid || isNegativeLE(t, P) || y === _0n)
+      throw new Error('invalid ristretto255 encoding 2');
     return new RistPoint(new ed25519.Point(x, y, _1n, t));
   }
 
+  /**
+   * Converts ristretto-encoded string to ristretto point.
+   * Described in [RFC9496](https://www.rfc-editor.org/rfc/rfc9496#name-decode).
+   * @param hex Ristretto-encoded 32 bytes. Not every 32-byte string is valid ristretto encoding
+   */
+  static fromHex(hex: Hex): RistPoint {
+    return RistPoint.fromBytes(ensureBytes('ristrettoHex', hex, 32));
+  }
+
   static msm(points: RistPoint[], scalars: bigint[]): RistPoint {
-    const Fn = Field(ed25519.CURVE.n, ed25519.CURVE.nBitLength);
-    return pippenger(RistPoint, Fn, points, scalars);
+    return pippenger(RistPoint, ed25519.Point.Fn, points, scalars);
+  }
+
+  clearCofactor(): RistPoint {
+    // no-op
+    return this;
+  }
+
+  assertValidity(): void {
+    this.ep.assertValidity();
+  }
+
+  toAffine(invertedZ?: bigint): AffinePoint<bigint> {
+    return this.ep.toAffine(invertedZ);
   }
 
   /**
@@ -550,17 +578,29 @@ export const RistrettoPoint: typeof RistPoint = /* @__PURE__ */ (() => {
   return RistPoint;
 })();
 
+const ristretto255_hasher: H2CHasherBase<bigint> = {
+  hashToCurve(msg: Uint8Array, options?: htfBasicOpts): RistPoint {
+    const DST = options?.DST || 'ristretto255_XMD:SHA-512_R255MAP_RO_';
+    return ristretto255_map(expand_message_xmd(msg, DST, 64, sha512));
+  },
+  hashToScalar(msg: Uint8Array, options: htfBasicOpts = { DST: _scalarDST }) {
+    return Fn.create(bytesToNumberLE(expand_message_xmd(msg, options.DST, 64, sha512)));
+  },
+};
+
+// export const ristretto255_OPRF: OPRF = createORPF({
+//   name: 'ristretto255-SHA512',
+//   Point: RistrettoPoint,
+//   hash: sha512,
+//   hashToGroup: ristretto255_hasher.hashToCurve,
+//   hashToScalar: ristretto255_hasher.hashToScalar,
+// });
+
+type RistHasher = (msg: Uint8Array, options: htfBasicOpts) => RistPoint;
 /**
  * hash-to-curve for ristretto255.
  * Described in [RFC9380](https://www.rfc-editor.org/rfc/rfc9380#appendix-B).
  */
-export const hashToRistretto255 = (msg: Uint8Array, options: htfBasicOpts): RistPoint => {
-  const d = options.DST;
-  const DST = typeof d === 'string' ? utf8ToBytes(d) : d;
-  const uniform_bytes = expand_message_xmd(msg, DST, 64, sha512);
-  const P = RistPoint.hashToCurve(uniform_bytes);
-  return P;
-};
+export const hashToRistretto255: RistHasher = ristretto255_hasher.hashToCurve as RistHasher;
 /** @deprecated */
-export const hash_to_ristretto255: (msg: Uint8Array, options: htfBasicOpts) => RistPoint =
-  hashToRistretto255; // legacy
+export const hash_to_ristretto255: RistHasher = ristretto255_hasher.hashToCurve as RistHasher;

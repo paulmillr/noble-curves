@@ -17,29 +17,31 @@ import {
 import type { AffinePoint, Group } from './abstract/curve.ts';
 import { pippenger } from './abstract/curve.ts';
 import {
-  type CurveFn,
   edwards,
+  twistedEdwards,
+  type CurveFn,
   type EdwardsOpts,
   type ExtPointConstructor,
   type ExtPointType,
-  twistedEdwards,
 } from './abstract/edwards.ts';
 import {
+  _scalarDST,
   createHasher,
   expand_message_xof,
   type H2CHasher,
+  type H2CHasherBase,
   type H2CMethod,
   type htfBasicOpts,
 } from './abstract/hash-to-curve.ts';
-import { Field, FpInvertBatch, isNegativeLE, mod, pow2 } from './abstract/modular.ts';
+import { Field, FpInvertBatch, isNegativeLE, mod, pow2, type IField } from './abstract/modular.ts';
 import { montgomery, type CurveFn as XCurveFn } from './abstract/montgomery.ts';
 import {
   bytesToHex,
   bytesToNumberLE,
   ensureBytes,
   equalBytes,
-  type Hex,
   numberToBytesLE,
+  type Hex,
 } from './utils.ts';
 
 // a = 1n
@@ -147,13 +149,17 @@ function uvRatio(u: bigint, v: bigint): { isValid: boolean; value: bigint } {
 }
 
 // Finite field 2n**448n - 2n**224n - 1n
-const Fp = /* @__PURE__ */ (() => Field(ed448_CURVE.p, 456, true))();
+const Fp = /* @__PURE__ */ (() => Field(ed448_CURVE.p, { BITS: 456, isLE: true }))();
 // RFC 7748 has 56-byte keys, RFC 8032 has 57-byte keys
+const Fn = /* @__PURE__ */ (() => Field(ed448_CURVE.n, { BITS: 448, isLE: true }))();
+// const Fn456 = /* @__PURE__ */ (() => Field(ed448_CURVE.n, { BITS: 456, isLE: true }))();
+
 // SHAKE256(dom4(phflag,context)||x, 114)
 const ED448_DEF = /* @__PURE__ */ (() => ({
   ...ed448_CURVE,
   Fp,
-  nBitLength: 456,
+  Fn,
+  // nBitLength: 456,
   hash: shake256_114,
   adjustScalarBytes,
   // dom4
@@ -375,6 +381,15 @@ function calcElligatorDecafMap(r0: bigint): ExtendedPoint {
   return new ed448.Point(mod(W0 * W3), mod(W2 * W1), mod(W1 * W3), mod(W0 * W2));
 }
 
+function decaf448_map(bytes: Uint8Array): DcfPoint {
+  abytes(bytes, 112);
+  const r1 = bytes448ToNumberLE(bytes.slice(0, 56));
+  const R1 = calcElligatorDecafMap(r1);
+  const r2 = bytes448ToNumberLE(bytes.slice(56, 112));
+  const R2 = calcElligatorDecafMap(r2);
+  return new DcfPoint(R1.add(R2));
+}
+
 /**
  * Each ed448/ExtendedPoint has 4 different equivalent points. This can be
  * a source of bugs for protocols like ring signatures. Decaf was created to solve this.
@@ -385,6 +400,7 @@ function calcElligatorDecafMap(r0: bigint): ExtendedPoint {
 class DcfPoint implements Group<DcfPoint> {
   static BASE: DcfPoint;
   static ZERO: DcfPoint;
+  static Fn: IField<bigint> = Fn;
   private readonly ep: ExtendedPoint;
   // Private property to discourage combining ExtendedPoint + DecafPoint
   // Always use Decaf encoding/decoding instead.
@@ -405,35 +421,20 @@ class DcfPoint implements Group<DcfPoint> {
    * @param hex 112-byte output of a hash function
    */
   static hashToCurve(hex: Hex): DcfPoint {
-    hex = ensureBytes('decafHash', hex, 112);
-    const r1 = bytes448ToNumberLE(hex.slice(0, 56));
-    const R1 = calcElligatorDecafMap(r1);
-    const r2 = bytes448ToNumberLE(hex.slice(56, 112));
-    const R2 = calcElligatorDecafMap(r2);
-    return new DcfPoint(R1.add(R2));
+    return decaf448_map(ensureBytes('decafHash', hex, 112));
   }
 
   static fromBytes(bytes: Uint8Array): DcfPoint {
-    abytes(bytes);
-    return this.fromHex(bytes);
-  }
-
-  /**
-   * Converts decaf-encoded string to decaf point.
-   * Described in [RFC9496](https://www.rfc-editor.org/rfc/rfc9496#name-decode-2).
-   * @param hex Decaf-encoded 56 bytes. Not every 56-byte string is valid decaf encoding
-   */
-  static fromHex(hex: Hex): DcfPoint {
-    hex = ensureBytes('decafHex', hex, 56);
+    abytes(bytes, 56);
     const { d } = ed448.CURVE;
     const P = Fp.ORDER;
     const mod = Fp.create;
-    const emsg = 'DecafPoint.fromHex: the hex is not valid encoding of DecafPoint';
-    const s = bytes448ToNumberLE(hex);
+    const s = bytes448ToNumberLE(bytes);
 
     // 1. Check that s_bytes is the canonical encoding of a field element, or else abort.
     // 2. Check that s is non-negative, or else abort
-    if (!equalBytes(numberToBytesLE(s, 56), hex) || isNegativeLE(s, P)) throw new Error(emsg);
+    if (!equalBytes(numberToBytesLE(s, 56), bytes) || isNegativeLE(s, P))
+      throw new Error('invalid decaf448 encoding 1');
 
     const s2 = mod(s * s); // 1
     const u1 = mod(_1n + s2); // 2
@@ -449,8 +450,17 @@ class DcfPoint implements Group<DcfPoint> {
     const y = mod((_1n - s2) * invsqrt * u1); // 7
     const t = mod(x * y); // 8
 
-    if (!isValid) throw new Error(emsg);
+    if (!isValid) throw new Error('invalid decaf448 encoding 2');
     return new DcfPoint(new ed448.Point(x, y, _1n, t));
+  }
+
+  /**
+   * Converts decaf-encoded string to decaf point.
+   * Described in [RFC9496](https://www.rfc-editor.org/rfc/rfc9496#name-decode-2).
+   * @param hex Decaf-encoded 56 bytes. Not every 56-byte string is valid decaf encoding
+   */
+  static fromHex(hex: Hex): DcfPoint {
+    return DcfPoint.fromBytes(ensureBytes('decafHex', hex, 56));
   }
 
   static msm(points: DcfPoint[], scalars: bigint[]): DcfPoint {
@@ -533,6 +543,19 @@ class DcfPoint implements Group<DcfPoint> {
   negate(): DcfPoint {
     return new DcfPoint(this.ep.negate());
   }
+
+  clearCofactor(): DcfPoint {
+    // no-op
+    return this;
+  }
+
+  assertValidity(): void {
+    this.ep.assertValidity();
+  }
+
+  toAffine(invertedZ?: bigint): AffinePoint<bigint> {
+    return this.ep.toAffine(invertedZ);
+  }
 }
 
 /**
@@ -547,15 +570,28 @@ export const DecafPoint: typeof DcfPoint = /* @__PURE__ */ (() => {
   return DcfPoint;
 })();
 
+export const decaf448_hasher: H2CHasherBase<bigint> = {
+  hashToCurve(msg: Uint8Array, options?: htfBasicOpts): DcfPoint {
+    const DST = options?.DST || 'decaf448_XOF:SHAKE256_D448MAP_RO_';
+    return decaf448_map(expand_message_xof(msg, DST, 112, 224, shake256));
+  },
+  hashToScalar(msg: Uint8Array, options: htfBasicOpts = { DST: _scalarDST }) {
+    return Fn.create(bytesToNumberLE(expand_message_xof(msg, options.DST, 64, 256, shake256)));
+  },
+};
+
+// export const decaf448_OPRF: OPRF = createORPF({
+//   name: 'decaf448-SHAKE256',
+//   Point: DecafPoint,
+//   hash: (msg: Uint8Array) => shake256(msg, { dkLen: 64 }),
+//   hashToGroup: decaf448_hasher.hashToCurve,
+//   hashToScalar: decaf448_hasher.hashToScalar,
+// });
+
+type DcfHasher = (msg: Uint8Array, options: htfBasicOpts) => DcfPoint;
 /**
  * hash-to-curve for decaf448.
  * Described in [RFC9380](https://www.rfc-editor.org/rfc/rfc9380#appendix-C).
  */
-export const hashToDecaf448 = (msg: Uint8Array, options: htfBasicOpts): DcfPoint => {
-  const d = options.DST;
-  const DST = typeof d === 'string' ? utf8ToBytes(d) : d;
-  const uniform_bytes = expand_message_xof(msg, DST, 112, 224, shake256);
-  const P = DcfPoint.hashToCurve(uniform_bytes);
-  return P;
-};
-export const hash_to_decaf448: typeof hashToDecaf448 = hashToDecaf448; // legacy
+export const hashToDecaf448: DcfHasher = decaf448_hasher.hashToCurve as DcfHasher;
+export const hash_to_decaf448: DcfHasher = decaf448_hasher.hashToCurve as DcfHasher;
