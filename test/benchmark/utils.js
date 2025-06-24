@@ -20,12 +20,22 @@ import { title } from './_shared.js';
 
   title('modular over secp256k1 P field');
   const { Fp: secpFp } = secp256k1.CURVE;
-  const NUMS = [2n ** 232n - 5910n, 2n ** 231n - 5910n, 2n ** 231n - 5909n];
-  await mark('invert a', () => secpFp.inv(NUMS[0]));
-  await mark('invert b', () => secpFp.inv(NUMS[1]));
-  await mark('sqrt p = 3 mod 4', () => secpFp.sqrt(NUMS[1]));
+  const Fp25519 = Fp(2n ** 255n - 19n);
+  const Fp383 = Fp(BigInt('2462625387274654950767440006258975862817483704404090416745738034557663054564649171262659326683244604346084081047321'));
   const FpStark = Fp(BigInt('0x800000000000011000000000000000000000000000000000000000000000001'));
-  await mark('sqrt tonneli-shanks', () => FpStark.sqrt(NUMS[2]));
+
+  const NUM0 = 2n ** 232n - 5910n;
+  const NUM1 = 2n ** 231n - 5910n;
+  const NUM2 = 2n ** 231n - 5909n;
+  const NUM3 = 16n;
+
+  await mark('invert a', () => secpFp.inv(NUM0));
+  await mark('invert b', () => secpFp.inv(NUM1));
+
+  await mark('sqrt p = 3 mod 4', () => secpFp.sqrt(NUM1));
+  await mark('sqrt p = 5 mod 8', () => Fp25519.sqrt(NUM3));
+  await mark('sqrt p = 9 mod 16', () => Fp383.sqrt(NUM3));
+  await mark('sqrt tonneli-shanks', () => FpStark.sqrt(NUM2));
 
   title('hashing to fields')
   const N = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n;

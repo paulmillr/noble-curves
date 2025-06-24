@@ -19,8 +19,9 @@ import {
 // prettier-ignore
 const _0n = BigInt(0), _1n = BigInt(1), _2n = /* @__PURE__ */ BigInt(2), _3n = /* @__PURE__ */ BigInt(3);
 // prettier-ignore
-const _4n = /* @__PURE__ */ BigInt(4), _5n = /* @__PURE__ */ BigInt(5);
-const _8n = /* @__PURE__ */ BigInt(8);
+const _4n = /* @__PURE__ */ BigInt(4), _5n = /* @__PURE__ */ BigInt(5), _7n = /* @__PURE__ */ BigInt(7);
+// prettier-ignore
+const _8n = /* @__PURE__ */ BigInt(8), _9n = /* @__PURE__ */ BigInt(9), _16n = /* @__PURE__ */ BigInt(16);
 
 // Calculates a modulo b
 export function mod(a: bigint, b: bigint): bigint {
@@ -73,6 +74,10 @@ export function invert(number: bigint, modulo: bigint): bigint {
   return mod(x, modulo);
 }
 
+function assertIsSquare<T>(Fp: IField<T>, root: T, n: T): void {
+  if (!Fp.eql(Fp.sqr(root), n)) throw new Error('Cannot find square root');
+}
+
 // Not all roots are possible! Example which will throw:
 // const NUM =
 // n = 72057594037927816n;
@@ -80,8 +85,7 @@ export function invert(number: bigint, modulo: bigint): bigint {
 function sqrt3mod4<T>(Fp: IField<T>, n: T) {
   const p1div4 = (Fp.ORDER + _1n) / _4n;
   const root = Fp.pow(n, p1div4);
-  // Throw if root^2 != n
-  if (!Fp.eql(Fp.sqr(root), n)) throw new Error('Cannot find square root');
+  assertIsSquare(Fp, root, n);
   return root;
 }
 
@@ -92,32 +96,34 @@ function sqrt5mod8<T>(Fp: IField<T>, n: T) {
   const nv = Fp.mul(n, v);
   const i = Fp.mul(Fp.mul(nv, _2n), v);
   const root = Fp.mul(nv, Fp.sub(i, Fp.ONE));
-  if (!Fp.eql(Fp.sqr(root), n)) throw new Error('Cannot find square root');
+  assertIsSquare(Fp, root, n);
   return root;
 }
 
-// TODO: Commented-out for now. Provide test vectors.
-// Tonelli is too slow for extension fields Fp2.
-// That means we can't use sqrt (c1, c2...) even for initialization constants.
-// if (P % _16n === _9n) return sqrt9mod16;
-// // prettier-ignore
-// function sqrt9mod16<T>(Fp: IField<T>, n: T, p7div16?: bigint) {
-//   if (p7div16 === undefined) p7div16 = (Fp.ORDER + BigInt(7)) / _16n;
-//   const c1 = Fp.sqrt(Fp.neg(Fp.ONE)); //  1. c1 = sqrt(-1) in F, i.e., (c1^2) == -1 in F
-//   const c2 = Fp.sqrt(c1);             //  2. c2 = sqrt(c1) in F, i.e., (c2^2) == c1 in F
-//   const c3 = Fp.sqrt(Fp.neg(c1));     //  3. c3 = sqrt(-c1) in F, i.e., (c3^2) == -c1 in F
-//   const c4 = p7div16;                 //  4. c4 = (q + 7) / 16        # Integer arithmetic
-//   let tv1 = Fp.pow(n, c4);            //  1. tv1 = x^c4
-//   let tv2 = Fp.mul(c1, tv1);          //  2. tv2 = c1 * tv1
-//   const tv3 = Fp.mul(c2, tv1);        //  3. tv3 = c2 * tv1
-//   let tv4 = Fp.mul(c3, tv1);          //  4. tv4 = c3 * tv1
-//   const e1 = Fp.eql(Fp.sqr(tv2), n);  //  5.  e1 = (tv2^2) == x
-//   const e2 = Fp.eql(Fp.sqr(tv3), n);  //  6.  e2 = (tv3^2) == x
-//   tv1 = Fp.cmov(tv1, tv2, e1); //  7. tv1 = CMOV(tv1, tv2, e1)  # Select tv2 if (tv2^2) == x
-//   tv2 = Fp.cmov(tv4, tv3, e2); //  8. tv2 = CMOV(tv4, tv3, e2)  # Select tv3 if (tv3^2) == x
-//   const e3 = Fp.eql(Fp.sqr(tv2), n);  //  9.  e3 = (tv2^2) == x
-//   return Fp.cmov(tv1, tv2, e3); // 10.  z = CMOV(tv1, tv2, e3) # Select the sqrt from tv1 and tv2
-// }
+// Based on RFC9380, Kong algorithm
+// prettier-ignore
+function sqrt9mod16(P: bigint): <T>(Fp: IField<T>, n: T) => T {
+  const Fp_ = Field(P);
+  const tn = tonelliShanks(P);
+  const c1 = tn(Fp_, Fp_.neg(Fp_.ONE));//  1. c1 = sqrt(-1) in F, i.e., (c1^2) == -1 in F
+  const c2 = tn(Fp_, c1);              //  2. c2 = sqrt(c1) in F, i.e., (c2^2) == c1 in F
+  const c3 = tn(Fp_, Fp_.neg(c1));     //  3. c3 = sqrt(-c1) in F, i.e., (c3^2) == -c1 in F
+  const c4 = (P + _7n) / _16n;         //  4. c4 = (q + 7) / 16        # Integer arithmetic
+  return <T>(Fp: IField<T>, n: T) => {
+    let tv1 = Fp.pow(n, c4);           //  1. tv1 = x^c4
+    let tv2 = Fp.mul(tv1, c1);         //  2. tv2 = c1 * tv1
+    const tv3 = Fp.mul(tv1, c2);       //  3. tv3 = c2 * tv1
+    const tv4 = Fp.mul(tv1, c3);       //  4. tv4 = c3 * tv1
+    const e1 = Fp.eql(Fp.sqr(tv2), n); //  5.  e1 = (tv2^2) == x
+    const e2 = Fp.eql(Fp.sqr(tv3), n); //  6.  e2 = (tv3^2) == x
+    tv1 = Fp.cmov(tv1, tv2, e1);       //  7. tv1 = CMOV(tv1, tv2, e1)  # Select tv2 if (tv2^2) == x
+    tv2 = Fp.cmov(tv4, tv3, e2);       //  8. tv2 = CMOV(tv4, tv3, e2)  # Select tv3 if (tv3^2) == x
+    const e3 = Fp.eql(Fp.sqr(tv2), n); //  9.  e3 = (tv2^2) == x
+    const root = Fp.cmov(tv1, tv2, e3);// 10.  z = CMOV(tv1, tv2, e3)   # Select sqrt from tv1 & tv2
+    assertIsSquare(Fp, root, n);
+    return root;
+  };
+}
 
 /**
  * Tonelli-Shanks square root search algorithm.
@@ -129,7 +135,7 @@ function sqrt5mod8<T>(Fp: IField<T>, n: T) {
 export function tonelliShanks(P: bigint): <T>(Fp: IField<T>, n: T) => T {
   // Initialization (precomputation).
   // Caching initialization could boost perf by 7%.
-  if (P < BigInt(3)) throw new Error('sqrt is not defined for small field');
+  if (P < _3n) throw new Error('sqrt is not defined for small field');
   // Factor P - 1 = Q * 2^S, where Q is odd
   let Q = P - _1n;
   let S = 0;
@@ -197,7 +203,8 @@ export function tonelliShanks(P: bigint): <T>(Fp: IField<T>, n: T) => T {
  *
  * 1. P ≡ 3 (mod 4)
  * 2. P ≡ 5 (mod 8)
- * 3. Tonelli-Shanks algorithm
+ * 3. P ≡ 9 (mod 16)
+ * 4. Tonelli-Shanks algorithm
  *
  * Different algorithms can give different roots, it is up to user to decide which one they want.
  * For example there is FpSqrtOdd/FpSqrtEven to choice root based on oddness (used for hash-to-curve).
@@ -207,7 +214,8 @@ export function FpSqrt(P: bigint): <T>(Fp: IField<T>, n: T) => T {
   if (P % _4n === _3n) return sqrt3mod4;
   // P ≡ 5 (mod 8) => Atkin algorithm, page 10 of https://eprint.iacr.org/2012/685.pdf
   if (P % _8n === _5n) return sqrt5mod8;
-  // P ≡ 9 (mod 16) not implemented, see above
+  // P ≡ 9 (mod 16) => Kong algorithm, page 11 of https://eprint.iacr.org/2012/685.pdf (algorithm 4)
+  if (P % _16n === _9n) return sqrt9mod16(P);
   // Tonelli-Shanks algorithm
   return tonelliShanks(P);
 }

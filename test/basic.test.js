@@ -14,7 +14,7 @@ import { bls12_381 } from '../esm/bls12-381.js';
 import { bn254 } from '../esm/bn254.js';
 import { ed25519, ed25519ctx, ed25519ph, RistrettoPoint, x25519 } from '../esm/ed25519.js';
 import { DecafPoint, ed448, ed448ph } from '../esm/ed448.js';
-import { jubjub } from '../esm/misc.js';
+import { babyjubjub, jubjub, pallas, vesta } from '../esm/misc.js';
 import { secp256r1, secp384r1, secp521r1 } from '../esm/nist.js';
 import { secp256k1 } from '../esm/secp256k1.js';
 import { randomBytes } from '../esm/utils.js';
@@ -40,7 +40,10 @@ const FIELDS = {
   secp256r1: { Fp: [secp256r1.CURVE.Fp] },
   secp521r1: { Fp: [secp521r1.CURVE.Fp] },
   secp256k1: { Fp: [secp256k1.CURVE.Fp] },
-  jubjub: { Fp: [jubjub.CURVE.Fp] },
+  pallas: { Fp: [pallas.Point.Fp] },
+  vesta: { Fp: [vesta.Point.Fp] },
+  jubjub: { Fp: [jubjub.Point.Fp] },
+  babyjubjub: { Fp: [babyjubjub.Point.Fp] },
   ed25519: { Fp: [ed25519.CURVE.Fp] },
   ed448: { Fp: [ed448.CURVE.Fp] },
   bls12: {
@@ -82,6 +85,15 @@ const FIELDS = {
       (Fp12, num) => Fp12.fromBigTwelve(num),
     ],
   },
+  // https://neuromancer.sk/std/other/E-382 (just to check Kong sqrt, nobody else uses it)
+  e382: {
+    // Prime
+    Fr: [
+      Field(
+        2462625387274654950767440006258975862817483704404090416745738034557663054564649171262659326683244604346084081047321n
+      ),
+    ],
+  },
 };
 
 // prettier-ignore
@@ -107,7 +119,7 @@ const CURVES = {
   decaf: { ...ed448, Point: DecafPoint, ExtendedPoint: DecafPoint },
 };
 Object.assign(CURVES, miscCurves);
-
+const SQRT_FIELDS = [];
 for (const c in FIELDS) {
   const curve = FIELDS[c];
   for (const f in curve) {
@@ -118,6 +130,9 @@ for (const c in FIELDS) {
     const Fp = Fp_opts[0];
     const FC_BIGINT = curve[f][1] ? Fp_opts[1] : fc.bigInt(1n, Fp.ORDER - 1n);
     const create = Fp_opts[2] ? Fp_opts[2].bind(null, Fp) : (num) => Fp.create(num);
+    const noSqrt = [bls12_381.fields.Fp12, bn254.fields.Fp12].includes(Fp);
+    const isNonPrime = noSqrt || [bls12_381.fields.Fp2, bn254.fields.Fp2].includes(Fp);
+
     describe(name, () => {
       should('equality', () => {
         fc.assert(
@@ -287,9 +302,35 @@ for (const c in FIELDS) {
         eql(Fp.eql(Fp.mul(i16, inv0(i4)), i4), true); // 16/4 == 4
       });
 
-      // Not implemented
-      if (!(Fp === bls12_381.fields.Fp12 || Fp === bn254.fields.Fp12)) {
-        should('multiply/sqrt', () => {
+      const checkRoot = (n, root) => {
+        const negRoot = Fp.neg(root);
+        eql(mod.FpPow(Fp, root, 2n), n);
+        eql(mod.FpPow(Fp, negRoot, 2n), n);
+        // Cross-check with tonneli
+        eql(Fp.mul(root, root), n);
+        eql(Fp.mul(negRoot, negRoot), n);
+        eql(Fp.eql(Fp.sqr(root), n), true, 'sqrt(a)^2 == a');
+        eql(Fp.eql(Fp.sqr(Fp.neg(root)), n), true, '(-sqrt(a))^2 == a');
+        // Returns odd/even element
+        eql(Fp.isOdd(mod.FpSqrtOdd(Fp, n)), true);
+        eql(Fp.isOdd(mod.FpSqrtEven(Fp, n)), false);
+        eql(Fp.eql(Fp.sqr(mod.FpSqrtOdd(Fp, n)), n), true);
+        eql(Fp.eql(Fp.sqr(mod.FpSqrtEven(Fp, n)), n), true);
+      };
+
+      // No legendre for extension fields, but we can have Fp.sqrt defined via specific algorithm
+      if (!noSqrt) {
+        should('sqrt(sqr)', () => {
+          fc.assert(
+            fc.property(FC_BIGINT, (num) => {
+              const x = create(num);
+              const sq = Fp.mul(x, x);
+              const root = Fp.sqrt(sq);
+              eql(Fp.eql(root, x) || Fp.eql(root, Fp.neg(x)), true);
+            })
+          );
+        });
+        should('sqrt(field)', () => {
           fc.assert(
             fc.property(FC_BIGINT, (num) => {
               const a = create(num);
@@ -297,27 +338,123 @@ for (const c in FIELDS) {
               try {
                 root = Fp.sqrt(a);
               } catch (e) {
+                if (!e.message.includes('Cannot find square root')) throw e;
                 eql(mod.FpIsSquare(Fp, a), false);
                 return;
               }
-              eql(mod.FpIsSquare(Fp, a), true);
-              eql(Fp.eql(Fp.sqr(root), a), true, 'sqrt(a)^2 == a');
-              eql(Fp.eql(Fp.sqr(Fp.neg(root)), a), true, '(-sqrt(a))^2 == a');
-              // Returns odd/even element
-              eql(Fp.isOdd(mod.FpSqrtOdd(Fp, a)), true);
-              eql(Fp.isOdd(mod.FpSqrtEven(Fp, a)), false);
-              eql(Fp.eql(Fp.sqr(mod.FpSqrtOdd(Fp, a)), a), true);
-              eql(Fp.eql(Fp.sqr(mod.FpSqrtEven(Fp, a)), a), true);
+              checkRoot(a, root);
             })
           );
         });
-
+      }
+      if (!isNonPrime) {
+        SQRT_FIELDS.push(Fp);
         should('sqrt(0)', () => {
           eql(Fp.sqrt(Fp.ZERO), Fp.ZERO);
           const sqrt1 = Fp.sqrt(Fp.ONE);
           eql(Fp.eql(sqrt1, Fp.ONE) || Fp.eql(sqrt1, Fp.neg(Fp.ONE)), true, 'sqrt(1) = 1 or -1');
+          eql(mod.FpLegendre(Fp, Fp.ZERO), 0);
+        });
+        should('sqr returns square', () =>
+          fc.assert(
+            fc.property(FC_BIGINT, (num) => {
+              const x = create(num);
+              eql(mod.FpIsSquare(Fp, Fp.sqr(x)), true);
+            })
+          )
+        );
+        should('FpSqrt + legendre', () =>
+          fc.assert(
+            fc.property(FC_BIGINT, (num) => {
+              const n = create(num);
+              const leg = mod.FpLegendre(Fp, n);
+              if (leg === 1) {
+                const root = mod.FpSqrt(Fp.ORDER)(Fp, n);
+                const negRoot = Fp.neg(root);
+                checkRoot(n, root);
+                const t = mod.tonelliShanks(Fp.ORDER)(Fp, n);
+                eql(Fp.eql(t, root) || Fp.eql(t, negRoot), true);
+              } else if (leg === 0) {
+                eql(n, Fp.ZERO);
+                eql(mod.FpIsSquare(Fp, n), false);
+              } else if (leg === -1) {
+                throws(() => mod.FpSqrt(Fp, n));
+                eql(mod.FpIsSquare(Fp, n), false);
+              } else {
+                throw new Error('unexpected legendre output');
+              }
+            })
+          )
+        );
+        should('legendre correctness', () =>
+          fc.assert(
+            fc.property(FC_BIGINT, (num) => {
+              const n = create(num);
+              const leg = BigInt(mod.FpLegendre(Fp, n));
+              eql(Fp.mul(Fp.ONE, leg), Fp.pow(n, (Fp.ORDER - 1n) / 2n));
+            })
+          )
+        );
+        should('legendre multiplicativity', () =>
+          fc.assert(
+            fc.property(FC_BIGINT, FC_BIGINT, (num1, num2) => {
+              const a = create(num1);
+              const b = create(num2);
+              eql(mod.FpLegendre(Fp, a) * mod.FpLegendre(Fp, b), mod.FpLegendre(Fp, Fp.mul(a, b)));
+            })
+          )
+        );
+      } else {
+        should('sqrt(fail)', () =>
+          fc.assert(
+            fc.property(FC_BIGINT, (num) => {
+              const a = create(num);
+              throws(() => mod.FpSqrt(Fp.ORDER)(Fp, n));
+            })
+          )
+        );
+      }
+      should('pow(x*y, e) == pow(x,e)*pow(y,e)', () =>
+        fc.assert(
+          fc.property(FC_BIGINT, FC_BIGINT, FC_BIGINT, (num1, num2, num3) => {
+            const a = create(num1);
+            const b = create(num2);
+            const c = create(num3);
+            eql(Fp.pow(Fp.mul(a, b), c), Fp.mul(Fp.pow(a, c), Fp.pow(b, c)));
+          })
+        )
+      );
+      should('pow(x, 0) = 1', () => {
+        fc.assert(
+          fc.property(FC_BIGINT, (num) => {
+            const x = create(num);
+            if (Fp.eql(x, Fp.ZERO)) return; // Optional skip or check 0^0 edge case
+            eql(Fp.eql(mod.FpPow(Fp, x, 0n), Fp.ONE), true);
+          })
+        );
+      });
+      should('pow(x, 1) = x', () => {
+        fc.assert(
+          fc.property(FC_BIGINT, (num) => {
+            const x = create(num);
+            eql(Fp.eql(mod.FpPow(Fp, x, 1n), x), true);
+          })
+        );
+      });
+      if (!isNonPrime) {
+        should('pow(x, p-1) = 1 (mod p) for x ≠ 0', () => {
+          fc.assert(
+            fc.property(FC_BIGINT, (num) => {
+              const x = create(num);
+              if (Fp.eql(x, Fp.ZERO)) return;
+              eql(Fp.eql(mod.FpPow(Fp, x, Fp.ORDER - 1n), Fp.ONE), true);
+            })
+          );
         });
       }
+      should('legendre(0)', () => {
+        eql(mod.FpLegendre(Fp, Fp.ZERO), 0);
+      });
 
       should('div/division by one equality', () => {
         fc.assert(
@@ -364,6 +501,26 @@ for (const c in FIELDS) {
     });
   }
 }
+
+should('Sqrt cases', () => {
+  // Verify that we checked fields for every sqrt case
+  const CASES = [
+    (n) => n % 4n === 3n,
+    (n) => n % 8n === 5n, // atkin
+    (n) => n % 16n == 9n, // kong
+    (n) => true, // shanks
+  ];
+  const checkedCases = new Set();
+  for (const f of SQRT_FIELDS) {
+    for (let i = 0; i < CASES.length; i++) {
+      if (CASES[i](f.ORDER)) {
+        checkedCases.add(i);
+        break;
+      }
+    }
+  }
+  eql(checkedCases.size, CASES.length);
+});
 
 // Group tests
 const getXY = (p) => ({ x: p.x, y: p.y });
