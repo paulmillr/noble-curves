@@ -464,7 +464,6 @@ class DcfPoint implements Group<DcfPoint> {
   }
 
   static msm(points: DcfPoint[], scalars: bigint[]): DcfPoint {
-    const Fn = Field(ed448.CURVE.n, ed448.CURVE.nBitLength);
     return pippenger(DcfPoint, Fn, points, scalars);
   }
 
