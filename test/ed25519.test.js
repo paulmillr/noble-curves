@@ -12,7 +12,7 @@ import {
   ED25519_TORSION_SUBGROUP,
   numberToBytesLE,
   edwardsToMontgomeryPub,
-  montgomeryToEdwardsPub
+  montgomeryToEdwardsPub,
 } from './ed25519.helpers.js';
 import { getTypeTestsNonUi8a, json, txt } from './utils.js';
 
