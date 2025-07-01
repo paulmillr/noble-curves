@@ -70,6 +70,7 @@ export type WebCryptoGetPubOpts = {
   privFormat?: Format;
   pubFormat?: Format;
 };
+const _format = 'raw';
 
 function assertType(type: 'private' | 'public', key: any) {
   if (key.type !== type) throw new Error(`invalid key type, expected ${type}`);
@@ -82,24 +83,24 @@ function createKeyUtils(algo: Algo, derive: boolean, pcks8header: string) {
   const arrBufToU8 = (res: Key, format: Format) =>
     format === 'jwk' ? res : new Uint8Array(res as ArrayBuffer);
   const pub: KeyUtils = {
-    async import(key: Key, format: Format = 'raw'): Promise<CryptoKey> {
+    async import(key: Key, format: Format = _format): Promise<CryptoKey> {
       const crypto = getWebcryptoSubtle();
       const keyi: CryptoKey = await crypto.importKey(format, key, algo, true, pubUsage);
       assertType('public', keyi);
       return keyi;
     },
-    async export(key: CryptoKey, format: Format = 'raw'): Promise<Key> {
+    async export(key: CryptoKey, format: Format = _format): Promise<Key> {
       assertType('public', key);
       const crypto = getWebcryptoSubtle();
       const keyi = await crypto.exportKey(format, key);
       return arrBufToU8(keyi, format);
     },
-    async convert(key: Key, inFormat: Format = 'raw', outFormat: Format = 'raw'): Promise<Key> {
+    async convert(key: Key, inFormat: Format = _format, outFormat: Format = _format): Promise<Key> {
       return pub.export(await pub.import(key, inFormat), outFormat);
     },
   };
   const priv: KeyUtils = {
-    async import(key: Key, format: Format = 'raw'): Promise<CryptoKey> {
+    async import(key: Key, format: Format = _format): Promise<CryptoKey> {
       const crypto = getWebcryptoSubtle();
       let keyi: CryptoKey;
       if (format === 'raw') {
@@ -121,7 +122,7 @@ function createKeyUtils(algo: Algo, derive: boolean, pcks8header: string) {
       assertType('private', keyi);
       return keyi;
     },
-    async export(key: CryptoKey, format: Format = 'raw'): Promise<Key> {
+    async export(key: CryptoKey, format: Format = _format): Promise<Key> {
       const crypto = getWebcryptoSubtle();
       assertType('private', key);
       if (format === 'raw') {
@@ -136,7 +137,7 @@ function createKeyUtils(algo: Algo, derive: boolean, pcks8header: string) {
       const keyi = await crypto.exportKey(format, key);
       return arrBufToU8(keyi, format);
     },
-    async convert(key: Key, inFormat: Format = 'raw', outFormat: Format = 'raw'): Promise<Key> {
+    async convert(key: Key, inFormat: Format = _format, outFormat: Format = _format): Promise<Key> {
       return priv.export(await priv.import(key, inFormat), outFormat);
     },
   };
@@ -157,20 +158,19 @@ function createKeyUtils(algo: Algo, derive: boolean, pcks8header: string) {
     },
     // We support different input / output formats since there is no 'spki' private key
     async getPublicKey(privateKey: Key, opts: WebCryptoGetPubOpts = {}): Promise<Key> {
-      if (opts.pubFormat === undefined) opts.pubFormat = opts.privFormat;
+      const fpriv = opts.privFormat ?? _format;
+      const fpub = opts.pubFormat ?? fpriv;
       // Export to jwk, remove private scalar and then convert to format
       const jwk = (
-        opts.privFormat === 'jwk'
-          ? { ...privateKey }
-          : await priv.convert(privateKey, opts.privFormat, 'jwk')
+        fpriv === 'jwk' ? { ...privateKey } : await priv.convert(privateKey, fpriv, 'jwk')
       ) as JsonWebKey;
       delete jwk.d;
       jwk.key_ops = pubUsage;
-      if (opts.pubFormat === 'jwk') return jwk;
-      return pub.convert(jwk, 'jwk', opts.pubFormat);
+      if (fpub === 'jwk') return jwk;
+      return pub.convert(jwk, 'jwk', fpub);
     },
     utils: {
-      async randomPrivateKey(format: Format = 'raw'): Promise<Key> {
+      async randomPrivateKey(format: Format = _format): Promise<Key> {
         const crypto = getWebcryptoSubtle();
         const keyPair = await crypto.generateKey(algo, true, privUsage);
         return priv.export(keyPair.privateKey, format);
@@ -182,7 +182,6 @@ function createKeyUtils(algo: Algo, derive: boolean, pcks8header: string) {
 }
 
 type WebCryptoOpts = { format?: Format };
-const _format = 'raw';
 
 function createSigner(keys: ReturnType<typeof createKeyUtils>, algo: SigAlgo) {
   return {
