@@ -44,11 +44,19 @@ const CURVES = {
 
 const MSG = new Uint8Array([1, 2, 3]);
 describe('webcrypto', () => {
+  const isDeno = process?.versions?.deno;
+  const isBun = process?.versions?.bun;
   for (const c in CURVES) {
+    if (['ed25519', 'x25519', 'ed448', 'x448'].includes(c) && isBun) return;
+    if (['ed448', 'x448', 'p521'].includes(c) && isDeno) return;
     describe(c, () => {
       const { noble, web, canDerive, canSign } = CURVES[c];
       for (const keyType of ['raw', 'pkcs8', 'spki', 'jwk']) {
         should(keyType, async () => {
+          // if (!(await webcrypto.supportsWc(web))) {
+          //   console.log(`skipping test, unsupported webcrypto ${c} ${keyType}`);
+          //   return;
+          // }
           // Basic
           deepStrictEqual(await web.isAvailable(), true);
           deepStrictEqual(await webcrypto.supportsWc(web), true);

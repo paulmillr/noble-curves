@@ -76,7 +76,7 @@ function assertType(type: 'private' | 'public', key: any) {
   if (key.type !== type) throw new Error(`invalid key type, expected ${type}`);
 }
 
-function createKeyUtils(algo: Algo, derive: boolean, pcks8header: string) {
+function createKeyUtils(algo: Algo, derive: boolean, keyLen: number, pcks8header: string) {
   const privUsage: KeyUsage[] = derive ? ['deriveBits'] : ['sign'];
   const pubUsage: KeyUsage[] = derive ? [] : ['verify'];
   // Return Uint8Array instead of ArrayBuffer
@@ -132,7 +132,11 @@ function createKeyUtils(algo: Algo, derive: boolean, pcks8header: string) {
         const base64 = jwk.d.replace(/-/g, '+').replace(/_/g, '/'); // base64url
         const pad = base64.length % 4 ? '='.repeat(4 - (base64.length % 4)) : ''; // add padding
         const binary = atob(base64 + pad);
-        return Uint8Array.from(binary, (c) => c.charCodeAt(0)) as Key;
+        const raw = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+        // Pad key to key len because Bun strips leading zero for P-521 only
+        const res = new Uint8Array(keyLen);
+        res.set(raw, keyLen - raw.length);
+        return res as Key;
       }
       const keyi = await crypto.exportKey(format, key);
       return arrBufToU8(keyi, format);
@@ -150,7 +154,17 @@ function createKeyUtils(algo: Algo, derive: boolean, pcks8header: string) {
       if (available !== undefined) return available;
       try {
         const crypto = getWebcryptoSubtle();
-        await crypto.generateKey(algo, true, privUsage);
+        const key = await crypto.generateKey(algo, true, privUsage);
+        // Deno is broken and generates key for unsupported curves, but then fails on export
+        await priv.export(key.privateKey, 'jwk');
+        // Bun fails on derive for x25519, but not x448
+        if (derive) {
+          await crypto.deriveBits(
+            { name: typeof algo === 'string' ? algo : algo.name, public: key.publicKey },
+            key.privateKey,
+            8
+          );
+        }
         return (available = true);
       } catch (e) {
         return (available = false);
@@ -265,8 +279,8 @@ function wrapNIST(
   pcks8header: string
 ): WebCryptoNIST {
   const ECDH_ALGO = { name: 'ECDH', namedCurve: curve };
-  const keys = createKeyUtils({ name: 'ECDSA', namedCurve: curve }, false, pcks8header);
-  const keysEcdh = createKeyUtils(ECDH_ALGO, true, pcks8header);
+  const keys = createKeyUtils({ name: 'ECDSA', namedCurve: curve }, false, keyLen, pcks8header);
+  const keysEcdh = createKeyUtils(ECDH_ALGO, true, keyLen, pcks8header);
   return Object.freeze({
     name: curve,
     isAvailable: keys.isAvailable,
@@ -277,8 +291,12 @@ function wrapNIST(
   });
 }
 
-function wrapEdDSA(curve: 'Ed25519' | 'Ed448', pcks8header: string): WebCryptoEdDSA {
-  const keys = createKeyUtils(curve, false, pcks8header);
+function wrapEdDSA(
+  curve: 'Ed25519' | 'Ed448',
+  keyLen: number,
+  pcks8header: string
+): WebCryptoEdDSA {
+  const keys = createKeyUtils(curve, false, keyLen, pcks8header);
   return Object.freeze({
     name: curve,
     isAvailable: keys.isAvailable,
@@ -293,7 +311,7 @@ function wrapMontgomery(
   keyLen: number,
   pcks8header: string
 ): WebCryptoMontgomery {
-  const keys = createKeyUtils(curve, true, pcks8header);
+  const keys = createKeyUtils(curve, true, keyLen, pcks8header);
   return Object.freeze({
     name: curve,
     isAvailable: keys.isAvailable,
@@ -324,10 +342,12 @@ export const p521: WebCryptoNIST = /* @__PURE__ */ wrapNIST(
 
 export const ed25519: WebCryptoEdDSA = /* @__PURE__ */ wrapEdDSA(
   'Ed25519',
+  32,
   '302e020100300506032b657004220420'
 );
 export const ed448: WebCryptoEdDSA = /* @__PURE__ */ wrapEdDSA(
   'Ed448',
+  57,
   '3047020100300506032b6571043b0439'
 );
 
