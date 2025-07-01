@@ -222,6 +222,27 @@ export function edwardsToMontgomeryPub(edwardsPub: Hex): Uint8Array {
 export const edwardsToMontgomery: typeof edwardsToMontgomeryPub = edwardsToMontgomeryPub; // deprecated
 
 /**
+ * Converts a Montgomery public key (u-coordinate) to a compressed Edwards public key.
+ * This is a key part of the XEd25519 signature scheme.
+ * The sign of the x-coordinate is chosen to be even (sign bit 0), which is the standard convention.
+ * @param montgomeryPub A 32-byte X25519 public key.
+ * @returns A 32-byte Ed25519 public key.
+ */
+export function montgomeryToEdwardsPub(montgomeryPub: Hex): Uint8Array {
+  const u = Fp.fromBytes(ensureBytes('montgomeryPub', montgomeryPub, 32));
+  // y = (u - 1) / (u + 1)
+  const y = Fp.mul(Fp.sub(u, _1n), Fp.inv(Fp.add(u, _1n)));
+  const y2 = Fp.sqr(y);
+  // x^2 = (y^2 - 1) / (d * y^2 + 1)
+  const num = Fp.sub(y2, _1n);
+  const den = Fp.add(Fp.mul(ed25519_CURVE.d, y2), _1n); // a = -1 for ed25519
+  const { isValid, value: x } = uvRatio(num, den);
+  if (!isValid) throw new Error('montgomeryToEdwardsPub: invalid point');
+  const point = new ed25519.Point(x, y, _1n, Fp.mul(x, y));
+  return point.toBytes();
+}
+
+/**
  * Converts ed25519 secret key to x25519 secret key.
  * @example
  *   const someonesPub = x25519.getPublicKey(x25519.utils.randomPrivateKey());

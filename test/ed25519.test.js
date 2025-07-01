@@ -7,7 +7,13 @@ import {
 import * as fc from 'fast-check';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql, strictEqual, throws } from 'node:assert';
-import { ed25519 as ed, ED25519_TORSION_SUBGROUP, numberToBytesLE } from './ed25519.helpers.js';
+import {
+  ed25519 as ed,
+  ED25519_TORSION_SUBGROUP,
+  numberToBytesLE,
+  edwardsToMontgomeryPub,
+  montgomeryToEdwardsPub
+} from './ed25519.helpers.js';
 import { getTypeTestsNonUi8a, json, txt } from './utils.js';
 
 const VECTORS_rfc8032_ed25519 = json('./vectors/rfc8032-ed25519.json');
@@ -375,6 +381,29 @@ describe('ed25519', () => {
         } else throw new Error('unknown test result');
       }
     }
+  });
+
+  describe('montgomeryToEdwardsPub', () => {
+    should('convert x25519 pubkey to ed25519 pubkey and verify signature', () => {
+      const priv = ed.utils.randomPrivateKey();
+      const pubEd = ed.getPublicKey(priv);
+      const pubX = edwardsToMontgomeryPub(pubEd);
+      const pubEdRecovered = montgomeryToEdwardsPub(pubX);
+
+      const msg = new Uint8Array([1, 2, 3, 4]);
+      const sig = ed.sign(msg, priv);
+      if (!ed.verify(sig, msg, pubEdRecovered)) {
+        console.error('pubEd', Buffer.from(pubEd).toString('hex'));
+        console.error('pubX', Buffer.from(pubX).toString('hex'));
+        console.error('pubEdRecovered', Buffer.from(pubEdRecovered).toString('hex'));
+        console.error('sig', Buffer.from(sig).toString('hex'));
+      }
+
+      // Should verify with original pubkey
+      strictEqual(ed.verify(sig, msg, pubEd), true);
+      // Should verify with recovered pubkey (may not be byte-equal, but must verify)
+      strictEqual(ed.verify(sig, msg, pubEdRecovered), true);
+    });
   });
 });
 
