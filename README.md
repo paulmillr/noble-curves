@@ -183,9 +183,7 @@ edwardsToMontgomeryPriv(ed25519.utils.randomPrivateKey());
 #### ristretto255
 
 ```ts
-// ristretto255 from [RFC9496](https://www.rfc-editor.org/rfc/rfc9496)
-import { utf8ToBytes } from '@noble/hashes/utils';
-import { sha512 } from '@noble/hashes/sha512';
+import { sha512 } from '@noble/hashes/sha2.js';
 import {
   hashToCurve,
   encodeToCurve,
@@ -193,7 +191,7 @@ import {
   hashToRistretto255,
 } from '@noble/curves/ed25519.js';
 
-const msg = utf8ToBytes('Ristretto is traditionally a short shot of espresso coffee');
+const msg = new TextEncoder().encode('Ristretto is traditionally a short shot of espresso coffee');
 hashToCurve(msg);
 
 const rp = RistrettoPoint.fromHex(
@@ -206,6 +204,8 @@ RistrettoPoint.hashToCurve(sha512(msg));
 // full hash-to-curve including domain separation tag
 hashToRistretto255(msg, { DST: 'ristretto255_XMD:SHA-512_R255MAP_RO_' });
 ```
+
+Check out [RFC9496](https://www.rfc-editor.org/rfc/rfc9496) more info on ristretto255.
 
 #### ed448
 
@@ -238,11 +238,10 @@ edwardsToMontgomeryPub(ed448.getPublicKey(ed448.utils.randomPrivateKey()));
 
 ```ts
 // decaf448 from [RFC9496](https://www.rfc-editor.org/rfc/rfc9496)
-import { utf8ToBytes } from '@noble/hashes/utils';
-import { shake256 } from '@noble/hashes/sha3';
+import { shake256 } from '@noble/hashes/sha3.js';
 import { hashToCurve, encodeToCurve, DecafPoint, hashToDecaf448 } from '@noble/curves/ed448.js';
 
-const msg = utf8ToBytes('Ristretto is traditionally a short shot of espresso coffee');
+const msg = new TextEncoder().encode('Ristretto is traditionally a short shot of espresso coffee');
 hashToCurve(msg);
 
 const dp = DecafPoint.fromHex(
@@ -256,11 +255,13 @@ DecafPoint.hashToCurve(shake256(msg, { dkLen: 112 }));
 hashToDecaf448(msg, { DST: 'decaf448_XOF:SHAKE256_D448MAP_RO_' });
 ```
 
+Check out [RFC9496](https://www.rfc-editor.org/rfc/rfc9496) more info on decaf448.
+
 #### bls12-381
 
 ```ts
 import { bls12_381 } from '@noble/curves/bls12-381.js';
-import { hexToBytes, utf8ToBytes } from '@noble/curves/abstract/utils.js';
+import { hexToBytes } from '@noble/curves/abstract/utils.js';
 
 // private keys are 32 bytes
 const privKey = hexToBytes('67d53f170b908cabb9eb326c3c337762d59289a8fec79f7bc9254b584b73265c');
@@ -270,7 +271,7 @@ const privKey = hexToBytes('67d53f170b908cabb9eb326c3c337762d59289a8fec79f7bc925
 const blsl = bls12_381.longSignatures;
 const publicKey = blsl.getPublicKey(privateKey);
 // Sign msg with custom (Ethereum) DST
-const msg = utf8ToBytes('hello');
+const msg = new TextEncoder().encode('hello');
 const DST = 'BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_';
 const msgp = blsl.hash(msg, DST);
 const signature = blsl.sign(msgp, privateKey);
@@ -280,7 +281,7 @@ console.log({ publicKey, signature, isValid });
 // Short signatures (G1), long public keys (G2)
 const blss = bls12_381.shortSignatures;
 const publicKey2 = blss.getPublicKey(privateKey);
-const msgp2 = blss.hash(utf8ToBytes('hello'), 'BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_')
+const msgp2 = blss.hash(new TextEncoder().encode('hello'), 'BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_')
 const signature2 = blss.sign(msgp2, privateKey);
 const isValid2 = blss.verify(signature2, msgp2, publicKey);
 console.log({ publicKey2, signature2, isValid2 });
@@ -375,65 +376,63 @@ method: check out examples.
 
 ### weierstrass: Short Weierstrass curve
 
-```ts
+```js
 import { weierstrass } from '@noble/curves/abstract/weierstrass.js';
-import { Field } from '@noble/curves/abstract/modular.js';
-import { sha256 } from '@noble/hashes/sha256';
-import { hmac } from '@noble/hashes/hmac';
-import { concatBytes, randomBytes } from '@noble/hashes/utils';
 
-const hmacSha256 = (key: Uint8Array, ...msgs: Uint8Array[]) =>
-  hmac(sha256, key, concatBytes(...msgs));
-
-// secQ (not secP) - secq256k1 is a cycle of secp256k1 with Fp/N flipped.
-// https://personaelabs.org/posts/spartan-ecdsa
-// https://zcash.github.io/halo2/background/curves.html#cycles-of-curves
-const secq256k1 = weierstrass({
-  a: 0n,
-  b: 7n,
-  Fp: Field(2n ** 256n - 432420386565659656852420866394968145599n),
-  n: 2n ** 256n - 2n ** 32n - 2n ** 9n - 2n ** 8n - 2n ** 7n - 2n ** 6n - 2n ** 4n - 1n,
-  Gx: 55066263022277343669578718895168534326250603453777594175500187360389116729240n,
-  Gy: 32670510020758816978083085130507043184471273380659243275938904335757337482424n,
-  hash: sha256,
-  hmac: hmacSha256,
-  randomBytes,
-});
-
-// NIST secp192r1 aka p192
-// https://www.secg.org/sec2-v2.pdf, https://neuromancer.sk/std/secg/secp192r1
-const secp192r1 = weierstrass({
+// NIST secp192r1 aka p192. https://www.secg.org/sec2-v2.pdf
+const p192_CURVE = {
+  p: 0xfffffffffffffffffffffffffffffffeffffffffffffffffn,
+  n: 0xffffffffffffffffffffffff99def836146bc9b1b4d22831n,
+  h: 1n,
   a: 0xfffffffffffffffffffffffffffffffefffffffffffffffcn,
   b: 0x64210519e59c80e70fa7e9ab72243049feb8deecc146b9b1n,
-  Fp: Field(0xfffffffffffffffffffffffffffffffeffffffffffffffffn),
-  n: 0xffffffffffffffffffffffff99def836146bc9b1b4d22831n,
   Gx: 0x188da80eb03090f67cbf20eb43a18800f4ff0afd82ff1012n,
   Gy: 0x07192b95ffc8da78631011ed6b24cdd573f977a11e794811n,
-  hash: sha256,
-  hmac: hmacSha256,
-  randomBytes,
-});
+};
+const p192_Point = weierstrass(p192_CURVE);
 ```
 
 Short Weierstrass curve's formula is `y² = x³ + ax + b`. `weierstrass`
 expects arguments `a`, `b`, field `Fp`, curve order `n`, cofactor `h`
 and coordinates `Gx`, `Gy` of generator point.
-`hmac` and `hash` must be specified for deterministic `k` generation.
 
-**Weierstrass points:**
+#### Projective Point
 
-- Are exported as `ProjectivePoint`
-- Are represented in projective (homogeneous) coordinates: (x, y, z) ∋ (x=x/z, y=y/z)
-- Use complete exception-free formulas for addition and doubling
-- Can be decoded/encoded from/to Uint8Array / hex strings using
-  `ProjectivePoint.fromHex` and `ProjectivePoint#toRawBytes()`
-- Have `assertValidity()` which checks for being on-curve
-- Have `toAffine()` and `x` / `y` getters which convert to 2d xy affine coordinates
+```js
+// # weierstrass Point methods
+// projective (homogeneous) coordinates: (x, y, z) ∋ (x=x/z, y=y/z)
 
-**ECDSA signatures:**
+const point = Point.BASE; // Elliptic curve Point class and BASE point static var.
+point.add(point).equals(point.double()); // add(), equals(), double() methods
+point.subtract(point).equals(Point.ZERO); // subtract() method, ZERO static var
+point.negate(); // Flips point over x/y coordinate.
+point.multiply(31415n); // Multiplication of Point by scalar.
+
+// decoding, encoding
+const b = p.toBytes();
+const p2 = Point.fromBytes(b);
+// affine conversion
+const { x, y } = p.toAffine();
+const p3 = Point.fromAffine({ x, y });
+```
+
+#### ECDSA signatures
+
+```js
+import { ecdsa } from '@noble/curves/abstract/weierstrass.js';
+import { sha256 } from '@noble/hashes/sha2.js';
+const p192 = ecdsa(p192_Point, sha256);
+const priv = p192.utils.randomPrivateKey();
+const pub = p192.getPublicKey(priv);
+const msg = sha256(new TextEncoder().encode('custom curve'));
+const sig = p192.sign(msg);
+const isValid = p192.verify(sig, msg, pub);
+```
+
+ECDSA signatures:
 
 - Are represented by `Signature` instances with `r, s` and optional `recovery` properties
-- Have `recoverPublicKey()`, `toCompactRawBytes()` and `toDERRawBytes()` methods
+- Have `recoverPublicKey()`, `toBytes()` with optional `format: 'compact' | 'der'`
 - Can be prehashed, or non-prehashed:
   - `sign(msgHash, privKey)` (default, prehash: false) - you did hashing before
   - `sign(msg, privKey, {prehash: true})` - curves will do hashing for you
@@ -441,85 +440,62 @@ and coordinates `Gx`, `Gy` of generator point.
   - Consider [hedged ECDSA with noise](#hedged-ecdsa-with-noise) for adding randomness into
     for signatures, to get improved security against fault attacks.
 
-More examples:
-
-```typescript
-// All curves expose same generic interface.
-const priv = secq256k1.utils.randomPrivateKey();
-secq256k1.getPublicKey(priv); // Convert private key to public.
-const sig = secq256k1.sign(msg, priv); // Sign msg with private key.
-const sig2 = secq256k1.sign(msg, priv, { prehash: true }); // hash(msg)
-secq256k1.verify(sig, msg, priv); // Verify if sig is correct.
-
-// Default behavior is "try DER, then try compact if fails". Can be explicit:
-secq256k1.verify(sig.toCompactHex(), msg, priv, { format: 'compact' });
-
-const Point = secq256k1.ProjectivePoint;
-const point = Point.BASE; // Elliptic curve Point class and BASE point static var.
-point.add(point).equals(point.double()); // add(), equals(), double() methods
-point.subtract(point).equals(Point.ZERO); // subtract() method, ZERO static var
-point.negate(); // Flips point over x/y coordinate.
-point.multiply(31415n); // Multiplication of Point by scalar.
-
-point.assertValidity(); // Checks for being on-curve
-point.toAffine(); // Converts to 2d affine xy coordinates
-
-secq256k1.CURVE.n;
-secq256k1.CURVE.p;
-secq256k1.CURVE.Fp.mod();
-secq256k1.CURVE.hash();
-
-// precomputes
-const fast = secq256k1.utils.precompute(8, Point.fromHex(someonesPubKey));
-fast.multiply(privKey); // much faster ECDH now
-```
-
 ### edwards: Twisted Edwards curve
 
 ```ts
-import { twistedEdwards } from '@noble/curves/abstract/edwards.js';
+import { edwards, eddsa } from '@noble/curves/abstract/edwards.js';
 import { Field } from '@noble/curves/abstract/modular.js';
-import { sha512 } from '@noble/hashes/sha512';
-import { randomBytes } from '@noble/hashes/utils';
+import { sha512 } from '@noble/hashes/sha2.js';
+import { randomBytes } from '@noble/hashes/utils.js';
 
-const Fp = Field(2n ** 255n - 19n);
-const ed25519 = twistedEdwards({
-  a: Fp.create(-1n),
-  d: Fp.div(-121665n, 121666n), // -121665n/121666n mod p
-  Fp: Fp,
-  n: 2n ** 252n + 27742317777372353535851937790883648493n,
-  h: 8n,
-  Gx: 15112221349535400772501151409588531511454012693041857206046113283949847762202n,
-  Gy: 46316835694926478169428394003475163141307993866256225615783033603165251855960n,
-  hash: sha512,
-  randomBytes,
-  adjustScalarBytes(bytes) {
-    // optional; but mandatory in ed25519
-    bytes[0] &= 248;
-    bytes[31] &= 127;
-    bytes[31] |= 64;
-    return bytes;
-  },
-} as const);
+const ed25519_CURVE: EdwardsOpts = {
+  p: BigInt('0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed'),
+  n: BigInt('0x1000000000000000000000000000000014def9dea2f79cd65812631a5cf5d3ed'),
+  h: _8n,
+  a: BigInt('0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffec'),
+  d: BigInt('0x52036cee2b6ffe738cc740797779e89800700a4d4141d8ab75eb4dca135978a3'),
+  Gx: BigInt('0x216936d3cd6e53fec0a4e231fdd6dc5c692cc7609525a7b2c9562d608f25d51a'),
+  Gy: BigInt('0x6666666666666666666666666666666666666666666666666666666666666658'),
+};
+const ed25519_Point = edwards(ed25519_CURVE);
 ```
 
 Twisted Edwards curve's formula is `ax² + y² = 1 + dx²y²`.
-You must specify `a`, `d`, field `Fp`, order `n`, cofactor `h`
-and coordinates `Gx`, `Gy` of generator point.
-For EdDSA signatures, `hash` param required.
-`adjustScalarBytes` which instructs how to change private scalars could be specified.
+You must specify `a`, `d`, field characteristic `p`, curve order `n`,
+cofactor `h` and coordinates `Gx`, `Gy` of generator point.
 
-**Edwards points:**
+#### Extended Point
 
-- Are exported as `ExtendedPoint`
-- Are represented in extended coordinates: (x, y, z, t) ∋ (x=x/z, y=y/z)
-- Use complete exception-free formulas for addition and doubling
-- Can be decoded/encoded from/to Uint8Array / hex strings using `ExtendedPoint.fromHex` and `ExtendedPoint#toRawBytes()`
-- Have `assertValidity()` which checks for being on-curve
-- Have `toAffine()` and `x` / `y` getters which convert to 2d xy affine coordinates
-- Have `isTorsionFree()`, `clearCofactor()` and `isSmallOrder()` utilities to handle torsions
+```js
+const Point = ed25519_Point;
+// extended coordinates: (x, y, z, t) ∋ (x=x/z, y=y/z)
+const p = new Point(x, y, z, t);
+// decoding, encoding
+const b = p.toBytes();
+const p2 = Point.fromBytes(b);
+// on-curve test
+p.assertValidity();
+// affine conversion
+const { x, y } = p.toAffine();
+const p3 = Point.fromAffine({ x, y });
+// misc
+const pcl = p.clearCofactor();
+console.log(p.isTorsionFree(), p.isSmallOrder());
+```
 
-**EdDSA signatures:**
+#### EdDSA signatures
+
+```js
+const ed25519 = eddsa(ed25519_Point, { hash: sha512 });
+ed25519.getPublicKey();
+ed25519.sign();
+ed25519.verify();
+```
+
+We define ed25519, ed448; user can use custom curves with EdDSA,
+but EdDSA in general is not defined. Check out `edwards.ts` source code.
+
+For EdDSA signatures:
 
 - `zip215: true` is default behavior. It has slightly looser verification logic
   to be [consensus-friendly](https://hdevalence.ca/blog/2020-10-04-its-25519am), following [ZIP215](https://zips.z.cash/zip-0215) rules
@@ -531,9 +507,6 @@ For EdDSA signatures, `hash` param required.
   - E-voting: malicious voters may pick keys that allow repudiation in order to deny results
   - Blockchains: transaction of amount X might also be valid for a different amount Y
 - Both modes have SUF-CMA (strong unforgeability under chosen message attacks).
-
-Check out [RFC9496](https://www.rfc-editor.org/rfc/rfc9496) for description of
-ristretto and decaf groups which we implement.
 
 ### montgomery: Montgomery curve
 
@@ -563,7 +536,7 @@ Every curve has exported `hashToCurve` and `encodeToCurve` methods. You should a
 
 ```ts
 import { hashToCurve, encodeToCurve } from '@noble/curves/secp256k1.js';
-import { randomBytes } from '@noble/hashes/utils';
+import { randomBytes } from '@noble/hashes/utils.js';
 hashToCurve('0102abcd');
 console.log(hashToCurve(randomBytes()));
 console.log(encodeToCurve(randomBytes()));
@@ -620,7 +593,7 @@ permutation and sponge.
 
 There are many poseidon variants with different constants.
 We don't provide them: you should construct them manually.
-Check out [micro-starknet](https://github.com/paulmillr/micro-starknet) package for a proper example.
+Check out [scure-starknet](https://github.com/paulmillr/scure-starknet) package for a proper example.
 
 ```ts
 import { poseidon, poseidonSponge } from '@noble/curves/abstract/poseidon.js';
@@ -701,8 +674,8 @@ if you need to hash to **public key**.
 
 ```ts
 import { p256 } from '@noble/curves/nist.js';
-import { sha256 } from '@noble/hashes/sha256';
-import { hkdf } from '@noble/hashes/hkdf';
+import { sha256 } from '@noble/hashes/sha2.js';
+import { hkdf } from '@noble/hashes/hkdf.js';
 import * as mod from '@noble/curves/abstract/modular.js';
 const someKey = new Uint8Array(32).fill(2); // Needs to actually be random, not .fill(2)
 const derived = hkdf(sha256, someKey, undefined, 'application', 48); // 48 bytes for 32-byte priv
