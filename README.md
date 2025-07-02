@@ -69,8 +69,8 @@ import { bytesToHex, hexToBytes, concatBytes, utf8ToBytes } from '@noble/curves/
 - [misc curves](#misc-curves)
 - [Low-level methods](#low-level-methods)
 - [Abstract API](#abstract-api)
-  - [weierstrass](#weierstrass-short-weierstrass-curve), [Projective Point](#projective-point), [ECDSA signatures](#ecdsa-signatures)
-  - [edwards](#edwards-twisted-edwards-curve), [Extended Point](#extended-point), [EdDSA signatures](#eddsa-signatures)
+  - [weierstrass](#weierstrass-short-weierstrass-curve), [Projective Point](#projective-weierstrass-point), [ECDSA signatures](#ecdsa-signatures)
+  - [edwards](#edwards-twisted-edwards-curve), [Extended Point](#extended-edwards-point), [EdDSA signatures](#eddsa-signatures)
   - [montgomery](#montgomery-montgomery-curve)
   - [bls](#bls-barreto-lynn-scott-curves)
   - [hash-to-curve](#hash-to-curve-hashing-strings-to-curve-points)
@@ -375,7 +375,7 @@ Short Weierstrass curve's formula is `y² = x³ + ax + b`. `weierstrass`
 expects arguments `a`, `b`, field `Fp`, curve order `n`, cofactor `h`
 and coordinates `Gx`, `Gy` of generator point.
 
-#### Projective Point
+#### Projective Weierstrass Point
 
 ```js
 // # weierstrass Point methods
@@ -428,19 +428,15 @@ ECDSA signatures:
 ### edwards: Twisted Edwards curve
 
 ```ts
-import { edwards, eddsa } from '@noble/curves/abstract/edwards.js';
-import { Field } from '@noble/curves/abstract/modular.js';
-import { sha512 } from '@noble/hashes/sha2.js';
-import { randomBytes } from '@noble/hashes/utils.js';
-
-const ed25519_CURVE: EdwardsOpts = {
-  p: BigInt('0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed'),
-  n: BigInt('0x1000000000000000000000000000000014def9dea2f79cd65812631a5cf5d3ed'),
-  h: _8n,
-  a: BigInt('0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffec'),
-  d: BigInt('0x52036cee2b6ffe738cc740797779e89800700a4d4141d8ab75eb4dca135978a3'),
-  Gx: BigInt('0x216936d3cd6e53fec0a4e231fdd6dc5c692cc7609525a7b2c9562d608f25d51a'),
-  Gy: BigInt('0x6666666666666666666666666666666666666666666666666666666666666658'),
+import { edwards } from '@noble/curves/abstract/edwards.js';
+const ed25519_CURVE = {
+  p: 0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffedn,
+  n: 0x1000000000000000000000000000000014def9dea2f79cd65812631a5cf5d3edn,
+  h: 8n,
+  a: 0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffecn,
+  d: 0x52036cee2b6ffe738cc740797779e89800700a4d4141d8ab75eb4dca135978a3n,
+  Gx: 0x216936d3cd6e53fec0a4e231fdd6dc5c692cc7609525a7b2c9562d608f25d51an,
+  Gy: 0x6666666666666666666666666666666666666666666666666666666666666658n,
 };
 const ed25519_Point = edwards(ed25519_CURVE);
 ```
@@ -449,7 +445,7 @@ Twisted Edwards curve's formula is `ax² + y² = 1 + dx²y²`.
 You must specify `a`, `d`, field characteristic `p`, curve order `n`,
 cofactor `h` and coordinates `Gx`, `Gy` of generator point.
 
-#### Extended Point
+#### Extended Edwards Point
 
 ```js
 const Point = ed25519_Point;
