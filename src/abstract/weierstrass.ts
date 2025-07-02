@@ -150,12 +150,18 @@ export function _splitEndoScalar(k: bigint, basis: EndoBasis, n: bigint): Scalar
   return { k1neg, k1, k2neg, k2 };
 }
 
+export type ECDSASigFormat = 'compact' | 'der';
 export type Entropy = Hex | boolean;
-export type SignOpts = { lowS?: boolean; extraEntropy?: Entropy; prehash?: boolean };
+export type SignOpts = {
+  lowS?: boolean;
+  extraEntropy?: Entropy;
+  prehash?: boolean;
+  format?: ECDSASigFormat | 'js';
+};
 export type VerOpts = {
   lowS?: boolean;
   prehash?: boolean;
-  format?: 'compact' | 'der' | 'js' | undefined;
+  format?: ECDSASigFormat | 'js' | undefined;
 };
 
 function validateSigVerOpts(opts: SignOpts | VerOpts) {
@@ -1009,16 +1015,22 @@ export interface SignatureType {
   readonly r: bigint;
   readonly s: bigint;
   readonly recovery?: number;
-  assertValidity(): void;
   addRecoveryBit(recovery: number): RecoveredSignatureType;
   hasHighS(): boolean;
   normalizeS(): SignatureType;
   recoverPublicKey(msgHash: Hex): ProjPointType<bigint>;
+  toBytes(format?: string): Uint8Array;
+
+  /** @deprecated */
+  assertValidity(): void;
+  /** @deprecated use `.toBytes('compact')` */
   toCompactRawBytes(): Uint8Array;
+  /** @deprecated use `.toBytes('compact')` */
   toCompactHex(): string;
+  /** @deprecated use `.toBytes('der')` */
   toDERRawBytes(): Uint8Array;
+  /** @deprecated use `.toBytes('der')` */
   toDERHex(): string;
-  // toBytes(format?: string): Uint8Array;
 }
 export type RecoveredSignatureType = SignatureType & {
   readonly recovery: number;
@@ -1026,7 +1038,11 @@ export type RecoveredSignatureType = SignatureType & {
 // Static methods
 export type SignatureConstructor = {
   new (r: bigint, s: bigint, recovery?: number): SignatureType;
+  fromBytes(bytes: Uint8Array, format?: ECDSASigFormat): SignatureType;
+
+  /** @deprecated use `.fromBytes(bytes, 'compact')` */
   fromCompact(hex: Hex): SignatureType;
+  /** @deprecated use `.fromBytes(bytes, 'der')` */
   fromDER(hex: Hex): SignatureType;
 };
 export type SignatureLike = { r: bigint; s: bigint };
@@ -1120,16 +1136,29 @@ export function ecdsa(
 
     // pair (bytes of r, bytes of s)
     static fromCompact(hex: Hex) {
-      const L = Fn.BYTES;
-      const b = ensureBytes('compactSignature', hex, L * 2);
-      return new Signature(Fn.fromBytes(b.subarray(0, L)), Fn.fromBytes(b.subarray(L, L * 2)));
+      return Signature.fromBytes(ensureBytes('sig', hex), 'compact');
     }
 
     // DER encoded ECDSA signature
     // https://bitcoin.stackexchange.com/questions/57644/what-are-the-parts-of-a-bitcoin-transaction-input-script
     static fromDER(hex: Hex) {
-      const { r, s } = DER.toSig(ensureBytes('DER', hex));
-      return new Signature(r, s);
+      return Signature.fromBytes(ensureBytes('sig', hex), 'der');
+    }
+
+    static fromBytes(bytes: Uint8Array, format: ECDSASigFormat = 'compact') {
+      if (format === 'compact') {
+        const L = Fn.BYTES;
+        abytes(bytes, L * 2);
+        const r = bytes.subarray(0, L);
+        const s = bytes.subarray(L, L * 2);
+        return new Signature(Fn.fromBytes(r), Fn.fromBytes(s));
+      }
+      if (format === 'der') {
+        abytes(bytes);
+        const { r, s } = DER.toSig(bytes);
+        return new Signature(r, s);
+      }
+      throw new Error('invalid format');
     }
 
     /**
@@ -1183,7 +1212,7 @@ export function ecdsa(
       return this.hasHighS() ? new Signature(this.r, Fn.neg(this.s), this.recovery) : this;
     }
 
-    toBytes(format: 'compact' | 'der') {
+    toBytes(format: ECDSASigFormat = 'compact') {
       if (format === 'compact') return concatBytes(Fn.toBytes(this.r), Fn.toBytes(this.s));
       if (format === 'der') return hexToBytes(DER.hexFromSig(this));
       throw new Error('invalid format');
@@ -1196,7 +1225,6 @@ export function ecdsa(
     toDERHex() {
       return bytesToHex(this.toBytes('der'));
     }
-
     // padded bytes of r, then padded bytes of s
     toCompactRawBytes() {
       return this.toBytes('compact');
@@ -1427,67 +1455,70 @@ export function ecdsa(
     // TODO: remove
     if ('strict' in opts) throw new Error('options.strict was renamed to lowS');
 
-    if (format !== undefined && !['compact', 'der', 'js'].includes(format))
-      throw new Error('format must be "compact", "der" or "js"');
-    const isHex = typeof sg === 'string' || isBytes(sg);
-    const isObj =
-      !isHex &&
-      !format &&
-      typeof sg === 'object' &&
-      sg !== null &&
-      typeof sg.r === 'bigint' &&
-      typeof sg.s === 'bigint';
-    if (!isHex && !isObj)
-      throw new Error('invalid signature, expected Uint8Array, hex string or Signature instance');
     let _sig: Signature | undefined = undefined;
     let P: ProjPointType<bigint>;
 
-    // deduce signature format
-    try {
-      // if (format === 'js') {
-      //   if (sg != null && !isBytes(sg)) _sig = new Signature(sg.r, sg.s);
-      // } else if (format === 'compact') {
-      //   _sig = Signature.fromCompact(sg);
-      // } else if (format === 'der') {
-      //   _sig = Signature.fromDER(sg);
-      // } else {
-      //   throw new Error('invalid format');
-      // }
+    if (format === undefined) {
+      // Try to deduce format
+      const isHex = typeof sg === 'string' || isBytes(sg);
+      const isObj =
+        !isHex &&
+        sg !== null &&
+        typeof sg === 'object' &&
+        typeof sg.r === 'bigint' &&
+        typeof sg.s === 'bigint';
+      if (!isHex && !isObj)
+        throw new Error('invalid signature, expected Uint8Array, hex string or Signature instance');
       if (isObj) {
-        if (format === undefined || format === 'js') {
-          _sig = new Signature(sg.r, sg.s);
-        } else {
-          throw new Error('invalid format');
-        }
-      }
-      if (isHex) {
+        _sig = new Signature(sg.r, sg.s);
+      } else if (isHex) {
         // TODO: remove this malleable check
         // Signature can be represented in 2 ways: compact (2*Fn.BYTES) & DER (variable-length).
         // Since DER can also be 2*Fn.BYTES bytes, we check for it first.
         try {
-          if (format !== 'compact') _sig = Signature.fromDER(sg);
+          _sig = Signature.fromDER(sg);
         } catch (derError) {
           if (!(derError instanceof DER.Err)) throw derError;
         }
-        if (!_sig && format !== 'der') _sig = Signature.fromCompact(sg);
+        if (!_sig) {
+          try {
+            _sig = Signature.fromCompact(sg);
+          } catch (error) {
+            return false;
+          }
+        }
       }
+    } else {
+      if (format === 'compact' || format === 'der') {
+        if (typeof sg !== 'string' && !isBytes(sg))
+          throw new Error('"der" / "compact" format expects Uint8Array signature');
+        _sig = Signature.fromBytes(ensureBytes('sig', sg), format);
+      } else if (format === 'js') {
+        if (!(sg instanceof Signature)) throw new Error('"js" format expects Signature instance');
+        _sig = sg;
+      } else {
+        throw new Error('format must be "compact", "der" or "js"');
+      }
+    }
+
+    if (!_sig) return false;
+    try {
       P = Point.fromHex(publicKey);
-    } catch (error) {
+      if (lowS && _sig.hasHighS()) return false;
+      // todo: optional.hash => hash
+      if (prehash) msgHash = ecdsaOpts.hash(msgHash);
+      const { r, s } = _sig;
+      const h = bits2int_modN(msgHash); // Cannot use fields methods, since it is group element
+      const is = Fn.inv(s); // s^-1
+      const u1 = Fn.create(h * is); // u1 = hs^-1 mod n
+      const u2 = Fn.create(r * is); // u2 = rs^-1 mod n
+      const R = Point.BASE.multiplyUnsafe(u1).add(P.multiplyUnsafe(u2));
+      if (R.is0()) return false;
+      const v = Fn.create(R.x); // v = r.x mod n
+      return v === r;
+    } catch (e) {
       return false;
     }
-    if (!_sig) return false;
-    if (lowS && _sig.hasHighS()) return false;
-    // todo: optional.hash => hash
-    if (prehash) msgHash = ecdsaOpts.hash(msgHash);
-    const { r, s } = _sig;
-    const h = bits2int_modN(msgHash); // Cannot use fields methods, since it is group element
-    const is = Fn.inv(s); // s^-1
-    const u1 = Fn.create(h * is); // u1 = hs^-1 mod n
-    const u2 = Fn.create(r * is); // u2 = rs^-1 mod n
-    const R = Point.BASE.multiplyUnsafe(u1).add(P.multiplyUnsafe(u2));
-    if (R.is0()) return false;
-    const v = Fn.create(R.x); // v = r.x mod n
-    return v === r;
   }
   // TODO: clarify API for cloning .clone({hash: sha512}) ? .createWith({hash: sha512})?
   // const clone = (hash: CHash): ECDSA => ecdsa(Point, { ...ecdsaOpts, ...getHash(hash) }, curveOpts);
