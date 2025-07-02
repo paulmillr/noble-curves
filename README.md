@@ -69,8 +69,12 @@ import { bytesToHex, hexToBytes, concatBytes, utf8ToBytes } from '@noble/curves/
 - [misc curves](#misc-curves)
 - [Low-level methods](#low-level-methods)
 - [Abstract API](#abstract-api)
-  - [weierstrass](#weierstrass-short-weierstrass-curve), [edwards](#edwards-twisted-edwards-curve), [montgomery](#montgomery-montgomery-curve), [bls](#bls-barreto-lynn-scott-curves)
-  - [hash-to-curve](#hash-to-curve-hashing-strings-to-curve-points), [poseidon](#poseidon-poseidon-hash)
+  - [weierstrass](#weierstrass-short-weierstrass-curve), [Projective Point](#projective-point), [ECDSA signatures](#ecdsa-signatures)
+  - [edwards](#edwards-twisted-edwards-curve), [Extended Point](#extended-point), [EdDSA signatures](#eddsa-signatures)
+  - [montgomery](#montgomery-montgomery-curve)
+  - [bls](#bls-barreto-lynn-scott-curves)
+  - [hash-to-curve](#hash-to-curve-hashing-strings-to-curve-points)
+  - [poseidon](#poseidon-poseidon-hash)
   - [modular](#modular-modular-arithmetics-utilities)
   - [fft](#fft-fast-fourier-transform)
   - [Creating private keys from hashes](#creating-private-keys-from-hashes)
@@ -339,46 +343,21 @@ Miscellaneous, rarely used curves are contained in the module.
 Jubjub curves have Fp over scalar fields of other curves. They are friendly to ZK proofs.
 jubjub Fp = bls n. babyjubjub Fp = bn254 n.
 
-#### Low-level methods
-
-```ts
-import { secp256k1 } from '@noble/curves/secp256k1.js';
-
-// Curve's variables
-// Every curve has `CURVE` object that contains its parameters, field, and others
-console.log(secp256k1.CURVE.p); // field modulus
-console.log(secp256k1.CURVE.n); // curve order
-console.log(secp256k1.CURVE.a, secp256k1.CURVE.b); // equation params
-console.log(secp256k1.CURVE.Gx, secp256k1.CURVE.Gy); // base point coordinates
-
-// MSM
-const p = secp256k1.ProjectivePoint;
-const points = [p.BASE, p.BASE.multiply(2n), p.BASE.multiply(4n), p.BASE.multiply(8n)];
-p.msm(points, [3n, 5n, 7n, 11n]).equals(p.BASE.multiply(129n)); // 129*G
-```
-
-Multi-scalar-multiplication (MSM) is basically `(Pa + Qb + Rc + ...)`.
-It's 10-30x faster vs naive addition for large amount of points.
-Pippenger algorithm is used underneath.
-
 ## Abstract API
 
-Implementations use [noble-hashes](https://github.com/paulmillr/noble-hashes).
-If you want to use a different hashing library, abstract API doesn't depend on them.
-
 Abstract API allows to define custom curves. All arithmetics is done with JS
-bigints over finite fields, which is defined from `modular` sub-module. For
-scalar multiplication, we use
+bigints over finite fields, which is defined from `modular` sub-module.
+For scalar multiplication, we use
 [precomputed tables with w-ary non-adjacent form (wNAF)](https://paulmillr.com/posts/noble-secp256k1-fast-ecc/).
-Precomputes are enabled for weierstrass and edwards BASE points of a curve. You
-could precompute any other point (e.g. for ECDH) using `utils.precompute()`
-method: check out examples.
+Precomputes are enabled for weierstrass and edwards BASE points of a curve.
+Implementations use [noble-hashes](https://github.com/paulmillr/noble-hashes).
+It's always possible to use different hashing library.
+
 
 ### weierstrass: Short Weierstrass curve
 
 ```js
 import { weierstrass } from '@noble/curves/abstract/weierstrass.js';
-
 // NIST secp192r1 aka p192. https://www.secg.org/sec2-v2.pdf
 const p192_CURVE = {
   p: 0xfffffffffffffffffffffffffffffffeffffffffffffffffn,
@@ -414,6 +393,12 @@ const p2 = Point.fromBytes(b);
 // affine conversion
 const { x, y } = p.toAffine();
 const p3 = Point.fromAffine({ x, y });
+
+// Multi-scalar-multiplication (MSM) is basically `(Pa + Qb + Rc + ...)`.
+// It's 10-30x faster vs naive addition for large amount of points.
+// Pippenger algorithm is used underneath.
+const points = [Point.BASE, Point.BASE.multiply(2n), Point.BASE.multiply(4n), Point.BASE.multiply(8n)];
+Point.msm(points, [3n, 5n, 7n, 11n]).equals(Point.BASE.multiply(129n)); // 129*G
 ```
 
 #### ECDSA signatures
