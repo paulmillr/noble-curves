@@ -372,20 +372,21 @@ const p192_Point = weierstrass(p192_CURVE);
 ```
 
 Short Weierstrass curve's formula is `y² = x³ + ax + b`. `weierstrass`
-expects arguments `a`, `b`, field `Fp`, curve order `n`, cofactor `h`
-and coordinates `Gx`, `Gy` of generator point.
+expects arguments `a`, `b`, field characteristic `p`, curve order `n`,
+cofactor `h` and coordinates `Gx`, `Gy` of generator point.
 
 #### Projective Weierstrass Point
 
 ```js
 // # weierstrass Point methods
 // projective (homogeneous) coordinates: (x, y, z) ∋ (x=x/z, y=y/z)
-
-const point = Point.BASE; // Elliptic curve Point class and BASE point static var.
-point.add(point).equals(point.double()); // add(), equals(), double() methods
-point.subtract(point).equals(Point.ZERO); // subtract() method, ZERO static var
-point.negate(); // Flips point over x/y coordinate.
-point.multiply(31415n); // Multiplication of Point by scalar.
+// const p = new Point(x, y, z);
+const p = Point.BASE;
+// arithmetics
+p.add(p).equals(p.double());
+p.subtract(p).equals(Point.ZERO);
+p.negate();
+p.multiply(31415n);
 
 // decoding, encoding
 const b = p.toBytes();
@@ -442,7 +443,7 @@ const ed25519_Point = edwards(ed25519_CURVE);
 ```
 
 Twisted Edwards curve's formula is `ax² + y² = 1 + dx²y²`.
-You must specify `a`, `d`, field characteristic `p`, curve order `n`,
+You must specify `a`, `d`, field characteristic `p`, curve order `n` (sometimes named as `L`),
 cofactor `h` and coordinates `Gx`, `Gy` of generator point.
 
 #### Extended Edwards Point
@@ -450,7 +451,15 @@ cofactor `h` and coordinates `Gx`, `Gy` of generator point.
 ```js
 const Point = ed25519_Point;
 // extended coordinates: (x, y, z, t) ∋ (x=x/z, y=y/z)
-const p = new Point(x, y, z, t);
+// const p = new Point(x, y, z, t);
+
+const p = Point.BASE;
+// arithmetics
+p.add(p).equals(p.double());
+p.subtract(p).equals(Point.ZERO);
+p.negate();
+p.multiply(31415n);
+
 // decoding, encoding
 const b = p.toBytes();
 const p2 = Point.fromBytes(b);
@@ -468,9 +477,9 @@ console.log(p.isTorsionFree(), p.isSmallOrder());
 
 ```js
 const ed25519 = eddsa(ed25519_Point, { hash: sha512 });
-ed25519.getPublicKey();
-ed25519.sign();
-ed25519.verify();
+// ed25519.getPublicKey();
+// ed25519.sign();
+// ed25519.verify();
 ```
 
 We define ed25519, ed448; user can use custom curves with EdDSA,
