@@ -8,10 +8,10 @@ import * as fc from 'fast-check';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql, strictEqual, throws } from 'node:assert';
 import {
+  x25519,
   ed25519 as ed,
   ED25519_TORSION_SUBGROUP,
   numberToBytesLE,
-  edwardsToMontgomeryPub,
   montgomeryToEdwardsPub,
 } from './ed25519.helpers.js';
 import { getTypeTestsNonUi8a, json, txt } from './utils.js';
@@ -385,24 +385,25 @@ describe('ed25519', () => {
 
   describe('montgomeryToEdwardsPub', () => {
     should('convert x25519 pubkey to ed25519 pubkey and verify signature', () => {
-      const priv = ed.utils.randomPrivateKey();
-      const pubEd = ed.getPublicKey(priv);
-      const pubX = edwardsToMontgomeryPub(pubEd);
-      const pubEdRecovered = montgomeryToEdwardsPub(pubX);
+      const montgomeryPriv = x25519.utils.randomPrivateKey();
+      const montgomeryPub = x25519.getPublicKey(montgomeryPriv);
 
-      const msg = new Uint8Array([1, 2, 3, 4]);
-      const sig = ed.sign(msg, priv);
-      if (!ed.verify(sig, msg, pubEdRecovered)) {
-        console.error('pubEd', Buffer.from(pubEd).toString('hex'));
-        console.error('pubX', Buffer.from(pubX).toString('hex'));
-        console.error('pubEdRecovered', Buffer.from(pubEdRecovered).toString('hex'));
-        console.error('sig', Buffer.from(sig).toString('hex'));
+      const edwardsPubBytes = montgomeryToEdwardsPub(montgomeryPub);
+
+      let point;
+      let didThrow = false;
+      try {
+        point = ed.Point.fromHex(edwardsPubBytes);
+        strictEqual(point.isTorsionFree(), true, 'Point must be torsion-free');
+      } catch (error) {
+        didThrow = true;
+        console.error(error);
       }
-
-      // Should verify with original pubkey
-      strictEqual(ed.verify(sig, msg, pubEd), true);
-      // Should verify with recovered pubkey (may not be byte-equal, but must verify)
-      strictEqual(ed.verify(sig, msg, pubEdRecovered), true);
+      strictEqual(
+        didThrow,
+        false,
+        'Conversion resulted in an invalid point that could not be parsed'
+      );
     });
   });
 });

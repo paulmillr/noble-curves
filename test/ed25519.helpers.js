@@ -4,4 +4,5 @@ export {
   ED25519_TORSION_SUBGROUP,
   edwardsToMontgomeryPub,
   montgomeryToEdwardsPub,
+  x25519,
 } from '../esm/ed25519.js';
