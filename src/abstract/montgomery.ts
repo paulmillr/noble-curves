@@ -13,6 +13,7 @@ import {
   numberToBytesLE,
   randomBytes,
 } from '../utils.ts';
+import type { LengthsInfo } from './curve.ts';
 import { mod } from './modular.ts';
 
 const _0n = BigInt(0);
@@ -35,6 +36,8 @@ export type CurveFn = {
   getPublicKey: (privateKey: Hex) => Uint8Array;
   utils: { randomPrivateKey: () => Uint8Array };
   GuBytes: Uint8Array;
+  lengths: Omit<LengthsInfo, 'signature'>;
+  keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
 };
 
 function validateOpts(curve: CurveType) {
@@ -155,13 +158,24 @@ export function montgomery(curveDef: CurveType): CurveFn {
     const z2 = powPminus2(z_2); // `Fp.pow(x, P - _2n)` is much slower equivalent
     return modP(x_2 * z2); // Return x_2 * (z_2^(p - 2))
   }
-
+  const utils = { randomPrivateKey: (seed = randomBytes_(fieldLen)) => seed };
+  const lengths = {
+    secret: fieldLen,
+    public: fieldLen,
+    seed: fieldLen,
+    _publicHasPrefix: false,
+  };
   return {
     scalarMult,
     scalarMultBase,
     getSharedSecret: (privateKey: Hex, publicKey: Hex) => scalarMult(privateKey, publicKey),
     getPublicKey: (privateKey: Hex): Uint8Array => scalarMultBase(privateKey),
-    utils: { randomPrivateKey: () => randomBytes_(fieldLen) },
+    utils,
     GuBytes: GuBytes.slice(),
+    lengths,
+    keygen: (seed?: Uint8Array) => {
+      const secretKey = utils.randomPrivateKey(seed);
+      return { secretKey, publicKey: scalarMultBase(secretKey) };
+    },
   };
 }

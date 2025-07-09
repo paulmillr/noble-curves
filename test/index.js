@@ -17,5 +17,6 @@ import './rfc9496-ristretto-decaf.test.js';
 import './secp256k1.test.js';
 import './utils.test.js';
 import './webcrypto.test.js';
+import './info.test.js';
 
 should.runWhen(import.meta.url);

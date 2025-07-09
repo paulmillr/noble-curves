@@ -29,6 +29,7 @@ import {
   type BasicCurve,
   type Group,
   type GroupConstructor,
+  type LengthsInfo,
 } from './curve.ts';
 import { Field, type IField, type NLength } from './modular.ts';
 
@@ -160,7 +161,7 @@ export interface EdDSA {
   ) => boolean;
   Point: ExtPointConstructor;
   utils: {
-    randomPrivateKey: () => Uint8Array;
+    randomPrivateKey: (seed?: Uint8Array) => Uint8Array;
     getExtendedPublicKey: (key: Hex) => {
       head: Uint8Array;
       prefix: Uint8Array;
@@ -171,6 +172,8 @@ export interface EdDSA {
     /** @deprecated use `point.precompute()` */
     precompute: (windowSize?: number, point?: ExtPointType) => ExtPointType;
   };
+  lengths: LengthsInfo;
+  keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
 }
 
 // Legacy params. TODO: remove
@@ -188,7 +191,7 @@ export type CurveFn = {
   /** @deprecated use `Point` */
   ExtendedPoint: ExtPointConstructor;
   utils: {
-    randomPrivateKey: () => Uint8Array;
+    randomPrivateKey: (seed?: Uint8Array) => Uint8Array;
     getExtendedPublicKey: (key: Hex) => {
       head: Uint8Array;
       prefix: Uint8Array;
@@ -198,6 +201,8 @@ export type CurveFn = {
     };
     precompute: (windowSize?: number, point?: ExtPointType) => ExtPointType;
   };
+  lengths: LengthsInfo;
+  keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
 };
 
 function isEdValidXY(Fp: IField<bigint>, CURVE: EdwardsOpts, x: bigint, y: bigint): boolean {
@@ -650,10 +655,19 @@ export function eddsa(Point: ExtPointConstructor, eddsaOpts: EdDSAOpts): EdDSA {
 
   G.precompute(8); // Enable precomputes. Slows down first publicKey computation by 20ms.
 
+  const fpl = Fp.BYTES;
+  const lengths = {
+    secret: fpl,
+    public: fpl,
+    signature: 2 * fpl,
+    seed: fpl,
+    _publicHasPrefix: false,
+  };
+
   const utils = {
     getExtendedPublicKey,
     /** ed25519 priv keys are uniform 32b. No need to check for modulo bias, like in secp256k1. */
-    randomPrivateKey: (): Uint8Array => randomBytes_!(Fp.BYTES),
+    randomPrivateKey: (seed = randomBytes_!(lengths.seed)): Uint8Array => seed,
 
     /**
      * We're doing scalar multiplication (used in getPublicKey etc) with precomputed BASE_POINT
@@ -666,7 +680,18 @@ export function eddsa(Point: ExtPointConstructor, eddsaOpts: EdDSAOpts): EdDSA {
     },
   };
 
-  return { getPublicKey, sign, verify, utils, Point };
+  return {
+    getPublicKey,
+    sign,
+    verify,
+    utils,
+    Point,
+    lengths,
+    keygen: (seed?: Uint8Array) => {
+      const secretKey = utils.randomPrivateKey(seed);
+      return { secretKey, publicKey: getPublicKey(secretKey) };
+    },
+  };
 }
 
 export type EdComposed = {

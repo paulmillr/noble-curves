@@ -9,6 +9,7 @@
 import { sha256 } from '@noble/hashes/sha2.js';
 import { randomBytes } from '@noble/hashes/utils.js';
 import { createCurve, type CurveFnWithCreate } from './_shortw_utils.ts';
+import type { LengthsInfo } from './abstract/curve.ts';
 import {
   createHasher,
   type H2CHasher,
@@ -222,7 +223,7 @@ export type SecpSchnorr = {
   sign: typeof schnorrSign;
   verify: typeof schnorrVerify;
   utils: {
-    randomPrivateKey: () => Uint8Array;
+    randomPrivateKey: (seed?: Uint8Array) => Uint8Array;
     lift_x: typeof lift_x;
     pointToBytes: (point: PointType<bigint>) => Uint8Array;
     numberToBytesBE: typeof numberToBytesBE;
@@ -230,7 +231,10 @@ export type SecpSchnorr = {
     taggedHash: typeof taggedHash;
     mod: typeof mod;
   };
+  lengths: LengthsInfo;
+  keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
 };
+const size = 32;
 /**
  * Schnorr signatures over secp256k1.
  * https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki
@@ -256,6 +260,17 @@ export const schnorr: SecpSchnorr = /* @__PURE__ */ (() => ({
     bytesToNumberBE,
     taggedHash,
     mod,
+  },
+  lengths: {
+    secret: size,
+    public: size,
+    signature: 64,
+    seed: 48,
+    _publicHasPrefix: false,
+  },
+  keygen: (seed?: Uint8Array) => {
+    const secretKey = secp256k1.utils.randomPrivateKey(seed);
+    return { secretKey, publicKey: schnorrGetPublicKey(secretKey) };
   },
 }))();
 

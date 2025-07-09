@@ -59,6 +59,7 @@ import {
   type BasicCurve,
   type Group,
   type GroupConstructor,
+  type LengthsInfo,
 } from './curve.ts';
 import {
   Field,
@@ -320,12 +321,14 @@ export interface ECDSA {
   Signature: SignatureConstructor;
   utils: {
     isValidPrivateKey(privateKey: PrivKey): boolean;
-    randomPrivateKey: () => Uint8Array;
+    randomPrivateKey: (seed?: Uint8Array) => Uint8Array;
     // TODO: deprecate those two
     normPrivateKeyToScalar: (key: PrivKey) => bigint;
     /** @deprecated */
     precompute: (windowSize?: number, point?: ProjPointType<bigint>) => ProjPointType<bigint>;
   };
+  lengths: LengthsInfo;
+  keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
 }
 export class DERErr extends Error {
   constructor(m = '') {
@@ -1075,9 +1078,10 @@ export type CurveFn = {
   utils: {
     normPrivateKeyToScalar: (key: PrivKey) => bigint;
     isValidPrivateKey(privateKey: PrivKey): boolean;
-    randomPrivateKey: () => Uint8Array;
+    randomPrivateKey: (seed?: Uint8Array) => Uint8Array;
     precompute: (windowSize?: number, point?: ProjPointType<bigint>) => ProjPointType<bigint>;
   };
+  keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
 };
 
 export function ecdsa(
@@ -1240,7 +1244,7 @@ export function ecdsa(
     curveOpts.allowedPrivateKeyLengths,
     curveOpts.wrapPrivateKey
   );
-
+  const seedLen = getMinHashLength(CURVE_ORDER);
   const utils = {
     isValidPrivateKey(privateKey: PrivKey) {
       try {
@@ -1256,9 +1260,8 @@ export function ecdsa(
      * Produces cryptographically secure private key from random of size
      * (groupLen + ceil(groupLen / 2)) with modulo bias being negligible.
      */
-    randomPrivateKey: (): Uint8Array => {
-      const n = CURVE_ORDER;
-      return mapHashToField(randomBytes_(getMinHashLength(n)), n);
+    randomPrivateKey: (seed = randomBytes_(seedLen)): Uint8Array => {
+      return mapHashToField(seed, CURVE_ORDER);
     },
 
     precompute(windowSize = 8, point = Point.BASE): typeof Point.BASE {
@@ -1520,6 +1523,14 @@ export function ecdsa(
       return false;
     }
   }
+  const fpl = Fn.BYTES;
+  const lengths = {
+    secret: fpl,
+    public: 1 + fpl,
+    signature: 2 * fpl,
+    seed: seedLen,
+    _publicHasPrefix: true,
+  };
   // TODO: clarify API for cloning .clone({hash: sha512}) ? .createWith({hash: sha512})?
   // const clone = (hash: CHash): ECDSA => ecdsa(Point, { ...ecdsaOpts, ...getHash(hash) }, curveOpts);
   return Object.freeze({
@@ -1530,6 +1541,11 @@ export function ecdsa(
     utils,
     Point,
     Signature,
+    lengths,
+    keygen: (seed?: Uint8Array) => {
+      const secretKey = utils.randomPrivateKey(seed);
+      return { secretKey, publicKey: getPublicKey(secretKey) };
+    },
   });
 }
 

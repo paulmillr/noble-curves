@@ -25,6 +25,14 @@ export interface Group<T extends Group<T>> {
   toAffine?(invertedZ?: any): AffinePoint<any>;
 }
 
+export interface LengthsInfo {
+  secret: number;
+  public: number;
+  signature: number;
+  seed: number;
+  _publicHasPrefix: boolean;
+}
+
 export type GroupConstructor<T> = {
   BASE: T;
   ZERO: T;
