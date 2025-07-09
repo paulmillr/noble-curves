@@ -7,7 +7,13 @@ import {
 import * as fc from 'fast-check';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql, strictEqual, throws } from 'node:assert';
-import { ed25519 as ed, ED25519_TORSION_SUBGROUP, numberToBytesLE } from './ed25519.helpers.js';
+import {
+  x25519,
+  ed25519 as ed,
+  ED25519_TORSION_SUBGROUP,
+  numberToBytesLE,
+  montgomeryToEdwardsPub,
+} from './ed25519.helpers.js';
 import { getTypeTestsNonUi8a, json, txt } from './utils.js';
 
 const VECTORS_rfc8032_ed25519 = json('./vectors/rfc8032-ed25519.json');
@@ -375,6 +381,30 @@ describe('ed25519', () => {
         } else throw new Error('unknown test result');
       }
     }
+  });
+
+  describe('montgomeryToEdwardsPub', () => {
+    should('convert x25519 pubkey to ed25519 pubkey and verify signature', () => {
+      const montgomeryPriv = x25519.utils.randomPrivateKey();
+      const montgomeryPub = x25519.getPublicKey(montgomeryPriv);
+
+      const edwardsPubBytes = montgomeryToEdwardsPub(montgomeryPub);
+
+      let point;
+      let didThrow = false;
+      try {
+        point = ed.Point.fromHex(edwardsPubBytes);
+        strictEqual(point.isTorsionFree(), true, 'Point must be torsion-free');
+      } catch (error) {
+        didThrow = true;
+        console.error(error);
+      }
+      strictEqual(
+        didThrow,
+        false,
+        'Conversion resulted in an invalid point that could not be parsed'
+      );
+    });
   });
 });
 
