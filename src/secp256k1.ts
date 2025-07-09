@@ -16,7 +16,7 @@ import {
   type H2CMethod,
   isogenyMap,
 } from './abstract/hash-to-curve.ts';
-import { Field, mod, pow2 } from './abstract/modular.ts';
+import { Field, mapHashToField, mod, pow2 } from './abstract/modular.ts';
 import {
   type EndomorphismOpts,
   mapToCurveSimpleSWU,
@@ -234,7 +234,6 @@ export type SecpSchnorr = {
   lengths: LengthsInfo;
   keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
 };
-const size = 32;
 /**
  * Schnorr signatures over secp256k1.
  * https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki
@@ -248,31 +247,42 @@ const size = 32;
  * const isValid = schnorr.verify(sig, msg, pub);
  * ```
  */
-export const schnorr: SecpSchnorr = /* @__PURE__ */ (() => ({
-  getPublicKey: schnorrGetPublicKey,
-  sign: schnorrSign,
-  verify: schnorrVerify,
-  utils: {
-    randomPrivateKey: secp256k1.utils.randomPrivateKey,
-    lift_x,
-    pointToBytes,
-    numberToBytesBE,
-    bytesToNumberBE,
-    taggedHash,
-    mod,
-  },
-  lengths: {
-    secret: size,
-    public: size,
-    signature: 64,
-    seed: 48,
-    _publicHasPrefix: false,
-  },
-  keygen: (seed?: Uint8Array) => {
-    const secretKey = secp256k1.utils.randomPrivateKey(seed);
-    return { secretKey, publicKey: schnorrGetPublicKey(secretKey) };
-  },
-}))();
+export const schnorr: SecpSchnorr = /* @__PURE__ */ (() => {
+  const size = 32;
+  const seedLength = 48;
+  const randomPrivateKey = (seed = randomBytes(seedLength)): Uint8Array => {
+    return mapHashToField(seed, secp256k1_CURVE.n);
+  };
+  // TODO: remove
+  secp256k1.utils.randomPrivateKey;
+  return {
+    getPublicKey: schnorrGetPublicKey,
+    sign: schnorrSign,
+    verify: schnorrVerify,
+    utils: {
+      randomPrivateKey: randomPrivateKey,
+      taggedHash,
+
+      // TODO: remove
+      lift_x,
+      pointToBytes,
+      numberToBytesBE,
+      bytesToNumberBE,
+      mod,
+    },
+    lengths: {
+      secret: size,
+      public: size,
+      signature: size * 2,
+      seed: seedLength,
+      _publicHasPrefix: false,
+    },
+    keygen: (seed?: Uint8Array) => {
+      const secretKey = randomPrivateKey(seed);
+      return { secretKey, publicKey: schnorrGetPublicKey(secretKey) };
+    },
+  };
+})();
 
 const isoMap = /* @__PURE__ */ (() =>
   isogenyMap(
