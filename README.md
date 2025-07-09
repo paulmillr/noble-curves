@@ -6,9 +6,10 @@ Audited & minimal JS implementation of elliptic curve cryptography.
 - 🔻 Tree-shakeable: unused code is excluded from your builds
 - 🏎 Fast: hand-optimized for caveats of JS engines
 - 🔍 Reliable: cross-library / wycheproof tests and fuzzing ensure correctness
-- ➰ Short Weierstrass, Edwards, Montgomery curves
-- ✍️ ECDSA, EdDSA, Schnorr, BLS, ECDH, hashing to curves, Poseidon ZK-friendly hash
-- 🔖 SUF-CMA, SBS (non-repudiation), ZIP215 (consensus friendliness) features for ed25519 & ed448
+- ➰ Weierstrass, Edwards, Montgomery curves; ECDSA, EdDSA, Schnorr, BLS signatures
+- ✍️ ECDH, hash-to-curve, OPRF, Poseidon ZK-friendly hash
+- 🔖 Non-repudiation (SUF-CMA, SBS) & consensus-friendliness (ZIP215) in ed25519, ed448
+- 🥈 Optional, friendly wrapper over native WebCrypto
 - 🪶 36KB (gzipped) including bundled hashes, 11KB for single-curve build
 
 Curves have 4KB sister projects
