@@ -21,6 +21,7 @@ import {
   type EndomorphismOpts,
   mapToCurveSimpleSWU,
   type ProjPointType as PointType,
+  type ProjConstructor,
   type WeierstrassOpts,
 } from './abstract/weierstrass.ts';
 import type { Hex, PrivKey } from './utils.ts';
@@ -222,6 +223,7 @@ export type SecpSchnorr = {
   getPublicKey: typeof schnorrGetPublicKey;
   sign: typeof schnorrSign;
   verify: typeof schnorrVerify;
+  Point: ProjConstructor<bigint>;
   utils: {
     randomPrivateKey: (seed?: Uint8Array) => Uint8Array;
     lift_x: typeof lift_x;
@@ -231,7 +233,7 @@ export type SecpSchnorr = {
     taggedHash: typeof taggedHash;
     mod: typeof mod;
   };
-  info: { type: 'weierstrass'; publicKeyHasPrefix: true; lengths: CurveInfo['lengths'] };
+  info: { type: 'weierstrass'; publicKeyHasPrefix: false; lengths: CurveInfo['lengths'] };
   keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
 };
 /**
@@ -264,6 +266,7 @@ export const schnorr: SecpSchnorr = /* @__PURE__ */ (() => {
     getPublicKey: schnorrGetPublicKey,
     sign: schnorrSign,
     verify: schnorrVerify,
+    Point,
     utils: {
       randomPrivateKey,
       taggedHash,
@@ -277,7 +280,7 @@ export const schnorr: SecpSchnorr = /* @__PURE__ */ (() => {
     },
     info: {
       type: 'weierstrass',
-      publicKeyHasPrefix: true,
+      publicKeyHasPrefix: false,
       lengths: {
         secret: size,
         public: size,
