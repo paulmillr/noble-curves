@@ -386,12 +386,10 @@ function createBlsPairing(
     // Cache precomputed toAffine for all points
     normalizeZ(
       G1,
-      'pz',
       pairs.map(({ g1 }) => g1)
     );
     normalizeZ(
       G2,
-      'pz',
       pairs.map(({ g2 }) => g2)
     );
     for (const { g1, g2 } of pairs) {

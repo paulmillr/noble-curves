@@ -173,11 +173,19 @@ function validateSigVerOpts(opts: SignOpts | VerOpts) {
 /** Instance methods for 3D XYZ points. */
 export interface ProjPointType<T> extends Group<ProjPointType<T>> {
   /** projective x coordinate. Note: different from .x */
-  readonly px: T;
+  readonly X: T;
   /** projective y coordinate. Note: different from .y */
-  readonly py: T;
+  readonly Y: T;
   /** projective z coordinate */
+  readonly Z: T;
+
+  /** @deprecated use .X */
+  readonly px: T;
+  /** @deprecated use .Y */
+  readonly py: T;
+  /** @deprecated use .Z */
   readonly pz: T;
+
   /** affine x coordinate */
   get x(): T;
   /** affine y coordinate */
@@ -630,19 +638,19 @@ export function weierstrassN<T>(
   // Can accept precomputed Z^-1 - for example, from invertBatch.
   // (X, Y, Z) ∋ (x=X/Z, y=Y/Z)
   const toAffineMemo = memoized((p: Point, iz?: T): AffinePoint<T> => {
-    const { px: x, py: y, pz: z } = p;
+    const { X, Y, Z } = p;
     // Fast-path for normalized points
-    if (Fp.eql(z, Fp.ONE)) return { x, y };
+    if (Fp.eql(Z, Fp.ONE)) return { x: X, y: Y };
     const is0 = p.is0();
     // If invZ was 0, we return zero point. However we still want to execute
     // all operations, so we replace invZ with a random number, 1.
-    if (iz == null) iz = is0 ? Fp.ONE : Fp.inv(z);
-    const ax = Fp.mul(x, iz);
-    const ay = Fp.mul(y, iz);
-    const zz = Fp.mul(z, iz);
+    if (iz == null) iz = is0 ? Fp.ONE : Fp.inv(Z);
+    const x = Fp.mul(X, iz);
+    const y = Fp.mul(Y, iz);
+    const zz = Fp.mul(Z, iz);
     if (is0) return { x: Fp.ZERO, y: Fp.ZERO };
     if (!Fp.eql(zz, Fp.ONE)) throw new Error('invZ was invalid');
-    return { x: ax, y: ay };
+    return { x, y };
   });
   // NOTE: on exception this will crash 'cached' and no value will be set.
   // Otherwise true will be return
@@ -651,7 +659,7 @@ export function weierstrassN<T>(
       // (0, 1, 0) aka ZERO is invalid in most contexts.
       // In BLS, ZERO can be serialized, so we allow it.
       // (0, 0, 0) is invalid representation of ZERO.
-      if (curveOpts.allowInfinityPoint && !Fp.is0(p.py)) return;
+      if (curveOpts.allowInfinityPoint && !Fp.is0(p.Y)) return;
       throw new Error('bad point: ZERO');
     }
     // Some 3rd-party test vectors require different wording between here & `fromCompressedHex`
@@ -669,7 +677,7 @@ export function weierstrassN<T>(
     k1neg: boolean,
     k2neg: boolean
   ) {
-    k2p = new Point(Fp.mul(k2p.px, endoBeta), k2p.py, k2p.pz);
+    k2p = new Point(Fp.mul(k2p.X, endoBeta), k2p.Y, k2p.Z);
     k1p = negateCt(k1neg, k1p);
     k2p = negateCt(k2neg, k2p);
     return k1p.add(k2p);
@@ -689,15 +697,15 @@ export function weierstrassN<T>(
     static readonly Fp = Fp;
     static readonly Fn = Fn;
 
-    readonly px: T;
-    readonly py: T;
-    readonly pz: T;
+    readonly X: T;
+    readonly Y: T;
+    readonly Z: T;
 
     /** Does NOT validate if the point is valid. Use `.assertValidity()`. */
-    constructor(px: T, py: T, pz: T) {
-      this.px = acoord('x', px);
-      this.py = acoord('y', py, true);
-      this.pz = acoord('z', pz);
+    constructor(X: T, Y: T, Z: T) {
+      this.X = acoord('x', X);
+      this.Y = acoord('y', Y, true);
+      this.Z = acoord('z', Z);
       Object.freeze(this);
     }
 
@@ -718,8 +726,18 @@ export function weierstrassN<T>(
       return this.toAffine().y;
     }
 
+    get px(): T {
+      return this.X;
+    }
+    get py(): T {
+      return this.X;
+    }
+    get pz(): T {
+      return this.Z;
+    }
+
     static normalizeZ(points: Point[]): Point[] {
-      return normalizeZ(Point, 'pz', points);
+      return normalizeZ(Point, points);
     }
 
     static fromBytes(bytes: Uint8Array): Point {
@@ -781,8 +799,8 @@ export function weierstrassN<T>(
     /** Compare one point to another. */
     equals(other: Point): boolean {
       aprjpoint(other);
-      const { px: X1, py: Y1, pz: Z1 } = this;
-      const { px: X2, py: Y2, pz: Z2 } = other;
+      const { X: X1, Y: Y1, Z: Z1 } = this;
+      const { X: X2, Y: Y2, Z: Z2 } = other;
       const U1 = Fp.eql(Fp.mul(X1, Z2), Fp.mul(X2, Z1));
       const U2 = Fp.eql(Fp.mul(Y1, Z2), Fp.mul(Y2, Z1));
       return U1 && U2;
@@ -790,7 +808,7 @@ export function weierstrassN<T>(
 
     /** Flips point to one corresponding to (x, -y) in Affine coordinates. */
     negate(): Point {
-      return new Point(this.px, Fp.neg(this.py), this.pz);
+      return new Point(this.X, Fp.neg(this.Y), this.Z);
     }
 
     // Renes-Costello-Batina exception-free doubling formula.
@@ -800,7 +818,7 @@ export function weierstrassN<T>(
     double() {
       const { a, b } = CURVE;
       const b3 = Fp.mul(b, _3n);
-      const { px: X1, py: Y1, pz: Z1 } = this;
+      const { X: X1, Y: Y1, Z: Z1 } = this;
       let X3 = Fp.ZERO, Y3 = Fp.ZERO, Z3 = Fp.ZERO; // prettier-ignore
       let t0 = Fp.mul(X1, X1); // step 1
       let t1 = Fp.mul(Y1, Y1);
@@ -842,8 +860,8 @@ export function weierstrassN<T>(
     // Cost: 12M + 0S + 3*a + 3*b3 + 23add.
     add(other: Point): Point {
       aprjpoint(other);
-      const { px: X1, py: Y1, pz: Z1 } = this;
-      const { px: X2, py: Y2, pz: Z2 } = other;
+      const { X: X1, Y: Y1, Z: Z1 } = this;
+      const { X: X2, Y: Y2, Z: Z2 } = other;
       let X3 = Fp.ZERO, Y3 = Fp.ZERO, Z3 = Fp.ZERO; // prettier-ignore
       const a = CURVE.a;
       const b3 = Fp.mul(CURVE.b, _3n);
@@ -979,6 +997,11 @@ export function weierstrassN<T>(
       if (cofactor === _1n) return this; // Fast-path
       if (clearCofactor) return clearCofactor(Point, this) as Point;
       return this.multiplyUnsafe(cofactor);
+    }
+
+    isSmallOrder(): boolean {
+      // can we use this.clearCofactor()?
+      return this.multiplyUnsafe(cofactor).is0();
     }
 
     toBytes(isCompressed = true): Uint8Array {

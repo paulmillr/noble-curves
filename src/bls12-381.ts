@@ -520,7 +520,7 @@ export const bls12_381: CurveFn = bls({
       const beta = BigInt(
         '0x5f19672fdf76ce51ba69c6076a0f77eaddb3a93be6f89688de17d813620a00022e01fffffffefffe'
       );
-      const phi = new c(Fp.mul(point.px, beta), point.py, point.pz);
+      const phi = new c(Fp.mul(point.X, beta), point.Y, point.Z);
       // TODO: unroll
       const xP = point.multiplyUnsafe(BLS_X).negate(); // [x]P
       const u2P = xP.multiplyUnsafe(BLS_X); // [u2]P

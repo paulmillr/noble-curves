@@ -58,13 +58,11 @@ export function negateCt<T extends Group<T>>(condition: boolean, item: T): T {
  * so this improves performance massively.
  * Optimization: converts a list of projective points to a list of identical points with Z=1.
  */
-export function normalizeZ<T>(
-  c: ExtendedGroupConstructor<T>,
-  property: 'pz' | 'ez',
-  points: T[]
-): T[] {
-  const getz = property === 'pz' ? (p: any) => p.pz : (p: any) => p.ez;
-  const toInv = FpInvertBatch(c.Fp, points.map(getz));
+export function normalizeZ<T>(c: ExtendedGroupConstructor<T>, points: T[]): T[] {
+  const toInv = FpInvertBatch(
+    c.Fp,
+    points.map((p: any) => p.Z)
+  );
   // @ts-ignore
   const affined = points.map((p, i) => p.toAffine(toInv[i]));
   return affined.map(c.fromAffine);

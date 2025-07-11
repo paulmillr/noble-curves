@@ -59,9 +59,17 @@ const VERIFY_DEFAULT = { zip215: true };
 
 /** Instance of Extended Point with coordinates in X, Y, Z, T. */
 export interface ExtPointType extends Group<ExtPointType> {
+  readonly X: bigint;
+  readonly Y: bigint;
+  readonly Z: bigint;
+  readonly T: bigint;
+  /** @deprecated use .X */
   readonly ex: bigint;
+  /** @deprecated use .Y */
   readonly ey: bigint;
+  /** @deprecated use .Z */
   readonly ez: bigint;
+  /** @deprecated use .T */
   readonly et: bigint;
   get x(): bigint;
   get y(): bigint;
@@ -257,22 +265,22 @@ export function edwards(CURVE: EdwardsOpts, curveOpts: EdwardsExtraOpts = {}): E
   // Converts Extended point to default (x, y) coordinates.
   // Can accept precomputed Z^-1 - for example, from invertBatch.
   const toAffineMemo = memoized((p: Point, iz?: bigint): AffinePoint<bigint> => {
-    const { ex: x, ey: y, ez: z } = p;
+    const { X, Y, Z } = p;
     const is0 = p.is0();
-    if (iz == null) iz = is0 ? _8n : (Fp.inv(z) as bigint); // 8 was chosen arbitrarily
-    const ax = modP(x * iz);
-    const ay = modP(y * iz);
-    const zz = modP(z * iz);
+    if (iz == null) iz = is0 ? _8n : (Fp.inv(Z) as bigint); // 8 was chosen arbitrarily
+    const x = modP(X * iz);
+    const y = modP(Y * iz);
+    const zz = Fp.mul(Z, iz);
     if (is0) return { x: _0n, y: _1n };
     if (zz !== _1n) throw new Error('invZ was invalid');
-    return { x: ax, y: ay };
+    return { x, y };
   });
   const assertValidMemo = memoized((p: Point) => {
     const { a, d } = CURVE;
     if (p.is0()) throw new Error('bad point: ZERO'); // TODO: optimize, with vars below?
     // Equation in affine coordinates: ax² + y² = 1 + dx²y²
     // Equation in projective coordinates (X/Z, Y/Z, Z):  (aX² + Y²)Z² = Z⁴ + dX²Y²
-    const { ex: X, ey: Y, ez: Z, et: T } = p;
+    const { X, Y, Z, T } = p;
     const X2 = modP(X * X); // X²
     const Y2 = modP(Y * Y); // Y²
     const Z2 = modP(Z * Z); // Z²
@@ -299,16 +307,16 @@ export function edwards(CURVE: EdwardsOpts, curveOpts: EdwardsExtraOpts = {}): E
     static readonly Fp = Fp;
     static readonly Fn = Fn;
 
-    readonly ex: bigint;
-    readonly ey: bigint;
-    readonly ez: bigint;
-    readonly et: bigint;
+    readonly X: bigint;
+    readonly Y: bigint;
+    readonly Z: bigint;
+    readonly T: bigint;
 
-    constructor(ex: bigint, ey: bigint, ez: bigint, et: bigint) {
-      this.ex = acoord('x', ex);
-      this.ey = acoord('y', ey);
-      this.ez = acoord('z', ez, true);
-      this.et = acoord('t', et);
+    constructor(X: bigint, Y: bigint, Z: bigint, T: bigint) {
+      this.X = acoord('x', X);
+      this.Y = acoord('y', Y);
+      this.Z = acoord('z', Z, true);
+      this.T = acoord('t', T);
       Object.freeze(this);
     }
 
@@ -319,6 +327,19 @@ export function edwards(CURVE: EdwardsOpts, curveOpts: EdwardsExtraOpts = {}): E
       return this.toAffine().y;
     }
 
+    get ex(): bigint {
+      return this.X;
+    }
+    get ey(): bigint {
+      return this.Y;
+    }
+    get ez(): bigint {
+      return this.Z;
+    }
+    get et(): bigint {
+      return this.T;
+    }
+
     static fromAffine(p: AffinePoint<bigint>): Point {
       if (p instanceof Point) throw new Error('extended point not allowed');
       const { x, y } = p || {};
@@ -327,7 +348,7 @@ export function edwards(CURVE: EdwardsOpts, curveOpts: EdwardsExtraOpts = {}): E
       return new Point(x, y, _1n, modP(x * y));
     }
     static normalizeZ(points: Point[]): Point[] {
-      return normalizeZ(Point, 'ez', points);
+      return normalizeZ(Point, points);
     }
     // Multiscalar Multiplication
     static msm(points: Point[], scalars: bigint[]): Point {
@@ -352,8 +373,8 @@ export function edwards(CURVE: EdwardsOpts, curveOpts: EdwardsExtraOpts = {}): E
     // Compare one point to another.
     equals(other: Point): boolean {
       aextpoint(other);
-      const { ex: X1, ey: Y1, ez: Z1 } = this;
-      const { ex: X2, ey: Y2, ez: Z2 } = other;
+      const { X: X1, Y: Y1, Z: Z1 } = this;
+      const { X: X2, Y: Y2, Z: Z2 } = other;
       const X1Z2 = modP(X1 * Z2);
       const X2Z1 = modP(X2 * Z1);
       const Y1Z2 = modP(Y1 * Z2);
@@ -367,7 +388,7 @@ export function edwards(CURVE: EdwardsOpts, curveOpts: EdwardsExtraOpts = {}): E
 
     negate(): Point {
       // Flips point sign to a negative one (-x, y in affine coords)
-      return new Point(modP(-this.ex), this.ey, this.ez, modP(-this.et));
+      return new Point(modP(-this.X), this.Y, this.Z, modP(-this.T));
     }
 
     // Fast algo for doubling Extended Point.
@@ -375,7 +396,7 @@ export function edwards(CURVE: EdwardsOpts, curveOpts: EdwardsExtraOpts = {}): E
     // Cost: 4M + 4S + 1*a + 6add + 1*2.
     double(): Point {
       const { a } = CURVE;
-      const { ex: X1, ey: Y1, ez: Z1 } = this;
+      const { X: X1, Y: Y1, Z: Z1 } = this;
       const A = modP(X1 * X1); // A = X12
       const B = modP(Y1 * Y1); // B = Y12
       const C = modP(_2n * modP(Z1 * Z1)); // C = 2*Z12
@@ -398,8 +419,8 @@ export function edwards(CURVE: EdwardsOpts, curveOpts: EdwardsExtraOpts = {}): E
     add(other: Point) {
       aextpoint(other);
       const { a, d } = CURVE;
-      const { ex: X1, ey: Y1, ez: Z1, et: T1 } = this;
-      const { ex: X2, ey: Y2, ez: Z2, et: T2 } = other;
+      const { X: X1, Y: Y1, Z: Z1, T: T1 } = this;
+      const { X: X2, Y: Y2, Z: Z2, T: T2 } = other;
       const A = modP(X1 * X2); // A = X1*X2
       const B = modP(Y1 * Y2); // B = Y1*Y2
       const C = modP(T1 * d * T2); // C = T1*d*T2
@@ -733,4 +754,91 @@ export function twistedEdwards(c: CurveTypeWithLength): CurveFn {
   const Point = edwards(CURVE, curveOpts);
   const EDDSA = eddsa(Point, eddsaOpts);
   return _eddsa_new_output_to_legacy(c, EDDSA);
+}
+
+/**
+ * Base class for prime-order points like Ristretto255 and Decaf448.
+ * These points eliminate cofactor issues by representing equivalence classes
+ * of Edwards curve points.
+ */
+export abstract class PrimeEdPoint<T extends PrimeEdPoint<T>> implements Group<T> {
+  static BASE: any;
+  static ZERO: any;
+  static Fn: IField<bigint>;
+
+  protected readonly ep: ExtPointType;
+
+  constructor(ep: ExtPointType) {
+    this.ep = ep;
+  }
+
+  // Abstract methods that must be implemented by subclasses
+  abstract toBytes(): Uint8Array;
+  abstract equals(other: T): boolean;
+
+  // Static methods that must be implemented by subclasses
+  static fromBytes(_bytes: Uint8Array): any {
+    throw new Error('fromBytes must be implemented by subclass');
+  }
+
+  static fromHex(_hex: Hex): any {
+    throw new Error('fromHex must be implemented by subclass');
+  }
+
+  // Common implementations
+  clearCofactor(): T {
+    // no-op for prime-order groups
+    return this as any;
+  }
+
+  assertValidity(): void {
+    this.ep.assertValidity();
+  }
+
+  toAffine(invertedZ?: bigint): AffinePoint<bigint> {
+    return this.ep.toAffine(invertedZ);
+  }
+
+  /** @deprecated use `toBytes` */
+  toRawBytes(): Uint8Array {
+    return this.toBytes();
+  }
+
+  toHex(): string {
+    return bytesToHex(this.toBytes());
+  }
+
+  toString(): string {
+    return this.toHex();
+  }
+
+  add(other: T): T {
+    this.validateSameType(other);
+    return this.createNew(this.ep.add(other.ep));
+  }
+
+  subtract(other: T): T {
+    this.validateSameType(other);
+    return this.createNew(this.ep.subtract(other.ep));
+  }
+
+  multiply(scalar: bigint): T {
+    return this.createNew(this.ep.multiply(scalar));
+  }
+
+  multiplyUnsafe(scalar: bigint): T {
+    return this.createNew(this.ep.multiplyUnsafe(scalar));
+  }
+
+  double(): T {
+    return this.createNew(this.ep.double());
+  }
+
+  negate(): T {
+    return this.createNew(this.ep.negate());
+  }
+
+  // Helper methods
+  protected abstract validateSameType(other: T): void;
+  protected abstract createNew(ep: ExtPointType): T;
 }
