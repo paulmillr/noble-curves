@@ -57,9 +57,9 @@ import {
   wNAF,
   type AffinePoint,
   type BasicCurve,
+  type CurveInfo,
   type Group,
   type GroupConstructor,
-  type LengthsInfo,
 } from './curve.ts';
 import {
   Field,
@@ -313,10 +313,11 @@ export type ECDSAOpts = {
 
 /** ECDSA is only supported for prime fields, not Fp2 (extension fields). */
 export interface ECDSA {
+  keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
   getPublicKey: (privateKey: PrivKey, isCompressed?: boolean) => Uint8Array;
-  getSharedSecret: (privateA: PrivKey, publicB: Hex, isCompressed?: boolean) => Uint8Array;
   sign: (msgHash: Hex, privKey: PrivKey, opts?: SignOpts) => RecoveredSignatureType;
   verify: (signature: Hex | SignatureLike, msgHash: Hex, publicKey: Hex, opts?: VerOpts) => boolean;
+  getSharedSecret: (privateA: PrivKey, publicB: Hex, isCompressed?: boolean) => Uint8Array;
   Point: ProjConstructor<bigint>;
   Signature: SignatureConstructor;
   utils: {
@@ -327,8 +328,7 @@ export interface ECDSA {
     /** @deprecated */
     precompute: (windowSize?: number, point?: ProjPointType<bigint>) => ProjPointType<bigint>;
   };
-  lengths: LengthsInfo;
-  keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
+  info: CurveInfo;
 }
 export class DERErr extends Error {
   constructor(m = '') {
@@ -1523,29 +1523,30 @@ export function ecdsa(
       return false;
     }
   }
+
+  function keygen(seed?: Uint8Array) {
+    const secretKey = utils.randomPrivateKey(seed);
+    return { secretKey, publicKey: getPublicKey(secretKey) };
+  }
+
   const fpl = Fn.BYTES;
   const lengths = {
     secret: fpl,
     public: 1 + fpl,
     signature: 2 * fpl,
     seed: seedLen,
-    _publicHasPrefix: true,
   };
-  // TODO: clarify API for cloning .clone({hash: sha512}) ? .createWith({hash: sha512})?
-  // const clone = (hash: CHash): ECDSA => ecdsa(Point, { ...ecdsaOpts, ...getHash(hash) }, curveOpts);
+
   return Object.freeze({
+    keygen,
     getPublicKey,
-    getSharedSecret,
     sign,
     verify,
+    getSharedSecret,
     utils,
     Point,
     Signature,
-    lengths,
-    keygen: (seed?: Uint8Array) => {
-      const secretKey = utils.randomPrivateKey(seed);
-      return { secretKey, publicKey: getPublicKey(secretKey) };
-    },
+    info: { type: 'weierstrass' as const, lengths },
   });
 }
 

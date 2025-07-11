@@ -24,7 +24,7 @@ describe('info', () => {
     const curve = CURVES[name];
     describe(name, () => {
       should('keys', () => {
-        const len = curve.lengths;
+        const len = curve.info.lengths;
         const privateKey = curve.utils.randomPrivateKey();
         eql(privateKey.length, len.secret);
         const publicKey = curve.getPublicKey(privateKey);
@@ -46,7 +46,7 @@ describe('info', () => {
         curve.getPublicKey(curve.utils.randomPrivateKey(seed)); // doesn't throw
       });
       should('keygen', () => {
-        const seed = randomBytes(curve.lengths.seed);
+        const seed = randomBytes(curve.info.lengths.seed);
         const keys = curve.keygen(seed);
         eql(keys.secretKey, curve.utils.randomPrivateKey(seed));
         eql(keys.publicKey, curve.getPublicKey(curve.utils.randomPrivateKey(seed)));

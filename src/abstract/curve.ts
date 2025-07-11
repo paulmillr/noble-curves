@@ -25,14 +25,17 @@ export interface Group<T extends Group<T>> {
   toAffine?(invertedZ?: any): AffinePoint<any>;
 }
 
-export interface LengthsInfo {
-  secret: number;
-  public: number;
-  signature: number;
-  seed: number;
-  _publicHasPrefix: boolean;
+// More like SigAlgorithmInfo, not CurveInfo
+export interface CurveInfo {
+  type: 'weierstrass' | 'edwards' | 'montgomery';
+  publicKeyHasPrefix?: true;
+  lengths: {
+    secret: number;
+    public: number;
+    signature: number;
+    seed: number;
+  };
 }
-
 export type GroupConstructor<T> = {
   BASE: T;
   ZERO: T;

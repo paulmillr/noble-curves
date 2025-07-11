@@ -9,7 +9,7 @@
 import { sha256 } from '@noble/hashes/sha2.js';
 import { randomBytes } from '@noble/hashes/utils.js';
 import { createCurve, type CurveFnWithCreate } from './_shortw_utils.ts';
-import type { LengthsInfo } from './abstract/curve.ts';
+import type { CurveInfo } from './abstract/curve.ts';
 import {
   createHasher,
   type H2CHasher,
@@ -231,7 +231,7 @@ export type SecpSchnorr = {
     taggedHash: typeof taggedHash;
     mod: typeof mod;
   };
-  lengths: LengthsInfo;
+  info: { type: 'weierstrass'; publicKeyHasPrefix: true; lengths: CurveInfo['lengths'] };
   keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
 };
 /**
@@ -255,12 +255,17 @@ export const schnorr: SecpSchnorr = /* @__PURE__ */ (() => {
   };
   // TODO: remove
   secp256k1.utils.randomPrivateKey;
+  function keygen(seed?: Uint8Array) {
+    const secretKey = randomPrivateKey(seed);
+    return { secretKey, publicKey: schnorrGetPublicKey(secretKey) };
+  }
   return {
+    keygen,
     getPublicKey: schnorrGetPublicKey,
     sign: schnorrSign,
     verify: schnorrVerify,
     utils: {
-      randomPrivateKey: randomPrivateKey,
+      randomPrivateKey,
       taggedHash,
 
       // TODO: remove
@@ -270,16 +275,15 @@ export const schnorr: SecpSchnorr = /* @__PURE__ */ (() => {
       bytesToNumberBE,
       mod,
     },
-    lengths: {
-      secret: size,
-      public: size,
-      signature: size * 2,
-      seed: seedLength,
-      _publicHasPrefix: false,
-    },
-    keygen: (seed?: Uint8Array) => {
-      const secretKey = randomPrivateKey(seed);
-      return { secretKey, publicKey: schnorrGetPublicKey(secretKey) };
+    info: {
+      type: 'weierstrass',
+      publicKeyHasPrefix: true,
+      lengths: {
+        secret: size,
+        public: size,
+        signature: size * 2,
+        seed: seedLength,
+      },
     },
   };
 })();

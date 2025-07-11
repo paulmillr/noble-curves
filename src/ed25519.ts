@@ -33,7 +33,7 @@ import {
   pow2,
   type IField,
 } from './abstract/modular.ts';
-import { montgomery, type CurveFn as XCurveFn } from './abstract/montgomery.ts';
+import { montgomery, type MontgomeryECDH as XCurveFn } from './abstract/montgomery.ts';
 import {
   bytesToHex,
   bytesToNumberLE,

@@ -27,9 +27,9 @@ import {
   wNAF,
   type AffinePoint,
   type BasicCurve,
+  type CurveInfo,
   type Group,
   type GroupConstructor,
-  type LengthsInfo,
 } from './curve.ts';
 import { Field, type IField, type NLength } from './modular.ts';
 
@@ -104,11 +104,11 @@ export interface ExtPointConstructor extends GroupConstructor<ExtPointType> {
  * * Gy: y coordinate of generator point
  */
 export type EdwardsOpts = Readonly<{
-  a: bigint;
-  d: bigint;
   p: bigint;
   n: bigint;
   h: bigint;
+  a: bigint;
+  d: bigint;
   Gx: bigint;
   Gy: bigint;
 }>;
@@ -172,7 +172,7 @@ export interface EdDSA {
     /** @deprecated use `point.precompute()` */
     precompute: (windowSize?: number, point?: ExtPointType) => ExtPointType;
   };
-  lengths: LengthsInfo;
+  info: CurveInfo;
   keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
 }
 
@@ -201,7 +201,7 @@ export type CurveFn = {
     };
     precompute: (windowSize?: number, point?: ExtPointType) => ExtPointType;
   };
-  lengths: LengthsInfo;
+  info: CurveInfo;
   keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
 };
 
@@ -661,7 +661,6 @@ export function eddsa(Point: ExtPointConstructor, eddsaOpts: EdDSAOpts): EdDSA {
     public: fpl,
     signature: 2 * fpl,
     seed: fpl,
-    _publicHasPrefix: false,
   };
 
   const utils = {
@@ -680,18 +679,20 @@ export function eddsa(Point: ExtPointConstructor, eddsaOpts: EdDSAOpts): EdDSA {
     },
   };
 
-  return {
+  function keygen(seed?: Uint8Array) {
+    const secretKey = utils.randomPrivateKey(seed);
+    return { secretKey, publicKey: getPublicKey(secretKey) };
+  }
+
+  return Object.freeze({
+    keygen,
     getPublicKey,
     sign,
     verify,
     utils,
     Point,
-    lengths,
-    keygen: (seed?: Uint8Array) => {
-      const secretKey = utils.randomPrivateKey(seed);
-      return { secretKey, publicKey: getPublicKey(secretKey) };
-    },
-  };
+    info: { type: 'edwards' as const, lengths },
+  });
 }
 
 export type EdComposed = {
