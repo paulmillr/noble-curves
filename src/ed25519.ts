@@ -8,7 +8,7 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha512 } from '@noble/hashes/sha2.js';
 import { abytes, concatBytes, utf8ToBytes } from '@noble/hashes/utils.js';
-import { pippenger, type AffinePoint, type Group } from './abstract/curve.ts';
+import { pippenger, type AffinePoint, type CurveInfo, type Group } from './abstract/curve.ts';
 import {
   twistedEdwards,
   type CurveFn,
@@ -424,6 +424,7 @@ function ristretto255_map(bytes: Uint8Array): RistPoint {
 class RistPoint implements Group<RistPoint> {
   static BASE: RistPoint;
   static ZERO: RistPoint;
+  static Fp: IField<bigint> = Fp;
   static Fn: IField<bigint> = Fn;
   private readonly ep: ExtendedPoint;
   // Private property to discourage combining ExtendedPoint + RistrettoPoint
@@ -547,6 +548,14 @@ class RistPoint implements Group<RistPoint> {
     return this.toHex();
   }
 
+  isTorsionFree(): boolean {
+    return true;
+  }
+
+  isSmallOrder(): boolean {
+    return false;
+  }
+
   /**
    * Compares two Ristretto points.
    * Described in [RFC9496](https://www.rfc-editor.org/rfc/rfc9496#name-equals).
@@ -598,6 +607,11 @@ export const RistrettoPoint: typeof RistPoint = /* @__PURE__ */ (() => {
   if (!RistPoint.ZERO) RistPoint.ZERO = new RistPoint(ed25519.Point.ZERO);
   return RistPoint;
 })();
+
+export const ristretto255: { Point: typeof RistPoint; info: CurveInfo } = {
+  Point: RistrettoPoint,
+  info: { type: 'other', lengths: ed25519.info.lengths },
+};
 
 const ristretto255_hasher: H2CHasherBase<bigint> = {
   hashToCurve(msg: Uint8Array, options?: htfBasicOpts): RistPoint {

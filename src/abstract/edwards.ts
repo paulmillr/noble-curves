@@ -318,6 +318,18 @@ export function edwards(CURVE: EdwardsOpts, curveOpts: EdwardsExtraOpts = {}): E
     get y(): bigint {
       return this.toAffine().y;
     }
+    get X(): bigint {
+      return this.ex;
+    }
+    get Y(): bigint {
+      return this.ey;
+    }
+    get Z(): bigint {
+      return this.ez;
+    }
+    get T(): bigint {
+      return this.et;
+    }
 
     static fromAffine(p: AffinePoint<bigint>): Point {
       if (p instanceof Point) throw new Error('extended point not allowed');

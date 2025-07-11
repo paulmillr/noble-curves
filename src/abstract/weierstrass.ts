@@ -315,7 +315,7 @@ export type ECDSAOpts = {
 export interface ECDSA {
   keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
   getPublicKey: (privateKey: PrivKey, isCompressed?: boolean) => Uint8Array;
-  sign: (msgHash: Hex, privKey: PrivKey, opts?: SignOpts) => RecoveredSignatureType;
+  sign: (msgHash: Hex, privKey: PrivKey, opts?: SignOpts) => Uint8Array;
   verify: (signature: Hex | SignatureLike, msgHash: Hex, publicKey: Hex, opts?: VerOpts) => boolean;
   getSharedSecret: (privateA: PrivKey, publicB: Hex, isCompressed?: boolean) => Uint8Array;
   Point: ProjConstructor<bigint>;
@@ -717,6 +717,15 @@ export function weierstrassN<T>(
     get y(): T {
       return this.toAffine().y;
     }
+    get X(): T {
+      return this.px;
+    }
+    get Y(): T {
+      return this.py;
+    }
+    get Z(): T {
+      return this.pz;
+    }
 
     static normalizeZ(points: Point[]): Point[] {
       return normalizeZ(Point, 'pz', points);
@@ -981,6 +990,10 @@ export function weierstrassN<T>(
       return this.multiplyUnsafe(cofactor);
     }
 
+    isSmallOrder(): boolean {
+      return this.clearCofactor().is0();
+    }
+
     toBytes(isCompressed = true): Uint8Array {
       abool('isCompressed', isCompressed);
       this.assertValidity();
@@ -1069,12 +1082,13 @@ export type CurveFn = {
   CURVE: CurvePointsType<bigint>;
   getPublicKey: (privateKey: PrivKey, isCompressed?: boolean) => Uint8Array;
   getSharedSecret: (privateA: PrivKey, publicB: Hex, isCompressed?: boolean) => Uint8Array;
-  sign: (msgHash: Hex, privKey: PrivKey, opts?: SignOpts) => RecoveredSignatureType;
+  sign: (msgHash: Hex, privKey: PrivKey, opts?: SignOpts) => Uint8Array;
   verify: (signature: Hex | SignatureLike, msgHash: Hex, publicKey: Hex, opts?: VerOpts) => boolean;
   Point: ProjConstructor<bigint>;
   /** @deprecated use `Point` */
   ProjectivePoint: ProjConstructor<bigint>;
   Signature: SignatureConstructor;
+  info: CurveInfo;
   utils: {
     normPrivateKeyToScalar: (key: PrivKey) => bigint;
     isValidPrivateKey(privateKey: PrivKey): boolean;
@@ -1419,10 +1433,10 @@ export function ecdsa(
    * @param opts lowS for non-malleable sigs. extraEntropy for mixing randomness into k. prehash will hash first arg.
    * @returns signature with recovery param
    */
-  function sign(msgHash: Hex, privKey: PrivKey, opts = defaultSigOpts): RecoveredSignature {
+  function sign(msgHash: Hex, privKey: PrivKey, opts = defaultSigOpts): Uint8Array {
     const { seed, k2sig } = prepSig(msgHash, privKey, opts); // Steps A, D of RFC6979 3.2.
     const drbg = createHmacDrbg<RecoveredSignature>(ecdsaOpts.hash.outputLen, Fn.BYTES, hmac_);
-    return drbg(seed, k2sig); // Steps B, C, D, E, F, G
+    return drbg(seed, k2sig).toBytes(); // Steps B, C, D, E, F, G
   }
 
   // Enable precomputes. Slows down first publicKey computation by 20ms.

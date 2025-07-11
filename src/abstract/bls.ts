@@ -24,7 +24,7 @@ import {
   type Hex,
   type PrivKey,
 } from '../utils.ts';
-import { normalizeZ } from './curve.ts';
+import { normalizeZ, type CurveInfo } from './curve.ts';
 import {
   createHasher,
   type H2CHasher,
@@ -218,8 +218,8 @@ export type CurveFn = {
     G2b: Fp2;
   };
   curves: {
-    G1: ProjConstructor<bigint>;
-    G2: ProjConstructor<Fp2>;
+    G1: { Point: ProjConstructor<bigint>; info: CurveInfo };
+    G2: { Point: ProjConstructor<Fp2>; info: CurveInfo };
   };
   fields: {
     Fp: IField<Fp>;
@@ -687,6 +687,15 @@ export function bls(CURVE: CurveType): CurveFn {
 
   G1.Point.BASE.precompute(4);
 
+  function lens(size, multiplier) {
+    return {
+      secret: size,
+      public: 1 + size * multiplier,
+      signature: 2 * size * multiplier,
+      seed: size,
+    };
+  }
+
   return {
     longSignatures,
     shortSignatures,
@@ -695,8 +704,8 @@ export function bls(CURVE: CurveType): CurveFn {
     pairingBatch,
     verifyBatch,
     curves: {
-      G1: G1_.Point,
-      G2: G2_.Point,
+      G1: { Point: G1_.Point, info: { type: 'weierstrass' } },
+      G2: { Point: G2_.Point },
     },
     fields: {
       Fr,

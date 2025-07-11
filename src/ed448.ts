@@ -14,7 +14,7 @@ import {
   utf8ToBytes,
   createHasher as wrapConstructor,
 } from '@noble/hashes/utils.js';
-import type { AffinePoint, Group } from './abstract/curve.ts';
+import type { AffinePoint, CurveInfo, Group } from './abstract/curve.ts';
 import { pippenger } from './abstract/curve.ts';
 import {
   edwards,
@@ -400,6 +400,7 @@ function decaf448_map(bytes: Uint8Array): DcfPoint {
 class DcfPoint implements Group<DcfPoint> {
   static BASE: DcfPoint;
   static ZERO: DcfPoint;
+  static Fp: IField<bigint> = Fp;
   static Fn: IField<bigint> = Fn;
   private readonly ep: ExtendedPoint;
   // Private property to discourage combining ExtendedPoint + DecafPoint
@@ -465,6 +466,14 @@ class DcfPoint implements Group<DcfPoint> {
 
   static msm(points: DcfPoint[], scalars: bigint[]): DcfPoint {
     return pippenger(DcfPoint, Fn, points, scalars);
+  }
+
+  isTorsionFree(): boolean {
+    return true;
+  }
+
+  isSmallOrder(): boolean {
+    return false;
   }
 
   /**
@@ -568,6 +577,11 @@ export const DecafPoint: typeof DcfPoint = /* @__PURE__ */ (() => {
   if (!DcfPoint.ZERO) DcfPoint.ZERO = new DcfPoint(ed448.Point.ZERO);
   return DcfPoint;
 })();
+
+export const decaf448: { Point: typeof DecafPoint; info: CurveInfo } = {
+  Point: DecafPoint,
+  info: { type: 'other', lengths: ed448.info.lengths },
+};
 
 export const decaf448_hasher: H2CHasherBase<bigint> = {
   hashToCurve(msg: Uint8Array, options?: htfBasicOpts): DcfPoint {

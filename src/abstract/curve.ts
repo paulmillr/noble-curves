@@ -27,7 +27,7 @@ export interface Group<T extends Group<T>> {
 
 // More like SigAlgorithmInfo, not CurveInfo
 export interface CurveInfo {
-  type: 'weierstrass' | 'edwards' | 'montgomery';
+  type: 'weierstrass' | 'edwards' | 'montgomery' | 'other';
   publicKeyHasPrefix?: true;
   lengths: {
     secret: number;
