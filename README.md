@@ -5,7 +5,7 @@ Audited & minimal JS implementation of elliptic curve cryptography.
 - 🔒 [**Audited**](#security) by independent security firms
 - 🔻 Tree-shakeable: unused code is excluded from your builds
 - 🏎 Fast: hand-optimized for caveats of JS engines
-- 🔍 Reliable: cross-library / wycheproof tests and fuzzing ensure correctness
+- 🔍 Reliable: tested against cross-library, wycheproof and acvp vectors
 - ➰ Weierstrass, Edwards, Montgomery curves; ECDSA, EdDSA, Schnorr, BLS signatures
 - ✍️ ECDH, hash-to-curve, OPRF, Poseidon ZK-friendly hash
 - 🔖 Non-repudiation (SUF-CMA, SBS) & consensus-friendliness (ZIP215) in ed25519, ed448

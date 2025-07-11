@@ -1,0 +1,3 @@
+[submodule "test/vectors/acvp-vectors"]
+  path = test/vectors/acvp-vectors
+  url = https://github.com/paulmillr/acvp-vectors.git
