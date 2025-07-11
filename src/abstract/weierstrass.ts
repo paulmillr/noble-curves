@@ -1081,6 +1081,7 @@ export type CurveFn = {
     randomPrivateKey: (seed?: Uint8Array) => Uint8Array;
     precompute: (windowSize?: number, point?: ProjPointType<bigint>) => ProjPointType<bigint>;
   };
+  info: CurveInfo;
   keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
 };
 
@@ -1546,7 +1547,7 @@ export function ecdsa(
     utils,
     Point,
     Signature,
-    info: { type: 'weierstrass' as const, lengths },
+    info: { type: 'weierstrass' as const, lengths, publicKeyHasPrefix: true },
   });
 }
 
