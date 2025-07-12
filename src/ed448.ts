@@ -18,6 +18,7 @@ import type { AffinePoint, Group } from './abstract/curve.ts';
 import { pippenger } from './abstract/curve.ts';
 import {
   edwards,
+  PrimeEdPoint,
   twistedEdwards,
   type CurveFn,
   type EdwardsOpts,
@@ -33,16 +34,9 @@ import {
   type H2CMethod,
   type htfBasicOpts,
 } from './abstract/hash-to-curve.ts';
-import { Field, FpInvertBatch, isNegativeLE, mod, pow2, type IField } from './abstract/modular.ts';
+import { Field, FpInvertBatch, isNegativeLE, mod, pow2 } from './abstract/modular.ts';
 import { montgomery, type MontgomeryECDH as XCurveFn } from './abstract/montgomery.ts';
-import {
-  bytesToHex,
-  bytesToNumberLE,
-  ensureBytes,
-  equalBytes,
-  numberToBytesLE,
-  type Hex,
-} from './utils.ts';
+import { bytesToNumberLE, ensureBytes, equalBytes, numberToBytesLE, type Hex } from './utils.ts';
 
 // a = 1n
 // d = Fp.neg(39081n)
@@ -397,19 +391,21 @@ function decaf448_map(bytes: Uint8Array): DcfPoint {
  * but it should work in its own namespace: do not combine those two.
  * See [RFC9496](https://www.rfc-editor.org/rfc/rfc9496).
  */
-class DcfPoint implements Group<DcfPoint> {
-  static BASE: DcfPoint;
-  static ZERO: DcfPoint;
-  static Fn: IField<bigint> = Fn;
-  private readonly ep: ExtendedPoint;
-  // Private property to discourage combining ExtendedPoint + DecafPoint
-  // Always use Decaf encoding/decoding instead.
+class DcfPoint extends PrimeEdPoint<DcfPoint> implements Group<DcfPoint> {
   constructor(ep: ExtendedPoint) {
-    this.ep = ep;
+    super(ep);
   }
 
   static fromAffine(ap: AffinePoint<bigint>): DcfPoint {
     return new DcfPoint(ed448.Point.fromAffine(ap));
+  }
+
+  protected validateSameType(other: DcfPoint): void {
+    adecafp(other);
+  }
+
+  protected createNew(ep: ExtPointType): DcfPoint {
+    return new DcfPoint(ep);
   }
 
   /**
@@ -472,36 +468,23 @@ class DcfPoint implements Group<DcfPoint> {
    * Described in [RFC9496](https://www.rfc-editor.org/rfc/rfc9496#name-encode-2).
    */
   toBytes(): Uint8Array {
-    let { ex: x, ey: _y, ez: z, et: t } = this.ep;
+    const { X, Z, T } = this.ep;
     const P = Fp.ORDER;
     const mod = Fp.create;
 
-    const u1 = mod(mod(x + t) * mod(x - t)); // 1
-    const x2 = mod(x * x);
+    const u1 = mod(mod(X + T) * mod(X - T)); // 1
+    const x2 = mod(X * X);
     const { value: invsqrt } = invertSqrt(mod(u1 * ONE_MINUS_D * x2)); // 2
 
     let ratio = mod(invsqrt * u1 * SQRT_MINUS_D); // 3
     if (isNegativeLE(ratio, P)) ratio = mod(-ratio);
 
-    const u2 = mod(INVSQRT_MINUS_D * ratio * z - t); // 4
+    const u2 = mod(INVSQRT_MINUS_D * ratio * Z - T); // 4
 
-    let s = mod(ONE_MINUS_D * invsqrt * x * u2); // 5
+    let s = mod(ONE_MINUS_D * invsqrt * X * u2); // 5
     if (isNegativeLE(s, P)) s = mod(-s);
 
     return numberToBytesLE(s, 56);
-  }
-
-  /** @deprecated use `toBytes` */
-  toRawBytes(): Uint8Array {
-    return this.toBytes();
-  }
-
-  toHex(): string {
-    return bytesToHex(this.toBytes());
-  }
-
-  toString(): string {
-    return this.toHex();
   }
 
   /**
@@ -510,64 +493,13 @@ class DcfPoint implements Group<DcfPoint> {
    */
   equals(other: DcfPoint): boolean {
     adecafp(other);
-    const { ex: X1, ey: Y1 } = this.ep;
-    const { ex: X2, ey: Y2 } = other.ep;
+    const { X: X1, Y: Y1 } = this.ep;
+    const { X: X2, Y: Y2 } = other.ep;
     const mod = Fp.create;
     // (x1 * y2 == y1 * x2)
     return mod(X1 * Y2) === mod(Y1 * X2);
   }
-
-  add(other: DcfPoint): DcfPoint {
-    adecafp(other);
-    return new DcfPoint(this.ep.add(other.ep));
-  }
-
-  subtract(other: DcfPoint): DcfPoint {
-    adecafp(other);
-    return new DcfPoint(this.ep.subtract(other.ep));
-  }
-
-  multiply(scalar: bigint): DcfPoint {
-    return new DcfPoint(this.ep.multiply(scalar));
-  }
-
-  multiplyUnsafe(scalar: bigint): DcfPoint {
-    return new DcfPoint(this.ep.multiplyUnsafe(scalar));
-  }
-
-  double(): DcfPoint {
-    return new DcfPoint(this.ep.double());
-  }
-
-  negate(): DcfPoint {
-    return new DcfPoint(this.ep.negate());
-  }
-
-  clearCofactor(): DcfPoint {
-    // no-op
-    return this;
-  }
-
-  assertValidity(): void {
-    this.ep.assertValidity();
-  }
-
-  toAffine(invertedZ?: bigint): AffinePoint<bigint> {
-    return this.ep.toAffine(invertedZ);
-  }
 }
-
-/**
- * Wrapper over Edwards Point for decaf448 from
- * [RFC9496](https://www.rfc-editor.org/rfc/rfc9496).
- */
-export const DecafPoint: typeof DcfPoint = /* @__PURE__ */ (() => {
-  // decaf448 base point is ed448 base x 2
-  // https://github.com/dalek-cryptography/curve25519-dalek/blob/59837c6ecff02b77b9d5ff84dbc239d0cf33ef90/vendor/ristretto.sage#L699
-  if (!DcfPoint.BASE) DcfPoint.BASE = new DcfPoint(ed448.Point.BASE).multiply(_2n);
-  if (!DcfPoint.ZERO) DcfPoint.ZERO = new DcfPoint(ed448.Point.ZERO);
-  return DcfPoint;
-})();
 
 export const decaf448_hasher: H2CHasherBase<bigint> = {
   hashToCurve(msg: Uint8Array, options?: htfBasicOpts): DcfPoint {
@@ -579,6 +511,26 @@ export const decaf448_hasher: H2CHasherBase<bigint> = {
   },
 };
 
+export const DecafPoint: typeof DcfPoint = /* @__PURE__ */ (() => {
+  // decaf448 base point is ed448 base x 2
+  // https://github.com/dalek-cryptography/curve25519-dalek/blob/59837c6ecff02b77b9d5ff84dbc239d0cf33ef90/vendor/ristretto.sage#L699
+  // new DcfPoint(ed448.Point.BASE).multiplyUnsafe(_2n);
+  DcfPoint.BASE = new DcfPoint(
+    ed448.Point.fromAffine({
+      x: BigInt(
+        '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa955555555555555555555555555555555555555555555555555555555'
+      ),
+      y: BigInt(
+        '0xae05e9634ad7048db359d6205086c2b0036ed7a035884dd7b7e36d728ad8c4b80d6565833a2a3098bbbcb2bed1cda06bdaeafbcdea9386ed'
+      ),
+    })
+  );
+  DcfPoint.ZERO = new DcfPoint(ed448.Point.ZERO);
+  DcfPoint.Fp = Fp;
+  DcfPoint.Fn = Fn;
+  return DcfPoint;
+})();
+
 // export const decaf448_OPRF: OPRF = createORPF({
 //   name: 'decaf448-SHAKE256',
 //   Point: DecafPoint,
@@ -588,9 +540,9 @@ export const decaf448_hasher: H2CHasherBase<bigint> = {
 // });
 
 type DcfHasher = (msg: Uint8Array, options: htfBasicOpts) => DcfPoint;
-/**
- * hash-to-curve for decaf448.
- * Described in [RFC9380](https://www.rfc-editor.org/rfc/rfc9380#appendix-C).
- */
+// /**
+//  * hash-to-curve for decaf448.
+//  * Described in [RFC9380](https://www.rfc-editor.org/rfc/rfc9380#appendix-C).
+//  */
 export const hashToDecaf448: DcfHasher = decaf448_hasher.hashToCurve as DcfHasher;
 export const hash_to_decaf448: DcfHasher = decaf448_hasher.hashToCurve as DcfHasher;

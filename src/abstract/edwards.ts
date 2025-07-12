@@ -764,6 +764,7 @@ export function twistedEdwards(c: CurveTypeWithLength): CurveFn {
 export abstract class PrimeEdPoint<T extends PrimeEdPoint<T>> implements Group<T> {
   static BASE: any;
   static ZERO: any;
+  static Fp: IField<bigint>;
   static Fn: IField<bigint>;
 
   protected readonly ep: ExtPointType;

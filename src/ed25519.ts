@@ -10,6 +10,7 @@ import { sha512 } from '@noble/hashes/sha2.js';
 import { abytes, concatBytes, utf8ToBytes } from '@noble/hashes/utils.js';
 import { pippenger, type AffinePoint, type Group } from './abstract/curve.ts';
 import {
+  PrimeEdPoint,
   twistedEdwards,
   type CurveFn,
   type EdwardsOpts,
@@ -24,24 +25,9 @@ import {
   type H2CMethod,
   type htfBasicOpts,
 } from './abstract/hash-to-curve.ts';
-import {
-  Field,
-  FpInvertBatch,
-  FpSqrtEven,
-  isNegativeLE,
-  mod,
-  pow2,
-  type IField,
-} from './abstract/modular.ts';
+import { Field, FpInvertBatch, FpSqrtEven, isNegativeLE, mod, pow2 } from './abstract/modular.ts';
 import { montgomery, type MontgomeryECDH as XCurveFn } from './abstract/montgomery.ts';
-import {
-  bytesToHex,
-  bytesToNumberLE,
-  ensureBytes,
-  equalBytes,
-  numberToBytesLE,
-  type Hex,
-} from './utils.ts';
+import { bytesToNumberLE, ensureBytes, equalBytes, numberToBytesLE, type Hex } from './utils.ts';
 
 // prettier-ignore
 const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3);
@@ -345,10 +331,6 @@ export const hashToCurve: H2CMethod<bigint> = /* @__PURE__ */ (() => ed25519_has
 export const encodeToCurve: H2CMethod<bigint> = /* @__PURE__ */ (() =>
   ed25519_hasher.encodeToCurve)();
 
-function aristp(other: unknown) {
-  if (!(other instanceof RistPoint)) throw new Error('RistrettoPoint expected');
-}
-
 // √(-1) aka √(a) aka 2^((p-1)/4)
 const SQRT_M1 = ED25519_SQRT_M1;
 // √(ad - 1)
@@ -414,26 +396,34 @@ function ristretto255_map(bytes: Uint8Array): RistPoint {
   return new RistPoint(R1.add(R2));
 }
 
+function aristp(other: unknown) {
+  if (!(other instanceof RistPoint)) throw new Error('RistrettoPoint expected');
+}
+
 /**
+ * Wrapper over Edwards Point for ristretto255.
+ *
  * Each ed25519/ExtendedPoint has 8 different equivalent points. This can be
  * a source of bugs for protocols like ring signatures. Ristretto was created to solve this.
  * Ristretto point operates in X:Y:Z:T extended coordinates like ExtendedPoint,
  * but it should work in its own namespace: do not combine those two.
  * See [RFC9496](https://www.rfc-editor.org/rfc/rfc9496).
  */
-class RistPoint implements Group<RistPoint> {
-  static BASE: RistPoint;
-  static ZERO: RistPoint;
-  static Fn: IField<bigint> = Fn;
-  private readonly ep: ExtendedPoint;
-  // Private property to discourage combining ExtendedPoint + RistrettoPoint
-  // Always use Ristretto encoding/decoding instead.
+class RistPoint extends PrimeEdPoint<RistPoint> implements Group<RistPoint> {
   constructor(ep: ExtendedPoint) {
-    this.ep = ep;
+    super(ep);
   }
 
   static fromAffine(ap: AffinePoint<bigint>): RistPoint {
     return new RistPoint(ed25519.Point.fromAffine(ap));
+  }
+
+  protected validateSameType(other: RistPoint): void {
+    aristp(other);
+  }
+
+  protected createNew(ep: ExtPointType): RistPoint {
+    return new RistPoint(ep);
   }
 
   /**
@@ -489,62 +479,36 @@ class RistPoint implements Group<RistPoint> {
     return pippenger(RistPoint, ed25519.Point.Fn, points, scalars);
   }
 
-  clearCofactor(): RistPoint {
-    // no-op
-    return this;
-  }
-
-  assertValidity(): void {
-    this.ep.assertValidity();
-  }
-
-  toAffine(invertedZ?: bigint): AffinePoint<bigint> {
-    return this.ep.toAffine(invertedZ);
-  }
-
   /**
    * Encodes ristretto point to Uint8Array.
    * Described in [RFC9496](https://www.rfc-editor.org/rfc/rfc9496#name-encode).
    */
   toBytes(): Uint8Array {
-    let { ex: x, ey: y, ez: z, et: t } = this.ep;
+    let { X, Y, Z, T } = this.ep;
     const P = Fp.ORDER;
     const mod = Fp.create;
-    const u1 = mod(mod(z + y) * mod(z - y)); // 1
-    const u2 = mod(x * y); // 2
+    const u1 = mod(mod(Z + Y) * mod(Z - Y)); // 1
+    const u2 = mod(X * Y); // 2
     // Square root always exists
     const u2sq = mod(u2 * u2);
     const { value: invsqrt } = invertSqrt(mod(u1 * u2sq)); // 3
     const D1 = mod(invsqrt * u1); // 4
     const D2 = mod(invsqrt * u2); // 5
-    const zInv = mod(D1 * D2 * t); // 6
+    const zInv = mod(D1 * D2 * T); // 6
     let D: bigint; // 7
-    if (isNegativeLE(t * zInv, P)) {
-      let _x = mod(y * SQRT_M1);
-      let _y = mod(x * SQRT_M1);
-      x = _x;
-      y = _y;
+    if (isNegativeLE(T * zInv, P)) {
+      let _x = mod(Y * SQRT_M1);
+      let _y = mod(X * SQRT_M1);
+      X = _x;
+      Y = _y;
       D = mod(D1 * INVSQRT_A_MINUS_D);
     } else {
       D = D2; // 8
     }
-    if (isNegativeLE(x * zInv, P)) y = mod(-y); // 9
-    let s = mod((z - y) * D); // 10 (check footer's note, no sqrt(-a))
+    if (isNegativeLE(X * zInv, P)) Y = mod(-Y); // 9
+    let s = mod((Z - Y) * D); // 10 (check footer's note, no sqrt(-a))
     if (isNegativeLE(s, P)) s = mod(-s);
     return numberToBytesLE(s, 32); // 11
-  }
-
-  /** @deprecated use `toBytes` */
-  toRawBytes(): Uint8Array {
-    return this.toBytes();
-  }
-
-  toHex(): string {
-    return bytesToHex(this.toBytes());
-  }
-
-  toString(): string {
-    return this.toHex();
   }
 
   /**
@@ -553,53 +517,24 @@ class RistPoint implements Group<RistPoint> {
    */
   equals(other: RistPoint): boolean {
     aristp(other);
-    const { ex: X1, ey: Y1 } = this.ep;
-    const { ex: X2, ey: Y2 } = other.ep;
+    const { X: X1, Y: Y1 } = this.ep;
+    const { X: X2, Y: Y2 } = other.ep;
     const mod = Fp.create;
     // (x1 * y2 == y1 * x2) | (y1 * y2 == x1 * x2)
     const one = mod(X1 * Y2) === mod(Y1 * X2);
     const two = mod(Y1 * Y2) === mod(X1 * X2);
     return one || two;
   }
-
-  add(other: RistPoint): RistPoint {
-    aristp(other);
-    return new RistPoint(this.ep.add(other.ep));
-  }
-
-  subtract(other: RistPoint): RistPoint {
-    aristp(other);
-    return new RistPoint(this.ep.subtract(other.ep));
-  }
-
-  multiply(scalar: bigint): RistPoint {
-    return new RistPoint(this.ep.multiply(scalar));
-  }
-
-  multiplyUnsafe(scalar: bigint): RistPoint {
-    return new RistPoint(this.ep.multiplyUnsafe(scalar));
-  }
-
-  double(): RistPoint {
-    return new RistPoint(this.ep.double());
-  }
-
-  negate(): RistPoint {
-    return new RistPoint(this.ep.negate());
-  }
 }
-
-/**
- * Wrapper over Edwards Point for ristretto255 from
- * [RFC9496](https://www.rfc-editor.org/rfc/rfc9496).
- */
 export const RistrettoPoint: typeof RistPoint = /* @__PURE__ */ (() => {
-  if (!RistPoint.BASE) RistPoint.BASE = new RistPoint(ed25519.Point.BASE);
-  if (!RistPoint.ZERO) RistPoint.ZERO = new RistPoint(ed25519.Point.ZERO);
+  RistPoint.BASE = new RistPoint(ed25519.Point.BASE);
+  RistPoint.ZERO = new RistPoint(ed25519.Point.ZERO);
+  RistPoint.Fp = Fp;
+  RistPoint.Fn = Fn;
   return RistPoint;
 })();
 
-const ristretto255_hasher: H2CHasherBase<bigint> = {
+export const ristretto255_hasher: H2CHasherBase<bigint> = {
   hashToCurve(msg: Uint8Array, options?: htfBasicOpts): RistPoint {
     const DST = options?.DST || 'ristretto255_XMD:SHA-512_R255MAP_RO_';
     return ristretto255_map(expand_message_xmd(msg, DST, 64, sha512));
