@@ -693,6 +693,11 @@ utils.nLength(255n);
 utils.equalBytes(Uint8Array.from([0xde]), Uint8Array.from([0xde]));
 ```
 
+### Unreleased bits
+
+- `test/unreleased-xeddsa.ts` contains implementation of XEd25519, defined by Signal
+- `test/misc/endomorphism.js` contains tool for generation of endomorphism params for Koblitz curves
+
 ## Security
 
 The library has been independently audited:
