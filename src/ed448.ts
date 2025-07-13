@@ -18,12 +18,12 @@ import type { AffinePoint, Group } from './abstract/curve.ts';
 import { pippenger } from './abstract/curve.ts';
 import {
   edwards,
-  PrimeEdPoint,
+  PrimeEdwardsPoint,
   twistedEdwards,
   type CurveFn,
   type EdwardsOpts,
-  type ExtPointConstructor,
-  type ExtPointType,
+  type EdwardsPoint,
+  type EdwardsPointCons,
 } from './abstract/edwards.ts';
 import {
   _scalarDST,
@@ -79,7 +79,7 @@ const E448_CURVE: EdwardsOpts = Object.assign({}, ed448_CURVE, {
     '0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffff80000000000000000000000000000000000000000000000000000001'
   ),
 });
-export const E448: ExtPointConstructor = edwards(E448_CURVE);
+export const E448: EdwardsPointCons = edwards(E448_CURVE);
 
 const shake256_114 = /* @__PURE__ */ wrapConstructor(() => shake256.create({ dkLen: 114 }));
 const shake256_64 = /* @__PURE__ */ wrapConstructor(() => shake256.create({ dkLen: 64 }));
@@ -153,7 +153,6 @@ const ED448_DEF = /* @__PURE__ */ (() => ({
   ...ed448_CURVE,
   Fp,
   Fn,
-  // nBitLength: 456,
   hash: shake256_114,
   adjustScalarBytes,
   // dom4
@@ -175,12 +174,14 @@ const ED448_DEF = /* @__PURE__ */ (() => ({
  * import { ed448 } from '@noble/curves/ed448';
  * const priv = ed448.utils.randomPrivateKey();
  * const pub = ed448.getPublicKey(priv);
- * const msg = new TextEncoder().encode('whatsup');
+ * const msg = new TextEncoder().encode('hello');
  * const sig = ed448.sign(msg, priv);
  * ed448.verify(sig, msg, pub);
  */
 export const ed448: CurveFn = twistedEdwards(ED448_DEF);
-// NOTE: there is no ed448ctx, since ed448 supports ctx by default
+
+// There is no ed448ctx, since ed448 supports ctx by default
+/** Prehashed version of ed448. Accepts already-hashed messages in sign() and verify(). */
 export const ed448ph: CurveFn = /* @__PURE__ */ (() =>
   twistedEdwards({
     ...ED448_DEF,
@@ -206,23 +207,13 @@ export const x448: XCurveFn = /* @__PURE__ */ (() => {
   });
 })();
 
-/**
- * Converts edwards448 public key to x448 public key. Uses formula:
- * * `(u, v) = ((y-1)/(y+1), sqrt(156324)*u/x)`
- * * `(x, y) = (sqrt(156324)*u/v, (1+u)/(1-u))`
- * @example
- *   const aPub = ed448.getPublicKey(utils.randomPrivateKey());
- *   x448.getSharedSecret(edwardsToMontgomery(aPub), edwardsToMontgomery(someonesPub))
- */
+/** @deprecated use `ed448.utils.toMontgomery` */
 export function edwardsToMontgomeryPub(edwardsPub: string | Uint8Array): Uint8Array {
-  const bpub = ensureBytes('pub', edwardsPub);
-  const { y } = ed448.Point.fromHex(bpub);
-  const _1n = BigInt(1);
-  return Fp.toBytes(Fp.create((y - _1n) * Fp.inv(y + _1n)));
+  return ed448.utils.toMontgomery(ensureBytes('pub', edwardsPub));
 }
 
-export const edwardsToMontgomery: typeof edwardsToMontgomeryPub = edwardsToMontgomeryPub; // deprecated
-// TODO: add edwardsToMontgomeryPriv, similar to ed25519 version
+/** @deprecated use `ed448.utils.toMontgomery` */
+export const edwardsToMontgomery: typeof edwardsToMontgomeryPub = edwardsToMontgomeryPub;
 
 // Hash To Curve Elligator2 Map
 const ELL2_C1 = /* @__PURE__ */ (() => (Fp.ORDER - BigInt(3)) / BigInt(4))(); // 1. c1 = (q - 3) / 4         # Integer arithmetic
@@ -335,7 +326,7 @@ const MAX_448B = /* @__PURE__ */ BigInt(
 );
 const bytes448ToNumberLE = (bytes: Uint8Array) => Fp.create(bytesToNumberLE(bytes) & MAX_448B);
 
-type ExtendedPoint = ExtPointType;
+type ExtendedPoint = EdwardsPoint;
 
 /**
  * Elligator map for hash-to-curve of decaf448.
@@ -387,7 +378,7 @@ function decaf448_map(bytes: Uint8Array): DecafPoint {
  * but it should work in its own namespace: do not combine those two.
  * See [RFC9496](https://www.rfc-editor.org/rfc/rfc9496).
  */
-export class DecafPoint extends PrimeEdPoint<DecafPoint> implements Group<DecafPoint> {
+export class DecafPoint extends PrimeEdwardsPoint<DecafPoint> implements Group<DecafPoint> {
   // The following gymnastics is done because typescript strips comments otherwise
   // prettier-ignore
   static BASE: DecafPoint =
@@ -414,7 +405,7 @@ export class DecafPoint extends PrimeEdPoint<DecafPoint> implements Group<DecafP
     if (!(other instanceof DecafPoint)) throw new Error('DecafPoint expected');
   }
 
-  protected init(ep: ExtPointType): DecafPoint {
+  protected init(ep: EdwardsPoint): DecafPoint {
     return new DecafPoint(ep);
   }
 

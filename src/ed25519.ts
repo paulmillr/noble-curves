@@ -10,11 +10,11 @@ import { sha512 } from '@noble/hashes/sha2.js';
 import { abytes, concatBytes, utf8ToBytes } from '@noble/hashes/utils.js';
 import { pippenger, type AffinePoint, type Group } from './abstract/curve.ts';
 import {
-  PrimeEdPoint,
+  PrimeEdwardsPoint,
   twistedEdwards,
   type CurveFn,
   type EdwardsOpts,
-  type ExtPointType,
+  type EdwardsPoint,
 } from './abstract/edwards.ts';
 import {
   _scalarDST,
@@ -161,11 +161,14 @@ function ed25519_domain(data: Uint8Array, ctx: Uint8Array, phflag: boolean) {
   );
 }
 
+/** Context of ed25519. Uses context for domain separation. */
 export const ed25519ctx: CurveFn = /* @__PURE__ */ (() =>
   twistedEdwards({
     ...ed25519Defaults,
     domain: ed25519_domain,
   }))();
+
+/** Prehashed version of ed25519. Accepts already-hashed messages in sign() and verify(). */
 export const ed25519ph: CurveFn = /* @__PURE__ */ (() =>
   twistedEdwards(
     Object.assign({}, ed25519Defaults, {
@@ -198,54 +201,16 @@ export const x25519: XCurveFn = /* @__PURE__ */ (() => {
   });
 })();
 
-/**
- * Converts ed25519 public key to x25519 public key. Uses formula:
- * * `(u, v) = ((1+y)/(1-y), sqrt(-486664)*u/x)`
- * * `(x, y) = (sqrt(-486664)*u/v, (u-1)/(u+1))`
- * @example
- *   const someonesPub = ed25519.getPublicKey(ed25519.utils.randomPrivateKey());
- *   const aPriv = x25519.utils.randomPrivateKey();
- *   x25519.getSharedSecret(aPriv, edwardsToMontgomeryPub(someonesPub))
- */
+/** @deprecated use `ed25519.utils.toMontgomery` */
 export function edwardsToMontgomeryPub(edwardsPub: Hex): Uint8Array {
-  const bpub = ensureBytes('pub', edwardsPub);
-  const { y } = ed25519.Point.fromHex(bpub);
-  const _1n = BigInt(1);
-  return Fp.toBytes(Fp.create((_1n + y) * Fp.inv(_1n - y)));
+  return ed25519.utils.toMontgomery(ensureBytes('pub', edwardsPub));
 }
-export const edwardsToMontgomery: typeof edwardsToMontgomeryPub = edwardsToMontgomeryPub; // deprecated
+/** @deprecated use `ed25519.utils.toMontgomery` */
+export const edwardsToMontgomery: typeof edwardsToMontgomeryPub = edwardsToMontgomeryPub;
 
-/**
- * Converts a Montgomery public key (u-coordinate) to a compressed Edwards public key.
- * This is a key part of the XEd25519 signature scheme.
- * The sign of the x-coordinate is chosen to be even (sign bit 0), which is the standard convention.
- * @param montgomeryPub A 32-byte X25519 public key.
- * @returns A 32-byte Ed25519 public key.
- */
-export function montgomeryToEdwardsPub(montgomeryPub: Hex): Uint8Array {
-  const u = Fp.fromBytes(ensureBytes('montgomeryPub', montgomeryPub, 32));
-  // y = (u - 1) / (u + 1)
-  const y = Fp.mul(Fp.sub(u, _1n), Fp.inv(Fp.add(u, _1n)));
-  const y2 = Fp.sqr(y);
-  // x^2 = (y^2 - 1) / (d * y^2 + 1)
-  const num = Fp.sub(y2, _1n);
-  const den = Fp.add(Fp.mul(ed25519_CURVE.d, y2), _1n); // a = -1 for ed25519
-  const { isValid, value: x } = uvRatio(num, den);
-  if (!isValid) throw new Error('montgomeryToEdwardsPub: invalid point');
-  const point = new ed25519.Point(x, y, _1n, Fp.mul(x, y));
-  return point.toBytes();
-}
-
-/**
- * Converts ed25519 secret key to x25519 secret key.
- * @example
- *   const someonesPub = x25519.getPublicKey(x25519.utils.randomPrivateKey());
- *   const aPriv = ed25519.utils.randomPrivateKey();
- *   x25519.getSharedSecret(edwardsToMontgomeryPriv(aPriv), someonesPub)
- */
+/** @deprecated use `ed25519.utils.toMontgomeryPriv` */
 export function edwardsToMontgomeryPriv(edwardsPriv: Uint8Array): Uint8Array {
-  const hashed = ed25519Defaults.hash(edwardsPriv.subarray(0, 32));
-  return ed25519Defaults.adjustScalarBytes(hashed).subarray(0, 32);
+  return ed25519.utils.toMontgomeryPriv(ensureBytes('pub', edwardsPriv));
 }
 
 // Hash To Curve Elligator2 Map (NOTE: different from ristretto255 elligator)
@@ -366,7 +331,7 @@ const MAX_255B = /* @__PURE__ */ BigInt(
 const bytes255ToNumberLE = (bytes: Uint8Array) =>
   ed25519.CURVE.Fp.create(bytesToNumberLE(bytes) & MAX_255B);
 
-type ExtendedPoint = ExtPointType;
+type ExtendedPoint = EdwardsPoint;
 
 /**
  * Computes Elligator map for Ristretto255.
@@ -413,7 +378,10 @@ function ristretto255_map(bytes: Uint8Array): RistrettoPoint {
  * but it should work in its own namespace: do not combine those two.
  * See [RFC9496](https://www.rfc-editor.org/rfc/rfc9496).
  */
-export class RistrettoPoint extends PrimeEdPoint<RistrettoPoint> implements Group<RistrettoPoint> {
+export class RistrettoPoint
+  extends PrimeEdwardsPoint<RistrettoPoint>
+  implements Group<RistrettoPoint>
+{
   // The following gymnastics is done because typescript strips comments otherwise
   // prettier-ignore
   static BASE: RistrettoPoint =
@@ -440,7 +408,7 @@ export class RistrettoPoint extends PrimeEdPoint<RistrettoPoint> implements Grou
     if (!(other instanceof RistrettoPoint)) throw new Error('RistrettoPoint expected');
   }
 
-  protected init(ep: ExtPointType): RistrettoPoint {
+  protected init(ep: EdwardsPoint): RistrettoPoint {
     return new RistrettoPoint(ep);
   }
 
