@@ -551,6 +551,94 @@ export function edwards(CURVE: EdwardsOpts, curveOpts: EdwardsExtraOpts = {}): E
 }
 
 /**
+ * Base class for prime-order points like Ristretto255 and Decaf448.
+ * These points eliminate cofactor issues by representing equivalence classes
+ * of Edwards curve points.
+ */
+export abstract class PrimeEdPoint<T extends PrimeEdPoint<T>> implements Group<T> {
+  static BASE: PrimeEdPoint<any>;
+  static ZERO: PrimeEdPoint<any>;
+  static Fp: IField<bigint>;
+  static Fn: IField<bigint>;
+
+  protected readonly ep: ExtPointType;
+
+  constructor(ep: ExtPointType) {
+    this.ep = ep;
+  }
+
+  // Abstract methods that must be implemented by subclasses
+  abstract toBytes(): Uint8Array;
+  abstract equals(other: T): boolean;
+
+  // Static methods that must be implemented by subclasses
+  static fromBytes(_bytes: Uint8Array): any {
+    throw new Error('fromBytes must be implemented by subclass');
+  }
+
+  static fromHex(_hex: Hex): any {
+    throw new Error('fromHex must be implemented by subclass');
+  }
+
+  // Common implementations
+  clearCofactor(): T {
+    // no-op for prime-order groups
+    return this as any;
+  }
+
+  assertValidity(): void {
+    this.ep.assertValidity();
+  }
+
+  toAffine(invertedZ?: bigint): AffinePoint<bigint> {
+    return this.ep.toAffine(invertedZ);
+  }
+
+  /** @deprecated use `toBytes` */
+  toRawBytes(): Uint8Array {
+    return this.toBytes();
+  }
+
+  toHex(): string {
+    return bytesToHex(this.toBytes());
+  }
+
+  toString(): string {
+    return this.toHex();
+  }
+
+  add(other: T): T {
+    this.assertSame(other);
+    return this.init(this.ep.add(other.ep));
+  }
+
+  subtract(other: T): T {
+    this.assertSame(other);
+    return this.init(this.ep.subtract(other.ep));
+  }
+
+  multiply(scalar: bigint): T {
+    return this.init(this.ep.multiply(scalar));
+  }
+
+  multiplyUnsafe(scalar: bigint): T {
+    return this.init(this.ep.multiplyUnsafe(scalar));
+  }
+
+  double(): T {
+    return this.init(this.ep.double());
+  }
+
+  negate(): T {
+    return this.init(this.ep.negate());
+  }
+
+  // Helper methods
+  protected abstract assertSame(other: T): void;
+  protected abstract init(ep: ExtPointType): T;
+}
+
+/**
  * Initializes EdDSA signatures over given Edwards curve.
  */
 export function eddsa(Point: ExtPointConstructor, eddsaOpts: EdDSAOpts): EdDSA {
@@ -754,92 +842,4 @@ export function twistedEdwards(c: CurveTypeWithLength): CurveFn {
   const Point = edwards(CURVE, curveOpts);
   const EDDSA = eddsa(Point, eddsaOpts);
   return _eddsa_new_output_to_legacy(c, EDDSA);
-}
-
-/**
- * Base class for prime-order points like Ristretto255 and Decaf448.
- * These points eliminate cofactor issues by representing equivalence classes
- * of Edwards curve points.
- */
-export abstract class PrimeEdPoint<T extends PrimeEdPoint<T>> implements Group<T> {
-  static BASE: any;
-  static ZERO: any;
-  static Fp: IField<bigint>;
-  static Fn: IField<bigint>;
-
-  protected readonly ep: ExtPointType;
-
-  constructor(ep: ExtPointType) {
-    this.ep = ep;
-  }
-
-  // Abstract methods that must be implemented by subclasses
-  abstract toBytes(): Uint8Array;
-  abstract equals(other: T): boolean;
-
-  // Static methods that must be implemented by subclasses
-  static fromBytes(_bytes: Uint8Array): any {
-    throw new Error('fromBytes must be implemented by subclass');
-  }
-
-  static fromHex(_hex: Hex): any {
-    throw new Error('fromHex must be implemented by subclass');
-  }
-
-  // Common implementations
-  clearCofactor(): T {
-    // no-op for prime-order groups
-    return this as any;
-  }
-
-  assertValidity(): void {
-    this.ep.assertValidity();
-  }
-
-  toAffine(invertedZ?: bigint): AffinePoint<bigint> {
-    return this.ep.toAffine(invertedZ);
-  }
-
-  /** @deprecated use `toBytes` */
-  toRawBytes(): Uint8Array {
-    return this.toBytes();
-  }
-
-  toHex(): string {
-    return bytesToHex(this.toBytes());
-  }
-
-  toString(): string {
-    return this.toHex();
-  }
-
-  add(other: T): T {
-    this.validateSameType(other);
-    return this.createNew(this.ep.add(other.ep));
-  }
-
-  subtract(other: T): T {
-    this.validateSameType(other);
-    return this.createNew(this.ep.subtract(other.ep));
-  }
-
-  multiply(scalar: bigint): T {
-    return this.createNew(this.ep.multiply(scalar));
-  }
-
-  multiplyUnsafe(scalar: bigint): T {
-    return this.createNew(this.ep.multiplyUnsafe(scalar));
-  }
-
-  double(): T {
-    return this.createNew(this.ep.double());
-  }
-
-  negate(): T {
-    return this.createNew(this.ep.negate());
-  }
-
-  // Helper methods
-  protected abstract validateSameType(other: T): void;
-  protected abstract createNew(ep: ExtPointType): T;
 }

@@ -25,7 +25,15 @@ import {
   type H2CMethod,
   type htfBasicOpts,
 } from './abstract/hash-to-curve.ts';
-import { Field, FpInvertBatch, FpSqrtEven, isNegativeLE, mod, pow2 } from './abstract/modular.ts';
+import {
+  Field,
+  FpInvertBatch,
+  FpSqrtEven,
+  isNegativeLE,
+  mod,
+  pow2,
+  type IField,
+} from './abstract/modular.ts';
 import { montgomery, type MontgomeryECDH as XCurveFn } from './abstract/montgomery.ts';
 import { bytesToNumberLE, ensureBytes, equalBytes, numberToBytesLE, type Hex } from './utils.ts';
 
@@ -387,17 +395,13 @@ function calcElligatorRistrettoMap(r0: bigint): ExtendedPoint {
   return new ed25519.Point(mod(W0 * W3), mod(W2 * W1), mod(W1 * W3), mod(W0 * W2));
 }
 
-function ristretto255_map(bytes: Uint8Array): RistPoint {
+function ristretto255_map(bytes: Uint8Array): RistrettoPoint {
   abytes(bytes, 64);
   const r1 = bytes255ToNumberLE(bytes.subarray(0, 32));
   const R1 = calcElligatorRistrettoMap(r1);
   const r2 = bytes255ToNumberLE(bytes.subarray(32, 64));
   const R2 = calcElligatorRistrettoMap(r2);
-  return new RistPoint(R1.add(R2));
-}
-
-function aristp(other: unknown) {
-  if (!(other instanceof RistPoint)) throw new Error('RistrettoPoint expected');
+  return new RistrettoPoint(R1.add(R2));
 }
 
 /**
@@ -409,36 +413,43 @@ function aristp(other: unknown) {
  * but it should work in its own namespace: do not combine those two.
  * See [RFC9496](https://www.rfc-editor.org/rfc/rfc9496).
  */
-class RistPoint extends PrimeEdPoint<RistPoint> implements Group<RistPoint> {
+export class RistrettoPoint extends PrimeEdPoint<RistrettoPoint> implements Group<RistrettoPoint> {
+  // The following gymnastics is done because typescript strips comments otherwise
+  // prettier-ignore
+  static BASE: RistrettoPoint =
+    /* @__PURE__ */ (() => new RistrettoPoint(ed25519.Point.BASE))();
+  // prettier-ignore
+  static ZERO: RistrettoPoint =
+    /* @__PURE__ */ (() => new RistrettoPoint(ed25519.Point.ZERO))();
+  // prettier-ignore
+  static Fp: IField<bigint> =
+    /* @__PURE__ */ Fp;
+  // prettier-ignore
+  static Fn: IField<bigint> =
+    /* @__PURE__ */ Fn;
+
   constructor(ep: ExtendedPoint) {
     super(ep);
   }
 
-  static fromAffine(ap: AffinePoint<bigint>): RistPoint {
-    return new RistPoint(ed25519.Point.fromAffine(ap));
+  static fromAffine(ap: AffinePoint<bigint>): RistrettoPoint {
+    return new RistrettoPoint(ed25519.Point.fromAffine(ap));
   }
 
-  protected validateSameType(other: RistPoint): void {
-    aristp(other);
+  protected assertSame(other: RistrettoPoint): void {
+    if (!(other instanceof RistrettoPoint)) throw new Error('RistrettoPoint expected');
   }
 
-  protected createNew(ep: ExtPointType): RistPoint {
-    return new RistPoint(ep);
+  protected init(ep: ExtPointType): RistrettoPoint {
+    return new RistrettoPoint(ep);
   }
 
-  /**
-   * Takes uniform output of 64-byte hash function like sha512 and converts it to `RistrettoPoint`.
-   * The hash-to-group operation applies Elligator twice and adds the results.
-   * **Note:** this is one-way map, there is no conversion from point to hash.
-   * Described in [RFC9380](https://www.rfc-editor.org/rfc/rfc9380#appendix-B) and on
-   * the [website](https://ristretto.group/formulas/elligator.html).
-   * @param hex 64-byte output of a hash function
-   */
-  static hashToCurve(hex: Hex): RistPoint {
+  /** @deprecated use `import { ristretto255_hasher } from '@noble/curves/ed25519.js';` */
+  static hashToCurve(hex: Hex): RistrettoPoint {
     return ristretto255_map(ensureBytes('ristrettoHash', hex, 64));
   }
 
-  static fromBytes(bytes: Uint8Array): RistPoint {
+  static fromBytes(bytes: Uint8Array): RistrettoPoint {
     abytes(bytes, 32);
     const { a, d } = ed25519.CURVE;
     const P = Fp.ORDER;
@@ -463,7 +474,7 @@ class RistPoint extends PrimeEdPoint<RistPoint> implements Group<RistPoint> {
     const t = mod(x * y); // 12
     if (!isValid || isNegativeLE(t, P) || y === _0n)
       throw new Error('invalid ristretto255 encoding 2');
-    return new RistPoint(new ed25519.Point(x, y, _1n, t));
+    return new RistrettoPoint(new ed25519.Point(x, y, _1n, t));
   }
 
   /**
@@ -471,12 +482,12 @@ class RistPoint extends PrimeEdPoint<RistPoint> implements Group<RistPoint> {
    * Described in [RFC9496](https://www.rfc-editor.org/rfc/rfc9496#name-decode).
    * @param hex Ristretto-encoded 32 bytes. Not every 32-byte string is valid ristretto encoding
    */
-  static fromHex(hex: Hex): RistPoint {
-    return RistPoint.fromBytes(ensureBytes('ristrettoHex', hex, 32));
+  static fromHex(hex: Hex): RistrettoPoint {
+    return RistrettoPoint.fromBytes(ensureBytes('ristrettoHex', hex, 32));
   }
 
-  static msm(points: RistPoint[], scalars: bigint[]): RistPoint {
-    return pippenger(RistPoint, ed25519.Point.Fn, points, scalars);
+  static msm(points: RistrettoPoint[], scalars: bigint[]): RistrettoPoint {
+    return pippenger(RistrettoPoint, ed25519.Point.Fn, points, scalars);
   }
 
   /**
@@ -515,8 +526,8 @@ class RistPoint extends PrimeEdPoint<RistPoint> implements Group<RistPoint> {
    * Compares two Ristretto points.
    * Described in [RFC9496](https://www.rfc-editor.org/rfc/rfc9496#name-equals).
    */
-  equals(other: RistPoint): boolean {
-    aristp(other);
+  equals(other: RistrettoPoint): boolean {
+    this.assertSame(other);
     const { X: X1, Y: Y1 } = this.ep;
     const { X: X2, Y: Y2 } = other.ep;
     const mod = Fp.create;
@@ -526,16 +537,13 @@ class RistPoint extends PrimeEdPoint<RistPoint> implements Group<RistPoint> {
     return one || two;
   }
 }
-export const RistrettoPoint: typeof RistPoint = /* @__PURE__ */ (() => {
-  RistPoint.BASE = new RistPoint(ed25519.Point.BASE);
-  RistPoint.ZERO = new RistPoint(ed25519.Point.ZERO);
-  RistPoint.Fp = Fp;
-  RistPoint.Fn = Fn;
-  return RistPoint;
-})();
+
+export const ristretto255: {
+  Point: typeof RistrettoPoint;
+} = { Point: RistrettoPoint };
 
 export const ristretto255_hasher: H2CHasherBase<bigint> = {
-  hashToCurve(msg: Uint8Array, options?: htfBasicOpts): RistPoint {
+  hashToCurve(msg: Uint8Array, options?: htfBasicOpts): RistrettoPoint {
     const DST = options?.DST || 'ristretto255_XMD:SHA-512_R255MAP_RO_';
     return ristretto255_map(expand_message_xmd(msg, DST, 64, sha512));
   },
@@ -544,7 +552,7 @@ export const ristretto255_hasher: H2CHasherBase<bigint> = {
   },
 };
 
-// export const ristretto255_OPRF: OPRF = createORPF({
+// export const ristretto255_oprf: OPRF = createORPF({
 //   name: 'ristretto255-SHA512',
 //   Point: RistrettoPoint,
 //   hash: sha512,
@@ -552,11 +560,10 @@ export const ristretto255_hasher: H2CHasherBase<bigint> = {
 //   hashToScalar: ristretto255_hasher.hashToScalar,
 // });
 
-type RistHasher = (msg: Uint8Array, options: htfBasicOpts) => RistPoint;
-/**
- * hash-to-curve for ristretto255.
- * Described in [RFC9380](https://www.rfc-editor.org/rfc/rfc9380#appendix-B).
- */
-export const hashToRistretto255: RistHasher = ristretto255_hasher.hashToCurve as RistHasher;
-/** @deprecated */
-export const hash_to_ristretto255: RistHasher = ristretto255_hasher.hashToCurve as RistHasher;
+type RistHasher = (msg: Uint8Array, options: htfBasicOpts) => RistrettoPoint;
+/** @deprecated use `import { ristretto255_hasher } from '@noble/curves/ed25519.js';` */
+export const hashToRistretto255: RistHasher = /* @__PURE__ */ (() =>
+  ristretto255_hasher.hashToCurve as RistHasher)();
+/** @deprecated use `import { ristretto255_hasher } from '@noble/curves/ed25519.js';` */
+export const hash_to_ristretto255: RistHasher = /* @__PURE__ */ (() =>
+  ristretto255_hasher.hashToCurve as RistHasher)();
