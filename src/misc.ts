@@ -12,7 +12,7 @@ import {
   twistedEdwards,
   type CurveFn,
   type EdwardsOpts,
-  type ExtPointType,
+  type EdwardsPoint,
 } from './abstract/edwards.ts';
 import { Field, mod } from './abstract/modular.ts';
 import { weierstrass, type CurveFn as WCurveFn } from './abstract/weierstrass.ts';
@@ -59,7 +59,7 @@ const jubjub_gh_first_block = utf8ToBytes(
 );
 
 // Returns point at JubJub curve which is prime order and not zero
-export function jubjub_groupHash(tag: Uint8Array, personalization: Uint8Array): ExtPointType {
+export function jubjub_groupHash(tag: Uint8Array, personalization: Uint8Array): EdwardsPoint {
   const h = blake2s.create({ personalization, dkLen: 32 });
   h.update(jubjub_gh_first_block);
   h.update(tag);
@@ -74,7 +74,7 @@ export function jubjub_groupHash(tag: Uint8Array, personalization: Uint8Array): 
 // No secret data is leaked here at all.
 // It operates over public data:
 // const G_SPEND = jubjub.findGroupHash(Uint8Array.of(), utf8ToBytes('Item_G_'));
-export function jubjub_findGroupHash(m: Uint8Array, personalization: Uint8Array): ExtPointType {
+export function jubjub_findGroupHash(m: Uint8Array, personalization: Uint8Array): EdwardsPoint {
   const tag = concatBytes(m, Uint8Array.of(0));
   const hashes = [];
   for (let i = 0; i < 256; i++) {

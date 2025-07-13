@@ -20,9 +20,9 @@ import { Field, mapHashToField, mod, pow2 } from './abstract/modular.ts';
 import {
   type EndomorphismOpts,
   mapToCurveSimpleSWU,
-  type ProjPointType as PointType,
-  type ProjConstructor,
+  type WeierstrassPoint as PointType,
   type WeierstrassOpts,
+  type WeierstrassPointCons,
 } from './abstract/weierstrass.ts';
 import type { Hex, PrivKey } from './utils.ts';
 import {
@@ -55,9 +55,9 @@ const secp256k1_ENDO: EndomorphismOpts = {
   ],
 };
 
-const _0n = BigInt(0);
-const _1n = BigInt(1);
-const _2n = BigInt(2);
+const _0n = /* @__PURE__ */ BigInt(0);
+const _1n = /* @__PURE__ */ BigInt(1);
+const _2n = /* @__PURE__ */ BigInt(2);
 
 /**
  * √n = n^((p+1)/4) for fields p = 3 mod 4. We unwrap the loop and multiply bit-by-bit.
@@ -223,7 +223,7 @@ export type SecpSchnorr = {
   getPublicKey: typeof schnorrGetPublicKey;
   sign: typeof schnorrSign;
   verify: typeof schnorrVerify;
-  Point: ProjConstructor<bigint>;
+  Point: WeierstrassPointCons<bigint>;
   utils: {
     randomPrivateKey: (seed?: Uint8Array) => Uint8Array;
     lift_x: typeof lift_x;

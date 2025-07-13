@@ -98,9 +98,9 @@ import { psiFrobenius, tower12 } from './abstract/tower.ts';
 import {
   mapToCurveSimpleSWU,
   type AffinePoint,
-  type ProjConstructor,
-  type ProjPointType,
   type WeierstrassOpts,
+  type WeierstrassPoint,
+  type WeierstrassPointCons,
 } from './abstract/weierstrass.ts';
 
 // Be friendly to bad ECMAScript parsers by not using bigint literals
@@ -294,7 +294,11 @@ function setMask(
   return bytes;
 }
 
-function pointG1ToBytes(_c: ProjConstructor<Fp>, point: ProjPointType<Fp>, isComp: boolean) {
+function pointG1ToBytes(
+  _c: WeierstrassPointCons<Fp>,
+  point: WeierstrassPoint<Fp>,
+  isComp: boolean
+) {
   const { BYTES: L, ORDER: P } = Fp;
   const is0 = point.is0();
   const { x, y } = point.toAffine();
@@ -311,7 +315,7 @@ function pointG1ToBytes(_c: ProjConstructor<Fp>, point: ProjPointType<Fp>, isCom
   }
 }
 
-function signatureG1ToBytes(point: ProjPointType<Fp>) {
+function signatureG1ToBytes(point: WeierstrassPoint<Fp>) {
   point.assertValidity();
   const { BYTES: L, ORDER: P } = Fp;
   const { x, y } = point.toAffine();
@@ -350,7 +354,7 @@ function pointG1FromBytes(bytes: Uint8Array): AffinePoint<Fp> {
   }
 }
 
-function signatureG1FromBytes(hex: Hex): ProjPointType<Fp> {
+function signatureG1FromBytes(hex: Hex): WeierstrassPoint<Fp> {
   const { infinity, sort, value } = parseMask(ensureBytes('signatureHex', hex, 48));
   const P = Fp.ORDER;
   const Point = bls12_381.G1.Point;
@@ -368,7 +372,11 @@ function signatureG1FromBytes(hex: Hex): ProjPointType<Fp> {
   return point;
 }
 
-function pointG2ToBytes(_c: ProjConstructor<Fp2>, point: ProjPointType<Fp2>, isComp: boolean) {
+function pointG2ToBytes(
+  _c: WeierstrassPointCons<Fp2>,
+  point: WeierstrassPoint<Fp2>,
+  isComp: boolean
+) {
   const { BYTES: L, ORDER: P } = Fp;
   const is0 = point.is0();
   const { x, y } = point.toAffine();
@@ -392,7 +400,7 @@ function pointG2ToBytes(_c: ProjConstructor<Fp2>, point: ProjPointType<Fp2>, isC
   }
 }
 
-function signatureG2ToBytes(point: ProjPointType<Fp2>) {
+function signatureG2ToBytes(point: WeierstrassPoint<Fp2>) {
   point.assertValidity();
   const { BYTES: L } = Fp;
   if (point.is0()) return concatBytes(COMPZERO, numberToBytesBE(_0n, L));
@@ -540,16 +548,16 @@ export const bls12_381: CurveFn = bls({
         abytes(bytes);
         return signatureG1FromBytes(bytes);
       },
-      fromHex(hex: Hex): ProjPointType<Fp> {
+      fromHex(hex: Hex): WeierstrassPoint<Fp> {
         return signatureG1FromBytes(hex);
       },
-      toBytes(point: ProjPointType<Fp>) {
+      toBytes(point: WeierstrassPoint<Fp>) {
         return signatureG1ToBytes(point);
       },
-      toRawBytes(point: ProjPointType<Fp>) {
+      toRawBytes(point: WeierstrassPoint<Fp>) {
         return signatureG1ToBytes(point);
       },
-      toHex(point: ProjPointType<Fp>) {
+      toHex(point: WeierstrassPoint<Fp>) {
         return bytesToHex(signatureG1ToBytes(point));
       },
     },
@@ -595,20 +603,20 @@ export const bls12_381: CurveFn = bls({
     fromBytes: pointG2FromBytes,
     toBytes: pointG2ToBytes,
     Signature: {
-      fromBytes(bytes: Uint8Array): ProjPointType<Fp2> {
+      fromBytes(bytes: Uint8Array): WeierstrassPoint<Fp2> {
         abytes(bytes);
         return signatureG2FromBytes(bytes);
       },
-      fromHex(hex: Hex): ProjPointType<Fp2> {
+      fromHex(hex: Hex): WeierstrassPoint<Fp2> {
         return signatureG2FromBytes(hex);
       },
-      toBytes(point: ProjPointType<Fp2>) {
+      toBytes(point: WeierstrassPoint<Fp2>) {
         return signatureG2ToBytes(point);
       },
-      toRawBytes(point: ProjPointType<Fp2>) {
+      toRawBytes(point: WeierstrassPoint<Fp2>) {
         return signatureG2ToBytes(point);
       },
-      toHex(point: ProjPointType<Fp2>) {
+      toHex(point: WeierstrassPoint<Fp2>) {
         return bytesToHex(signatureG2ToBytes(point));
       },
     },
