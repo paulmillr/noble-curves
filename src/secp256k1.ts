@@ -330,6 +330,7 @@ const mapSWU = /* @__PURE__ */ (() =>
     B: BigInt('1771'),
     Z: Fpk1.create(BigInt('-11')),
   }))();
+
 /** Hashing / encoding to secp256k1 points / field. RFC 9380 methods. */
 export const secp256k1_hasher: H2CHasher<bigint> = /* @__PURE__ */ (() =>
   createHasher(
@@ -349,8 +350,10 @@ export const secp256k1_hasher: H2CHasher<bigint> = /* @__PURE__ */ (() =>
     }
   ))();
 
+/** @deprecated use `import { secp256k1_hasher } from '@noble/curves/secp256k1.js';` */
 export const hashToCurve: H2CMethod<bigint> = /* @__PURE__ */ (() =>
   secp256k1_hasher.hashToCurve)();
 
+/** @deprecated use `import { secp256k1_hasher } from '@noble/curves/secp256k1.js';` */
 export const encodeToCurve: H2CMethod<bigint> = /* @__PURE__ */ (() =>
   secp256k1_hasher.encodeToCurve)();

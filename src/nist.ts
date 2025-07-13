@@ -109,7 +109,7 @@ export const p256_hasher: H2CHasher<bigint> = /* @__PURE__ */ (() => {
   );
 })();
 
-// export const p256_OPRF: OPRF = createORPF({
+// export const p256_oprf: OPRF = createORPF({
 //   name: 'P256-SHA256',
 //   Point: p256.Point,
 //   hash: sha256,
@@ -145,7 +145,7 @@ export const p384_hasher: H2CHasher<bigint> = /* @__PURE__ */ (() => {
   );
 })();
 
-// export const p384_OPRF: OPRF = createORPF({
+// export const p384_oprf: OPRF = createORPF({
 //   name: 'P384-SHA384',
 //   Point: p384.Point,
 //   hash: sha384,
@@ -181,7 +181,7 @@ export const p521_hasher: H2CHasher<bigint> = /* @__PURE__ */ (() => {
   );
 })();
 
-// export const p521_OPRF: OPRF = createORPF({
+// export const p521_oprf: OPRF = createORPF({
 //   name: 'P521-SHA512',
 //   Point: p521.Point,
 //   hash: sha512,
