@@ -12,7 +12,7 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { bitLen, bitMask, concatBytes, notImplemented } from '../utils.ts';
 import * as mod from './modular.ts';
-import type { ProjConstructor, ProjPointType } from './weierstrass.ts';
+import type { WeierstrassPoint, WeierstrassPointCons } from './weierstrass.ts';
 
 // Be friendly to bad ECMAScript parsers by not using bigint literals
 // prettier-ignore
@@ -95,8 +95,8 @@ export function psiFrobenius(
 ): {
   psi: (x: Fp2, y: Fp2) => [Fp2, Fp2];
   psi2: (x: Fp2, y: Fp2) => [Fp2, Fp2];
-  G2psi: (c: ProjConstructor<Fp2>, P: ProjPointType<Fp2>) => ProjPointType<Fp2>;
-  G2psi2: (c: ProjConstructor<Fp2>, P: ProjPointType<Fp2>) => ProjPointType<Fp2>;
+  G2psi: (c: WeierstrassPointCons<Fp2>, P: WeierstrassPoint<Fp2>) => WeierstrassPoint<Fp2>;
+  G2psi2: (c: WeierstrassPointCons<Fp2>, P: WeierstrassPoint<Fp2>) => WeierstrassPoint<Fp2>;
   PSI_X: Fp2;
   PSI_Y: Fp2;
   PSI2_X: Fp2;
@@ -123,7 +123,7 @@ export function psiFrobenius(
   // Map points
   const mapAffine =
     <T>(fn: (x: T, y: T) => [T, T]) =>
-    (c: ProjConstructor<T>, P: ProjPointType<T>) => {
+    (c: WeierstrassPointCons<T>, P: WeierstrassPoint<T>) => {
       const affine = P.toAffine();
       const p = fn(affine.x, affine.y);
       return c.fromAffine({ x: p[0], y: p[1] });

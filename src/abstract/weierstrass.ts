@@ -26,6 +26,7 @@
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { hmac } from '@noble/hashes/hmac.js';
+import { ahash } from '@noble/hashes/utils';
 import {
   _validateObject,
   abool,
@@ -114,9 +115,9 @@ export type BasicWCurve<T> = BasicCurve<T> & {
   endo?: EndomorphismOpts;
   // When a cofactor != 1, there can be an effective methods to:
   // 1. Determine whether a point is torsion-free
-  isTorsionFree?: (c: ProjConstructor<T>, point: ProjPointType<T>) => boolean;
+  isTorsionFree?: (c: WeierstrassPointCons<T>, point: WeierstrassPoint<T>) => boolean;
   // 2. Clear torsion component
-  clearCofactor?: (c: ProjConstructor<T>, point: ProjPointType<T>) => ProjPointType<T>;
+  clearCofactor?: (c: WeierstrassPointCons<T>, point: WeierstrassPoint<T>) => WeierstrassPoint<T>;
 };
 
 // We construct basis in such way that den is always positive and equals n, but num sign depends on basis (not on secret value)
@@ -153,17 +154,17 @@ export function _splitEndoScalar(k: bigint, basis: EndoBasis, n: bigint): Scalar
 
 export type ECDSASigFormat = 'compact' | 'der';
 export type Entropy = Hex | boolean;
-export type SignOpts = {
-  lowS?: boolean;
-  extraEntropy?: Entropy;
-  prehash?: boolean;
-  format?: ECDSASigFormat | 'js';
-};
-export type VerOpts = {
-  lowS?: boolean;
-  prehash?: boolean;
-  format?: ECDSASigFormat | 'js' | undefined;
-};
+export type SignOpts = Partial<{
+  lowS: boolean;
+  extraEntropy: Entropy;
+  prehash: boolean;
+  format: ECDSASigFormat | 'js';
+}>;
+export type VerOpts = Partial<{
+  lowS: boolean;
+  prehash: boolean;
+  format: ECDSASigFormat | 'js' | undefined;
+}>;
 
 function validateSigVerOpts(opts: SignOpts | VerOpts) {
   if (opts.lowS !== undefined) abool('lowS', opts.lowS);
@@ -171,7 +172,7 @@ function validateSigVerOpts(opts: SignOpts | VerOpts) {
 }
 
 /** Instance methods for 3D XYZ points. */
-export interface ProjPointType<T> extends Group<ProjPointType<T>> {
+export interface WeierstrassPoint<T> extends Group<WeierstrassPoint<T>> {
   /** projective x coordinate. Note: different from .x */
   readonly X: T;
   /** projective y coordinate. Note: different from .y */
@@ -191,10 +192,10 @@ export interface ProjPointType<T> extends Group<ProjPointType<T>> {
   /** affine y coordinate */
   get y(): T;
   assertValidity(): void;
-  clearCofactor(): ProjPointType<T>;
+  clearCofactor(): WeierstrassPoint<T>;
   is0(): boolean;
   isTorsionFree(): boolean;
-  multiplyUnsafe(scalar: bigint): ProjPointType<T>;
+  multiplyUnsafe(scalar: bigint): WeierstrassPoint<T>;
   /**
    * Massively speeds up `p.multiply(n)` by using wnaf precompute tables (caching).
    * Table generation takes 30MB of ram and 10ms on high-end CPU, but may take
@@ -204,7 +205,7 @@ export interface ProjPointType<T> extends Group<ProjPointType<T>> {
    * @param windowSize - table window size
    * @param isLazy - (default true) allows to defer generation
    */
-  precompute(windowSize?: number, isLazy?: boolean): ProjPointType<T>;
+  precompute(windowSize?: number, isLazy?: boolean): WeierstrassPoint<T>;
 
   /** Converts 3D XYZ projective point to 2D xy affine coordinates */
   toAffine(invertedZ?: T): AffinePoint<T>;
@@ -215,7 +216,11 @@ export interface ProjPointType<T> extends Group<ProjPointType<T>> {
   /** @deprecated use `toBytes` */
   toRawBytes(isCompressed?: boolean): Uint8Array;
   /** @deprecated use `multiplyUnsafe` */
-  multiplyAndAddUnsafe(Q: ProjPointType<T>, a: bigint, b: bigint): ProjPointType<T> | undefined;
+  multiplyAndAddUnsafe(
+    Q: WeierstrassPoint<T>,
+    a: bigint,
+    b: bigint
+  ): WeierstrassPoint<T> | undefined;
   /** @deprecated use `p.y % 2n === 0n` */
   hasEvenY(): boolean;
   /** @deprecated use `p.precompute(windowSize)` */
@@ -223,23 +228,34 @@ export interface ProjPointType<T> extends Group<ProjPointType<T>> {
 }
 
 /** Static methods for 3D XYZ points. */
-export interface ProjConstructor<T> extends GroupConstructor<ProjPointType<T>> {
+export interface WeierstrassPointCons<T> extends GroupConstructor<WeierstrassPoint<T>> {
   Fp: IField<T>;
   Fn: IField<bigint>;
   /** Does NOT validate if the point is valid. Use `.assertValidity()`. */
-  new (x: T, y: T, z: T): ProjPointType<T>;
+  new (x: T, y: T, z: T): WeierstrassPoint<T>;
   /** Does NOT validate if the point is valid. Use `.assertValidity()`. */
-  fromAffine(p: AffinePoint<T>): ProjPointType<T>;
-  fromBytes(encodedPoint: Uint8Array): ProjPointType<T>;
-  fromHex(hex: Hex): ProjPointType<T>;
-  fromPrivateKey(privateKey: PrivKey): ProjPointType<T>;
-  normalizeZ(points: ProjPointType<T>[]): ProjPointType<T>[];
-  msm(points: ProjPointType<T>[], scalars: bigint[]): ProjPointType<T>;
+  fromAffine(p: AffinePoint<T>): WeierstrassPoint<T>;
+  fromBytes(encodedPoint: Uint8Array): WeierstrassPoint<T>;
+  fromHex(hex: Hex): WeierstrassPoint<T>;
+  fromPrivateKey(privateKey: PrivKey): WeierstrassPoint<T>;
+  normalizeZ(points: WeierstrassPoint<T>[]): WeierstrassPoint<T>[];
+  /** @deprecated use `import { pippenger } from '@noble/curves/abstract/curve.js';` */
+  msm(points: WeierstrassPoint<T>[], scalars: bigint[]): WeierstrassPoint<T>;
 }
 
+/** @deprecated use WeierstrassPoint */
+export type ProjPointType<T> = WeierstrassPoint<T>;
+/** @deprecated use WeierstrassPointCons */
+export type ProjConstuctor<T> = WeierstrassPointCons<T>;
+
+// TODO: remove
 export type CurvePointsType<T> = BasicWCurve<T> & {
   fromBytes?: (bytes: Uint8Array) => AffinePoint<T>;
-  toBytes?: (c: ProjConstructor<T>, point: ProjPointType<T>, isCompressed: boolean) => Uint8Array;
+  toBytes?: (
+    c: WeierstrassPointCons<T>,
+    point: WeierstrassPoint<T>,
+    isCompressed: boolean
+  ) => Uint8Array;
 };
 
 // LegacyWeierstrassOpts
@@ -249,9 +265,9 @@ export type CurvePointsTypeWithLength<T> = Readonly<CurvePointsType<T> & Partial
 export type CurvePointsRes<T> = {
   /** @deprecated import individual CURVE params */
   CURVE: CurvePointsType<T>;
-  Point: ProjConstructor<T>;
+  Point: WeierstrassPointCons<T>;
   /** @deprecated use `Point` */
-  ProjectivePoint: ProjConstructor<T>;
+  ProjectivePoint: WeierstrassPointCons<T>;
   /** @deprecated */
   normPrivateKeyToScalar: (key: PrivKey) => bigint;
   /** @deprecated */
@@ -301,40 +317,43 @@ export type WeierstrassExtraOpts<T> = Partial<{
   allowInfinityPoint: boolean;
   endo: EndomorphismOpts;
   wrapPrivateKey: boolean;
-  isTorsionFree: (c: ProjConstructor<T>, point: ProjPointType<T>) => boolean;
-  clearCofactor: (c: ProjConstructor<T>, point: ProjPointType<T>) => ProjPointType<T>;
+  isTorsionFree: (c: WeierstrassPointCons<T>, point: WeierstrassPoint<T>) => boolean;
+  clearCofactor: (c: WeierstrassPointCons<T>, point: WeierstrassPoint<T>) => WeierstrassPoint<T>;
   fromBytes: (bytes: Uint8Array) => AffinePoint<T>;
-  toBytes: (c: ProjConstructor<T>, point: ProjPointType<T>, isCompressed: boolean) => Uint8Array;
+  toBytes: (
+    c: WeierstrassPointCons<T>,
+    point: WeierstrassPoint<T>,
+    isCompressed: boolean
+  ) => Uint8Array;
 }>;
 
 /**
  * Options for ECDSA signatures over a Weierstrass curve.
  */
-export type ECDSAOpts = {
-  hash: CHash;
-  hmac?: HmacFnSync;
-  randomBytes?: (bytesLength?: number) => Uint8Array;
-  lowS?: boolean;
-  bits2int?: (bytes: Uint8Array) => bigint;
-  bits2int_modN?: (bytes: Uint8Array) => bigint;
-};
+export type ECDSAOpts = Partial<{
+  lowS: boolean;
+  hmac: HmacFnSync;
+  randomBytes: (bytesLength?: number) => Uint8Array;
+  bits2int: (bytes: Uint8Array) => bigint;
+  bits2int_modN: (bytes: Uint8Array) => bigint;
+}>;
 
 /** ECDSA is only supported for prime fields, not Fp2 (extension fields). */
 export interface ECDSA {
   keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
   getPublicKey: (privateKey: PrivKey, isCompressed?: boolean) => Uint8Array;
-  sign: (msgHash: Hex, privKey: PrivKey, opts?: SignOpts) => RecoveredSignatureType;
+  sign: (msgHash: Hex, privKey: PrivKey, opts?: SignOpts) => ECDSASigRecovered;
   verify: (signature: Hex | SignatureLike, msgHash: Hex, publicKey: Hex, opts?: VerOpts) => boolean;
   getSharedSecret: (privateA: PrivKey, publicB: Hex, isCompressed?: boolean) => Uint8Array;
-  Point: ProjConstructor<bigint>;
-  Signature: SignatureConstructor;
+  Point: WeierstrassPointCons<bigint>;
+  Signature: ECDSASignatureCons;
   utils: {
     isValidPrivateKey(privateKey: PrivKey): boolean;
     randomPrivateKey: (seed?: Uint8Array) => Uint8Array;
     // TODO: deprecate those two
     normPrivateKeyToScalar: (key: PrivKey) => bigint;
     /** @deprecated */
-    precompute: (windowSize?: number, point?: ProjPointType<bigint>) => ProjPointType<bigint>;
+    precompute: (windowSize?: number, point?: WeierstrassPoint<bigint>) => WeierstrassPoint<bigint>;
   };
   info: CurveInfo;
 }
@@ -511,7 +530,7 @@ export function _legacyHelperNormPriv(
 export function weierstrassN<T>(
   CURVE: WeierstrassOpts<T>,
   curveOpts: WeierstrassExtraOpts<T> = {}
-): ProjConstructor<T> {
+): WeierstrassPointCons<T> {
   const { Fp, Fn } = _createCurveFields('weierstrass', CURVE, curveOpts);
   const { h: cofactor, n: CURVE_ORDER } = CURVE;
   _validateObject(
@@ -542,8 +561,8 @@ export function weierstrassN<T>(
 
   // Implements IEEE P1363 point encoding
   function pointToBytes(
-    _c: ProjConstructor<T>,
-    point: ProjPointType<T>,
+    _c: WeierstrassPointCons<T>,
+    point: WeierstrassPoint<T>,
     isCompressed: boolean
   ): Uint8Array {
     const { x, y } = point.toAffine();
@@ -688,7 +707,7 @@ export function weierstrassN<T>(
    * Default Point works in 2d / affine coordinates: (x, y).
    * We're doing calculations in projective, because its operations don't require costly inversion.
    */
-  class Point implements ProjPointType<T> {
+  class Point implements WeierstrassPoint<T> {
     // base / generator point
     static readonly BASE = new Point(CURVE.Gx, CURVE.Gy, Fp.ONE);
     // zero / infinity / identity point
@@ -762,7 +781,6 @@ export function weierstrassN<T>(
       return Point.BASE.multiply(normPrivateKeyToScalar(privateKey));
     }
 
-    /** Multiscalar Multiplication */
     static msm(points: Point[], scalars: bigint[]): Point {
       return pippenger(Point, Fn, points, scalars);
     }
@@ -1029,6 +1047,7 @@ export function weierstrassN<T>(
 }
 
 // _legacyWeierstrass
+// TODO: remove
 /** @deprecated use `weierstrassN` */
 export function weierstrassPoints<T>(c: CurvePointsTypeWithLength<T>): CurvePointsRes<T> {
   const { CURVE, curveOpts } = _weierstrass_legacy_opts_to_new(c);
@@ -1037,14 +1056,14 @@ export function weierstrassPoints<T>(c: CurvePointsTypeWithLength<T>): CurvePoin
 }
 
 // Instance
-export interface SignatureType {
+export interface ECDSASignature {
   readonly r: bigint;
   readonly s: bigint;
   readonly recovery?: number;
-  addRecoveryBit(recovery: number): RecoveredSignatureType;
+  addRecoveryBit(recovery: number): ECDSASigRecovered;
   hasHighS(): boolean;
-  normalizeS(): SignatureType;
-  recoverPublicKey(msgHash: Hex): ProjPointType<bigint>;
+  normalizeS(): ECDSASignature;
+  recoverPublicKey(msgHash: Hex): WeierstrassPoint<bigint>;
   toBytes(format?: string): Uint8Array;
 
   /** @deprecated */
@@ -1058,22 +1077,26 @@ export interface SignatureType {
   /** @deprecated use `.toBytes('der')` */
   toDERHex(): string;
 }
-export type RecoveredSignatureType = SignatureType & {
+export type SignatureType = ECDSASignature;
+export type ECDSASigRecovered = ECDSASignature & {
   readonly recovery: number;
 };
+export type RecoveredSignatureType = ECDSASigRecovered;
 // Static methods
-export type SignatureConstructor = {
-  new (r: bigint, s: bigint, recovery?: number): SignatureType;
-  fromBytes(bytes: Uint8Array, format?: ECDSASigFormat): SignatureType;
+export type ECDSASignatureCons = {
+  new (r: bigint, s: bigint, recovery?: number): ECDSASignature;
+  fromBytes(bytes: Uint8Array, format?: ECDSASigFormat): ECDSASignature;
 
   /** @deprecated use `.fromBytes(bytes, 'compact')` */
-  fromCompact(hex: Hex): SignatureType;
+  fromCompact(hex: Hex): ECDSASignature;
   /** @deprecated use `.fromBytes(bytes, 'der')` */
-  fromDER(hex: Hex): SignatureType;
+  fromDER(hex: Hex): ECDSASignature;
 };
 export type SignatureLike = { r: bigint; s: bigint };
-export type PubKey = Hex | ProjPointType<bigint>;
+// TODO: remove
+export type PubKey = Hex | WeierstrassPoint<bigint>;
 
+// TODO: remove
 export type CurveType = BasicWCurve<bigint> & {
   hash: CHash; // CHash not FHash because we need outputLen for DRBG
   hmac?: HmacFnSync;
@@ -1088,34 +1111,173 @@ function pprefix(hasEvenY: boolean): Uint8Array {
   return Uint8Array.of(hasEvenY ? 0x02 : 0x03);
 }
 
+// TODO: remove
 export type CurveFn = {
   CURVE: CurvePointsType<bigint>;
   getPublicKey: (privateKey: PrivKey, isCompressed?: boolean) => Uint8Array;
   getSharedSecret: (privateA: PrivKey, publicB: Hex, isCompressed?: boolean) => Uint8Array;
-  sign: (msgHash: Hex, privKey: PrivKey, opts?: SignOpts) => RecoveredSignatureType;
+  sign: (msgHash: Hex, privKey: PrivKey, opts?: SignOpts) => ECDSASigRecovered;
   verify: (signature: Hex | SignatureLike, msgHash: Hex, publicKey: Hex, opts?: VerOpts) => boolean;
-  Point: ProjConstructor<bigint>;
+  Point: WeierstrassPointCons<bigint>;
   /** @deprecated use `Point` */
-  ProjectivePoint: ProjConstructor<bigint>;
-  Signature: SignatureConstructor;
+  ProjectivePoint: WeierstrassPointCons<bigint>;
+  Signature: ECDSASignatureCons;
   utils: {
     normPrivateKeyToScalar: (key: PrivKey) => bigint;
     isValidPrivateKey(privateKey: PrivKey): boolean;
     randomPrivateKey: (seed?: Uint8Array) => Uint8Array;
-    precompute: (windowSize?: number, point?: ProjPointType<bigint>) => ProjPointType<bigint>;
+    precompute: (windowSize?: number, point?: WeierstrassPoint<bigint>) => WeierstrassPoint<bigint>;
   };
   info: CurveInfo;
   keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
 };
 
+/**
+ * Implementation of the Shallue and van de Woestijne method for any weierstrass curve.
+ * TODO: check if there is a way to merge this with uvRatio in Edwards; move to modular.
+ * b = True and y = sqrt(u / v) if (u / v) is square in F, and
+ * b = False and y = sqrt(Z * (u / v)) otherwise.
+ * @param Fp
+ * @param Z
+ * @returns
+ */
+export function SWUFpSqrtRatio<T>(
+  Fp: IField<T>,
+  Z: T
+): (u: T, v: T) => { isValid: boolean; value: T } {
+  // Generic implementation
+  const q = Fp.ORDER;
+  let l = _0n;
+  for (let o = q - _1n; o % _2n === _0n; o /= _2n) l += _1n;
+  const c1 = l; // 1. c1, the largest integer such that 2^c1 divides q - 1.
+  // We need 2n ** c1 and 2n ** (c1-1). We can't use **; but we can use <<.
+  // 2n ** c1 == 2n << (c1-1)
+  const _2n_pow_c1_1 = _2n << (c1 - _1n - _1n);
+  const _2n_pow_c1 = _2n_pow_c1_1 * _2n;
+  const c2 = (q - _1n) / _2n_pow_c1; // 2. c2 = (q - 1) / (2^c1)  # Integer arithmetic
+  const c3 = (c2 - _1n) / _2n; // 3. c3 = (c2 - 1) / 2            # Integer arithmetic
+  const c4 = _2n_pow_c1 - _1n; // 4. c4 = 2^c1 - 1                # Integer arithmetic
+  const c5 = _2n_pow_c1_1; // 5. c5 = 2^(c1 - 1)                  # Integer arithmetic
+  const c6 = Fp.pow(Z, c2); // 6. c6 = Z^c2
+  const c7 = Fp.pow(Z, (c2 + _1n) / _2n); // 7. c7 = Z^((c2 + 1) / 2)
+  let sqrtRatio = (u: T, v: T): { isValid: boolean; value: T } => {
+    let tv1 = c6; // 1. tv1 = c6
+    let tv2 = Fp.pow(v, c4); // 2. tv2 = v^c4
+    let tv3 = Fp.sqr(tv2); // 3. tv3 = tv2^2
+    tv3 = Fp.mul(tv3, v); // 4. tv3 = tv3 * v
+    let tv5 = Fp.mul(u, tv3); // 5. tv5 = u * tv3
+    tv5 = Fp.pow(tv5, c3); // 6. tv5 = tv5^c3
+    tv5 = Fp.mul(tv5, tv2); // 7. tv5 = tv5 * tv2
+    tv2 = Fp.mul(tv5, v); // 8. tv2 = tv5 * v
+    tv3 = Fp.mul(tv5, u); // 9. tv3 = tv5 * u
+    let tv4 = Fp.mul(tv3, tv2); // 10. tv4 = tv3 * tv2
+    tv5 = Fp.pow(tv4, c5); // 11. tv5 = tv4^c5
+    let isQR = Fp.eql(tv5, Fp.ONE); // 12. isQR = tv5 == 1
+    tv2 = Fp.mul(tv3, c7); // 13. tv2 = tv3 * c7
+    tv5 = Fp.mul(tv4, tv1); // 14. tv5 = tv4 * tv1
+    tv3 = Fp.cmov(tv2, tv3, isQR); // 15. tv3 = CMOV(tv2, tv3, isQR)
+    tv4 = Fp.cmov(tv5, tv4, isQR); // 16. tv4 = CMOV(tv5, tv4, isQR)
+    // 17. for i in (c1, c1 - 1, ..., 2):
+    for (let i = c1; i > _1n; i--) {
+      let tv5 = i - _2n; // 18.    tv5 = i - 2
+      tv5 = _2n << (tv5 - _1n); // 19.    tv5 = 2^tv5
+      let tvv5 = Fp.pow(tv4, tv5); // 20.    tv5 = tv4^tv5
+      const e1 = Fp.eql(tvv5, Fp.ONE); // 21.    e1 = tv5 == 1
+      tv2 = Fp.mul(tv3, tv1); // 22.    tv2 = tv3 * tv1
+      tv1 = Fp.mul(tv1, tv1); // 23.    tv1 = tv1 * tv1
+      tvv5 = Fp.mul(tv4, tv1); // 24.    tv5 = tv4 * tv1
+      tv3 = Fp.cmov(tv2, tv3, e1); // 25.    tv3 = CMOV(tv2, tv3, e1)
+      tv4 = Fp.cmov(tvv5, tv4, e1); // 26.    tv4 = CMOV(tv5, tv4, e1)
+    }
+    return { isValid: isQR, value: tv3 };
+  };
+  if (Fp.ORDER % _4n === _3n) {
+    // sqrt_ratio_3mod4(u, v)
+    const c1 = (Fp.ORDER - _3n) / _4n; // 1. c1 = (q - 3) / 4     # Integer arithmetic
+    const c2 = Fp.sqrt(Fp.neg(Z)); // 2. c2 = sqrt(-Z)
+    sqrtRatio = (u: T, v: T) => {
+      let tv1 = Fp.sqr(v); // 1. tv1 = v^2
+      const tv2 = Fp.mul(u, v); // 2. tv2 = u * v
+      tv1 = Fp.mul(tv1, tv2); // 3. tv1 = tv1 * tv2
+      let y1 = Fp.pow(tv1, c1); // 4. y1 = tv1^c1
+      y1 = Fp.mul(y1, tv2); // 5. y1 = y1 * tv2
+      const y2 = Fp.mul(y1, c2); // 6. y2 = y1 * c2
+      const tv3 = Fp.mul(Fp.sqr(y1), v); // 7. tv3 = y1^2; 8. tv3 = tv3 * v
+      const isQR = Fp.eql(tv3, u); // 9. isQR = tv3 == u
+      let y = Fp.cmov(y2, y1, isQR); // 10. y = CMOV(y2, y1, isQR)
+      return { isValid: isQR, value: y }; // 11. return (isQR, y) isQR ? y : y*c2
+    };
+  }
+  // No curves uses that
+  // if (Fp.ORDER % _8n === _5n) // sqrt_ratio_5mod8
+  return sqrtRatio;
+}
+/**
+ * Simplified Shallue-van de Woestijne-Ulas Method
+ * https://www.rfc-editor.org/rfc/rfc9380#section-6.6.2
+ */
+export function mapToCurveSimpleSWU<T>(
+  Fp: IField<T>,
+  opts: {
+    A: T;
+    B: T;
+    Z: T;
+  }
+): (u: T) => { x: T; y: T } {
+  validateField(Fp);
+  const { A, B, Z } = opts;
+  if (!Fp.isValid(A) || !Fp.isValid(B) || !Fp.isValid(Z))
+    throw new Error('mapToCurveSimpleSWU: invalid opts');
+  const sqrtRatio = SWUFpSqrtRatio(Fp, Z);
+  if (!Fp.isOdd) throw new Error('Field does not have .isOdd()');
+  // Input: u, an element of F.
+  // Output: (x, y), a point on E.
+  return (u: T): { x: T; y: T } => {
+    // prettier-ignore
+    let tv1, tv2, tv3, tv4, tv5, tv6, x, y;
+    tv1 = Fp.sqr(u); // 1.  tv1 = u^2
+    tv1 = Fp.mul(tv1, Z); // 2.  tv1 = Z * tv1
+    tv2 = Fp.sqr(tv1); // 3.  tv2 = tv1^2
+    tv2 = Fp.add(tv2, tv1); // 4.  tv2 = tv2 + tv1
+    tv3 = Fp.add(tv2, Fp.ONE); // 5.  tv3 = tv2 + 1
+    tv3 = Fp.mul(tv3, B); // 6.  tv3 = B * tv3
+    tv4 = Fp.cmov(Z, Fp.neg(tv2), !Fp.eql(tv2, Fp.ZERO)); // 7.  tv4 = CMOV(Z, -tv2, tv2 != 0)
+    tv4 = Fp.mul(tv4, A); // 8.  tv4 = A * tv4
+    tv2 = Fp.sqr(tv3); // 9.  tv2 = tv3^2
+    tv6 = Fp.sqr(tv4); // 10. tv6 = tv4^2
+    tv5 = Fp.mul(tv6, A); // 11. tv5 = A * tv6
+    tv2 = Fp.add(tv2, tv5); // 12. tv2 = tv2 + tv5
+    tv2 = Fp.mul(tv2, tv3); // 13. tv2 = tv2 * tv3
+    tv6 = Fp.mul(tv6, tv4); // 14. tv6 = tv6 * tv4
+    tv5 = Fp.mul(tv6, B); // 15. tv5 = B * tv6
+    tv2 = Fp.add(tv2, tv5); // 16. tv2 = tv2 + tv5
+    x = Fp.mul(tv1, tv3); // 17.   x = tv1 * tv3
+    const { isValid, value } = sqrtRatio(tv2, tv6); // 18. (is_gx1_square, y1) = sqrt_ratio(tv2, tv6)
+    y = Fp.mul(tv1, u); // 19.   y = tv1 * u  -> Z * u^3 * y1
+    y = Fp.mul(y, value); // 20.   y = y * y1
+    x = Fp.cmov(x, tv3, isValid); // 21.   x = CMOV(x, tv3, is_gx1_square)
+    y = Fp.cmov(y, value, isValid); // 22.   y = CMOV(y, y1, is_gx1_square)
+    const e1 = Fp.isOdd!(u) === Fp.isOdd!(y); // 23.  e1 = sgn0(u) == sgn0(y)
+    y = Fp.cmov(Fp.neg(y), y, e1); // 24.   y = CMOV(-y, y, e1)
+    const tv4_inv = FpInvertBatch(Fp, [tv4], true)[0];
+    x = Fp.mul(x, tv4_inv); // 25.   x = x / tv4
+    return { x, y };
+  };
+}
+
+/**
+ * Creates ECDSA for given elliptic curve Point and hash function.
+ */
 export function ecdsa(
-  Point: ProjConstructor<bigint>,
-  ecdsaOpts: ECDSAOpts,
+  Point: WeierstrassPointCons<bigint>,
+  hash: CHash,
+  ecdsaOpts: ECDSAOpts = {},
   curveOpts: WeierstrassExtraOpts<bigint> = {}
 ): ECDSA {
+  ahash(hash);
   _validateObject(
     ecdsaOpts,
-    { hash: 'function' },
+    {},
     {
       hmac: 'function',
       lowS: 'boolean',
@@ -1128,7 +1290,7 @@ export function ecdsa(
   const randomBytes_ = ecdsaOpts.randomBytes || randomBytes;
   const hmac_: HmacFnSync =
     ecdsaOpts.hmac ||
-    (((key, ...msgs) => hmac(ecdsaOpts.hash, key, concatBytes(...msgs))) satisfies HmacFnSync);
+    (((key, ...msgs) => hmac(hash, key, concatBytes(...msgs))) satisfies HmacFnSync);
 
   const { Fp, Fn } = Point;
   const { ORDER: CURVE_ORDER, BITS: fnBits } = Fn;
@@ -1149,7 +1311,7 @@ export function ecdsa(
   /**
    * ECDSA signature with its (r, s) properties. Supports DER & compact representations.
    */
-  class Signature implements SignatureType {
+  class Signature implements ECDSASignature {
     readonly r: bigint;
     readonly s: bigint;
     readonly recovery?: number;
@@ -1377,7 +1539,6 @@ export function ecdsa(
   function prepSig(msgHash: Hex, privateKey: PrivKey, opts = defaultSigOpts) {
     if (['recovered', 'canonical'].some((k) => k in opts))
       throw new Error('sign() legacy options not supported');
-    const { hash } = ecdsaOpts;
     let { lowS, prehash, extraEntropy: ent } = opts; // generates low-s sigs by default
     if (lowS == null) lowS = true; // RFC6979 3.2: we skip step A, because we already provide hash
     msgHash = ensureBytes('msgHash', msgHash);
@@ -1445,7 +1606,7 @@ export function ecdsa(
    */
   function sign(msgHash: Hex, privKey: PrivKey, opts = defaultSigOpts): RecoveredSignature {
     const { seed, k2sig } = prepSig(msgHash, privKey, opts); // Steps A, D of RFC6979 3.2.
-    const drbg = createHmacDrbg<RecoveredSignature>(ecdsaOpts.hash.outputLen, Fn.BYTES, hmac_);
+    const drbg = createHmacDrbg<RecoveredSignature>(hash.outputLen, Fn.BYTES, hmac_);
     return drbg(seed, k2sig); // Steps B, C, D, E, F, G
   }
 
@@ -1483,7 +1644,7 @@ export function ecdsa(
     if ('strict' in opts) throw new Error('options.strict was renamed to lowS');
 
     let _sig: Signature | undefined = undefined;
-    let P: ProjPointType<bigint>;
+    let P: WeierstrassPoint<bigint>;
 
     if (format === undefined) {
       // Try to deduce format
@@ -1533,7 +1694,7 @@ export function ecdsa(
       P = Point.fromHex(publicKey);
       if (lowS && _sig.hasHighS()) return false;
       // todo: optional.hash => hash
-      if (prehash) msgHash = ecdsaOpts.hash(msgHash);
+      if (prehash) msgHash = hash(msgHash);
       const { r, s } = _sig;
       const h = bits2int_modN(msgHash); // Cannot use fields methods, since it is group element
       const is = Fn.inv(s); // s^-1
@@ -1553,11 +1714,10 @@ export function ecdsa(
     return { secretKey, publicKey: getPublicKey(secretKey) };
   }
 
-  const fpl = Fn.BYTES;
   const lengths = {
-    secret: fpl,
-    public: 1 + fpl,
-    signature: 2 * fpl,
+    secret: Fn.BYTES,
+    public: 1 + Fp.BYTES,
+    signature: 2 * Fn.BYTES,
     seed: seedLen,
   };
 
@@ -1574,15 +1734,19 @@ export function ecdsa(
   });
 }
 
+// TODO: remove
 export type WsPointComposed<T> = {
   CURVE: WeierstrassOpts<T>;
   curveOpts: WeierstrassExtraOpts<T>;
 };
+// TODO: remove
 export type WsComposed = {
   CURVE: WeierstrassOpts<bigint>;
+  hash: CHash;
   curveOpts: WeierstrassExtraOpts<bigint>;
   ecdsaOpts: ECDSAOpts;
 };
+// TODO: remove
 function _weierstrass_legacy_opts_to_new<T>(c: CurvePointsType<T>): WsPointComposed<T> {
   const CURVE: WeierstrassOpts<T> = {
     a: c.a,
@@ -1612,18 +1776,18 @@ function _weierstrass_legacy_opts_to_new<T>(c: CurvePointsType<T>): WsPointCompo
 function _ecdsa_legacy_opts_to_new(c: CurveType): WsComposed {
   const { CURVE, curveOpts } = _weierstrass_legacy_opts_to_new(c);
   const ecdsaOpts: ECDSAOpts = {
-    hash: c.hash,
     hmac: c.hmac,
     randomBytes: c.randomBytes,
     lowS: c.lowS,
     bits2int: c.bits2int,
     bits2int_modN: c.bits2int_modN,
   };
-  return { CURVE, curveOpts, ecdsaOpts };
+  return { CURVE, curveOpts, hash: c.hash, ecdsaOpts };
 }
+// TODO: remove
 function _weierstrass_new_output_to_legacy<T>(
   c: CurvePointsType<T>,
-  Point: ProjConstructor<T>
+  Point: WeierstrassPointCons<T>
 ): CurvePointsRes<T> {
   const { Fp, Fn } = Point;
   // TODO: remove
@@ -1648,6 +1812,7 @@ function _weierstrass_new_output_to_legacy<T>(
     }
   );
 }
+// TODO: remove
 function _ecdsa_new_output_to_legacy(c: CurveType, ecdsa: ECDSA): CurveFn {
   return Object.assign({}, ecdsa, {
     ProjectivePoint: ecdsa.Point,
@@ -1657,141 +1822,8 @@ function _ecdsa_new_output_to_legacy(c: CurveType, ecdsa: ECDSA): CurveFn {
 
 // _ecdsa_legacy
 export function weierstrass(c: CurveType): CurveFn {
-  const { CURVE, curveOpts, ecdsaOpts } = _ecdsa_legacy_opts_to_new(c);
+  const { CURVE, curveOpts, hash, ecdsaOpts } = _ecdsa_legacy_opts_to_new(c);
   const Point = weierstrassN(CURVE, curveOpts);
-  const signs = ecdsa(Point, ecdsaOpts, curveOpts);
+  const signs = ecdsa(Point, hash, ecdsaOpts, curveOpts);
   return _ecdsa_new_output_to_legacy(c, signs);
-}
-
-/**
- * Implementation of the Shallue and van de Woestijne method for any weierstrass curve.
- * TODO: check if there is a way to merge this with uvRatio in Edwards; move to modular.
- * b = True and y = sqrt(u / v) if (u / v) is square in F, and
- * b = False and y = sqrt(Z * (u / v)) otherwise.
- * @param Fp
- * @param Z
- * @returns
- */
-export function SWUFpSqrtRatio<T>(
-  Fp: IField<T>,
-  Z: T
-): (u: T, v: T) => { isValid: boolean; value: T } {
-  // Generic implementation
-  const q = Fp.ORDER;
-  let l = _0n;
-  for (let o = q - _1n; o % _2n === _0n; o /= _2n) l += _1n;
-  const c1 = l; // 1. c1, the largest integer such that 2^c1 divides q - 1.
-  // We need 2n ** c1 and 2n ** (c1-1). We can't use **; but we can use <<.
-  // 2n ** c1 == 2n << (c1-1)
-  const _2n_pow_c1_1 = _2n << (c1 - _1n - _1n);
-  const _2n_pow_c1 = _2n_pow_c1_1 * _2n;
-  const c2 = (q - _1n) / _2n_pow_c1; // 2. c2 = (q - 1) / (2^c1)  # Integer arithmetic
-  const c3 = (c2 - _1n) / _2n; // 3. c3 = (c2 - 1) / 2            # Integer arithmetic
-  const c4 = _2n_pow_c1 - _1n; // 4. c4 = 2^c1 - 1                # Integer arithmetic
-  const c5 = _2n_pow_c1_1; // 5. c5 = 2^(c1 - 1)                  # Integer arithmetic
-  const c6 = Fp.pow(Z, c2); // 6. c6 = Z^c2
-  const c7 = Fp.pow(Z, (c2 + _1n) / _2n); // 7. c7 = Z^((c2 + 1) / 2)
-  let sqrtRatio = (u: T, v: T): { isValid: boolean; value: T } => {
-    let tv1 = c6; // 1. tv1 = c6
-    let tv2 = Fp.pow(v, c4); // 2. tv2 = v^c4
-    let tv3 = Fp.sqr(tv2); // 3. tv3 = tv2^2
-    tv3 = Fp.mul(tv3, v); // 4. tv3 = tv3 * v
-    let tv5 = Fp.mul(u, tv3); // 5. tv5 = u * tv3
-    tv5 = Fp.pow(tv5, c3); // 6. tv5 = tv5^c3
-    tv5 = Fp.mul(tv5, tv2); // 7. tv5 = tv5 * tv2
-    tv2 = Fp.mul(tv5, v); // 8. tv2 = tv5 * v
-    tv3 = Fp.mul(tv5, u); // 9. tv3 = tv5 * u
-    let tv4 = Fp.mul(tv3, tv2); // 10. tv4 = tv3 * tv2
-    tv5 = Fp.pow(tv4, c5); // 11. tv5 = tv4^c5
-    let isQR = Fp.eql(tv5, Fp.ONE); // 12. isQR = tv5 == 1
-    tv2 = Fp.mul(tv3, c7); // 13. tv2 = tv3 * c7
-    tv5 = Fp.mul(tv4, tv1); // 14. tv5 = tv4 * tv1
-    tv3 = Fp.cmov(tv2, tv3, isQR); // 15. tv3 = CMOV(tv2, tv3, isQR)
-    tv4 = Fp.cmov(tv5, tv4, isQR); // 16. tv4 = CMOV(tv5, tv4, isQR)
-    // 17. for i in (c1, c1 - 1, ..., 2):
-    for (let i = c1; i > _1n; i--) {
-      let tv5 = i - _2n; // 18.    tv5 = i - 2
-      tv5 = _2n << (tv5 - _1n); // 19.    tv5 = 2^tv5
-      let tvv5 = Fp.pow(tv4, tv5); // 20.    tv5 = tv4^tv5
-      const e1 = Fp.eql(tvv5, Fp.ONE); // 21.    e1 = tv5 == 1
-      tv2 = Fp.mul(tv3, tv1); // 22.    tv2 = tv3 * tv1
-      tv1 = Fp.mul(tv1, tv1); // 23.    tv1 = tv1 * tv1
-      tvv5 = Fp.mul(tv4, tv1); // 24.    tv5 = tv4 * tv1
-      tv3 = Fp.cmov(tv2, tv3, e1); // 25.    tv3 = CMOV(tv2, tv3, e1)
-      tv4 = Fp.cmov(tvv5, tv4, e1); // 26.    tv4 = CMOV(tv5, tv4, e1)
-    }
-    return { isValid: isQR, value: tv3 };
-  };
-  if (Fp.ORDER % _4n === _3n) {
-    // sqrt_ratio_3mod4(u, v)
-    const c1 = (Fp.ORDER - _3n) / _4n; // 1. c1 = (q - 3) / 4     # Integer arithmetic
-    const c2 = Fp.sqrt(Fp.neg(Z)); // 2. c2 = sqrt(-Z)
-    sqrtRatio = (u: T, v: T) => {
-      let tv1 = Fp.sqr(v); // 1. tv1 = v^2
-      const tv2 = Fp.mul(u, v); // 2. tv2 = u * v
-      tv1 = Fp.mul(tv1, tv2); // 3. tv1 = tv1 * tv2
-      let y1 = Fp.pow(tv1, c1); // 4. y1 = tv1^c1
-      y1 = Fp.mul(y1, tv2); // 5. y1 = y1 * tv2
-      const y2 = Fp.mul(y1, c2); // 6. y2 = y1 * c2
-      const tv3 = Fp.mul(Fp.sqr(y1), v); // 7. tv3 = y1^2; 8. tv3 = tv3 * v
-      const isQR = Fp.eql(tv3, u); // 9. isQR = tv3 == u
-      let y = Fp.cmov(y2, y1, isQR); // 10. y = CMOV(y2, y1, isQR)
-      return { isValid: isQR, value: y }; // 11. return (isQR, y) isQR ? y : y*c2
-    };
-  }
-  // No curves uses that
-  // if (Fp.ORDER % _8n === _5n) // sqrt_ratio_5mod8
-  return sqrtRatio;
-}
-/**
- * Simplified Shallue-van de Woestijne-Ulas Method
- * https://www.rfc-editor.org/rfc/rfc9380#section-6.6.2
- */
-export function mapToCurveSimpleSWU<T>(
-  Fp: IField<T>,
-  opts: {
-    A: T;
-    B: T;
-    Z: T;
-  }
-): (u: T) => { x: T; y: T } {
-  validateField(Fp);
-  const { A, B, Z } = opts;
-  if (!Fp.isValid(A) || !Fp.isValid(B) || !Fp.isValid(Z))
-    throw new Error('mapToCurveSimpleSWU: invalid opts');
-  const sqrtRatio = SWUFpSqrtRatio(Fp, Z);
-  if (!Fp.isOdd) throw new Error('Field does not have .isOdd()');
-  // Input: u, an element of F.
-  // Output: (x, y), a point on E.
-  return (u: T): { x: T; y: T } => {
-    // prettier-ignore
-    let tv1, tv2, tv3, tv4, tv5, tv6, x, y;
-    tv1 = Fp.sqr(u); // 1.  tv1 = u^2
-    tv1 = Fp.mul(tv1, Z); // 2.  tv1 = Z * tv1
-    tv2 = Fp.sqr(tv1); // 3.  tv2 = tv1^2
-    tv2 = Fp.add(tv2, tv1); // 4.  tv2 = tv2 + tv1
-    tv3 = Fp.add(tv2, Fp.ONE); // 5.  tv3 = tv2 + 1
-    tv3 = Fp.mul(tv3, B); // 6.  tv3 = B * tv3
-    tv4 = Fp.cmov(Z, Fp.neg(tv2), !Fp.eql(tv2, Fp.ZERO)); // 7.  tv4 = CMOV(Z, -tv2, tv2 != 0)
-    tv4 = Fp.mul(tv4, A); // 8.  tv4 = A * tv4
-    tv2 = Fp.sqr(tv3); // 9.  tv2 = tv3^2
-    tv6 = Fp.sqr(tv4); // 10. tv6 = tv4^2
-    tv5 = Fp.mul(tv6, A); // 11. tv5 = A * tv6
-    tv2 = Fp.add(tv2, tv5); // 12. tv2 = tv2 + tv5
-    tv2 = Fp.mul(tv2, tv3); // 13. tv2 = tv2 * tv3
-    tv6 = Fp.mul(tv6, tv4); // 14. tv6 = tv6 * tv4
-    tv5 = Fp.mul(tv6, B); // 15. tv5 = B * tv6
-    tv2 = Fp.add(tv2, tv5); // 16. tv2 = tv2 + tv5
-    x = Fp.mul(tv1, tv3); // 17.   x = tv1 * tv3
-    const { isValid, value } = sqrtRatio(tv2, tv6); // 18. (is_gx1_square, y1) = sqrt_ratio(tv2, tv6)
-    y = Fp.mul(tv1, u); // 19.   y = tv1 * u  -> Z * u^3 * y1
-    y = Fp.mul(y, value); // 20.   y = y * y1
-    x = Fp.cmov(x, tv3, isValid); // 21.   x = CMOV(x, tv3, is_gx1_square)
-    y = Fp.cmov(y, value, isValid); // 22.   y = CMOV(y, y1, is_gx1_square)
-    const e1 = Fp.isOdd!(u) === Fp.isOdd!(y); // 23.  e1 = sgn0(u) == sgn0(y)
-    y = Fp.cmov(Fp.neg(y), y, e1); // 24.   y = CMOV(-y, y, e1)
-    const tv4_inv = FpInvertBatch(Fp, [tv4], true)[0];
-    x = Fp.mul(x, tv4_inv); // 25.   x = x / tv4
-    return { x, y };
-  };
 }

@@ -40,8 +40,8 @@ import {
   weierstrassPoints,
   type CurvePointsRes,
   type CurvePointsType,
-  type ProjConstructor,
-  type ProjPointType,
+  type WeierstrassPoint,
+  type WeierstrassPointCons,
 } from './weierstrass.ts';
 
 type Fp = bigint; // Can be different field?
@@ -52,21 +52,21 @@ const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3);
 export type TwistType = 'multiplicative' | 'divisive';
 
 export type ShortSignatureCoder<Fp> = {
-  fromBytes(bytes: Uint8Array): ProjPointType<Fp>;
-  fromHex(hex: Hex): ProjPointType<Fp>;
-  toBytes(point: ProjPointType<Fp>): Uint8Array;
+  fromBytes(bytes: Uint8Array): WeierstrassPoint<Fp>;
+  fromHex(hex: Hex): WeierstrassPoint<Fp>;
+  toBytes(point: WeierstrassPoint<Fp>): Uint8Array;
   /** @deprecated use `toBytes` */
-  toRawBytes(point: ProjPointType<Fp>): Uint8Array;
-  toHex(point: ProjPointType<Fp>): string;
+  toRawBytes(point: WeierstrassPoint<Fp>): Uint8Array;
+  toHex(point: WeierstrassPoint<Fp>): string;
 };
 
 export type SignatureCoder<Fp> = {
-  fromBytes(bytes: Uint8Array): ProjPointType<Fp>;
-  fromHex(hex: Hex): ProjPointType<Fp>;
-  toBytes(point: ProjPointType<Fp>): Uint8Array;
+  fromBytes(bytes: Uint8Array): WeierstrassPoint<Fp>;
+  fromHex(hex: Hex): WeierstrassPoint<Fp>;
+  toBytes(point: WeierstrassPoint<Fp>): Uint8Array;
   /** @deprecated use `toBytes` */
-  toRawBytes(point: ProjPointType<Fp>): Uint8Array;
-  toHex(point: ProjPointType<Fp>): string;
+  toRawBytes(point: WeierstrassPoint<Fp>): Uint8Array;
+  toHex(point: WeierstrassPoint<Fp>): string;
 };
 
 export type BlsFields = {
@@ -94,11 +94,11 @@ export type PostPrecomputeFn = (
 ) => void;
 export type BlsPairing = {
   Fp12: Fp12Bls;
-  calcPairingPrecomputes: (p: ProjPointType<Fp2>) => Precompute;
+  calcPairingPrecomputes: (p: WeierstrassPoint<Fp2>) => Precompute;
   millerLoopBatch: (pairs: [Precompute, Fp, Fp][]) => Fp12;
-  pairing: (P: ProjPointType<Fp>, Q: ProjPointType<Fp2>, withFinalExponent?: boolean) => Fp12;
+  pairing: (P: WeierstrassPoint<Fp>, Q: WeierstrassPoint<Fp2>, withFinalExponent?: boolean) => Fp12;
   pairingBatch: (
-    pairs: { g1: ProjPointType<Fp>; g2: ProjPointType<Fp2> }[],
+    pairs: { g1: WeierstrassPoint<Fp>; g2: WeierstrassPoint<Fp2> }[],
     withFinalExponent?: boolean
   ) => Fp12;
 };
@@ -159,47 +159,55 @@ export type CurveFn = {
   /** @deprecated use `longSignatures.sign` */
   sign: {
     (message: Hex, privateKey: PrivKey, htfOpts?: htfBasicOpts): Uint8Array;
-    (message: ProjPointType<Fp2>, privateKey: PrivKey, htfOpts?: htfBasicOpts): ProjPointType<Fp2>;
+    (
+      message: WeierstrassPoint<Fp2>,
+      privateKey: PrivKey,
+      htfOpts?: htfBasicOpts
+    ): WeierstrassPoint<Fp2>;
   };
   /** @deprecated use `shortSignatures.sign` */
   signShortSignature: {
     (message: Hex, privateKey: PrivKey, htfOpts?: htfBasicOpts): Uint8Array;
-    (message: ProjPointType<Fp>, privateKey: PrivKey, htfOpts?: htfBasicOpts): ProjPointType<Fp>;
+    (
+      message: WeierstrassPoint<Fp>,
+      privateKey: PrivKey,
+      htfOpts?: htfBasicOpts
+    ): WeierstrassPoint<Fp>;
   };
   /** @deprecated use `longSignatures.verify` */
   verify: (
-    signature: Hex | ProjPointType<Fp2>,
-    message: Hex | ProjPointType<Fp2>,
-    publicKey: Hex | ProjPointType<Fp>,
+    signature: Hex | WeierstrassPoint<Fp2>,
+    message: Hex | WeierstrassPoint<Fp2>,
+    publicKey: Hex | WeierstrassPoint<Fp>,
     htfOpts?: htfBasicOpts
   ) => boolean;
   /** @deprecated use `shortSignatures.verify` */
   verifyShortSignature: (
-    signature: Hex | ProjPointType<Fp>,
-    message: Hex | ProjPointType<Fp>,
-    publicKey: Hex | ProjPointType<Fp2>,
+    signature: Hex | WeierstrassPoint<Fp>,
+    message: Hex | WeierstrassPoint<Fp>,
+    publicKey: Hex | WeierstrassPoint<Fp2>,
     htfOpts?: htfBasicOpts
   ) => boolean;
   verifyBatch: (
-    signature: Hex | ProjPointType<Fp2>,
-    messages: (Hex | ProjPointType<Fp2>)[],
-    publicKeys: (Hex | ProjPointType<Fp>)[],
+    signature: Hex | WeierstrassPoint<Fp2>,
+    messages: (Hex | WeierstrassPoint<Fp2>)[],
+    publicKeys: (Hex | WeierstrassPoint<Fp>)[],
     htfOpts?: htfBasicOpts
   ) => boolean;
   /** @deprecated use `longSignatures.aggregatePublicKeys` */
   aggregatePublicKeys: {
     (publicKeys: Hex[]): Uint8Array;
-    (publicKeys: ProjPointType<Fp>[]): ProjPointType<Fp>;
+    (publicKeys: WeierstrassPoint<Fp>[]): WeierstrassPoint<Fp>;
   };
   /** @deprecated use `longSignatures.aggregateSignatures` */
   aggregateSignatures: {
     (signatures: Hex[]): Uint8Array;
-    (signatures: ProjPointType<Fp2>[]): ProjPointType<Fp2>;
+    (signatures: WeierstrassPoint<Fp2>[]): WeierstrassPoint<Fp2>;
   };
   /** @deprecated use `shortSignatures.aggregateSignatures` */
   aggregateShortSignatures: {
     (signatures: Hex[]): Uint8Array;
-    (signatures: ProjPointType<Fp>[]): ProjPointType<Fp>;
+    (signatures: WeierstrassPoint<Fp>[]): WeierstrassPoint<Fp>;
   };
   /** @deprecated use `curves.G1` and `curves.G2` */
   G1: CurvePointsRes<Fp> & H2CHasher<Fp>;
@@ -218,8 +226,8 @@ export type CurveFn = {
     G2b: Fp2;
   };
   curves: {
-    G1: ProjConstructor<bigint>;
-    G2: ProjConstructor<Fp2>;
+    G1: WeierstrassPointCons<bigint>;
+    G2: WeierstrassPointCons<Fp2>;
   };
   fields: {
     Fp: IField<Fp>;
@@ -236,21 +244,21 @@ export type CurveFn = {
 
 type BLSInput = Hex | Uint8Array;
 export interface BLSSigs<P, S> {
-  getPublicKey(privateKey: PrivKey): ProjPointType<P>;
-  sign(hashedMessage: ProjPointType<S>, privateKey: PrivKey): ProjPointType<S>;
+  getPublicKey(privateKey: PrivKey): WeierstrassPoint<P>;
+  sign(hashedMessage: WeierstrassPoint<S>, privateKey: PrivKey): WeierstrassPoint<S>;
   verify(
-    signature: ProjPointType<S> | BLSInput,
-    message: ProjPointType<S>,
-    publicKey: ProjPointType<P> | BLSInput
+    signature: WeierstrassPoint<S> | BLSInput,
+    message: WeierstrassPoint<S>,
+    publicKey: WeierstrassPoint<P> | BLSInput
   ): boolean;
   verifyBatch: (
-    signature: ProjPointType<S> | BLSInput,
-    messages: ProjPointType<S>[],
-    publicKeys: (ProjPointType<P> | BLSInput)[]
+    signature: WeierstrassPoint<S> | BLSInput,
+    messages: WeierstrassPoint<S>[],
+    publicKeys: (WeierstrassPoint<P> | BLSInput)[]
   ) => boolean;
-  aggregatePublicKeys(publicKeys: (ProjPointType<P> | BLSInput)[]): ProjPointType<P>;
-  aggregateSignatures(signatures: (ProjPointType<S> | BLSInput)[]): ProjPointType<S>;
-  hash(message: Uint8Array, DST?: string | Uint8Array, hashOpts?: H2CHashOpts): ProjPointType<S>;
+  aggregatePublicKeys(publicKeys: (WeierstrassPoint<P> | BLSInput)[]): WeierstrassPoint<P>;
+  aggregateSignatures(signatures: (WeierstrassPoint<S> | BLSInput)[]): WeierstrassPoint<S>;
+  hash(message: Uint8Array, DST?: string | Uint8Array, hashOpts?: H2CHashOpts): WeierstrassPoint<S>;
   Signature: SignatureCoder<S>;
 }
 
@@ -275,8 +283,8 @@ function aNonEmpty(arr: any[]) {
 // This should be enough for bn254, no need to export full stuff?
 function createBlsPairing(
   fields: BlsFields,
-  G1: ProjConstructor<Fp>,
-  G2: ProjConstructor<Fp2>,
+  G1: WeierstrassPointCons<Fp>,
+  G2: WeierstrassPointCons<Fp2>,
   params: BlsPairingParams
 ): BlsPairing {
   const { Fp2, Fp12 } = fields;
@@ -425,8 +433,8 @@ function createBlsSig<P, S>(
   isSigG1: boolean
 ): BLSSigs<P, S> {
   const { Fp12, pairingBatch } = blsPairing;
-  type PubPoint = ProjPointType<P>;
-  type SigPoint = ProjPointType<S>;
+  type PubPoint = WeierstrassPoint<P>;
+  type SigPoint = WeierstrassPoint<S>;
   function normPub(point: PubPoint | BLSInput): PubPoint {
     return point instanceof PubCurve.Point ? (point as PubPoint) : PubCurve.Point.fromHex(point);
   }
