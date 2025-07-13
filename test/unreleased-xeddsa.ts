@@ -3,7 +3,7 @@ import { randomBytes } from '@noble/hashes/utils';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual } from 'node:assert';
 import { mod } from '../esm/abstract/modular.js';
-import { ed25519, edwardsToMontgomeryPriv, x25519 } from '../esm/ed25519.js';
+import { ed25519, x25519 } from '../esm/ed25519.js';
 import { bytesToNumberLE, concatBytes, ensureBytes, equalBytes, numberToBytesLE } from '../esm/utils.js';
 
 /*
@@ -124,7 +124,7 @@ describe('xeddsa25519', () => {
     for (let i = 0; i < 50; i++) {
       const msg = randomBytes(64);
       // x25519 can generate invalid U
-      const secret = edwardsToMontgomeryPriv(ed25519.utils.randomPrivateKey());
+      const secret = ed25519.utils.toMontgomeryPriv(ed25519.utils.randomPrivateKey());
       const pub = x25519.getPublicKey(secret);
       const signature = xeddsa25519.sign(secret, msg);
       deepStrictEqual(xeddsa25519.verify(pub, msg, signature), true);
