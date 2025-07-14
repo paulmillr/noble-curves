@@ -947,7 +947,7 @@ export function weierstrassN<T>(
       const { endo } = curveOpts;
       if (!Fn.isValidNot0(scalar)) throw new Error('invalid scalar: out of range'); // 0 is invalid
       let point: Point, fake: Point; // Fake point is used to const-time mult
-      const mul = (n: bigint) => wnaf.wNAFCached(this, n, Point.normalizeZ);
+      const mul = (n: bigint) => wnaf.wNAFCached(this, n, (p) => normalizeZ(Point, p));
       /** See docs for {@link EndomorphismOpts} */
       if (endo) {
         const { k1neg, k1, k2neg, k2 } = splitEndoScalarN(scalar);
@@ -961,7 +961,7 @@ export function weierstrassN<T>(
         fake = f;
       }
       // Normalize `z` for both points, but return only real one
-      return Point.normalizeZ([point, fake])[0];
+      return normalizeZ(Point, [point, fake])[0];
     }
 
     /**

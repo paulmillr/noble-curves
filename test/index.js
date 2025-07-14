@@ -4,6 +4,7 @@ import { should } from 'micro-should';
 import './basic.test.js';
 import './bls12-381.test.js';
 import './bn254.test.js';
+import './ed.test.js';
 import './ed25519.test.js';
 import './ed448.test.js';
 import './endomorphism.test.js';

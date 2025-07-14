@@ -456,8 +456,8 @@ export function edwards(CURVE: EdwardsOpts, curveOpts: EdwardsExtraOpts = {}): E
     multiply(scalar: bigint): Point {
       const n = scalar;
       aInRange('scalar', n, _1n, CURVE_ORDER); // 1 <= scalar < L
-      const { p, f } = wnaf.wNAFCached(this, n, Point.normalizeZ);
-      return Point.normalizeZ([p, f])[0];
+      const { p, f } = wnaf.wNAFCached(this, n, (p) => normalizeZ(Point, p));
+      return normalizeZ(Point, [p, f])[0];
     }
 
     // Non-constant-time multiplication. Uses double-and-add algorithm.
@@ -470,7 +470,7 @@ export function edwards(CURVE: EdwardsOpts, curveOpts: EdwardsExtraOpts = {}): E
       aInRange('scalar', n, _0n, CURVE_ORDER); // 0 <= scalar < L
       if (n === _0n) return Point.ZERO;
       if (this.is0() || n === _1n) return this;
-      return wnaf.wNAFCachedUnsafe(this, n, Point.normalizeZ, acc);
+      return wnaf.wNAFCachedUnsafe(this, n, (p) => normalizeZ(Point, p), acc);
     }
 
     // Checks if point is of small order.
