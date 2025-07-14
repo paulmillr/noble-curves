@@ -26,7 +26,7 @@ import {
   type EdwardsPointCons,
 } from './abstract/edwards.ts';
 import {
-  _scalarDST,
+  _DST_scalar,
   createHasher,
   expand_message_xof,
   type H2CHasher,
@@ -38,6 +38,7 @@ import { Field, FpInvertBatch, isNegativeLE, mod, pow2, type IField } from './ab
 import { montgomery, type MontgomeryECDH as XCurveFn } from './abstract/montgomery.ts';
 import { bytesToNumberLE, ensureBytes, equalBytes, numberToBytesLE, type Hex } from './utils.ts';
 
+// edwards448 curve
 // a = 1n
 // d = Fp.neg(39081n)
 // Finite field 2n**448n - 2n**224n - 1n
@@ -63,9 +64,7 @@ const ed448_CURVE: EdwardsOpts = {
   ),
 };
 
-// E448 != Edwards448 used in ed448
-// E448 is defined by NIST
-// It's birationally equivalent to edwards448
+// E448 NIST curve is identical to edwards448, except for:
 // d = 39082/39081
 // Gx = 3/2
 const E448_CURVE: EdwardsOpts = Object.assign({}, ed448_CURVE, {
@@ -79,7 +78,6 @@ const E448_CURVE: EdwardsOpts = Object.assign({}, ed448_CURVE, {
     '0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffff80000000000000000000000000000000000000000000000000000001'
   ),
 });
-export const E448: EdwardsPointCons = edwards(E448_CURVE);
 
 const shake256_114 = /* @__PURE__ */ wrapConstructor(() => shake256.create({ dkLen: 114 }));
 const shake256_64 = /* @__PURE__ */ wrapConstructor(() => shake256.create({ dkLen: 64 }));
@@ -189,6 +187,13 @@ export const ed448ph: CurveFn = /* @__PURE__ */ (() =>
   }))();
 
 /**
+ * E448 curve, defined by NIST.
+ * E448 != edwards448 used in ed448.
+ * E448 is birationally equivalent to edwards448.
+ */
+export const E448: EdwardsPointCons = edwards(E448_CURVE);
+
+/**
  * ECDH using curve448 aka x448.
  * x448 has 56-byte keys as per RFC 7748, while
  * ed448 has 57-byte keys as per RFC 8032.
@@ -292,6 +297,7 @@ function map_to_curve_elligator2_edwards448(u: bigint) {
   return { x: Fp.mul(xEn, inv[0]), y: Fp.mul(yEn, inv[1]) }; // 38. return (xEn, xEd, yEn, yEd)
 }
 
+/** Hashing / encoding to ed448 points / field. RFC 9380 methods. */
 export const ed448_hasher: H2CHasher<bigint> = /* @__PURE__ */ (() =>
   createHasher(ed448.Point, (scalars: bigint[]) => map_to_curve_elligator2_edwards448(scalars[0]), {
     DST: 'edwards448_XOF:SHAKE256_ELL2_RO_',
@@ -302,9 +308,6 @@ export const ed448_hasher: H2CHasher<bigint> = /* @__PURE__ */ (() =>
     expand: 'xof',
     hash: shake256,
   }))();
-export const hashToCurve: H2CMethod<bigint> = /* @__PURE__ */ (() => ed448_hasher.hashToCurve)();
-export const encodeToCurve: H2CMethod<bigint> = /* @__PURE__ */ (() =>
-  ed448_hasher.encodeToCurve)();
 
 // 1-d
 const ONE_MINUS_D = /* @__PURE__ */ BigInt('39082');
@@ -453,6 +456,7 @@ export class DecafPoint extends PrimeEdwardsPoint<DecafPoint> implements Group<D
     return DecafPoint.fromBytes(ensureBytes('decafHex', hex, 56));
   }
 
+  /** @deprecated use `import { pippenger } from '@noble/curves/abstract/curve.js';` */
   static msm(points: DecafPoint[], scalars: bigint[]): DecafPoint {
     return pippenger(DecafPoint, Fn, points, scalars);
   }
@@ -499,12 +503,13 @@ export const decaf448: {
   Point: typeof DecafPoint;
 } = { Point: DecafPoint };
 
+/** Hashing to decaf448 points / field. RFC 9380 methods. */
 export const decaf448_hasher: H2CHasherBase<bigint> = {
   hashToCurve(msg: Uint8Array, options?: htfBasicOpts): DecafPoint {
     const DST = options?.DST || 'decaf448_XOF:SHAKE256_D448MAP_RO_';
     return decaf448_map(expand_message_xof(msg, DST, 112, 224, shake256));
   },
-  hashToScalar(msg: Uint8Array, options: htfBasicOpts = { DST: _scalarDST }) {
+  hashToScalar(msg: Uint8Array, options: htfBasicOpts = { DST: _DST_scalar }) {
     return Fn.create(bytesToNumberLE(expand_message_xof(msg, options.DST, 64, 256, shake256)));
   },
 };
@@ -519,9 +524,27 @@ export const decaf448_hasher: H2CHasherBase<bigint> = {
 
 type DcfHasher = (msg: Uint8Array, options: htfBasicOpts) => DecafPoint;
 
+/** @deprecated use `import { ed448_hasher } from '@noble/curves/ed448.js';` */
+export const hashToCurve: H2CMethod<bigint> = /* @__PURE__ */ (() => ed448_hasher.hashToCurve)();
+/** @deprecated use `import { ed448_hasher } from '@noble/curves/ed448.js';` */
+export const encodeToCurve: H2CMethod<bigint> = /* @__PURE__ */ (() =>
+  ed448_hasher.encodeToCurve)();
 /** @deprecated use `import { decaf448_hasher } from '@noble/curves/ed448.js';` */
 export const hashToDecaf448: DcfHasher = /* @__PURE__ */ (() =>
   decaf448_hasher.hashToCurve as DcfHasher)();
 /** @deprecated use `import { decaf448_hasher } from '@noble/curves/ed448.js';` */
 export const hash_to_decaf448: DcfHasher = /* @__PURE__ */ (() =>
   decaf448_hasher.hashToCurve as DcfHasher)();
+
+/**
+ * Weird / bogus points, useful for debugging.
+ * Unlike ed25519, there is no ed448 generator point which can produce full T subgroup.
+ * Instead, there is a Klein four-group, which spans over 2 independent 2-torsion points:
+ * (0, 1), (0, -1), (-1, 0), (1, 0).
+ */
+export const ED448_TORSION_SUBGROUP: string[] = [
+  '010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
+  'fefffffffffffffffffffffffffffffffffffffffffffffffffffffffeffffffffffffffffffffffffffffffffffffffffffffffffffffff00',
+  '000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
+  '000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000080',
+];
