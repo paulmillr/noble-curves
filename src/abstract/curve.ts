@@ -159,6 +159,10 @@ export type IWNAF<T extends Group<T>> = {
 
 /**
  * Elliptic curve multiplication of Point by scalar. Fragile.
+ * Table generation takes **30MB of ram and 10ms on high-end CPU**,
+ * but may take much longer on slow devices. Actual generation will happen on
+ * first call of `multiply()`. By default, `BASE` point is precomputed.
+ *
  * Scalars should always be less than curve order: this should be checked inside of a curve itself.
  * Creates precomputation tables for fast multiplication:
  * - private scalar is split by fixed size windows of W bits

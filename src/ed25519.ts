@@ -17,7 +17,7 @@ import {
   type EdwardsPoint,
 } from './abstract/edwards.ts';
 import {
-  _scalarDST,
+  _DST_scalar,
   createHasher,
   expand_message_xmd,
   type H2CHasher,
@@ -111,18 +111,6 @@ function uvRatio(u: bigint, v: bigint): { isValid: boolean; value: bigint } {
   if (isNegativeLE(x, P)) x = mod(-x, P);
   return { isValid: useRoot1 || useRoot2, value: x };
 }
-
-/** Weird / bogus points, useful for debugging. */
-export const ED25519_TORSION_SUBGROUP: string[] = [
-  '0100000000000000000000000000000000000000000000000000000000000000',
-  'c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a',
-  '0000000000000000000000000000000000000000000000000000000000000080',
-  '26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05',
-  'ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f',
-  '26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc85',
-  '0000000000000000000000000000000000000000000000000000000000000000',
-  'c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa',
-];
 
 const Fp = /* @__PURE__ */ (() => Field(ed25519_CURVE.p, { isLE: true }))();
 const Fn = /* @__PURE__ */ (() => Field(ed25519_CURVE.n, { isLE: true }))();
@@ -286,6 +274,7 @@ function map_to_curve_elligator2_edwards25519(u: bigint) {
   return { x: Fp.mul(xn, xd_inv), y: Fp.mul(yn, yd_inv) }; //  13. return (xn, xd, yn, yd)
 }
 
+/** Hashing to ed25519 points / field. RFC 9380 methods. */
 export const ed25519_hasher: H2CHasher<bigint> = /* @__PURE__ */ (() =>
   createHasher(
     ed25519.Point,
@@ -300,9 +289,6 @@ export const ed25519_hasher: H2CHasher<bigint> = /* @__PURE__ */ (() =>
       hash: sha512,
     }
   ))();
-export const hashToCurve: H2CMethod<bigint> = /* @__PURE__ */ (() => ed25519_hasher.hashToCurve)();
-export const encodeToCurve: H2CMethod<bigint> = /* @__PURE__ */ (() =>
-  ed25519_hasher.encodeToCurve)();
 
 // √(-1) aka √(a) aka 2^((p-1)/4)
 const SQRT_M1 = ED25519_SQRT_M1;
@@ -510,12 +496,13 @@ export const ristretto255: {
   Point: typeof RistrettoPoint;
 } = { Point: RistrettoPoint };
 
+/** Hashing to ristretto255 points / field. RFC 9380 methods. */
 export const ristretto255_hasher: H2CHasherBase<bigint> = {
   hashToCurve(msg: Uint8Array, options?: htfBasicOpts): RistrettoPoint {
     const DST = options?.DST || 'ristretto255_XMD:SHA-512_R255MAP_RO_';
     return ristretto255_map(expand_message_xmd(msg, DST, 64, sha512));
   },
-  hashToScalar(msg: Uint8Array, options: htfBasicOpts = { DST: _scalarDST }) {
+  hashToScalar(msg: Uint8Array, options: htfBasicOpts = { DST: _DST_scalar }) {
     return Fn.create(bytesToNumberLE(expand_message_xmd(msg, options.DST, 64, sha512)));
   },
 };
@@ -528,6 +515,11 @@ export const ristretto255_hasher: H2CHasherBase<bigint> = {
 //   hashToScalar: ristretto255_hasher.hashToScalar,
 // });
 
+/** @deprecated use `import { ed25519_hasher } from '@noble/curves/ed25519.js';` */
+export const hashToCurve: H2CMethod<bigint> = /* @__PURE__ */ (() => ed25519_hasher.hashToCurve)();
+/** @deprecated use `import { ed25519_hasher } from '@noble/curves/ed25519.js';` */
+export const encodeToCurve: H2CMethod<bigint> = /* @__PURE__ */ (() =>
+  ed25519_hasher.encodeToCurve)();
 type RistHasher = (msg: Uint8Array, options: htfBasicOpts) => RistrettoPoint;
 /** @deprecated use `import { ristretto255_hasher } from '@noble/curves/ed25519.js';` */
 export const hashToRistretto255: RistHasher = /* @__PURE__ */ (() =>
@@ -535,3 +527,20 @@ export const hashToRistretto255: RistHasher = /* @__PURE__ */ (() =>
 /** @deprecated use `import { ristretto255_hasher } from '@noble/curves/ed25519.js';` */
 export const hash_to_ristretto255: RistHasher = /* @__PURE__ */ (() =>
   ristretto255_hasher.hashToCurve as RistHasher)();
+
+/**
+ * Weird / bogus points, useful for debugging.
+ * All 8 ed25519 points of 8-torsion subgroup can be generated from the point
+ * T = `26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05`.
+ * ⟨T⟩ = { O, T, 2T, 3T, 4T, 5T, 6T, 7T }
+ */
+export const ED25519_TORSION_SUBGROUP: string[] = [
+  '0100000000000000000000000000000000000000000000000000000000000000',
+  'c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a',
+  '0000000000000000000000000000000000000000000000000000000000000080',
+  '26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05',
+  'ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f',
+  '26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc85',
+  '0000000000000000000000000000000000000000000000000000000000000000',
+  'c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa',
+];

@@ -250,7 +250,7 @@ export type H2CHasher<T> = H2CHasherBase<T> & {
 // TODO: remove
 export type Hasher<T> = H2CHasher<T>;
 
-export const _scalarDST: Uint8Array = utf8ToBytes('HashToScalar-');
+export const _DST_scalar: Uint8Array = utf8ToBytes('HashToScalar-');
 
 /** Creates hash-to-curve methods from EC Point and mapToCurve function. See {@link H2CHasher}. */
 export function createHasher<T>(
@@ -299,7 +299,7 @@ export function createHasher<T>(
     hashToScalar(msg: Uint8Array, options?: htfBasicOpts): bigint {
       // @ts-ignore
       const N = Point.Fn.ORDER;
-      const opts = Object.assign({}, defaults, { p: N, m: 1, DST: _scalarDST }, options);
+      const opts = Object.assign({}, defaults, { p: N, m: 1, DST: _DST_scalar }, options);
       return hash_to_field(msg, 1, opts)[0][0];
     },
   };

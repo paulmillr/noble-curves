@@ -60,7 +60,7 @@ import {
   validateObject,
 } from '../utils.ts';
 import type { Group, GroupConstructor } from './curve.ts';
-import { _scalarDST, type H2CMethod, type htfBasicOpts } from './hash-to-curve.js';
+import { _DST_scalar, type H2CMethod, type htfBasicOpts } from './hash-to-curve.js';
 import { getMinHashLength, mapHashToField, type IField } from './modular.js';
 
 // OPRF is designed to be used across network, so we default to serialized values.
@@ -353,7 +353,7 @@ export function createORPF<P extends OPRFPoint<P>>(opts: OPRFOpts<P>): OPRF {
       DST: concatBytes(utf8ToBytes('HashToGroup-'), ctx),
     }) as P;
   const hashToScalarPrefixed = (msg: Uint8Array, ctx: Uint8Array) =>
-    opts.hashToScalar(msg, { DST: concatBytes(_scalarDST, ctx) });
+    opts.hashToScalar(msg, { DST: concatBytes(_DST_scalar, ctx) });
   const randomScalar = (rng: RNG = randomBytes) => {
     const t = mapHashToField(rng(getMinHashLength(Fn.ORDER)), Fn.ORDER, Fn.isLE);
     // We cannot use Fn.fromBytes here, because field

@@ -57,19 +57,17 @@ export type CurveTypeWithLength = Readonly<CurveType & Partial<NLength>>;
 
 /** Instance of Extended Point with coordinates in X, Y, Z, T. */
 export interface EdwardsPoint extends Group<EdwardsPoint> {
+  /** extended X coordinate. Different from affine x. */
   readonly X: bigint;
+  /** extended Y coordinate. Different from affine y. */
   readonly Y: bigint;
+  /** extended Z coordinate */
   readonly Z: bigint;
+  /** extended T coordinate */
   readonly T: bigint;
-  /** @deprecated use .X */
-  readonly ex: bigint;
-  /** @deprecated use .Y */
-  readonly ey: bigint;
-  /** @deprecated use .Z */
-  readonly ez: bigint;
-  /** @deprecated use .T */
-  readonly et: bigint;
+  /** affine x coordinate. Different from extended X. */
   get x(): bigint;
+  /** affine y coordinate. Different from extended Y. */
   get y(): bigint;
   assertValidity(): void;
   multiply(scalar: bigint): EdwardsPoint;
@@ -78,23 +76,39 @@ export interface EdwardsPoint extends Group<EdwardsPoint> {
   isSmallOrder(): boolean;
   isTorsionFree(): boolean;
   clearCofactor(): EdwardsPoint;
-  toAffine(iz?: bigint): AffinePoint<bigint>;
+  toAffine(invertedZ?: bigint): AffinePoint<bigint>;
   toBytes(): Uint8Array;
+  toHex(): string;
+  /**
+   * Massively speeds up `p.multiply(n)` by using precompute tables (caching). See {@link wNAF}.
+   * @param isLazy calculate cache now. Default (true) ensures it's deferred to first `multiply()`
+   */
+  precompute(windowSize?: number, isLazy?: boolean): EdwardsPoint;
+
   /** @deprecated use `toBytes` */
   toRawBytes(): Uint8Array;
-  toHex(): string;
-  precompute(windowSize?: number, isLazy?: boolean): EdwardsPoint;
   /** @deprecated use `p.precompute(windowSize)` */
   _setWindowSize(windowSize: number): void;
+  /** @deprecated use .X */
+  readonly ex: bigint;
+  /** @deprecated use .Y */
+  readonly ey: bigint;
+  /** @deprecated use .Z */
+  readonly ez: bigint;
+  /** @deprecated use .T */
+  readonly et: bigint;
 }
 /** Static methods of Extended Point with coordinates in X, Y, Z, T. */
 export interface EdwardsPointCons extends GroupConstructor<EdwardsPoint> {
-  new (x: bigint, y: bigint, z: bigint, t: bigint): EdwardsPoint;
+  new (X: bigint, Y: bigint, Z: bigint, T: bigint): EdwardsPoint;
+  /** Field for basic curve math */
   Fp: IField<bigint>;
+  /** Scalar field, for scalars in multiply and others */
   Fn: IField<bigint>;
   fromAffine(p: AffinePoint<bigint>): EdwardsPoint;
   fromBytes(bytes: Uint8Array, zip215?: boolean): EdwardsPoint;
   fromHex(hex: Hex, zip215?: boolean): EdwardsPoint;
+
   /** @deprecated use `import { pippenger } from '@noble/curves/abstract/curve.js';` */
   msm(points: EdwardsPoint[], scalars: bigint[]): EdwardsPoint;
 }
@@ -339,6 +353,7 @@ export function edwards(CURVE: EdwardsOpts, curveOpts: EdwardsExtraOpts = {}): E
       return this.toAffine().y;
     }
 
+    // TODO: remove
     get ex(): bigint {
       return this.X;
     }
@@ -351,6 +366,15 @@ export function edwards(CURVE: EdwardsOpts, curveOpts: EdwardsExtraOpts = {}): E
     get et(): bigint {
       return this.T;
     }
+    static normalizeZ(points: Point[]): Point[] {
+      return normalizeZ(Point, points);
+    }
+    static msm(points: Point[], scalars: bigint[]): Point {
+      return pippenger(Point, Fn, points, scalars);
+    }
+    _setWindowSize(windowSize: number) {
+      this.precompute(windowSize);
+    }
 
     static fromAffine(p: AffinePoint<bigint>): Point {
       if (p instanceof Point) throw new Error('extended point not allowed');
@@ -359,25 +383,14 @@ export function edwards(CURVE: EdwardsOpts, curveOpts: EdwardsExtraOpts = {}): E
       acoord('y', y);
       return new Point(x, y, _1n, modP(x * y));
     }
-    static normalizeZ(points: Point[]): Point[] {
-      return normalizeZ(Point, points);
-    }
-    // Multiscalar Multiplication
-    static msm(points: Point[], scalars: bigint[]): Point {
-      return pippenger(Point, Fn, points, scalars);
-    }
 
-    // "Private method", don't use it directly
-    _setWindowSize(windowSize: number) {
-      this.precompute(windowSize);
-    }
     precompute(windowSize: number = 8, isLazy = true) {
       wnaf.setWindowSize(this, windowSize);
       if (!isLazy) this.multiply(_2n); // random number
       return this;
     }
-    // Not required for fromHex(), which always creates valid points.
-    // Could be useful for fromAffine().
+
+    // Useful in fromAffine() - not for fromBytes(), which always created valid points.
     assertValidity(): void {
       assertValidMemo(this);
     }

@@ -171,25 +171,17 @@ function validateSigVerOpts(opts: SignOpts | VerOpts) {
   if (opts.prehash !== undefined) abool('prehash', opts.prehash);
 }
 
-/** Instance methods for 3D XYZ points. */
+/** Instance methods for 3D XYZ projective points. */
 export interface WeierstrassPoint<T> extends Group<WeierstrassPoint<T>> {
-  /** projective x coordinate. Note: different from .x */
+  /** projective X coordinate. Different from affine x. */
   readonly X: T;
-  /** projective y coordinate. Note: different from .y */
+  /** projective Y coordinate. Different from affine y. */
   readonly Y: T;
   /** projective z coordinate */
   readonly Z: T;
-
-  /** @deprecated use .X */
-  readonly px: T;
-  /** @deprecated use .Y */
-  readonly py: T;
-  /** @deprecated use .Z */
-  readonly pz: T;
-
-  /** affine x coordinate */
+  /** affine x coordinate. Different from projective X. */
   get x(): T;
-  /** affine y coordinate */
+  /** affine y coordinate. Different from projective Y. */
   get y(): T;
   assertValidity(): void;
   clearCofactor(): WeierstrassPoint<T>;
@@ -197,22 +189,22 @@ export interface WeierstrassPoint<T> extends Group<WeierstrassPoint<T>> {
   isTorsionFree(): boolean;
   multiplyUnsafe(scalar: bigint): WeierstrassPoint<T>;
   /**
-   * Massively speeds up `p.multiply(n)` by using wnaf precompute tables (caching).
-   * Table generation takes 30MB of ram and 10ms on high-end CPU, but may take
-   * much longer on slow devices.
-   * Actual generation will happen on first call of `.multiply()`.
-   * By default, BASE point is precomputed.
-   * @param windowSize - table window size
-   * @param isLazy - (default true) allows to defer generation
+   * Massively speeds up `p.multiply(n)` by using precompute tables (caching). See {@link wNAF}.
+   * @param isLazy calculate cache now. Default (true) ensures it's deferred to first `multiply()`
    */
   precompute(windowSize?: number, isLazy?: boolean): WeierstrassPoint<T>;
-
   /** Converts 3D XYZ projective point to 2D xy affine coordinates */
   toAffine(invertedZ?: T): AffinePoint<T>;
   /** Encodes point using IEEE P1363 (DER) encoding. First byte is 2/3/4. Default = isCompressed. */
   toBytes(isCompressed?: boolean): Uint8Array;
   toHex(isCompressed?: boolean): string;
 
+  /** @deprecated use .X */
+  readonly px: T;
+  /** @deprecated use .Y */
+  readonly py: T;
+  /** @deprecated use .Z */
+  readonly pz: T;
   /** @deprecated use `toBytes` */
   toRawBytes(isCompressed?: boolean): Uint8Array;
   /** @deprecated use `multiplyUnsafe` */
@@ -227,17 +219,21 @@ export interface WeierstrassPoint<T> extends Group<WeierstrassPoint<T>> {
   _setWindowSize(windowSize: number): void;
 }
 
-/** Static methods for 3D XYZ points. */
+/** Static methods for 3D XYZ projective points. */
 export interface WeierstrassPointCons<T> extends GroupConstructor<WeierstrassPoint<T>> {
-  Fp: IField<T>;
-  Fn: IField<bigint>;
   /** Does NOT validate if the point is valid. Use `.assertValidity()`. */
-  new (x: T, y: T, z: T): WeierstrassPoint<T>;
+  new (X: T, Y: T, Z: T): WeierstrassPoint<T>;
+  /** Field for basic curve math */
+  Fp: IField<T>;
+  /** Scalar field, for scalars in multiply and others */
+  Fn: IField<bigint>;
   /** Does NOT validate if the point is valid. Use `.assertValidity()`. */
   fromAffine(p: AffinePoint<T>): WeierstrassPoint<T>;
   fromBytes(encodedPoint: Uint8Array): WeierstrassPoint<T>;
   fromHex(hex: Hex): WeierstrassPoint<T>;
+  // TODO: deprecate
   fromPrivateKey(privateKey: PrivKey): WeierstrassPoint<T>;
+  /** @deprecated use `import { normalizeZ } from '@noble/curves/abstract/curve.js';` */
   normalizeZ(points: WeierstrassPoint<T>[]): WeierstrassPoint<T>[];
   /** @deprecated use `import { pippenger } from '@noble/curves/abstract/curve.js';` */
   msm(points: WeierstrassPoint<T>[], scalars: bigint[]): WeierstrassPoint<T>;
@@ -745,6 +741,7 @@ export function weierstrassN<T>(
       return this.toAffine().y;
     }
 
+    // TODO: remove
     get px(): T {
       return this.X;
     }
@@ -754,7 +751,6 @@ export function weierstrassN<T>(
     get pz(): T {
       return this.Z;
     }
-
     static normalizeZ(points: Point[]): Point[] {
       return normalizeZ(Point, points);
     }
