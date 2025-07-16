@@ -56,6 +56,7 @@ export interface CurvePoint<F, P extends CurvePoint<F, P>> extends Group<P> {
 
 /** Base interface for all elliptic curve Point constructors. */
 export interface CurvePointCons<F, P extends CurvePoint<F, P>> extends GroupConstructor<P> {
+  [Symbol.hasInstance]: (item: unknown) => boolean;
   BASE: P;
   ZERO: P;
   /** Field for basic curve math */

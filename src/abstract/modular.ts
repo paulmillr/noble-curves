@@ -7,6 +7,7 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import {
   _validateObject,
+  abytes,
   anumber,
   bitMask,
   bytesToNumberBE,
@@ -476,6 +477,7 @@ export function Field(
       }),
     toBytes: (num) => (isLE ? numberToBytesLE(num, BYTES) : numberToBytesBE(num, BYTES)),
     fromBytes: (bytes, skipValidation = true) => {
+      abytes(bytes);
       if (allowedLengths) {
         if (!allowedLengths.includes(bytes.length) || bytes.length > BYTES) {
           throw new Error(

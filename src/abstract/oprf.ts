@@ -81,7 +81,7 @@ export type OPRFOpts<F, P extends CurvePoint<F, P>, PC extends CurvePointCons<F,
   // Fn: IField<bigint>;
   hash: (msg: Bytes) => Bytes;
   hashToScalar: (msg: Uint8Array, options: htfBasicOpts) => bigint;
-  hashToGroup: ((msg: Uint8Array, options: htfBasicOpts) => P) | H2CMethod<P>;
+  hashToGroup: ((msg: Uint8Array, options: htfBasicOpts) => P) | H2CMethod<F, P>;
 };
 
 export type Keys = { secretKey: ScalarBytes; publicKey: PointBytes };

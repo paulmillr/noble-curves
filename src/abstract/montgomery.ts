@@ -36,8 +36,6 @@ export type MontgomeryECDH = {
   getPublicKey: (secretKey: Hex) => Uint8Array;
   utils: {
     randomSecretKey: () => Uint8Array;
-    /** @deprecated use `randomSecretKey` */
-    randomPrivateKey: () => Uint8Array;
   };
   GuBytes: Uint8Array;
   info: {
@@ -47,7 +45,6 @@ export type MontgomeryECDH = {
   };
   keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
 };
-export type CurveFn = MontgomeryECDH;
 
 function validateOpts(curve: CurveType) {
   _validateObject(curve, {
