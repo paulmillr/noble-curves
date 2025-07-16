@@ -171,7 +171,7 @@ export interface BLSCurvePair {
     randomPrivateKey: () => Uint8Array;
     calcPairingPrecomputes: BlsPairing['calcPairingPrecomputes'];
   };
-};
+}
 
 export type CurveFn = BLSCurvePair & {
   /** @deprecated use `longSignatures.getPublicKey` */
@@ -602,9 +602,9 @@ export function bls(CURVE: CurveType): CurveFn {
 
   const rand = CURVE.randomBytes || randomBytes;
   const randomSecretKey = (): Uint8Array => {
-      const length = getMinHashLength(Fr.ORDER);
-      return mapHashToField(rand(length), Fr.ORDER);
-    }
+    const length = getMinHashLength(Fr.ORDER);
+    return mapHashToField(rand(length), Fr.ORDER);
+  };
   const utils = {
     randomSecretKey,
     randomPrivateKey: randomSecretKey,
