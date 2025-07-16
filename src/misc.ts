@@ -6,16 +6,15 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { blake256 } from '@noble/hashes/blake1.js';
 import { blake2s } from '@noble/hashes/blake2.js';
-import { sha256, sha512 } from '@noble/hashes/sha2.js';
+import { sha512 } from '@noble/hashes/sha2.js';
 import { concatBytes, utf8ToBytes } from '@noble/hashes/utils.js';
 import {
-  twistedEdwards,
-  type CurveFn,
+  eddsa,
+  edwards,
+  type EdDSA,
   type EdwardsOpts,
   type EdwardsPoint,
 } from './abstract/edwards.ts';
-import { Field, mod } from './abstract/modular.ts';
-import { weierstrass, type CurveFn as WCurveFn } from './abstract/weierstrass.ts';
 import { bls12_381_Fr } from './bls12-381.ts';
 import { bn254_Fr } from './bn254.ts';
 
@@ -32,11 +31,7 @@ const jubjub_CURVE: EdwardsOpts = {
   Gy: BigInt('0x1d523cf1ddab1a1793132e78c866c0c33e26ba5cc220fed7cc3f870e59d292aa'),
 };
 /** Curve over scalar field of bls12-381. jubjub Fp = bls n */
-export const jubjub: CurveFn = /* @__PURE__ */ twistedEdwards({
-  ...jubjub_CURVE,
-  Fp: bls12_381_Fr,
-  hash: sha512,
-});
+export const jubjub: EdDSA = /* @__PURE__ */ eddsa(edwards(jubjub_CURVE), sha512);
 
 const babyjubjub_CURVE: EdwardsOpts = {
   p: bn254_Fr.ORDER,
@@ -48,11 +43,7 @@ const babyjubjub_CURVE: EdwardsOpts = {
   Gy: BigInt('0xc19139cb84c680a6e14116da06056174a0cfa121e6e5c2450f87d64fc000001'),
 };
 /** Curve over scalar field of bn254. babyjubjub Fp = bn254 n */
-export const babyjubjub: CurveFn = /* @__PURE__ */ twistedEdwards({
-  ...babyjubjub_CURVE,
-  Fp: bn254_Fr,
-  hash: blake256,
-});
+export const babyjubjub: EdDSA = /* @__PURE__ */ eddsa(edwards(babyjubjub_CURVE), blake256);
 
 const jubjub_gh_first_block = utf8ToBytes(
   '096b36a5804bfacef1691e173c366a47ff5ba84a44f26ddd7e8d9f79d5b42df0'
@@ -66,7 +57,7 @@ export function jubjub_groupHash(tag: Uint8Array, personalization: Uint8Array): 
   // NOTE: returns ExtendedPoint, in case it will be multiplied later
   let p = jubjub.Point.fromHex(h.digest());
   // NOTE: cannot replace with isSmallOrder, returns Point*8
-  p = p.multiply(jubjub.CURVE.h);
+  p = p.multiply(jubjub_CURVE.h);
   if (p.equals(jubjub.Point.ZERO)) throw new Error('Point has small order');
   return p;
 }
@@ -86,39 +77,3 @@ export function jubjub_findGroupHash(m: Uint8Array, personalization: Uint8Array)
   if (!hashes.length) throw new Error('findGroupHash tag overflow');
   return hashes[0];
 }
-
-// Pasta curves. See [Spec](https://o1-labs.github.io/proof-systems/specs/pasta.html).
-
-export const pasta_p: bigint = BigInt(
-  '0x40000000000000000000000000000000224698fc094cf91b992d30ed00000001'
-);
-export const pasta_q: bigint = BigInt(
-  '0x40000000000000000000000000000000224698fc0994a8dd8c46eb2100000001'
-);
-
-/**
- * @deprecated
- */
-export const pallas: WCurveFn = weierstrass({
-  a: BigInt(0),
-  b: BigInt(5),
-  Fp: Field(pasta_p),
-  n: pasta_q,
-  Gx: mod(BigInt(-1), pasta_p),
-  Gy: BigInt(2),
-  h: BigInt(1),
-  hash: sha256,
-});
-/**
- * @deprecated
- */
-export const vesta: WCurveFn = weierstrass({
-  a: BigInt(0),
-  b: BigInt(5),
-  Fp: Field(pasta_q),
-  n: pasta_p,
-  Gx: mod(BigInt(-1), pasta_q),
-  Gy: BigInt(2),
-  h: BigInt(1),
-  hash: sha256,
-});

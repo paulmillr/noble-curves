@@ -5,12 +5,15 @@
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha256, sha384, sha512 } from '@noble/hashes/sha2.js';
-import { createCurve, type CurveFnWithCreate } from './_shortw_utils.ts';
 import { createHasher, type H2CHasher } from './abstract/hash-to-curve.ts';
 import { Field } from './abstract/modular.ts';
 import {
+  ecdsa,
   mapToCurveSimpleSWU,
+  weierstrass,
+  type ECDSA,
   type WeierstrassOpts,
+  type WeierstrassPoint,
   type WeierstrassPointCons,
 } from './abstract/weierstrass.ts';
 
@@ -72,9 +75,6 @@ const p521_CURVE: WeierstrassOpts<bigint> = {
   ),
 };
 
-const Fp256 = Field(p256_CURVE.p);
-const Fp384 = Field(p384_CURVE.p);
-const Fp521 = Field(p521_CURVE.p);
 type SwuOpts = {
   A: bigint;
   B: bigint;
@@ -86,12 +86,10 @@ function createSWU(Point: WeierstrassPointCons<bigint>, opts: SwuOpts) {
 }
 
 /** NIST P256 (aka secp256r1, prime256v1) curve, ECDSA and ECDH methods. */
-export const p256: CurveFnWithCreate = createCurve(
-  { ...p256_CURVE, Fp: Fp256, lowS: false },
-  sha256
-);
+
+export const p256: ECDSA = ecdsa(weierstrass(p256_CURVE), sha256);
 /** Hashing / encoding to p256 points / field. RFC 9380 methods. */
-export const p256_hasher: H2CHasher<bigint> = /* @__PURE__ */ (() => {
+export const p256_hasher: H2CHasher<bigint, WeierstrassPoint<bigint>> = /* @__PURE__ */ (() => {
   return createHasher(
     p256.Point,
     createSWU(p256.Point, {
@@ -120,12 +118,9 @@ export const p256_hasher: H2CHasher<bigint> = /* @__PURE__ */ (() => {
 // });
 
 /** NIST P384 (aka secp384r1) curve, ECDSA and ECDH methods. */
-export const p384: CurveFnWithCreate = createCurve(
-  { ...p384_CURVE, Fp: Fp384, lowS: false },
-  sha384
-);
+export const p384: ECDSA = ecdsa(weierstrass(p384_CURVE), sha384);
 /** Hashing / encoding to p384 points / field. RFC 9380 methods. */
-export const p384_hasher: H2CHasher<bigint> = /* @__PURE__ */ (() => {
+export const p384_hasher: H2CHasher<bigint, WeierstrassPoint<bigint>> = /* @__PURE__ */ (() => {
   return createHasher(
     p384.Point,
     createSWU(p384.Point, {
@@ -153,15 +148,12 @@ export const p384_hasher: H2CHasher<bigint> = /* @__PURE__ */ (() => {
 //   hashToScalar: p384_hasher.hashToScalar,
 // });
 
-// const Fn521 = Field(p521_CURVE.n, { allowedScalarLengths: [65, 66] });
+const Fn521 = Field(p521_CURVE.n, { allowedLengths: [65, 66] });
 /** NIST P521 (aka secp521r1) curve, ECDSA and ECDH methods. */
-export const p521: CurveFnWithCreate = createCurve(
-  { ...p521_CURVE, Fp: Fp521, lowS: false, allowedPrivateKeyLengths: [130, 131, 132] },
-  sha512
-);
+export const p521: ECDSA = ecdsa(weierstrass(p521_CURVE, { Fn: Fn521 }), sha512);
 
 /** Hashing / encoding to p521 points / field. RFC 9380 methods. */
-export const p521_hasher: H2CHasher<bigint> = /* @__PURE__ */ (() => {
+export const p521_hasher: H2CHasher<bigint, WeierstrassPoint<bigint>> = /* @__PURE__ */ (() => {
   return createHasher(
     p521.Point,
     createSWU(p521.Point, {
