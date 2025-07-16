@@ -264,7 +264,7 @@ export interface IField<T> {
   // legendre?(num: T): T;
   invertBatch: (lst: T[]) => T[];
   toBytes(num: T): Uint8Array;
-  fromBytes(bytes: Uint8Array): T;
+  fromBytes(bytes: Uint8Array, skipValidation?: boolean): T;
   // If c is False, CMOV returns a, otherwise it returns b.
   cmov(a: T, b: T, c: boolean): T;
 }
@@ -475,7 +475,7 @@ export function Field(
         return sqrtP(f, n);
       }),
     toBytes: (num) => (isLE ? numberToBytesLE(num, BYTES) : numberToBytesBE(num, BYTES)),
-    fromBytes: (bytes) => {
+    fromBytes: (bytes, skipValidation = true) => {
       if (allowedLengths) {
         if (!allowedLengths.includes(bytes.length) || bytes.length > BYTES) {
           throw new Error(
@@ -491,6 +491,8 @@ export function Field(
         throw new Error('Field.fromBytes: expected ' + BYTES + ' bytes, got ' + bytes.length);
       let scalar = isLE ? bytesToNumberLE(bytes) : bytesToNumberBE(bytes);
       if (modOnDecode) scalar = mod(scalar, ORDER);
+      if (!skipValidation)
+        if (!f.isValid(scalar)) throw new Error('invalid field element: outside of range 0..ORDER');
       // NOTE: we don't validate scalar here, please use isValid. This done such way because some
       // protocol may allow non-reduced scalar that reduced later or changed some other way.
       return scalar;

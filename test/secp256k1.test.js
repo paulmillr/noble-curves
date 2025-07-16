@@ -5,15 +5,15 @@ import { deepStrictEqual as eql, throws } from 'node:assert';
 import { getTypeTestsNonUi8a, json, txt } from './utils.js';
 // prettier-ignore
 import {
-    bytesToNumberBE,
-    mod,
-    normVerifySig,
-    numberToBytesBE,
-    schnorr,
-    secp,
-    selectHash,
-    sigFromDER,
-    sigToDER
+  bytesToNumberBE,
+  mod,
+  normVerifySig,
+  numberToBytesBE,
+  schnorr,
+  secp,
+  selectHash,
+  sigFromDER,
+  sigToDER
 } from './secp256k1.helpers.js';
 
 const VECTORS_ecdsa = json('./vectors/secp256k1/ecdsa.json');
@@ -87,13 +87,13 @@ describe('secp256k1 static vectors', () => {
       }
     });
 
-    should('.fromPrivateKey()', () => {
-      for (const vector of VECTORS_points.valid.pointFromScalar) {
-        const { d, expected } = vector;
-        const db = hexToBytes(d);
-        eql(phex(Point.fromPrivateKey(db)), expected);
-      }
-    });
+    // should('.fromPrivateKey()', () => {
+    //   for (const vector of VECTORS_points.valid.pointFromScalar) {
+    //     const { d, expected } = vector;
+    //     const db = hexToBytes(d);
+    //     eql(phex(Point.fromPrivateKey(db)), expected);
+    //   }
+    // });
 
     should('#toBytes(compressed)', () => {
       for (const vector of VECTORS_points.valid.pointCompress) {

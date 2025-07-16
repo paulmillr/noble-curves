@@ -18,6 +18,7 @@ import {
 } from './abstract/hash-to-curve.ts';
 import { Field, mapHashToField, mod, pow2 } from './abstract/modular.ts';
 import {
+  _normFnElement,
   type EndomorphismOpts,
   mapToCurveSimpleSWU,
   type WeierstrassPoint as PointType,
@@ -132,8 +133,9 @@ const hasEven = (y: bigint) => y % _2n === _0n;
 
 // Calculate point, scalar and bytes
 function schnorrGetExtPubKey(priv: PrivKey) {
-  let d_ = secp256k1.utils.normPrivateKeyToScalar(priv); // same method executed in fromPrivateKey
-  let p = Point.fromPrivateKey(d_); // P = d'⋅G; 0 < d' < n check is done inside
+  // TODO: replace with Point.Fn.fromBytes(priv)
+  let d_ = _normFnElement(Point.Fn, priv);
+  let p = Point.BASE.multiply(d_); // P = d'⋅G; 0 < d' < n check is done inside
   const scalar = hasEven(p.y) ? d_ : modN(-d_);
   return { scalar, bytes: pointToBytes(p) };
 }
@@ -222,13 +224,17 @@ export type SecpSchnorr = {
   Point: WeierstrassPointCons<bigint>;
   utils: {
     randomSecretKey: (seed?: Uint8Array) => Uint8Array;
+    pointToBytes: (point: PointType<bigint>) => Uint8Array;
+    lift_x: typeof lift_x;
+    taggedHash: typeof taggedHash;
+
     /** @deprecated use `randomSecretKey` */
     randomPrivateKey: (seed?: Uint8Array) => Uint8Array;
-    lift_x: typeof lift_x;
-    pointToBytes: (point: PointType<bigint>) => Uint8Array;
+    /** @deprecated use `utils` */
     numberToBytesBE: typeof numberToBytesBE;
+    /** @deprecated use `utils` */
     bytesToNumberBE: typeof bytesToNumberBE;
-    taggedHash: typeof taggedHash;
+    /** @deprecated use `modular` */
     mod: typeof mod;
   };
   info: { type: 'weierstrass'; publicKeyHasPrefix: false; lengths: CurveInfo['lengths'] };

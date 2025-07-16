@@ -211,7 +211,7 @@ export interface WeierstrassPoint<T> extends CurvePoint<T, WeierstrassPoint<T>> 
 export interface WeierstrassPointCons<T> extends CurvePointCons<T, WeierstrassPoint<T>> {
   /** Does NOT validate if the point is valid. Use `.assertValidity()`. */
   new (X: T, Y: T, Z: T): WeierstrassPoint<T>;
-  // TODO: deprecate
+  /** @deprecated use `Point.BASE.multiply(Point.Fn.fromBytes(privateKey))` */
   fromPrivateKey(privateKey: PrivKey): WeierstrassPoint<T>;
   /** @deprecated use `import { normalizeZ } from '@noble/curves/abstract/curve.js';` */
   normalizeZ(points: WeierstrassPoint<T>[]): WeierstrassPoint<T>[];
@@ -239,12 +239,13 @@ export type CurvePointsTypeWithLength<T> = Readonly<CurvePointsType<T> & Partial
 
 // LegacyWeierstrass
 export type CurvePointsRes<T> = {
+  Point: WeierstrassPointCons<T>;
+
   /** @deprecated import individual CURVE params */
   CURVE: CurvePointsType<T>;
-  Point: WeierstrassPointCons<T>;
   /** @deprecated use `Point` */
   ProjectivePoint: WeierstrassPointCons<T>;
-  /** @deprecated */
+  /** @deprecated use `Point.Fn.fromBytes(privateKey)` */
   normPrivateKeyToScalar: (key: PrivKey) => bigint;
   /** @deprecated */
   weierstrassEquation: (x: T) => T;
@@ -322,7 +323,7 @@ export interface ECDSA {
   Signature: ECDSASignatureCons;
   utils: {
     isValidSecretKey: (secretKey: PrivKey) => boolean;
-    isValidPublicKey: (publicKey: Uint8Array) => boolean;
+    isValidPublicKey: (publicKey: Uint8Array, isCompressed?: boolean) => boolean;
     randomSecretKey: (seed?: Uint8Array) => Uint8Array;
 
     /** @deprecated use `randomSecretKey` */
@@ -471,7 +472,7 @@ export function _legacyHelperEquat<T>(Fp: IField<T>, a: T, b: T): (x: T) => T {
   }
   return weierstrassEquation;
 }
-export function normFnElement(Fn: IField<bigint>, key: PrivKey): bigint {
+export function _normFnElement(Fn: IField<bigint>, key: PrivKey): bigint {
   const { BYTES: expected } = Fn;
   let num: bigint;
   if (typeof key === 'bigint') {
@@ -734,7 +735,7 @@ export function weierstrassN<T>(
 
     /** Multiplies generator point by privateKey. */
     static fromPrivateKey(privateKey: PrivKey) {
-      return Point.BASE.multiply(normFnElement(Fn, privateKey));
+      return Point.BASE.multiply(_normFnElement(Fn, privateKey));
     }
 
     // TODO: remove
@@ -1383,7 +1384,7 @@ export function ecdsa(
 
   function isValidSecretKey(privateKey: PrivKey) {
     try {
-      return !!normFnElement(Fn, privateKey);
+      return !!_normFnElement(Fn, privateKey);
     } catch (error) {
       return false;
     }
@@ -1414,7 +1415,7 @@ export function ecdsa(
     // TODO: remove
     isValidPrivateKey: isValidSecretKey,
     randomPrivateKey: randomSecretKey,
-    normPrivateKeyToScalar: (key: PrivKey) => normFnElement(Fn, key),
+    normPrivateKeyToScalar: (key: PrivKey) => _normFnElement(Fn, key),
     precompute(windowSize = 8, point = Point.BASE): WeierstrassPoint<bigint> {
       return point.precompute(windowSize, false);
     },
@@ -1426,7 +1427,7 @@ export function ecdsa(
    * @returns Public key, full when isCompressed=false; short when isCompressed=true
    */
   function getPublicKey(secretKey: PrivKey, isCompressed = true): Uint8Array {
-    return Point.fromPrivateKey(secretKey).toBytes(isCompressed);
+    return Point.BASE.multiply(_normFnElement(Fn, secretKey)).toBytes(isCompressed);
   }
 
   /**
@@ -1453,7 +1454,7 @@ export function ecdsa(
   function getSharedSecret(secretKeyA: PrivKey, publicKeyB: Hex, isCompressed = true): Uint8Array {
     if (isProbPub(secretKeyA) === true) throw new Error('first arg must be private key');
     if (isProbPub(publicKeyB) === false) throw new Error('second arg must be public key');
-    const s = normFnElement(Fn, secretKeyA);
+    const s = _normFnElement(Fn, secretKeyA);
     const b = Point.fromHex(publicKeyB); // checks for being on-curve
     return b.multiply(s).toBytes(isCompressed);
   }
@@ -1507,7 +1508,7 @@ export function ecdsa(
     // with fnBits % 8 !== 0. Because of that, we unwrap it here as int2octets call.
     // const bits2octets = (bits) => int2octets(bits2int_modN(bits))
     const h1int = bits2int_modN(msgHash);
-    const d = normFnElement(Fn, privateKey); // validate secret key, convert to bigint
+    const d = _normFnElement(Fn, privateKey); // validate secret key, convert to bigint
     const seedArgs = [int2octets(d), int2octets(h1int)];
     // extraEntropy. RFC6979 3.6: additional k' (optional).
     if (ent != null && ent !== false) {
@@ -1753,7 +1754,7 @@ function _weierstrass_new_output_to_legacy<T>(
       CURVE: c,
       Point: Point,
       ProjectivePoint: Point,
-      normPrivateKeyToScalar: (key: PrivKey) => normFnElement(Fn, key),
+      normPrivateKeyToScalar: (key: PrivKey) => _normFnElement(Fn, key),
       weierstrassEquation,
       isWithinCurveOrder,
     }

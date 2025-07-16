@@ -427,7 +427,9 @@ export function createORPF<
   function verifyProof(ctx: Bytes, B: P, C: P[], D: P[], proof: Bytes) {
     abytes(proof, 2 * Fn.BYTES);
     const { M, Z } = computeComposites(B, C, D, ctx);
-    const [c, s] = [proof.subarray(0, Fn.BYTES), proof.subarray(Fn.BYTES)].map(Fn.fromBytes);
+    const [c, s] = [proof.subarray(0, Fn.BYTES), proof.subarray(Fn.BYTES)].map((f) =>
+      Fn.fromBytes(f)
+    );
     const t2 = Point.BASE.multiply(s).add(B.multiply(c)); // s*G + c*B
     const t3 = M.multiply(s).add(Z.multiply(c)); // s*M + c*Z
     const expectedC = challengeTranscript(B, M, Z, t2, t3, ctx);

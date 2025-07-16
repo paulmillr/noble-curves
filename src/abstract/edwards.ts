@@ -162,8 +162,9 @@ export interface EdDSA {
   Point: EdwardsPointCons;
   utils: {
     randomSecretKey: (seed?: Uint8Array) => Uint8Array;
-    /** @deprecated use `randomSecretKey` */
-    randomPrivateKey: (seed?: Uint8Array) => Uint8Array;
+    isValidSecretKey: (secretKey: Uint8Array) => boolean;
+    isValidPublicKey: (publicKey: Uint8Array, zip215?: boolean) => boolean;
+
     /**
      * Converts ed public key to x public key.
      * @example
@@ -191,6 +192,9 @@ export interface EdDSA {
       point: EdwardsPoint;
       pointBytes: Uint8Array;
     };
+
+    /** @deprecated use `randomSecretKey` */
+    randomPrivateKey: (seed?: Uint8Array) => Uint8Array;
     /** @deprecated use `point.precompute()` */
     precompute: (windowSize?: number, point?: EdwardsPoint) => EdwardsPoint;
   };
@@ -522,9 +526,6 @@ export function edwards(CURVE: EdwardsOpts, curveOpts: EdwardsExtraOpts = {}): E
       if (isLastByteOdd !== isXOdd) x = modP(-x); // if x_0 != x mod 2, set x = p-x
       return Point.fromAffine({ x, y });
     }
-    static fromPrivateScalar(scalar: bigint): Point {
-      return Point.BASE.multiply(scalar);
-    }
     toBytes(): Uint8Array {
       const { x, y } = this.toAffine();
       const bytes = numberToBytesLE(y, Fp.BYTES); // each y has 2 x values (x, -y)
@@ -799,6 +800,10 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
     getExtendedPublicKey,
     /** ed25519 priv keys are uniform 32b. No need to check for modulo bias, like in secp256k1. */
     randomSecretKey,
+
+    isValidSecretKey,
+    isValidPublicKey,
+
     randomPrivateKey: randomSecretKey,
 
     /**
@@ -843,6 +848,22 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
   function keygen(seed?: Uint8Array) {
     const secretKey = utils.randomSecretKey(seed);
     return { secretKey, publicKey: getPublicKey(secretKey) };
+  }
+
+  function isValidSecretKey(key: Uint8Array): boolean {
+    try {
+      return !!Fn.fromBytes(key, false);
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function isValidPublicKey(key: Uint8Array, zip215?: boolean): boolean {
+    try {
+      return !!Point.fromBytes(key, zip215);
+    } catch (error) {
+      return false;
+    }
   }
 
   return Object.freeze({

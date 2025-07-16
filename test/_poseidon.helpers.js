@@ -14,7 +14,7 @@ export const Fp251 = Fp(
 ); // 2^251 + 17 * 2^192 + 1
 
 function poseidonRoundConstant(Fp, name, idx) {
-  const val = Fp.fromBytes(sha256(utf8ToBytes(`${name}${idx}`)));
+  const val = Fp.fromBytes(sha256(utf8ToBytes(`${name}${idx}`)), true);
   return Fp.create(val);
 }
 

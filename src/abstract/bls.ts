@@ -37,6 +37,7 @@ import {
 import { getMinHashLength, mapHashToField, type IField } from './modular.ts';
 import type { Fp12, Fp12Bls, Fp2, Fp2Bls, Fp6Bls } from './tower.ts';
 import {
+  _normFnElement,
   weierstrassPoints,
   type CurvePointsRes,
   type CurvePointsType,
@@ -455,13 +456,19 @@ function createBlsSig<P, S>(
   return {
     // P = pk x G
     getPublicKey(secretKey: PrivKey): PubPoint {
-      return PubCurve.Point.fromPrivateKey(secretKey);
+      // TODO: replace with
+      // const sec = PubCurve.Point.Fn.fromBytes(secretKey);
+      const sec = _normFnElement(PubCurve.Point.Fn, secretKey);
+      return PubCurve.Point.BASE.multiply(sec);
     },
     // S = pk x H(m)
     sign(message: SigPoint, secretKey: PrivKey, unusedArg?: any): SigPoint {
       if (unusedArg != null) throw new Error('sign() expects 2 arguments');
+      // TODO: replace with
+      // PubCurve.Point.Fn.fromBytes(secretKey)
+      const sec = _normFnElement(PubCurve.Point.Fn, secretKey);
       amsg(message).assertValidity();
-      return message.multiply(PubCurve.normPrivateKeyToScalar(secretKey));
+      return message.multiply(sec);
     },
     // Checks if pairing of public key & hash is equal to pairing of generator & signature.
     // e(P, H(m)) == e(G, S)
