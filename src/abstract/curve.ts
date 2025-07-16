@@ -93,7 +93,7 @@ export type ExtendedGroupConstructor<T> = GroupConstructor<T> & {
 };
 export type Mapper<T> = (i: T[]) => T[];
 
-export function negateCt<T extends Group<T>>(condition: boolean, item: T): T {
+export function negateCt<T extends { negate: () => T }>(condition: boolean, item: T): T {
   const neg = item.negate();
   return condition ? neg : item;
 }
@@ -215,12 +215,14 @@ function assert0(n: bigint): void {
 export class wNAF<F, P extends CurvePoint<F, P>> {
   private readonly BASE: P;
   private readonly ZERO: P;
+  private readonly Fn: CurvePointCons<F, P>['Fn'];
   readonly bits: number;
 
   // Parametrized with a given Point class (not individual point)
-  constructor(Point: GroupConstructor<P>, bits: number) {
+  constructor(Point: CurvePointCons<F, P>, bits: number) {
     this.BASE = Point.BASE;
     this.ZERO = Point.ZERO;
+    this.Fn = Point.Fn;
     this.bits = bits;
   }
 
@@ -267,14 +269,13 @@ export class wNAF<F, P extends CurvePoint<F, P>> {
 
   /**
    * Implements ec multiplication using precomputed tables and w-ary non-adjacent form.
+   * More compact implementation:
+   * https://github.com/paulmillr/noble-secp256k1/blob/47cb1669b6e506ad66b35fe7d76132ae97465da2/index.ts#L502-L541
    * @returns real and fake (for const-time) points
    */
   private wNAF(W: number, precomputes: P[], n: bigint): { p: P; f: P } {
-    // Smaller version:
-    // https://github.com/paulmillr/noble-secp256k1/blob/47cb1669b6e506ad66b35fe7d76132ae97465da2/index.ts#L502-L541
-    // TODO: check the scalar is less than group order?
-    // The behavior is undefined otherwise. But have to carefully remove
-    // other checks before. ORDER == bits here.
+    // Scalar should be smaller than field order
+    if (!this.Fn.isValid(n)) throw new Error('invalid scalar');
     // Accumulators
     let p = this.ZERO;
     let f = this.BASE;
@@ -372,14 +373,14 @@ export class wNAF<F, P extends CurvePoint<F, P>> {
  * Cost: 128 dbl, 0-256 adds.
  */
 export function mulEndoUnsafe<T extends Group<T>>(
-  c: GroupConstructor<T>,
+  Point: GroupConstructor<T>,
   point: T,
   k1: bigint,
   k2: bigint
 ): { p1: T; p2: T } {
   let acc = point;
-  let p1 = c.ZERO;
-  let p2 = c.ZERO;
+  let p1 = Point.ZERO;
+  let p2 = Point.ZERO;
   while (k1 > _0n || k2 > _0n) {
     if (k1 & _1n) p1 = p1.add(acc);
     if (k2 & _1n) p2 = p2.add(acc);
