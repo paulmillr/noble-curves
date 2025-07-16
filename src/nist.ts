@@ -86,8 +86,6 @@ export const p256: CurveFnWithCreate = createCurve(
   { ...p256_CURVE, Fp: Fp256, lowS: false },
   sha256
 );
-/** Alias to p256. */
-export const secp256r1: CurveFnWithCreate = p256;
 /** Hashing / encoding to p256 points / field. RFC 9380 methods. */
 export const p256_hasher: H2CHasher<bigint> = /* @__PURE__ */ (() => {
   return createHasher(
@@ -122,8 +120,6 @@ export const p384: CurveFnWithCreate = createCurve(
   { ...p384_CURVE, Fp: Fp384, lowS: false },
   sha384
 );
-/** Alias to p384. */
-export const secp384r1: CurveFnWithCreate = p384;
 /** Hashing / encoding to p384 points / field. RFC 9380 methods. */
 export const p384_hasher: H2CHasher<bigint> = /* @__PURE__ */ (() => {
   return createHasher(
@@ -158,8 +154,6 @@ export const p521: CurveFnWithCreate = createCurve(
   { ...p521_CURVE, Fp: Fp521, lowS: false, allowedPrivateKeyLengths: [130, 131, 132] },
   sha512
 );
-/** Alias to p521. */
-export const secp521r1: CurveFnWithCreate = p521;
 /** Hashing / encoding to p521 points / field. RFC 9380 methods. */
 export const p521_hasher: H2CHasher<bigint> = /* @__PURE__ */ (() => {
   return createHasher(
