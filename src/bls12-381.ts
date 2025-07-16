@@ -88,9 +88,9 @@ import {
   bytesToNumberBE,
   concatBytes,
   ensureBytes,
+  hexToBytes,
   numberToBytesBE,
   randomBytes,
-  type Hex,
 } from './utils.ts';
 // Types
 import { isogenyMap } from './abstract/hash-to-curve.ts';
@@ -357,7 +357,7 @@ function pointG1FromBytes(bytes: Uint8Array): AffinePoint<Fp> {
   }
 }
 
-function signatureG1FromBytes(hex: Hex): WeierstrassPoint<Fp> {
+function signatureG1FromBytes(hex: Uint8Array): WeierstrassPoint<Fp> {
   const { infinity, sort, value } = parseMask(ensureBytes('signatureHex', hex, 48));
   const P = Fp.ORDER;
   const Point = bls12_381.G1.Point;
@@ -463,7 +463,7 @@ function pointG2FromBytes(bytes: Uint8Array): AffinePoint<Fp2> {
   }
 }
 
-function signatureG2FromBytes(hex: Hex) {
+function signatureG2FromBytes(hex: Uint8Array) {
   const { ORDER: P } = Fp;
   // TODO: Optimize, it's very slow because of sqrt.
   const { infinity, sort, value } = parseMask(ensureBytes('signatureHex', hex));
@@ -501,8 +501,8 @@ const signatureCoders = {
       abytes(bytes);
       return signatureG1FromBytes(bytes);
     },
-    fromHex(hex: Hex): WeierstrassPoint<Fp> {
-      return signatureG1FromBytes(hex);
+    fromHex(hex: string): WeierstrassPoint<Fp> {
+      return signatureG1FromBytes(hexToBytes(hex));
     },
     toBytes(point: WeierstrassPoint<Fp>) {
       return signatureG1ToBytes(point);
@@ -519,8 +519,8 @@ const signatureCoders = {
       abytes(bytes);
       return signatureG2FromBytes(bytes);
     },
-    fromHex(hex: Hex): WeierstrassPoint<Fp2> {
-      return signatureG2FromBytes(hex);
+    fromHex(hex: string): WeierstrassPoint<Fp2> {
+      return signatureG2FromBytes(hexToBytes(hex));
     },
     toBytes(point: WeierstrassPoint<Fp2>) {
       return signatureG2ToBytes(point);

@@ -12,7 +12,6 @@ import {
   bitMask,
   bytesToNumberBE,
   bytesToNumberLE,
-  ensureBytes,
   numberToBytesBE,
   numberToBytesLE,
 } from '../utils.ts';
@@ -532,28 +531,6 @@ export function FpSqrtEven<T>(Fp: IField<T>, elm: T): T {
   if (!Fp.isOdd) throw new Error("Field doesn't have isOdd");
   const root = Fp.sqrt(elm);
   return Fp.isOdd(root) ? Fp.neg(root) : root;
-}
-
-/**
- * "Constant-time" private key generation utility.
- * Same as mapKeyToField, but accepts less bytes (40 instead of 48 for 32-byte field).
- * Which makes it slightly more biased, less secure.
- * @deprecated use `mapKeyToField` instead
- */
-export function hashToPrivateScalar(
-  hash: string | Uint8Array,
-  groupOrder: bigint,
-  isLE = false
-): bigint {
-  hash = ensureBytes('privateHash', hash);
-  const hashLen = hash.length;
-  const minLen = nLength(groupOrder).nByteLength + 8;
-  if (minLen < 24 || hashLen < minLen || hashLen > 1024)
-    throw new Error(
-      'hashToPrivateScalar: expected ' + minLen + '-1024 bytes of input, got ' + hashLen
-    );
-  const num = isLE ? bytesToNumberLE(hash) : bytesToNumberBE(hash);
-  return mod(num, groupOrder - _1n) + _1n;
 }
 
 /**

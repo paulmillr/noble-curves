@@ -77,18 +77,12 @@ export function numberToVarBytesBE(n: number | bigint): Uint8Array {
  * @param expectedLength optional, will compare to result array's length
  * @returns
  */
-export function ensureBytes(title: string, hex: Hex, expectedLength?: number): Uint8Array {
+export function ensureBytes(title: string, bytes: Uint8Array, expectedLength?: number): Uint8Array {
   let res: Uint8Array;
-  if (typeof hex === 'string') {
-    try {
-      res = hexToBytes_(hex);
-    } catch (e) {
-      throw new Error(title + ' must be hex string or Uint8Array, cause: ' + e);
-    }
-  } else if (isBytes_(hex)) {
+  if (isBytes_(bytes)) {
     // Uint8Array.from() instead of hash.slice() because node.js Buffer
     // is instance of Uint8Array, and its slice() creates **mutable** copy
-    res = Uint8Array.from(hex);
+    res = Uint8Array.from(bytes);
   } else {
     throw new Error(title + ' must be hex string or Uint8Array');
   }

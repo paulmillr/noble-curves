@@ -11,6 +11,7 @@ import { shake256 } from '@noble/hashes/sha3.js';
 import {
   abytes,
   concatBytes,
+  hexToBytes,
   utf8ToBytes,
   createHasher as wrapConstructor,
 } from '@noble/hashes/utils.js';
@@ -34,7 +35,7 @@ import {
 } from './abstract/hash-to-curve.ts';
 import { Field, FpInvertBatch, isNegativeLE, mod, pow2, type IField } from './abstract/modular.ts';
 import { montgomery, type MontgomeryECDH } from './abstract/montgomery.ts';
-import { bytesToNumberLE, ensureBytes, equalBytes, numberToBytesLE, type Hex } from './utils.ts';
+import { bytesToNumberLE, equalBytes, numberToBytesLE } from './utils.ts';
 
 // edwards448 curve
 // a = 1n
@@ -428,8 +429,8 @@ class _DecafPoint extends PrimeEdwardsPoint<_DecafPoint> {
    * Described in [RFC9496](https://www.rfc-editor.org/rfc/rfc9496#name-decode-2).
    * @param hex Decaf-encoded 56 bytes. Not every 56-byte string is valid decaf encoding
    */
-  static fromHex(hex: Hex): _DecafPoint {
-    return _DecafPoint.fromBytes(ensureBytes('decafHex', hex, 56));
+  static fromHex(hex: string): _DecafPoint {
+    return _DecafPoint.fromBytes(hexToBytes(hex));
   }
 
   /**

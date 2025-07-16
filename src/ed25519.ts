@@ -7,7 +7,7 @@
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha512 } from '@noble/hashes/sha2.js';
-import { abytes, concatBytes, utf8ToBytes } from '@noble/hashes/utils.js';
+import { abytes, concatBytes, hexToBytes, utf8ToBytes } from '@noble/hashes/utils.js';
 import { pippenger, type AffinePoint } from './abstract/curve.ts';
 import {
   eddsa,
@@ -34,7 +34,7 @@ import {
   type IField,
 } from './abstract/modular.ts';
 import { montgomery, type MontgomeryECDH } from './abstract/montgomery.ts';
-import { bytesToNumberLE, ensureBytes, equalBytes, numberToBytesLE, type Hex } from './utils.ts';
+import { bytesToNumberLE, equalBytes, numberToBytesLE } from './utils.ts';
 
 // prettier-ignore
 const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3);
@@ -396,8 +396,8 @@ class _RistrettoPoint extends PrimeEdwardsPoint<_RistrettoPoint> {
    * Described in [RFC9496](https://www.rfc-editor.org/rfc/rfc9496#name-decode).
    * @param hex Ristretto-encoded 32 bytes. Not every 32-byte string is valid ristretto encoding
    */
-  static fromHex(hex: Hex): _RistrettoPoint {
-    return _RistrettoPoint.fromBytes(ensureBytes('ristrettoHex', hex, 32));
+  static fromHex(hex: string): _RistrettoPoint {
+    return _RistrettoPoint.fromBytes(hexToBytes(hex));
   }
 
   static msm(points: _RistrettoPoint[], scalars: bigint[]): _RistrettoPoint {

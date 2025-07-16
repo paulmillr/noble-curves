@@ -37,14 +37,14 @@ export type TwistType = 'multiplicative' | 'divisive';
 
 export type ShortSignatureCoder<Fp> = {
   fromBytes(bytes: Uint8Array): WeierstrassPoint<Fp>;
-  fromHex(hex: Hex): WeierstrassPoint<Fp>;
+  fromHex(hex: string): WeierstrassPoint<Fp>;
   toBytes(point: WeierstrassPoint<Fp>): Uint8Array;
   toHex(point: WeierstrassPoint<Fp>): string;
 };
 
 export type LongSignatureCoder<Fp> = {
   fromBytes(bytes: Uint8Array): WeierstrassPoint<Fp>;
-  fromHex(hex: Hex): WeierstrassPoint<Fp>;
+  fromHex(hex: string): WeierstrassPoint<Fp>;
   toBytes(point: WeierstrassPoint<Fp>): Uint8Array;
   toHex(point: WeierstrassPoint<Fp>): string;
 };

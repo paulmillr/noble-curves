@@ -4,8 +4,8 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { bitLen, bitMask, validateObject, type Hex } from '../utils.ts';
-import { Field, FpInvertBatch, nLength, validateField, type IField } from './modular.ts';
+import { bitLen, bitMask } from '../utils.ts';
+import { Field, FpInvertBatch, validateField, type IField } from './modular.ts';
 
 const _0n = BigInt(0);
 const _1n = BigInt(1);
@@ -66,7 +66,7 @@ export interface CurvePointCons<F, P extends CurvePoint<F, P>> extends GroupCons
   /** Creates point from x, y. Does NOT validate if the point is valid. Use `.assertValidity()`. */
   fromAffine(p: AffinePoint<F>): P;
   fromBytes(bytes: Uint8Array): P;
-  fromHex(hex: Hex): P;
+  fromHex(hex: string): P;
 }
 
 // Type inference helpers
@@ -89,12 +89,6 @@ export interface CurveInfo {
 export type GroupConstructor<T> = {
   BASE: T;
   ZERO: T;
-};
-/** @deprecated */
-export type ExtendedGroupConstructor<T> = GroupConstructor<T> & {
-  Fp: IField<any>;
-  Fn: IField<bigint>;
-  fromAffine(ap: AffinePoint<any>): T;
 };
 export type Mapper<T> = (i: T[]) => T[];
 
@@ -550,41 +544,6 @@ export type BasicCurve<T> = {
   Gy: T; // base point Y coordinate
   allowInfinityPoint?: boolean; // bls12-381 requires it. ZERO point is valid, but invalid pubkey
 };
-
-// TODO: remove
-/** @deprecated */
-export function validateBasic<FP, T>(
-  curve: BasicCurve<FP> & T
-): Readonly<
-  {
-    readonly nBitLength: number;
-    readonly nByteLength: number;
-  } & BasicCurve<FP> &
-    T & {
-      p: bigint;
-    }
-> {
-  validateField(curve.Fp);
-  validateObject(
-    curve,
-    {
-      n: 'bigint',
-      h: 'bigint',
-      Gx: 'field',
-      Gy: 'field',
-    },
-    {
-      nBitLength: 'isSafeInteger',
-      nByteLength: 'isSafeInteger',
-    }
-  );
-  // Set defaults
-  return Object.freeze({
-    ...nLength(curve.n, curve.nBitLength),
-    ...curve,
-    ...{ p: curve.Fp.ORDER },
-  } as const);
-}
 
 export type ValidCurveParams<T> = {
   a: T;

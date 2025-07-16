@@ -45,7 +45,6 @@ import {
   numberToHexUnpadded,
   randomBytes,
   type CHash,
-  type Hex,
 } from '../utils.ts';
 import {
   _createCurveFields,
@@ -131,10 +130,10 @@ export function _splitEndoScalar(k: bigint, basis: EndoBasis, n: bigint): Scalar
 }
 
 export type ECDSASigFormat = 'compact' | 'der';
-export type Entropy = Hex | boolean;
+export type Entropy = Uint8Array | boolean;
 export type SignOpts = Partial<{
   lowS: boolean;
-  extraEntropy: Entropy;
+  extraEntropy: Uint8Array | boolean;
   prehash: boolean;
   format: ECDSASigFormat | 'js';
 }>;
@@ -346,7 +345,7 @@ export const DER: IDER = {
       return bytesToNumberBE(data);
     },
   },
-  toSig(hex: string | Uint8Array): { r: bigint; s: bigint } {
+  toSig(hex: Uint8Array): { r: bigint; s: bigint } {
     // parse DER signature
     const { Err: E, _int: int, _tlv: tlv } = DER;
     const data = ensureBytes('signature', hex);
@@ -1129,7 +1128,7 @@ export function ecdsa(
       const radj = rec === 2 || rec === 3 ? r + CURVE_ORDER : r;
       if (!Fp.isValid(radj)) throw new Error('recovery id 2 or 3 invalid');
       const x = Fp.toBytes(radj);
-      const R = Point.fromHex(concatBytes(pprefix((rec & 1) === 0), x));
+      const R = Point.fromBytes(concatBytes(pprefix((rec & 1) === 0), x));
       const ir = Fn.inv(radj); // r^-1
       const h = bits2int_modN(ensureBytes('msgHash', msgHash)); // Truncate hash
       const u1 = Fn.create(-h * ir); // -hr^-1
@@ -1229,7 +1228,7 @@ export function ecdsa(
     if (isProbPub(secretKeyA) === true) throw new Error('first arg must be private key');
     if (isProbPub(publicKeyB) === false) throw new Error('second arg must be public key');
     const s = Fn.fromBytes(secretKeyA);
-    const b = Point.fromHex(publicKeyB); // checks for being on-curve
+    const b = Point.fromBytes(publicKeyB); // checks for being on-curve
     return b.multiply(s).toBytes(isCompressed);
   }
 
@@ -1389,7 +1388,7 @@ export function ecdsa(
 
     if (!_sig) return false;
     try {
-      P = Point.fromHex(publicKey);
+      P = Point.fromBytes(publicKey);
       if (lowS && _sig.hasHighS()) return false;
       // todo: optional.hash => hash
       if (prehash) msgHash = hash(msgHash);

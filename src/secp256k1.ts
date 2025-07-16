@@ -22,7 +22,6 @@ import {
   type WeierstrassPoint,
   type WeierstrassPointCons,
 } from './abstract/weierstrass.ts';
-import type { Hex } from './utils.ts';
 import {
   aInRange,
   bytesToNumberBE,
@@ -193,7 +192,7 @@ function schnorrSign(
  * Verifies Schnorr signature.
  * Will swallow errors & return false except for initial type validation of arguments.
  */
-function schnorrVerify(signature: Hex, message: Hex, publicKey: Hex): boolean {
+function schnorrVerify(signature: Uint8Array, message: Uint8Array, publicKey: Uint8Array): boolean {
   const sig = ensureBytes('signature', signature, 64);
   const m = ensureBytes('message', message);
   const pub = ensureBytes('publicKey', publicKey, 32);

@@ -14,7 +14,9 @@ import {
   bytesToNumberLE,
   concatBytes,
   ensureBytes,
+  hexToBytes,
   memoized,
+  notImplemented,
   numberToBytesLE,
   randomBytes,
   type FHash,
@@ -52,7 +54,7 @@ export interface EdwardsPoint extends CurvePoint<bigint, EdwardsPoint> {
 export interface EdwardsPointCons extends CurvePointCons<bigint, EdwardsPoint> {
   new (X: bigint, Y: bigint, Z: bigint, T: bigint): EdwardsPoint;
   fromBytes(bytes: Uint8Array, zip215?: boolean): EdwardsPoint;
-  fromHex(hex: Hex, zip215?: boolean): EdwardsPoint;
+  fromHex(hex: string, zip215?: boolean): EdwardsPoint;
 }
 
 /**
@@ -114,13 +116,17 @@ export type EdDSAOpts = Partial<{
  */
 export interface EdDSA {
   keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
-  getPublicKey: (secretKey: Hex) => Uint8Array;
-  sign: (message: Hex, secretKey: Hex, options?: { context?: Hex }) => Uint8Array;
+  getPublicKey: (secretKey: Uint8Array) => Uint8Array;
+  sign: (
+    message: Uint8Array,
+    secretKey: Uint8Array,
+    options?: { context?: Uint8Array }
+  ) => Uint8Array;
   verify: (
-    sig: Hex,
-    message: Hex,
-    publicKey: Hex,
-    options?: { context?: Hex; zip215: boolean }
+    sig: Uint8Array,
+    message: Uint8Array,
+    publicKey: Uint8Array,
+    options?: { context?: Uint8Array; zip215: boolean }
   ) => boolean;
   Point: EdwardsPointCons;
   utils: {
@@ -148,7 +154,7 @@ export interface EdDSA {
      * ```
      */
     toMontgomeryPriv: (privateKey: Uint8Array) => Uint8Array;
-    getExtendedPublicKey: (key: Hex) => {
+    getExtendedPublicKey: (key: Uint8Array) => {
       head: Uint8Array;
       prefix: Uint8Array;
       scalar: bigint;
@@ -410,18 +416,12 @@ export function edwards(CURVE: EdwardsOpts, curveOpts: EdwardsExtraOpts = {}): E
 
     static fromBytes(bytes: Uint8Array, zip215 = false): Point {
       abytes(bytes);
-      return Point.fromHex(bytes, zip215);
-    }
-
-    // Converts hash string or Uint8Array to Point.
-    // Uses algo from RFC8032 5.1.3.
-    static fromHex(hex: Hex, zip215 = false): Point {
       const { d, a } = CURVE;
       const len = Fp.BYTES;
-      hex = ensureBytes('pointHex', hex, len); // copy hex to a new array
+      bytes = ensureBytes('pointHex', bytes, len); // copy hex to a new array
       abool('zip215', zip215);
-      const normed = hex.slice(); // copy again, we'll manipulate it
-      const lastByte = hex[len - 1]; // select last byte
+      const normed = bytes.slice(); // copy again, we'll manipulate it
+      const lastByte = bytes[len - 1]; // select last byte
       normed[len - 1] = lastByte & ~0x80; // clear last bit
       const y = bytesToNumberLE(normed);
 
@@ -446,6 +446,12 @@ export function edwards(CURVE: EdwardsOpts, curveOpts: EdwardsExtraOpts = {}): E
         throw new Error('Point.fromHex: x=0 and x_0=1');
       if (isLastByteOdd !== isXOdd) x = modP(-x); // if x_0 != x mod 2, set x = p-x
       return Point.fromAffine({ x, y });
+    }
+
+    // Converts hash string or Uint8Array to Point.
+    // Uses algo from RFC8032 5.1.3.
+    static fromHex(hex: string, zip215 = false): Point {
+      return Point.fromBytes(hexToBytes(hex), zip215);
     }
     toBytes(): Uint8Array {
       const { x, y } = this.toAffine();
@@ -490,11 +496,11 @@ export abstract class PrimeEdwardsPoint<T extends PrimeEdwardsPoint<T>>
 
   // Static methods that must be implemented by subclasses
   static fromBytes(_bytes: Uint8Array): any {
-    throw new Error('fromBytes must be implemented by subclass');
+    notImplemented();
   }
 
   static fromHex(_hex: Hex): any {
-    throw new Error('fromHex must be implemented by subclass');
+    notImplemented();
   }
 
   get x(): bigint {
@@ -612,7 +618,7 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
   }
 
   // Get the hashed private scalar per RFC8032 5.1.5
-  function getPrivateScalar(key: Hex) {
+  function getPrivateScalar(key: Uint8Array) {
     const len = Fp.BYTES;
     key = ensureBytes('private key', key, len);
     // Hash private key with curve's hash function to produce uniformingly random input
@@ -625,7 +631,7 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
   }
 
   /** Convenience method that creates public key from scalar. RFC8032 5.1.5 */
-  function getExtendedPublicKey(secretKey: Hex) {
+  function getExtendedPublicKey(secretKey: Uint8Array) {
     const { head, prefix, scalar } = getPrivateScalar(secretKey);
     const point = G.multiply(scalar); // Point on Edwards curve aka public key
     const pointBytes = point.toBytes();
@@ -633,18 +639,22 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
   }
 
   /** Calculates EdDSA pub key. RFC8032 5.1.5. */
-  function getPublicKey(secretKey: Hex): Uint8Array {
+  function getPublicKey(secretKey: Uint8Array): Uint8Array {
     return getExtendedPublicKey(secretKey).pointBytes;
   }
 
   // int('LE', SHA512(dom2(F, C) || msgs)) mod N
-  function hashDomainToScalar(context: Hex = Uint8Array.of(), ...msgs: Uint8Array[]) {
+  function hashDomainToScalar(context: Uint8Array = Uint8Array.of(), ...msgs: Uint8Array[]) {
     const msg = concatBytes(...msgs);
     return modN_LE(cHash(domain(msg, ensureBytes('context', context), !!prehash)));
   }
 
   /** Signs message with privateKey. RFC8032 5.1.6 */
-  function sign(msg: Hex, secretKey: Hex, options: { context?: Hex } = {}): Uint8Array {
+  function sign(
+    msg: Uint8Array,
+    secretKey: Uint8Array,
+    options: { context?: Uint8Array } = {}
+  ): Uint8Array {
     msg = ensureBytes('message', msg);
     if (prehash) msg = prehash(msg); // for ed25519ph etc.
     const { prefix, scalar, pointBytes } = getExtendedPublicKey(secretKey);
@@ -659,13 +669,18 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
   }
 
   // verification rule is either zip215 or rfc8032 / nist186-5. Consult fromHex:
-  const verifyOpts: { context?: Hex; zip215?: boolean } = { zip215: true };
+  const verifyOpts: { context?: Uint8Array; zip215?: boolean } = { zip215: true };
 
   /**
    * Verifies EdDSA signature against message and public key. RFC8032 5.1.7.
    * An extended group equation is checked.
    */
-  function verify(sig: Hex, msg: Hex, publicKey: Hex, options = verifyOpts): boolean {
+  function verify(
+    sig: Uint8Array,
+    msg: Uint8Array,
+    publicKey: Uint8Array,
+    options = verifyOpts
+  ): boolean {
     const { context, zip215 } = options;
     const len = Fp.BYTES; // Verifies EdDSA signature against message and public key. RFC8032 5.1.7.
     sig = ensureBytes('signature', sig, 2 * len); // An extended group equation is checked.
@@ -680,8 +695,8 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
       // zip215=true is good for consensus-critical apps. =false follows RFC8032 / NIST186-5.
       // zip215=true:  0 <= y < MASK (2^256 for ed25519)
       // zip215=false: 0 <= y < P (2^255-19 for ed25519)
-      A = Point.fromHex(publicKey, zip215);
-      R = Point.fromHex(sig.slice(0, len), zip215);
+      A = Point.fromBytes(publicKey, zip215);
+      R = Point.fromBytes(sig.slice(0, len), zip215);
       SB = G.multiplyUnsafe(s); // 0 <= s < l is done inside
     } catch (error) {
       return false;
