@@ -72,7 +72,7 @@ export function numberToVarBytesBE(n: number | bigint): Uint8Array {
  * Takes hex string or Uint8Array, converts to Uint8Array.
  * Validates output length.
  * Will throw error for other types.
- * @param title descriptive title for an error e.g. 'private key'
+ * @param title descriptive title for an error e.g. 'secret key'
  * @param hex hex string or Uint8Array
  * @param expectedLength optional, will compare to result array's length
  * @returns

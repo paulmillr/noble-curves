@@ -153,24 +153,24 @@ export type CurveFn = {
   pairingBatch: BlsPairing['pairingBatch'];
 
   /** @deprecated use `longSignatures.getPublicKey` */
-  getPublicKey: (privateKey: PrivKey) => Uint8Array;
+  getPublicKey: (secretKey: PrivKey) => Uint8Array;
   /** @deprecated use `shortSignatures.getPublicKey` */
-  getPublicKeyForShortSignatures: (privateKey: PrivKey) => Uint8Array;
+  getPublicKeyForShortSignatures: (secretKey: PrivKey) => Uint8Array;
   /** @deprecated use `longSignatures.sign` */
   sign: {
-    (message: Hex, privateKey: PrivKey, htfOpts?: htfBasicOpts): Uint8Array;
+    (message: Hex, secretKey: PrivKey, htfOpts?: htfBasicOpts): Uint8Array;
     (
       message: WeierstrassPoint<Fp2>,
-      privateKey: PrivKey,
+      secretKey: PrivKey,
       htfOpts?: htfBasicOpts
     ): WeierstrassPoint<Fp2>;
   };
   /** @deprecated use `shortSignatures.sign` */
   signShortSignature: {
-    (message: Hex, privateKey: PrivKey, htfOpts?: htfBasicOpts): Uint8Array;
+    (message: Hex, secretKey: PrivKey, htfOpts?: htfBasicOpts): Uint8Array;
     (
       message: WeierstrassPoint<Fp>,
-      privateKey: PrivKey,
+      secretKey: PrivKey,
       htfOpts?: htfBasicOpts
     ): WeierstrassPoint<Fp>;
   };
@@ -237,15 +237,15 @@ export type CurveFn = {
     Fr: IField<bigint>;
   };
   utils: {
-    randomPrivateKey: () => Uint8Array;
+    randomSecretKey: () => Uint8Array;
     calcPairingPrecomputes: BlsPairing['calcPairingPrecomputes'];
   };
 };
 
 type BLSInput = Hex | Uint8Array;
 export interface BLSSigs<P, S> {
-  getPublicKey(privateKey: PrivKey): WeierstrassPoint<P>;
-  sign(hashedMessage: WeierstrassPoint<S>, privateKey: PrivKey): WeierstrassPoint<S>;
+  getPublicKey(secretKey: PrivKey): WeierstrassPoint<P>;
+  sign(hashedMessage: WeierstrassPoint<S>, secretKey: PrivKey): WeierstrassPoint<S>;
   verify(
     signature: WeierstrassPoint<S> | BLSInput,
     message: WeierstrassPoint<S>,
@@ -423,8 +423,6 @@ function createBlsPairing(
   };
 }
 
-// NOTE: We cannot use just points here, because of 'normPrivateKeyToScalar' which is deprecated.
-// Probably better to inline it here or something? Then we can re-use generic points with hasher
 function createBlsSig<P, S>(
   blsPairing: BlsPairing,
   PubCurve: CurvePointsRes<P> & H2CHasher<P>,
@@ -456,14 +454,14 @@ function createBlsSig<P, S>(
     : (a: PubPoint, b: SigPoint) => ({ g1: b, g2: a }) as PairingInput;
   return {
     // P = pk x G
-    getPublicKey(privateKey: PrivKey): PubPoint {
-      return PubCurve.Point.fromPrivateKey(privateKey);
+    getPublicKey(secretKey: PrivKey): PubPoint {
+      return PubCurve.Point.fromPrivateKey(secretKey);
     },
     // S = pk x H(m)
-    sign(message: SigPoint, privateKey: PrivKey, unusedArg?: any): SigPoint {
+    sign(message: SigPoint, secretKey: PrivKey, unusedArg?: any): SigPoint {
       if (unusedArg != null) throw new Error('sign() expects 2 arguments');
       amsg(message).assertValidity();
-      return message.multiply(PubCurve.normPrivateKeyToScalar(privateKey));
+      return message.multiply(PubCurve.normPrivateKeyToScalar(secretKey));
     },
     // Checks if pairing of public key & hash is equal to pairing of generator & signature.
     // e(P, H(m)) == e(G, S)
@@ -592,7 +590,7 @@ export function bls(CURVE: CurveType): CurveFn {
 
   const rand = CURVE.randomBytes || randomBytes;
   const utils = {
-    randomPrivateKey: (): Uint8Array => {
+    randomSecretKey: (): Uint8Array => {
       const length = getMinHashLength(Fr.ORDER);
       return mapHashToField(rand(length), Fr.ORDER);
     },

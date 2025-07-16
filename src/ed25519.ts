@@ -130,8 +130,7 @@ const ed25519Defaults = /* @__PURE__ */ (() => ({
  * ed25519 curve with EdDSA signatures.
  * @example
  * import { ed25519 } from '@noble/curves/ed25519';
- * const priv = ed25519.utils.randomPrivateKey();
- * const pub = ed25519.getPublicKey(priv);
+ * const { secretKey, publicKey } = ed25519.keygen();
  * const msg = new TextEncoder().encode('hello');
  * const sig = ed25519.sign(msg, priv);
  * ed25519.verify(sig, msg, pub); // Default mode: follows ZIP215
@@ -173,7 +172,7 @@ export const ed25519ph: CurveFn = /* @__PURE__ */ (() =>
  * const pub = 'e6db6867583030db3594c1a424b15f7c726624ec26b3353b10a903a6d0ab1c4c';
  * x25519.getSharedSecret(priv, pub) === x25519.scalarMult(priv, pub); // aliases
  * x25519.getPublicKey(priv) === x25519.scalarMultBase(priv);
- * x25519.getPublicKey(x25519.utils.randomPrivateKey());
+ * x25519.getPublicKey(x25519.utils.randomSecretKey());
  */
 export const x25519: XCurveFn = /* @__PURE__ */ (() => {
   const P = ed25519_CURVE.p;

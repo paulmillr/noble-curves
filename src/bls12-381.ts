@@ -13,7 +13,7 @@ BLS can mean 2 different things:
 ### Summary
 
 1. BLS Relies on expensive bilinear pairing
-2. Private Keys: 32 bytes
+2. Secret Keys: 32 bytes
 3. Public Keys: 48 OR 96 bytes - big-endian x coordinate of point on G1 OR G2 curve
 4. Signatures: 96 OR 48 bytes - big-endian x coordinate of point on G2 OR G1 curve
 5. The 12 stands for the Embedding degree.
@@ -66,7 +66,7 @@ More complicated math is done over polynominal extension fields.
 
 ### Compatibility and notes
 1. It is compatible with Algorand, Chia, Dfinity, Ethereum, Filecoin, ZEC.
-Filecoin uses little endian byte arrays for private keys - make sure to reverse byte order.
+Filecoin uses little endian byte arrays for secret keys - make sure to reverse byte order.
 2. Make sure to correctly select mode: "long signature" or "short signature".
 3. Compatible with specs:
    RFC 9380,
@@ -146,7 +146,7 @@ const bls12_381_CURVE_G1: WeierstrassOpts<bigint> = {
 };
 
 // CURVE FIELDS
-export const bls12_381_Fr: IField<bigint> = Field(bls12_381_CURVE_G1.n);
+export const bls12_381_Fr: IField<bigint> = Field(bls12_381_CURVE_G1.n, { modOnDecode: true });
 const { Fp, Fp2, Fp6, Fp4Square, Fp12 } = tower12({
   // Order of Fp
   ORDER: bls12_381_CURVE_G1.p,

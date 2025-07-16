@@ -5,17 +5,17 @@
 
 ## No way to get public keys
 
-- Export of raw private key is prohibited by spec:
+- Export of raw secret key is prohibited by spec:
   - https://w3c.github.io/webcrypto/#ecdsa-operations-export-key
     -> "If format is "raw":" -> "If the [[type]] internal slot of key is not "public",
        then throw an InvalidAccessError."
-- Import of raw private keys is prohibited by spec:
+- Import of raw secret keys is prohibited by spec:
   - https://w3c.github.io/webcrypto/#ecdsa-operations-import-key
     -> "If format is "raw":" -> "If usages contains a value which is not "verify"
        then throw a SyntaxError."
 - SPKI (Simple public-key infrastructure) is public-key-only
-- PCKS8 is private-key-only
-- No way to get public key from private key, but we convert to jwk and then create it manually, since jwk private key is priv+pub.
+- PCKS8 is secret-key-only
+- No way to get public key from secret key, but we convert to jwk and then create it manually, since jwk secret key is priv+pub.
 - Noble supports generating keys for both sign, verify & getSharedSecret,
   but JWK key includes usage, which forces us to patch it (non-JWK is ok)
 - We have import/export for 'raw', but it doesn't work in Firefox / Safari
@@ -67,7 +67,7 @@ type KeyUtils = {
   convert(key: Key, inFormat?: Format, outFormat?: Format): Promise<Key>;
 };
 export type WebCryptoGetPubOpts = {
-  privFormat?: Format;
+  secFormat?: Format;
   pubFormat?: Format;
 };
 const _format = 'raw';
@@ -77,7 +77,7 @@ function assertType(type: 'private' | 'public', key: any) {
 }
 
 function createKeyUtils(algo: Algo, derive: boolean, keyLen: number, pcks8header: string) {
-  const privUsage: KeyUsage[] = derive ? ['deriveBits'] : ['sign'];
+  const secUsage: KeyUsage[] = derive ? ['deriveBits'] : ['sign'];
   const pubUsage: KeyUsage[] = derive ? [] : ['verify'];
   // Return Uint8Array instead of ArrayBuffer
   const arrBufToU8 = (res: Key, format: Format) =>
@@ -112,12 +112,12 @@ function createKeyUtils(algo: Algo, derive: boolean, keyLen: number, pcks8header
           concatBytes(hexToBytes(pcks8header), key as Uint8Array),
           algo,
           true,
-          privUsage
+          secUsage
         );
       } else {
         // Fix import of ECDSA keys into ECDH, other formats are ok
-        if (derive && format === 'jwk') key = { ...key, key_ops: privUsage };
-        keyi = await crypto.importKey(format, key, algo, true, privUsage);
+        if (derive && format === 'jwk') key = { ...key, key_ops: secUsage };
+        keyi = await crypto.importKey(format, key, algo, true, secUsage);
       }
       assertType('private', keyi);
       return keyi;
@@ -154,7 +154,7 @@ function createKeyUtils(algo: Algo, derive: boolean, keyLen: number, pcks8header
       if (available !== undefined) return available;
       try {
         const crypto = getWebcryptoSubtle();
-        const key = await crypto.generateKey(algo, true, privUsage);
+        const key = await crypto.generateKey(algo, true, secUsage);
         // Deno is broken and generates key for unsupported curves, but then fails on export
         await priv.export(key.privateKey, 'jwk');
         // Bun fails on derive for x25519, but not x448
@@ -170,13 +170,13 @@ function createKeyUtils(algo: Algo, derive: boolean, keyLen: number, pcks8header
         return (available = false);
       }
     },
-    // We support different input / output formats since there is no 'spki' private key
-    async getPublicKey(privateKey: Key, opts: WebCryptoGetPubOpts = {}): Promise<Key> {
-      const fpriv = opts.privFormat ?? _format;
+    // We support different input / output formats since there is no 'spki' secret key
+    async getPublicKey(secretKey: Key, opts: WebCryptoGetPubOpts = {}): Promise<Key> {
+      const fpriv = opts.secFormat ?? _format;
       const fpub = opts.pubFormat ?? fpriv;
       // Export to jwk, remove private scalar and then convert to format
       const jwk = (
-        fpriv === 'jwk' ? { ...privateKey } : await priv.convert(privateKey, fpriv, 'jwk')
+        fpriv === 'jwk' ? { ...secretKey } : await priv.convert(secretKey, fpriv, 'jwk')
       ) as JsonWebKey;
       delete jwk.d;
       jwk.key_ops = pubUsage;
@@ -184,13 +184,13 @@ function createKeyUtils(algo: Algo, derive: boolean, keyLen: number, pcks8header
       return pub.convert(jwk, 'jwk', fpub);
     },
     utils: {
-      async randomPrivateKey(format: Format = _format): Promise<Key> {
+      async randomSecretKey(format: Format = _format): Promise<Key> {
         const crypto = getWebcryptoSubtle();
-        const keyPair = await crypto.generateKey(algo, true, privUsage);
+        const keyPair = await crypto.generateKey(algo, true, secUsage);
         return priv.export(keyPair.privateKey, format);
       },
       convertPublicKey: pub.convert as KeyUtils['convert'],
-      convertPrivateKey: priv.convert as KeyUtils['convert'],
+      convertSecretKey: priv.convert as KeyUtils['convert'],
     },
   };
 }
@@ -199,13 +199,9 @@ type WebCryptoOpts = { format?: Format };
 
 function createSigner(keys: ReturnType<typeof createKeyUtils>, algo: SigAlgo) {
   return {
-    async sign(
-      msgHash: Uint8Array,
-      privateKey: Key,
-      opts: WebCryptoOpts = {}
-    ): Promise<Uint8Array> {
+    async sign(msgHash: Uint8Array, secretKey: Key, opts: WebCryptoOpts = {}): Promise<Uint8Array> {
       const crypto = getWebcryptoSubtle();
-      const key = await keys.priv.import(privateKey, opts.format || _format);
+      const key = await keys.priv.import(secretKey, opts.format || _format);
       const sig = await crypto.sign(algo, key, msgHash);
       return new Uint8Array(sig);
     },
@@ -225,17 +221,17 @@ function createSigner(keys: ReturnType<typeof createKeyUtils>, algo: SigAlgo) {
 function createECDH(keys: ReturnType<typeof createKeyUtils>, algo: Algo, keyLen: number) {
   return {
     async getSharedSecret(
-      priv: Uint8Array,
-      pub: Uint8Array,
+      secretKeyA: Uint8Array,
+      publicKeyB: Uint8Array,
       opts: WebCryptoOpts = {}
     ): Promise<Uint8Array> {
       // if (_isCompressed !== true) throw new Error('WebCrypto only supports compressed keys');
       const crypto = getWebcryptoSubtle();
-      const privKey = await keys.priv.import(priv, opts.format || _format);
-      const pubKey = await keys.pub.import(pub, opts.format || _format);
+      const secKey = await keys.priv.import(secretKeyA, opts.format || _format);
+      const pubKey = await keys.pub.import(publicKeyB, opts.format || _format);
       const shared = await crypto.deriveBits(
         { name: typeof algo === 'string' ? algo : algo.name, public: pubKey },
-        privKey,
+        secKey,
         8 * keyLen
       );
       return new Uint8Array(shared);
@@ -246,11 +242,11 @@ function createECDH(keys: ReturnType<typeof createKeyUtils>, algo: Algo, keyLen:
 type WebCryptoBaseCurve = {
   name: string;
   isAvailable(): Promise<boolean>;
-  getPublicKey(privateKey: Key, opts?: WebCryptoGetPubOpts): Promise<Key>;
+  getPublicKey(secretKey: Key, opts?: WebCryptoGetPubOpts): Promise<Key>;
   utils: {
-    randomPrivateKey(format?: Format): Promise<Key>;
+    randomSecretKey: (format?: Format) => Promise<Key>;
+    convertSecretKey: (key: Key, inFormat?: Format, outFormat?: Format) => Promise<Key>;
     convertPublicKey: (key: Key, inFormat?: Format, outFormat?: Format) => Promise<Key>;
-    convertPrivateKey: (key: Key, inFormat?: Format, outFormat?: Format) => Promise<Key>;
   };
 };
 

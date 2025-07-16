@@ -29,6 +29,7 @@ export interface Group<T extends Group<T>> {
 
 // We can't "abstract out" coordinates (X, Y, Z; and T in Edwards): argument names of constructor
 // are not accessible. See Typescript gh-56093, gh-41594.
+
 /** Base interface for all elliptic curve Points. */
 export interface CurvePoint<F, P extends CurvePoint<F, P>> extends Group<P> {
   /** Affine x coordinate. Different from projective / extended X coordinate. */
@@ -47,7 +48,8 @@ export interface CurvePoint<F, P extends CurvePoint<F, P>> extends Group<P> {
    * @param isLazy calculate cache now. Default (true) ensures it's deferred to first `multiply()`
    */
   precompute(windowSize?: number, isLazy?: boolean): P;
-  toAffine(invertedZ?: F): AffinePoint<F>; // Converts point to 2D xy affine coordinates
+  /** Converts point to 2D xy affine coordinates */
+  toAffine(invertedZ?: F): AffinePoint<F>;
   toBytes(): Uint8Array;
   toHex(): string;
 }
@@ -60,6 +62,7 @@ export interface CurvePointCons<F, P extends CurvePoint<F, P>> extends GroupCons
   Fp: IField<F>;
   /** Scalar field, for scalars in multiply and others */
   Fn: IField<bigint>;
+  /** Creates point from x, y. Does NOT validate if the point is valid. Use `.assertValidity()`. */
   fromAffine(p: AffinePoint<F>): P;
   fromBytes(bytes: Uint8Array): P;
   fromHex(hex: Hex): P;
@@ -77,6 +80,7 @@ export interface CurveInfo {
   lengths: {
     secret: number;
     public: number;
+    publicUncompressed?: number;
     signature: number;
     seed: number;
   };
@@ -399,7 +403,7 @@ export function mulEndoUnsafe<T extends Group<T>>(
  * @param c Curve Point constructor
  * @param fieldN field over CURVE.N - important that it's not over CURVE.P
  * @param points array of L curve points
- * @param scalars array of L scalars (aka private keys / bigints)
+ * @param scalars array of L scalars (aka secret keys / bigints)
  */
 export function pippenger<T extends Group<T>>(
   c: GroupConstructor<T>,

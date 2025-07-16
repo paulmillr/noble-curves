@@ -260,6 +260,7 @@ export interface IField<T> {
   // [RFC9380](https://www.rfc-editor.org/rfc/rfc9380#section-4.1).
   // NOTE: sgn0 is 'negative in LE', which is same as odd. And negative in LE is kinda strange definition anyway.
   isOdd?(num: T): boolean; // Odd instead of even since we have it for Fp2
+  allowedLengths?: number[];
   // legendre?(num: T): T;
   invertBatch: (lst: T[]) => T[];
   toBytes(num: T): Uint8Array;
@@ -379,7 +380,13 @@ export function nLength(n: bigint, nBitLength?: number): NLength {
 
 type FpField = IField<bigint> & Required<Pick<IField<bigint>, 'isOdd'>>;
 type SqrtFn = (n: bigint) => bigint;
-type FieldOpts = Partial<{ sqrt: SqrtFn; isLE: boolean; BITS: number }>;
+type FieldOpts = Partial<{
+  sqrt: SqrtFn;
+  isLE: boolean;
+  BITS: number;
+  modOnDecode: boolean; // bls12-381 requires mod(n) instead of rejecting keys >= n
+  allowedLengths?: readonly number[]; // for P521 (adds padding for smaller sizes)
+}>;
 /**
  * Creates a finite field. Major performance optimizations:
  * * 1. Denormalized operations like mulN instead of mul.
@@ -401,19 +408,23 @@ type FieldOpts = Partial<{ sqrt: SqrtFn; isLE: boolean; BITS: number }>;
  */
 export function Field(
   ORDER: bigint,
-  bitLenOrOpts?: number | FieldOpts,
+  bitLenOrOpts?: number | FieldOpts, // TODO: use opts only in v2?
   isLE = false,
   opts: { sqrt?: SqrtFn } = {}
 ): Readonly<FpField> {
   if (ORDER <= _0n) throw new Error('invalid field: expected ORDER > 0, got ' + ORDER);
   let _nbitLength: number | undefined = undefined;
   let _sqrt: SqrtFn | undefined = undefined;
+  let modOnDecode: boolean = false;
+  let allowedLengths: undefined | readonly number[] = undefined;
   if (typeof bitLenOrOpts === 'object' && bitLenOrOpts != null) {
     if (opts.sqrt || isLE) throw new Error('cannot specify opts in two arguments');
     const _opts = bitLenOrOpts;
     if (_opts.BITS) _nbitLength = _opts.BITS;
     if (_opts.sqrt) _sqrt = _opts.sqrt;
     if (typeof _opts.isLE === 'boolean') isLE = _opts.isLE;
+    if (typeof _opts.modOnDecode === 'boolean') modOnDecode = _opts.modOnDecode;
+    allowedLengths = _opts.allowedLengths;
   } else {
     if (typeof bitLenOrOpts === 'number') _nbitLength = bitLenOrOpts;
     if (opts.sqrt) _sqrt = opts.sqrt;
@@ -429,6 +440,7 @@ export function Field(
     MASK: bitMask(BITS),
     ZERO: _0n,
     ONE: _1n,
+    allowedLengths: allowedLengths,
     create: (num) => mod(num, ORDER),
     isValid: (num) => {
       if (typeof num !== 'bigint')
@@ -464,9 +476,24 @@ export function Field(
       }),
     toBytes: (num) => (isLE ? numberToBytesLE(num, BYTES) : numberToBytesBE(num, BYTES)),
     fromBytes: (bytes) => {
+      if (allowedLengths) {
+        if (!allowedLengths.includes(bytes.length) || bytes.length > BYTES) {
+          throw new Error(
+            'Field.fromBytes: expected ' + allowedLengths + ' bytes, got ' + bytes.length
+          );
+        }
+        const padded = new Uint8Array(BYTES);
+        // isLE add 0 to right, !isLE to the left.
+        padded.set(bytes, isLE ? 0 : padded.length - bytes.length);
+        bytes = padded;
+      }
       if (bytes.length !== BYTES)
         throw new Error('Field.fromBytes: expected ' + BYTES + ' bytes, got ' + bytes.length);
-      return isLE ? bytesToNumberLE(bytes) : bytesToNumberBE(bytes);
+      let scalar = isLE ? bytesToNumberLE(bytes) : bytesToNumberBE(bytes);
+      if (modOnDecode) scalar = mod(scalar, ORDER);
+      // NOTE: we don't validate scalar here, please use isValid. This done such way because some
+      // protocol may allow non-reduced scalar that reduced later or changed some other way.
+      return scalar;
     },
     // TODO: we don't need it here, move out to separate fn
     invertBatch: (lst) => FpInvertBatch(f, lst),
@@ -476,6 +503,20 @@ export function Field(
   } as FpField);
   return Object.freeze(f);
 }
+
+// Generic random scalar, we can do same for other fields if via Fp2.mul(Fp2.ONE, Fp2.random)?
+// This allows unsafe methods like ignore bias or zero. These unsafe, but often used in different protocols (if deterministic RNG).
+// which mean we cannot force this via opts.
+// Not sure what to do with randomBytes, we can accept it inside opts if wanted.
+// Probably need to export getMinHashLength somewhere?
+// random(bytes?: Uint8Array, unsafeAllowZero = false, unsafeAllowBias = false) {
+//   const LEN = !unsafeAllowBias ? getMinHashLength(ORDER) : BYTES;
+//   if (bytes === undefined) bytes = randomBytes(LEN); // _opts.randomBytes?
+//   const num = isLE ? bytesToNumberLE(bytes) : bytesToNumberBE(bytes);
+//   // `mod(x, 11)` can sometimes produce 0. `mod(x, 10) + 1` is the same, but no 0
+//   const reduced = unsafeAllowZero ? mod(num, ORDER) : mod(num, ORDER - _1n) + _1n;
+//   return reduced;
+// },
 
 export function FpSqrtOdd<T>(Fp: IField<T>, elm: T): T {
   if (!Fp.isOdd) throw new Error("Field doesn't have isOdd");

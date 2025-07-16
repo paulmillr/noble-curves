@@ -32,9 +32,13 @@ export type CurveType = {
 export type MontgomeryECDH = {
   scalarMult: (scalar: Hex, u: Hex) => Uint8Array;
   scalarMultBase: (scalar: Hex) => Uint8Array;
-  getSharedSecret: (privateKeyA: Hex, publicKeyB: Hex) => Uint8Array;
-  getPublicKey: (privateKey: Hex) => Uint8Array;
-  utils: { randomPrivateKey: () => Uint8Array };
+  getSharedSecret: (secretKeyA: Hex, publicKeyB: Hex) => Uint8Array;
+  getPublicKey: (secretKey: Hex) => Uint8Array;
+  utils: {
+    randomSecretKey: () => Uint8Array;
+    /** @deprecated use `randomSecretKey` */
+    randomPrivateKey: () => Uint8Array;
+  };
   GuBytes: Uint8Array;
   info: {
     type: 'montgomery';
@@ -163,9 +167,13 @@ export function montgomery(curveDef: CurveType): MontgomeryECDH {
     const z2 = powPminus2(z_2); // `Fp.pow(x, P - _2n)` is much slower equivalent
     return modP(x_2 * z2); // Return x_2 * (z_2^(p - 2))
   }
-  const utils = { randomPrivateKey: (seed = randomBytes_(fieldLen)) => seed };
+  const randomSecretKey = (seed = randomBytes_(fieldLen)) => seed;
+  const utils = {
+    randomSecretKey,
+    randomPrivateKey: randomSecretKey,
+  };
   function keygen(seed?: Uint8Array) {
-    const secretKey = utils.randomPrivateKey(seed);
+    const secretKey = utils.randomSecretKey(seed);
     return { secretKey, publicKey: scalarMultBase(secretKey) };
   }
   const lengths = {
@@ -175,8 +183,8 @@ export function montgomery(curveDef: CurveType): MontgomeryECDH {
   };
   return {
     keygen,
-    getSharedSecret: (privateKey: Hex, publicKey: Hex) => scalarMult(privateKey, publicKey),
-    getPublicKey: (privateKey: Hex): Uint8Array => scalarMultBase(privateKey),
+    getSharedSecret: (secretKey: Hex, publicKey: Hex) => scalarMult(secretKey, publicKey),
+    getPublicKey: (secretKey: Hex): Uint8Array => scalarMultBase(secretKey),
     scalarMult,
     scalarMultBase,
     utils,

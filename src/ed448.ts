@@ -170,11 +170,10 @@ const ED448_DEF = /* @__PURE__ */ (() => ({
  * ed448 EdDSA curve and methods.
  * @example
  * import { ed448 } from '@noble/curves/ed448';
- * const priv = ed448.utils.randomPrivateKey();
- * const pub = ed448.getPublicKey(priv);
+ * const { secretKey, publicKey } = ed448.keygen();
  * const msg = new TextEncoder().encode('hello');
- * const sig = ed448.sign(msg, priv);
- * ed448.verify(sig, msg, pub);
+ * const sig = ed448.sign(msg, secretKey);
+ * const isValid = ed448.verify(sig, msg, publicKey);
  */
 export const ed448: CurveFn = twistedEdwards(ED448_DEF);
 

@@ -97,11 +97,10 @@ const Fpk1 = Field(secp256k1_CURVE.p, undefined, undefined, { sqrt: sqrtMod });
  * @example
  * ```js
  * import { secp256k1 } from '@noble/curves/secp256k1';
- * const priv = secp256k1.utils.randomPrivateKey();
- * const pub = secp256k1.getPublicKey(priv);
- * const msg = new Uint8Array(32).fill(1); // message hash (not message) in ecdsa
- * const sig = secp256k1.sign(msg, priv); // `{prehash: true}` option is available
- * const isValid = secp256k1.verify(sig, msg, pub) === true;
+ * const { secretKey, publicKey } = secp256k1.keygen();
+ * const msg = new TextEncoder().encode('hello');
+ * const sig = secp256k1.sign(msg, secretKey);
+ * const isValid = secp256k1.verify(sig, msg, publicKey) === true;
  * ```
  */
 export const secp256k1: CurveFnWithCreate = createCurve(
@@ -136,7 +135,7 @@ function schnorrGetExtPubKey(priv: PrivKey) {
   let d_ = secp256k1.utils.normPrivateKeyToScalar(priv); // same method executed in fromPrivateKey
   let p = Point.fromPrivateKey(d_); // P = d'⋅G; 0 < d' < n check is done inside
   const scalar = hasEven(p.y) ? d_ : modN(-d_);
-  return { scalar: scalar, bytes: pointToBytes(p) };
+  return { scalar, bytes: pointToBytes(p) };
 }
 /**
  * lift_x from BIP340. Convert 32-byte x coordinate to elliptic curve point.
@@ -163,21 +162,17 @@ function challenge(...args: Uint8Array[]): bigint {
 /**
  * Schnorr public key is just `x` coordinate of Point as per BIP340.
  */
-function schnorrGetPublicKey(privateKey: Hex): Uint8Array {
-  return schnorrGetExtPubKey(privateKey).bytes; // d'=int(sk). Fail if d'=0 or d'≥n. Ret bytes(d'⋅G)
+function schnorrGetPublicKey(secretKey: Hex): Uint8Array {
+  return schnorrGetExtPubKey(secretKey).bytes; // d'=int(sk). Fail if d'=0 or d'≥n. Ret bytes(d'⋅G)
 }
 
 /**
  * Creates Schnorr signature as per BIP340. Verifies itself before returning anything.
  * auxRand is optional and is not the sole source of k generation: bad CSPRNG won't be dangerous.
  */
-function schnorrSign(
-  message: Hex,
-  privateKey: PrivKey,
-  auxRand: Hex = randomBytes(32)
-): Uint8Array {
+function schnorrSign(message: Hex, secretKey: PrivKey, auxRand: Hex = randomBytes(32)): Uint8Array {
   const m = ensureBytes('message', message);
-  const { bytes: px, scalar: d } = schnorrGetExtPubKey(privateKey); // checks for isWithinCurveOrder
+  const { bytes: px, scalar: d } = schnorrGetExtPubKey(secretKey); // checks for isWithinCurveOrder
   const a = ensureBytes('auxRand', auxRand, 32); // Auxiliary random data a: a 32-byte array
   const t = numTo32b(d ^ num(taggedHash('BIP0340/aux', a))); // Let t be the byte-wise xor of bytes(d) and hash/aux(a)
   const rand = taggedHash('BIP0340/nonce', t, px, m); // Let rand = hash/nonce(t || bytes(P) || m)
@@ -220,11 +215,14 @@ function schnorrVerify(signature: Hex, message: Hex, publicKey: Hex): boolean {
 }
 
 export type SecpSchnorr = {
+  keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
   getPublicKey: typeof schnorrGetPublicKey;
   sign: typeof schnorrSign;
   verify: typeof schnorrVerify;
   Point: WeierstrassPointCons<bigint>;
   utils: {
+    randomSecretKey: (seed?: Uint8Array) => Uint8Array;
+    /** @deprecated use `randomSecretKey` */
     randomPrivateKey: (seed?: Uint8Array) => Uint8Array;
     lift_x: typeof lift_x;
     pointToBytes: (point: PointType<bigint>) => Uint8Array;
@@ -234,7 +232,6 @@ export type SecpSchnorr = {
     mod: typeof mod;
   };
   info: { type: 'weierstrass'; publicKeyHasPrefix: false; lengths: CurveInfo['lengths'] };
-  keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
 };
 /**
  * Schnorr signatures over secp256k1.
@@ -242,23 +239,23 @@ export type SecpSchnorr = {
  * @example
  * ```js
  * import { schnorr } from '@noble/curves/secp256k1';
- * const priv = schnorr.utils.randomPrivateKey();
- * const pub = schnorr.getPublicKey(priv);
+ * const { secretKey, publicKey } = schnorr.keygen();
+ * // const publicKey = schnorr.getPublicKey(secretKey);
  * const msg = new TextEncoder().encode('hello');
- * const sig = schnorr.sign(msg, priv);
- * const isValid = schnorr.verify(sig, msg, pub);
+ * const sig = schnorr.sign(msg, secretKey);
+ * const isValid = schnorr.verify(sig, msg, publicKey);
  * ```
  */
 export const schnorr: SecpSchnorr = /* @__PURE__ */ (() => {
   const size = 32;
   const seedLength = 48;
-  const randomPrivateKey = (seed = randomBytes(seedLength)): Uint8Array => {
+  const randomSecretKey = (seed = randomBytes(seedLength)): Uint8Array => {
     return mapHashToField(seed, secp256k1_CURVE.n);
   };
   // TODO: remove
-  secp256k1.utils.randomPrivateKey;
+  secp256k1.utils.randomSecretKey;
   function keygen(seed?: Uint8Array) {
-    const secretKey = randomPrivateKey(seed);
+    const secretKey = randomSecretKey(seed);
     return { secretKey, publicKey: schnorrGetPublicKey(secretKey) };
   }
   return {
@@ -268,7 +265,8 @@ export const schnorr: SecpSchnorr = /* @__PURE__ */ (() => {
     verify: schnorrVerify,
     Point,
     utils: {
-      randomPrivateKey,
+      randomSecretKey: randomSecretKey,
+      randomPrivateKey: randomSecretKey,
       taggedHash,
 
       // TODO: remove

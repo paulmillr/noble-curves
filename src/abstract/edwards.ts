@@ -129,12 +129,12 @@ export type EdwardsExtraOpts = Partial<{
 /**
  * EdDSA (Edwards Digital Signature algorithm) options.
  *
- * * hash: hash function used to hash private keys and messages
+ * * hash: hash function used to hash secret keys and messages
  * * adjustScalarBytes: clears bits to get valid field element
  * * domain: Used for hashing
  * * mapToCurve: for hash-to-curve standard
  * * prehash: RFC 8032 pre-hashing of messages to sign() / verify()
- * * randomBytes: function generating random bytes, used for randomPrivateKey
+ * * randomBytes: function generating random bytes, used for randomSecretKey
  */
 export type EdDSAOpts = Partial<{
   adjustScalarBytes: (bytes: Uint8Array) => Uint8Array;
@@ -147,12 +147,12 @@ export type EdDSAOpts = Partial<{
 /**
  * EdDSA (Edwards Digital Signature algorithm) interface.
  *
- * Allows to create and verify signatures, create public and private keys.
+ * Allows to create and verify signatures, create public and secret keys.
  */
 export interface EdDSA {
   keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
-  getPublicKey: (privateKey: Hex) => Uint8Array;
-  sign: (message: Hex, privateKey: Hex, options?: { context?: Hex }) => Uint8Array;
+  getPublicKey: (secretKey: Hex) => Uint8Array;
+  sign: (message: Hex, secretKey: Hex, options?: { context?: Hex }) => Uint8Array;
   verify: (
     sig: Hex,
     message: Hex,
@@ -161,13 +161,15 @@ export interface EdDSA {
   ) => boolean;
   Point: EdwardsPointCons;
   utils: {
+    randomSecretKey: (seed?: Uint8Array) => Uint8Array;
+    /** @deprecated use `randomSecretKey` */
     randomPrivateKey: (seed?: Uint8Array) => Uint8Array;
     /**
      * Converts ed public key to x public key.
      * @example
      * ```js
-     * const someonesPub = ed25519.getPublicKey(ed25519.utils.randomPrivateKey());
-     * const aPriv = x25519.utils.randomPrivateKey();
+     * const someonesPub = ed25519.getPublicKey(ed25519.utils.randomSecretKey());
+     * const aPriv = x25519.utils.randomSecretKey();
      * x25519.getSharedSecret(aPriv, ed25519.utils.toMontgomery(someonesPub))
      * ```
      */
@@ -176,8 +178,8 @@ export interface EdDSA {
      * Converts ed secret key to x secret key.
      * @example
      * ```js
-     * const someonesPub = x25519.getPublicKey(x25519.utils.randomPrivateKey());
-     * const aPriv = ed25519.utils.randomPrivateKey();
+     * const someonesPub = x25519.getPublicKey(x25519.utils.randomSecretKey());
+     * const aPriv = ed25519.utils.randomSecretKey();
      * x25519.getSharedSecret(ed25519.utils.toMontgomeryPriv(aPriv), someonesPub)
      * ```
      */
@@ -198,20 +200,15 @@ export interface EdDSA {
 // Legacy params. TODO: remove
 export type CurveFn = {
   CURVE: CurveType;
-  getPublicKey: (privateKey: Hex) => Uint8Array;
-  sign: (message: Hex, privateKey: Hex, options?: { context?: Hex }) => Uint8Array;
-  verify: (
-    sig: Hex,
-    message: Hex,
-    publicKey: Hex,
-    options?: { context?: Hex; zip215: boolean }
-  ) => boolean;
+  keygen: EdDSA['keygen'];
+  getPublicKey: EdDSA['getPublicKey'];
+  sign: EdDSA['sign'];
+  verify: EdDSA['verify'];
   Point: EdwardsPointCons;
   /** @deprecated use `Point` */
   ExtendedPoint: EdwardsPointCons;
   utils: EdDSA['utils'];
   info: CurveInfo;
-  keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
 };
 
 function isEdValidXY(Fp: IField<bigint>, CURVE: EdwardsOpts, x: bigint, y: bigint): boolean {
@@ -619,6 +616,7 @@ export abstract class PrimeEdwardsPoint<T extends PrimeEdwardsPoint<T>>
   isTorsionFree(): boolean {
     return true;
   }
+
   isSmallOrder(): boolean {
     return false;
   }
@@ -693,6 +691,7 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
   function modN(a: bigint) {
     return Fn.create(a);
   }
+
   // Little-endian SHA512 with modulo n
   function modN_LE(hash: Uint8Array): bigint {
     // Not using Fn.fromBytes: hash can be 2*Fn.BYTES
@@ -712,17 +711,17 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
     return { head, prefix, scalar };
   }
 
-  // Convenience method that creates public key from scalar. RFC8032 5.1.5
-  function getExtendedPublicKey(key: Hex) {
-    const { head, prefix, scalar } = getPrivateScalar(key);
+  /** Convenience method that creates public key from scalar. RFC8032 5.1.5 */
+  function getExtendedPublicKey(secretKey: Hex) {
+    const { head, prefix, scalar } = getPrivateScalar(secretKey);
     const point = G.multiply(scalar); // Point on Edwards curve aka public key
     const pointBytes = point.toBytes();
     return { head, prefix, scalar, point, pointBytes };
   }
 
-  // Calculates EdDSA pub key. RFC8032 5.1.5. Privkey is hashed. Use first half with 3 bits cleared
-  function getPublicKey(privKey: Hex): Uint8Array {
-    return getExtendedPublicKey(privKey).pointBytes;
+  /** Calculates EdDSA pub key. RFC8032 5.1.5. */
+  function getPublicKey(secretKey: Hex): Uint8Array {
+    return getExtendedPublicKey(secretKey).pointBytes;
   }
 
   // int('LE', SHA512(dom2(F, C) || msgs)) mod N
@@ -732,10 +731,10 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
   }
 
   /** Signs message with privateKey. RFC8032 5.1.6 */
-  function sign(msg: Hex, privKey: Hex, options: { context?: Hex } = {}): Uint8Array {
+  function sign(msg: Hex, secretKey: Hex, options: { context?: Hex } = {}): Uint8Array {
     msg = ensureBytes('message', msg);
     if (prehash) msg = prehash(msg); // for ed25519ph etc.
-    const { prefix, scalar, pointBytes } = getExtendedPublicKey(privKey);
+    const { prefix, scalar, pointBytes } = getExtendedPublicKey(secretKey);
     const r = hashDomainToScalar(options.context, prefix, msg); // r = dom2(F, C) || prefix || PH(M)
     const R = G.multiply(r).toBytes(); // R = rG
     const k = hashDomainToScalar(options.context, R, pointBytes, msg); // R || A || PH(M)
@@ -792,11 +791,15 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
     signature: 2 * size,
     seed: size,
   };
+  function randomSecretKey(seed = randomBytes_!(lengths.seed)): Uint8Array {
+    return seed;
+  }
 
   const utils = {
     getExtendedPublicKey,
     /** ed25519 priv keys are uniform 32b. No need to check for modulo bias, like in secp256k1. */
-    randomPrivateKey: (seed = randomBytes_!(lengths.seed)): Uint8Array => seed,
+    randomSecretKey,
+    randomPrivateKey: randomSecretKey,
 
     /**
      * Converts ed public key to x public key. Uses formula:
@@ -838,7 +841,7 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
   };
 
   function keygen(seed?: Uint8Array) {
-    const secretKey = utils.randomPrivateKey(seed);
+    const secretKey = utils.randomSecretKey(seed);
     return { secretKey, publicKey: getPublicKey(secretKey) };
   }
 
