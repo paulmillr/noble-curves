@@ -364,13 +364,13 @@ function calcElligatorDecafMap(r0: bigint): ExtendedPoint {
   return new ed448.Point(mod(W0 * W3), mod(W2 * W1), mod(W1 * W3), mod(W0 * W2));
 }
 
-function decaf448_map(bytes: Uint8Array): DecafPoint {
+function decaf448_map(bytes: Uint8Array): _DecafPoint {
   abytes(bytes, 112);
   const r1 = bytes448ToNumberLE(bytes.slice(0, 56));
   const R1 = calcElligatorDecafMap(r1);
   const r2 = bytes448ToNumberLE(bytes.slice(56, 112));
   const R2 = calcElligatorDecafMap(r2);
-  return new DecafPoint(R1.add(R2));
+  return new _DecafPoint(R1.add(R2));
 }
 
 /**
@@ -380,14 +380,14 @@ function decaf448_map(bytes: Uint8Array): DecafPoint {
  * but it should work in its own namespace: do not combine those two.
  * See [RFC9496](https://www.rfc-editor.org/rfc/rfc9496).
  */
-export class DecafPoint extends PrimeEdwardsPoint<DecafPoint> {
+class _DecafPoint extends PrimeEdwardsPoint<_DecafPoint> {
   // The following gymnastics is done because typescript strips comments otherwise
   // prettier-ignore
-  static BASE: DecafPoint =
-    /* @__PURE__ */ (() => new DecafPoint(ed448.Point.BASE).multiplyUnsafe(_2n))();
+  static BASE: _DecafPoint =
+    /* @__PURE__ */ (() => new _DecafPoint(ed448.Point.BASE).multiplyUnsafe(_2n))();
   // prettier-ignore
-  static ZERO: DecafPoint =
-    /* @__PURE__ */ (() => new DecafPoint(ed448.Point.ZERO))();
+  static ZERO: _DecafPoint =
+    /* @__PURE__ */ (() => new _DecafPoint(ed448.Point.ZERO))();
   // prettier-ignore
   static Fp: IField<bigint> =
     /* @__PURE__ */ Fp;
@@ -399,24 +399,24 @@ export class DecafPoint extends PrimeEdwardsPoint<DecafPoint> {
     super(ep);
   }
 
-  static fromAffine(ap: AffinePoint<bigint>): DecafPoint {
-    return new DecafPoint(ed448.Point.fromAffine(ap));
+  static fromAffine(ap: AffinePoint<bigint>): _DecafPoint {
+    return new _DecafPoint(ed448.Point.fromAffine(ap));
   }
 
-  protected assertSame(other: DecafPoint): void {
-    if (!(other instanceof DecafPoint)) throw new Error('DecafPoint expected');
+  protected assertSame(other: _DecafPoint): void {
+    if (!(other instanceof _DecafPoint)) throw new Error('DecafPoint expected');
   }
 
-  protected init(ep: EdwardsPoint): DecafPoint {
-    return new DecafPoint(ep);
+  protected init(ep: EdwardsPoint): _DecafPoint {
+    return new _DecafPoint(ep);
   }
 
   /** @deprecated use `import { decaf448_hasher } from '@noble/curves/ed448.js';` */
-  static hashToCurve(hex: Hex): DecafPoint {
+  static hashToCurve(hex: Hex): _DecafPoint {
     return decaf448_map(ensureBytes('decafHash', hex, 112));
   }
 
-  static fromBytes(bytes: Uint8Array): DecafPoint {
+  static fromBytes(bytes: Uint8Array): _DecafPoint {
     abytes(bytes, 56);
     const { d } = ed448.CURVE;
     const P = Fp.ORDER;
@@ -443,7 +443,7 @@ export class DecafPoint extends PrimeEdwardsPoint<DecafPoint> {
     const t = mod(x * y); // 8
 
     if (!isValid) throw new Error('invalid decaf448 encoding 2');
-    return new DecafPoint(new ed448.Point(x, y, _1n, t));
+    return new _DecafPoint(new ed448.Point(x, y, _1n, t));
   }
 
   /**
@@ -451,13 +451,13 @@ export class DecafPoint extends PrimeEdwardsPoint<DecafPoint> {
    * Described in [RFC9496](https://www.rfc-editor.org/rfc/rfc9496#name-decode-2).
    * @param hex Decaf-encoded 56 bytes. Not every 56-byte string is valid decaf encoding
    */
-  static fromHex(hex: Hex): DecafPoint {
-    return DecafPoint.fromBytes(ensureBytes('decafHex', hex, 56));
+  static fromHex(hex: Hex): _DecafPoint {
+    return _DecafPoint.fromBytes(ensureBytes('decafHex', hex, 56));
   }
 
   /** @deprecated use `import { pippenger } from '@noble/curves/abstract/curve.js';` */
-  static msm(points: DecafPoint[], scalars: bigint[]): DecafPoint {
-    return pippenger(DecafPoint, Fn, points, scalars);
+  static msm(points: _DecafPoint[], scalars: bigint[]): _DecafPoint {
+    return pippenger(_DecafPoint, Fn, points, scalars);
   }
 
   /**
@@ -488,7 +488,7 @@ export class DecafPoint extends PrimeEdwardsPoint<DecafPoint> {
    * Compare one point to another.
    * Described in [RFC9496](https://www.rfc-editor.org/rfc/rfc9496#name-equals-2).
    */
-  equals(other: DecafPoint): boolean {
+  equals(other: _DecafPoint): boolean {
     this.assertSame(other);
     const { X: X1, Y: Y1 } = this.ep;
     const { X: X2, Y: Y2 } = other.ep;
@@ -498,17 +498,19 @@ export class DecafPoint extends PrimeEdwardsPoint<DecafPoint> {
   }
 
   is0(): boolean {
-    return this.equals(DecafPoint.ZERO);
+    return this.equals(_DecafPoint.ZERO);
   }
 }
 
+/** @deprecated use `decaf448.Point` */
+export const DecafPoint: typeof _DecafPoint = _DecafPoint;
 export const decaf448: {
-  Point: typeof DecafPoint;
-} = { Point: DecafPoint };
+  Point: typeof _DecafPoint;
+} = { Point: _DecafPoint };
 
 /** Hashing to decaf448 points / field. RFC 9380 methods. */
 export const decaf448_hasher: H2CHasherBase<bigint> = {
-  hashToCurve(msg: Uint8Array, options?: htfBasicOpts): DecafPoint {
+  hashToCurve(msg: Uint8Array, options?: htfBasicOpts): _DecafPoint {
     const DST = options?.DST || 'decaf448_XOF:SHAKE256_D448MAP_RO_';
     return decaf448_map(expand_message_xof(msg, DST, 112, 224, shake256));
   },
@@ -525,7 +527,7 @@ export const decaf448_hasher: H2CHasherBase<bigint> = {
 //   hashToScalar: decaf448_hasher.hashToScalar,
 // });
 
-type DcfHasher = (msg: Uint8Array, options: htfBasicOpts) => DecafPoint;
+type DcfHasher = (msg: Uint8Array, options: htfBasicOpts) => _DecafPoint;
 
 /** @deprecated use `import { ed448_hasher } from '@noble/curves/ed448.js';` */
 export const hashToCurve: H2CMethod<bigint> = /* @__PURE__ */ (() => ed448_hasher.hashToCurve)();

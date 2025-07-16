@@ -345,13 +345,13 @@ function calcElligatorRistrettoMap(r0: bigint): ExtendedPoint {
   return new ed25519.Point(mod(W0 * W3), mod(W2 * W1), mod(W1 * W3), mod(W0 * W2));
 }
 
-function ristretto255_map(bytes: Uint8Array): RistrettoPoint {
+function ristretto255_map(bytes: Uint8Array): _RistrettoPoint {
   abytes(bytes, 64);
   const r1 = bytes255ToNumberLE(bytes.subarray(0, 32));
   const R1 = calcElligatorRistrettoMap(r1);
   const r2 = bytes255ToNumberLE(bytes.subarray(32, 64));
   const R2 = calcElligatorRistrettoMap(r2);
-  return new RistrettoPoint(R1.add(R2));
+  return new _RistrettoPoint(R1.add(R2));
 }
 
 /**
@@ -363,15 +363,15 @@ function ristretto255_map(bytes: Uint8Array): RistrettoPoint {
  * but it should work in its own namespace: do not combine those two.
  * See [RFC9496](https://www.rfc-editor.org/rfc/rfc9496).
  */
-export class RistrettoPoint extends PrimeEdwardsPoint<RistrettoPoint> {
+class _RistrettoPoint extends PrimeEdwardsPoint<_RistrettoPoint> {
   // Do NOT change syntax: the following gymnastics is done,
   // because typescript strips comments, which makes bundlers disable tree-shaking.
   // prettier-ignore
-  static BASE: RistrettoPoint =
-    /* @__PURE__ */ (() => new RistrettoPoint(ed25519.Point.BASE))();
+  static BASE: _RistrettoPoint =
+    /* @__PURE__ */ (() => new _RistrettoPoint(ed25519.Point.BASE))();
   // prettier-ignore
-  static ZERO: RistrettoPoint =
-    /* @__PURE__ */ (() => new RistrettoPoint(ed25519.Point.ZERO))();
+  static ZERO: _RistrettoPoint =
+    /* @__PURE__ */ (() => new _RistrettoPoint(ed25519.Point.ZERO))();
   // prettier-ignore
   static Fp: IField<bigint> =
     /* @__PURE__ */ Fp;
@@ -383,24 +383,24 @@ export class RistrettoPoint extends PrimeEdwardsPoint<RistrettoPoint> {
     super(ep);
   }
 
-  static fromAffine(ap: AffinePoint<bigint>): RistrettoPoint {
-    return new RistrettoPoint(ed25519.Point.fromAffine(ap));
+  static fromAffine(ap: AffinePoint<bigint>): _RistrettoPoint {
+    return new _RistrettoPoint(ed25519.Point.fromAffine(ap));
   }
 
-  protected assertSame(other: RistrettoPoint): void {
-    if (!(other instanceof RistrettoPoint)) throw new Error('RistrettoPoint expected');
+  protected assertSame(other: _RistrettoPoint): void {
+    if (!(other instanceof _RistrettoPoint)) throw new Error('RistrettoPoint expected');
   }
 
-  protected init(ep: EdwardsPoint): RistrettoPoint {
-    return new RistrettoPoint(ep);
+  protected init(ep: EdwardsPoint): _RistrettoPoint {
+    return new _RistrettoPoint(ep);
   }
 
   /** @deprecated use `import { ristretto255_hasher } from '@noble/curves/ed25519.js';` */
-  static hashToCurve(hex: Hex): RistrettoPoint {
+  static hashToCurve(hex: Hex): _RistrettoPoint {
     return ristretto255_map(ensureBytes('ristrettoHash', hex, 64));
   }
 
-  static fromBytes(bytes: Uint8Array): RistrettoPoint {
+  static fromBytes(bytes: Uint8Array): _RistrettoPoint {
     abytes(bytes, 32);
     const { a, d } = ed25519.CURVE;
     const P = Fp.ORDER;
@@ -425,7 +425,7 @@ export class RistrettoPoint extends PrimeEdwardsPoint<RistrettoPoint> {
     const t = mod(x * y); // 12
     if (!isValid || isNegativeLE(t, P) || y === _0n)
       throw new Error('invalid ristretto255 encoding 2');
-    return new RistrettoPoint(new ed25519.Point(x, y, _1n, t));
+    return new _RistrettoPoint(new ed25519.Point(x, y, _1n, t));
   }
 
   /**
@@ -433,12 +433,12 @@ export class RistrettoPoint extends PrimeEdwardsPoint<RistrettoPoint> {
    * Described in [RFC9496](https://www.rfc-editor.org/rfc/rfc9496#name-decode).
    * @param hex Ristretto-encoded 32 bytes. Not every 32-byte string is valid ristretto encoding
    */
-  static fromHex(hex: Hex): RistrettoPoint {
-    return RistrettoPoint.fromBytes(ensureBytes('ristrettoHex', hex, 32));
+  static fromHex(hex: Hex): _RistrettoPoint {
+    return _RistrettoPoint.fromBytes(ensureBytes('ristrettoHex', hex, 32));
   }
 
-  static msm(points: RistrettoPoint[], scalars: bigint[]): RistrettoPoint {
-    return pippenger(RistrettoPoint, ed25519.Point.Fn, points, scalars);
+  static msm(points: _RistrettoPoint[], scalars: bigint[]): _RistrettoPoint {
+    return pippenger(_RistrettoPoint, ed25519.Point.Fn, points, scalars);
   }
 
   /**
@@ -477,7 +477,7 @@ export class RistrettoPoint extends PrimeEdwardsPoint<RistrettoPoint> {
    * Compares two Ristretto points.
    * Described in [RFC9496](https://www.rfc-editor.org/rfc/rfc9496#name-equals).
    */
-  equals(other: RistrettoPoint): boolean {
+  equals(other: _RistrettoPoint): boolean {
     this.assertSame(other);
     const { X: X1, Y: Y1 } = this.ep;
     const { X: X2, Y: Y2 } = other.ep;
@@ -489,17 +489,20 @@ export class RistrettoPoint extends PrimeEdwardsPoint<RistrettoPoint> {
   }
 
   is0(): boolean {
-    return this.equals(RistrettoPoint.ZERO);
+    return this.equals(_RistrettoPoint.ZERO);
   }
 }
 
+/** @deprecated use `ristretto255.Point` */
+export const RistrettoPoint: typeof _RistrettoPoint = _RistrettoPoint;
+
 export const ristretto255: {
-  Point: typeof RistrettoPoint;
-} = { Point: RistrettoPoint };
+  Point: typeof _RistrettoPoint;
+} = { Point: _RistrettoPoint };
 
 /** Hashing to ristretto255 points / field. RFC 9380 methods. */
 export const ristretto255_hasher: H2CHasherBase<bigint> = {
-  hashToCurve(msg: Uint8Array, options?: htfBasicOpts): RistrettoPoint {
+  hashToCurve(msg: Uint8Array, options?: htfBasicOpts): _RistrettoPoint {
     const DST = options?.DST || 'ristretto255_XMD:SHA-512_R255MAP_RO_';
     return ristretto255_map(expand_message_xmd(msg, DST, 64, sha512));
   },
@@ -521,7 +524,7 @@ export const hashToCurve: H2CMethod<bigint> = /* @__PURE__ */ (() => ed25519_has
 /** @deprecated use `import { ed25519_hasher } from '@noble/curves/ed25519.js';` */
 export const encodeToCurve: H2CMethod<bigint> = /* @__PURE__ */ (() =>
   ed25519_hasher.encodeToCurve)();
-type RistHasher = (msg: Uint8Array, options: htfBasicOpts) => RistrettoPoint;
+type RistHasher = (msg: Uint8Array, options: htfBasicOpts) => _RistrettoPoint;
 /** @deprecated use `import { ristretto255_hasher } from '@noble/curves/ed25519.js';` */
 export const hashToRistretto255: RistHasher = /* @__PURE__ */ (() =>
   ristretto255_hasher.hashToCurve as RistHasher)();
