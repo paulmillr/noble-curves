@@ -59,9 +59,15 @@ import {
   utf8ToBytes,
   validateObject,
 } from '../utils.ts';
-import type { Group, GroupConstructor } from './curve.ts';
+import {
+  pippenger,
+  type CurvePoint,
+  type CurvePointCons,
+  type GetPointConsF,
+  type GetPointConsPoint,
+} from './curve.ts';
 import { _DST_scalar, type H2CMethod, type htfBasicOpts } from './hash-to-curve.js';
-import { getMinHashLength, mapHashToField, type IField } from './modular.js';
+import { getMinHashLength, mapHashToField } from './modular.js';
 
 // OPRF is designed to be used across network, so we default to serialized values.
 export type PointBytes = Uint8Array;
@@ -69,26 +75,13 @@ export type ScalarBytes = Uint8Array;
 export type Bytes = Uint8Array;
 export type RNG = typeof randomBytes;
 
-export interface OPRFPoint<T extends Group<T>> extends Group<T> {
-  add(rhs: T): T;
-  multiply(rhs: bigint): T;
-  equals(rhs: T): boolean;
-  toBytes(compressed?: boolean): Bytes;
-}
-
-export interface OPRFPointConstructor<T> extends GroupConstructor<T> {
-  msm(points: T[], scalars: bigint[]): T;
-  fromBytes(a: Bytes): T;
-  Fn: IField<bigint>;
-}
-
-export type OPRFOpts<T> = {
+export type OPRFOpts<F, P extends CurvePoint<F, P>, PC extends CurvePointCons<F, P>> = {
   name: string;
-  Point: OPRFPointConstructor<T>;
+  Point: PC;
   // Fn: IField<bigint>;
   hash: (msg: Bytes) => Bytes;
   hashToScalar: (msg: Uint8Array, options: htfBasicOpts) => bigint;
-  hashToGroup: ((msg: Uint8Array, options: htfBasicOpts) => T) | H2CMethod<bigint>;
+  hashToGroup: ((msg: Uint8Array, options: htfBasicOpts) => P) | H2CMethod<P>;
 };
 
 export type Keys = { secretKey: ScalarBytes; publicKey: PointBytes };
@@ -335,7 +328,13 @@ export type OPRF = {
   };
 };
 
-export function createORPF<P extends OPRFPoint<P>>(opts: OPRFOpts<P>): OPRF {
+// welcome to generic hell
+export function createORPF<
+  PC extends CurvePointCons<any, any>,
+  F = GetPointConsF<PC>,
+  P extends CurvePoint<F, P> = GetPointConsPoint<PC>,
+  Opts extends OPRFOpts<F, P, PC> = OPRFOpts<F, P, PC>,
+>(opts: Opts): OPRF {
   validateObject(opts, {
     name: 'string',
     hash: 'function',
@@ -344,7 +343,6 @@ export function createORPF<P extends OPRFPoint<P>>(opts: OPRFOpts<P>): OPRF {
   });
   // TODO
   // Point: 'point',
-
   const { name, Point, hash } = opts;
   const { Fn } = Point;
 
@@ -360,6 +358,9 @@ export function createORPF<P extends OPRFPoint<P>>(opts: OPRFOpts<P>): OPRF {
     // can have different number of bytes (like ed448)
     return Fn.isLE ? bytesToNumberLE(t) : bytesToNumberBE(t);
   };
+
+  const msm = (points: P[], scalars: bigint[]) => pippenger(Point, Point.Fn, points, scalars);
+
   const getCtx = (mode: number) =>
     concatBytes(utf8ToBytes('OPRFV1-'), new Uint8Array([mode]), utf8ToBytes('-' + name));
   const ctxOPRF = getCtx(0x00);
@@ -382,12 +383,12 @@ export function createORPF<P extends OPRFPoint<P>>(opts: OPRFOpts<P>): OPRF {
   const hashInput = (...bytes: Uint8Array[]) => hash(encode(...bytes, 'Finalize'));
 
   function getTranscripts(B: P, C: P[], D: P[], ctx: Bytes) {
-    const Bm = B.toBytes(true);
+    const Bm = B.toBytes();
     const seed = hash(encode(Bm, concatBytes(utf8ToBytes('Seed-'), ctx)));
     const res = [];
     for (let i = 0; i < C.length; i++) {
-      const Ci = C[i].toBytes(true);
-      const Di = D[i].toBytes(true);
+      const Ci = C[i].toBytes();
+      const Di = D[i].toBytes();
       const di = hashToScalarPrefixed(encode(seed, i, Ci, Di, 'Composite'), ctx);
       res.push(di);
     }
@@ -396,20 +397,20 @@ export function createORPF<P extends OPRFPoint<P>>(opts: OPRFOpts<P>): OPRF {
 
   function computeComposites(B: P, C: P[], D: P[], ctx: Bytes) {
     const T = getTranscripts(B, C, D, ctx);
-    const M = Point.msm(C, T);
-    const Z = Point.msm(D, T);
+    const M = msm(C, T);
+    const Z = msm(D, T);
     return { M, Z };
   }
 
   function computeCompositesFast(k: bigint, B: P, C: P[], D: P[], ctx: Bytes): { M: P; Z: P } {
     const T = getTranscripts(B, C, D, ctx);
-    const M = Point.msm(C, T);
+    const M = msm(C, T);
     const Z = M.multiply(k);
     return { M, Z };
   }
 
   function challengeTranscript(B: P, M: P, Z: P, t2: P, t3: P, ctx: Bytes) {
-    const [Bm, a0, a1, a2, a3] = [B, M, Z, t2, t3].map((i) => i.toBytes(true));
+    const [Bm, a0, a1, a2, a3] = [B, M, Z, t2, t3].map((i) => i.toBytes());
     return hashToScalarPrefixed(encode(Bm, a0, a1, a2, a3, 'Challenge'), ctx);
   }
 
@@ -436,7 +437,7 @@ export function createORPF<P extends OPRFPoint<P>>(opts: OPRFOpts<P>): OPRF {
   function generateKeyPair() {
     const skS = randomScalar();
     const pkS = Point.BASE.multiply(skS);
-    return { secretKey: Fn.toBytes(skS), publicKey: pkS.toBytes(true) };
+    return { secretKey: Fn.toBytes(skS), publicKey: pkS.toBytes() };
   }
 
   function deriveKeyPair(ctx: Bytes, seed: Bytes, info: Bytes) {
@@ -446,7 +447,7 @@ export function createORPF<P extends OPRFPoint<P>>(opts: OPRFOpts<P>): OPRF {
       msg[msg.length - 1] = counter;
       const skS = opts.hashToScalar(msg, { DST: dst });
       if (Fn.is0(skS)) continue; // should not happen
-      return { secretKey: Fn.toBytes(skS), publicKey: Point.BASE.multiply(skS).toBytes(true) };
+      return { secretKey: Fn.toBytes(skS), publicKey: Point.BASE.multiply(skS).toBytes() };
     }
     throw new Error('Cannot derive key');
   }
@@ -455,13 +456,13 @@ export function createORPF<P extends OPRFPoint<P>>(opts: OPRFOpts<P>): OPRF {
     const inputPoint = hashToGroup(input, ctx);
     if (inputPoint.equals(Point.ZERO)) throw new Error('Input point at infinity');
     const blinded = inputPoint.multiply(blind);
-    return { blind: Fn.toBytes(blind), blinded: blinded.toBytes(true) };
+    return { blind: Fn.toBytes(blind), blinded: blinded.toBytes() };
   }
   function evaluate(ctx: Bytes, secretKey: ScalarBytes, input: Bytes) {
     const skS = Fn.fromBytes(secretKey);
     const inputPoint = hashToGroup(input, ctx);
     if (inputPoint.equals(Point.ZERO)) throw new Error('Input point at infinity');
-    const unblinded = inputPoint.multiply(skS).toBytes(true);
+    const unblinded = inputPoint.multiply(skS).toBytes();
     return hashInput(input, unblinded);
   }
   const oprf = {
@@ -471,12 +472,12 @@ export function createORPF<P extends OPRFPoint<P>>(opts: OPRFOpts<P>): OPRF {
     blindEvaluate(secretKey: ScalarBytes, blindedPoint: PointBytes) {
       const skS = Fn.fromBytes(secretKey);
       const elm = Point.fromBytes(blindedPoint);
-      return elm.multiply(skS).toBytes(true);
+      return elm.multiply(skS).toBytes();
     },
     finalize(input: Bytes, blindBytes: ScalarBytes, evaluatedBytes: PointBytes) {
       const blind = Fn.fromBytes(blindBytes);
       const evalPoint = Point.fromBytes(evaluatedBytes);
-      const unblinded = evalPoint.multiply(Fn.inv(blind)).toBytes(true);
+      const unblinded = evalPoint.multiply(Fn.inv(blind)).toBytes();
       return hashInput(input, unblinded);
     },
     evaluate: (secretKey: ScalarBytes, input: Bytes) => evaluate(ctxOPRF, secretKey, input),
@@ -498,7 +499,7 @@ export function createORPF<P extends OPRFPoint<P>>(opts: OPRFOpts<P>): OPRF {
       const blindedPoints = blinded.map(Point.fromBytes);
       const evaluated = blindedPoints.map((i) => i.multiply(skS));
       const proof = generateProof(ctxVOPRF, skS, pkS, blindedPoints, evaluated, rng);
-      return { evaluated: evaluated.map((i) => i.toBytes(true)), proof };
+      return { evaluated: evaluated.map((i) => i.toBytes()), proof };
     },
     blindEvaluate(
       secretKey: ScalarBytes,
@@ -546,8 +547,8 @@ export function createORPF<P extends OPRFPoint<P>>(opts: OPRFOpts<P>): OPRF {
         const blindedPoint = inputPoint.multiply(blind);
         return {
           blind: Fn.toBytes(blind),
-          blinded: blindedPoint.toBytes(true),
-          tweakedKey: tweakedKey.toBytes(true),
+          blinded: blindedPoint.toBytes(),
+          tweakedKey: tweakedKey.toBytes(),
         };
       },
       blindEvaluateBatch(secretKey: ScalarBytes, blinded: PointBytes[], rng: RNG = randomBytes) {
@@ -561,7 +562,7 @@ export function createORPF<P extends OPRFPoint<P>>(opts: OPRFOpts<P>): OPRF {
         const evalPoints = blindedPoints.map((i) => i.multiply(invT));
         const tweakedKey = Point.BASE.multiply(t);
         const proof = generateProof(ctxPOPRF, t, tweakedKey, evalPoints, blindedPoints, rng);
-        return { evaluated: evalPoints.map((i) => i.toBytes(true)), proof };
+        return { evaluated: evalPoints.map((i) => i.toBytes()), proof };
       },
       blindEvaluate(secretKey: ScalarBytes, blinded: PointBytes, rng: RNG = randomBytes) {
         const res = this.blindEvaluateBatch(secretKey, [blinded], rng);
@@ -579,7 +580,7 @@ export function createORPF<P extends OPRFPoint<P>>(opts: OPRFOpts<P>): OPRF {
         );
         return items.map((i, j) => {
           const blind = Fn.fromBytes(i.blind);
-          const point = evalPoints[j].multiply(Fn.inv(blind)).toBytes(true);
+          const point = evalPoints[j].multiply(Fn.inv(blind)).toBytes();
           return hashInput(i.input, info, point);
         });
       },
@@ -599,7 +600,7 @@ export function createORPF<P extends OPRFPoint<P>>(opts: OPRFOpts<P>): OPRF {
         if (inputPoint.equals(Point.ZERO)) throw new Error('Input point at infinity');
         const t = Fn.add(skS, m);
         const invT = Fn.inv(t);
-        const unblinded = inputPoint.multiply(invT).toBytes(true);
+        const unblinded = inputPoint.multiply(invT).toBytes();
         return hashInput(input, info, unblinded);
       },
     };
