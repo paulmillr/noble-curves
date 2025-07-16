@@ -114,7 +114,7 @@ describe('ristretto255', () => {
   should('have proper equality testing', () => {
     const MAX_255B = BigInt('0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff');
     const bytes255ToNumberLE = (bytes) =>
-      ed25519ctx.CURVE.Fp.create(bytesToNumberLE(bytes) & MAX_255B);
+      ed25519ctx.Point.Fp.create(bytesToNumberLE(bytes) & MAX_255B);
 
     const priv = new Uint8Array([
       198, 101, 65, 165, 93, 120, 37, 238, 16, 133, 10, 35, 253, 243, 161, 246, 229, 135, 12, 137,
@@ -232,7 +232,7 @@ describe('decaf448', () => {
     const MAX_448B = BigInt(
       '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
     );
-    const bytes448ToNumberLE = (bytes) => ed448.CURVE.Fp.create(bytesToNumberLE(bytes) & MAX_448B);
+    const bytes448ToNumberLE = (bytes) => ed448.Point.Fp.create(bytesToNumberLE(bytes) & MAX_448B);
 
     const priv = new Uint8Array([
       23, 211, 149, 179, 209, 108, 78, 37, 229, 45, 122, 220, 85, 38, 192, 182, 96, 40, 168, 63,

@@ -93,7 +93,7 @@ describe('ed448', () => {
     fc.assert(
       fc.property(
         hexaString({ minLength: 2, maxLength: 57 }),
-        fc.bigInt(2n, ed.CURVE.n),
+        fc.bigInt(2n, ed.Point.Fn.ORDER),
         (message, privateKey) => {
           const publicKey = ed.getPublicKey(bytes57(privateKey));
           const signature = ed.sign(bytes57(message), bytes57(privateKey));
@@ -110,7 +110,7 @@ describe('ed448', () => {
       fc.property(
         fc.array(fc.integer({ min: 0x00, max: 0xff })),
         fc.array(fc.integer({ min: 0x00, max: 0xff })),
-        fc.bigInt(1n, ed.CURVE.n),
+        fc.bigInt(1n, ed.Point.Fn.ORDER),
         (bytes, wrongBytes, privateKey) => {
           const message = new Uint8Array(bytes);
           const wrongMessage = new Uint8Array(wrongBytes);
@@ -364,7 +364,7 @@ describe('ed448', () => {
 
       s = hex(s.slice().reverse());
       s = BigInt('0x' + s);
-      s = s + ed448.CURVE.n;
+      s = s + ed448.Point.Fn.ORDER;
       s = numberToBytesLE(s, 56);
 
       const sig_invalid = concatBytes(R, s);

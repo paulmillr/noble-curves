@@ -118,7 +118,7 @@ describe('ACVP', () => {
       const curve = CURVES[info.ip.curve];
       if (!curve) continue;
       const hash = HASHES[info.ip.hashAlg];
-      const curveWithHash = curve.create(hash);
+      const curveWithHash = curve._createWithNewHash(hash);
       for (const t of tests) {
         if (t.ip.randomValue) continue; // mesage randomization
         const sk = hexToBytes(info.ip.d);
@@ -146,7 +146,7 @@ describe('ACVP', () => {
       if (info.ip.hashAlg.startsWith('SHAKE-')) continue;
       // console.log(info.ip.hashAlg);
       const hash = HASHES[info.ip.hashAlg];
-      const curveWithHash = curve.create(hash);
+      const curveWithHash = curve._createWithNewHash(hash);
       for (const t of tests) {
         if (t.ip.randomValue) continue; // mesage randomization
         const opts = { lowS: false, prehash: true };

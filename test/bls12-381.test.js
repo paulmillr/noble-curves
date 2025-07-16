@@ -162,7 +162,7 @@ fc.configureGlobal({ numRuns: NUM_RUNS });
 const G1Point = bls.G1.Point;
 const G2Point = bls.G2.Point;
 const G1Aff = (x, y) => G1Point.fromAffine({ x, y });
-const CURVE_ORDER = bls.params.r;
+const CURVE_ORDER = bls.G1.Point.Fn.ORDER;
 
 function hexa() {
   const items = '0123456789abcdef';

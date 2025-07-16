@@ -120,7 +120,7 @@ describe('ed25519', () => {
         fc.property(
           hexaString({ minLength: 2, maxLength: 32 }),
           // @ts-ignore
-          fc.bigInt(2n, ed.CURVE.n),
+          fc.bigInt(2n, ed.Point.Fn.ORDER),
           (msgh, privnum) => {
             const priv = bytes32(privnum);
             const pub = ed.getPublicKey(priv);
@@ -141,7 +141,7 @@ describe('ed25519', () => {
           fc.array(fc.integer({ min: 0x00, max: 0xff })),
           // @ts-ignore
           fc.array(fc.integer({ min: 0x00, max: 0xff })),
-          fc.bigInt(1n, ed.CURVE.n),
+          fc.bigInt(1n, ed.Point.Fn.ORDER),
           (bytes, wrongBytes, privateKey) => {
             const privKey = bytes32(privateKey);
             const message = new Uint8Array(bytes);
@@ -198,7 +198,7 @@ describe('ed25519', () => {
       let s_0 = signature.slice(32, 64);
       let s_1 = hex(s_0.slice().reverse());
       let s_2 = BigInt('0x' + s_1);
-      s_2 = s_2 + ed.CURVE.n;
+      s_2 = s_2 + ed.Point.Fn.ORDER;
       let s_3 = numberToBytesLE(s_2, 32);
 
       const sig_invalid = concatBytes(R, s_3);

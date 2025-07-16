@@ -32,7 +32,7 @@ export function phex(point) {
 // the file is shared between noble-curves and noble-secp256k1.
 
 const Point = secp.Point;
-const FC_BIGINT = fc.bigInt(1n + 1n, secp.CURVE.n - 1n);
+const FC_BIGINT = fc.bigInt(1n + 1n, secp.Point.Fn.ORDER - 1n);
 // TODO: Real implementation.
 function derToPub(der) {
   return hexToBytes(der.slice(46));
@@ -134,7 +134,7 @@ describe('secp256k1 static vectors', () => {
       for (const vector of VECTORS_points.invalid.pointMultiply) {
         let { P, d } = vector;
         const Pb = hexToBytes(P);
-        if (hexToNumber(d) < secp.CURVE.n) {
+        if (hexToNumber(d) < secp.Point.Fn.ORDER) {
           throws(() => {
             const p = Point.fromBytes(Pb);
             p.multiply(hexToNumber(d)).toBytes(true);
@@ -356,17 +356,20 @@ describe('secp256k1 static vectors', () => {
     };
     const tweakUtils = {
       privateAdd: (privateKey, tweak) => {
-        return numberToBytesBE(mod(normPriv(privateKey) + normPriv(tweak), secp.CURVE.n), 32);
+        return numberToBytesBE(
+          mod(normPriv(privateKey) + normPriv(tweak), secp.Point.Fn.ORDER),
+          32
+        );
       },
 
       privateNegate: (privateKey) => {
-        return numberToBytesBE(mod(-normPriv(privateKey), secp.CURVE.n), 32);
+        return numberToBytesBE(mod(-normPriv(privateKey), secp.Point.Fn.ORDER), 32);
       },
 
       pointAddScalar: (p, tweak, isCompressed) => {
         p = normPub(p);
         tweak = normPub(tweak);
-        const tweaked = Point.fromBytes(p).add(Point.fromPrivateKey(tweak));
+        const tweaked = Point.fromBytes(p).add(Point.BASE.multiply(Point.Fn.fromBytes(tweak)));
         if (tweaked.is0()) throw new Error('Tweaked point at infinity');
         return tweaked.toBytes(isCompressed);
       },

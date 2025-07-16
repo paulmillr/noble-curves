@@ -89,7 +89,7 @@ should('fields', () => {
     secp521r1:
       0x01ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffn,
   };
-  for (const n in vectors) eql(NIST[n].CURVE.Fp.ORDER, vectors[n]);
+  for (const n in vectors) eql(NIST[n].Point.Fp.ORDER, vectors[n]);
 });
 
 // We don't support ASN.1 encoding of points. For tests we've implemented quick
@@ -98,8 +98,8 @@ should('fields', () => {
 function verifyECDHVector(test, curve) {
   if (test.flags.includes('InvalidAsn')) return; // Ignore invalid ASN
   if (test.result === 'valid' || test.result === 'acceptable') {
-    const fnLen = curve.CURVE.nByteLength; // 32 for P256
-    const fpLen = curve.CURVE.Fp.BYTES; // 32 for P256
+    const fnLen = curve.Point.Fn.BYTES; // 32 for P256
+    const fpLen = curve.Point.Fp.BYTES; // 32 for P256
     const encodedHexLen = fpLen * 2 * 2 + 2; // 130 (65 * 2) for P256
     const pubB = test.public.slice(-encodedHexLen); // slice(-130) for P256
     let privA = test.private;
@@ -353,7 +353,7 @@ describe('wycheproof ECDSA', () => {
       if (!CURVE) continue;
       const hasLowS = group.key.curve === 'secp256k1';
       if (group.key.curve === 'secp224r1' && group.sha !== 'SHA-224') {
-        if (group.sha === 'SHA-256') CURVE = CURVE.create(sha256);
+        if (group.sha === 'SHA-256') CURVE = CURVE._createWithNewHash(sha256);
       }
       const uncomp = hexToBytes(group.key.uncompressed);
       const pubKey = CURVE.Point.fromBytes(uncomp);
@@ -392,7 +392,7 @@ describe('wycheproof ECDSA', () => {
     describe(name, () => {
       for (const hName in hashes) {
         const { hash, tests } = hashes[hName];
-        const CURVE = curve.create(hash);
+        const CURVE = curve._createWithNewHash(hash);
         should(`${name}/${hName}`, () => {
           for (let i = 0; i < tests.length; i++) {
             const groups = tests[i].testGroups;
@@ -413,7 +413,7 @@ describe('RFC6979', () => {
     should(v.curve, () => {
       const hasLowS = v.curve === 'secp256k1';
       const curve = NIST[v.curve];
-      eql(curve.CURVE.n, hexToBigint(v.q));
+      eql(curve.Point.Fn.ORDER, hexToBigint(v.q));
       if (v.curve === 'P521') v.private = v.private.padStart(132, '0');
       const priv = hexToBytes(v.private);
       const pubKey = curve.getPublicKey(priv);
