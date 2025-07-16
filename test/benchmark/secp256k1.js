@@ -10,7 +10,7 @@ import { generateData, title } from './_shared.js';
   await mark('sign', () => secp256k1.sign(d.msg, d.priv));
   await mark('verify', () => secp256k1.verify(d.sig, d.msg, d.pub));
   await mark('recoverPublicKey', () => d.sig.recoverPublicKey(d.msg));
-  const pub2 = secp256k1.getPublicKey(secp256k1.utils.randomPrivateKey());
+  const pub2 = secp256k1.getPublicKey(secp256k1.utils.randomSecretKey());
   await mark('getSharedSecret', () => secp256k1.getSharedSecret(d.priv, pub2));
   const s = schnorr.sign(d.msg, d.priv);
   const spub = schnorr.getPublicKey(d.priv);

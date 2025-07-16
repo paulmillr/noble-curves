@@ -1,7 +1,7 @@
 export function generateData(curve) {
-  const priv = curve.utils.randomPrivateKey();
+  const priv = curve.utils.randomSecretKey();
   const pub = curve.getPublicKey(priv, true);
-  const msg = curve.utils.randomPrivateKey();
+  const msg = curve.utils.randomSecretKey();
   const sig = curve.sign(msg, priv);
   const isWeierstrass = !!curve.ProjectivePoint;
   const Point = isWeierstrass ? curve.ProjectivePoint : curve.ExtendedPoint;

@@ -140,9 +140,9 @@ describe('X25519 RFC7748 ECDH', () => {
 
   should('X25519/getSharedSecret() should be commutative', () => {
     for (let i = 0; i < 512; i++) {
-      const asec = x25519.utils.randomPrivateKey();
+      const asec = x25519.utils.randomSecretKey();
       const apub = x25519.getPublicKey(asec);
-      const bsec = x25519.utils.randomPrivateKey();
+      const bsec = x25519.utils.randomSecretKey();
       const bpub = x25519.getPublicKey(bsec);
       try {
         eql(x25519.getSharedSecret(asec, bpub), x25519.getSharedSecret(bsec, apub));
@@ -166,7 +166,7 @@ describe('X25519 RFC7748 ECDH', () => {
     });
 
     should('edwardsToMontgomery should produce correct keyPair', () => {
-      const edSecret = ed25519.utils.randomPrivateKey();
+      const edSecret = ed25519.utils.randomSecretKey();
       const edPublic = ed25519.getPublicKey(edSecret);
       const xSecret = ed25519.utils.toMontgomeryPriv(edSecret);
       const expectedXPublic = x25519.getPublicKey(xSecret);
@@ -175,9 +175,9 @@ describe('X25519 RFC7748 ECDH', () => {
     });
 
     should('ECDH through edwardsToMontgomery should be commutative', () => {
-      const edSecret1 = ed25519.utils.randomPrivateKey();
+      const edSecret1 = ed25519.utils.randomSecretKey();
       const edPublic1 = ed25519.getPublicKey(edSecret1);
-      const edSecret2 = ed25519.utils.randomPrivateKey();
+      const edSecret2 = ed25519.utils.randomSecretKey();
       const edPublic2 = ed25519.getPublicKey(edSecret2);
       eql(
         x25519.getSharedSecret(

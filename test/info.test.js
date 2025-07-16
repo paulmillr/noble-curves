@@ -25,7 +25,7 @@ describe('info', () => {
     describe(name, () => {
       should('keys', () => {
         const len = curve.info.lengths;
-        const privateKey = curve.utils.randomPrivateKey();
+        const privateKey = curve.utils.randomSecretKey();
         eql(privateKey.length, len.secret);
         const publicKey = curve.getPublicKey(privateKey);
         eql(publicKey.length, len.public);
@@ -42,14 +42,14 @@ describe('info', () => {
           curve.verify(sig, msg, publicKey);
         }
         const seed = randomBytes(len.seed);
-        eql(curve.utils.randomPrivateKey(seed), curve.utils.randomPrivateKey(seed));
-        curve.getPublicKey(curve.utils.randomPrivateKey(seed)); // doesn't throw
+        eql(curve.utils.randomSecretKey(seed), curve.utils.randomSecretKey(seed));
+        curve.getPublicKey(curve.utils.randomSecretKey(seed)); // doesn't throw
       });
       should('keygen', () => {
         const seed = randomBytes(curve.info.lengths.seed);
         const keys = curve.keygen(seed);
-        eql(keys.secretKey, curve.utils.randomPrivateKey(seed));
-        eql(keys.publicKey, curve.getPublicKey(curve.utils.randomPrivateKey(seed)));
+        eql(keys.secretKey, curve.utils.randomSecretKey(seed));
+        eql(keys.publicKey, curve.getPublicKey(curve.utils.randomSecretKey(seed)));
       });
     });
   }

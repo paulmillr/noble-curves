@@ -61,25 +61,28 @@ describe('webcrypto', () => {
           deepStrictEqual(await web.isAvailable(), true);
           deepStrictEqual(await webcrypto.supportsWc(web), true);
           // Keygen
-          const privFormat = keyType === 'spki' ? 'raw' : keyType;
+          const secFormat = keyType === 'spki' ? 'raw' : keyType;
           const pubFormat = keyType === 'pkcs8' ? 'raw' : keyType;
-          const randomWeb = await web.utils.randomPrivateKey(privFormat);
-          const randomNoble = noble.utils.randomPrivateKey();
-          const randomNobleConverted = await web.utils.convertPrivateKey(
+          const randomWeb = await web.utils.randomSecretKey(secFormat);
+          const randomNoble = noble.utils.randomSecretKey();
+          const randomNobleConverted = await web.utils.convertSecretKey(
             randomNoble,
             'raw',
-            privFormat
+            secFormat
           );
           const randomNoblePub = await web.getPublicKey(randomNobleConverted, {
-            privFormat,
+            secFormat: secFormat,
             pubFormat,
           });
-          const publicWeb = await web.getPublicKey(randomWeb, { privFormat, pubFormat });
-          const rawPrivWeb = await web.utils.convertPrivateKey(randomWeb, privFormat, 'raw');
+          const publicWeb = await web.getPublicKey(randomWeb, { secFormat: secFormat, pubFormat });
+          const rawPrivWeb = await web.utils.convertSecretKey(randomWeb, secFormat, 'raw');
           const rawPubWeb = await web.utils.convertPublicKey(publicWeb, pubFormat, 'raw');
           deepStrictEqual(rawPubWeb, noble.getPublicKey(rawPrivWeb, false));
           deepStrictEqual(
-            await web.getPublicKey(randomNobleConverted, { privFormat, pubFormat: 'raw' }),
+            await web.getPublicKey(randomNobleConverted, {
+              secFormat: secFormat,
+              pubFormat: 'raw',
+            }),
             noble.getPublicKey(randomNoble, false)
           );
           deepStrictEqual(
@@ -88,7 +91,7 @@ describe('webcrypto', () => {
           );
           // Sign
           if (canSign) {
-            const sigWeb = await web.sign(MSG, randomWeb, { format: privFormat });
+            const sigWeb = await web.sign(MSG, randomWeb, { format: secFormat });
             let sigNoble = noble.sign(MSG, randomNoble, { prehash: true });
             if (c !== 'ed25519' && c !== 'ed448') sigNoble = sigNoble.toBytes('compact');
             deepStrictEqual(await web.verify(sigWeb, MSG, publicWeb, { format: pubFormat }), true);
@@ -99,9 +102,9 @@ describe('webcrypto', () => {
             deepStrictEqual(noble.verify(sigWeb, MSG, rawPubWeb, { prehash: true }), true);
           }
           // Get shared secret
-          if (canDerive && privFormat === pubFormat) {
+          if (canDerive && secFormat === pubFormat) {
             const webShared = await web.getSharedSecret(randomWeb, randomNoblePub, {
-              format: privFormat,
+              format: secFormat,
             });
             const nobleShared = noble.getSharedSecret(rawPrivWeb, noble.getPublicKey(randomNoble));
             deepStrictEqual(

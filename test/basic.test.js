@@ -849,7 +849,7 @@ for (const name in CURVES) {
       should('.verify() should verify random signatures', () =>
         fc.assert(
           fc.property(FC_HEX, (msg) => {
-            const priv = C.utils.randomPrivateKey();
+            const priv = C.utils.randomSecretKey();
             const pub = C.getPublicKey(priv);
             const sig = C.sign(msg, priv);
             eql(C.verify(sig, msg, pub), true, `priv=${hex(priv)},pub=${hex(pub)},msg=${msg}`);
@@ -860,7 +860,7 @@ for (const name in CURVES) {
       should('.verify() should verify random signatures in hex', () =>
         fc.assert(
           fc.property(FC_HEX, (msg) => {
-            const priv = hex(C.utils.randomPrivateKey());
+            const priv = hex(C.utils.randomSecretKey());
             const pub = hex(C.getPublicKey(priv));
             const sig = C.sign(msg, priv);
             let sighex = isBytes(sig) ? hex(sig) : sig.toHex('compact');
@@ -871,7 +871,7 @@ for (const name in CURVES) {
       );
       should('.verify() should verify empty signatures', () => {
         const msg = new Uint8Array([]);
-        const priv = C.utils.randomPrivateKey();
+        const priv = C.utils.randomSecretKey();
         const pub = C.getPublicKey(priv);
         const sig = C.sign(msg, priv);
         eql(C.verify(sig, msg, pub), true, `priv=${hex(priv)},pub=${hex(pub)},msg=${msg}`);
@@ -879,7 +879,7 @@ for (const name in CURVES) {
 
       should('.sign() type tests', () => {
         const msg = new Uint8Array([]);
-        const priv = C.utils.randomPrivateKey();
+        const priv = C.utils.randomSecretKey();
         C.sign(msg, priv);
         for (let [item, repr_] of getTypeTests()) {
           throws(() => C.sign(msg, item), repr_);
@@ -899,25 +899,25 @@ for (const name in CURVES) {
         const msg = '01'.repeat(32);
         const msgWrong = '11'.repeat(32);
         should('true for proper signatures', () => {
-          const priv = C.utils.randomPrivateKey();
+          const priv = C.utils.randomSecretKey();
           const sig = C.sign(msg, priv);
           const pub = C.getPublicKey(priv);
           eql(C.verify(sig, msg, pub), true);
         });
         should('false for wrong messages', () => {
-          const priv = C.utils.randomPrivateKey();
+          const priv = C.utils.randomSecretKey();
           const sig = C.sign(msg, priv);
           const pub = C.getPublicKey(priv);
           eql(C.verify(sig, msgWrong, pub), false);
         });
         should('false for wrong keys', () => {
-          const priv = C.utils.randomPrivateKey();
-          const pub2 = C.getPublicKey(C.utils.randomPrivateKey());
+          const priv = C.utils.randomSecretKey();
+          const pub2 = C.getPublicKey(C.utils.randomSecretKey());
           const sig = C.sign(msg, priv);
           eql(C.verify(sig, msg, pub2), false);
         });
         should('type tests', () => {
-          const priv = C.utils.randomPrivateKey();
+          const priv = C.utils.randomSecretKey();
           const sig = C.sign(msg, priv);
           const pub = C.getPublicKey(priv);
           C.verify(sig, msg, pub);
@@ -934,7 +934,7 @@ for (const name in CURVES) {
       should('Signature serialization roundtrip', () =>
         fc.assert(
           fc.property(FC_HEX, (msg) => {
-            const priv = C.utils.randomPrivateKey();
+            const priv = C.utils.randomSecretKey();
             const sig = C.sign(msg, priv);
             const sigRS = (sig) => ({ s: sig.s, r: sig.r });
             // Compact
@@ -952,7 +952,7 @@ for (const name in CURVES) {
           fc.property(FC_HEX, (msg) => {
             if (C.CURVE.h >= 2n) return;
             // if (/secp128r2|secp224k1|bls|mnt/i.test(name)) return;
-            const priv = C.utils.randomPrivateKey();
+            const priv = C.utils.randomSecretKey();
             const pub = C.getPublicKey(priv);
             const sig = C.sign(msg, priv);
             eql(sig.recoverPublicKey(msg).toBytes(), pub);
@@ -967,7 +967,7 @@ for (const name in CURVES) {
       should('Signature.normalizeS', () =>
         fc.assert(
           fc.property(FC_HEX, (msg) => {
-            const priv = C.utils.randomPrivateKey();
+            const priv = C.utils.randomSecretKey();
             const pub = C.getPublicKey(priv);
             const sig = C.sign(msg, priv, { lowS: false });
             if (!sig.hasHighS()) return;
@@ -992,7 +992,7 @@ for (const name in CURVES) {
     //       fc.array(fc.integer({ min: 0x00, max: 0xff })),
     //       fc.array(fc.integer({ min: 0x00, max: 0xff })),
     //       (bytes, wrongBytes) => {
-    //         const privKey = C.utils.randomPrivateKey();
+    //         const privKey = C.utils.randomSecretKey();
     //         const message = new Uint8Array(bytes);
     //         const wrongMessage = new Uint8Array(wrongBytes);
     //         const publicKey = C.getPublicKey(privKey);
@@ -1010,9 +1010,9 @@ for (const name in CURVES) {
     if (C.getSharedSecret) {
       should('getSharedSecret() should be commutative', () => {
         for (let i = 0; i < NUM_RUNS; i++) {
-          const asec = C.utils.randomPrivateKey();
+          const asec = C.utils.randomSecretKey();
           const apub = C.getPublicKey(asec);
-          const bsec = C.utils.randomPrivateKey();
+          const bsec = C.utils.randomSecretKey();
           const bpub = C.getPublicKey(bsec);
           try {
             eql(C.getSharedSecret(asec, bpub), C.getSharedSecret(bsec, apub));

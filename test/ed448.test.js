@@ -136,7 +136,7 @@ describe('ed448', () => {
       eql(ed.verify(signature, msg, publicKey), true);
     });
     should('not verify signature with wrong public key', () => {
-      const publicKey = ed.getPublicKey(ed.utils.randomPrivateKey());
+      const publicKey = ed.getPublicKey(ed.utils.randomSecretKey());
       const signature = ed.sign(msg, privKey);
       eql(ed.verify(signature, msg, publicKey), false);
     });
@@ -153,7 +153,7 @@ describe('ed448', () => {
       eql(ed.verify(signature, msg, publicKey), true);
     });
     should('not verify signature with wrong public key', () => {
-      const publicKey = ed.getPublicKey(ed.utils.randomPrivateKey());
+      const publicKey = ed.getPublicKey(ed.utils.randomSecretKey());
       const signature = ed.sign(msg, privKey);
       eql(ed.verify(signature, msg, publicKey), false);
     });
@@ -171,7 +171,7 @@ describe('ed448', () => {
   });
 
   should('input immutability: sign/verify are immutable', () => {
-    const privateKey = ed.utils.randomPrivateKey();
+    const privateKey = ed.utils.randomSecretKey();
     const publicKey = ed.getPublicKey(privateKey);
 
     for (let i = 0; i < 100; i++) {
@@ -253,9 +253,9 @@ describe('ed448', () => {
 
   // should('X448/getSharedSecret() should be commutative', async () => {
   //   for (let i = 0; i < 512; i++) {
-  //     const asec = ed.utils.randomPrivateKey();
+  //     const asec = ed.utils.randomSecretKey();
   //     const apub = ed.getPublicKey(asec);
-  //     const bsec = ed.utils.randomPrivateKey();
+  //     const bsec = ed.utils.randomSecretKey();
   //     const bpub = ed.getPublicKey(bsec);
   //     try {
   //       deepStrictEqual(ed.getSharedSecret(asec, bpub), ed.getSharedSecret(bsec, apub));
@@ -354,7 +354,7 @@ describe('ed448', () => {
 
   should('not verify when sig.s >= CURVE.n', () => {
     function get56bSig() {
-      const privateKey = ed448.utils.randomPrivateKey();
+      const privateKey = ed448.utils.randomSecretKey();
       const message = Uint8Array.from([0xab, 0xbc, 0xcd, 0xde]);
       const publicKey = ed448.getPublicKey(privateKey);
       const signature = ed448.sign(message, privateKey);

@@ -45,7 +45,7 @@ describe('ed25519', () => {
 
   describe('sign()', () => {
     should('creates random signature', () => {
-      const priv = ed.utils.randomPrivateKey();
+      const priv = ed.utils.randomSecretKey();
       const pub = ed.getPublicKey(priv);
       const msg = new TextEncoder().encode('hello');
       const sig = ed.sign(msg, priv);
@@ -159,7 +159,7 @@ describe('ed25519', () => {
     });
 
     should('not mutate inputs 1', () => {
-      const privateKey = ed.utils.randomPrivateKey();
+      const privateKey = ed.utils.randomSecretKey();
       const publicKey = ed.getPublicKey(privateKey);
 
       for (let i = 0; i < 100; i++) {
@@ -189,7 +189,7 @@ describe('ed25519', () => {
     });
 
     should('not verify when sig.s >= CURVE.n', () => {
-      const privateKey = ed.utils.randomPrivateKey();
+      const privateKey = ed.utils.randomSecretKey();
       const message = Uint8Array.from([0xab, 0xbc, 0xcd, 0xde]);
       const publicKey = ed.getPublicKey(privateKey);
       const signature = ed.sign(message, privateKey);
@@ -232,11 +232,11 @@ describe('ed25519', () => {
       const zeros = ed.Point.fromAffine({ x: 0n, y: 0n });
       eql(zeros.equals(ed.Point.BASE.multiply(3n)), false);
 
-      const key = ed.utils.randomPrivateKey();
+      const key = ed.utils.randomSecretKey();
       const A = ed.Point.fromBytes(ed.getPublicKey(key));
       const T = ed.Point.fromBytes(bytes(ED25519_TORSION_SUBGROUP[2]));
       const B = A.add(T).add(A);
-      const C = ed.Point.fromBytes(ed.getPublicKey(ed.utils.randomPrivateKey()));
+      const C = ed.Point.fromBytes(ed.getPublicKey(ed.utils.randomSecretKey()));
       eql(B.equals(C), false);
 
       const sig =
@@ -283,7 +283,7 @@ describe('ed25519', () => {
     });
 
     should('isTorsionFree()', () => {
-      const { point } = ed.utils.getExtendedPublicKey(ed.utils.randomPrivateKey());
+      const { point } = ed.utils.getExtendedPublicKey(ed.utils.randomSecretKey());
       for (const hex of ED25519_TORSION_SUBGROUP.slice(1)) {
         const dirty = point.add(Point.fromBytes(bytes(hex)));
         const cleared = dirty.clearCofactor();

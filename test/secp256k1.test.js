@@ -5,15 +5,15 @@ import { deepStrictEqual as eql, throws } from 'node:assert';
 import { getTypeTestsNonUi8a, json, txt } from './utils.js';
 // prettier-ignore
 import {
-  bytesToNumberBE,
-  mod,
-  normVerifySig,
-  numberToBytesBE,
-  schnorr,
-  secp,
-  selectHash,
-  sigFromDER,
-  sigToDER
+    bytesToNumberBE,
+    mod,
+    normVerifySig,
+    numberToBytesBE,
+    schnorr,
+    secp,
+    selectHash,
+    sigFromDER,
+    sigToDER
 } from './secp256k1.helpers.js';
 
 const VECTORS_ecdsa = json('./vectors/secp256k1/ecdsa.json');
@@ -644,7 +644,7 @@ describe('verify()', () => {
       throws(() => sig.recoverPublicKey(msgHash));
     });
     should('handle all-zeros msghash', () => {
-      const privKey = secp.utils.randomPrivateKey();
+      const privKey = secp.utils.randomSecretKey();
       const pub = secp.getPublicKey(privKey);
       const zeros = hexToBytes('0000000000000000000000000000000000000000000000000000000000000000');
       const sig = secp.sign(zeros, privKey);

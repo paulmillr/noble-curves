@@ -49,7 +49,7 @@ import { title } from './_shared.js';
   );
 
   title('ristretto255');
-  const priv = hashToPrivateScalar(sha512(ed25519.utils.randomPrivateKey()), ed25519.CURVE.n);
+  const priv = hashToPrivateScalar(sha512(ed25519.utils.randomSecretKey()), ed25519.CURVE.n);
   const pub = RistrettoPoint.BASE.multiply(priv);
   const encoded = pub.toRawBytes();
   const msg = utf8ToBytes('message');
@@ -64,7 +64,7 @@ import { title } from './_shared.js';
 
   title('decaf448');
   const dpriv = hashToPrivateScalar(
-    shake256(ed448.utils.randomPrivateKey(), { dkLen: 112 }),
+    shake256(ed448.utils.randomSecretKey(), { dkLen: 112 }),
     ed448.CURVE.n
   );
   const dpub = DecafPoint.BASE.multiply(priv);
