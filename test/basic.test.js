@@ -12,15 +12,17 @@ import { twistedEdwards } from '../esm/abstract/edwards.js';
 import { Field } from '../esm/abstract/modular.js';
 import { bls12_381 } from '../esm/bls12-381.js';
 import { bn254 } from '../esm/bn254.js';
-import { ed25519, ed25519ctx, ed25519ph, RistrettoPoint, x25519 } from '../esm/ed25519.js';
-import { DecafPoint, ed448, ed448ph } from '../esm/ed448.js';
-import { babyjubjub, jubjub, pallas, vesta } from '../esm/misc.js';
+import { ed25519, ed25519ctx, ed25519ph, ristretto255, x25519 } from '../esm/ed25519.js';
+import { decaf448, ed448, ed448ph } from '../esm/ed448.js';
+import { babyjubjub, jubjub } from '../esm/misc.js';
 import { p256 as secp256r1, p384 as secp384r1, p521 as secp521r1 } from '../esm/nist.js';
 import { secp256k1 } from '../esm/secp256k1.js';
 import { randomBytes } from '../esm/utils.js';
 import { miscCurves, secp192r1, secp224r1 } from './_more-curves.helpers.js';
 const wyche_curves = json('./vectors/wycheproof/ec_prime_order_curves_test.json');
 
+const RistrettoPoint = ristretto255.Point;
+const DecafPoint = decaf448.Point;
 const NUM_RUNS = 5;
 
 function hexa() {
@@ -40,8 +42,6 @@ const FIELDS = {
   secp256r1: { Fp: [secp256r1.CURVE.Fp] },
   secp521r1: { Fp: [secp521r1.CURVE.Fp] },
   secp256k1: { Fp: [secp256k1.CURVE.Fp] },
-  pallas: { Fp: [pallas.Point.Fp] },
-  vesta: { Fp: [vesta.Point.Fp] },
   jubjub: { Fp: [jubjub.Point.Fp] },
   babyjubjub: { Fp: [babyjubjub.Point.Fp] },
   ed25519: { Fp: [ed25519.CURVE.Fp] },

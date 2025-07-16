@@ -624,7 +624,7 @@ describe('bn254', () => {
 
     // Ok, this seems correct?
     const g1 =
-      bn254.curves.G1.BASE.multiply(
+      bn254.G1.Point.BASE.multiply(
         18097487326282793650237947474982649264364522469319914492172746413872781676n
       );
     g1.assertValidity();

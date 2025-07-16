@@ -4,7 +4,7 @@ import { generateData, title } from './_shared.js';
 
 (async () => {
   title('secp256k1');
-  await mark('init', 1, () => secp256k1.utils.precompute(8));
+  await mark('init', 1, () => secp256k1.Point.BASE.precompute(8));
   const d = generateData(secp256k1);
   await mark('getPublicKey', () => secp256k1.getPublicKey(d.priv));
   await mark('sign', () => secp256k1.sign(d.msg, d.priv));

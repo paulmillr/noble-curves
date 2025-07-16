@@ -1,15 +1,17 @@
 import { hash_to_field } from '@noble/curves/abstract/hash-to-curve';
 import { Field as Fp, hashToPrivateScalar } from '@noble/curves/abstract/modular';
 import { hexToBytes, utf8ToBytes } from '@noble/curves/abstract/utils';
-import { ed25519, hash_to_ristretto255, RistrettoPoint } from '@noble/curves/ed25519';
-import { DecafPoint, ed448, hash_to_decaf448 } from '@noble/curves/ed448';
+import { ed25519, ristretto255, ristretto255_hasher } from '@noble/curves/ed25519';
+import { decaf448, decaf448_hasher, ed448 } from '@noble/curves/ed448';
 import { secp256k1 } from '@noble/curves/secp256k1';
-import { sha256 } from '@noble/hashes/sha256';
+import { sha256, sha512 } from '@noble/hashes/sha2.js';
 import { shake256 } from '@noble/hashes/sha3';
-import { sha512 } from '@noble/hashes/sha512';
 import { randomBytes } from '@noble/hashes/utils';
 import mark from 'micro-bmark';
 import { title } from './_shared.js';
+
+const RistrettoPoint = ristretto255.Point;
+const DecafPoint = decaf448.Point;
 
 (async () => {
   title('utils');
@@ -49,32 +51,31 @@ import { title } from './_shared.js';
   );
 
   title('ristretto255');
-  const priv = hashToPrivateScalar(sha512(ed25519.utils.randomSecretKey()), ed25519.CURVE.n);
+  const priv = ristretto255_hasher.hashToScalar(sha512(ed25519.utils.randomSecretKey()));
   const pub = RistrettoPoint.BASE.multiply(priv);
-  const encoded = pub.toRawBytes();
+  const encoded = pub.toBytes();
   const msg = utf8ToBytes('message');
 
   await mark('add', () => pub.add(RistrettoPoint.BASE));
   await mark('multiply', () => RistrettoPoint.BASE.multiply(priv));
-  await mark('encode', () => RistrettoPoint.BASE.toRawBytes());
+  await mark('encode', () => RistrettoPoint.BASE.toBytes());
   await mark('decode', () => RistrettoPoint.fromHex(encoded));
-  await mark('hash_to_ristretto255', 1000, () =>
-    hash_to_ristretto255(msg, { DST: 'ristretto255_XMD:SHA-512_R255MAP_RO_' })
+  await mark('ristretto255_hasher', 1000, () =>
+    ristretto255_hasher.hashToCurve(msg, { DST: 'ristretto255_XMD:SHA-512_R255MAP_RO_' })
   );
 
   title('decaf448');
-  const dpriv = hashToPrivateScalar(
-    shake256(ed448.utils.randomSecretKey(), { dkLen: 112 }),
-    ed448.CURVE.n
+  const dpriv = decaf448_hasher.hashToScalar(
+    shake256(ed448.utils.randomSecretKey(), { dkLen: 112 })
   );
   const dpub = DecafPoint.BASE.multiply(priv);
-  const dencoded = dpub.toRawBytes();
+  const dencoded = dpub.toBytes();
   await mark('add', () => dpub.add(DecafPoint.BASE));
   await mark('multiply', () => DecafPoint.BASE.multiply(dpriv));
-  await mark('encode', () => DecafPoint.BASE.toRawBytes());
+  await mark('encode', () => DecafPoint.BASE.toBytes());
   await mark('decode', () => DecafPoint.fromHex(dencoded));
-  await mark('hash_to_decaf448', () =>
-    hash_to_decaf448(msg, { DST: 'decaf448_XOF:SHAKE256_D448MAP_RO_' })
+  await mark('decaf448_hasher', () =>
+    decaf448_hasher.hashToCurve(msg, { DST: 'decaf448_XOF:SHAKE256_D448MAP_RO_' })
   );
 })();
 

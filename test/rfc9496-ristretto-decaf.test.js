@@ -3,8 +3,11 @@ import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql, throws } from 'node:assert';
 import { bytesToNumberLE, utf8ToBytes } from '../esm/abstract/utils.js';
-import { ed25519ctx, ristretto255_hasher, RistrettoPoint } from '../esm/ed25519.js';
-import { decaf448_hasher, DecafPoint, ed448 } from '../esm/ed448.js';
+import { ed25519ctx, ristretto255, ristretto255_hasher } from '../esm/ed25519.js';
+import { decaf448, decaf448_hasher, ed448 } from '../esm/ed448.js';
+
+const RistrettoPoint = ristretto255.Point;
+const DecafPoint = decaf448.Point;
 
 describe('ristretto255', () => {
   should('follow the byte encodings of small multiples', () => {

@@ -145,14 +145,35 @@ export type CurveType = {
 type PrecomputeSingle = [Fp2, Fp2, Fp2][];
 type Precompute = PrecomputeSingle[];
 
-export type CurveFn = {
+/**
+ * BLS consists of two curves: G1 and G2:
+ * - G1 is a subgroup of (x, y) E(Fq) over y² = x³ + 4.
+ * - G2 is a subgroup of ((x₁, x₂+i), (y₁, y₂+i)) E(Fq²) over y² = x³ + 4(1 + i) where i is √-1
+ */
+export interface BLSCurvePair {
   longSignatures: BLSSigs<bigint, Fp2>;
   shortSignatures: BLSSigs<Fp2, bigint>;
-
   millerLoopBatch: BlsPairing['millerLoopBatch'];
   pairing: BlsPairing['pairing'];
   pairingBatch: BlsPairing['pairingBatch'];
+  G1: { Point: WeierstrassPointCons<bigint> } & H2CHasher<Fp>;
+  G2: { Point: WeierstrassPointCons<Fp2> } & H2CHasher<Fp2>;
+  fields: {
+    Fp: IField<Fp>;
+    Fp2: Fp2Bls;
+    Fp6: Fp6Bls;
+    Fp12: Fp12Bls;
+    Fr: IField<bigint>;
+  };
+  utils: {
+    randomSecretKey: () => Uint8Array;
+    /** @deprecated use randomSecretKey */
+    randomPrivateKey: () => Uint8Array;
+    calcPairingPrecomputes: BlsPairing['calcPairingPrecomputes'];
+  };
+};
 
+export type CurveFn = BLSCurvePair & {
   /** @deprecated use `longSignatures.getPublicKey` */
   getPublicKey: (secretKey: PrivKey) => Uint8Array;
   /** @deprecated use `shortSignatures.getPublicKey` */
@@ -210,7 +231,6 @@ export type CurveFn = {
     (signatures: Hex[]): Uint8Array;
     (signatures: WeierstrassPoint<Fp>[]): WeierstrassPoint<Fp>;
   };
-  /** @deprecated use `curves.G1` and `curves.G2` */
   G1: CurvePointsRes<Fp> & H2CHasher<Fp>;
   G2: CurvePointsRes<Fp2> & H2CHasher<Fp2>;
   /** @deprecated use `longSignatures.Signature` */
@@ -225,21 +245,6 @@ export type CurveFn = {
     G1b: bigint;
     /** @deprecated */
     G2b: Fp2;
-  };
-  curves: {
-    G1: WeierstrassPointCons<bigint>;
-    G2: WeierstrassPointCons<Fp2>;
-  };
-  fields: {
-    Fp: IField<Fp>;
-    Fp2: Fp2Bls;
-    Fp6: Fp6Bls;
-    Fp12: Fp12Bls;
-    Fr: IField<bigint>;
-  };
-  utils: {
-    randomSecretKey: () => Uint8Array;
-    calcPairingPrecomputes: BlsPairing['calcPairingPrecomputes'];
   };
 };
 
@@ -596,11 +601,13 @@ export function bls(CURVE: CurveType): CurveFn {
   const shortSignatures = createBlsSig(pairingRes, G2, G1, CURVE.G1.ShortSignature, true);
 
   const rand = CURVE.randomBytes || randomBytes;
-  const utils = {
-    randomSecretKey: (): Uint8Array => {
+  const randomSecretKey = (): Uint8Array => {
       const length = getMinHashLength(Fr.ORDER);
       return mapHashToField(rand(length), Fr.ORDER);
-    },
+    }
+  const utils = {
+    randomSecretKey,
+    randomPrivateKey: randomSecretKey,
     calcPairingPrecomputes,
   };
 
@@ -705,10 +712,6 @@ export function bls(CURVE: CurveType): CurveFn {
     pairing,
     pairingBatch,
     verifyBatch,
-    curves: {
-      G1: G1_.Point,
-      G2: G2_.Point,
-    },
     fields: {
       Fr,
       Fp,

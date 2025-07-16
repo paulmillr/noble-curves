@@ -19,11 +19,11 @@ const G2_VECTORS = readFileSync(
   let p1, p2, sig;
   await bench('init', 1, () => {
     p1 =
-      bls.G1.ProjectivePoint.BASE.multiply(
+      bls.G1.Point.BASE.multiply(
         0x28b90deaf189015d3a325908c5e0e4bf00f84f7e639b056ff82d7e70b6eede4cn
       );
     p2 =
-      bls.G2.ProjectivePoint.BASE.multiply(
+      bls.G2.Point.BASE.multiply(
         0x28b90deaf189015d3a325908c5e0e4bf00f84f7e639b056ff82d7e70b6eede4dn
       );
     bls.pairing(p1, p2);
@@ -53,8 +53,8 @@ const G2_VECTORS = readFileSync(
   const scalars2 = Array(4096)
     .fill(0)
     .map((i) => 2n ** 241n + BigInt(i));
-  const points = scalars1.map((s) => bls.G1.ProjectivePoint.BASE.multiply(s));
-  const pointsG2 = scalars1.map((s) => bls.G2.ProjectivePoint.BASE.multiply(s));
+  const points = scalars1.map((s) => bls.G1.Point.BASE.multiply(s));
+  const pointsG2 = scalars1.map((s) => bls.G2.Point.BASE.multiply(s));
 
   const pairingBatch = 10;
   await bench(`pairing${pairingBatch}`, 10, () => {

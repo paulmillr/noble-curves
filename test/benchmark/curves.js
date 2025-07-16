@@ -1,22 +1,20 @@
-import { ed25519, hashToCurve as ed25519_hash, x25519 } from '@noble/curves/ed25519';
-import { ed448, hashToCurve as ed448_hash, x448 } from '@noble/curves/ed448';
-import { p256, hashToCurve as p256_hash } from '@noble/curves/p256';
-import { p384, hashToCurve as p384_hash } from '@noble/curves/p384';
-import { p521, hashToCurve as p521_hash } from '@noble/curves/p521';
-import { secp256k1, hashToCurve as secp256k1_hash } from '@noble/curves/secp256k1';
-import { randomBytes } from '@noble/hashes/utils';
+import { ed25519, ed25519_hasher, x25519 } from '@noble/curves/ed25519';
+import { ed448, ed448_hasher, x448 } from '@noble/curves/ed448';
+import { p256, p256_hasher, p384, p384_hasher, p521, p521_hasher } from '@noble/curves/nist.js';
+import { secp256k1, secp256k1_hasher } from '@noble/curves/secp256k1.js';
+import { randomBytes } from '@noble/hashes/utils.js';
 import compare from 'micro-bmark/compare.js';
 import { generateData } from './_shared.js';
 
 (async () => {
   const curves_ = { ed25519, ed448, secp256k1, p256, p384, p521 };
   const hashToCurves = {
-    ed25519: ed25519_hash,
-    ed448: ed448_hash,
-    p256: p256_hash,
-    p384: p384_hash,
-    p521: p521_hash,
-    secp256k1: secp256k1_hash
+    ed25519: ed25519_hasher,
+    ed448: ed448_hasher,
+    p256: p256_hasher,
+    p384: p384_hasher,
+    p521: p521_hasher,
+    secp256k1: secp256k1_hasher
   }
   const curves = {};
   const scalar = 2n ** 180n - 15820n;
@@ -40,7 +38,7 @@ import { generateData } from './_shared.js';
       verify: () => curve.verify(d.sig, d.msg, d.pub),
       getSharedSecret: getSharedSecret,
       fromHex: () => d.Point.fromHex(d.pub),
-      hashToCurve: () => hashToCurves[name](d.msg),
+      hashToCurve: () => hashToCurves[name].hashToCurve(d.msg),
       Point_add: () => d.point.add(d.point),
       Point_mul: () => d.point.multiply(scalar),
       Point_mulUns: () => d.point.multiplyUnsafe(scalar)
