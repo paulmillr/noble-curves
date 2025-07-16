@@ -154,12 +154,12 @@ describe('secp256k1 static vectors', () => {
       const vsig = hexToBytes(vector.signature);
 
       const usig = secp.sign(m, d);
-      const sig = usig.toCompactRawBytes();
+      const sig = usig.toBytes();
       eql(sig, vsig);
 
       if (secp.signAsync) {
         const usig = await secp.signAsync(m, d);
-        const sig = usig.toCompactRawBytes();
+        const sig = usig.toBytes();
         eql(sig, vsig);
       }
     }
@@ -193,8 +193,8 @@ describe('secp256k1 static vectors', () => {
       let msg = hexToBytes(msgh);
       const res = secp.sign(msg, privKey, { extraEntropy: undefined });
       eql(sigToDER(res), exp);
-      const rs = sigFromDER(sigToDER(res)).toCompactRawBytes();
-      eql(sigToDER(secp.Signature.fromCompact(rs)), exp);
+      const rs = sigFromDER(sigToDER(res)).toBytes();
+      eql(sigToDER(secp.Signature.fromBytes(rs)), exp);
     }
   });
 
@@ -211,7 +211,7 @@ describe('secp256k1 static vectors', () => {
           const extraEntropy = hexToBytes(enth);
           const m = hexToBytes(e.m);
           const d = hexToBytes(e.d);
-          const s = secp.sign(m, d, { extraEntropy }).toCompactRawBytes();
+          const s = secp.sign(m, d, { extraEntropy }).toBytes();
           return bytesToHex(s);
         };
         eql(sign(''), e.signature);
@@ -227,7 +227,7 @@ describe('secp256k1 static vectors', () => {
       const extraEntropy = hexToBytes('01');
       const priv = hexToBytes('0101010101010101010101010101010101010101010101010101010101010101');
       const msg = hexToBytes('d1a9dc8ed4e46a6a3e5e594615ca351d7d7ef44df1e4c94c1802f3592183794b');
-      const res = secp.sign(msg, priv, { extraEntropy }).toCompactRawBytes();
+      const res = secp.sign(msg, priv, { extraEntropy }).toBytes();
       eql(
         bytesToHex(res),
         'a250ec23a54bfdecf0e924cbf484077c5044410f915cdba86731cb2e4e925aaa5b1e4e3553d88be2c48a9a0d8d849ce2cc5720d25b2f97473e02f2550abe9545'
@@ -240,7 +240,7 @@ describe('secp256k1 static vectors', () => {
       );
       const priv = hexToBytes('0101010101010101010101010101010101010101010101010101010101010101');
       const msg = hexToBytes('d1a9dc8ed4e46a6a3e5e594615ca351d7d7ef44df1e4c94c1802f3592183794b');
-      const res = secp.sign(msg, priv, { extraEntropy }).toCompactRawBytes();
+      const res = secp.sign(msg, priv, { extraEntropy }).toBytes();
       eql(
         bytesToHex(res),
         '2bdf40f42ac0e42ee12750d03bb12b75306dae58eb3c961c5a80d78efae93e595295b66e8eb28f1eb046bb129a976340312159ec0c20b97342667572e4a8379a'
@@ -479,7 +479,7 @@ describe('Signature', () => {
     fc.assert(
       fc.property(FC_BIGINT, FC_BIGINT, (r, s) => {
         const sig = new secp.Signature(r, s);
-        eql(secp.Signature.fromCompact(sig.toCompactRawBytes()), sig);
+        eql(secp.Signature.fromBytes(sig.toBytes()), sig);
       })
     );
   });
@@ -516,12 +516,12 @@ describe('Signature', () => {
     const sig = secp.sign(msg, priv, { lowS: false });
     eql(sig.hasHighS(), true);
     eql(sig, hi_);
-    eql(bytesToHex(sig.toCompactRawBytes()), hi);
+    eql(bytesToHex(sig.toBytes()), hi);
 
     const lowSig = sig.normalizeS();
     eql(lowSig.hasHighS(), false);
     eql(lowSig, lo_);
-    eql(bytesToHex(lowSig.toCompactRawBytes()), lo);
+    eql(bytesToHex(lowSig.toBytes()), lo);
 
     eql(secp.verify(sig, msg, pub, { lowS: false }), true);
     eql(secp.verify(sig, msg, pub, { lowS: true }), false);

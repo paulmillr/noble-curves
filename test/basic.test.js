@@ -15,7 +15,7 @@ import { bn254 } from '../esm/bn254.js';
 import { ed25519, ed25519ctx, ed25519ph, RistrettoPoint, x25519 } from '../esm/ed25519.js';
 import { DecafPoint, ed448, ed448ph } from '../esm/ed448.js';
 import { babyjubjub, jubjub, pallas, vesta } from '../esm/misc.js';
-import { secp256r1, secp384r1, secp521r1 } from '../esm/nist.js';
+import { p256 as secp256r1, p384 as secp384r1, p521 as secp521r1 } from '../esm/nist.js';
 import { secp256k1 } from '../esm/secp256k1.js';
 import { randomBytes } from '../esm/utils.js';
 import { miscCurves, secp192r1, secp224r1 } from './_more-curves.helpers.js';
@@ -863,7 +863,7 @@ for (const name in CURVES) {
             const priv = hex(C.utils.randomPrivateKey());
             const pub = hex(C.getPublicKey(priv));
             const sig = C.sign(msg, priv);
-            let sighex = isBytes(sig) ? hex(sig) : sig.toCompactHex();
+            let sighex = isBytes(sig) ? hex(sig) : sig.toHex('compact');
             eql(C.verify(sighex, msg, pub), true, `priv=${priv},pub=${pub},msg=${msg}`);
           }),
           { numRuns: NUM_RUNS }
@@ -938,11 +938,11 @@ for (const name in CURVES) {
             const sig = C.sign(msg, priv);
             const sigRS = (sig) => ({ s: sig.s, r: sig.r });
             // Compact
-            eql(sigRS(C.Signature.fromCompact(sig.toCompactHex())), sigRS(sig));
-            eql(sigRS(C.Signature.fromCompact(sig.toCompactRawBytes())), sigRS(sig));
+            eql(sigRS(C.Signature.fromCompact(sig.toHex())), sigRS(sig));
+            eql(sigRS(C.Signature.fromCompact(sig.toBytes())), sigRS(sig));
             // DER
-            eql(sigRS(C.Signature.fromDER(sig.toDERHex())), sigRS(sig));
-            eql(sigRS(C.Signature.fromDER(sig.toDERRawBytes())), sigRS(sig));
+            eql(sigRS(C.Signature.fromDER(sig.toHex('der'))), sigRS(sig));
+            eql(sigRS(C.Signature.fromDER(sig.toBytes('der'))), sigRS(sig));
           }),
           { numRuns: NUM_RUNS }
         )
@@ -956,7 +956,7 @@ for (const name in CURVES) {
             const pub = C.getPublicKey(priv);
             const sig = C.sign(msg, priv);
             eql(sig.recoverPublicKey(msg).toBytes(), pub);
-            const sig2 = C.Signature.fromCompact(sig.toCompactHex());
+            const sig2 = C.Signature.fromCompact(sig.toHex('compact'));
             throws(() => sig2.recoverPublicKey(msg));
             const sig3 = sig2.addRecoveryBit(sig.recovery);
             eql(sig3.recoverPublicKey(msg).toBytes(), pub);

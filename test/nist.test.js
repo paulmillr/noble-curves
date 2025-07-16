@@ -4,7 +4,7 @@ import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql, throws } from 'node:assert';
 import { bytesToHex, hexToBytes, utf8ToBytes } from '../esm/abstract/utils.js';
 import { DER } from '../esm/abstract/weierstrass.js';
-import { p256, p384, p521, secp256r1, secp384r1, secp521r1 } from '../esm/nist.js';
+import { p256, p384, p521 } from '../esm/nist.js';
 import { secp256k1 } from '../esm/secp256k1.js';
 import { p192, p224, secp192r1, secp224r1 } from './_more-curves.helpers.js';
 import { json } from './utils.js';
@@ -71,9 +71,9 @@ const shake256_512 = wrapShake(shake256, 512 / 8);
 const NIST = {
   secp192r1, P192: p192,
   secp224r1, P224: p224,
-  secp256r1, P256: p256,
-  secp384r1, P384: p384,
-  secp521r1, P521: p521,
+  secp256r1: p256, P256: p256,
+  secp384r1: p384, P384: p384,
+  secp521r1: p521, P521: p521,
   secp256k1,
 };
 
@@ -426,7 +426,7 @@ describe('RFC6979', () => {
         const sigObj = curve.sign(h, priv, opts);
         eql(sigObj.r, hexToBigint(c.r), 'R');
         eql(sigObj.s, hexToBigint(c.s), 'S');
-        eql(curve.verify(sigObj.toDERRawBytes(), h, pubKey, opts), true, 'verify(1)');
+        eql(curve.verify(sigObj.toBytes('der'), h, pubKey, opts), true, 'verify(1)');
         eql(curve.verify(sigObj, h, pubKey, opts), true, 'verify(2)');
       }
     });
@@ -503,7 +503,7 @@ should('handle edge-case in P521', () => {
   //   '14e8dafcb8f6a7d59757ec8896981466d6f0eb5ca07dcaa46e6bb86eb20471e4' +
   //   '5702429ef132e0c96615';
 
-  const hexp = secp521r1.sign(msg, privKey, { lowS: false, prehash: true }).toDERHex();
+  const hexp = p521.sign(msg, privKey, { lowS: false, prehash: true }).toHex('der');
   eql(hexp, sig);
 });
 

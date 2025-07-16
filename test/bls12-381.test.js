@@ -742,13 +742,13 @@ describe('bls12-381 Point', () => {
       }),
     ];
     // Use wNAF allow scalars higher than CURVE.r
-    const w = wNAF(G2Point, 1);
+    const w = new wNAF(G2Point, 1);
     const hEff = BigInt(
       '0xbc69f08f2ee75b3584c6a0ea91b352888e2a8e9145ad7689986ff031508ffe1329c2f178731db956d82bf015d1212b02ec0ec69d7477c1ae954cbc06689f6a359894c0adebbf6b4e8020005aaa95551'
     );
     for (let p of points) {
       const ours = p.clearCofactor();
-      const shouldBe = w.unsafeLadder(p, hEff);
+      const shouldBe = w._unsafeLadder(p, hEff);
       eql(ours.equals(shouldBe), true, 'clearLast');
     }
   });
