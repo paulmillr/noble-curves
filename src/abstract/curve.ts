@@ -1,11 +1,11 @@
 /**
  * Methods for elliptic curve multiplication by scalars.
- * Contains wNAF, pippenger
+ * Contains wNAF, pippenger.
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { bitLen, bitMask, validateObject } from '../utils.ts';
-import { Field, FpInvertBatch, type IField, nLength, validateField } from './modular.ts';
+import { bitLen, bitMask, validateObject, type Hex } from '../utils.ts';
+import { Field, FpInvertBatch, nLength, validateField, type IField } from './modular.ts';
 
 const _0n = BigInt(0);
 const _1n = BigInt(1);
@@ -15,6 +15,8 @@ export type AffinePoint<T> = {
   y: T;
 } & { z?: never; t?: never };
 
+// This was initialy do this way to re-use montgomery ladder in field (add->mul,double->sqr), but
+// that didn't happen and there is probably not much reason to have separate Group like this?
 export interface Group<T extends Group<T>> {
   double(): T;
   negate(): T;
@@ -24,6 +26,49 @@ export interface Group<T extends Group<T>> {
   multiply(scalar: bigint): T;
   toAffine?(invertedZ?: any): AffinePoint<any>;
 }
+
+// We can't "abstract out" coordinates (X, Y, Z; and T in Edwards): argument names of constructor
+// are not accessible. See Typescript gh-56093, gh-41594.
+/** Base interface for all elliptic curve Points. */
+export interface CurvePoint<F, P extends CurvePoint<F, P>> extends Group<P> {
+  /** Affine x coordinate. Different from projective / extended X coordinate. */
+  x: F;
+  /** Affine y coordinate. Different from projective / extended Y coordinate. */
+  y: F;
+  Z?: F;
+  assertValidity(): void;
+  clearCofactor(): P;
+  is0(): boolean;
+  isTorsionFree(): boolean;
+  isSmallOrder(): boolean;
+  multiplyUnsafe(scalar: bigint): P;
+  /**
+   * Massively speeds up `p.multiply(n)` by using precompute tables (caching). See {@link wNAF}.
+   * @param isLazy calculate cache now. Default (true) ensures it's deferred to first `multiply()`
+   */
+  precompute(windowSize?: number, isLazy?: boolean): P;
+  toAffine(invertedZ?: F): AffinePoint<F>; // Converts point to 2D xy affine coordinates
+  toBytes(): Uint8Array;
+  toHex(): string;
+}
+
+/** Base interface for all elliptic curve Point constructors. */
+export interface CurvePointCons<F, P extends CurvePoint<F, P>> extends GroupConstructor<P> {
+  BASE: P;
+  ZERO: P;
+  /** Field for basic curve math */
+  Fp: IField<F>;
+  /** Scalar field, for scalars in multiply and others */
+  Fn: IField<bigint>;
+  fromAffine(p: AffinePoint<F>): P;
+  fromBytes(bytes: Uint8Array): P;
+  fromHex(hex: Hex): P;
+}
+
+// Type inference helpers
+// PC - PointConstructor, P - Point, Fp - Field element
+export type GetPointConsF<PC> = PC extends CurvePointCons<infer F, any> ? F : never;
+export type GetPointConsPoint<PC> = PC extends CurvePointCons<any, infer P> ? P : never;
 
 // More like SigAlgorithmInfo, not CurveInfo
 export interface CurveInfo {
@@ -40,6 +85,7 @@ export type GroupConstructor<T> = {
   BASE: T;
   ZERO: T;
 };
+/** @deprecated */
 export type ExtendedGroupConstructor<T> = GroupConstructor<T> & {
   Fp: IField<any>;
   Fn: IField<bigint>;
@@ -58,14 +104,16 @@ export function negateCt<T extends Group<T>>(condition: boolean, item: T): T {
  * so this improves performance massively.
  * Optimization: converts a list of projective points to a list of identical points with Z=1.
  */
-export function normalizeZ<T>(c: ExtendedGroupConstructor<T>, points: T[]): T[] {
-  const toInv = FpInvertBatch(
+export function normalizeZ<
+  PC extends CurvePointCons<any, any>,
+  F = GetPointConsF<PC>,
+  P extends CurvePoint<F, P> = GetPointConsPoint<PC>,
+>(c: CurvePointCons<F, P>, points: P[]): P[] {
+  const invertedZs = FpInvertBatch(
     c.Fp,
-    points.map((p: any) => p.Z)
+    points.map((p) => p.Z!)
   );
-  // @ts-ignore
-  const affined = points.map((p, i) => p.toAffine(toInv[i]));
-  return affined.map(c.fromAffine);
+  return points.map((p, i) => c.fromAffine(p.toAffine(invertedZs[i])));
 }
 
 function validateW(W: number, bits: number) {
@@ -137,25 +185,14 @@ const pointPrecomputes = new WeakMap<any, any[]>();
 const pointWindowSizes = new WeakMap<any, number>();
 
 function getW(P: any): number {
+  // To disable precomputes:
+  // return 1;
   return pointWindowSizes.get(P) || 1;
 }
 
 function assert0(n: bigint): void {
   if (n !== _0n) throw new Error('invalid wNAF');
 }
-
-export type IWNAF<T extends Group<T>> = {
-  constTimeNegate: <T extends Group<T>>(condition: boolean, item: T) => T;
-  hasPrecomputes(elm: T): boolean;
-  unsafeLadder(elm: T, n: bigint, p?: T): T;
-  precomputeWindow(elm: T, W: number): Group<T>[];
-  getPrecomputes(W: number, P: T, transform?: Mapper<T>): T[];
-  wNAF(W: number, precomputes: T[], n: bigint): { p: T; f: T };
-  wNAFUnsafe(W: number, precomputes: T[], n: bigint, acc?: T): T;
-  wNAFCached(P: T, n: bigint, transform?: Mapper<T>): { p: T; f: T };
-  wNAFCachedUnsafe(P: T, n: bigint, transform?: Mapper<T>, prev?: T): T;
-  setWindowSize(P: T, W: number): void;
-};
 
 /**
  * Elliptic curve multiplication of Point by scalar. Fragile.
@@ -175,159 +212,159 @@ export type IWNAF<T extends Group<T>> = {
  * @todo Research returning 2d JS array of windows, instead of a single window.
  * This would allow windows to be in different memory locations
  */
-export function wNAF<T extends Group<T>>(c: GroupConstructor<T>, bits: number): IWNAF<T> {
-  return {
-    constTimeNegate: negateCt,
+export class wNAF<F, P extends CurvePoint<F, P>> {
+  private readonly BASE: P;
+  private readonly ZERO: P;
+  readonly bits: number;
 
-    hasPrecomputes(elm: T) {
-      return getW(elm) !== 1;
-    },
+  // Parametrized with a given Point class (not individual point)
+  constructor(Point: GroupConstructor<P>, bits: number) {
+    this.BASE = Point.BASE;
+    this.ZERO = Point.ZERO;
+    this.bits = bits;
+  }
 
-    // non-const time multiplication ladder
-    unsafeLadder(elm: T, n: bigint, p = c.ZERO) {
-      let d: T = elm;
-      while (n > _0n) {
-        if (n & _1n) p = p.add(d);
-        d = d.double();
-        n >>= _1n;
-      }
-      return p;
-    },
+  // non-const time multiplication ladder
+  _unsafeLadder(elm: P, n: bigint, p: P = this.ZERO): P {
+    let d: P = elm;
+    while (n > _0n) {
+      if (n & _1n) p = p.add(d);
+      d = d.double();
+      n >>= _1n;
+    }
+    return p;
+  }
 
-    /**
-     * Creates a wNAF precomputation window. Used for caching.
-     * Default window size is set by `utils.precompute()` and is equal to 8.
-     * Number of precomputed points depends on the curve size:
-     * 2^(𝑊−1) * (Math.ceil(𝑛 / 𝑊) + 1), where:
-     * - 𝑊 is the window size
-     * - 𝑛 is the bitlength of the curve order.
-     * For a 256-bit curve and window size 8, the number of precomputed points is 128 * 33 = 4224.
-     * @param elm Point instance
-     * @param W window size
-     * @returns precomputed point tables flattened to a single array
-     */
-    precomputeWindow(elm: T, W: number): Group<T>[] {
-      const { windows, windowSize } = calcWOpts(W, bits);
-      const points: T[] = [];
-      let p: T = elm;
-      let base = p;
-      for (let window = 0; window < windows; window++) {
-        base = p;
+  /**
+   * Creates a wNAF precomputation window. Used for caching.
+   * Default window size is set by `utils.precompute()` and is equal to 8.
+   * Number of precomputed points depends on the curve size:
+   * 2^(𝑊−1) * (Math.ceil(𝑛 / 𝑊) + 1), where:
+   * - 𝑊 is the window size
+   * - 𝑛 is the bitlength of the curve order.
+   * For a 256-bit curve and window size 8, the number of precomputed points is 128 * 33 = 4224.
+   * @param point Point instance
+   * @param W window size
+   * @returns precomputed point tables flattened to a single array
+   */
+  private precomputeWindow(point: P, W: number): Group<P>[] {
+    const { windows, windowSize } = calcWOpts(W, this.bits);
+    const points: P[] = [];
+    let p: P = point;
+    let base = p;
+    for (let window = 0; window < windows; window++) {
+      base = p;
+      points.push(base);
+      // i=1, bc we skip 0
+      for (let i = 1; i < windowSize; i++) {
+        base = base.add(p);
         points.push(base);
-        // i=1, bc we skip 0
-        for (let i = 1; i < windowSize; i++) {
-          base = base.add(p);
-          points.push(base);
-        }
-        p = base.double();
       }
-      return points;
-    },
+      p = base.double();
+    }
+    return points;
+  }
 
-    /**
-     * Implements ec multiplication using precomputed tables and w-ary non-adjacent form.
-     * @param W window size
-     * @param precomputes precomputed tables
-     * @param n scalar (we don't check here, but should be less than curve order)
-     * @returns real and fake (for const-time) points
-     */
-    wNAF(W: number, precomputes: T[], n: bigint): { p: T; f: T } {
-      // Smaller version:
-      // https://github.com/paulmillr/noble-secp256k1/blob/47cb1669b6e506ad66b35fe7d76132ae97465da2/index.ts#L502-L541
-      // TODO: check the scalar is less than group order?
-      // wNAF behavior is undefined otherwise. But have to carefully remove
-      // other checks before wNAF. ORDER == bits here.
-      // Accumulators
-      let p = c.ZERO;
-      let f = c.BASE;
-      // This code was first written with assumption that 'f' and 'p' will never be infinity point:
-      // since each addition is multiplied by 2 ** W, it cannot cancel each other. However,
-      // there is negate now: it is possible that negated element from low value
-      // would be the same as high element, which will create carry into next window.
-      // It's not obvious how this can fail, but still worth investigating later.
-      const wo = calcWOpts(W, bits);
-      for (let window = 0; window < wo.windows; window++) {
-        // (n === _0n) is handled and not early-exited. isEven and offsetF are used for noise
-        const { nextN, offset, isZero, isNeg, isNegF, offsetF } = calcOffsets(n, window, wo);
-        n = nextN;
-        if (isZero) {
-          // bits are 0: add garbage to fake point
-          // Important part for const-time getPublicKey: add random "noise" point to f.
-          f = f.add(negateCt(isNegF, precomputes[offsetF]));
-        } else {
-          // bits are 1: add to result point
-          p = p.add(negateCt(isNeg, precomputes[offset]));
-        }
+  /**
+   * Implements ec multiplication using precomputed tables and w-ary non-adjacent form.
+   * @returns real and fake (for const-time) points
+   */
+  private wNAF(W: number, precomputes: P[], n: bigint): { p: P; f: P } {
+    // Smaller version:
+    // https://github.com/paulmillr/noble-secp256k1/blob/47cb1669b6e506ad66b35fe7d76132ae97465da2/index.ts#L502-L541
+    // TODO: check the scalar is less than group order?
+    // The behavior is undefined otherwise. But have to carefully remove
+    // other checks before. ORDER == bits here.
+    // Accumulators
+    let p = this.ZERO;
+    let f = this.BASE;
+    // This code was first written with assumption that 'f' and 'p' will never be infinity point:
+    // since each addition is multiplied by 2 ** W, it cannot cancel each other. However,
+    // there is negate now: it is possible that negated element from low value
+    // would be the same as high element, which will create carry into next window.
+    // It's not obvious how this can fail, but still worth investigating later.
+    const wo = calcWOpts(W, this.bits);
+    for (let window = 0; window < wo.windows; window++) {
+      // (n === _0n) is handled and not early-exited. isEven and offsetF are used for noise
+      const { nextN, offset, isZero, isNeg, isNegF, offsetF } = calcOffsets(n, window, wo);
+      n = nextN;
+      if (isZero) {
+        // bits are 0: add garbage to fake point
+        // Important part for const-time getPublicKey: add random "noise" point to f.
+        f = f.add(negateCt(isNegF, precomputes[offsetF]));
+      } else {
+        // bits are 1: add to result point
+        p = p.add(negateCt(isNeg, precomputes[offset]));
       }
-      assert0(n);
-      // Return both real and fake points: JIT won't eliminate f.
-      // At this point there is a way to F be infinity-point even if p is not,
-      // which makes it less const-time: around 1 bigint multiply.
-      return { p, f };
-    },
+    }
+    assert0(n);
+    // Return both real and fake points: JIT won't eliminate f.
+    // At this point there is a way to F be infinity-point even if p is not,
+    // which makes it less const-time: around 1 bigint multiply.
+    return { p, f };
+  }
 
-    /**
-     * Implements ec unsafe (non const-time) multiplication using precomputed tables and w-ary non-adjacent form.
-     * @param W window size
-     * @param precomputes precomputed tables
-     * @param n scalar (we don't check here, but should be less than curve order)
-     * @param acc accumulator point to add result of multiplication
-     * @returns point
-     */
-    wNAFUnsafe(W: number, precomputes: T[], n: bigint, acc: T = c.ZERO): T {
-      const wo = calcWOpts(W, bits);
-      for (let window = 0; window < wo.windows; window++) {
-        if (n === _0n) break; // Early-exit, skip 0 value
-        const { nextN, offset, isZero, isNeg } = calcOffsets(n, window, wo);
-        n = nextN;
-        if (isZero) {
-          // Window bits are 0: skip processing.
-          // Move to next window.
-          continue;
-        } else {
-          const item = precomputes[offset];
-          acc = acc.add(isNeg ? item.negate() : item); // Re-using acc allows to save adds in MSM
-        }
+  /**
+   * Implements ec unsafe (non const-time) multiplication using precomputed tables and w-ary non-adjacent form.
+   * @param acc accumulator point to add result of multiplication
+   * @returns point
+   */
+  private wNAFUnsafe(W: number, precomputes: P[], n: bigint, acc: P = this.ZERO): P {
+    const wo = calcWOpts(W, this.bits);
+    for (let window = 0; window < wo.windows; window++) {
+      if (n === _0n) break; // Early-exit, skip 0 value
+      const { nextN, offset, isZero, isNeg } = calcOffsets(n, window, wo);
+      n = nextN;
+      if (isZero) {
+        // Window bits are 0: skip processing.
+        // Move to next window.
+        continue;
+      } else {
+        const item = precomputes[offset];
+        acc = acc.add(isNeg ? item.negate() : item); // Re-using acc allows to save adds in MSM
       }
-      assert0(n);
-      return acc;
-    },
+    }
+    assert0(n);
+    return acc;
+  }
 
-    getPrecomputes(W: number, P: T, transform?: Mapper<T>): T[] {
-      // Calculate precomputes on a first run, reuse them after
-      let comp = pointPrecomputes.get(P);
-      if (!comp) {
-        comp = this.precomputeWindow(P, W) as T[];
-        if (W !== 1) {
-          // Doing transform outside of if brings 15% perf hit
-          if (typeof transform === 'function') comp = transform(comp);
-          pointPrecomputes.set(P, comp);
-        }
+  private getPrecomputes(W: number, point: P, transform?: Mapper<P>): P[] {
+    // Calculate precomputes on a first run, reuse them after
+    let comp = pointPrecomputes.get(point);
+    if (!comp) {
+      comp = this.precomputeWindow(point, W) as P[];
+      if (W !== 1) {
+        // Doing transform outside of if brings 15% perf hit
+        if (typeof transform === 'function') comp = transform(comp);
+        pointPrecomputes.set(point, comp);
       }
-      return comp;
-    },
+    }
+    return comp;
+  }
 
-    wNAFCached(P: T, n: bigint, transform?: Mapper<T>): { p: T; f: T } {
-      const W = getW(P);
-      return this.wNAF(W, this.getPrecomputes(W, P, transform), n);
-    },
+  cached(point: P, scalar: bigint, transform?: Mapper<P>): { p: P; f: P } {
+    const W = getW(point);
+    return this.wNAF(W, this.getPrecomputes(W, point, transform), scalar);
+  }
 
-    wNAFCachedUnsafe(P: T, n: bigint, transform?: Mapper<T>, prev?: T): T {
-      const W = getW(P);
-      if (W === 1) return this.unsafeLadder(P, n, prev); // For W=1 ladder is ~x2 faster
-      return this.wNAFUnsafe(W, this.getPrecomputes(W, P, transform), n, prev);
-    },
+  unsafe(point: P, scalar: bigint, transform?: Mapper<P>, prev?: P): P {
+    const W = getW(point);
+    if (W === 1) return this._unsafeLadder(point, scalar, prev); // For W=1 ladder is ~x2 faster
+    return this.wNAFUnsafe(W, this.getPrecomputes(W, point, transform), scalar, prev);
+  }
 
-    // We calculate precomputes for elliptic curve point multiplication
-    // using windowed method. This specifies window size and
-    // stores precomputed values. Usually only base point would be precomputed.
+  // We calculate precomputes for elliptic curve point multiplication
+  // using windowed method. This specifies window size and
+  // stores precomputed values. Usually only base point would be precomputed.
+  createCache(P: P, W: number): void {
+    validateW(W, this.bits);
+    pointWindowSizes.set(P, W);
+    pointPrecomputes.delete(P);
+  }
 
-    setWindowSize(P: T, W: number) {
-      validateW(W, bits);
-      pointWindowSizes.set(P, W);
-      pointPrecomputes.delete(P);
-    },
-  };
+  hasCache(elm: P): boolean {
+    return getW(elm) !== 1;
+  }
 }
 
 /**
@@ -491,6 +528,7 @@ export function precomputeMSMUnsafe<T extends Group<T>>(
   };
 }
 
+// TODO: remove
 /**
  * Generic BasicCurve interface: works even for polynomial fields (BLS): P, n, h would be ok.
  * Though generator can be different (Fp2 / Fp6 for BLS).
