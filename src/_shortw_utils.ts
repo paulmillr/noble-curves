@@ -14,6 +14,7 @@ export function getHash(hash: CHash): { hash: CHash } {
 export type CurveDef = Readonly<Omit<CurveType, 'hash'>>;
 export type CurveFnWithCreate = CurveFn & { create: (hash: CHash) => CurveFn };
 
+/** @deprecated use new `weierstrass()` and `ecdsa()` methods */
 export function createCurve(curveDef: CurveDef, defHash: CHash): CurveFnWithCreate {
   const create = (hash: CHash): CurveFn => weierstrass({ ...curveDef, hash: hash });
   return { ...create(defHash), create };
