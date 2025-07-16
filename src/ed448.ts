@@ -14,7 +14,7 @@ import {
   utf8ToBytes,
   createHasher as wrapConstructor,
 } from '@noble/hashes/utils.js';
-import type { AffinePoint, Group } from './abstract/curve.ts';
+import type { AffinePoint } from './abstract/curve.ts';
 import { pippenger } from './abstract/curve.ts';
 import {
   edwards,
@@ -381,7 +381,7 @@ function decaf448_map(bytes: Uint8Array): DecafPoint {
  * but it should work in its own namespace: do not combine those two.
  * See [RFC9496](https://www.rfc-editor.org/rfc/rfc9496).
  */
-export class DecafPoint extends PrimeEdwardsPoint<DecafPoint> implements Group<DecafPoint> {
+export class DecafPoint extends PrimeEdwardsPoint<DecafPoint> {
   // The following gymnastics is done because typescript strips comments otherwise
   // prettier-ignore
   static BASE: DecafPoint =
@@ -496,6 +496,10 @@ export class DecafPoint extends PrimeEdwardsPoint<DecafPoint> implements Group<D
     const mod = Fp.create;
     // (x1 * y2 == y1 * x2)
     return mod(X1 * Y2) === mod(Y1 * X2);
+  }
+
+  is0(): boolean {
+    return this.equals(DecafPoint.ZERO);
   }
 }
 

@@ -8,7 +8,7 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha512 } from '@noble/hashes/sha2.js';
 import { abytes, concatBytes, utf8ToBytes } from '@noble/hashes/utils.js';
-import { pippenger, type AffinePoint, type Group } from './abstract/curve.ts';
+import { pippenger, type AffinePoint } from './abstract/curve.ts';
 import {
   PrimeEdwardsPoint,
   twistedEdwards,
@@ -364,11 +364,9 @@ function ristretto255_map(bytes: Uint8Array): RistrettoPoint {
  * but it should work in its own namespace: do not combine those two.
  * See [RFC9496](https://www.rfc-editor.org/rfc/rfc9496).
  */
-export class RistrettoPoint
-  extends PrimeEdwardsPoint<RistrettoPoint>
-  implements Group<RistrettoPoint>
-{
-  // The following gymnastics is done because typescript strips comments otherwise
+export class RistrettoPoint extends PrimeEdwardsPoint<RistrettoPoint> {
+  // Do NOT change syntax: the following gymnastics is done,
+  // because typescript strips comments, which makes bundlers disable tree-shaking.
   // prettier-ignore
   static BASE: RistrettoPoint =
     /* @__PURE__ */ (() => new RistrettoPoint(ed25519.Point.BASE))();
@@ -489,6 +487,10 @@ export class RistrettoPoint
     const one = mod(X1 * Y2) === mod(Y1 * X2);
     const two = mod(Y1 * Y2) === mod(X1 * X2);
     return one || two;
+  }
+
+  is0(): boolean {
+    return this.equals(RistrettoPoint.ZERO);
   }
 }
 
