@@ -28,8 +28,8 @@ import {
   type AffinePoint,
   type BasicCurve,
   type CurveInfo,
-  type Group,
-  type GroupConstructor,
+  type CurvePoint,
+  type CurvePointCons,
 } from './curve.ts';
 import { Field, type IField, type NLength } from './modular.ts';
 
@@ -56,7 +56,7 @@ export type CurveType = BasicCurve<bigint> & {
 export type CurveTypeWithLength = Readonly<CurveType & Partial<NLength>>;
 
 /** Instance of Extended Point with coordinates in X, Y, Z, T. */
-export interface EdwardsPoint extends Group<EdwardsPoint> {
+export interface EdwardsPoint extends CurvePoint<bigint, EdwardsPoint> {
   /** extended X coordinate. Different from affine x. */
   readonly X: bigint;
   /** extended Y coordinate. Different from affine y. */
@@ -65,25 +65,6 @@ export interface EdwardsPoint extends Group<EdwardsPoint> {
   readonly Z: bigint;
   /** extended T coordinate */
   readonly T: bigint;
-  /** affine x coordinate. Different from extended X. */
-  get x(): bigint;
-  /** affine y coordinate. Different from extended Y. */
-  get y(): bigint;
-  assertValidity(): void;
-  multiply(scalar: bigint): EdwardsPoint;
-  multiplyUnsafe(scalar: bigint): EdwardsPoint;
-  is0(): boolean;
-  isSmallOrder(): boolean;
-  isTorsionFree(): boolean;
-  clearCofactor(): EdwardsPoint;
-  toAffine(invertedZ?: bigint): AffinePoint<bigint>;
-  toBytes(): Uint8Array;
-  toHex(): string;
-  /**
-   * Massively speeds up `p.multiply(n)` by using precompute tables (caching). See {@link wNAF}.
-   * @param isLazy calculate cache now. Default (true) ensures it's deferred to first `multiply()`
-   */
-  precompute(windowSize?: number, isLazy?: boolean): EdwardsPoint;
 
   /** @deprecated use `toBytes` */
   toRawBytes(): Uint8Array;
@@ -99,16 +80,10 @@ export interface EdwardsPoint extends Group<EdwardsPoint> {
   readonly et: bigint;
 }
 /** Static methods of Extended Point with coordinates in X, Y, Z, T. */
-export interface EdwardsPointCons extends GroupConstructor<EdwardsPoint> {
+export interface EdwardsPointCons extends CurvePointCons<bigint, EdwardsPoint> {
   new (X: bigint, Y: bigint, Z: bigint, T: bigint): EdwardsPoint;
-  /** Field for basic curve math */
-  Fp: IField<bigint>;
-  /** Scalar field, for scalars in multiply and others */
-  Fn: IField<bigint>;
-  fromAffine(p: AffinePoint<bigint>): EdwardsPoint;
   fromBytes(bytes: Uint8Array, zip215?: boolean): EdwardsPoint;
   fromHex(hex: Hex, zip215?: boolean): EdwardsPoint;
-
   /** @deprecated use `import { pippenger } from '@noble/curves/abstract/curve.js';` */
   msm(points: EdwardsPoint[], scalars: bigint[]): EdwardsPoint;
 }
@@ -385,7 +360,7 @@ export function edwards(CURVE: EdwardsOpts, curveOpts: EdwardsExtraOpts = {}): E
     }
 
     precompute(windowSize: number = 8, isLazy = true) {
-      wnaf.setWindowSize(this, windowSize);
+      wnaf.createCache(this, windowSize);
       if (!isLazy) this.multiply(_2n); // random number
       return this;
     }
@@ -469,7 +444,7 @@ export function edwards(CURVE: EdwardsOpts, curveOpts: EdwardsExtraOpts = {}): E
     multiply(scalar: bigint): Point {
       const n = scalar;
       aInRange('scalar', n, _1n, CURVE_ORDER); // 1 <= scalar < L
-      const { p, f } = wnaf.wNAFCached(this, n, (p) => normalizeZ(Point, p));
+      const { p, f } = wnaf.cached(this, n, (p) => normalizeZ(Point, p));
       return normalizeZ(Point, [p, f])[0];
     }
 
@@ -483,7 +458,7 @@ export function edwards(CURVE: EdwardsOpts, curveOpts: EdwardsExtraOpts = {}): E
       aInRange('scalar', n, _0n, CURVE_ORDER); // 0 <= scalar < L
       if (n === _0n) return Point.ZERO;
       if (this.is0() || n === _1n) return this;
-      return wnaf.wNAFCachedUnsafe(this, n, (p) => normalizeZ(Point, p), acc);
+      return wnaf.unsafe(this, n, (p) => normalizeZ(Point, p), acc);
     }
 
     // Checks if point is of small order.
@@ -497,7 +472,7 @@ export function edwards(CURVE: EdwardsOpts, curveOpts: EdwardsExtraOpts = {}): E
     // Multiplies point by curve order and checks if the result is 0.
     // Returns `false` is the point is dirty.
     isTorsionFree(): boolean {
-      return wnaf.wNAFCachedUnsafe(this, CURVE_ORDER).is0();
+      return wnaf.unsafe(this, CURVE_ORDER).is0();
     }
 
     // Converts Extended point to default (x, y) coordinates.
@@ -571,7 +546,7 @@ export function edwards(CURVE: EdwardsOpts, curveOpts: EdwardsExtraOpts = {}): E
       return `<Point ${this.is0() ? 'ZERO' : this.toHex()}>`;
     }
   }
-  const wnaf = wNAF(Point, Fn.BYTES * 8); // Fn.BITS?
+  const wnaf = new wNAF(Point, Fn.BYTES * 8); // Fn.BITS?
   return Point;
 }
 
@@ -580,7 +555,9 @@ export function edwards(CURVE: EdwardsOpts, curveOpts: EdwardsExtraOpts = {}): E
  * These points eliminate cofactor issues by representing equivalence classes
  * of Edwards curve points.
  */
-export abstract class PrimeEdwardsPoint<T extends PrimeEdwardsPoint<T>> implements Group<T> {
+export abstract class PrimeEdwardsPoint<T extends PrimeEdwardsPoint<T>>
+  implements CurvePoint<bigint, T>
+{
   static BASE: PrimeEdwardsPoint<any>;
   static ZERO: PrimeEdwardsPoint<any>;
   static Fp: IField<bigint>;
@@ -603,6 +580,13 @@ export abstract class PrimeEdwardsPoint<T extends PrimeEdwardsPoint<T>> implemen
 
   static fromHex(_hex: Hex): any {
     throw new Error('fromHex must be implemented by subclass');
+  }
+
+  get x(): bigint {
+    return this.toAffine().x;
+  }
+  get y(): bigint {
+    return this.toAffine().y;
   }
 
   // Common implementations
@@ -632,6 +616,13 @@ export abstract class PrimeEdwardsPoint<T extends PrimeEdwardsPoint<T>> implemen
     return this.toHex();
   }
 
+  isTorsionFree(): boolean {
+    return true;
+  }
+  isSmallOrder(): boolean {
+    return false;
+  }
+
   add(other: T): T {
     this.assertSame(other);
     return this.init(this.ep.add(other.ep));
@@ -658,7 +649,12 @@ export abstract class PrimeEdwardsPoint<T extends PrimeEdwardsPoint<T>> implemen
     return this.init(this.ep.negate());
   }
 
+  precompute(windowSize?: number, isLazy?: boolean): T {
+    return this.init(this.ep.precompute(windowSize, isLazy));
+  }
+
   // Helper methods
+  abstract is0(): boolean;
   protected abstract assertSame(other: T): void;
   protected abstract init(ep: EdwardsPoint): T;
 }

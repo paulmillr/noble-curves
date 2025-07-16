@@ -59,8 +59,8 @@ import {
   type AffinePoint,
   type BasicCurve,
   type CurveInfo,
-  type Group,
-  type GroupConstructor,
+  type CurvePoint,
+  type CurvePointCons,
 } from './curve.ts';
 import {
   Field,
@@ -172,7 +172,7 @@ function validateSigVerOpts(opts: SignOpts | VerOpts) {
 }
 
 /** Instance methods for 3D XYZ projective points. */
-export interface WeierstrassPoint<T> extends Group<WeierstrassPoint<T>> {
+export interface WeierstrassPoint<T> extends CurvePoint<T, WeierstrassPoint<T>> {
   /** projective X coordinate. Different from affine x. */
   readonly X: T;
   /** projective Y coordinate. Different from affine y. */
@@ -183,18 +183,6 @@ export interface WeierstrassPoint<T> extends Group<WeierstrassPoint<T>> {
   get x(): T;
   /** affine y coordinate. Different from projective Y. */
   get y(): T;
-  assertValidity(): void;
-  clearCofactor(): WeierstrassPoint<T>;
-  is0(): boolean;
-  isTorsionFree(): boolean;
-  multiplyUnsafe(scalar: bigint): WeierstrassPoint<T>;
-  /**
-   * Massively speeds up `p.multiply(n)` by using precompute tables (caching). See {@link wNAF}.
-   * @param isLazy calculate cache now. Default (true) ensures it's deferred to first `multiply()`
-   */
-  precompute(windowSize?: number, isLazy?: boolean): WeierstrassPoint<T>;
-  /** Converts 3D XYZ projective point to 2D xy affine coordinates */
-  toAffine(invertedZ?: T): AffinePoint<T>;
   /** Encodes point using IEEE P1363 (DER) encoding. First byte is 2/3/4. Default = isCompressed. */
   toBytes(isCompressed?: boolean): Uint8Array;
   toHex(isCompressed?: boolean): string;
@@ -220,17 +208,9 @@ export interface WeierstrassPoint<T> extends Group<WeierstrassPoint<T>> {
 }
 
 /** Static methods for 3D XYZ projective points. */
-export interface WeierstrassPointCons<T> extends GroupConstructor<WeierstrassPoint<T>> {
+export interface WeierstrassPointCons<T> extends CurvePointCons<T, WeierstrassPoint<T>> {
   /** Does NOT validate if the point is valid. Use `.assertValidity()`. */
   new (X: T, Y: T, Z: T): WeierstrassPoint<T>;
-  /** Field for basic curve math */
-  Fp: IField<T>;
-  /** Scalar field, for scalars in multiply and others */
-  Fn: IField<bigint>;
-  /** Does NOT validate if the point is valid. Use `.assertValidity()`. */
-  fromAffine(p: AffinePoint<T>): WeierstrassPoint<T>;
-  fromBytes(encodedPoint: Uint8Array): WeierstrassPoint<T>;
-  fromHex(hex: Hex): WeierstrassPoint<T>;
   // TODO: deprecate
   fromPrivateKey(privateKey: PrivKey): WeierstrassPoint<T>;
   /** @deprecated use `import { normalizeZ } from '@noble/curves/abstract/curve.js';` */
@@ -777,8 +757,12 @@ export function weierstrassN<T>(
       return Point.BASE.multiply(normPrivateKeyToScalar(privateKey));
     }
 
+    // TODO: remove
     static msm(points: Point[], scalars: bigint[]): Point {
       return pippenger(Point, Fn, points, scalars);
+    }
+    _setWindowSize(windowSize: number) {
+      this.precompute(windowSize);
     }
 
     /**
@@ -788,14 +772,9 @@ export function weierstrassN<T>(
      * @returns
      */
     precompute(windowSize: number = 8, isLazy = true): Point {
-      wnaf.setWindowSize(this, windowSize);
+      wnaf.createCache(this, windowSize);
       if (!isLazy) this.multiply(_3n); // random number
       return this;
-    }
-
-    /** "Private method", don't use it directly */
-    _setWindowSize(windowSize: number) {
-      this.precompute(windowSize);
     }
 
     // TODO: return `this`
@@ -943,7 +922,7 @@ export function weierstrassN<T>(
       const { endo } = curveOpts;
       if (!Fn.isValidNot0(scalar)) throw new Error('invalid scalar: out of range'); // 0 is invalid
       let point: Point, fake: Point; // Fake point is used to const-time mult
-      const mul = (n: bigint) => wnaf.wNAFCached(this, n, (p) => normalizeZ(Point, p));
+      const mul = (n: bigint) => wnaf.cached(this, n, (p) => normalizeZ(Point, p));
       /** See docs for {@link EndomorphismOpts} */
       if (endo) {
         const { k1neg, k1, k2neg, k2 } = splitEndoScalarN(scalar);
@@ -971,14 +950,14 @@ export function weierstrassN<T>(
       if (!Fn.isValid(sc)) throw new Error('invalid scalar: out of range'); // 0 is valid
       if (sc === _0n || p.is0()) return Point.ZERO;
       if (sc === _1n) return p; // fast-path
-      if (wnaf.hasPrecomputes(this)) return this.multiply(sc);
+      if (wnaf.hasCache(this)) return this.multiply(sc);
       if (endo) {
         const { k1neg, k1, k2neg, k2 } = splitEndoScalarN(sc);
         // `wNAFCachedUnsafe` is 30% slower
         const { p1, p2 } = mulEndoUnsafe(Point, p, k1, k2);
         return finishEndo(endo.beta, p1, p2, k1neg, k2neg);
       } else {
-        return wnaf.wNAFCachedUnsafe(p, sc);
+        return wnaf.unsafe(p, sc);
       }
     }
 
@@ -1003,7 +982,7 @@ export function weierstrassN<T>(
       const { isTorsionFree } = curveOpts;
       if (cofactor === _1n) return true;
       if (isTorsionFree) return isTorsionFree(Point, this);
-      return wnaf.wNAFCachedUnsafe(this, CURVE_ORDER).is0();
+      return wnaf.unsafe(this, CURVE_ORDER).is0();
     }
 
     clearCofactor(): Point {
@@ -1038,7 +1017,7 @@ export function weierstrassN<T>(
     }
   }
   const bits = Fn.BITS;
-  const wnaf = wNAF(Point, curveOpts.endo ? Math.ceil(bits / 2) : bits);
+  const wnaf = new wNAF(Point, curveOpts.endo ? Math.ceil(bits / 2) : bits);
   return Point;
 }
 
@@ -1061,6 +1040,7 @@ export interface ECDSASignature {
   normalizeS(): ECDSASignature;
   recoverPublicKey(msgHash: Hex): WeierstrassPoint<bigint>;
   toBytes(format?: string): Uint8Array;
+  toHex(format?: string): string;
 
   /** @deprecated */
   assertValidity(): void;
@@ -1082,6 +1062,7 @@ export type RecoveredSignatureType = ECDSASigRecovered;
 export type ECDSASignatureCons = {
   new (r: bigint, s: bigint, recovery?: number): ECDSASignature;
   fromBytes(bytes: Uint8Array, format?: ECDSASigFormat): ECDSASignature;
+  fromHex(hex: string, format?: ECDSASigFormat): ECDSASignature;
 
   /** @deprecated use `.fromBytes(bytes, 'compact')` */
   fromCompact(hex: Hex): ECDSASignature;
@@ -1320,17 +1301,6 @@ export function ecdsa(
       Object.freeze(this);
     }
 
-    // pair (bytes of r, bytes of s)
-    static fromCompact(hex: Hex) {
-      return Signature.fromBytes(ensureBytes('sig', hex), 'compact');
-    }
-
-    // DER encoded ECDSA signature
-    // https://bitcoin.stackexchange.com/questions/57644/what-are-the-parts-of-a-bitcoin-transaction-input-script
-    static fromDER(hex: Hex) {
-      return Signature.fromBytes(ensureBytes('sig', hex), 'der');
-    }
-
     static fromBytes(bytes: Uint8Array, format: ECDSASigFormat = 'compact') {
       if (format === 'compact') {
         const L = Fn.BYTES;
@@ -1347,11 +1317,9 @@ export function ecdsa(
       throw new Error('invalid format');
     }
 
-    /**
-     * @todo remove
-     * @deprecated
-     */
-    assertValidity(): void {}
+    static fromHex(hex: string, format?: ECDSASigFormat) {
+      return this.fromBytes(hexToBytes(hex), format);
+    }
 
     addRecoveryBit(recovery: number): RecoveredSignature {
       return new Signature(this.r, this.s, recovery) as RecoveredSignature;
@@ -1404,14 +1372,24 @@ export function ecdsa(
       throw new Error('invalid format');
     }
 
-    // DER-encoded
+    toHex(format?: ECDSASigFormat) {
+      return bytesToHex(this.toBytes(format));
+    }
+
+    // TODO: remove
+    assertValidity(): void {}
+    static fromCompact(hex: Hex) {
+      return Signature.fromBytes(ensureBytes('sig', hex), 'compact');
+    }
+    static fromDER(hex: Hex) {
+      return Signature.fromBytes(ensureBytes('sig', hex), 'der');
+    }
     toDERRawBytes() {
       return this.toBytes('der');
     }
     toDERHex() {
       return bytesToHex(this.toBytes('der'));
     }
-    // padded bytes of r, then padded bytes of s
     toCompactRawBytes() {
       return this.toBytes('compact');
     }
