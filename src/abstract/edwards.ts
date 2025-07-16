@@ -23,37 +23,19 @@ import {
 import {
   _createCurveFields,
   normalizeZ,
-  pippenger,
   wNAF,
   type AffinePoint,
-  type BasicCurve,
   type CurveInfo,
   type CurvePoint,
   type CurvePointCons,
 } from './curve.ts';
-import { Field, type IField, type NLength } from './modular.ts';
+import { type IField } from './modular.ts';
 
 // Be friendly to bad ECMAScript parsers by not using bigint literals
 // prettier-ignore
 const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _8n = BigInt(8);
 
 export type UVRatio = (u: bigint, v: bigint) => { isValid: boolean; value: bigint };
-
-// TODO: remove
-export type CurveType = BasicCurve<bigint> & {
-  a: bigint; // curve param a
-  d: bigint; // curve param d
-  hash: FHash; // Hashing
-  randomBytes?: (bytesLength?: number) => Uint8Array; // CSPRNG
-  adjustScalarBytes?: (bytes: Uint8Array) => Uint8Array; // clears bits to get valid field elemtn
-  domain?: (data: Uint8Array, ctx: Uint8Array, phflag: boolean) => Uint8Array; // Used for hashing
-  uvRatio?: UVRatio; // Ratio √(u/v)
-  prehash?: FHash; // RFC 8032 pre-hashing of messages to sign() / verify()
-  mapToCurve?: (scalar: bigint[]) => AffinePoint<bigint>; // for hash-to-curve standard
-};
-
-// TODO: remove
-export type CurveTypeWithLength = Readonly<CurveType & Partial<NLength>>;
 
 /** Instance of Extended Point with coordinates in X, Y, Z, T. */
 export interface EdwardsPoint extends CurvePoint<bigint, EdwardsPoint> {
@@ -65,32 +47,13 @@ export interface EdwardsPoint extends CurvePoint<bigint, EdwardsPoint> {
   readonly Z: bigint;
   /** extended T coordinate */
   readonly T: bigint;
-
-  /** @deprecated use `toBytes` */
-  toRawBytes(): Uint8Array;
-  /** @deprecated use `p.precompute(windowSize)` */
-  _setWindowSize(windowSize: number): void;
-  /** @deprecated use .X */
-  readonly ex: bigint;
-  /** @deprecated use .Y */
-  readonly ey: bigint;
-  /** @deprecated use .Z */
-  readonly ez: bigint;
-  /** @deprecated use .T */
-  readonly et: bigint;
 }
 /** Static methods of Extended Point with coordinates in X, Y, Z, T. */
 export interface EdwardsPointCons extends CurvePointCons<bigint, EdwardsPoint> {
   new (X: bigint, Y: bigint, Z: bigint, T: bigint): EdwardsPoint;
   fromBytes(bytes: Uint8Array, zip215?: boolean): EdwardsPoint;
   fromHex(hex: Hex, zip215?: boolean): EdwardsPoint;
-  /** @deprecated use `import { pippenger } from '@noble/curves/abstract/curve.js';` */
-  msm(points: EdwardsPoint[], scalars: bigint[]): EdwardsPoint;
 }
-/** @deprecated use EdwardsPoint */
-export type ExtPointType = EdwardsPoint;
-/** @deprecated use EdwardsPointCons */
-export type ExtPointConstructor = EdwardsPointCons;
 
 /**
  * Twisted Edwards curve options.
@@ -192,28 +155,9 @@ export interface EdDSA {
       point: EdwardsPoint;
       pointBytes: Uint8Array;
     };
-
-    /** @deprecated use `randomSecretKey` */
-    randomPrivateKey: (seed?: Uint8Array) => Uint8Array;
-    /** @deprecated use `point.precompute()` */
-    precompute: (windowSize?: number, point?: EdwardsPoint) => EdwardsPoint;
   };
   info: CurveInfo;
 }
-
-// Legacy params. TODO: remove
-export type CurveFn = {
-  CURVE: CurveType;
-  keygen: EdDSA['keygen'];
-  getPublicKey: EdDSA['getPublicKey'];
-  sign: EdDSA['sign'];
-  verify: EdDSA['verify'];
-  Point: EdwardsPointCons;
-  /** @deprecated use `Point` */
-  ExtendedPoint: EdwardsPointCons;
-  utils: EdDSA['utils'];
-  info: CurveInfo;
-};
 
 function isEdValidXY(Fp: IField<bigint>, CURVE: EdwardsOpts, x: bigint, y: bigint): boolean {
   const x2 = Fp.sqr(x);
@@ -327,29 +271,6 @@ export function edwards(CURVE: EdwardsOpts, curveOpts: EdwardsExtraOpts = {}): E
     }
     get y(): bigint {
       return this.toAffine().y;
-    }
-
-    // TODO: remove
-    get ex(): bigint {
-      return this.X;
-    }
-    get ey(): bigint {
-      return this.Y;
-    }
-    get ez(): bigint {
-      return this.Z;
-    }
-    get et(): bigint {
-      return this.T;
-    }
-    static normalizeZ(points: Point[]): Point[] {
-      return normalizeZ(Point, points);
-    }
-    static msm(points: Point[], scalars: bigint[]): Point {
-      return pippenger(Point, Fn, points, scalars);
-    }
-    _setWindowSize(windowSize: number) {
-      this.precompute(windowSize);
     }
 
     static fromAffine(p: AffinePoint<bigint>): Point {
@@ -532,10 +453,6 @@ export function edwards(CURVE: EdwardsOpts, curveOpts: EdwardsExtraOpts = {}): E
       bytes[bytes.length - 1] |= x & _1n ? 0x80 : 0; // when compressing, it's enough to store y
       return bytes; // and use the last byte to encode sign of x
     }
-    /** @deprecated use `toBytes` */
-    toRawBytes(): Uint8Array {
-      return this.toBytes();
-    }
     toHex(): string {
       return bytesToHex(this.toBytes());
     }
@@ -601,11 +518,6 @@ export abstract class PrimeEdwardsPoint<T extends PrimeEdwardsPoint<T>>
     return this.ep.toAffine(invertedZ);
   }
 
-  /** @deprecated use `toBytes` */
-  toRawBytes(): Uint8Array {
-    return this.toBytes();
-  }
-
   toHex(): string {
     return bytesToHex(this.toBytes());
   }
@@ -661,7 +573,7 @@ export abstract class PrimeEdwardsPoint<T extends PrimeEdwardsPoint<T>>
 /**
  * Initializes EdDSA signatures over given Edwards curve.
  */
-export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpts): EdDSA {
+export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpts = {}): EdDSA {
   if (typeof cHash !== 'function') throw new Error('"hash" function param is required');
   _validateObject(
     eddsaOpts,
@@ -875,47 +787,4 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
     Point,
     info: { type: 'edwards' as const, lengths },
   });
-}
-
-// TODO: remove
-export type EdComposed = {
-  CURVE: EdwardsOpts;
-  curveOpts: EdwardsExtraOpts;
-  hash: FHash;
-  eddsaOpts: EdDSAOpts;
-};
-// TODO: remove
-function _eddsa_legacy_opts_to_new(c: CurveTypeWithLength): EdComposed {
-  const CURVE: EdwardsOpts = {
-    a: c.a,
-    d: c.d,
-    p: c.Fp.ORDER,
-    n: c.n,
-    h: c.h,
-    Gx: c.Gx,
-    Gy: c.Gy,
-  };
-  const Fp = c.Fp;
-  const Fn = Field(CURVE.n, c.nBitLength, true);
-  const curveOpts: EdwardsExtraOpts = { Fp, Fn, uvRatio: c.uvRatio };
-  const eddsaOpts: EdDSAOpts = {
-    randomBytes: c.randomBytes,
-    adjustScalarBytes: c.adjustScalarBytes,
-    domain: c.domain,
-    prehash: c.prehash,
-    mapToCurve: c.mapToCurve,
-  };
-  return { CURVE, curveOpts, hash: c.hash, eddsaOpts };
-}
-// TODO: remove
-function _eddsa_new_output_to_legacy(c: CurveTypeWithLength, eddsa: EdDSA): CurveFn {
-  const legacy = Object.assign({}, eddsa, { ExtendedPoint: eddsa.Point, CURVE: c });
-  return legacy;
-}
-// TODO: remove. Use eddsa
-export function twistedEdwards(c: CurveTypeWithLength): CurveFn {
-  const { CURVE, curveOpts, hash, eddsaOpts } = _eddsa_legacy_opts_to_new(c);
-  const Point = edwards(CURVE, curveOpts);
-  const EDDSA = eddsa(Point, hash, eddsaOpts);
-  return _eddsa_new_output_to_legacy(c, EDDSA);
 }
