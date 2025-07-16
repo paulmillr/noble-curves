@@ -1,6 +1,6 @@
 {
   "name": "@noble/curves",
-  "version": "1.9.2",
+  "version": "1.9.3",
   "description": "Audited & minimal JS implementation of elliptic curve cryptography",
   "files": [
     "*.js",
@@ -9,7 +9,9 @@
     "*.d.ts.map",
     "esm",
     "src",
-    "abstract"
+    "abstract",
+    "!oprf.*",
+    "!webcrypto.*"
   ],
   "scripts": {
     "bench": "npm run bench:install; cd test/benchmark; node secp256k1.js; node curves.js; node utils.js; node bls.js",
