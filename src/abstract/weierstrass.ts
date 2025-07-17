@@ -222,7 +222,7 @@ export interface WeierstrassPointCons<T> extends CurvePointCons<T, WeierstrassPo
 /** @deprecated use WeierstrassPoint */
 export type ProjPointType<T> = WeierstrassPoint<T>;
 /** @deprecated use WeierstrassPointCons */
-export type ProjConstuctor<T> = WeierstrassPointCons<T>;
+export type ProjConstructor<T> = WeierstrassPointCons<T>;
 
 // TODO: remove
 export type CurvePointsType<T> = BasicWCurve<T> & {
@@ -241,7 +241,7 @@ export type CurvePointsTypeWithLength<T> = Readonly<CurvePointsType<T> & Partial
 export type CurvePointsRes<T> = {
   Point: WeierstrassPointCons<T>;
 
-  /** @deprecated import individual CURVE params */
+  /** @deprecated the property will be removed in next release */
   CURVE: CurvePointsType<T>;
   /** @deprecated use `Point` */
   ProjectivePoint: WeierstrassPointCons<T>;
@@ -1003,7 +1003,7 @@ export function weierstrassN<T>(
 
 // _legacyWeierstrass
 // TODO: remove
-/** @deprecated use `weierstrassN` */
+/** @deprecated use `weierstrass` in newer releases */
 export function weierstrassPoints<T>(c: CurvePointsTypeWithLength<T>): CurvePointsRes<T> {
   const { CURVE, curveOpts } = _weierstrass_legacy_opts_to_new(c);
   const Point = weierstrassN(CURVE, curveOpts);
@@ -1070,6 +1070,7 @@ function pprefix(hasEvenY: boolean): Uint8Array {
 
 // TODO: remove
 export type CurveFn = {
+  /** @deprecated the property will be removed in next release */
   CURVE: CurvePointsType<bigint>;
   keygen: ECDSA['keygen'];
   getPublicKey: ECDSA['getPublicKey'];

@@ -43,6 +43,7 @@ export type UVRatio = (u: bigint, v: bigint) => { isValid: boolean; value: bigin
 export type CurveType = BasicCurve<bigint> & {
   a: bigint; // curve param a
   d: bigint; // curve param d
+  /** @deprecated the property will be removed in next release */
   hash: FHash; // Hashing
   randomBytes?: (bytesLength?: number) => Uint8Array; // CSPRNG
   adjustScalarBytes?: (bytes: Uint8Array) => Uint8Array; // clears bits to get valid field elemtn
@@ -203,6 +204,7 @@ export interface EdDSA {
 
 // Legacy params. TODO: remove
 export type CurveFn = {
+  /** @deprecated the property will be removed in next release */
   CURVE: CurveType;
   keygen: EdDSA['keygen'];
   getPublicKey: EdDSA['getPublicKey'];
