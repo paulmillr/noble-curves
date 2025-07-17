@@ -129,18 +129,18 @@ export function _splitEndoScalar(k: bigint, basis: EndoBasis, n: bigint): Scalar
   return { k1neg, k1, k2neg, k2 };
 }
 
-export type ECDSASigFormat = 'compact' | 'der';
+export type ECDSASigFormat = 'compact' | 'recovered' | 'der';
 export type Entropy = Uint8Array | boolean;
 export type SignOpts = Partial<{
   lowS: boolean;
   extraEntropy: Uint8Array | boolean;
   prehash: boolean;
-  format: ECDSASigFormat | 'js';
+  format: ECDSASigFormat;
 }>;
 export type VerOpts = Partial<{
   lowS: boolean;
   prehash: boolean;
-  format: ECDSASigFormat | 'js' | undefined;
+  format: ECDSASigFormat | undefined;
 }>;
 
 function validateSigVerOpts(opts: SignOpts | VerOpts) {
@@ -226,13 +226,9 @@ export type ECDSAOpts = Partial<{
 export interface ECDSA {
   keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
   getPublicKey: (secretKey: Uint8Array, isCompressed?: boolean) => Uint8Array;
-  sign: (
-    msgHash: Uint8Array,
-    secretKey: Uint8Array,
-    opts?: SignOpts
-  ) => ECDSASigRecovered | Uint8Array;
+  sign: (msgHash: Uint8Array, secretKey: Uint8Array, opts?: SignOpts) => Uint8Array;
   verify: (
-    signature: Uint8Array | ECDSASigRecovered,
+    signature: Uint8Array,
     msgHash: Uint8Array,
     publicKey: Uint8Array,
     opts?: VerOpts
@@ -242,6 +238,7 @@ export interface ECDSA {
     publicKeyB: Uint8Array,
     isCompressed?: boolean
   ) => Uint8Array;
+  recoverPublicKey(signature: Uint8Array, msgHash: Uint8Array): Uint8Array;
   Point: WeierstrassPointCons<bigint>;
   Signature: ECDSASignatureCons;
   utils: {
@@ -869,18 +866,15 @@ export interface ECDSASignature {
   toBytes(format?: string): Uint8Array;
   toHex(format?: string): string;
 }
-export type SignatureType = ECDSASignature;
 export type ECDSASigRecovered = ECDSASignature & {
   readonly recovery: number;
 };
-export type RecoveredSignatureType = ECDSASigRecovered;
 // Static methods
 export type ECDSASignatureCons = {
   new (r: bigint, s: bigint, recovery?: number): ECDSASignature;
   fromBytes(bytes: Uint8Array, format?: ECDSASigFormat): ECDSASignature;
   fromHex(hex: string, format?: ECDSASigFormat): ECDSASignature;
 };
-export type SignatureLike = { r: bigint; s: bigint };
 
 // Points start with byte 0x02 when y is even; otherwise 0x03
 function pprefix(hasEvenY: boolean): Uint8Array {
@@ -1073,6 +1067,10 @@ export function ecdsa(
     if (!Fn.isValidNot0(num))
       throw new Error(`invalid signature ${title}: out of range 1..CURVE.n`);
   }
+  function validateSigFormat(format: ECDSASigFormat): void {
+    if (!['compact', 'recovered', 'der'].includes(format as string))
+      throw new Error('Signature format must be "compact", "recovered", or "der"');
+  }
 
   /**
    * ECDSA signature with its (r, s) properties. Supports DER & compact representations.
@@ -1090,20 +1088,27 @@ export function ecdsa(
       Object.freeze(this);
     }
 
-    static fromBytes(bytes: Uint8Array, format: ECDSASigFormat = 'compact') {
-      if (format === 'compact') {
-        const L = Fn.BYTES;
-        abytes(bytes, L * 2);
-        const r = bytes.subarray(0, L);
-        const s = bytes.subarray(L, L * 2);
-        return new Signature(Fn.fromBytes(r), Fn.fromBytes(s));
-      }
+    static fromBytes(bytes: Uint8Array, format: ECDSASigFormat = 'compact'): Signature {
+      validateSigFormat(format);
+      const size = lengths.signature;
+      let recid: number | undefined;
       if (format === 'der') {
         abytes(bytes);
         const { r, s } = DER.toSig(bytes);
         return new Signature(r, s);
       }
-      throw new Error('invalid format');
+      if (format === 'recovered') {
+        abytes(bytes, size + 1);
+        recid = bytes[0];
+
+        format = 'compact';
+        bytes = bytes.subarray(1);
+      }
+      abytes(bytes, size);
+      const L = size / 2;
+      const r = bytes.subarray(0, L);
+      const s = bytes.subarray(L, L * 2);
+      return new Signature(Fn.fromBytes(r), Fn.fromBytes(s), recid);
     }
 
     static fromHex(hex: string, format?: ECDSASigFormat) {
@@ -1156,9 +1161,13 @@ export function ecdsa(
     }
 
     toBytes(format: ECDSASigFormat = 'compact') {
-      if (format === 'compact') return concatBytes(Fn.toBytes(this.r), Fn.toBytes(this.s));
+      validateSigFormat(format);
       if (format === 'der') return hexToBytes(DER.hexFromSig(this));
-      throw new Error('invalid format');
+      if (format === 'recovered') {
+        if (this.recovery == null) throw new Error('recovery bit must be present');
+        return concatBytes(Uint8Array.of(this.recovery), Fn.toBytes(this.r), Fn.toBytes(this.s));
+      }
+      return concatBytes(Fn.toBytes(this.r), Fn.toBytes(this.s));
     }
 
     toHex(format?: ECDSASigFormat) {
@@ -1304,7 +1313,7 @@ export function ecdsa(
     // Can use scalar blinding b^-1(bm + bdr) where b ∈ [1,q−1] according to
     // https://tches.iacr.org/index.php/TCHES/article/view/7337/6509. We've decided against it:
     // a) dependency on CSPRNG b) 15% slowdown c) doesn't really help since bigints are not CT
-    function k2sig(kBytes: Uint8Array): Uint8Array | RecoveredSignature | undefined {
+    function k2sig(kBytes: Uint8Array): RecoveredSignature | undefined {
       // RFC 6979 Section 3.2, step 3: k = bits2int(T)
       // Important: all mod() calls here must be done over N
       const k = bits2int(kBytes); // Cannot use fields methods, since it is group element
@@ -1321,14 +1330,16 @@ export function ecdsa(
         normS = normalizeS(s); // if lowS was passed, ensure s is always
         recovery ^= 1; // // in the bottom half of N
       }
-      const sig = new Signature(r, normS, recovery) as RecoveredSignature; // use normS, not s
-      if (opts.format === 'js') return sig;
-      return sig.toBytes(opts.format);
+      return new Signature(r, normS, recovery) as RecoveredSignature; // use normS, not s
     }
     return { seed, k2sig };
   }
   const defaultSigOpts: SignOpts = { lowS: ecdsaOpts.lowS, prehash: false, format: 'compact' };
-  const defaultVerOpts: VerOpts = { lowS: ecdsaOpts.lowS, prehash: false, format: 'compact' };
+  const defaultVerOpts: Required<VerOpts> = {
+    lowS: ecdsaOpts.lowS,
+    prehash: false,
+    format: 'compact',
+  };
 
   /**
    * Signs message hash with a secret key.
@@ -1342,11 +1353,12 @@ export function ecdsa(
   function sign(
     msgHash: Uint8Array,
     secretKey: Uint8Array,
-    opts = defaultSigOpts
-  ): Uint8Array | RecoveredSignature {
+    opts: SignOpts = defaultSigOpts
+  ): Uint8Array {
     const { seed, k2sig } = prepSig(msgHash, secretKey, opts); // Steps A, D of RFC6979 3.2.
-    const drbg = createHmacDrbg<Uint8Array | RecoveredSignature>(hash.outputLen, Fn.BYTES, hmac_);
-    return drbg(seed, k2sig); // Steps B, C, D, E, F, G
+    const drbg = createHmacDrbg<RecoveredSignature>(hash.outputLen, Fn.BYTES, hmac_);
+    const sig = drbg(seed, k2sig); // Steps B, C, D, E, F, G
+    return sig.toBytes(opts.format);
   }
 
   // Enable precomputes. Slows down first publicKey computation by 20ms.
@@ -1366,10 +1378,10 @@ export function ecdsa(
    * ```
    */
   function verify(
-    signature: Uint8Array | SignatureLike,
+    signature: Uint8Array,
     msgHash: Uint8Array,
     publicKey: Uint8Array,
-    opts = defaultVerOpts
+    opts: VerOpts = defaultVerOpts
   ): boolean {
     const sg = signature;
     msgHash = ensureBytes('msgHash', msgHash);
@@ -1377,7 +1389,8 @@ export function ecdsa(
 
     // Verify opts
     validateSigVerOpts(opts);
-    let { lowS, prehash, format } = opts;
+    let format: ECDSASigFormat = opts.format ?? defaultVerOpts.format;
+    let { lowS, prehash } = opts;
     if (lowS === undefined) lowS = defaultVerOpts.lowS;
     if (prehash === undefined) prehash = defaultVerOpts.prehash;
     if (format === undefined) format = defaultVerOpts.format;
@@ -1386,22 +1399,14 @@ export function ecdsa(
     let P: WeierstrassPoint<bigint>;
 
     // Those errors should not be swallowed
-    if (format === 'compact' || format === 'der') {
-      if (!isBytes(sg))
-        throw new Error('verify "der" / "compact" format expects Uint8Array signature');
-    } else if (format === 'js') {
-      if (!(sg instanceof Signature))
-        throw new Error('verify "js" format expects Signature instance');
-    } else {
-      throw new Error('verify format must be "compact", "der" or "js"');
+    validateSigFormat(format);
+    if (!isBytes(signature)) {
+      const end = (signature as any) instanceof Signature ? ', use sig.toBytes()' : '';
+      throw new Error('verify expects Uint8Array signature' + end);
     }
 
     try {
-      if (format === 'js') {
-        _sig = sg as Signature;
-      } else {
-        _sig = Signature.fromBytes(sg as Uint8Array, format);
-      }
+      _sig = Signature.fromBytes(sg as Uint8Array, format);
       if (!_sig) return false;
       P = Point.fromBytes(publicKey);
       if (lowS && _sig.hasHighS()) return false;
@@ -1421,6 +1426,10 @@ export function ecdsa(
     }
   }
 
+  function recoverPublicKey(signature: Uint8Array, msgHash: Uint8Array): Uint8Array {
+    return Signature.fromBytes(signature, 'recovered').recoverPublicKey(msgHash).toBytes();
+  }
+
   function keygen(seed?: Uint8Array) {
     const secretKey = utils.randomSecretKey(seed);
     return { secretKey, publicKey: getPublicKey(secretKey) };
@@ -1436,6 +1445,7 @@ export function ecdsa(
     sign,
     verify,
     getSharedSecret,
+    recoverPublicKey,
     utils,
     Point,
     Signature,
