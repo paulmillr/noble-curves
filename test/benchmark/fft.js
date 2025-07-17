@@ -1,5 +1,5 @@
-import * as fft from '@noble/curves/abstract/fft';
-import { bls12_381 } from '@noble/curves/bls12-381';
+import * as fft from '@noble/curves/abstract/fft.js';
+import { bls12_381 } from '@noble/curves/bls12-381.js';
 
 import mark from 'micro-bmark';
 import { title } from './_shared.js';

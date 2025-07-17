@@ -476,6 +476,7 @@ class _Field implements IField<bigint> {
     return invert(num, this.ORDER);
   }
   sqrt(num: bigint): bigint {
+    // Caching _sqrt speeds up sqrt9mod16 by 5x and tonneli-shanks by 10%
     if (!this._sqrt) this._sqrt = FpSqrt(this.ORDER);
     return this._sqrt(this, num);
   }

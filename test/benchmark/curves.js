@@ -1,5 +1,5 @@
-import { ed25519, ed25519_hasher, x25519 } from '@noble/curves/ed25519';
-import { ed448, ed448_hasher, x448 } from '@noble/curves/ed448';
+import { ed25519, ed25519_hasher, x25519 } from '@noble/curves/ed25519.js';
+import { ed448, ed448_hasher, x448 } from '@noble/curves/ed448.js';
 import { p256, p256_hasher, p384, p384_hasher, p521, p521_hasher } from '@noble/curves/nist.js';
 import { secp256k1, secp256k1_hasher } from '@noble/curves/secp256k1.js';
 import { randomBytes } from '@noble/hashes/utils.js';

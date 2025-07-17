@@ -226,7 +226,7 @@ export type H2CMethod<F, P extends CurvePoint<F, P>> = (
 // TODO: remove
 export type H2CHasherBase<F, P extends CurvePoint<F, P>> = {
   hashToCurve: H2CMethod<F, P>;
-  hashToScalar: (msg: Uint8Array, options: htfBasicOpts) => bigint;
+  hashToScalar: (msg: Uint8Array, options?: htfBasicOpts) => bigint;
 };
 /**
  * RFC 9380 methods, with cofactor clearing. See https://www.rfc-editor.org/rfc/rfc9380#section-3.

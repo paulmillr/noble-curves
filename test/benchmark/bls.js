@@ -1,4 +1,5 @@
-import { bls12_381 as bls } from '@noble/curves/bls12-381';
+import { bls12_381 as bls } from '@noble/curves/bls12-381.js';
+import { hexToBytes } from '@noble/hashes/utils.js';
 import bench from 'micro-bmark';
 import { readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -7,7 +8,7 @@ import { title } from './_shared.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const G2_VECTORS = readFileSync(
-  `${__dirname}/../test/bls12-381/bls12-381-g2-test-vectors.txt`,
+  `${__dirname}/../vectors/bls12-381/bls12-381-g2-test-vectors.txt`,
   'utf-8'
 )
   .trim()
@@ -17,6 +18,7 @@ const G2_VECTORS = readFileSync(
 (async () => {
   title('bls12-381');
   let p1, p2, sig;
+  const blsl = bls.longSignatures;
   await bench('init', 1, () => {
     p1 =
       bls.G1.Point.BASE.multiply(
@@ -28,11 +30,11 @@ const G2_VECTORS = readFileSync(
       );
     bls.pairing(p1, p2);
   });
-  const priv = '28b90deaf189015d3a325908c5e0e4bf00f84f7e639b056ff82d7e70b6eede4c';
-  sig = bls.sign('09', priv);
-  const pubs = G2_VECTORS.map((v) => bls.getPublicKey(v[0]));
-  const sigs = G2_VECTORS.map((v) => v[2]);
-  const pub = bls.getPublicKey(priv);
+  const priv = hexToBytes('28b90deaf189015d3a325908c5e0e4bf00f84f7e639b056ff82d7e70b6eede4c');
+  sig = blsl.sign(blsl.hash(Uint8Array.of(0x09)), priv);
+  const pubs = G2_VECTORS.map((v) => blsl.getPublicKey(hexToBytes(v[0])));
+  const sigs = G2_VECTORS.map((v) => hexToBytes(v[2]));
+  const pub = blsl.getPublicKey(priv);
   const pub512 = pubs.slice(0, 512); // .map(bls.PointG1.fromHex)
   const pub32 = pub512.slice(0, 32);
   const pub128 = pub512.slice(0, 128);
@@ -41,23 +43,25 @@ const G2_VECTORS = readFileSync(
   const sig32 = sig512.slice(0, 32);
   const sig128 = sig512.slice(0, 128);
   const sig2048 = sig512.concat(sig512, sig512, sig512);
-  await bench('getPublicKey 1-bit', () => bls.getPublicKey('2'.padStart(64, '0')));
-  await bench('getPublicKey', () => bls.getPublicKey(priv));
-  await bench('sign', () => bls.sign('09', priv));
-  await bench('verify', () => bls.verify(sig, '09', pub));
+  await bench('getPublicKey 1-bit', () => blsl.getPublicKey(hexToBytes('2'.padStart(64, '0'))));
+  await bench('getPublicKey', () => blsl.getPublicKey(priv));
+  await bench('sign', () => blsl.sign(blsl.hash(Uint8Array.of(0x09)), priv));
+  await bench('verify', () => blsl.verify(sig, blsl.hash(Uint8Array.of(0x09)), pub));
   await bench('pairing', () => bls.pairing(p1, p2));
 
+  const _pow1 = 2n ** 235n;
+  const _pow2 = 2n ** 241n;
   const scalars1 = Array(4096)
     .fill(0)
-    .map((i) => 2n ** 235n - BigInt(i));
+    .map((i) => _pow1 - BigInt(i));
   const scalars2 = Array(4096)
     .fill(0)
-    .map((i) => 2n ** 241n + BigInt(i));
+    .map((i) => _pow2 + BigInt(i));
   const points = scalars1.map((s) => bls.G1.Point.BASE.multiply(s));
   const pointsG2 = scalars1.map((s) => bls.G2.Point.BASE.multiply(s));
 
   const pairingBatch = 10;
-  await bench(`pairing${pairingBatch}`, 10, () => {
+  await bench(`pairing${pairingBatch}`, () => {
     const res = [];
     for (let i = 0; i < pairingBatch; i++) res.push({ g1: points[i], g2: pointsG2[i] });
     bls.pairingBatch(res);
@@ -74,14 +78,14 @@ const G2_VECTORS = readFileSync(
     }
   });
 
-  await bench('aggregatePublicKeys/8', () => bls.aggregatePublicKeys(pubs.slice(0, 8)));
-  await bench('aggregatePublicKeys/32', () => bls.aggregatePublicKeys(pub32));
-  await bench('aggregatePublicKeys/128', () => bls.aggregatePublicKeys(pub128));
-  await bench('aggregatePublicKeys/512', () => bls.aggregatePublicKeys(pub512));
-  await bench('aggregatePublicKeys/2048', () => bls.aggregatePublicKeys(pub2048));
-  await bench('aggregateSignatures/8', () => bls.aggregateSignatures(sigs.slice(0, 8)));
-  await bench('aggregateSignatures/32', () => bls.aggregateSignatures(sig32));
-  await bench('aggregateSignatures/128', () => bls.aggregateSignatures(sig128));
-  await bench('aggregateSignatures/512', () => bls.aggregateSignatures(sig512));
-  await bench('aggregateSignatures/2048', () => bls.aggregateSignatures(sig2048));
+  await bench('aggregatePublicKeys/8', () => blsl.aggregatePublicKeys(pubs.slice(0, 8)));
+  await bench('aggregatePublicKeys/32', () => blsl.aggregatePublicKeys(pub32));
+  await bench('aggregatePublicKeys/128', () => blsl.aggregatePublicKeys(pub128));
+  await bench('aggregatePublicKeys/512', () => blsl.aggregatePublicKeys(pub512));
+  await bench('aggregatePublicKeys/2048', () => blsl.aggregatePublicKeys(pub2048));
+  await bench('aggregateSignatures/8', () => blsl.aggregateSignatures(sigs.slice(0, 8)));
+  await bench('aggregateSignatures/32', () => blsl.aggregateSignatures(sig32));
+  await bench('aggregateSignatures/128', () => blsl.aggregateSignatures(sig128));
+  await bench('aggregateSignatures/512', () => blsl.aggregateSignatures(sig512));
+  await bench('aggregateSignatures/2048', () => blsl.aggregateSignatures(sig2048));
 })();

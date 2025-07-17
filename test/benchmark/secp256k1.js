@@ -1,4 +1,4 @@
-import { schnorr, secp256k1 } from '@noble/curves/secp256k1';
+import { schnorr, secp256k1 } from '@noble/curves/secp256k1.js';
 import mark from 'micro-bmark';
 import { generateData, title } from './_shared.js';
 
