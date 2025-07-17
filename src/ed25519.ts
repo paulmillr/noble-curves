@@ -8,7 +8,7 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha512 } from '@noble/hashes/sha2.js';
 import { abytes, concatBytes, hexToBytes, utf8ToBytes } from '@noble/hashes/utils.js';
-import { pippenger, type AffinePoint } from './abstract/curve.ts';
+import { type AffinePoint } from './abstract/curve.ts';
 import {
   eddsa,
   edwards,
@@ -402,10 +402,6 @@ class _RistrettoPoint extends PrimeEdwardsPoint<_RistrettoPoint> {
    */
   static fromHex(hex: string): _RistrettoPoint {
     return _RistrettoPoint.fromBytes(hexToBytes(hex));
-  }
-
-  static msm(points: _RistrettoPoint[], scalars: bigint[]): _RistrettoPoint {
-    return pippenger(_RistrettoPoint, ed25519_Point.Fn, points, scalars);
   }
 
   /**

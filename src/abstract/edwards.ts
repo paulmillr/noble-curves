@@ -722,17 +722,32 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
   function randomSecretKey(seed = randomBytes_!(lengths.seed)): Uint8Array {
     return seed;
   }
+  function keygen(seed?: Uint8Array) {
+    const secretKey = utils.randomSecretKey(seed);
+    return { secretKey, publicKey: getPublicKey(secretKey) };
+  }
+
+  function isValidSecretKey(key: Uint8Array): boolean {
+    try {
+      return !!Fn.fromBytes(key, false);
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function isValidPublicKey(key: Uint8Array, zip215?: boolean): boolean {
+    try {
+      return !!Point.fromBytes(key, zip215);
+    } catch (error) {
+      return false;
+    }
+  }
 
   const utils = {
     getExtendedPublicKey,
-    /** ed25519 priv keys are uniform 32b. No need to check for modulo bias, like in secp256k1. */
     randomSecretKey,
-
     isValidSecretKey,
     isValidPublicKey,
-
-    randomPrivateKey: randomSecretKey,
-
     /**
      * Converts ed public key to x public key. Uses formula:
      * - ed25519:
@@ -754,44 +769,12 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
       const u = is25519 ? Fp.div(_1n + y, _1n - y) : Fp.div(y - _1n, y + _1n);
       return Fp.toBytes(u);
     },
-
     toMontgomeryPriv(privateKey: Uint8Array): Uint8Array {
       abytes(privateKey, size);
       const hashed = cHash(privateKey.subarray(0, size));
       return adjustScalarBytes(hashed).subarray(0, size);
     },
-
-    /**
-     * We're doing scalar multiplication (used in getPublicKey etc) with precomputed BASE_POINT
-     * values. This slows down first getPublicKey() by milliseconds (see Speed section),
-     * but allows to speed-up subsequent getPublicKey() calls up to 20x.
-     * @param windowSize 2, 4, 8, 16
-     */
-    precompute(windowSize = 8, point: EdwardsPoint = Point.BASE): EdwardsPoint {
-      return point.precompute(windowSize, false);
-    },
   };
-
-  function keygen(seed?: Uint8Array) {
-    const secretKey = utils.randomSecretKey(seed);
-    return { secretKey, publicKey: getPublicKey(secretKey) };
-  }
-
-  function isValidSecretKey(key: Uint8Array): boolean {
-    try {
-      return !!Fn.fromBytes(key, false);
-    } catch (error) {
-      return false;
-    }
-  }
-
-  function isValidPublicKey(key: Uint8Array, zip215?: boolean): boolean {
-    try {
-      return !!Point.fromBytes(key, zip215);
-    } catch (error) {
-      return false;
-    }
-  }
 
   return Object.freeze({
     keygen,

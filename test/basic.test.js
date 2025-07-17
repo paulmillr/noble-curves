@@ -715,7 +715,7 @@ for (const name in CURVES) {
 
       describe('multiscalar multiplication', () => {
         should('MSM basic', () => {
-          const msm = (points, scalars) => pippenger(p, p.Fn, points, scalars);
+          const msm = (points, scalars) => pippenger(p, points, scalars);
           equal(msm([p.BASE], [0n]), p.ZERO, '0*G');
           equal(msm([], []), p.ZERO, 'empty');
           equal(msm([p.ZERO], [123n]), p.ZERO, '123 * Infinity');
@@ -737,7 +737,7 @@ for (const name in CURVES) {
               }
               total = mod.mod(total, CURVE_ORDER);
               const exp = total ? p.BASE.multiply(total) : p.ZERO;
-              equal(pippenger(p, p.Fn, points, scalars), exp, 'total');
+              equal(pippenger(p, points, scalars), exp, 'total');
             }),
             { numRuns: NUM_RUNS }
           )
@@ -751,7 +751,7 @@ for (const name in CURVES) {
           const scalars = [3n, 5n, 7n, 11n];
           const res = p.BASE.multiply(129n);
           for (let windowSize = 1; windowSize <= 10; windowSize++) {
-            const mul = precomputeMSMUnsafe(Point, field, points, windowSize);
+            const mul = precomputeMSMUnsafe(Point, points, windowSize);
             equal(mul(scalars), res, 'windowSize=' + windowSize);
           }
         });
@@ -774,7 +774,7 @@ for (const name in CURVES) {
               const res = total ? p.BASE.multiply(total) : p.ZERO;
 
               for (let windowSize = 1; windowSize <= 10; windowSize++) {
-                const mul = precomputeMSMUnsafe(Point, field, points, windowSize);
+                const mul = precomputeMSMUnsafe(Point, points, windowSize);
                 equal(mul(scalars), res, 'windowSize=' + windowSize);
               }
             }),
