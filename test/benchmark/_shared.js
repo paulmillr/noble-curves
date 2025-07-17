@@ -5,7 +5,7 @@ export function generateData(curve) {
   const sig = curve.sign(msg, priv);
   const isWeierstrass = !!curve.Point;
   const Point = isWeierstrass ? curve.Point : curve.Point;
-  const point = Point.fromHex(pub);
+  const point = Point.fromBytes(pub);
   return { priv, pub, msg, sig, point, Point, isWeierstrass };
 }
 
