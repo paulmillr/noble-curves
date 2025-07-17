@@ -14,7 +14,7 @@ import { bls12_381 } from '../bls12-381.js';
 import { bn254 } from '../bn254.js';
 import { ed25519, ed25519ctx, ed25519ph, ristretto255, x25519 } from '../ed25519.js';
 import { decaf448, ed448, ed448ph } from '../ed448.js';
-import { babyjubjub, jubjub } from '../misc.js';
+import { babyjubjub, brainpoolP256r1, brainpoolP384r1, brainpoolP512r1, jubjub } from '../misc.js';
 import { p256 as secp256r1, p384 as secp384r1, p521 as secp521r1 } from '../nist.js';
 import { secp256k1 } from '../secp256k1.js';
 import { miscCurves, secp192r1, secp224r1 } from './_more-curves.helpers.js';
@@ -84,6 +84,9 @@ const FIELDS = {
       (Fp12, num) => Fp12.fromBigTwelve(num),
     ],
   },
+  brainpoolP256r1: { Fp: [brainpoolP256r1.Point.Fp] },
+  brainpoolP384r1: { Fp: [brainpoolP384r1.Point.Fp] },
+  brainpoolP512r1: { Fp: [brainpoolP512r1.Point.Fp] },
   // https://neuromancer.sk/std/other/E-382 (just to check Kong sqrt, nobody else uses it)
   e382: {
     // Prime
@@ -109,6 +112,9 @@ const CURVES = {
   ed448,
   ed448ph,
   jubjub,
+  brainpoolP256r1,
+  brainpoolP384r1,
+  brainpoolP512r1,
   bls12_381_G1: bls12_381.G1,
   bls12_381_G2: bls12_381.G2,
   // Requires fromHex/toHex

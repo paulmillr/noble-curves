@@ -4,6 +4,7 @@ import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql, throws } from 'node:assert';
 import { bytesToHex, hexToBytes, utf8ToBytes } from '../abstract/utils.js';
 import { DER } from '../abstract/weierstrass.js';
+import { brainpoolP256r1, brainpoolP384r1, brainpoolP512r1 } from '../misc.js';
 import { p256, p384, p521 } from '../nist.js';
 import { secp256k1 } from '../secp256k1.js';
 import { p192, p224, secp192r1, secp224r1 } from './_more-curves.helpers.js';
@@ -52,6 +53,17 @@ const secp384r1_shake256_test = json(PREFIX + 'ecdsa_secp384r1_shake256_test.jso
 const secp521r1_sha3_512_test = json(PREFIX + 'ecdsa_secp521r1_sha3_512_test.json');
 const secp521r1_sha512_test = json(PREFIX + 'ecdsa_secp521r1_sha512_test.json');
 const secp521r1_shake256_test = json(PREFIX + 'ecdsa_secp521r1_shake256_test.json');
+
+// brainpool
+const ecdh_brainpoolP256r1_test = json(PREFIX + 'ecdh_brainpoolP256r1_test.json');
+const ecdh_brainpoolP384r1_test = json(PREFIX + 'ecdh_brainpoolP384r1_test.json');
+const ecdh_brainpoolP512r1_test = json(PREFIX + 'ecdh_brainpoolP512r1_test.json');
+const brainpoolP256r1_sha256_test = json(PREFIX + 'ecdsa_brainpoolP256r1_sha256_test.json');
+const brainpoolP256r1_sha3_256_test = json(PREFIX + 'ecdsa_brainpoolP256r1_sha3_256_test.json');
+const brainpoolP384r1_sha384_test = json(PREFIX + 'ecdsa_brainpoolP384r1_sha384_test.json');
+const brainpoolP384r1_sha3_384_test = json(PREFIX + 'ecdsa_brainpoolP384r1_sha3_384_test.json');
+const brainpoolP512r1_sha512_test = json(PREFIX + 'ecdsa_brainpoolP512r1_sha512_test.json');
+const brainpoolP512r1_sha3_512_test = json(PREFIX + 'ecdsa_brainpoolP512r1_sha3_512_test.json');
 
 // TODO: maybe add to noble-hashes?
 const wrapShake = (shake, dkLen) => {
@@ -165,6 +177,11 @@ describe('wycheproof ECDH', () => {
       curve: p521,
       tests: [ecdh_secp521r1_test],
     },
+
+    // brainpool
+    brainpoolP256r1: { curve: brainpoolP256r1, tests: [ecdh_brainpoolP256r1_test] },
+    brainpoolP384r1: { curve: brainpoolP384r1, tests: [ecdh_brainpoolP384r1_test] },
+    brainpoolP512r1: { curve: brainpoolP512r1, tests: [ecdh_brainpoolP512r1_test] },
   };
 
   for (const name in WYCHEPROOF_ECDH) {
@@ -313,6 +330,27 @@ const WYCHEPROOF_ECDSA = {
       },
     },
   },
+  brainpoolP256r1: {
+    curve: brainpoolP256r1,
+    hashes: {
+      sha256: { hash: sha256, tests: [brainpoolP256r1_sha256_test] },
+      sha3_256: { hash: sha3_256, tests: [brainpoolP256r1_sha3_256_test] },
+    },
+  },
+  brainpoolP384r1: {
+    curve: brainpoolP384r1,
+    hashes: {
+      sha384: { hash: sha384, tests: [brainpoolP384r1_sha384_test] },
+      sha3_384: { hash: sha3_384, tests: [brainpoolP384r1_sha3_384_test] },
+    },
+  },
+  brainpoolP512r1: {
+    curve: brainpoolP512r1,
+    hashes: {
+      sha512: { hash: sha512, tests: [brainpoolP512r1_sha512_test] },
+      sha3_512: { hash: sha3_512, tests: [brainpoolP512r1_sha3_512_test] },
+    },
+  },
 };
 
 function runWycheproof(name, CURVE, group, index) {
@@ -434,7 +472,12 @@ describe('RFC6979', () => {
         eql(sigObj.r, hexToBigint(c.r), 'R');
         eql(sigObj.s, hexToBigint(c.s), 'S');
         eql(
-          curve.verify(sigObj, h, pubKey, Object.assign({}, opts, { format: 'der' })),
+          curve.verify(
+            sigObj.toBytes('der'),
+            h,
+            pubKey,
+            Object.assign({}, opts, { format: 'der' })
+          ),
           true,
           'verify(1)'
         );
@@ -448,7 +491,11 @@ describe('RFC6979', () => {
           true,
           'verify(2)'
         );
-        eql(curve.verify(sigObj, h, pubKey, opts), true, 'verify(3)');
+        eql(
+          curve.verify(sigObj.toBytes(), h, pubKey, Object.assign({}, opts, { format: undefined })),
+          true,
+          'verify(3)'
+        );
       }
     });
   }
