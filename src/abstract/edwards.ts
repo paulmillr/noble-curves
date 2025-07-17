@@ -416,7 +416,7 @@ export function edwards(CURVE: EdwardsOpts, curveOpts: EdwardsExtraOpts = {}): E
 
     static fromBytes(bytes: Uint8Array, zip215 = false): Point {
       abytes(bytes);
-      const { d, a } = CURVE;
+      const { a, d } = CURVE;
       const len = Fp.BYTES;
       bytes = ensureBytes('pointHex', bytes, len); // copy hex to a new array
       abool('zip215', zip215);

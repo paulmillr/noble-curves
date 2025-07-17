@@ -281,7 +281,7 @@ function map_to_curve_elligator2_edwards448(u: bigint) {
 
 /** Hashing / encoding to ed448 points / field. RFC 9380 methods. */
 export const ed448_hasher: H2CHasher<bigint, EdwardsPoint> = /* @__PURE__ */ (() =>
-  createHasher(ed448.Point, (scalars: bigint[]) => map_to_curve_elligator2_edwards448(scalars[0]), {
+  createHasher(ed448_Point, (scalars: bigint[]) => map_to_curve_elligator2_edwards448(scalars[0]), {
     DST: 'edwards448_XOF:SHAKE256_ELL2_RO_',
     encodeDST: 'edwards448_XOF:SHAKE256_ELL2_NU_',
     p: Fp.ORDER,
@@ -344,7 +344,7 @@ function calcElligatorDecafMap(r0: bigint): ExtendedPoint {
   const W1 = mod(s2 + _1n); // 9
   const W2 = mod(s2 - _1n); // 10
   const W3 = mod(v_prime * s * (r - _1n) * ONE_MINUS_TWO_D + sgn); // 11
-  return new ed448.Point(mod(W0 * W3), mod(W2 * W1), mod(W1 * W3), mod(W0 * W2));
+  return new ed448_Point(mod(W0 * W3), mod(W2 * W1), mod(W1 * W3), mod(W0 * W2));
 }
 
 function decaf448_map(bytes: Uint8Array): _DecafPoint {
@@ -367,10 +367,10 @@ class _DecafPoint extends PrimeEdwardsPoint<_DecafPoint> {
   // The following gymnastics is done because typescript strips comments otherwise
   // prettier-ignore
   static BASE: _DecafPoint =
-    /* @__PURE__ */ (() => new _DecafPoint(ed448.Point.BASE).multiplyUnsafe(_2n))();
+    /* @__PURE__ */ (() => new _DecafPoint(ed448_Point.BASE).multiplyUnsafe(_2n))();
   // prettier-ignore
   static ZERO: _DecafPoint =
-    /* @__PURE__ */ (() => new _DecafPoint(ed448.Point.ZERO))();
+    /* @__PURE__ */ (() => new _DecafPoint(ed448_Point.ZERO))();
   // prettier-ignore
   static Fp: IField<bigint> =
     /* @__PURE__ */ Fp;
@@ -383,7 +383,7 @@ class _DecafPoint extends PrimeEdwardsPoint<_DecafPoint> {
   }
 
   static fromAffine(ap: AffinePoint<bigint>): _DecafPoint {
-    return new _DecafPoint(ed448.Point.fromAffine(ap));
+    return new _DecafPoint(ed448_Point.fromAffine(ap));
   }
 
   protected assertSame(other: _DecafPoint): void {
@@ -421,7 +421,7 @@ class _DecafPoint extends PrimeEdwardsPoint<_DecafPoint> {
     const t = mod(x * y); // 8
 
     if (!isValid) throw new Error('invalid decaf448 encoding 2');
-    return new _DecafPoint(new ed448.Point(x, y, _1n, t));
+    return new _DecafPoint(new ed448_Point(x, y, _1n, t));
   }
 
   /**

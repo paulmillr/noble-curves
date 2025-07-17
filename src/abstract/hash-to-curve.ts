@@ -46,8 +46,6 @@ export type H2CHashOpts = {
   expand: 'xmd' | 'xof';
   hash: CHash;
 };
-// todo: remove
-export type Opts = H2COpts;
 
 // Octet Stream to Integer. "spec" implementation of os2ip is 2.5x slower vs bytesToNumberBE.
 const os2ip = bytesToNumberBE;

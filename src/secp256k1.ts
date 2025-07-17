@@ -84,8 +84,11 @@ function sqrtMod(y: bigint): bigint {
   return root;
 }
 
-const Fpk1 = Field(secp256k1_CURVE.p, undefined, undefined, { sqrt: sqrtMod });
-const secp256k1_Point = weierstrass(secp256k1_CURVE, { Fp: Fpk1, endo: secp256k1_ENDO });
+const Fpk1 = Field(secp256k1_CURVE.p, { sqrt: sqrtMod });
+const secp256k1_Point = /* @__PURE__ */ weierstrass(secp256k1_CURVE, {
+  Fp: Fpk1,
+  endo: secp256k1_ENDO,
+});
 
 /**
  * secp256k1 curve, ECDSA and ECDH methods.
@@ -102,7 +105,7 @@ const secp256k1_Point = weierstrass(secp256k1_CURVE, { Fp: Fpk1, endo: secp256k1
  * ```
  */
 
-export const secp256k1: ECDSA = ecdsa(secp256k1_Point, sha256);
+export const secp256k1: ECDSA = /* @__PURE__ */ ecdsa(secp256k1_Point, sha256);
 
 // Schnorr signatures are superior to ECDSA from above. Below is Schnorr-specific BIP0340 code.
 // https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki
@@ -258,16 +261,10 @@ export const schnorr: SecpSchnorr = /* @__PURE__ */ (() => {
     verify: schnorrVerify,
     Point: secp256k1_Point,
     utils: {
-      randomSecretKey: randomSecretKey,
-      randomPrivateKey: randomSecretKey,
+      randomSecretKey,
       taggedHash,
-
-      // TODO: remove
       lift_x,
       pointToBytes,
-      numberToBytesBE,
-      bytesToNumberBE,
-      mod,
     },
     info: {
       type: 'weierstrass',

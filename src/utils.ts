@@ -32,6 +32,19 @@ export type CHash = {
   create(opts?: { dkLen?: number }): any; // For shake
 };
 export type FHash = (message: Uint8Array | string) => Uint8Array;
+// export interface Signer {
+//   keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
+//   getPublicKey: (secretKey: Uint8Array) => Uint8Array;
+//   sign: (
+//     message: Uint8Array,
+//     secretKey: Uint8Array,
+//   ) => Uint8Array;
+//   verify: (
+//     signature: Uint8Array,
+//     message: Uint8Array,
+//     publicKey: Uint8Array,
+//   ) => boolean;
+// }
 
 export function abool(title: string, value: boolean): void {
   if (typeof value !== 'boolean') throw new Error(title + ' boolean expected, got ' + value);
@@ -84,7 +97,7 @@ export function ensureBytes(title: string, bytes: Uint8Array, expectedLength?: n
     // is instance of Uint8Array, and its slice() creates **mutable** copy
     res = Uint8Array.from(bytes);
   } else {
-    throw new Error(title + ' must be hex string or Uint8Array');
+    throw new Error(title + ' must be Uint8Array');
   }
   const len = res.length;
   if (typeof expectedLength === 'number' && len !== expectedLength)

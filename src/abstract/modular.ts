@@ -17,7 +17,7 @@ import {
 } from '../utils.ts';
 
 // prettier-ignore
-const _0n = BigInt(0), _1n = BigInt(1), _2n = /* @__PURE__ */ BigInt(2), _3n = /* @__PURE__ */ BigInt(3);
+const _0n = BigInt(0), _1n = /* @__PURE__ */ BigInt(1), _2n = /* @__PURE__ */ BigInt(2), _3n = /* @__PURE__ */ BigInt(3);
 // prettier-ignore
 const _4n = /* @__PURE__ */ BigInt(4), _5n = /* @__PURE__ */ BigInt(5), _7n = /* @__PURE__ */ BigInt(7);
 // prettier-ignore
@@ -406,28 +406,21 @@ type FieldOpts = Partial<{
  * @param isLE (default: false) if encoding / decoding should be in little-endian
  * @param redef optional faster redefinitions of sqrt and other methods
  */
-export function Field(
-  ORDER: bigint,
-  bitLenOrOpts?: number | FieldOpts, // TODO: use opts only in v2?
-  isLE = false,
-  opts: { sqrt?: SqrtFn } = {}
-): Readonly<FpField> {
+export function Field(ORDER: bigint, opts: FieldOpts = {}): Readonly<FpField> {
   if (ORDER <= _0n) throw new Error('invalid field: expected ORDER > 0, got ' + ORDER);
   let _nbitLength: number | undefined = undefined;
   let _sqrt: SqrtFn | undefined = undefined;
   let modOnDecode: boolean = false;
   let allowedLengths: undefined | readonly number[] = undefined;
-  if (typeof bitLenOrOpts === 'object' && bitLenOrOpts != null) {
-    if (opts.sqrt || isLE) throw new Error('cannot specify opts in two arguments');
-    const _opts = bitLenOrOpts;
+  let isLE = false;
+  if (typeof opts === 'object' && opts != null) {
+    // if (opts.sqrt) throw new Error('cannot specify opts in two arguments');
+    const _opts = opts;
     if (_opts.BITS) _nbitLength = _opts.BITS;
     if (_opts.sqrt) _sqrt = _opts.sqrt;
     if (typeof _opts.isLE === 'boolean') isLE = _opts.isLE;
     if (typeof _opts.modOnDecode === 'boolean') modOnDecode = _opts.modOnDecode;
     allowedLengths = _opts.allowedLengths;
-  } else {
-    if (typeof bitLenOrOpts === 'number') _nbitLength = bitLenOrOpts;
-    if (opts.sqrt) _sqrt = opts.sqrt;
   }
   const { nBitLength: BITS, nByteLength: BYTES } = nLength(ORDER, _nbitLength);
   if (BYTES > 2048) throw new Error('invalid field: expected ORDER of <= 2048 bytes');
@@ -475,7 +468,7 @@ export function Field(
         return sqrtP(f, n);
       }),
     toBytes: (num) => (isLE ? numberToBytesLE(num, BYTES) : numberToBytesBE(num, BYTES)),
-    fromBytes: (bytes, skipValidation = true) => {
+    fromBytes: (bytes, skipValidation = false) => {
       abytes(bytes);
       if (allowedLengths) {
         if (!allowedLengths.includes(bytes.length) || bytes.length > BYTES) {

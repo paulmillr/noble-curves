@@ -528,23 +528,6 @@ export function precomputeMSMUnsafe<T extends Group<T>>(
   };
 }
 
-// TODO: remove
-/**
- * Generic BasicCurve interface: works even for polynomial fields (BLS): P, n, h would be ok.
- * Though generator can be different (Fp2 / Fp6 for BLS).
- */
-export type BasicCurve<T> = {
-  Fp: IField<T>; // Field over which we'll do calculations (Fp)
-  n: bigint; // Curve order, total count of valid points in the field
-  nBitLength?: number; // bit length of curve order
-  nByteLength?: number; // byte length of curve order
-  h: bigint; // cofactor. we can assign default=1, but users will just ignore it w/o validation
-  hEff?: bigint; // Number to multiply to clear cofactor
-  Gx: T; // base point X coordinate
-  Gy: T; // base point Y coordinate
-  allowInfinityPoint?: boolean; // bls12-381 requires it. ZERO point is valid, but invalid pubkey
-};
-
 export type ValidCurveParams<T> = {
   a: T;
   p: bigint;
@@ -554,13 +537,17 @@ export type ValidCurveParams<T> = {
   Gy: T;
 } & ({ b: T } | { d: T });
 
-function createField<T>(order: bigint, field?: IField<T>): IField<T> {
+function createField<T>(
+  order: bigint,
+  field?: IField<T>,
+  type?: 'weierstrass' | 'edwards'
+): IField<T> {
   if (field) {
     if (field.ORDER !== order) throw new Error('Field.ORDER must match order: Fp == p, Fn == n');
     validateField(field);
     return field;
   } else {
-    return Field(order) as unknown as IField<T>;
+    return Field(order, { isLE: type === 'edwards' }) as unknown as IField<T>;
   }
 }
 export type FpFn<T> = { Fp: IField<T>; Fn: IField<bigint> };
@@ -576,8 +563,8 @@ export function _createCurveFields<T>(
     if (!(typeof val === 'bigint' && val > _0n))
       throw new Error(`CURVE.${p} must be positive bigint`);
   }
-  const Fp = createField(CURVE.p, curveOpts.Fp);
-  const Fn = createField(CURVE.n, curveOpts.Fn);
+  const Fp = createField(CURVE.p, curveOpts.Fp, type);
+  const Fn = createField(CURVE.n, curveOpts.Fn, type);
   const _b: 'b' | 'd' = type === 'weierstrass' ? 'b' : 'd';
   const params = ['Gx', 'Gy', 'a', _b] as const;
   for (const p of params) {

@@ -14,6 +14,7 @@ import {
   edwards,
   PrimeEdwardsPoint,
   type EdDSA,
+  type EdDSAOpts,
   type EdwardsOpts,
   type EdwardsPoint,
 } from './abstract/edwards.ts';
@@ -37,28 +38,31 @@ import { montgomery, type MontgomeryECDH } from './abstract/montgomery.ts';
 import { bytesToNumberLE, equalBytes, numberToBytesLE } from './utils.ts';
 
 // prettier-ignore
-const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3);
+const _0n = /* @__PURE__ */ BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3);
 // prettier-ignore
 const _5n = BigInt(5), _8n = BigInt(8);
 
+const ed25519_CURVE_p = BigInt(
+  '0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed'
+);
 // P = 2n**255n - 19n
 // N = 2n**252n + 27742317777372353535851937790883648493n
 // a = Fp.create(BigInt(-1))
 // d = -121665/121666 a.k.a. Fp.neg(121665 * Fp.inv(121666))
 const ed25519_CURVE: EdwardsOpts = {
-  p: BigInt('0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed'),
-  n: BigInt('0x1000000000000000000000000000000014def9dea2f79cd65812631a5cf5d3ed'),
+  p: ed25519_CURVE_p,
+  n: /* @__PURE__ */ BigInt('0x1000000000000000000000000000000014def9dea2f79cd65812631a5cf5d3ed'),
   h: _8n,
-  a: BigInt('0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffec'),
-  d: BigInt('0x52036cee2b6ffe738cc740797779e89800700a4d4141d8ab75eb4dca135978a3'),
-  Gx: BigInt('0x216936d3cd6e53fec0a4e231fdd6dc5c692cc7609525a7b2c9562d608f25d51a'),
-  Gy: BigInt('0x6666666666666666666666666666666666666666666666666666666666666658'),
+  a: /* @__PURE__ */ BigInt('0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffec'),
+  d: /* @__PURE__ */ BigInt('0x52036cee2b6ffe738cc740797779e89800700a4d4141d8ab75eb4dca135978a3'),
+  Gx: /* @__PURE__ */ BigInt('0x216936d3cd6e53fec0a4e231fdd6dc5c692cc7609525a7b2c9562d608f25d51a'),
+  Gy: /* @__PURE__ */ BigInt('0x6666666666666666666666666666666666666666666666666666666666666658'),
 };
 
 function ed25519_pow_2_252_3(x: bigint) {
   // prettier-ignore
   const _10n = BigInt(10), _20n = BigInt(20), _40n = BigInt(40), _80n = BigInt(80);
-  const P = ed25519_CURVE.p;
+  const P = ed25519_CURVE_p;
   const x2 = (x * x) % P;
   const b2 = (x2 * x) % P; // x^3, 11
   const b4 = (pow2(b2, _2n, P) * b2) % P; // x^15, 1111
@@ -93,7 +97,7 @@ const ED25519_SQRT_M1 = /* @__PURE__ */ BigInt(
 );
 // sqrt(u/v)
 function uvRatio(u: bigint, v: bigint): { isValid: boolean; value: bigint } {
-  const P = ed25519_CURVE.p;
+  const P = ed25519_CURVE_p;
   const v3 = mod(v * v * v, P); // v³
   const v7 = mod(v3 * v3 * v, P); // v⁷
   // (p+3)/8 and (p-5)/8
@@ -111,7 +115,7 @@ function uvRatio(u: bigint, v: bigint): { isValid: boolean; value: bigint } {
   return { isValid: useRoot1 || useRoot2, value: x };
 }
 
-const ed25519_Point = edwards(ed25519_CURVE, { uvRatio });
+const ed25519_Point = /* @__PURE__ */ edwards(ed25519_CURVE, { uvRatio });
 
 const ed25519_eddsa_opts = { adjustScalarBytes };
 function ed25519_domain(data: Uint8Array, ctx: Uint8Array, phflag: boolean) {
@@ -124,6 +128,10 @@ function ed25519_domain(data: Uint8Array, ctx: Uint8Array, phflag: boolean) {
   );
 }
 
+function _ed(opts: EdDSAOpts) {
+  return eddsa(ed25519_Point, sha512, Object.assign({}, ed25519_eddsa_opts, opts));
+}
+
 /**
  * ed25519 curve with EdDSA signatures.
  * @example
@@ -134,15 +142,11 @@ function ed25519_domain(data: Uint8Array, ctx: Uint8Array, phflag: boolean) {
  * ed25519.verify(sig, msg, pub); // Default mode: follows ZIP215
  * ed25519.verify(sig, msg, pub, { zip215: false }); // RFC8032 / FIPS 186-5
  */
-export const ed25519: EdDSA = /* @__PURE__ */ eddsa(ed25519_Point, sha512, ed25519_eddsa_opts);
+export const ed25519: EdDSA = /* @__PURE__ */ _ed({});
 /** Context of ed25519. Uses context for domain separation. */
-export const ed25519ctx: EdDSA =
-  /* @__PURE__ */
-  eddsa(ed25519_Point, sha512, { ...ed25519_eddsa_opts, domain: ed25519_domain });
+export const ed25519ctx: EdDSA = /* @__PURE__ */ _ed({ domain: ed25519_domain });
 /** Prehashed version of ed25519. Accepts already-hashed messages in sign() and verify(). */
-export const ed25519ph: EdDSA =
-  /* @__PURE__ */
-  eddsa(ed25519_Point, sha512, { ...ed25519_eddsa_opts, domain: ed25519_domain, prehash: sha512 });
+export const ed25519ph: EdDSA = /* @__PURE__ */ _ed({ domain: ed25519_domain, prehash: sha512 });
 
 /**
  * ECDH using curve25519 aka x25519.
@@ -155,7 +159,7 @@ export const ed25519ph: EdDSA =
  * x25519.getPublicKey(x25519.utils.randomSecretKey());
  */
 export const x25519: MontgomeryECDH = /* @__PURE__ */ (() => {
-  const P = ed25519_CURVE.p;
+  const P = ed25519_CURVE_p;
   return montgomery({
     P,
     type: 'x25519',
@@ -171,7 +175,7 @@ export const x25519: MontgomeryECDH = /* @__PURE__ */ (() => {
 // Hash To Curve Elligator2 Map (NOTE: different from ristretto255 elligator)
 // NOTE: very important part is usage of FpSqrtEven for ELL2_C1_EDWARDS, since
 // SageMath returns different root first and everything falls apart
-const Fp = ed25519_Point.Fp;
+const Fp = /* @__PURE__ */ (() => ed25519_Point.Fp)();
 const ELL2_C1 = /* @__PURE__ */ (() => (Fp.ORDER + _3n) / _8n)(); // 1. c1 = (q + 3) / 8       # Integer arithmetic
 const ELL2_C2 = /* @__PURE__ */ (() => Fp.pow(_2n, ELL2_C1))(); // 2. c2 = 2^c1
 const ELL2_C3 = /* @__PURE__ */ (() => Fp.sqrt(Fp.neg(Fp.ONE)))(); // 3. c3 = sqrt(-1)
@@ -244,7 +248,7 @@ function map_to_curve_elligator2_edwards25519(u: bigint) {
 /** Hashing to ed25519 points / field. RFC 9380 methods. */
 export const ed25519_hasher: H2CHasher<bigint, EdwardsPoint> = /* @__PURE__ */ (() =>
   createHasher(
-    ed25519.Point,
+    ed25519_Point,
     (scalars: bigint[]) => map_to_curve_elligator2_edwards25519(scalars[0]),
     {
       DST: 'edwards25519_XMD:SHA-512_ELL2_RO_',
@@ -293,7 +297,7 @@ type ExtendedPoint = EdwardsPoint;
  */
 function calcElligatorRistrettoMap(r0: bigint): ExtendedPoint {
   const { d } = ed25519_CURVE;
-  const P = ed25519_CURVE.p;
+  const P = ed25519_CURVE_p;
   const mod = ed25519_Point.Fp.create;
   const r = mod(SQRT_M1 * r0 * r0); // 1
   const Ns = mod((r + _1n) * ONE_MINUS_D_SQ); // 2
@@ -310,7 +314,7 @@ function calcElligatorRistrettoMap(r0: bigint): ExtendedPoint {
   const W1 = mod(Nt * SQRT_AD_MINUS_ONE); // 11
   const W2 = mod(_1n - s2); // 12
   const W3 = mod(_1n + s2); // 13
-  return new ed25519.Point(mod(W0 * W3), mod(W2 * W1), mod(W1 * W3), mod(W0 * W2));
+  return new ed25519_Point(mod(W0 * W3), mod(W2 * W1), mod(W1 * W3), mod(W0 * W2));
 }
 
 function ristretto255_map(bytes: Uint8Array): _RistrettoPoint {
@@ -336,23 +340,23 @@ class _RistrettoPoint extends PrimeEdwardsPoint<_RistrettoPoint> {
   // because typescript strips comments, which makes bundlers disable tree-shaking.
   // prettier-ignore
   static BASE: _RistrettoPoint =
-    /* @__PURE__ */ (() => new _RistrettoPoint(ed25519.Point.BASE))();
+    /* @__PURE__ */ (() => new _RistrettoPoint(ed25519_Point.BASE))();
   // prettier-ignore
   static ZERO: _RistrettoPoint =
-    /* @__PURE__ */ (() => new _RistrettoPoint(ed25519.Point.ZERO))();
+    /* @__PURE__ */ (() => new _RistrettoPoint(ed25519_Point.ZERO))();
   // prettier-ignore
   static Fp: IField<bigint> =
     /* @__PURE__ */ Fp;
   // prettier-ignore
   static Fn: IField<bigint> =
-    /* @__PURE__ */ ed25519.Point.Fn;
+    /* @__PURE__ */ (() => ed25519_Point.Fn)();
 
   constructor(ep: ExtendedPoint) {
     super(ep);
   }
 
   static fromAffine(ap: AffinePoint<bigint>): _RistrettoPoint {
-    return new _RistrettoPoint(ed25519.Point.fromAffine(ap));
+    return new _RistrettoPoint(ed25519_Point.fromAffine(ap));
   }
 
   protected assertSame(other: _RistrettoPoint): void {
@@ -388,7 +392,7 @@ class _RistrettoPoint extends PrimeEdwardsPoint<_RistrettoPoint> {
     const t = mod(x * y); // 12
     if (!isValid || isNegativeLE(t, P) || y === _0n)
       throw new Error('invalid ristretto255 encoding 2');
-    return new _RistrettoPoint(new ed25519.Point(x, y, _1n, t));
+    return new _RistrettoPoint(new ed25519_Point(x, y, _1n, t));
   }
 
   /**
@@ -401,7 +405,7 @@ class _RistrettoPoint extends PrimeEdwardsPoint<_RistrettoPoint> {
   }
 
   static msm(points: _RistrettoPoint[], scalars: bigint[]): _RistrettoPoint {
-    return pippenger(_RistrettoPoint, ed25519.Point.Fn, points, scalars);
+    return pippenger(_RistrettoPoint, ed25519_Point.Fn, points, scalars);
   }
 
   /**

@@ -101,34 +101,6 @@ export type BlsHasherParams = {
   hasherOptsG1: H2COpts;
   hasherOptsG2: H2COpts;
 };
-// export type CurveType = {
-//   G1: WeierstrassOpts<Fp> & {
-//     ShortSignature: LongSignatureCoder<Fp>;
-//     mapToCurve: MapToCurve<Fp>;
-//     htfDefaults: H2COpts;
-//   };
-//   G2: WeierstrassOpts<Fp2> & {
-//     Signature: LongSignatureCoder<Fp2>;
-//     mapToCurve: MapToCurve<Fp2>;
-//     htfDefaults: H2COpts;
-//   };
-//   fields: BlsFields;
-//   params: {
-//     // NOTE: MSB is always ignored and used as marker for length,
-//     // otherwise leading zeros will be lost.
-//     // Can be different from 'X' (seed) param!
-//     ateLoopSize: BlsPairingParams['ateLoopSize'];
-//     xNegative: BlsPairingParams['xNegative'];
-//     r: bigint; // TODO: remove
-//     twistType: BlsPairingParams['twistType']; // BLS12-381: Multiplicative, BN254: Divisive
-//   };
-//   htfDefaults: H2COpts;
-//   // hash: CHash; // Because we need outputLen for DRBG
-//   randomBytes?: (bytesLength?: number) => Uint8Array;
-//   // This is super ugly hack for untwist point in BN254 after miller loop
-//   postPrecompute?: PostPrecomputeFn;
-// };
-
 type PrecomputeSingle = [Fp2, Fp2, Fp2][];
 type Precompute = PrecomputeSingle[];
 
@@ -143,8 +115,8 @@ export interface BLSCurvePair {
   millerLoopBatch: BlsPairing['millerLoopBatch'];
   pairing: BlsPairing['pairing'];
   pairingBatch: BlsPairing['pairingBatch'];
-  G1: { Point: WeierstrassPointCons<Fp> } | H2CHasher<Fp, WeierstrassPoint<Fp>>;
-  G2: { Point: WeierstrassPointCons<Fp2> } | H2CHasher<Fp2, WeierstrassPoint<Fp2>>;
+  G1: H2CHasher<Fp, WeierstrassPoint<Fp>>; // { Point: WeierstrassPointCons<Fp>; } |
+  G2: H2CHasher<Fp2, WeierstrassPoint<Fp2>>; // { Point: WeierstrassPointCons<Fp2>; } |
   fields: {
     Fp: IField<Fp>;
     Fp2: Fp2Bls;
@@ -161,6 +133,11 @@ export interface BLSCurvePair {
     twistType: TwistType;
   };
 }
+
+// export interface BlsCurvePairWithHashers extends BLSCurvePair {
+//   G1: H2CHasher<Fp, WeierstrassPoint<Fp>>;
+//   G2: H2CHasher<Fp2, WeierstrassPoint<Fp2>>;
+// }
 
 type BLSInput = Hex | Uint8Array;
 export interface BLSSigs<P, S> {
@@ -388,7 +365,13 @@ function createBlsSig<P, S>(
   return {
     // P = pk x G
     getPublicKey(secretKey: Uint8Array): PubPoint {
-      const sec = PubPoint.Fn.fromBytes(secretKey);
+      let sec;
+      try {
+        sec = PubPoint.Fn.fromBytes(secretKey);
+      } catch (error) {
+        // @ts-ignore
+        throw new Error('invalid private key: ' + typeof secretKey, { cause: error });
+      }
       return PubPoint.BASE.multiply(sec);
     },
     // S = pk x H(m)
@@ -508,22 +491,25 @@ export function bls(
 
   // Point on G1 curve: (x, y)
   // const G1_Point = weierstrass(CURVE.G1, { Fn: Fr });
-  const G1 = hasherParams
-    ? createHasher(G1_Point, hasherParams.mapToG1 || notImplemented, {
+  const G1: any = { Point: G1_Point };
+  const G2: any = { Point: G2_Point };
+  if (hasherParams)
+    Object.assign(
+      G1,
+      createHasher(G1_Point, hasherParams.mapToG1 || notImplemented, {
         ...hasherParams.hasherOpts,
         ...hasherParams.hasherOptsG1,
       })
-    : { Point: G1_Point };
+    );
   // Point on G2 curve (complex numbers): (x₁, x₂+i), (y₁, y₂+i)
-  // const G2_Point = weierstrass(CURVE.G2, { Fn: Fr });
-  const G2 = hasherParams
-    ? createHasher(G2_Point, hasherParams.mapToG2 || notImplemented, {
+  if (hasherParams)
+    Object.assign(
+      G2,
+      createHasher(G2_Point, hasherParams.mapToG2 || notImplemented, {
         ...hasherParams.hasherOpts,
         ...hasherParams.hasherOptsG2,
       })
-    : { Point: G2_Point };
-  // type G1 = typeof G1.Point.BASE;
-  // type G2 = typeof G2.Point.BASE;
+    );
 
   const pairingRes = createBlsPairing(fields, G1_Point, G2_Point, {
     ...params,
@@ -536,6 +522,8 @@ export function bls(
     G1_Point,
     G2_Point,
     false,
+    // @ts-ignore
+    G2.hashToCurve as H2CHasher<Fp2, WeierstrassPoint<Fp2>>,
     signatureCoders?.LongSignature
   );
   const shortSignatures = createBlsSig(
@@ -543,6 +531,8 @@ export function bls(
     G2_Point,
     G1_Point,
     true,
+    // @ts-ignore
+    G1.hashToCurve,
     signatureCoders?.ShortSignature
   );
 

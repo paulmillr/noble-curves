@@ -226,9 +226,13 @@ export type ECDSAOpts = Partial<{
 export interface ECDSA {
   keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
   getPublicKey: (secretKey: Uint8Array, isCompressed?: boolean) => Uint8Array;
-  sign: (msgHash: Uint8Array, secretKey: Uint8Array, opts?: SignOpts) => ECDSASigRecovered;
+  sign: (
+    msgHash: Uint8Array,
+    secretKey: Uint8Array,
+    opts?: SignOpts
+  ) => ECDSASigRecovered | Uint8Array;
   verify: (
-    signature: Uint8Array | SignatureLike,
+    signature: Uint8Array | ECDSASigRecovered,
     msgHash: Uint8Array,
     publicKey: Uint8Array,
     opts?: VerOpts
@@ -463,7 +467,6 @@ export function weierstrass<T>(
     const x3 = Fp.mul(x2, x); // x² * x
     return Fp.add(Fp.add(x3, Fp.mul(x, CURVE.a)), CURVE.b); // x³ + a * x + b
   }
-  // const weierstrassEquation = _legacyHelperEquat(Fp, CURVE.a, CURVE.b);
 
   // TODO: move top-level
   /** Checks whether equation holds for given x, y: y² == x³ + ax + b */
@@ -1038,6 +1041,9 @@ export function ecdsa(
     }
   );
 
+  ecdsaOpts = Object.assign({}, ecdsaOpts);
+  if (ecdsaOpts.lowS === undefined) ecdsaOpts.lowS = true;
+
   const randomBytes_ = ecdsaOpts.randomBytes || randomBytes;
   const hmac_: HmacFnSync =
     ecdsaOpts.hmac ||
@@ -1269,8 +1275,6 @@ export function ecdsa(
   // NOTE: we cannot assume here that msgHash has same amount of bytes as curve order,
   // this will be invalid at least for P521. Also it can be bigger for P224 + SHA256
   function prepSig(msgHash: Uint8Array, privateKey: Uint8Array, opts = defaultSigOpts) {
-    if (['recovered', 'canonical'].some((k) => k in opts))
-      throw new Error('sign() legacy options not supported');
     let { lowS, prehash, extraEntropy: ent } = opts; // generates low-s sigs by default
     if (lowS == null) lowS = true; // RFC6979 3.2: we skip step A, because we already provide hash
     msgHash = ensureBytes('msgHash', msgHash);
@@ -1282,6 +1286,7 @@ export function ecdsa(
     // const bits2octets = (bits) => int2octets(bits2int_modN(bits))
     const h1int = bits2int_modN(msgHash);
     const d = Fn.fromBytes(privateKey); // validate secret key, convert to bigint
+    if (!Fn.isValidNot0(d)) throw new Error('invalid private key');
     const seedArgs = [int2octets(d), int2octets(h1int)];
     // extraEntropy. RFC6979 3.6: additional k' (optional).
     if (ent != null && ent !== false) {
@@ -1299,7 +1304,7 @@ export function ecdsa(
     // Can use scalar blinding b^-1(bm + bdr) where b ∈ [1,q−1] according to
     // https://tches.iacr.org/index.php/TCHES/article/view/7337/6509. We've decided against it:
     // a) dependency on CSPRNG b) 15% slowdown c) doesn't really help since bigints are not CT
-    function k2sig(kBytes: Uint8Array): RecoveredSignature | undefined {
+    function k2sig(kBytes: Uint8Array): Uint8Array | RecoveredSignature | undefined {
       // RFC 6979 Section 3.2, step 3: k = bits2int(T)
       // Important: all mod() calls here must be done over N
       const k = bits2int(kBytes); // Cannot use fields methods, since it is group element
@@ -1316,11 +1321,13 @@ export function ecdsa(
         normS = normalizeS(s); // if lowS was passed, ensure s is always
         recovery ^= 1; // // in the bottom half of N
       }
-      return new Signature(r, normS, recovery) as RecoveredSignature; // use normS, not s
+      const sig = new Signature(r, normS, recovery) as RecoveredSignature; // use normS, not s
+      if (opts.format === 'js') return sig;
+      return sig.toBytes(opts.format);
     }
     return { seed, k2sig };
   }
-  const defaultSigOpts: SignOpts = { lowS: ecdsaOpts.lowS, prehash: false };
+  const defaultSigOpts: SignOpts = { lowS: ecdsaOpts.lowS, prehash: false, format: 'compact' };
   const defaultVerOpts: VerOpts = { lowS: ecdsaOpts.lowS, prehash: false, format: 'compact' };
 
   /**
@@ -1336,9 +1343,9 @@ export function ecdsa(
     msgHash: Uint8Array,
     secretKey: Uint8Array,
     opts = defaultSigOpts
-  ): RecoveredSignature {
+  ): Uint8Array | RecoveredSignature {
     const { seed, k2sig } = prepSig(msgHash, secretKey, opts); // Steps A, D of RFC6979 3.2.
-    const drbg = createHmacDrbg<RecoveredSignature>(hash.outputLen, Fn.BYTES, hmac_);
+    const drbg = createHmacDrbg<Uint8Array | RecoveredSignature>(hash.outputLen, Fn.BYTES, hmac_);
     return drbg(seed, k2sig); // Steps B, C, D, E, F, G
   }
 
@@ -1370,24 +1377,32 @@ export function ecdsa(
 
     // Verify opts
     validateSigVerOpts(opts);
-    const { lowS, prehash, format } = opts;
+    let { lowS, prehash, format } = opts;
+    if (lowS === undefined) lowS = defaultVerOpts.lowS;
+    if (prehash === undefined) prehash = defaultVerOpts.prehash;
+    if (format === undefined) format = defaultVerOpts.format;
 
     let _sig: Signature | undefined = undefined;
     let P: WeierstrassPoint<bigint>;
 
+    // Those errors should not be swallowed
     if (format === 'compact' || format === 'der') {
-      if (typeof sg !== 'string' && !isBytes(sg))
-        throw new Error('"der" / "compact" format expects Uint8Array signature');
-      _sig = Signature.fromBytes(ensureBytes('sig', sg), format);
+      if (!isBytes(sg))
+        throw new Error('verify "der" / "compact" format expects Uint8Array signature');
     } else if (format === 'js') {
-      if (!(sg instanceof Signature)) throw new Error('"js" format expects Signature instance');
-      _sig = sg;
+      if (!(sg instanceof Signature))
+        throw new Error('verify "js" format expects Signature instance');
     } else {
-      throw new Error('format must be "compact", "der" or "js"');
+      throw new Error('verify format must be "compact", "der" or "js"');
     }
 
-    if (!_sig) return false;
     try {
+      if (format === 'js') {
+        _sig = sg as Signature;
+      } else {
+        _sig = Signature.fromBytes(sg as Uint8Array, format);
+      }
+      if (!_sig) return false;
       P = Point.fromBytes(publicKey);
       if (lowS && _sig.hasHighS()) return false;
       // todo: optional.hash => hash
