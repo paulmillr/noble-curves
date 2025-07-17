@@ -8,9 +8,9 @@ import {
   numberToBytesLE,
   utf8ToBytes,
 } from '../esm/abstract/utils.js';
-import { ristretto255_OPRF } from '../esm/ed25519.js';
-import { decaf448_OPRF } from '../esm/ed448.js';
-import { p256_OPRF, p384_OPRF, p521_OPRF } from '../esm/nist.js';
+import { ristretto255_oprf } from '../esm/ed25519.js';
+import { decaf448_oprf } from '../esm/ed448.js';
+import { p256_oprf, p384_oprf, p521_oprf } from '../esm/nist.js';
 import { json } from './utils.js';
 const VECTORS = json('./vectors/rfc9497-oprf.json'); // Generated using rfc9497-oprf-parser.js
 
@@ -29,11 +29,11 @@ const MockScalar = (Fn, bytes) => {
 };
 
 const SUITES = {
-  'P256-SHA256': p256_OPRF,
-  'P384-SHA384': p384_OPRF,
-  'P521-SHA512': p521_OPRF,
-  'ristretto255-SHA512': ristretto255_OPRF,
-  'decaf448-SHAKE256': decaf448_OPRF,
+  'P256-SHA256': p256_oprf,
+  'P384-SHA384': p384_oprf,
+  'P521-SHA512': p521_oprf,
+  'ristretto255-SHA512': ristretto255_oprf,
+  'decaf448-SHAKE256': decaf448_oprf,
 };
 
 function testExample(name, oprf) {

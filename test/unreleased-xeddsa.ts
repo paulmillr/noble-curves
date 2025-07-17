@@ -1,5 +1,5 @@
 import { sha512 } from '@noble/hashes/sha2.js';
-import { randomBytes } from '@noble/hashes/utils';
+import { randomBytes } from '@noble/hashes/utils.js';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual } from 'node:assert';
 import { mod } from '../esm/abstract/modular.js';

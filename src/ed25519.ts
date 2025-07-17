@@ -35,6 +35,7 @@ import {
   type IField,
 } from './abstract/modular.ts';
 import { montgomery, type MontgomeryECDH } from './abstract/montgomery.ts';
+import { createORPF, type OPRF } from './abstract/oprf.ts';
 import { bytesToNumberLE, equalBytes, numberToBytesLE } from './utils.ts';
 
 // prettier-ignore
@@ -473,13 +474,14 @@ export const ristretto255_hasher: H2CHasherBase<bigint, _RistrettoPoint> = {
   },
 };
 
-// export const ristretto255_oprf: OPRF = createORPF({
-//   name: 'ristretto255-SHA512',
-//   Point: RistrettoPoint,
-//   hash: sha512,
-//   hashToGroup: ristretto255_hasher.hashToCurve,
-//   hashToScalar: ristretto255_hasher.hashToScalar,
-// });
+export const ristretto255_oprf: OPRF = /* @__PURE__ */ (() =>
+  createORPF({
+    name: 'ristretto255-SHA512',
+    Point: _RistrettoPoint,
+    hash: sha512,
+    hashToGroup: ristretto255_hasher.hashToCurve,
+    hashToScalar: ristretto255_hasher.hashToScalar,
+  }))();
 
 /**
  * Weird / bogus points, useful for debugging.

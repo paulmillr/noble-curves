@@ -1,4 +1,4 @@
-import { isBytes } from '@noble/hashes/utils';
+import { isBytes } from '@noble/hashes/utils.js';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql } from 'node:assert';
 import { randomBytes } from 'node:crypto';

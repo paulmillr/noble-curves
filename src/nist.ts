@@ -7,6 +7,7 @@
 import { sha256, sha384, sha512 } from '@noble/hashes/sha2.js';
 import { createHasher, type H2CHasher } from './abstract/hash-to-curve.ts';
 import { Field } from './abstract/modular.ts';
+import { createORPF, type OPRF } from './abstract/oprf.ts';
 import {
   ecdsa,
   mapToCurveSimpleSWU,
@@ -110,13 +111,14 @@ export const p256_hasher: H2CHasher<bigint, WeierstrassPoint<bigint>> = /* @__PU
   );
 })();
 
-// export const p256_oprf: OPRF = createORPF({
-//   name: 'P256-SHA256',
-//   Point: p256.Point,
-//   hash: sha256,
-//   hashToGroup: p256_hasher.hashToCurve,
-//   hashToScalar: p256_hasher.hashToScalar,
-// });
+export const p256_oprf: OPRF = /* @__PURE__ */ (() =>
+  createORPF({
+    name: 'P256-SHA256',
+    Point: p256_Point,
+    hash: sha256,
+    hashToGroup: p256_hasher.hashToCurve,
+    hashToScalar: p256_hasher.hashToScalar,
+  }))();
 
 const p384_Point = /* @__PURE__ */ weierstrass(p384_CURVE);
 /** NIST P384 (aka secp384r1) curve, ECDSA and ECDH methods. */
@@ -142,13 +144,14 @@ export const p384_hasher: H2CHasher<bigint, WeierstrassPoint<bigint>> = /* @__PU
   );
 })();
 
-// export const p384_oprf: OPRF = createORPF({
-//   name: 'P384-SHA384',
-//   Point: p384.Point,
-//   hash: sha384,
-//   hashToGroup: p384_hasher.hashToCurve,
-//   hashToScalar: p384_hasher.hashToScalar,
-// });
+export const p384_oprf: OPRF = /* @__PURE__ */ (() =>
+  createORPF({
+    name: 'P384-SHA384',
+    Point: p384_Point,
+    hash: sha384,
+    hashToGroup: p384_hasher.hashToCurve,
+    hashToScalar: p384_hasher.hashToScalar,
+  }))();
 
 const Fn521 = /* @__PURE__ */ Field(p521_CURVE.n, { allowedLengths: [65, 66] });
 const p521_Point = /* @__PURE__ */ weierstrass(p521_CURVE, { Fn: Fn521 });
@@ -176,10 +179,11 @@ export const p521_hasher: H2CHasher<bigint, WeierstrassPoint<bigint>> = /* @__PU
   );
 })();
 
-// export const p521_oprf: OPRF = createORPF({
-//   name: 'P521-SHA512',
-//   Point: p521.Point,
-//   hash: sha512,
-//   hashToGroup: p521_hasher.hashToCurve,
-//   hashToScalar: p521_hasher.hashToScalar, // produces L=98 just like in RFC
-// });
+export const p521_oprf: OPRF = /* @__PURE__ */ (() =>
+  createORPF({
+    name: 'P521-SHA512',
+    Point: p521_Point,
+    hash: sha512,
+    hashToGroup: p521_hasher.hashToCurve,
+    hashToScalar: p521_hasher.hashToScalar, // produces L=98 just like in RFC
+  }))();

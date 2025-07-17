@@ -3,10 +3,10 @@ import { Field as Fp, hashToPrivateScalar } from '@noble/curves/abstract/modular
 import { hexToBytes, utf8ToBytes } from '@noble/curves/abstract/utils';
 import { ed25519, ristretto255, ristretto255_hasher } from '@noble/curves/ed25519';
 import { decaf448, decaf448_hasher, ed448 } from '@noble/curves/ed448';
-import { secp256k1 } from '@noble/curves/secp256k1';
+import { secp256k1 } from '@noble/curves/secp256k1.js';
 import { sha256, sha512 } from '@noble/hashes/sha2.js';
-import { shake256 } from '@noble/hashes/sha3';
-import { randomBytes } from '@noble/hashes/utils';
+import { shake256 } from '@noble/hashes/sha3.js';
+import { randomBytes } from '@noble/hashes/utils.js';
 import mark from 'micro-bmark';
 import { title } from './_shared.js';
 

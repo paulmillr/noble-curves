@@ -26,12 +26,12 @@ const _1n = /* @__PURE__ */ BigInt(1);
 export type Hex = Uint8Array | string; // hex strings are accepted for simplicity
 export type PrivKey = Hex | bigint; // bigints are accepted to ease learning curve
 export type CHash = {
-  (message: Uint8Array | string): Uint8Array;
+  (message: Uint8Array): Uint8Array;
   blockLen: number;
   outputLen: number;
   create(opts?: { dkLen?: number }): any; // For shake
 };
-export type FHash = (message: Uint8Array | string) => Uint8Array;
+export type FHash = (message: Uint8Array) => Uint8Array;
 // export interface Signer {
 //   keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
 //   getPublicKey: (secretKey: Uint8Array) => Uint8Array;
