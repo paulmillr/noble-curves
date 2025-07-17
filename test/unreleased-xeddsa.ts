@@ -2,9 +2,9 @@ import { sha512 } from '@noble/hashes/sha2.js';
 import { randomBytes } from '@noble/hashes/utils.js';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual } from 'node:assert';
-import { mod } from '../esm/abstract/modular.js';
-import { ed25519, x25519 } from '../esm/ed25519.js';
-import { bytesToNumberLE, concatBytes, ensureBytes, equalBytes, numberToBytesLE } from '../esm/utils.js';
+import { mod } from '../abstract/modular.js';
+import { ed25519, x25519 } from '../ed25519.js';
+import { bytesToNumberLE, concatBytes, ensureBytes, equalBytes, numberToBytesLE } from '../utils.js';
 
 /*
 Half-broken implementation of Hedged EdDSA / XEdDSA.

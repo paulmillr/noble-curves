@@ -1,9 +1,9 @@
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql } from 'node:assert';
-import { numberToBytesLE } from '../esm/abstract/utils.js';
-import { ed25519, ed25519ctx, ed25519ph, x25519 } from '../esm/ed25519.js';
-import { ed448 } from '../esm/ed448.js';
+import { numberToBytesLE } from '../abstract/utils.js';
+import { ed25519, ed25519ctx, ed25519ph, x25519 } from '../ed25519.js';
+import { ed448 } from '../ed448.js';
 import { json } from './utils.js';
 
 const x25519vectors = json('./vectors/wycheproof/x25519_test.json');

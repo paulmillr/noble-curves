@@ -2,10 +2,10 @@ import { sha224, sha256, sha384, sha512 } from '@noble/hashes/sha2.js';
 import { sha3_224, sha3_256, sha3_384, sha3_512, shake128, shake256 } from '@noble/hashes/sha3.js';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql, throws } from 'node:assert';
-import { bytesToHex, hexToBytes, utf8ToBytes } from '../esm/abstract/utils.js';
-import { DER } from '../esm/abstract/weierstrass.js';
-import { p256, p384, p521 } from '../esm/nist.js';
-import { secp256k1 } from '../esm/secp256k1.js';
+import { bytesToHex, hexToBytes, utf8ToBytes } from '../abstract/utils.js';
+import { DER } from '../abstract/weierstrass.js';
+import { p256, p384, p521 } from '../nist.js';
+import { secp256k1 } from '../secp256k1.js';
 import { p192, p224, secp192r1, secp224r1 } from './_more-curves.helpers.js';
 import { json } from './utils.js';
 
@@ -428,17 +428,13 @@ describe('RFC6979', () => {
       eql(pubPoint.y, hexToBigint(v.Uy));
       for (const c of v.cases) {
         const h = curve.CURVE.hash(utf8ToBytes(c.message));
-        const opts = { lowS: hasLowS, format: 'js' };
-        const sigObj = curve.sign(h, priv, opts);
+        const opts = { lowS: hasLowS, format: 'der' };
+        const sig = curve.sign(h, priv, opts);
+        const sigObj = curve.Signature.fromBytes(sig, 'der');
         eql(sigObj.r, hexToBigint(c.r), 'R');
         eql(sigObj.s, hexToBigint(c.s), 'S');
         eql(
-          curve.verify(
-            sigObj.toBytes('der'),
-            h,
-            pubKey,
-            Object.assign({}, opts, { format: 'der' })
-          ),
+          curve.verify(sigObj, h, pubKey, Object.assign({}, opts, { format: 'der' })),
           true,
           'verify(1)'
         );

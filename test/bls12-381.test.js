@@ -1,19 +1,19 @@
 import * as fc from 'fast-check';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql, throws } from 'node:assert';
-import { wNAF } from '../esm/abstract/curve.js';
-import { hash_to_field } from '../esm/abstract/hash-to-curve.js';
+import { wNAF } from '../abstract/curve.js';
+import { hash_to_field } from '../abstract/hash-to-curve.js';
 import {
   bytesToHex,
   bytesToNumberBE,
   concatBytes,
   hexToBytes,
   utf8ToBytes,
-} from '../esm/abstract/utils.js';
-import { bls12_381 as bls, bls12_381 } from '../esm/bls12-381.js';
+} from '../abstract/utils.js';
+import { bls12_381 as bls, bls12_381 } from '../bls12-381.js';
 import { json, txt } from './utils.js';
 
-import * as utils from '../esm/abstract/utils.js';
+import * as utils from '../abstract/utils.js';
 
 const eip2537 = json('./vectors/bls12-381/eip2537.json');
 const zkVectors = json('./vectors/bls12-381/zkcrypto/converted.json');

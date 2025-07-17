@@ -1,16 +1,16 @@
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql, notDeepEqual, throws } from 'node:assert';
-import * as mod from '../esm/abstract/modular.js';
+import * as mod from '../abstract/modular.js';
 import {
   bytesToHex,
   hexToBytes,
   numberToBytesBE,
   numberToBytesLE,
   utf8ToBytes,
-} from '../esm/abstract/utils.js';
-import { ristretto255_oprf } from '../esm/ed25519.js';
-import { decaf448_oprf } from '../esm/ed448.js';
-import { p256_oprf, p384_oprf, p521_oprf } from '../esm/nist.js';
+} from '../abstract/utils.js';
+import { ristretto255_oprf } from '../ed25519.js';
+import { decaf448_oprf } from '../ed448.js';
+import { p256_oprf, p384_oprf, p521_oprf } from '../nist.js';
 import { json } from './utils.js';
 const VECTORS = json('./vectors/rfc9497-oprf.json'); // Generated using rfc9497-oprf-parser.js
 

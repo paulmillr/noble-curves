@@ -1,22 +1,22 @@
 import * as fc from 'fast-check';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql, notDeepStrictEqual, throws } from 'node:assert';
-import * as mod from '../esm/abstract/modular.js';
-import { bytesToHex as hex, hexToBytes } from '../esm/abstract/utils.js';
+import * as mod from '../abstract/modular.js';
+import { bytesToHex as hex, hexToBytes } from '../abstract/utils.js';
 import { getTypeTests, json } from './utils.js';
 // Generic tests for all curves in package
 import { sha256 } from '@noble/hashes/sha2.js';
-// import { createCurve } from '../esm/_shortw_utils.js';
-import { pippenger, precomputeMSMUnsafe } from '../esm/abstract/curve.js';
-import { Field } from '../esm/abstract/modular.js';
-import { ecdsa, weierstrass } from '../esm/abstract/weierstrass.js';
-import { bls12_381 } from '../esm/bls12-381.js';
-import { bn254 } from '../esm/bn254.js';
-import { ed25519, ed25519ctx, ed25519ph, ristretto255, x25519 } from '../esm/ed25519.js';
-import { decaf448, ed448, ed448ph } from '../esm/ed448.js';
-import { babyjubjub, jubjub } from '../esm/misc.js';
-import { p256 as secp256r1, p384 as secp384r1, p521 as secp521r1 } from '../esm/nist.js';
-import { secp256k1 } from '../esm/secp256k1.js';
+// import { createCurve } from '../_shortw_utils.js';
+import { pippenger, precomputeMSMUnsafe } from '../abstract/curve.js';
+import { Field } from '../abstract/modular.js';
+import { ecdsa, weierstrass } from '../abstract/weierstrass.js';
+import { bls12_381 } from '../bls12-381.js';
+import { bn254 } from '../bn254.js';
+import { ed25519, ed25519ctx, ed25519ph, ristretto255, x25519 } from '../ed25519.js';
+import { decaf448, ed448, ed448ph } from '../ed448.js';
+import { babyjubjub, jubjub } from '../misc.js';
+import { p256 as secp256r1, p384 as secp384r1, p521 as secp521r1 } from '../nist.js';
+import { secp256k1 } from '../secp256k1.js';
 import { miscCurves, secp192r1, secp224r1 } from './_more-curves.helpers.js';
 const wyche_curves = json('./vectors/wycheproof/ec_prime_order_curves_test.json');
 
@@ -936,14 +936,18 @@ for (const name in CURVES) {
           fc.property(FC_HEX, (msgh) => {
             const msg = hexToBytes(msgh);
             const priv = C.utils.randomSecretKey();
-            const sig = C.sign(msg, priv, { format: 'js' });
+            const sigb = C.sign(msg, priv, { format: 'recovered' });
+            const sig = C.Signature.fromBytes(sigb, 'recovered');
             const sigRS = (sig) => ({ s: sig.s, r: sig.r });
-            // Compact
-            eql(sigRS(C.Signature.fromHex(sig.toHex('compact', 'compact'))), sigRS(sig));
-            eql(sigRS(C.Signature.fromBytes(sig.toBytes('compact', 'compact'))), sigRS(sig));
-            // DER
-            eql(sigRS(C.Signature.fromHex(sig.toHex('der'), 'der')), sigRS(sig));
-            eql(sigRS(C.Signature.fromBytes(sig.toBytes('der'), 'der')), sigRS(sig));
+            let f = 'compact';
+            eql(sigRS(C.Signature.fromHex(sig.toHex(f), f)), sigRS(sig));
+            eql(sigRS(C.Signature.fromBytes(sig.toBytes(f), f)), sigRS(sig));
+            f = 'recovered';
+            eql(sigRS(C.Signature.fromHex(sig.toHex(f), f)), sigRS(sig));
+            eql(sigRS(C.Signature.fromBytes(sig.toBytes(f), f)), sigRS(sig));
+            f = 'der';
+            eql(sigRS(C.Signature.fromHex(sig.toHex(f), f)), sigRS(sig));
+            eql(sigRS(C.Signature.fromBytes(sig.toBytes(f), f)), sigRS(sig));
           }),
           { numRuns: NUM_RUNS }
         )
@@ -951,19 +955,24 @@ for (const name in CURVES) {
       should('Signature.addRecoveryBit/Signature.recoverPublicKey', () =>
         fc.assert(
           fc.property(FC_HEX, (msgh) => {
-            // TODO;
-            return;
             const msg = hexToBytes(msgh);
-            if (C.CURVE.h >= 2n) return;
-            // if (/secp128r2|secp224k1|bls|mnt/i.test(name)) return;
             const priv = C.utils.randomSecretKey();
             const pub = C.getPublicKey(priv);
-            const sig = C.sign(msg, priv);
-            eql(sig.recoverPublicKey(msg).toBytes(), pub);
-            const sig2 = C.Signature.fromHex(sig.toHex('compact'), 'compact');
-            throws(() => sig2.recoverPublicKey(msg));
+            const sigb = C.sign(msg, priv, { format: 'recovered' });
+            const sig = C.Signature.fromBytes(sigb, 'recovered');
+            let res;
+            try {
+              res = C.recoverPublicKey(sigb, msg);
+            } catch (error) {
+              // curves with cofactor>1 can't be recovered
+              if (/recovery id is ambiguous/.test(error.message)) return;
+            }
+            eql(res, pub);
+            // Create identical sig
+            const sig2 = C.Signature.fromBytes(sig.toBytes('compact'), 'compact');
             const sig3 = sig2.addRecoveryBit(sig.recovery);
-            eql(sig3.recoverPublicKey(msg).toBytes(), pub);
+            throws(() => C.recoverPublicKey(sig3, msg));
+            eql(C.recoverPublicKey(sig3.toBytes('recovered'), msg), pub);
           }),
           { numRuns: NUM_RUNS }
         )

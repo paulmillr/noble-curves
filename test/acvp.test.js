@@ -4,10 +4,10 @@ import { sha3_224, sha3_256, sha3_384, sha3_512 } from '@noble/hashes/sha3.js';
 import { hexToBytes } from '@noble/hashes/utils.js';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql } from 'node:assert';
-import { ed25519, ed25519ctx, ed25519ph } from '../esm/ed25519.js';
-import { ed448, ed448ph } from '../esm/ed448.js';
-import { p256, p384, p521 } from '../esm/nist.js';
-import { hexToNumber } from '../esm/utils.js';
+import { ed25519, ed25519ctx, ed25519ph } from '../ed25519.js';
+import { ed448, ed448ph } from '../ed448.js';
+import { p256, p384, p521 } from '../nist.js';
+import { hexToNumber } from '../utils.js';
 import { jsonGZ } from './utils.js';
 
 const loadACVP = (name, gzip = true) => {

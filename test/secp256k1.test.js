@@ -11,8 +11,7 @@ import {
   schnorr,
   secp,
   selectHash,
-  sigFromDER,
-  sigToDER
+  sigFromDER
 } from './secp256k1.helpers.js';
 
 const VECTORS_ecdsa = json('./vectors/secp256k1/ecdsa.json');
@@ -190,10 +189,12 @@ describe('secp256k1 static vectors', () => {
     const privKey = hexToBytes('0101010101010101010101010101010101010101010101010101010101010101');
     for (const [msgh, exp] of CASES) {
       let msg = hexToBytes(msgh);
-      const res = secp.sign(msg, privKey, { extraEntropy: undefined, format: 'js' });
-      eql(sigToDER(res), exp);
-      const rs = sigFromDER(sigToDER(res)).toBytes();
-      eql(sigToDER(secp.Signature.fromBytes(rs)), exp);
+      const sig = secp.sign(msg, privKey, { extraEntropy: undefined, format: 'der' });
+      eql(bytesToHex(sig), exp);
+
+      // const sig2 = sigToDER()
+      // const rs = sigFromDER(sigToDER(sig)).toBytes();
+      // eql(sigToDER(secp.Signature.fromBytes(rs)), exp);
     }
   });
 
@@ -333,10 +334,10 @@ describe('secp256k1 static vectors', () => {
     for (const vector of VECTORS_ecdsa.valid) {
       const d = hexToBytes(vector.d);
       const m = hexToBytes(vector.m);
-      let usig = secp.sign(m, d, { format: 'js' });
-      let sig = sigToDER(usig);
+      let sig = secp.sign(m, d, { format: 'recovered' });
+      // let sig = sigToDER(usig);
       const vpub = secp.getPublicKey(d);
-      const recovered = usig.recoverPublicKey(m);
+      const recovered = secp.Signature.fromBytes(sig, 'recovered').recoverPublicKey(m);
       eql(recovered.toBytes(), vpub);
     }
   });
@@ -487,8 +488,8 @@ describe('Signature', () => {
   should('.fromDERHex() roundtrip', () => {
     fc.assert(
       fc.property(FC_BIGINT, FC_BIGINT, (r, s) => {
-        const sig = new secp.Signature(r, s);
-        eql(sigFromDER(sigToDER(sig)), sig);
+        const sig = new secp.Signature(r, s).toBytes('der');
+        eql(secp.Signature.fromBytes(sig, 'der').toBytes('der'), sig);
       })
     );
   });
@@ -504,16 +505,17 @@ describe('Signature', () => {
     const hi_ = new secp.Signature(
       75421779095773161492578598757717572512754773103551662129966816753283695785663n,
       63299015578620006752099543153250095157058828301739590985992016204296254460045n,
-      0
+      undefined
     );
     const lo_ = new secp.Signature(
       75421779095773161492578598757717572512754773103551662129966816753283695785663n,
       52493073658696188671471441855437812695778735977335313396613146937221907034292n,
-      0
+      undefined
     );
 
     const pub = secp.getPublicKey(priv);
-    const sig = secp.sign(msg, priv, { lowS: false, format: 'js' });
+    const sigb = secp.sign(msg, priv, { lowS: false });
+    const sig = secp.Signature.fromBytes(sigb);
     eql(sig.hasHighS(), true);
     eql(sig, hi_);
     eql(bytesToHex(sig.toBytes()), hi);
@@ -523,10 +525,14 @@ describe('Signature', () => {
     eql(lowSig, lo_);
     eql(bytesToHex(lowSig.toBytes()), lo);
 
-    eql(secp.verify(sig, msg, pub, { lowS: false, format: 'js' }), true);
-    eql(secp.verify(sig, msg, pub, { lowS: true, format: 'js' }), false);
-    eql(secp.verify(lowSig, msg, pub, { lowS: true, format: 'js' }), true);
-    eql(secp.verify(lowSig, msg, pub, { lowS: false, format: 'js' }), true);
+    eql(secp.verify(sig.toBytes(), msg, pub, { lowS: false }), true);
+    eql(secp.verify(sig.toBytes(), msg, pub, { lowS: true }), false);
+    for (let format of ['der', 'compact']) {
+      eql(secp.verify(sig.toBytes(format), msg, pub, { lowS: false, format }), true);
+      eql(secp.verify(sig.toBytes(format), msg, pub, { lowS: true, format }), false);
+      eql(secp.verify(lowSig.toBytes(format), msg, pub, { lowS: true, format }), true);
+      eql(secp.verify(lowSig.toBytes(format), msg, pub, { lowS: false, format }), true);
+    }
   });
 });
 
@@ -605,8 +611,8 @@ describe('verify()', () => {
     const r = 104546003225722045112039007203142344920046999340768276760147352389092131869133n;
     const s = 96900796730960181123786672629079577025401317267213807243199432755332205217369n;
     const pub = new Point(x, y, 1n).toBytes();
-    const sig = new secp.Signature(r, s);
-    eql(secp.verify(sig, msg, pub, { format: 'js' }), false);
+    const sig = new secp.Signature(r, s).toBytes();
+    eql(secp.verify(sig, msg, pub), false);
   });
   should('verify non-strict msg bb5a...', () => {
     const msg = hexToBytes('bb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023');
@@ -626,12 +632,12 @@ describe('verify()', () => {
       );
       const privateKey = numberToBytesBE(123456789n, 32);
       const publicKey = Point.fromBytes(secp.getPublicKey(privateKey)).toBytes(false);
-      const sig = secp.sign(message, privateKey, { format: 'js' });
-      const recoveredPubkey = sig.recoverPublicKey(message);
+      const sig = secp.sign(message, privateKey, { format: 'recovered' });
+      const recoveredPubkey = secp.Signature.fromBytes(sig, 'recovered').recoverPublicKey(message);
       // const recoveredPubkey = secp.recoverPublicKey(message, signature, recovery);
       eql(recoveredPubkey !== null, true);
       eql(recoveredPubkey.toBytes(false), publicKey);
-      eql(secp.verify(sig, message, publicKey, { format: 'js' }), true);
+      eql(secp.verify(sig, message, publicKey, { format: 'recovered' }), true);
     });
     should('not recover zero points', () => {
       const msgHash = hexToBytes(
@@ -648,9 +654,9 @@ describe('verify()', () => {
       const privKey = secp.utils.randomSecretKey();
       const pub = secp.getPublicKey(privKey);
       const zeros = hexToBytes('0000000000000000000000000000000000000000000000000000000000000000');
-      const sig = secp.sign(zeros, privKey, { format: 'js' });
-      const recoveredKey = sig.recoverPublicKey(zeros);
-      eql(recoveredKey.toBytes(), pub);
+      const sig = secp.sign(zeros, privKey, { format: 'recovered' });
+      const recoveredKey = secp.recoverPublicKey(sig, zeros);
+      eql(recoveredKey, pub);
     });
 
     should('have proper curve equation in assertValidity()', () => {
