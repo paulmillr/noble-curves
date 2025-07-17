@@ -1213,7 +1213,7 @@ export function ecdsa(
    */
   function isProbPub(item: Uint8Array): boolean | undefined {
     if (!isBytes(item)) return undefined;
-    if (Fn.allowedLengths || lengths.secret === lengths.public) return undefined;
+    if (('_lengths' in Fn && Fn._lengths) || lengths.secret === lengths.public) return undefined;
     const l = ensureBytes('key', item).length;
     return l === lengths.public || l === lengths.publicUncompressed;
   }

@@ -10,7 +10,7 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { bitLen, bitMask, concatBytes, notImplemented } from '../utils.ts';
+import { bitLen, concatBytes, notImplemented } from '../utils.ts';
 import * as mod from './modular.ts';
 import type { WeierstrassPoint, WeierstrassPointCons } from './weierstrass.ts';
 
@@ -204,7 +204,7 @@ export function tower12(opts: Tower12Opts): {
     NONRESIDUE: Fp2Nonresidue,
     BITS: bitLen(FP2_ORDER),
     BYTES: Math.ceil(bitLen(FP2_ORDER) / 8),
-    MASK: bitMask(bitLen(FP2_ORDER)),
+    // MASK: bitMask(bitLen(FP2_ORDER)),
     ZERO: { c0: Fp.ZERO, c1: Fp.ZERO },
     ONE: { c0: Fp.ONE, c1: Fp.ZERO },
     create: (num) => num,
@@ -362,7 +362,7 @@ export function tower12(opts: Tower12Opts): {
     isLE: Fp2.isLE,
     BITS: 3 * Fp2.BITS,
     BYTES: 3 * Fp2.BYTES,
-    MASK: bitMask(3 * Fp2.BITS),
+    // MASK: bitMask(3 * Fp2.BITS),
     ZERO: { c0: Fp2.ZERO, c1: Fp2.ZERO, c2: Fp2.ZERO },
     ONE: { c0: Fp2.ONE, c1: Fp2.ZERO, c2: Fp2.ZERO },
     create: (num) => num,
@@ -509,7 +509,7 @@ export function tower12(opts: Tower12Opts): {
     isLE: Fp6.isLE,
     BITS: 2 * Fp6.BITS,
     BYTES: 2 * Fp6.BYTES,
-    MASK: bitMask(2 * Fp6.BITS),
+    // MASK: bitMask(2 * Fp6.BITS),
     ZERO: { c0: Fp6.ZERO, c1: Fp6.ZERO },
     ONE: { c0: Fp6.ONE, c1: Fp6.ZERO },
     create: (num) => num,

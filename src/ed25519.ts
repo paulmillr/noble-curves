@@ -299,7 +299,7 @@ type ExtendedPoint = EdwardsPoint;
 function calcElligatorRistrettoMap(r0: bigint): ExtendedPoint {
   const { d } = ed25519_CURVE;
   const P = ed25519_CURVE_p;
-  const mod = ed25519_Point.Fp.create;
+  const mod = (n: bigint) => ed25519_Point.Fp.create(n);
   const r = mod(SQRT_M1 * r0 * r0); // 1
   const Ns = mod((r + _1n) * ONE_MINUS_D_SQ); // 2
   let c = BigInt(-1); // 3
@@ -372,7 +372,7 @@ class _RistrettoPoint extends PrimeEdwardsPoint<_RistrettoPoint> {
     abytes(bytes, 32);
     const { a, d } = ed25519_CURVE;
     const P = Fp.ORDER;
-    const mod = Fp.create;
+    const mod = (n: bigint) => Fp.create(n);
     const s = bytes255ToNumberLE(bytes);
     // 1. Check that s_bytes is the canonical encoding of a field element, or else abort.
     // 3. Check that s is non-negative, or else abort
@@ -412,7 +412,7 @@ class _RistrettoPoint extends PrimeEdwardsPoint<_RistrettoPoint> {
   toBytes(): Uint8Array {
     let { X, Y, Z, T } = this.ep;
     const P = Fp.ORDER;
-    const mod = Fp.create;
+    const mod = (n: bigint) => Fp.create(n);
     const u1 = mod(mod(Z + Y) * mod(Z - Y)); // 1
     const u2 = mod(X * Y); // 2
     // Square root always exists
@@ -445,7 +445,7 @@ class _RistrettoPoint extends PrimeEdwardsPoint<_RistrettoPoint> {
     this.assertSame(other);
     const { X: X1, Y: Y1 } = this.ep;
     const { X: X2, Y: Y2 } = other.ep;
-    const mod = Fp.create;
+    const mod = (n: bigint) => Fp.create(n);
     // (x1 * y2 == y1 * x2) | (y1 * y2 == x1 * x2)
     const one = mod(X1 * Y2) === mod(Y1 * X2);
     const two = mod(Y1 * Y2) === mod(X1 * X2);

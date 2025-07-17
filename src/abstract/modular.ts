@@ -9,7 +9,6 @@ import {
   _validateObject,
   abytes,
   anumber,
-  bitMask,
   bytesToNumberBE,
   bytesToNumberLE,
   numberToBytesBE,
@@ -230,7 +229,7 @@ export interface IField<T> {
   isLE: boolean;
   BYTES: number;
   BITS: number;
-  MASK: bigint;
+  // MASK: bigint;
   ZERO: T;
   ONE: T;
   // 1-arg
@@ -260,7 +259,6 @@ export interface IField<T> {
   // [RFC9380](https://www.rfc-editor.org/rfc/rfc9380#section-4.1).
   // NOTE: sgn0 is 'negative in LE', which is same as odd. And negative in LE is kinda strange definition anyway.
   isOdd?(num: T): boolean; // Odd instead of even since we have it for Fp2
-  allowedLengths?: number[];
   // legendre?(num: T): T;
   invertBatch: (lst: T[]) => T[];
   toBytes(num: T): Uint8Array;
@@ -277,7 +275,6 @@ const FIELD_FIELDS = [
 export function validateField<T>(field: IField<T>): IField<T> {
   const initial = {
     ORDER: 'bigint',
-    MASK: 'bigint',
     BYTES: 'number',
     BITS: 'number',
   } as Record<string, string>;
@@ -381,12 +378,146 @@ export function nLength(n: bigint, nBitLength?: number): NLength {
 type FpField = IField<bigint> & Required<Pick<IField<bigint>, 'isOdd'>>;
 type SqrtFn = (n: bigint) => bigint;
 type FieldOpts = Partial<{
-  sqrt: SqrtFn;
   isLE: boolean;
   BITS: number;
-  modOnDecode: boolean; // bls12-381 requires mod(n) instead of rejecting keys >= n
+  sqrt: SqrtFn;
   allowedLengths?: readonly number[]; // for P521 (adds padding for smaller sizes)
+  modFromBytes: boolean; // bls12-381 requires mod(n) instead of rejecting keys >= n
 }>;
+class _Field implements IField<bigint> {
+  readonly ORDER: bigint;
+  readonly BITS: number;
+  readonly BYTES: number;
+  readonly isLE: boolean;
+  readonly ZERO = _0n;
+  readonly ONE = _1n;
+  readonly _lengths?: number[];
+  private _sqrt: ReturnType<typeof FpSqrt> | undefined; // cached sqrt
+  private readonly _mod?: boolean;
+  constructor(ORDER: bigint, opts: FieldOpts = {}) {
+    if (ORDER <= _0n) throw new Error('invalid field: expected ORDER > 0, got ' + ORDER);
+    let _nbitLength: number | undefined = undefined;
+    this.isLE = false;
+    if (opts != null && typeof opts === 'object') {
+      if (typeof opts.BITS === 'number') _nbitLength = opts.BITS;
+      if (typeof opts.sqrt === 'function') this.sqrt = opts.sqrt;
+      if (typeof opts.isLE === 'boolean') this.isLE = opts.isLE;
+      if (opts.allowedLengths) this._lengths = opts.allowedLengths?.slice();
+      if (typeof opts.modFromBytes === 'boolean') this._mod = opts.modFromBytes;
+    }
+    const { nBitLength, nByteLength } = nLength(ORDER, _nbitLength);
+    if (nByteLength > 2048) throw new Error('invalid field: expected ORDER of <= 2048 bytes');
+    this.ORDER = ORDER;
+    this.BITS = nBitLength;
+    this.BYTES = nByteLength;
+    this._sqrt = undefined;
+    Object.preventExtensions(this);
+  }
+
+  create(num: bigint) {
+    return mod(num, this.ORDER);
+  }
+  isValid(num: bigint) {
+    if (typeof num !== 'bigint')
+      throw new Error('invalid field element: expected bigint, got ' + typeof num);
+    return _0n <= num && num < this.ORDER; // 0 is valid element, but it's not invertible
+  }
+  is0(num: bigint) {
+    return num === _0n;
+  }
+  // is valid and invertible
+  isValidNot0(num: bigint) {
+    return !this.is0(num) && this.isValid(num);
+  }
+  isOdd(num: bigint) {
+    return (num & _1n) === _1n;
+  }
+  neg(num: bigint) {
+    return mod(-num, this.ORDER);
+  }
+  eql(lhs: bigint, rhs: bigint) {
+    return lhs === rhs;
+  }
+
+  sqr(num: bigint) {
+    return mod(num * num, this.ORDER);
+  }
+  add(lhs: bigint, rhs: bigint) {
+    return mod(lhs + rhs, this.ORDER);
+  }
+  sub(lhs: bigint, rhs: bigint) {
+    return mod(lhs - rhs, this.ORDER);
+  }
+  mul(lhs: bigint, rhs: bigint) {
+    return mod(lhs * rhs, this.ORDER);
+  }
+  pow(num: bigint, power: bigint): bigint {
+    return FpPow(this, num, power);
+  }
+  div(lhs: bigint, rhs: bigint) {
+    return mod(lhs * invert(rhs, this.ORDER), this.ORDER);
+  }
+
+  // Same as above, but doesn't normalize
+  sqrN(num: bigint) {
+    return num * num;
+  }
+  addN(lhs: bigint, rhs: bigint) {
+    return lhs + rhs;
+  }
+  subN(lhs: bigint, rhs: bigint) {
+    return lhs - rhs;
+  }
+  mulN(lhs: bigint, rhs: bigint) {
+    return lhs * rhs;
+  }
+
+  inv(num: bigint) {
+    return invert(num, this.ORDER);
+  }
+  sqrt(num: bigint): bigint {
+    if (!this._sqrt) this._sqrt = FpSqrt(this.ORDER);
+    return this._sqrt(this, num);
+  }
+  toBytes(num: bigint) {
+    return this.isLE ? numberToBytesLE(num, this.BYTES) : numberToBytesBE(num, this.BYTES);
+  }
+  fromBytes(bytes: Uint8Array, skipValidation = false) {
+    abytes(bytes);
+    const { _lengths: allowedLengths, BYTES, isLE, ORDER, _mod: modFromBytes } = this;
+    if (allowedLengths) {
+      if (!allowedLengths.includes(bytes.length) || bytes.length > BYTES) {
+        throw new Error(
+          'Field.fromBytes: expected ' + allowedLengths + ' bytes, got ' + bytes.length
+        );
+      }
+      const padded = new Uint8Array(BYTES);
+      // isLE add 0 to right, !isLE to the left.
+      padded.set(bytes, isLE ? 0 : padded.length - bytes.length);
+      bytes = padded;
+    }
+    if (bytes.length !== BYTES)
+      throw new Error('Field.fromBytes: expected ' + BYTES + ' bytes, got ' + bytes.length);
+    let scalar = isLE ? bytesToNumberLE(bytes) : bytesToNumberBE(bytes);
+    if (modFromBytes) scalar = mod(scalar, ORDER);
+    if (!skipValidation)
+      if (!this.isValid(scalar))
+        throw new Error('invalid field element: outside of range 0..ORDER');
+    // NOTE: we don't validate scalar here, please use isValid. This done such way because some
+    // protocol may allow non-reduced scalar that reduced later or changed some other way.
+    return scalar;
+  }
+  // TODO: we don't need it here, move out to separate fn
+  invertBatch(lst: bigint[]): bigint[] {
+    return FpInvertBatch(this, lst);
+  }
+  // We can't move this out because Fp6, Fp12 implement it
+  // and it's unclear what to return in there.
+  cmov(a: bigint, b: bigint, condition: boolean) {
+    return condition ? b : a;
+  }
+}
+
 /**
  * Creates a finite field. Major performance optimizations:
  * * 1. Denormalized operations like mulN instead of mul.
@@ -407,97 +538,7 @@ type FieldOpts = Partial<{
  * @param redef optional faster redefinitions of sqrt and other methods
  */
 export function Field(ORDER: bigint, opts: FieldOpts = {}): Readonly<FpField> {
-  if (ORDER <= _0n) throw new Error('invalid field: expected ORDER > 0, got ' + ORDER);
-  let _nbitLength: number | undefined = undefined;
-  let _sqrt: SqrtFn | undefined = undefined;
-  let modOnDecode: boolean = false;
-  let allowedLengths: undefined | readonly number[] = undefined;
-  let isLE = false;
-  if (typeof opts === 'object' && opts != null) {
-    // if (opts.sqrt) throw new Error('cannot specify opts in two arguments');
-    const _opts = opts;
-    if (_opts.BITS) _nbitLength = _opts.BITS;
-    if (_opts.sqrt) _sqrt = _opts.sqrt;
-    if (typeof _opts.isLE === 'boolean') isLE = _opts.isLE;
-    if (typeof _opts.modOnDecode === 'boolean') modOnDecode = _opts.modOnDecode;
-    allowedLengths = _opts.allowedLengths;
-  }
-  const { nBitLength: BITS, nByteLength: BYTES } = nLength(ORDER, _nbitLength);
-  if (BYTES > 2048) throw new Error('invalid field: expected ORDER of <= 2048 bytes');
-  let sqrtP: ReturnType<typeof FpSqrt>; // cached sqrtP
-  const f: Readonly<FpField> = Object.freeze({
-    ORDER,
-    isLE,
-    BITS,
-    BYTES,
-    MASK: bitMask(BITS),
-    ZERO: _0n,
-    ONE: _1n,
-    allowedLengths: allowedLengths,
-    create: (num) => mod(num, ORDER),
-    isValid: (num) => {
-      if (typeof num !== 'bigint')
-        throw new Error('invalid field element: expected bigint, got ' + typeof num);
-      return _0n <= num && num < ORDER; // 0 is valid element, but it's not invertible
-    },
-    is0: (num) => num === _0n,
-    // is valid and invertible
-    isValidNot0: (num: bigint) => !f.is0(num) && f.isValid(num),
-    isOdd: (num) => (num & _1n) === _1n,
-    neg: (num) => mod(-num, ORDER),
-    eql: (lhs, rhs) => lhs === rhs,
-
-    sqr: (num) => mod(num * num, ORDER),
-    add: (lhs, rhs) => mod(lhs + rhs, ORDER),
-    sub: (lhs, rhs) => mod(lhs - rhs, ORDER),
-    mul: (lhs, rhs) => mod(lhs * rhs, ORDER),
-    pow: (num, power) => FpPow(f, num, power),
-    div: (lhs, rhs) => mod(lhs * invert(rhs, ORDER), ORDER),
-
-    // Same as above, but doesn't normalize
-    sqrN: (num) => num * num,
-    addN: (lhs, rhs) => lhs + rhs,
-    subN: (lhs, rhs) => lhs - rhs,
-    mulN: (lhs, rhs) => lhs * rhs,
-
-    inv: (num) => invert(num, ORDER),
-    sqrt:
-      _sqrt ||
-      ((n) => {
-        if (!sqrtP) sqrtP = FpSqrt(ORDER);
-        return sqrtP(f, n);
-      }),
-    toBytes: (num) => (isLE ? numberToBytesLE(num, BYTES) : numberToBytesBE(num, BYTES)),
-    fromBytes: (bytes, skipValidation = false) => {
-      abytes(bytes);
-      if (allowedLengths) {
-        if (!allowedLengths.includes(bytes.length) || bytes.length > BYTES) {
-          throw new Error(
-            'Field.fromBytes: expected ' + allowedLengths + ' bytes, got ' + bytes.length
-          );
-        }
-        const padded = new Uint8Array(BYTES);
-        // isLE add 0 to right, !isLE to the left.
-        padded.set(bytes, isLE ? 0 : padded.length - bytes.length);
-        bytes = padded;
-      }
-      if (bytes.length !== BYTES)
-        throw new Error('Field.fromBytes: expected ' + BYTES + ' bytes, got ' + bytes.length);
-      let scalar = isLE ? bytesToNumberLE(bytes) : bytesToNumberBE(bytes);
-      if (modOnDecode) scalar = mod(scalar, ORDER);
-      if (!skipValidation)
-        if (!f.isValid(scalar)) throw new Error('invalid field element: outside of range 0..ORDER');
-      // NOTE: we don't validate scalar here, please use isValid. This done such way because some
-      // protocol may allow non-reduced scalar that reduced later or changed some other way.
-      return scalar;
-    },
-    // TODO: we don't need it here, move out to separate fn
-    invertBatch: (lst) => FpInvertBatch(f, lst),
-    // We can't move this out because Fp6, Fp12 implement it
-    // and it's unclear what to return in there.
-    cmov: (a, b, c) => (c ? b : a),
-  } as FpField);
-  return Object.freeze(f);
+  return new _Field(ORDER, opts);
 }
 
 // Generic random scalar, we can do same for other fields if via Fp2.mul(Fp2.ONE, Fp2.random)?

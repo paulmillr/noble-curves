@@ -322,7 +322,7 @@ type ExtendedPoint = EdwardsPoint;
 function calcElligatorDecafMap(r0: bigint): ExtendedPoint {
   const { d } = ed448_CURVE;
   const P = Fp.ORDER;
-  const mod = Fp.create;
+  const mod = (n: bigint) => Fp.create(n);
 
   const r = mod(-(r0 * r0)); // 1
   const u0 = mod(d * (r - _1n)); // 2
@@ -399,7 +399,7 @@ class _DecafPoint extends PrimeEdwardsPoint<_DecafPoint> {
     abytes(bytes, 56);
     const { d } = ed448_CURVE;
     const P = Fp.ORDER;
-    const mod = Fp.create;
+    const mod = (n: bigint) => Fp.create(n);
     const s = bytes448ToNumberLE(bytes);
 
     // 1. Check that s_bytes is the canonical encoding of a field element, or else abort.
@@ -441,7 +441,7 @@ class _DecafPoint extends PrimeEdwardsPoint<_DecafPoint> {
   toBytes(): Uint8Array {
     const { X, Z, T } = this.ep;
     const P = Fp.ORDER;
-    const mod = Fp.create;
+    const mod = (n: bigint) => Fp.create(n);
 
     const u1 = mod(mod(X + T) * mod(X - T)); // 1
     const x2 = mod(X * X);
@@ -466,9 +466,8 @@ class _DecafPoint extends PrimeEdwardsPoint<_DecafPoint> {
     this.assertSame(other);
     const { X: X1, Y: Y1 } = this.ep;
     const { X: X2, Y: Y2 } = other.ep;
-    const mod = Fp.create;
     // (x1 * y2 == y1 * x2)
-    return mod(X1 * Y2) === mod(Y1 * X2);
+    return Fp.create(X1 * Y2) === Fp.create(Y1 * X2);
   }
 
   is0(): boolean {
