@@ -59,9 +59,21 @@ describe('RFC8032ctx', () => {
   for (let i = 0; i < VECTORS_RFC8032_CTX.length; i++) {
     const v = VECTORS_RFC8032_CTX[i];
     should(`${i}`, () => {
-      eql(bytesToHex(ed25519ctx.getPublicKey(v.secretKey)), v.publicKey);
-      eql(bytesToHex(ed25519ctx.sign(v.message, v.secretKey, { context: v.context })), v.signature);
-      eql(ed25519ctx.verify(v.signature, v.message, v.publicKey, { context: v.context }), true);
+      eql(bytesToHex(ed25519ctx.getPublicKey(hexToBytes(v.secretKey))), v.publicKey);
+      eql(
+        bytesToHex(
+          ed25519ctx.sign(hexToBytes(v.message), hexToBytes(v.secretKey), {
+            context: hexToBytes(v.context),
+          })
+        ),
+        v.signature
+      );
+      eql(
+        ed25519ctx.verify(hexToBytes(v.signature), hexToBytes(v.message), hexToBytes(v.publicKey), {
+          context: hexToBytes(v.context),
+        }),
+        true
+      );
     });
   }
 });
@@ -83,9 +95,12 @@ describe('RFC8032ph', () => {
   for (let i = 0; i < VECTORS_RFC8032_PH.length; i++) {
     const v = VECTORS_RFC8032_PH[i];
     should(`${i}`, () => {
-      eql(bytesToHex(ed25519ph.getPublicKey(v.secretKey)), v.publicKey);
-      eql(bytesToHex(ed25519ph.sign(v.message, v.secretKey)), v.signature);
-      eql(ed25519ph.verify(v.signature, v.message, v.publicKey), true);
+      eql(bytesToHex(ed25519ph.getPublicKey(hexToBytes(v.secretKey))), v.publicKey);
+      eql(bytesToHex(ed25519ph.sign(hexToBytes(v.message), hexToBytes(v.secretKey))), v.signature);
+      eql(
+        ed25519ph.verify(hexToBytes(v.signature), hexToBytes(v.message), hexToBytes(v.publicKey)),
+        true
+      );
     });
   }
 });
@@ -107,7 +122,7 @@ describe('X25519 RFC7748 ECDH', () => {
   for (let i = 0; i < rfc7748Mul.length; i++) {
     const v = rfc7748Mul[i];
     should(`scalarMult (${i})`, () => {
-      eql(bytesToHex(x25519.scalarMult(v.scalar, v.u)), v.outputU);
+      eql(bytesToHex(x25519.scalarMult(hexToBytes(v.scalar), hexToBytes(v.u))), v.outputU);
     });
   }
 
@@ -127,13 +142,21 @@ describe('X25519 RFC7748 ECDH', () => {
   }
 
   should('getSharedKey', () => {
-    const alicePrivate = '77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a';
-    const alicePublic = '8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a';
-    const bobPrivate = '5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb';
-    const bobPublic = 'de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f';
+    const alicePrivate = hexToBytes(
+      '77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a'
+    );
+    const alicePublic = hexToBytes(
+      '8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a'
+    );
+    const bobPrivate = hexToBytes(
+      '5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb'
+    );
+    const bobPublic = hexToBytes(
+      'de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f'
+    );
     const shared = '4a5d9d5ba4ce2de1728e3bf480350f25e07e21c947d19e3376f09b3c1e161742';
-    eql(alicePublic, bytesToHex(x25519.getPublicKey(alicePrivate)));
-    eql(bobPublic, bytesToHex(x25519.getPublicKey(bobPrivate)));
+    eql(alicePublic, x25519.getPublicKey(alicePrivate));
+    eql(bobPublic, x25519.getPublicKey(bobPrivate));
     eql(bytesToHex(x25519.scalarMult(alicePrivate, bobPublic)), shared);
     eql(bytesToHex(x25519.scalarMult(bobPrivate, alicePublic)), shared);
   });
@@ -206,7 +229,7 @@ describe('X25519 RFC7748 ECDH', () => {
 
   should('base point', () => {
     const { y } = ed25519ph.Point.BASE;
-    const { Fp } = ed25519ph.CURVE;
+    const { Fp } = ed25519ph.Point;
     const u = Fp.create((y + 1n) * Fp.inv(1n - y));
     eql(numberToBytesLE(u, 32), x25519.GuBytes);
   });
@@ -217,7 +240,7 @@ describe('X25519 RFC7748 ECDH', () => {
       const comment = `(${i}, ${v.result}) ${v.comment}`;
       if (v.result === 'valid' || v.result === 'acceptable') {
         try {
-          const shared = bytesToHex(x25519.scalarMult(v.private, v.public));
+          const shared = bytesToHex(x25519.scalarMult(hexToBytes(v.private), hexToBytes(v.public)));
           eql(shared, v.shared, comment);
         } catch (e) {
           // We are more strict

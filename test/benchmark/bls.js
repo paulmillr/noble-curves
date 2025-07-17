@@ -65,7 +65,7 @@ const G2_VECTORS = readFileSync(
 
   await bench('MSM 4096 scalars x points', 1, () => {
     // naive approach, not using multi-scalar-multiplication
-    let sum = bls.G1.ProjectivePoint.ZERO;
+    let sum = bls.G1.Point.ZERO;
     for (let i = 0; i < 4096; i++) {
       const scalar = scalars2[i];
       const G1 = points[i];

@@ -110,7 +110,7 @@ function verifyECDHVector(test, curve) {
     // c6cafb74e2a50c83b3d232c4585237f44d4c5433c4b3f50ce978e6aeda3a4f5d
     if (privA.length / 2 === fnLen + 1 && privA.startsWith('00')) privA = privA.slice(2);
     // privA = DER._int.decode(privA);
-    if (!curve.utils.isValidPrivateKey(privA)) return; // Ignore invalid private key size
+    if (!curve.utils.isValidSecretKey(privA)) return; // Ignore invalid private key size
     const pubB_b = hexToBytes(pubB);
     try {
       curve.Point.fromBytes(pubB_b);
@@ -326,10 +326,13 @@ function runWycheproof(name, CURVE, group, index) {
     const m = CURVE.CURVE.hash(hexToBytes(test.msg));
     const { sig } = test;
     if (test.result === 'valid' || test.result === 'acceptable') {
-      const verified = CURVE.verify(sig, m, pubR, { lowS: name === 'secp256k1' });
+      const verified = CURVE.verify(hexToBytes(sig), m, pubR, {
+        lowS: name === 'secp256k1',
+        format: 'der',
+      });
       if (name === 'secp256k1') {
         // lowS: true for secp256k1
-        eql(verified, !CURVE.Signature.fromDER(sig).hasHighS(), `${index}: verify invalid`);
+        eql(verified, !CURVE.Signature.fromHex(sig, 'der').hasHighS(), `${index}: verify invalid`);
       } else {
         eql(verified, true, `${index}: verify invalid`);
       }
@@ -368,10 +371,13 @@ describe('wycheproof ECDSA', () => {
           test.result = 'invalid';
         const m = CURVE.CURVE.hash(hexToBytes(test.msg));
         if (test.result === 'valid' || test.result === 'acceptable') {
-          const verified = CURVE.verify(test.sig, m, pubKey.toBytes(), { lowS: hasLowS });
+          const verified = CURVE.verify(hexToBytes(test.sig), m, pubKey.toBytes(), {
+            lowS: hasLowS,
+            format: 'der',
+          });
           if (hasLowS) {
             // lowS: true for secp256k1
-            eql(verified, !CURVE.Signature.fromDER(test.sig).hasHighS(), `valid`);
+            eql(verified, !CURVE.Signature.fromHex(test.sig, 'der').hasHighS(), `valid`);
           } else {
             eql(verified, true, `valid`);
           }
@@ -422,12 +428,31 @@ describe('RFC6979', () => {
       eql(pubPoint.y, hexToBigint(v.Uy));
       for (const c of v.cases) {
         const h = curve.CURVE.hash(utf8ToBytes(c.message));
-        const opts = { lowS: hasLowS };
+        const opts = { lowS: hasLowS, format: 'js' };
         const sigObj = curve.sign(h, priv, opts);
         eql(sigObj.r, hexToBigint(c.r), 'R');
         eql(sigObj.s, hexToBigint(c.s), 'S');
-        eql(curve.verify(sigObj.toBytes('der'), h, pubKey, opts), true, 'verify(1)');
-        eql(curve.verify(sigObj, h, pubKey, opts), true, 'verify(2)');
+        eql(
+          curve.verify(
+            sigObj.toBytes('der'),
+            h,
+            pubKey,
+            Object.assign({}, opts, { format: 'der' })
+          ),
+          true,
+          'verify(1)'
+        );
+        eql(
+          curve.verify(
+            sigObj.toBytes('compact'),
+            h,
+            pubKey,
+            Object.assign({}, opts, { format: 'compact' })
+          ),
+          true,
+          'verify(2)'
+        );
+        eql(curve.verify(sigObj, h, pubKey, opts), true, 'verify(3)');
       }
     });
   }
@@ -437,7 +462,9 @@ should('properly add leading zero to DER', () => {
   // Valid DER
   eql(
     DER.toSig(
-      '303c021c70049af31f8348673d56cece2b27e587a402f2a48f0b21a7911a480a021c2840bf24f6f66be287066b7cbf38788e1b7770b18fd1aa6a26d7c6dc'
+      hexToBytes(
+        '303c021c70049af31f8348673d56cece2b27e587a402f2a48f0b21a7911a480a021c2840bf24f6f66be287066b7cbf38788e1b7770b18fd1aa6a26d7c6dc'
+      )
     ),
     {
       r: 11796871166002955884468185727465595477481802908758874298363724580874n,
@@ -447,7 +474,9 @@ should('properly add leading zero to DER', () => {
   // Invalid DER (missing trailing zero)
   throws(() =>
     DER.toSig(
-      '303c021c70049af31f8348673d56cece2b27e587a402f2a48f0b21a7911a480a021cd7bf40db0909941d78f9948340c69e14c5417f8c840b7edb35846361'
+      hexToBytes(
+        '303c021c70049af31f8348673d56cece2b27e587a402f2a48f0b21a7911a480a021cd7bf40db0909941d78f9948340c69e14c5417f8c840b7edb35846361'
+      )
     )
   );
   // Correctly adds trailing zero
@@ -503,8 +532,8 @@ should('handle edge-case in P521', () => {
   //   '14e8dafcb8f6a7d59757ec8896981466d6f0eb5ca07dcaa46e6bb86eb20471e4' +
   //   '5702429ef132e0c96615';
 
-  const hexp = p521.sign(msg, privKey, { lowS: false, prehash: true }).toHex('der');
-  eql(hexp, sig);
+  const hexp = p521.sign(msg, privKey, { lowS: false, prehash: true, format: 'der' });
+  eql(bytesToHex(hexp), sig);
 });
 
 should.runWhen(import.meta.url);

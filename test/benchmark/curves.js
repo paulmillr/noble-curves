@@ -22,7 +22,7 @@ import { generateData } from './_shared.js';
     const [name, curve] = kv;
     // console.log();
     // title(name);
-    curve.utils.precompute(8);
+    curve.Point.BASE.precompute(8, false);
     const d = generateData(curve);
     const d2 = generateData(curve);
     const rand32 = [randomBytes(32), randomBytes(32)];

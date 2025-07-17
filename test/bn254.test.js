@@ -782,7 +782,7 @@ describe('bn254', () => {
           A.assertValidity();
           B.assertValidity();
           // zero is just skipped (was set to Fp12.ONE before)
-          if (A.equals(G1.Point.ZERO) || B.equals(G2.Point.ZERO)) continue;
+          if (A.is0() || B.is0()) continue;
           pairs.push({ g1: A, g2: B });
         }
         f = bn254.pairingBatch(pairs);
