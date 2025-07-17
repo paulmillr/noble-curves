@@ -67,6 +67,7 @@ import {
   FpInvertBatch,
   getMinHashLength,
   mapHashToField,
+  nLength,
   validateField,
   type IField,
   type NLength,
@@ -152,7 +153,7 @@ export function _splitEndoScalar(k: bigint, basis: EndoBasis, n: bigint): Scalar
   return { k1neg, k1, k2neg, k2 };
 }
 
-export type ECDSASigFormat = 'compact' | 'der';
+export type ECDSASigFormat = 'compact' | 'der' | 'recovered';
 export type Entropy = Hex | boolean;
 export type SignOpts = Partial<{
   lowS: boolean;
@@ -1082,6 +1083,7 @@ export type CurveFn = {
   ProjectivePoint: WeierstrassPointCons<bigint>;
   Signature: ECDSASignatureCons;
   utils: ECDSA['utils'];
+  /** @deprecated do not use for now, unstable */
   info: CurveInfo;
 };
 
@@ -1762,11 +1764,17 @@ function _weierstrass_new_output_to_legacy<T>(
   );
 }
 // TODO: remove
-function _ecdsa_new_output_to_legacy(c: CurveType, ecdsa: ECDSA): CurveFn {
-  return Object.assign({}, ecdsa, {
-    ProjectivePoint: ecdsa.Point,
-    CURVE: c,
-  });
+function _ecdsa_new_output_to_legacy(c: CurveType, _ecdsa: ECDSA): CurveFn {
+  const Point = _ecdsa.Point;
+  return Object.assign(
+    {},
+    _ecdsa,
+    {
+      ProjectivePoint: Point,
+      CURVE: c,
+    },
+    nLength(Point.Fn.ORDER, Point.Fn.BITS)
+  );
 }
 
 // _ecdsa_legacy
