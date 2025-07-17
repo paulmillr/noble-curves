@@ -76,7 +76,7 @@ describe('ACVP', () => {
       if (!curve) continue;
       for (const t of tests) {
         const pub = curve.getPublicKey(hexToBytes(t.ip.d));
-        const { x, y } = curve.Point.fromHex(pub).toAffine();
+        const { x, y } = curve.Point.fromBytes(pub).toAffine();
         eql(curve.Point.Fp.toBytes(x), hexToBytes(t.ip.qx));
         eql(curve.Point.Fp.toBytes(y), hexToBytes(t.ip.qy));
       }
@@ -118,7 +118,7 @@ describe('ACVP', () => {
       const curve = CURVES[info.ip.curve];
       if (!curve) continue;
       const hash = HASHES[info.ip.hashAlg];
-      const curveWithHash = curve.create(hash);
+      const curveWithHash = curve._createWithNewHash(hash);
       for (const t of tests) {
         if (t.ip.randomValue) continue; // mesage randomization
         const sk = hexToBytes(info.ip.d);
@@ -129,11 +129,13 @@ describe('ACVP', () => {
         const opts = { lowS: false, prehash: true };
         const msg = hexToBytes(t.ip.message);
         const sig = curveWithHash.sign(hexToBytes(t.ip.message), sk, opts);
-        const r = curve.Point.Fn.toBytes(sig.r);
-        const s = curve.Point.Fn.toBytes(sig.s);
-        eql(r, hexToBytes(t.ip.r));
-        eql(s, hexToBytes(t.ip.s));
-        eql(curveWithHash.verify(sig, msg, curve.getPublicKey(sk), opts), true);
+        const { r, s } = curve.Signature.fromBytes(sig);
+        // const r = curve.Point.Fn.toBytes(sig.r);
+        // const s = curve.Point.Fn.toBytes(sig.s);
+        eql(r, hexToNumber(t.ip.r));
+        eql(s, hexToNumber(t.ip.s));
+        const isValid = curveWithHash.verify(sig, msg, curve.getPublicKey(sk), opts);
+        eql(isValid, true, 'isValid false');
       }
     }
   });
@@ -146,7 +148,7 @@ describe('ACVP', () => {
       if (info.ip.hashAlg.startsWith('SHAKE-')) continue;
       // console.log(info.ip.hashAlg);
       const hash = HASHES[info.ip.hashAlg];
-      const curveWithHash = curve.create(hash);
+      const curveWithHash = curve._createWithNewHash(hash);
       for (const t of tests) {
         if (t.ip.randomValue) continue; // mesage randomization
         const opts = { lowS: false, prehash: true };
@@ -162,7 +164,7 @@ describe('ACVP', () => {
         const s = hexToNumber(t.ip.s);
         let passed;
         try {
-          const sig = new curve.Signature(r, s);
+          const sig = new curve.Signature(r, s).toBytes();
           passed = curveWithHash.verify(sig, msg, pk, opts);
         } catch (e) {
           passed = false;
@@ -189,7 +191,7 @@ describe('ACVP', () => {
       for (const t of tests) {
         let passed;
         try {
-          curve.Point.fromHex(hexToBytes(t.ip.q)).assertValidity();
+          curve.Point.fromBytes(hexToBytes(t.ip.q)).assertValidity();
           passed = true;
         } catch {
           passed = false;

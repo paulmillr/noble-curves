@@ -15,7 +15,13 @@ import {
   isHash,
   utf8ToBytes,
 } from '../utils.ts';
-import type { AffinePoint, Group, GroupConstructor } from './curve.ts';
+import type {
+  AffinePoint,
+  CurvePoint,
+  CurvePointCons,
+  GetPointConsF,
+  GetPointConsPoint,
+} from './curve.ts';
 import { FpInvertBatch, mod, type IField } from './modular.ts';
 
 export type UnicodeOrBytes = string | Uint8Array;
@@ -40,8 +46,6 @@ export type H2CHashOpts = {
   expand: 'xmd' | 'xof';
   hash: CHash;
 };
-// todo: remove
-export type Opts = H2COpts;
 
 // Octet Stream to Integer. "spec" implementation of os2ip is 2.5x slower vs bytesToNumberBE.
 const os2ip = bytesToNumberBE;
@@ -210,29 +214,18 @@ export function isogenyMap<T, F extends IField<T>>(field: F, map: XYRatio<T>): X
   };
 }
 
-/** Point interface, which curves must implement to work correctly with the module. */
-export interface H2CPoint<T> extends Group<H2CPoint<T>> {
-  add(rhs: H2CPoint<T>): H2CPoint<T>;
-  toAffine(iz?: bigint): AffinePoint<T>;
-  clearCofactor(): H2CPoint<T>;
-  assertValidity(): void;
-}
-
-export interface H2CPointConstructor<T> extends GroupConstructor<H2CPoint<T>> {
-  fromAffine(ap: AffinePoint<T>): H2CPoint<T>;
-}
-
 export type MapToCurve<T> = (scalar: bigint[]) => AffinePoint<T>;
 
 // Separated from initialization opts, so users won't accidentally change per-curve parameters
 // (changing DST is ok!)
 export type htfBasicOpts = { DST: UnicodeOrBytes };
-export type H2CMethod<T> = (msg: Uint8Array, options?: htfBasicOpts) => H2CPoint<T>;
+export type H2CMethod<F, P extends CurvePoint<F, P>> = (
+  msg: Uint8Array,
+  options?: htfBasicOpts
+) => CurvePoint<F, P>;
 // TODO: remove
-export type HTFMethod<T> = H2CMethod<T>;
-export type MapMethod<T> = (scalars: bigint[]) => H2CPoint<T>;
-export type H2CHasherBase<T> = {
-  hashToCurve: H2CMethod<T>;
+export type H2CHasherBase<F, P extends CurvePoint<F, P>> = {
+  hashToCurve: H2CMethod<F, P>;
   hashToScalar: (msg: Uint8Array, options: htfBasicOpts) => bigint;
 };
 /**
@@ -242,27 +235,30 @@ export type H2CHasherBase<T> = {
  * * encodeToCurve: `map(hash(input))`, encodes NON-UNIFORM bytes to curve (WITH hashing)
  * * mapToCurve: `map(scalars)`, encodes NON-UNIFORM scalars to curve (NO hashing)
  */
-export type H2CHasher<T> = H2CHasherBase<T> & {
-  encodeToCurve: H2CMethod<T>;
-  mapToCurve: MapMethod<T>;
+export type H2CHasher<F, P extends CurvePoint<F, P>> = H2CHasherBase<F, P> & {
+  Point: CurvePointCons<F, P>;
+  encodeToCurve: H2CMethod<F, P>;
+  mapToCurve: MapToCurve<F>;
   defaults: H2COpts & { encodeDST?: UnicodeOrBytes };
 };
-// TODO: remove
-export type Hasher<T> = H2CHasher<T>;
 
 export const _DST_scalar: Uint8Array = utf8ToBytes('HashToScalar-');
 
 /** Creates hash-to-curve methods from EC Point and mapToCurve function. See {@link H2CHasher}. */
-export function createHasher<T>(
-  Point: H2CPointConstructor<T>,
-  mapToCurve: MapToCurve<T>,
+export function createHasher<
+  PC extends CurvePointCons<any, any>,
+  F = GetPointConsF<PC>,
+  P extends CurvePoint<F, P> = GetPointConsPoint<PC>,
+>(
+  Point: CurvePointCons<F, P>,
+  mapToCurve: MapToCurve<F>,
   defaults: H2COpts & { encodeDST?: UnicodeOrBytes }
-): H2CHasher<T> {
+): H2CHasher<F, P> {
   if (typeof mapToCurve !== 'function') throw new Error('mapToCurve() must be defined');
   function map(num: bigint[]) {
     return Point.fromAffine(mapToCurve(num));
   }
-  function clear(initial: H2CPoint<T>) {
+  function clear(initial: CurvePoint<F, P>) {
     const P = initial.clearCofactor();
     if (P.equals(Point.ZERO)) return Point.ZERO; // zero will throw in assert
     P.assertValidity();
@@ -271,15 +267,16 @@ export function createHasher<T>(
 
   return {
     defaults,
+    Point,
 
-    hashToCurve(msg: Uint8Array, options?: htfBasicOpts): H2CPoint<T> {
+    hashToCurve(msg: Uint8Array, options?: htfBasicOpts): P {
       const opts = Object.assign({}, defaults, options);
       const u = hash_to_field(msg, 2, opts);
       const u0 = map(u[0]);
       const u1 = map(u[1]);
       return clear(u0.add(u1));
     },
-    encodeToCurve(msg: Uint8Array, options?: htfBasicOpts): H2CPoint<T> {
+    encodeToCurve(msg: Uint8Array, options?: htfBasicOpts): P {
       const optsDst = defaults.encodeDST ? { DST: defaults.encodeDST } : {};
       const opts = Object.assign({}, defaults, optsDst, options);
       const u = hash_to_field(msg, 1, opts);
@@ -287,7 +284,7 @@ export function createHasher<T>(
       return clear(u0);
     },
     /** See {@link H2CHasher} */
-    mapToCurve(scalars: bigint[]): H2CPoint<T> {
+    mapToCurve(scalars: bigint[]): P {
       if (!Array.isArray(scalars)) throw new Error('expected array of bigints');
       for (const i of scalars)
         if (typeof i !== 'bigint') throw new Error('expected array of bigints');

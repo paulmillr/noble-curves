@@ -4,8 +4,8 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { bitLen, bitMask, validateObject, type Hex } from '../utils.ts';
-import { Field, FpInvertBatch, nLength, validateField, type IField } from './modular.ts';
+import { bitLen, bitMask } from '../utils.ts';
+import { Field, FpInvertBatch, validateField, type IField } from './modular.ts';
 
 const _0n = BigInt(0);
 const _1n = BigInt(1);
@@ -15,28 +15,22 @@ export type AffinePoint<T> = {
   y: T;
 } & { z?: never; t?: never };
 
-// This was initialy do this way to re-use montgomery ladder in field (add->mul,double->sqr), but
-// that didn't happen and there is probably not much reason to have separate Group like this?
-export interface Group<T extends Group<T>> {
-  double(): T;
-  negate(): T;
-  add(other: T): T;
-  subtract(other: T): T;
-  equals(other: T): boolean;
-  multiply(scalar: bigint): T;
-  toAffine?(invertedZ?: any): AffinePoint<any>;
-}
-
 // We can't "abstract out" coordinates (X, Y, Z; and T in Edwards): argument names of constructor
 // are not accessible. See Typescript gh-56093, gh-41594.
 
 /** Base interface for all elliptic curve Points. */
-export interface CurvePoint<F, P extends CurvePoint<F, P>> extends Group<P> {
+export interface CurvePoint<F, P extends CurvePoint<F, P>> {
   /** Affine x coordinate. Different from projective / extended X coordinate. */
   x: F;
   /** Affine y coordinate. Different from projective / extended Y coordinate. */
   y: F;
   Z?: F;
+  double(): P;
+  negate(): P;
+  add(other: P): P;
+  subtract(other: P): P;
+  equals(other: P): boolean;
+  multiply(scalar: bigint): P;
   assertValidity(): void;
   clearCofactor(): P;
   is0(): boolean;
@@ -55,7 +49,8 @@ export interface CurvePoint<F, P extends CurvePoint<F, P>> extends Group<P> {
 }
 
 /** Base interface for all elliptic curve Point constructors. */
-export interface CurvePointCons<F, P extends CurvePoint<F, P>> extends GroupConstructor<P> {
+export interface CurvePointCons<F, P extends CurvePoint<F, P>> {
+  [Symbol.hasInstance]: (item: unknown) => boolean;
   BASE: P;
   ZERO: P;
   /** Field for basic curve math */
@@ -65,7 +60,7 @@ export interface CurvePointCons<F, P extends CurvePoint<F, P>> extends GroupCons
   /** Creates point from x, y. Does NOT validate if the point is valid. Use `.assertValidity()`. */
   fromAffine(p: AffinePoint<F>): P;
   fromBytes(bytes: Uint8Array): P;
-  fromHex(hex: Hex): P;
+  fromHex(hex: string): P;
 }
 
 // Type inference helpers
@@ -85,16 +80,7 @@ export interface CurveInfo {
     seed: number;
   };
 }
-export type GroupConstructor<T> = {
-  BASE: T;
-  ZERO: T;
-};
-/** @deprecated */
-export type ExtendedGroupConstructor<T> = GroupConstructor<T> & {
-  Fp: IField<any>;
-  Fn: IField<bigint>;
-  fromAffine(ap: AffinePoint<any>): T;
-};
+
 export type Mapper<T> = (i: T[]) => T[];
 
 export function negateCt<T extends { negate: () => T }>(condition: boolean, item: T): T {
@@ -253,7 +239,7 @@ export class wNAF<F, P extends CurvePoint<F, P>> {
    * @param W window size
    * @returns precomputed point tables flattened to a single array
    */
-  private precomputeWindow(point: P, W: number): Group<P>[] {
+  private precomputeWindow(point: P, W: number): P[] {
     const { windows, windowSize } = calcWOpts(W, this.bits);
     const points: P[] = [];
     let p: P = point;
@@ -376,12 +362,12 @@ export class wNAF<F, P extends CurvePoint<F, P>> {
  * Endomorphism-specific multiplication for Koblitz curves.
  * Cost: 128 dbl, 0-256 adds.
  */
-export function mulEndoUnsafe<T extends Group<T>>(
-  Point: GroupConstructor<T>,
-  point: T,
+export function mulEndoUnsafe<F, P extends CurvePoint<F, P>>(
+  Point: CurvePointCons<F, P>,
+  point: P,
   k1: bigint,
   k2: bigint
-): { p1: T; p2: T } {
+): { p1: P; p2: P } {
   let acc = point;
   let p1 = Point.ZERO;
   let p2 = Point.ZERO;
@@ -405,18 +391,18 @@ export function mulEndoUnsafe<T extends Group<T>>(
  * @param points array of L curve points
  * @param scalars array of L scalars (aka secret keys / bigints)
  */
-export function pippenger<T extends Group<T>>(
-  c: GroupConstructor<T>,
-  fieldN: IField<bigint>,
-  points: T[],
+export function pippenger<F, P extends CurvePoint<F, P>>(
+  c: CurvePointCons<F, P>,
+  points: P[],
   scalars: bigint[]
-): T {
+): P {
   // If we split scalars by some window (let's say 8 bits), every chunk will only
   // take 256 buckets even if there are 4096 scalars, also re-uses double.
   // TODO:
   // - https://eprint.iacr.org/2024/750.pdf
   // - https://tches.iacr.org/index.php/TCHES/article/view/10287
   // 0 is accepted in scalars
+  const fieldN = c.Fn;
   validateMSMPoints(points, c);
   validateMSMScalars(scalars, fieldN);
   const plength = points.length;
@@ -449,7 +435,7 @@ export function pippenger<T extends Group<T>>(
     sum = sum.add(resI);
     if (i !== 0) for (let j = 0; j < windowSize; j++) sum = sum.double();
   }
-  return sum as T;
+  return sum as P;
 }
 /**
  * Precomputed multi-scalar multiplication (MSM, Pa + Qb + Rc + ...).
@@ -458,12 +444,11 @@ export function pippenger<T extends Group<T>>(
  * @param points array of L curve points
  * @returns function which multiplies points with scaars
  */
-export function precomputeMSMUnsafe<T extends Group<T>>(
-  c: GroupConstructor<T>,
-  fieldN: IField<bigint>,
-  points: T[],
+export function precomputeMSMUnsafe<F, P extends CurvePoint<F, P>>(
+  c: CurvePointCons<F, P>,
+  points: P[],
   windowSize: number
-): (scalars: bigint[]) => T {
+): (scalars: bigint[]) => P {
   /**
    * Performance Analysis of Window-based Precomputation
    *
@@ -499,13 +484,14 @@ export function precomputeMSMUnsafe<T extends Group<T>>(
    *   - Optimal for ~256 scalars
    *   - Less efficient for 4096+ scalars (Pippenger preferred)
    */
+  const fieldN = c.Fn;
   validateW(windowSize, fieldN.BITS);
   validateMSMPoints(points, c);
   const zero = c.ZERO;
   const tableSize = 2 ** windowSize - 1; // table size (without zero)
   const chunks = Math.ceil(fieldN.BITS / windowSize); // chunks of item
   const MASK = bitMask(windowSize);
-  const tables = points.map((p: T) => {
+  const tables = points.map((p: P) => {
     const res = [];
     for (let i = 0, acc = p; i < tableSize; i++) {
       res.push(acc);
@@ -513,7 +499,7 @@ export function precomputeMSMUnsafe<T extends Group<T>>(
     }
     return res;
   });
-  return (scalars: bigint[]): T => {
+  return (scalars: bigint[]): P => {
     validateMSMScalars(scalars, fieldN);
     if (scalars.length > points.length)
       throw new Error('array of scalars must be smaller than array of points');
@@ -533,58 +519,6 @@ export function precomputeMSMUnsafe<T extends Group<T>>(
   };
 }
 
-// TODO: remove
-/**
- * Generic BasicCurve interface: works even for polynomial fields (BLS): P, n, h would be ok.
- * Though generator can be different (Fp2 / Fp6 for BLS).
- */
-export type BasicCurve<T> = {
-  Fp: IField<T>; // Field over which we'll do calculations (Fp)
-  n: bigint; // Curve order, total count of valid points in the field
-  nBitLength?: number; // bit length of curve order
-  nByteLength?: number; // byte length of curve order
-  h: bigint; // cofactor. we can assign default=1, but users will just ignore it w/o validation
-  hEff?: bigint; // Number to multiply to clear cofactor
-  Gx: T; // base point X coordinate
-  Gy: T; // base point Y coordinate
-  allowInfinityPoint?: boolean; // bls12-381 requires it. ZERO point is valid, but invalid pubkey
-};
-
-// TODO: remove
-/** @deprecated */
-export function validateBasic<FP, T>(
-  curve: BasicCurve<FP> & T
-): Readonly<
-  {
-    readonly nBitLength: number;
-    readonly nByteLength: number;
-  } & BasicCurve<FP> &
-    T & {
-      p: bigint;
-    }
-> {
-  validateField(curve.Fp);
-  validateObject(
-    curve,
-    {
-      n: 'bigint',
-      h: 'bigint',
-      Gx: 'field',
-      Gy: 'field',
-    },
-    {
-      nBitLength: 'isSafeInteger',
-      nByteLength: 'isSafeInteger',
-    }
-  );
-  // Set defaults
-  return Object.freeze({
-    ...nLength(curve.n, curve.nBitLength),
-    ...curve,
-    ...{ p: curve.Fp.ORDER },
-  } as const);
-}
-
 export type ValidCurveParams<T> = {
   a: T;
   p: bigint;
@@ -594,13 +528,17 @@ export type ValidCurveParams<T> = {
   Gy: T;
 } & ({ b: T } | { d: T });
 
-function createField<T>(order: bigint, field?: IField<T>): IField<T> {
+function createField<T>(
+  order: bigint,
+  field?: IField<T>,
+  type?: 'weierstrass' | 'edwards'
+): IField<T> {
   if (field) {
     if (field.ORDER !== order) throw new Error('Field.ORDER must match order: Fp == p, Fn == n');
     validateField(field);
     return field;
   } else {
-    return Field(order) as unknown as IField<T>;
+    return Field(order, { isLE: type === 'edwards' }) as unknown as IField<T>;
   }
 }
 export type FpFn<T> = { Fp: IField<T>; Fn: IField<bigint> };
@@ -616,8 +554,8 @@ export function _createCurveFields<T>(
     if (!(typeof val === 'bigint' && val > _0n))
       throw new Error(`CURVE.${p} must be positive bigint`);
   }
-  const Fp = createField(CURVE.p, curveOpts.Fp);
-  const Fn = createField(CURVE.n, curveOpts.Fn);
+  const Fp = createField(CURVE.p, curveOpts.Fp, type);
+  const Fn = createField(CURVE.n, curveOpts.Fn, type);
   const _b: 'b' | 'd' = type === 'weierstrass' ? 'b' : 'd';
   const params = ['Gx', 'Gy', 'a', _b] as const;
   for (const p of params) {

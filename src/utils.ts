@@ -26,12 +26,25 @@ const _1n = /* @__PURE__ */ BigInt(1);
 export type Hex = Uint8Array | string; // hex strings are accepted for simplicity
 export type PrivKey = Hex | bigint; // bigints are accepted to ease learning curve
 export type CHash = {
-  (message: Uint8Array | string): Uint8Array;
+  (message: Uint8Array): Uint8Array;
   blockLen: number;
   outputLen: number;
   create(opts?: { dkLen?: number }): any; // For shake
 };
-export type FHash = (message: Uint8Array | string) => Uint8Array;
+export type FHash = (message: Uint8Array) => Uint8Array;
+// export interface Signer {
+//   keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
+//   getPublicKey: (secretKey: Uint8Array) => Uint8Array;
+//   sign: (
+//     message: Uint8Array,
+//     secretKey: Uint8Array,
+//   ) => Uint8Array;
+//   verify: (
+//     signature: Uint8Array,
+//     message: Uint8Array,
+//     publicKey: Uint8Array,
+//   ) => boolean;
+// }
 
 export function abool(title: string, value: boolean): void {
   if (typeof value !== 'boolean') throw new Error(title + ' boolean expected, got ' + value);
@@ -77,20 +90,14 @@ export function numberToVarBytesBE(n: number | bigint): Uint8Array {
  * @param expectedLength optional, will compare to result array's length
  * @returns
  */
-export function ensureBytes(title: string, hex: Hex, expectedLength?: number): Uint8Array {
+export function ensureBytes(title: string, bytes: Uint8Array, expectedLength?: number): Uint8Array {
   let res: Uint8Array;
-  if (typeof hex === 'string') {
-    try {
-      res = hexToBytes_(hex);
-    } catch (e) {
-      throw new Error(title + ' must be hex string or Uint8Array, cause: ' + e);
-    }
-  } else if (isBytes_(hex)) {
+  if (isBytes_(bytes)) {
     // Uint8Array.from() instead of hash.slice() because node.js Buffer
     // is instance of Uint8Array, and its slice() creates **mutable** copy
-    res = Uint8Array.from(hex);
+    res = Uint8Array.from(bytes);
   } else {
-    throw new Error(title + ' must be hex string or Uint8Array');
+    throw new Error(title + ' must be Uint8Array');
   }
   const len = res.length;
   if (typeof expectedLength === 'number' && len !== expectedLength)

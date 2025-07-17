@@ -19,7 +19,6 @@ import { mod } from './modular.ts';
 const _0n = BigInt(0);
 const _1n = BigInt(1);
 const _2n = BigInt(2);
-type Hex = string | Uint8Array;
 
 export type CurveType = {
   P: bigint; // finite field prime
@@ -30,14 +29,12 @@ export type CurveType = {
 };
 
 export type MontgomeryECDH = {
-  scalarMult: (scalar: Hex, u: Hex) => Uint8Array;
-  scalarMultBase: (scalar: Hex) => Uint8Array;
-  getSharedSecret: (secretKeyA: Hex, publicKeyB: Hex) => Uint8Array;
-  getPublicKey: (secretKey: Hex) => Uint8Array;
+  scalarMult: (scalar: Uint8Array, u: Uint8Array) => Uint8Array;
+  scalarMultBase: (scalar: Uint8Array) => Uint8Array;
+  getSharedSecret: (secretKeyA: Uint8Array, publicKeyB: Uint8Array) => Uint8Array;
+  getPublicKey: (secretKey: Uint8Array) => Uint8Array;
   utils: {
     randomSecretKey: () => Uint8Array;
-    /** @deprecated use `randomSecretKey` */
-    randomPrivateKey: () => Uint8Array;
   };
   GuBytes: Uint8Array;
   info: {
@@ -47,7 +44,6 @@ export type MontgomeryECDH = {
   };
   keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
 };
-export type CurveFn = MontgomeryECDH;
 
 function validateOpts(curve: CurveType) {
   _validateObject(curve, {
@@ -85,7 +81,7 @@ export function montgomery(curveDef: CurveType): MontgomeryECDH {
   function encodeU(u: bigint): Uint8Array {
     return numberToBytesLE(modP(u), fieldLen);
   }
-  function decodeU(u: Hex): bigint {
+  function decodeU(u: Uint8Array): bigint {
     const _u = ensureBytes('u coordinate', u, fieldLen);
     // RFC: When receiving such an array, implementations of X25519
     // (but not X448) MUST mask the most significant bit in the final byte.
@@ -96,10 +92,10 @@ export function montgomery(curveDef: CurveType): MontgomeryECDH {
     // - 1 through 2^448 - 1 for X448.
     return modP(bytesToNumberLE(_u));
   }
-  function decodeScalar(scalar: Hex): bigint {
+  function decodeScalar(scalar: Uint8Array): bigint {
     return bytesToNumberLE(adjustScalarBytes(ensureBytes('scalar', scalar, fieldLen)));
   }
-  function scalarMult(scalar: Hex, u: Hex): Uint8Array {
+  function scalarMult(scalar: Uint8Array, u: Uint8Array): Uint8Array {
     const pu = montgomeryLadder(decodeU(u), decodeScalar(scalar));
     // Some public keys are useless, of low-order. Curve author doesn't think
     // it needs to be validated, but we do it nonetheless.
@@ -108,7 +104,7 @@ export function montgomery(curveDef: CurveType): MontgomeryECDH {
     return encodeU(pu);
   }
   // Computes public key from private. By doing scalar multiplication of base point.
-  function scalarMultBase(scalar: Hex): Uint8Array {
+  function scalarMultBase(scalar: Uint8Array): Uint8Array {
     return scalarMult(scalar, GuBytes);
   }
 
@@ -183,8 +179,9 @@ export function montgomery(curveDef: CurveType): MontgomeryECDH {
   };
   return {
     keygen,
-    getSharedSecret: (secretKey: Hex, publicKey: Hex) => scalarMult(secretKey, publicKey),
-    getPublicKey: (secretKey: Hex): Uint8Array => scalarMultBase(secretKey),
+    getSharedSecret: (secretKey: Uint8Array, publicKey: Uint8Array) =>
+      scalarMult(secretKey, publicKey),
+    getPublicKey: (secretKey: Uint8Array): Uint8Array => scalarMultBase(secretKey),
     scalarMult,
     scalarMultBase,
     utils,

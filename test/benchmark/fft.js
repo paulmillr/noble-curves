@@ -9,7 +9,7 @@ import { title } from './_shared.js';
   const curve = bls12_381;
 
   const Fr = curve.fields.Fr;
-  const G1 = curve.G1.ProjectivePoint;
+  const G1 = curve.G1.Point;
   const pFR = [1n, 2n, 3n, 4n, 5n, 6n, 7n, 8n];
   const pG1 = pFR.map((i) => G1.BASE.multiplyUnsafe(i));
 

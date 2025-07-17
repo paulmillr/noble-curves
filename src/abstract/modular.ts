@@ -7,17 +7,17 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import {
   _validateObject,
+  abytes,
   anumber,
   bitMask,
   bytesToNumberBE,
   bytesToNumberLE,
-  ensureBytes,
   numberToBytesBE,
   numberToBytesLE,
 } from '../utils.ts';
 
 // prettier-ignore
-const _0n = BigInt(0), _1n = BigInt(1), _2n = /* @__PURE__ */ BigInt(2), _3n = /* @__PURE__ */ BigInt(3);
+const _0n = BigInt(0), _1n = /* @__PURE__ */ BigInt(1), _2n = /* @__PURE__ */ BigInt(2), _3n = /* @__PURE__ */ BigInt(3);
 // prettier-ignore
 const _4n = /* @__PURE__ */ BigInt(4), _5n = /* @__PURE__ */ BigInt(5), _7n = /* @__PURE__ */ BigInt(7);
 // prettier-ignore
@@ -406,28 +406,21 @@ type FieldOpts = Partial<{
  * @param isLE (default: false) if encoding / decoding should be in little-endian
  * @param redef optional faster redefinitions of sqrt and other methods
  */
-export function Field(
-  ORDER: bigint,
-  bitLenOrOpts?: number | FieldOpts, // TODO: use opts only in v2?
-  isLE = false,
-  opts: { sqrt?: SqrtFn } = {}
-): Readonly<FpField> {
+export function Field(ORDER: bigint, opts: FieldOpts = {}): Readonly<FpField> {
   if (ORDER <= _0n) throw new Error('invalid field: expected ORDER > 0, got ' + ORDER);
   let _nbitLength: number | undefined = undefined;
   let _sqrt: SqrtFn | undefined = undefined;
   let modOnDecode: boolean = false;
   let allowedLengths: undefined | readonly number[] = undefined;
-  if (typeof bitLenOrOpts === 'object' && bitLenOrOpts != null) {
-    if (opts.sqrt || isLE) throw new Error('cannot specify opts in two arguments');
-    const _opts = bitLenOrOpts;
+  let isLE = false;
+  if (typeof opts === 'object' && opts != null) {
+    // if (opts.sqrt) throw new Error('cannot specify opts in two arguments');
+    const _opts = opts;
     if (_opts.BITS) _nbitLength = _opts.BITS;
     if (_opts.sqrt) _sqrt = _opts.sqrt;
     if (typeof _opts.isLE === 'boolean') isLE = _opts.isLE;
     if (typeof _opts.modOnDecode === 'boolean') modOnDecode = _opts.modOnDecode;
     allowedLengths = _opts.allowedLengths;
-  } else {
-    if (typeof bitLenOrOpts === 'number') _nbitLength = bitLenOrOpts;
-    if (opts.sqrt) _sqrt = opts.sqrt;
   }
   const { nBitLength: BITS, nByteLength: BYTES } = nLength(ORDER, _nbitLength);
   if (BYTES > 2048) throw new Error('invalid field: expected ORDER of <= 2048 bytes');
@@ -475,7 +468,8 @@ export function Field(
         return sqrtP(f, n);
       }),
     toBytes: (num) => (isLE ? numberToBytesLE(num, BYTES) : numberToBytesBE(num, BYTES)),
-    fromBytes: (bytes, skipValidation = true) => {
+    fromBytes: (bytes, skipValidation = false) => {
+      abytes(bytes);
       if (allowedLengths) {
         if (!allowedLengths.includes(bytes.length) || bytes.length > BYTES) {
           throw new Error(
@@ -530,28 +524,6 @@ export function FpSqrtEven<T>(Fp: IField<T>, elm: T): T {
   if (!Fp.isOdd) throw new Error("Field doesn't have isOdd");
   const root = Fp.sqrt(elm);
   return Fp.isOdd(root) ? Fp.neg(root) : root;
-}
-
-/**
- * "Constant-time" private key generation utility.
- * Same as mapKeyToField, but accepts less bytes (40 instead of 48 for 32-byte field).
- * Which makes it slightly more biased, less secure.
- * @deprecated use `mapKeyToField` instead
- */
-export function hashToPrivateScalar(
-  hash: string | Uint8Array,
-  groupOrder: bigint,
-  isLE = false
-): bigint {
-  hash = ensureBytes('privateHash', hash);
-  const hashLen = hash.length;
-  const minLen = nLength(groupOrder).nByteLength + 8;
-  if (minLen < 24 || hashLen < minLen || hashLen > 1024)
-    throw new Error(
-      'hashToPrivateScalar: expected ' + minLen + '-1024 bytes of input, got ' + hashLen
-    );
-  const num = isLE ? bytesToNumberLE(hash) : bytesToNumberBE(hash);
-  return mod(num, groupOrder - _1n) + _1n;
 }
 
 /**

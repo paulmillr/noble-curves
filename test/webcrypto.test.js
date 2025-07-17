@@ -93,7 +93,7 @@ describe('webcrypto', () => {
           if (canSign) {
             const sigWeb = await web.sign(MSG, randomWeb, { format: secFormat });
             let sigNoble = noble.sign(MSG, randomNoble, { prehash: true });
-            if (c !== 'ed25519' && c !== 'ed448') sigNoble = sigNoble.toBytes('compact');
+            // if (c !== 'ed25519' && c !== 'ed448') sigNoble = sigNoble.toBytes('compact');
             deepStrictEqual(await web.verify(sigWeb, MSG, publicWeb, { format: pubFormat }), true);
             deepStrictEqual(
               await web.verify(sigNoble, MSG, randomNoblePub, { format: pubFormat }),
