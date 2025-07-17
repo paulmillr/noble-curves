@@ -1766,15 +1766,10 @@ function _weierstrass_new_output_to_legacy<T>(
 // TODO: remove
 function _ecdsa_new_output_to_legacy(c: CurveType, _ecdsa: ECDSA): CurveFn {
   const Point = _ecdsa.Point;
-  return Object.assign(
-    {},
-    _ecdsa,
-    {
-      ProjectivePoint: Point,
-      CURVE: c,
-    },
-    nLength(Point.Fn.ORDER, Point.Fn.BITS)
-  );
+  return Object.assign({}, _ecdsa, {
+    ProjectivePoint: Point,
+    CURVE: Object.assign({}, c, nLength(Point.Fn.ORDER, Point.Fn.BITS)),
+  });
 }
 
 // _ecdsa_legacy
