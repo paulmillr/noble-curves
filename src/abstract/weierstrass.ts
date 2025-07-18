@@ -54,6 +54,7 @@ import {
   wNAF,
   type AffinePoint,
   type CurveInfo,
+  type CurveLengths,
   type CurvePoint,
   type CurvePointCons,
 } from './curve.ts';
@@ -222,10 +223,26 @@ export type ECDSAOpts = Partial<{
   bits2int_modN: (bytes: Uint8Array) => bigint;
 }>;
 
-/** ECDSA is only supported for prime fields, not Fp2 (extension fields). */
-export interface ECDSA {
+/** Elliptic Curve Diffie-Hellman. */
+export interface ECDH {
   keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
   getPublicKey: (secretKey: Uint8Array, isCompressed?: boolean) => Uint8Array;
+  getSharedSecret: (
+    secretKeyA: Uint8Array,
+    publicKeyB: Uint8Array,
+    isCompressed?: boolean
+  ) => Uint8Array;
+  Point: WeierstrassPointCons<bigint>;
+  utils: {
+    isValidSecretKey: (secretKey: Uint8Array) => boolean;
+    isValidPublicKey: (publicKey: Uint8Array, isCompressed?: boolean) => boolean;
+    randomSecretKey: (seed?: Uint8Array) => Uint8Array;
+  };
+  lengths: CurveLengths;
+}
+
+/** ECDSA is only supported for prime fields, not Fp2 (extension fields). */
+export interface ECDSA extends ECDH {
   sign: (msgHash: Uint8Array, secretKey: Uint8Array, opts?: SignOpts) => Uint8Array;
   verify: (
     signature: Uint8Array,
@@ -233,19 +250,8 @@ export interface ECDSA {
     publicKey: Uint8Array,
     opts?: VerOpts
   ) => boolean;
-  getSharedSecret: (
-    secretKeyA: Uint8Array,
-    publicKeyB: Uint8Array,
-    isCompressed?: boolean
-  ) => Uint8Array;
   recoverPublicKey(signature: Uint8Array, msgHash: Uint8Array): Uint8Array;
-  Point: WeierstrassPointCons<bigint>;
   Signature: ECDSASignatureCons;
-  utils: {
-    isValidSecretKey: (secretKey: Uint8Array) => boolean;
-    isValidPublicKey: (publicKey: Uint8Array, isCompressed?: boolean) => boolean;
-    randomSecretKey: (seed?: Uint8Array) => Uint8Array;
-  };
   info: CurveInfo;
 }
 export class DERErr extends Error {
@@ -1015,7 +1021,117 @@ export function mapToCurveSimpleSWU<T>(
 }
 
 /**
- * Creates ECDSA for given elliptic curve Point and hash function.
+ * Sometimes users only need getPublicKey, getSharedSecret, and secret key handling.
+ * This helper ensures no signature functionality is present. Less code, smaller bundle size.
+ */
+export function ecdh(
+  Point: WeierstrassPointCons<bigint>,
+  ecdhOpts: Partial<{ randomBytes: (bytesLength?: number) => Uint8Array }> = {}
+): ECDH {
+  const { Fp, Fn } = Point;
+  const randomBytes_ = ecdhOpts.randomBytes || randomBytes;
+  const seedLen = getMinHashLength(Fn.ORDER);
+  const lengths = {
+    secret: Fn.BYTES,
+    public: 1 + Fp.BYTES,
+    publicUncompressed: 1 + 2 * Fp.BYTES,
+    signature: 2 * Fn.BYTES,
+    seed: seedLen,
+  };
+
+  function isValidSecretKey(privateKey: Uint8Array) {
+    try {
+      const num = Fn.fromBytes(privateKey);
+      return Fn.isValidNot0(num);
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function isValidPublicKey(publicKey: Uint8Array, isCompressed?: boolean): boolean {
+    try {
+      const l = publicKey.length;
+      if (isCompressed === true && l !== lengths.public) return false;
+      if (isCompressed === false && l !== lengths.publicUncompressed) return false;
+      return !!Point.fromBytes(publicKey);
+    } catch (error) {
+      return false;
+    }
+  }
+
+  /**
+   * Produces cryptographically secure secret key from random of size
+   * (groupLen + ceil(groupLen / 2)) with modulo bias being negligible.
+   */
+  function randomSecretKey(seed = randomBytes_(lengths.seed)): Uint8Array {
+    return mapHashToField(seed, Fn.ORDER);
+  }
+
+  /**
+   * Computes public key for a secret key. Checks for validity of the secret key.
+   * @param isCompressed whether to return compact (default), or full key
+   * @returns Public key, full when isCompressed=false; short when isCompressed=true
+   */
+  function getPublicKey(secretKey: Uint8Array, isCompressed = true): Uint8Array {
+    return Point.BASE.multiply(Fn.fromBytes(secretKey)).toBytes(isCompressed);
+  }
+
+  function keygen(seed?: Uint8Array) {
+    const secretKey = randomSecretKey(seed);
+    return { secretKey, publicKey: getPublicKey(secretKey) };
+  }
+
+  /**
+   * Quick and dirty check for item being public key. Does not validate hex, or being on-curve.
+   */
+  function isProbPub(item: Uint8Array): boolean | undefined {
+    if (!isBytes(item)) return undefined;
+    if (('_lengths' in Fn && Fn._lengths) || lengths.secret === lengths.public) return undefined;
+    const l = ensureBytes('key', item).length;
+    return l === lengths.public || l === lengths.publicUncompressed;
+  }
+
+  /**
+   * ECDH (Elliptic Curve Diffie Hellman).
+   * Computes shared public key from secret key A and public key B.
+   * Checks: 1) secret key validity 2) shared key is on-curve.
+   * Does NOT hash the result.
+   * @param isCompressed whether to return compact (default), or full key
+   * @returns shared public key
+   */
+  function getSharedSecret(
+    secretKeyA: Uint8Array,
+    publicKeyB: Uint8Array,
+    isCompressed = true
+  ): Uint8Array {
+    if (isProbPub(secretKeyA) === true) throw new Error('first arg must be private key');
+    if (isProbPub(publicKeyB) === false) throw new Error('second arg must be public key');
+    const s = Fn.fromBytes(secretKeyA);
+    const b = Point.fromBytes(publicKeyB); // checks for being on-curve
+    return b.multiply(s).toBytes(isCompressed);
+  }
+
+  const utils = {
+    isValidSecretKey,
+    isValidPublicKey,
+    randomSecretKey,
+  };
+
+  return Object.freeze({ getPublicKey, getSharedSecret, keygen, Point, utils, lengths });
+}
+
+/**
+ * Creates ECDSA signing interface for given elliptic curve `Point` and `hash` function.
+ * We need `hash` for 2 features:
+ * 1. Message prehash-ing. NOT used if `sign` / `verify` are called with `prehash: false`
+ * 2. k generation in `sign`, using HMAC-drbg(hash)
+ *
+ * @example
+ * ```js
+ * const p256_Point = weierstrass(...);
+ * const p256_sha256 = ecdsa(p256_Point, sha256);
+ * const p256_sha224 = ecdsa(p256_Point, sha224);
+ * ```
  */
 export function ecdsa(
   Point: WeierstrassPointCons<bigint>,
@@ -1045,27 +1161,25 @@ export function ecdsa(
 
   const { Fp, Fn } = Point;
   const { ORDER: CURVE_ORDER, BITS: fnBits } = Fn;
-
-  const seedLen = getMinHashLength(CURVE_ORDER);
-  const lengths = {
-    secret: Fn.BYTES,
-    public: 1 + Fp.BYTES,
-    publicUncompressed: 1 + 2 * Fp.BYTES,
-    signature: 2 * Fn.BYTES,
-    seed: seedLen,
+  const { keygen, getPublicKey, getSharedSecret, utils, lengths } = ecdh(Point, ecdsaOpts);
+  const defaultSigOpts: SignOpts = { lowS: ecdsaOpts.lowS, prehash: false, format: 'compact' };
+  const defaultVerOpts: Required<VerOpts> = {
+    lowS: ecdsaOpts.lowS,
+    prehash: false,
+    format: 'compact',
   };
 
   function isBiggerThanHalfOrder(number: bigint) {
     const HALF = CURVE_ORDER >> _1n;
     return number > HALF;
   }
-
   function normalizeS(s: bigint) {
     return isBiggerThanHalfOrder(s) ? Fn.neg(s) : s;
   }
-  function aValidRS(title: string, num: bigint) {
+  function validateRS(title: string, num: bigint): bigint {
     if (!Fn.isValidNot0(num))
-      throw new Error(`invalid signature ${title}: out of range 1..CURVE.n`);
+      throw new Error(`invalid signature ${title}: out of range 1..Point.Fn.ORDER`);
+    return num;
   }
   function validateSigFormat(format: ECDSASigFormat): void {
     if (!['compact', 'recovered', 'der'].includes(format as string))
@@ -1079,18 +1193,17 @@ export function ecdsa(
     readonly r: bigint;
     readonly s: bigint;
     readonly recovery?: number;
+
     constructor(r: bigint, s: bigint, recovery?: number) {
-      aValidRS('r', r); // r in [1..N-1]
-      aValidRS('s', s); // s in [1..N-1]
-      this.r = r;
-      this.s = s;
+      this.r = validateRS('r', r); // r in [1..N-1];
+      this.s = validateRS('s', s); // s in [1..N-1];
       if (recovery != null) this.recovery = recovery;
       Object.freeze(this);
     }
 
     static fromBytes(bytes: Uint8Array, format: ECDSASigFormat = 'compact'): Signature {
       validateSigFormat(format);
-      const size = lengths.signature;
+      const size = lengths.signature!;
       let recid: number | undefined;
       if (format === 'der') {
         abytes(bytes);
@@ -1175,77 +1288,6 @@ export function ecdsa(
     }
   }
   type RecoveredSignature = Signature & { recovery: number };
-
-  function isValidSecretKey(privateKey: Uint8Array) {
-    try {
-      const num = Fn.fromBytes(privateKey);
-      return Fn.isValidNot0(num);
-    } catch (error) {
-      return false;
-    }
-  }
-  function isValidPublicKey(publicKey: Uint8Array, isCompressed?: boolean): boolean {
-    try {
-      const l = publicKey.length;
-      if (isCompressed === true && l !== lengths.public) return false;
-      if (isCompressed === false && l !== lengths.publicUncompressed) return false;
-      return !!Point.fromBytes(publicKey);
-    } catch (error) {
-      return false;
-    }
-  }
-  /**
-   * Produces cryptographically secure secret key from random of size
-   * (groupLen + ceil(groupLen / 2)) with modulo bias being negligible.
-   */
-  function randomSecretKey(seed = randomBytes_(seedLen)): Uint8Array {
-    return mapHashToField(seed, CURVE_ORDER);
-  }
-
-  const utils = {
-    isValidSecretKey,
-    isValidPublicKey,
-    randomSecretKey,
-  };
-
-  /**
-   * Computes public key for a secret key. Checks for validity of the secret key.
-   * @param isCompressed whether to return compact (default), or full key
-   * @returns Public key, full when isCompressed=false; short when isCompressed=true
-   */
-  function getPublicKey(secretKey: Uint8Array, isCompressed = true): Uint8Array {
-    return Point.BASE.multiply(Fn.fromBytes(secretKey)).toBytes(isCompressed);
-  }
-
-  /**
-   * Quick and dirty check for item being public key. Does not validate hex, or being on-curve.
-   */
-  function isProbPub(item: Uint8Array): boolean | undefined {
-    if (!isBytes(item)) return undefined;
-    if (('_lengths' in Fn && Fn._lengths) || lengths.secret === lengths.public) return undefined;
-    const l = ensureBytes('key', item).length;
-    return l === lengths.public || l === lengths.publicUncompressed;
-  }
-
-  /**
-   * ECDH (Elliptic Curve Diffie Hellman).
-   * Computes shared public key from secret key A and public key B.
-   * Checks: 1) secret key validity 2) shared key is on-curve.
-   * Does NOT hash the result.
-   * @param isCompressed whether to return compact (default), or full key
-   * @returns shared public key
-   */
-  function getSharedSecret(
-    secretKeyA: Uint8Array,
-    publicKeyB: Uint8Array,
-    isCompressed = true
-  ): Uint8Array {
-    if (isProbPub(secretKeyA) === true) throw new Error('first arg must be private key');
-    if (isProbPub(publicKeyB) === false) throw new Error('second arg must be public key');
-    const s = Fn.fromBytes(secretKeyA);
-    const b = Point.fromBytes(publicKeyB); // checks for being on-curve
-    return b.multiply(s).toBytes(isCompressed);
-  }
 
   // RFC6979: ensure ECDSA msg is X bytes and < N. RFC suggests optional truncating via bits2octets.
   // FIPS 186-4 4.6 suggests the leftmost min(nBitLen, outLen) bits, which matches bits2int.
@@ -1334,12 +1376,6 @@ export function ecdsa(
     }
     return { seed, k2sig };
   }
-  const defaultSigOpts: SignOpts = { lowS: ecdsaOpts.lowS, prehash: false, format: 'compact' };
-  const defaultVerOpts: Required<VerOpts> = {
-    lowS: ecdsaOpts.lowS,
-    prehash: false,
-    format: 'compact',
-  };
 
   /**
    * Signs message hash with a secret key.
@@ -1430,28 +1466,20 @@ export function ecdsa(
     return Signature.fromBytes(signature, 'recovered').recoverPublicKey(msgHash).toBytes();
   }
 
-  function keygen(seed?: Uint8Array) {
-    const secretKey = utils.randomSecretKey(seed);
-    return { secretKey, publicKey: getPublicKey(secretKey) };
-  }
-
-  function _createWithNewHash(hash: CHash) {
-    return ecdsa(Point, hash, ecdsaOpts);
-  }
-
   return Object.freeze({
     keygen,
     getPublicKey,
+    getSharedSecret,
+    utils,
+
     sign,
     verify,
-    getSharedSecret,
     recoverPublicKey,
-    utils,
     Point,
     Signature,
-    info: { type: 'weierstrass' as const, lengths, publicKeyHasPrefix: true },
-    // test-only
-    _createWithNewHash,
-    CURVE: { hash },
+
+    info: { type: 'weierstrass' as const, publicKeyHasPrefix: true },
+    lengths,
+    hash,
   });
 }
