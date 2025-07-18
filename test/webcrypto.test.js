@@ -99,7 +99,10 @@ describe('webcrypto', () => {
               await web.verify(sigNoble, MSG, randomNoblePub, { format: pubFormat }),
               true
             );
-            deepStrictEqual(noble.verify(sigWeb, MSG, rawPubWeb, { prehash: true }), true);
+            deepStrictEqual(
+              noble.verify(sigWeb, MSG, rawPubWeb, { prehash: true, lowS: false }),
+              true
+            );
           }
           // Get shared secret
           if (canDerive && secFormat === pubFormat) {

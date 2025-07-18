@@ -187,10 +187,12 @@ const fields = { Fp, Fp2, Fp6, Fp12, Fr: bn254_Fr };
 const bn254_G1 = weierstrass(bn254_G1_CURVE, {
   Fp,
   Fn: bn254_Fr,
+  allowInfinityPoint: true,
 });
 const bn254_G2 = weierstrass(bn254_G2_CURVE, {
   Fp: Fp2,
   Fn: bn254_Fr,
+  allowInfinityPoint: true,
   isTorsionFree: (c, P) => P.multiplyUnsafe(SIX_X_SQUARED).equals(G2psi(c, P)), // [p]P = [6X^2]P
 });
 /*
