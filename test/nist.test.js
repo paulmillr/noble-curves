@@ -3,7 +3,7 @@ import { sha3_224, sha3_256, sha3_384, sha3_512, shake128, shake256 } from '@nob
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql, throws } from 'node:assert';
 import { bytesToHex, hexToBytes, utf8ToBytes } from '../abstract/utils.js';
-import { DER } from '../abstract/weierstrass.js';
+import { DER, ecdsa } from '../abstract/weierstrass.js';
 import { brainpoolP256r1, brainpoolP384r1, brainpoolP512r1 } from '../misc.js';
 import { p256, p384, p521 } from '../nist.js';
 import { secp256k1 } from '../secp256k1.js';
@@ -14,8 +14,8 @@ const rfc6979 = json('./vectors/rfc6979.json');
 const endoVectors = json('./vectors/secp256k1/endomorphism.json');
 
 const PREFIX = './vectors/wycheproof/';
-const ecdsa = json(PREFIX + 'ecdsa_test.json');
-const ecdh = json(PREFIX + 'ecdh_test.json');
+const vecdsa = json(PREFIX + 'ecdsa_test.json');
+const vecdh = json(PREFIX + 'ecdh_test.json');
 const ecdh_secp224r1_test = json(PREFIX + 'ecdh_secp224r1_test.json');
 const ecdh_secp256r1_test = json(PREFIX + 'ecdh_secp256r1_test.json');
 const ecdh_secp256k1_test = json(PREFIX + 'ecdh_secp256k1_test.json');
@@ -145,7 +145,7 @@ function verifyECDHVector(test, curve) {
 }
 
 describe('wycheproof ECDH', () => {
-  for (const group of ecdh.testGroups) {
+  for (const group of vecdh.testGroups) {
     const curve = NIST[group.curve];
     if (!curve) continue;
     should(group.curve, () => {
@@ -361,7 +361,7 @@ function runWycheproof(name, CURVE, group, index) {
   eql(pubKey.y, BigInt(`0x${key.wy}`));
   const pubR = pubKey.toBytes();
   for (const test of group.tests) {
-    const m = CURVE.CURVE.hash(hexToBytes(test.msg));
+    const m = CURVE.hash(hexToBytes(test.msg));
     const { sig } = test;
     if (test.result === 'valid' || test.result === 'acceptable') {
       const verified = CURVE.verify(hexToBytes(sig), m, pubR, {
@@ -388,13 +388,13 @@ function runWycheproof(name, CURVE, group, index) {
 
 describe('wycheproof ECDSA', () => {
   should('generic', () => {
-    for (const group of ecdsa.testGroups) {
+    for (const group of vecdsa.testGroups) {
       // Tested in secp256k1.test.js
       let CURVE = NIST[group.key.curve];
       if (!CURVE) continue;
       const hasLowS = group.key.curve === 'secp256k1';
       if (group.key.curve === 'secp224r1' && group.sha !== 'SHA-224') {
-        if (group.sha === 'SHA-256') CURVE = CURVE._createWithNewHash(sha256);
+        if (group.sha === 'SHA-256') CURVE = ecdsa(CURVE.Point, sha256);
       }
       const uncomp = hexToBytes(group.key.uncompressed);
       const pubKey = CURVE.Point.fromBytes(uncomp);
@@ -407,7 +407,7 @@ describe('wycheproof ECDSA', () => {
         // These old Wycheproof vectors which still accept missing zero, new one is not.
         if (test.flags.includes('MissingZero') && test.result === 'acceptable')
           test.result = 'invalid';
-        const m = CURVE.CURVE.hash(hexToBytes(test.msg));
+        const m = CURVE.hash(hexToBytes(test.msg));
         if (test.result === 'valid' || test.result === 'acceptable') {
           const verified = CURVE.verify(hexToBytes(test.sig), m, pubKey.toBytes(), {
             lowS: hasLowS,
@@ -436,7 +436,7 @@ describe('wycheproof ECDSA', () => {
     describe(name, () => {
       for (const hName in hashes) {
         const { hash, tests } = hashes[hName];
-        const CURVE = curve._createWithNewHash(hash);
+        const CURVE = ecdsa(curve.Point, hash);
         should(`${name}/${hName}`, () => {
           for (let i = 0; i < tests.length; i++) {
             const groups = tests[i].testGroups;
@@ -465,7 +465,7 @@ describe('RFC6979', () => {
       eql(pubPoint.x, hexToBigint(v.Ux));
       eql(pubPoint.y, hexToBigint(v.Uy));
       for (const c of v.cases) {
-        const h = curve.CURVE.hash(utf8ToBytes(c.message));
+        const h = curve.hash(utf8ToBytes(c.message));
         const opts = { lowS: hasLowS, format: 'der' };
         const sig = curve.sign(h, priv, opts);
         const sigObj = curve.Signature.fromBytes(sig, 'der');

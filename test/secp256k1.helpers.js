@@ -5,6 +5,6 @@ export { bytesToNumberBE, numberToBytesBE } from '../abstract/utils.js';
 export { schnorr } from '../secp256k1.js';
 export const sigFromDER = (der) => _secp.Signature.fromHex(der, 'der');
 export const sigToDER = (sig) => _secp.Signature.fromBytes(sig).toHex('der');
-export const selectHash = (secp) => secp.CURVE.hash;
+export const selectHash = (secp) => secp.hash;
 export const normVerifySig = (s) => _secp.Signature.fromHex(s, 'der');
 export const secp = _secp;

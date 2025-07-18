@@ -4,6 +4,7 @@ import { sha3_224, sha3_256, sha3_384, sha3_512 } from '@noble/hashes/sha3.js';
 import { hexToBytes } from '@noble/hashes/utils.js';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql } from 'node:assert';
+import { ecdsa } from '../abstract/weierstrass.js';
 import { ed25519, ed25519ctx, ed25519ph } from '../ed25519.js';
 import { ed448, ed448ph } from '../ed448.js';
 import { p256, p384, p521 } from '../nist.js';
@@ -118,7 +119,7 @@ describe('ACVP', () => {
       const curve = CURVES[info.ip.curve];
       if (!curve) continue;
       const hash = HASHES[info.ip.hashAlg];
-      const curveWithHash = curve._createWithNewHash(hash);
+      const curveWithHash = ecdsa(curve.Point, hash);
       for (const t of tests) {
         if (t.ip.randomValue) continue; // mesage randomization
         const sk = hexToBytes(info.ip.d);
@@ -148,7 +149,7 @@ describe('ACVP', () => {
       if (info.ip.hashAlg.startsWith('SHAKE-')) continue;
       // console.log(info.ip.hashAlg);
       const hash = HASHES[info.ip.hashAlg];
-      const curveWithHash = curve._createWithNewHash(hash);
+      const curveWithHash = ecdsa(curve.Point, hash);
       for (const t of tests) {
         if (t.ip.randomValue) continue; // mesage randomization
         const opts = { lowS: false, prehash: true };
