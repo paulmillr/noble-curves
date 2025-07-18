@@ -28,6 +28,7 @@ import {
   wNAF,
   type AffinePoint,
   type CurveInfo,
+  type CurveLengths,
   type CurvePoint,
   type CurvePointCons,
 } from './curve.ts';
@@ -163,6 +164,7 @@ export interface EdDSA {
     };
   };
   info: CurveInfo;
+  lengths: CurveLengths;
 }
 
 function isEdValidXY(Fp: IField<bigint>, CURVE: EdwardsOpts, x: bigint, y: bigint): boolean {
@@ -783,6 +785,7 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
     verify,
     utils,
     Point,
-    info: { type: 'edwards' as const, lengths },
+    info: { type: 'edwards' as const },
+    lengths,
   });
 }

@@ -72,13 +72,13 @@ export type GetPointConsPoint<PC> = PC extends CurvePointCons<any, infer P> ? P 
 export interface CurveInfo {
   type: 'weierstrass' | 'edwards' | 'montgomery';
   publicKeyHasPrefix?: boolean;
-  lengths: {
-    secret: number;
-    public: number;
-    publicUncompressed?: number;
-    signature: number;
-    seed: number;
-  };
+}
+export interface CurveLengths {
+  secret?: number;
+  public?: number;
+  publicUncompressed?: number;
+  signature?: number;
+  seed?: number;
 }
 
 export type Mapper<T> = (i: T[]) => T[];

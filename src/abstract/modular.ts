@@ -601,7 +601,7 @@ export function getMinHashLength(fieldOrder: bigint): number {
  * FIPS 186-5, A.2 https://csrc.nist.gov/publications/detail/fips/186/5/final
  * RFC 9380, https://www.rfc-editor.org/rfc/rfc9380#section-5
  * @param hash hash output from SHA3 or a similar function
- * @param groupOrder size of subgroup - (e.g. secp256k1.CURVE.n)
+ * @param groupOrder size of subgroup - (e.g. secp256k1.Point.Fn.ORDER)
  * @param isLE interpret hash bytes as LE num
  * @returns valid private scalar
  */

@@ -8,7 +8,7 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha256 } from '@noble/hashes/sha2.js';
 import { randomBytes } from '@noble/hashes/utils.js';
-import type { CurveInfo } from './abstract/curve.ts';
+import type { CurveLengths } from './abstract/curve.ts';
 import { createHasher, type H2CHasher, isogenyMap } from './abstract/hash-to-curve.ts';
 import { Field, mapHashToField, mod, pow2 } from './abstract/modular.ts';
 import {
@@ -229,7 +229,8 @@ export type SecpSchnorr = {
     lift_x: typeof lift_x;
     taggedHash: typeof taggedHash;
   };
-  info: { type: 'weierstrass'; publicKeyHasPrefix: false; lengths: CurveInfo['lengths'] };
+  info: { type: 'weierstrass'; publicKeyHasPrefix: false };
+  lengths: CurveLengths;
 };
 /**
  * Schnorr signatures over secp256k1.
@@ -269,12 +270,12 @@ export const schnorr: SecpSchnorr = /* @__PURE__ */ (() => {
     info: {
       type: 'weierstrass',
       publicKeyHasPrefix: false,
-      lengths: {
-        secret: size,
-        public: size,
-        signature: size * 2,
-        seed: seedLength,
-      },
+    },
+    lengths: {
+      secret: size,
+      public: size,
+      signature: size * 2,
+      seed: seedLength,
     },
   };
 })();
