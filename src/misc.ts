@@ -7,7 +7,7 @@
 import { blake256 } from '@noble/hashes/blake1.js';
 import { blake2s } from '@noble/hashes/blake2.js';
 import { sha256, sha384, sha512 } from '@noble/hashes/sha2.js';
-import { concatBytes, utf8ToBytes } from '@noble/hashes/utils.js';
+import { concatBytes } from '@noble/hashes/utils.js';
 import {
   eddsa,
   edwards,
@@ -18,6 +18,7 @@ import {
 import { ecdsa, weierstrass, type ECDSA, type WeierstrassOpts } from './abstract/weierstrass.ts';
 import { bls12_381_Fr } from './bls12-381.ts';
 import { bn254_Fr } from './bn254.ts';
+import { asciiToBytes } from './utils.ts';
 
 // Jubjub curves have 𝔽p over scalar fields of other curves. They are friendly to ZK proofs.
 // jubjub Fp = bls n. babyjubjub Fp = bn254 n.
@@ -46,7 +47,7 @@ const babyjubjub_CURVE: EdwardsOpts = {
 /** Curve over scalar field of bn254. babyjubjub Fp = bn254 n */
 export const babyjubjub: EdDSA = /* @__PURE__ */ eddsa(edwards(babyjubjub_CURVE), blake256);
 
-const jubjub_gh_first_block = utf8ToBytes(
+const jubjub_gh_first_block = asciiToBytes(
   '096b36a5804bfacef1691e173c366a47ff5ba84a44f26ddd7e8d9f79d5b42df0'
 );
 

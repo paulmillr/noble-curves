@@ -23,10 +23,11 @@ import {
   type WeierstrassPointCons,
 } from './abstract/weierstrass.ts';
 import {
+  abytes,
   aInRange,
+  asciiToBytes,
   bytesToNumberBE,
   concatBytes,
-  ensureBytes,
   inRange,
   numberToBytesBE,
 } from './utils.ts';
@@ -114,7 +115,7 @@ const TAGGED_HASH_PREFIXES: { [tag: string]: Uint8Array } = {};
 function taggedHash(tag: string, ...messages: Uint8Array[]): Uint8Array {
   let tagP = TAGGED_HASH_PREFIXES[tag];
   if (tagP === undefined) {
-    const tagH = sha256(Uint8Array.from(tag, (c) => c.charCodeAt(0)));
+    const tagH = sha256(asciiToBytes(tag));
     tagP = concatBytes(tagH, tagH);
     TAGGED_HASH_PREFIXES[tag] = tagP;
   }
@@ -173,9 +174,9 @@ function schnorrSign(
   secretKey: Uint8Array,
   auxRand: Uint8Array = randomBytes(32)
 ): Uint8Array {
-  const m = ensureBytes('message', message);
+  const m = abytes(message, undefined, 'message');
   const { bytes: px, scalar: d } = schnorrGetExtPubKey(secretKey); // checks for isWithinCurveOrder
-  const a = ensureBytes('auxRand', auxRand, 32); // Auxiliary random data a: a 32-byte array
+  const a = abytes(auxRand, 32, 'auxRand'); // Auxiliary random data a: a 32-byte array
   const t = numTo32b(d ^ num(taggedHash('BIP0340/aux', a))); // Let t be the byte-wise xor of bytes(d) and hash/aux(a)
   const rand = taggedHash('BIP0340/nonce', t, px, m); // Let rand = hash/nonce(t || bytes(P) || m)
   const k_ = modN(num(rand)); // Let k' = int(rand) mod n
@@ -196,9 +197,9 @@ function schnorrSign(
  * Will swallow errors & return false except for initial type validation of arguments.
  */
 function schnorrVerify(signature: Uint8Array, message: Uint8Array, publicKey: Uint8Array): boolean {
-  const sig = ensureBytes('signature', signature, 64);
-  const m = ensureBytes('message', message);
-  const pub = ensureBytes('publicKey', publicKey, 32);
+  const sig = abytes(signature, 64, 'signature');
+  const m = abytes(message, undefined, 'message');
+  const pub = abytes(publicKey, 32, 'publicKey');
   try {
     const P = lift_x(num(pub)); // P = lift_x(int(pk)); fail if that fails
     const r = num(sig.subarray(0, 32)); // Let r = int(sig[0:32]); fail if r ≥ p.

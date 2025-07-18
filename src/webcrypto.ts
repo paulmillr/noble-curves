@@ -37,7 +37,7 @@ There seems no reasonable way to check for availability, other than actually cal
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { concatBytes, hexToBytes } from './utils.ts';
+import { asciiToBytes, concatBytes, hexToBytes } from './utils.ts';
 
 function getWebcryptoSubtle(): any {
   const subtle: any = globalThis?.crypto?.subtle;
@@ -132,7 +132,7 @@ function createKeyUtils(algo: Algo, derive: boolean, keyLen: number, pcks8header
         const base64 = jwk.d.replace(/-/g, '+').replace(/_/g, '/'); // base64url
         const pad = base64.length % 4 ? '='.repeat(4 - (base64.length % 4)) : ''; // add padding
         const binary = atob(base64 + pad);
-        const raw = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+        const raw = asciiToBytes(binary);
         // Pad key to key len because Bun strips leading zero for P-521 only
         const res = new Uint8Array(keyLen);
         res.set(raw, keyLen - raw.length);

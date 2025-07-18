@@ -7,9 +7,10 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import {
   _validateObject,
+  abytes,
   aInRange,
   bytesToNumberLE,
-  ensureBytes,
+  copyBytes,
   numberToBytesLE,
   randomBytes,
 } from '../utils.ts';
@@ -82,7 +83,7 @@ export function montgomery(curveDef: CurveType): MontgomeryECDH {
     return numberToBytesLE(modP(u), fieldLen);
   }
   function decodeU(u: Uint8Array): bigint {
-    const _u = ensureBytes('u coordinate', u, fieldLen);
+    const _u = copyBytes(abytes(u, fieldLen, 'uCoordinate'));
     // RFC: When receiving such an array, implementations of X25519
     // (but not X448) MUST mask the most significant bit in the final byte.
     if (is25519) _u[31] &= 127; // 0b0111_1111
@@ -93,7 +94,7 @@ export function montgomery(curveDef: CurveType): MontgomeryECDH {
     return modP(bytesToNumberLE(_u));
   }
   function decodeScalar(scalar: Uint8Array): bigint {
-    return bytesToNumberLE(adjustScalarBytes(ensureBytes('scalar', scalar, fieldLen)));
+    return bytesToNumberLE(adjustScalarBytes(copyBytes(abytes(scalar, fieldLen, 'scalar'))));
   }
   function scalarMult(scalar: Uint8Array, u: Uint8Array): Uint8Array {
     const pu = montgomeryLadder(decodeU(u), decodeScalar(scalar));

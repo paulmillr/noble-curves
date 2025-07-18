@@ -38,7 +38,6 @@ import {
   bytesToNumberBE,
   concatBytes,
   createHmacDrbg,
-  ensureBytes,
   hexToBytes,
   isBytes,
   memoized,
@@ -352,10 +351,10 @@ export const DER: IDER = {
       return bytesToNumberBE(data);
     },
   },
-  toSig(hex: Uint8Array): { r: bigint; s: bigint } {
+  toSig(bytes: Uint8Array): { r: bigint; s: bigint } {
     // parse DER signature
     const { Err: E, _int: int, _tlv: tlv } = DER;
-    const data = ensureBytes('signature', hex);
+    const data = abytes(bytes, undefined, 'signature');
     const { v: seqBytes, l: seqLeftBytes } = tlv.decode(0x30, data);
     if (seqLeftBytes.length) throw new E('invalid signature: left bytes after parsing');
     const { v: rBytes, l: rLeftBytes } = tlv.decode(0x02, seqBytes);
@@ -1087,7 +1086,7 @@ export function ecdh(
   function isProbPub(item: Uint8Array): boolean | undefined {
     if (!isBytes(item)) return undefined;
     if (('_lengths' in Fn && Fn._lengths) || lengths.secret === lengths.public) return undefined;
-    const l = ensureBytes('key', item).length;
+    const l = abytes(item, undefined, 'key').length;
     return l === lengths.public || l === lengths.publicUncompressed;
   }
 
@@ -1254,7 +1253,7 @@ export function ecdsa(
       const x = Fp.toBytes(radj);
       const R = Point.fromBytes(concatBytes(pprefix((rec & 1) === 0), x));
       const ir = Fn.inv(radj); // r^-1
-      const h = bits2int_modN(ensureBytes('msgHash', msgHash)); // Truncate hash
+      const h = bits2int_modN(abytes(msgHash, undefined, 'msgHash')); // Truncate hash
       const u1 = Fn.create(-h * ir); // -hr^-1
       const u2 = Fn.create(s * ir); // sr^-1
       // (sr^-1)R-(hr^-1)G = -(hr^-1)G + (sr^-1). unsafe is fine: there is no private data.
@@ -1328,9 +1327,9 @@ export function ecdsa(
   function prepSig(msgHash: Uint8Array, privateKey: Uint8Array, opts = defaultSigOpts) {
     let { lowS, prehash, extraEntropy: ent } = opts; // generates low-s sigs by default
     if (lowS == null) lowS = true; // RFC6979 3.2: we skip step A, because we already provide hash
-    msgHash = ensureBytes('msgHash', msgHash);
+    msgHash = abytes(msgHash, undefined, 'msgHash');
     validateSigVerOpts(opts);
-    if (prehash) msgHash = ensureBytes('prehashed msgHash', hash(msgHash));
+    if (prehash) msgHash = abytes(hash(msgHash), undefined, 'prehashed msgHash');
 
     // We can't later call bits2octets, since nested bits2int is broken for curves
     // with fnBits % 8 !== 0. Because of that, we unwrap it here as int2octets call.
@@ -1343,7 +1342,7 @@ export function ecdsa(
     if (ent != null && ent !== false) {
       // K = HMAC_K(V || 0x00 || int2octets(x) || bits2octets(h1) || k')
       const e = ent === true ? randomBytes_(lengths.secret) : ent; // gen random bytes OR pass as-is
-      seedArgs.push(ensureBytes('extraEntropy', e)); // check for being bytes
+      seedArgs.push(abytes(e, undefined, 'extraEntropy')); // check for being bytes
     }
     const seed = concatBytes(...seedArgs); // Step D of RFC6979 3.2
     const m = h1int; // NOTE: no need to call bits2int second time here, it is inside truncateHash!
@@ -1420,8 +1419,8 @@ export function ecdsa(
     opts: VerOpts = defaultVerOpts
   ): boolean {
     const sg = signature;
-    msgHash = ensureBytes('msgHash', msgHash);
-    publicKey = ensureBytes('publicKey', publicKey);
+    msgHash = abytes(msgHash, undefined, 'msgHash');
+    publicKey = abytes(publicKey, undefined, 'publicKey');
 
     // Verify opts
     validateSigVerOpts(opts);

@@ -7,7 +7,7 @@
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha512 } from '@noble/hashes/sha2.js';
-import { abytes, concatBytes, hexToBytes, utf8ToBytes } from '@noble/hashes/utils.js';
+import { abytes, concatBytes, hexToBytes } from '@noble/hashes/utils.js';
 import { type AffinePoint } from './abstract/curve.ts';
 import {
   eddsa,
@@ -36,7 +36,7 @@ import {
 } from './abstract/modular.ts';
 import { montgomery, type MontgomeryECDH } from './abstract/montgomery.ts';
 import { createORPF, type OPRF } from './abstract/oprf.ts';
-import { bytesToNumberLE, equalBytes, numberToBytesLE } from './utils.ts';
+import { asciiToBytes, bytesToNumberLE, equalBytes, numberToBytesLE } from './utils.ts';
 
 // prettier-ignore
 const _0n = /* @__PURE__ */ BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3);
@@ -122,7 +122,7 @@ const ed25519_eddsa_opts = { adjustScalarBytes };
 function ed25519_domain(data: Uint8Array, ctx: Uint8Array, phflag: boolean) {
   if (ctx.length > 255) throw new Error('Context is too big');
   return concatBytes(
-    utf8ToBytes('SigEd25519 no Ed25519 collisions'),
+    asciiToBytes('SigEd25519 no Ed25519 collisions'),
     new Uint8Array([phflag ? 1 : 0, ctx.length]),
     ctx,
     data

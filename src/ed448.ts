@@ -8,13 +8,7 @@
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { shake256 } from '@noble/hashes/sha3.js';
-import {
-  abytes,
-  concatBytes,
-  hexToBytes,
-  utf8ToBytes,
-  createHasher as wrapConstructor,
-} from '@noble/hashes/utils.js';
+import { concatBytes, hexToBytes, createHasher as wrapConstructor } from '@noble/hashes/utils.js';
 import type { AffinePoint } from './abstract/curve.ts';
 import {
   eddsa,
@@ -36,7 +30,7 @@ import {
 import { Field, FpInvertBatch, isNegativeLE, mod, pow2, type IField } from './abstract/modular.ts';
 import { montgomery, type MontgomeryECDH } from './abstract/montgomery.ts';
 import { createORPF, type OPRF } from './abstract/oprf.ts';
-import { bytesToNumberLE, equalBytes, numberToBytesLE } from './utils.ts';
+import { abytes, asciiToBytes, bytesToNumberLE, equalBytes, numberToBytesLE } from './utils.ts';
 
 // edwards448 curve
 // a = 1n
@@ -150,7 +144,7 @@ const Fn = /* @__PURE__ */ (() => Field(ed448_CURVE.n, { BITS: 448, isLE: true }
 function dom4(data: Uint8Array, ctx: Uint8Array, phflag: boolean) {
   if (ctx.length > 255) throw new Error('context must be smaller than 255, got: ' + ctx.length);
   return concatBytes(
-    utf8ToBytes('SigEd448'),
+    asciiToBytes('SigEd448'),
     new Uint8Array([phflag ? 1 : 0, ctx.length]),
     ctx,
     data
@@ -396,11 +390,10 @@ class _DecafPoint extends PrimeEdwardsPoint<_DecafPoint> {
   }
 
   static fromBytes(bytes: Uint8Array): _DecafPoint {
-    abytes(bytes, 56);
     const { d } = ed448_CURVE;
     const P = Fp.ORDER;
     const mod = (n: bigint) => Fp.create(n);
-    const s = bytes448ToNumberLE(bytes);
+    const s = bytes448ToNumberLE(abytes(bytes, 56));
 
     // 1. Check that s_bytes is the canonical encoding of a field element, or else abort.
     // 2. Check that s is non-negative, or else abort

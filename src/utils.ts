@@ -4,14 +4,12 @@
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import {
-  abytes as abytes_,
   bytesToHex as bytesToHex_,
   concatBytes as concatBytes_,
   hexToBytes as hexToBytes_,
   isBytes as isBytes_,
 } from '@noble/hashes/utils.js';
 export {
-  abytes,
   anumber,
   bytesToHex,
   bytesToUtf8,
@@ -19,7 +17,7 @@ export {
   hexToBytes,
   isBytes,
   randomBytes,
-  utf8ToBytes
+  utf8ToBytes,
 } from '@noble/hashes/utils.js';
 const _0n = /* @__PURE__ */ BigInt(0);
 const _1n = /* @__PURE__ */ BigInt(1);
@@ -50,6 +48,26 @@ export function abool(title: string, value: boolean): void {
   if (typeof value !== 'boolean') throw new Error(title + ' boolean expected, got ' + value);
 }
 
+// TODO: add, re-export from noble-hashes
+/** Asserts something is Uint8Array. */
+export function abytes(
+  b: Uint8Array | undefined,
+  expectedLength?: number,
+  message: string = ''
+): Uint8Array {
+  const notbytes = !isBytes_(b);
+  const length = b?.length;
+  const diffLen = expectedLength !== undefined && length !== expectedLength;
+  if (notbytes || diffLen) {
+    const prefix = message && '"' + message + '" ';
+    const suffix = notbytes
+      ? `, got type=${typeof b}`
+      : ` of length ${expectedLength}, got length=${length}`;
+    throw new Error(prefix + 'expected Uint8Array' + suffix);
+  }
+  return b;
+}
+
 // Used in weierstrass, der
 export function numberToHexUnpadded(num: number | bigint): string {
   const hex = num.toString(16);
@@ -66,8 +84,8 @@ export function bytesToNumberBE(bytes: Uint8Array): bigint {
   return hexToNumber(bytesToHex_(bytes));
 }
 export function bytesToNumberLE(bytes: Uint8Array): bigint {
-  abytes_(bytes);
-  return hexToNumber(bytesToHex_(Uint8Array.from(bytes).reverse()));
+  abytes(bytes);
+  return hexToNumber(bytesToHex_(copyBytes(bytes).reverse()));
 }
 
 export function numberToBytesBE(n: number | bigint, len: number): Uint8Array {
@@ -81,36 +99,24 @@ export function numberToVarBytesBE(n: number | bigint): Uint8Array {
   return hexToBytes_(numberToHexUnpadded(n));
 }
 
-/**
- * Takes hex string or Uint8Array, converts to Uint8Array.
- * Validates output length.
- * Will throw error for other types.
- * @param title descriptive title for an error e.g. 'secret key'
- * @param hex hex string or Uint8Array
- * @param expectedLength optional, will compare to result array's length
- * @returns
- */
-export function ensureBytes(title: string, bytes: Uint8Array, expectedLength?: number): Uint8Array {
-  let res: Uint8Array;
-  if (isBytes_(bytes)) {
-    // Uint8Array.from() instead of hash.slice() because node.js Buffer
-    // is instance of Uint8Array, and its slice() creates **mutable** copy
-    res = Uint8Array.from(bytes);
-  } else {
-    throw new Error(title + ' must be Uint8Array');
-  }
-  const len = res.length;
-  if (typeof expectedLength === 'number' && len !== expectedLength)
-    throw new Error(title + ' of length ' + expectedLength + ' expected, got ' + len);
-  return res;
-}
-
 // Compares 2 u8a-s in kinda constant time
 export function equalBytes(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) return false;
   let diff = 0;
   for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
   return diff === 0;
+}
+
+/**
+ * Copies Uint8Array. We can't use u8a.slice(), because u8a can be Buffer,
+ * and Buffer#slice creates mutable copy. Never use Buffers!
+ */
+export function copyBytes(bytes: Uint8Array): Uint8Array {
+  return Uint8Array.from(bytes);
+}
+
+export function asciiToBytes(ascii: string): Uint8Array {
+  return Uint8Array.from(ascii, (c) => c.charCodeAt(0));
 }
 
 /**

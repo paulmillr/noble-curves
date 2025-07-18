@@ -51,12 +51,12 @@ Flow:
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import {
   abytes,
+  asciiToBytes,
   bytesToNumberBE,
   bytesToNumberLE,
   concatBytes,
   numberToBytesBE,
   randomBytes,
-  utf8ToBytes,
   validateObject,
 } from '../utils.ts';
 import {
@@ -348,7 +348,7 @@ export function createORPF<
 
   const hashToGroup = (msg: Uint8Array, ctx: Uint8Array) =>
     opts.hashToGroup(msg, {
-      DST: concatBytes(utf8ToBytes('HashToGroup-'), ctx),
+      DST: concatBytes(asciiToBytes('HashToGroup-'), ctx),
     }) as P;
   const hashToScalarPrefixed = (msg: Uint8Array, ctx: Uint8Array) =>
     opts.hashToScalar(msg, { DST: concatBytes(_DST_scalar, ctx) });
@@ -362,7 +362,7 @@ export function createORPF<
   const msm = (points: P[], scalars: bigint[]) => pippenger(Point, points, scalars);
 
   const getCtx = (mode: number) =>
-    concatBytes(utf8ToBytes('OPRFV1-'), new Uint8Array([mode]), utf8ToBytes('-' + name));
+    concatBytes(asciiToBytes('OPRFV1-'), new Uint8Array([mode]), asciiToBytes('-' + name));
   const ctxOPRF = getCtx(0x00);
   const ctxVOPRF = getCtx(0x01);
   const ctxPOPRF = getCtx(0x02);
@@ -371,7 +371,7 @@ export function createORPF<
     const res = [];
     for (const a of args) {
       if (typeof a === 'number') res.push(numberToBytesBE(a, 2));
-      else if (typeof a === 'string') res.push(utf8ToBytes(a));
+      else if (typeof a === 'string') res.push(asciiToBytes(a));
       else {
         abytes(a);
         res.push(numberToBytesBE(a.length, 2), a);
@@ -384,7 +384,7 @@ export function createORPF<
 
   function getTranscripts(B: P, C: P[], D: P[], ctx: Bytes) {
     const Bm = B.toBytes();
-    const seed = hash(encode(Bm, concatBytes(utf8ToBytes('Seed-'), ctx)));
+    const seed = hash(encode(Bm, concatBytes(asciiToBytes('Seed-'), ctx)));
     const res = [];
     for (let i = 0; i < C.length; i++) {
       const Ci = C[i].toBytes();
@@ -443,7 +443,7 @@ export function createORPF<
   }
 
   function deriveKeyPair(ctx: Bytes, seed: Bytes, info: Bytes) {
-    const dst = concatBytes(utf8ToBytes('DeriveKeyPair'), ctx);
+    const dst = concatBytes(asciiToBytes('DeriveKeyPair'), ctx);
     const msg = concatBytes(seed, encode(info), new Uint8Array([0]));
     for (let counter = 0; counter <= 255; counter++) {
       msg[msg.length - 1] = counter;

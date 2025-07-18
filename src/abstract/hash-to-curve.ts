@@ -9,11 +9,11 @@ import type { CHash } from '../utils.ts';
 import {
   _validateObject,
   abytes,
+  asciiToBytes,
   bytesToNumberBE,
   concatBytes,
   isBytes,
   isHash,
-  utf8ToBytes,
 } from '../utils.ts';
 import type {
   AffinePoint,
@@ -77,7 +77,7 @@ function anum(item: unknown): void {
 
 function normDST(DST: UnicodeOrBytes): Uint8Array {
   if (!isBytes(DST) && typeof DST !== 'string') throw new Error('DST must be Uint8Array or string');
-  return typeof DST === 'string' ? utf8ToBytes(DST) : DST;
+  return typeof DST === 'string' ? asciiToBytes(DST) : DST;
 }
 
 /**
@@ -94,7 +94,7 @@ export function expand_message_xmd(
   anum(lenInBytes);
   DST = normDST(DST);
   // https://www.rfc-editor.org/rfc/rfc9380#section-5.3.3
-  if (DST.length > 255) DST = H(concatBytes(utf8ToBytes('H2C-OVERSIZE-DST-'), DST));
+  if (DST.length > 255) DST = H(concatBytes(asciiToBytes('H2C-OVERSIZE-DST-'), DST));
   const { outputLen: b_in_bytes, blockLen: r_in_bytes } = H;
   const ell = Math.ceil(lenInBytes / b_in_bytes);
   if (lenInBytes > 65535 || ell > 255) throw new Error('expand_message_xmd: invalid lenInBytes');
@@ -133,7 +133,7 @@ export function expand_message_xof(
   // DST = H('H2C-OVERSIZE-DST-' || a_very_long_DST, Math.ceil((lenInBytes * k) / 8));
   if (DST.length > 255) {
     const dkLen = Math.ceil((2 * k) / 8);
-    DST = H.create({ dkLen }).update(utf8ToBytes('H2C-OVERSIZE-DST-')).update(DST).digest();
+    DST = H.create({ dkLen }).update(asciiToBytes('H2C-OVERSIZE-DST-')).update(DST).digest();
   }
   if (lenInBytes > 65535 || DST.length > 255)
     throw new Error('expand_message_xof: invalid lenInBytes');
@@ -242,7 +242,7 @@ export type H2CHasher<F, P extends CurvePoint<F, P>> = H2CHasherBase<F, P> & {
   defaults: H2COpts & { encodeDST?: UnicodeOrBytes };
 };
 
-export const _DST_scalar: Uint8Array = utf8ToBytes('HashToScalar-');
+export const _DST_scalar: Uint8Array = asciiToBytes('HashToScalar-');
 
 /** Creates hash-to-curve methods from EC Point and mapToCurve function. See {@link H2CHasher}. */
 export function createHasher<

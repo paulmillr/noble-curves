@@ -13,7 +13,7 @@ import {
   bytesToHex,
   bytesToNumberLE,
   concatBytes,
-  ensureBytes,
+  copyBytes,
   hexToBytes,
   memoized,
   notImplemented,
@@ -417,10 +417,10 @@ export function edwards(CURVE: EdwardsOpts, curveOpts: EdwardsExtraOpts = {}): E
     }
 
     static fromBytes(bytes: Uint8Array, zip215 = false): Point {
-      abytes(bytes);
-      const { a, d } = CURVE;
       const len = Fp.BYTES;
-      bytes = ensureBytes('pointHex', bytes, len); // copy hex to a new array
+      abytes(bytes, len, 'point');
+      const { a, d } = CURVE;
+      bytes = copyBytes(bytes); // copy hex to a new array
       abool('zip215', zip215);
       const normed = bytes.slice(); // copy again, we'll manipulate it
       const lastByte = bytes[len - 1]; // select last byte
@@ -622,10 +622,10 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
   // Get the hashed private scalar per RFC8032 5.1.5
   function getPrivateScalar(key: Uint8Array) {
     const len = Fp.BYTES;
-    key = ensureBytes('private key', key, len);
+    abytes(key, len, 'secretKey');
     // Hash private key with curve's hash function to produce uniformingly random input
     // Check byte lengths: ensure(64, h(ensure(32, key)))
-    const hashed = ensureBytes('hashed private key', cHash(key), 2 * len);
+    const hashed = abytes(cHash(key), 2 * len, 'hashedSecretKey');
     const head = adjustScalarBytes(hashed.slice(0, len)); // clear first half bits, produce FE
     const prefix = hashed.slice(len, 2 * len); // second half is called key prefix (5.1.6)
     const scalar = modN_LE(head); // The actual private scalar
@@ -648,7 +648,7 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
   // int('LE', SHA512(dom2(F, C) || msgs)) mod N
   function hashDomainToScalar(context: Uint8Array = Uint8Array.of(), ...msgs: Uint8Array[]) {
     const msg = concatBytes(...msgs);
-    return modN_LE(cHash(domain(msg, ensureBytes('context', context), !!prehash)));
+    return modN_LE(cHash(domain(msg, abytes(context, undefined, 'context'), !!prehash)));
   }
 
   /** Signs message with privateKey. RFC8032 5.1.6 */
@@ -657,7 +657,7 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
     secretKey: Uint8Array,
     options: { context?: Uint8Array } = {}
   ): Uint8Array {
-    msg = ensureBytes('message', msg);
+    msg = abytes(msg, undefined, 'message');
     if (prehash) msg = prehash(msg); // for ed25519ph etc.
     const { prefix, scalar, pointBytes } = getExtendedPublicKey(secretKey);
     const r = hashDomainToScalar(options.context, prefix, msg); // r = dom2(F, C) || prefix || PH(M)
@@ -667,7 +667,7 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
     aInRange('signature.s', s, _0n, CURVE_ORDER); // 0 <= s < l
     const L = Fp.BYTES;
     const res = concatBytes(R, numberToBytesLE(s, L));
-    return ensureBytes('result', res, L * 2); // 64-byte signature
+    return abytes(res, L * 2, 'result'); // 64-byte signature
   }
 
   // verification rule is either zip215 or rfc8032 / nist186-5. Consult fromHex:
@@ -685,9 +685,9 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
   ): boolean {
     const { context, zip215 } = options;
     const len = Fp.BYTES; // Verifies EdDSA signature against message and public key. RFC8032 5.1.7.
-    sig = ensureBytes('signature', sig, 2 * len); // An extended group equation is checked.
-    msg = ensureBytes('message', msg);
-    publicKey = ensureBytes('publicKey', publicKey, len);
+    sig = abytes(sig, 2 * len, 'signature'); // An extended group equation is checked.
+    msg = abytes(msg, undefined, 'message');
+    publicKey = abytes(publicKey, len, 'publicKey');
     if (zip215 !== undefined) abool('zip215', zip215);
     if (prehash) msg = prehash(msg); // for ed25519ph, etc
 

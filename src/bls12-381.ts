@@ -88,7 +88,7 @@ import {
   bytesToHex,
   bytesToNumberBE,
   concatBytes,
-  ensureBytes,
+  copyBytes,
   hexToBytes,
   numberToBytesBE,
   randomBytes,
@@ -277,8 +277,9 @@ const bls12_381_CURVE_G2 = {
 const COMPZERO = setMask(Fp.toBytes(_0n), { infinity: true, compressed: true });
 
 function parseMask(bytes: Uint8Array) {
-  // Copy, so we can remove mask data. It will be removed also later, when Fp.create will call modulo.
-  bytes = bytes.slice();
+  // Copy, so we can remove mask data.
+  // It will be removed also later, when Fp.create will call modulo.
+  bytes = copyBytes(bytes);
   const mask = bytes[0] & 0b1110_0000;
   const compressed = !!((mask >> 7) & 1); // compression bit (0b1000_0000)
   const infinity = !!((mask >> 6) & 1); // point at infinity bit (0b0100_0000)
@@ -358,8 +359,8 @@ function pointG1FromBytes(bytes: Uint8Array): AffinePoint<Fp> {
   }
 }
 
-function signatureG1FromBytes(hex: Uint8Array): WeierstrassPoint<Fp> {
-  const { infinity, sort, value } = parseMask(ensureBytes('signatureHex', hex, 48));
+function signatureG1FromBytes(bytes: Uint8Array): WeierstrassPoint<Fp> {
+  const { infinity, sort, value } = parseMask(abytes(bytes, 48, 'signature'));
   const P = Fp.ORDER;
   const Point = bls12_381.G1.Point;
   const compressedValue = bytesToNumberBE(value);
@@ -464,10 +465,10 @@ function pointG2FromBytes(bytes: Uint8Array): AffinePoint<Fp2> {
   }
 }
 
-function signatureG2FromBytes(hex: Uint8Array) {
+function signatureG2FromBytes(bytes: Uint8Array) {
   const { ORDER: P } = Fp;
   // TODO: Optimize, it's very slow because of sqrt.
-  const { infinity, sort, value } = parseMask(ensureBytes('signatureHex', hex));
+  const { infinity, sort, value } = parseMask(abytes(bytes));
   const Point = bls12_381.G2.Point;
   const half = value.length / 2;
   if (half !== 48 && half !== 96)
@@ -499,8 +500,7 @@ function signatureG2FromBytes(hex: Uint8Array) {
 const signatureCoders = {
   ShortSignature: {
     fromBytes(bytes: Uint8Array) {
-      abytes(bytes);
-      return signatureG1FromBytes(bytes);
+      return signatureG1FromBytes(abytes(bytes));
     },
     fromHex(hex: string): WeierstrassPoint<Fp> {
       return signatureG1FromBytes(hexToBytes(hex));
@@ -517,8 +517,7 @@ const signatureCoders = {
   },
   LongSignature: {
     fromBytes(bytes: Uint8Array): WeierstrassPoint<Fp2> {
-      abytes(bytes);
-      return signatureG2FromBytes(bytes);
+      return signatureG2FromBytes(abytes(bytes));
     },
     fromHex(hex: string): WeierstrassPoint<Fp2> {
       return signatureG2FromBytes(hexToBytes(hex));
