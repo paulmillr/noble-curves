@@ -153,7 +153,7 @@ const Fp2fromBigTuple = (Fp: mod.IField<bigint>, tuple: BigintTuple | bigint[]) 
   return { c0: fps[0], c1: fps[1] };
 };
 
-class Fp2Creator implements mod.IField<Fp2> {
+class _Field2 implements mod.IField<Fp2> {
   readonly ORDER: bigint;
   readonly BITS: number;
   readonly BYTES: number;
@@ -369,7 +369,7 @@ class Fp2Creator implements mod.IField<Fp2> {
   }
 }
 
-class Fp6Creator implements Fp6Bls {
+class _Field6 implements Fp6Bls {
   readonly ORDER: bigint;
   readonly BITS: number;
   readonly BYTES: number;
@@ -592,7 +592,7 @@ class Fp6Creator implements Fp6Bls {
   }
 }
 
-class Fp12Creator implements Fp12Bls {
+class _Field12 implements Fp12Bls {
   readonly ORDER: bigint;
   readonly BITS: number;
   readonly BYTES: number;
@@ -839,6 +839,7 @@ class Fp12Creator implements Fp12Bls {
       }),
     }; // 2 * (T6 + c1c2) + T6
   }
+  // https://eprint.iacr.org/2009/565.pdf
   _cyclotomicExp(num: Fp12, n: bigint): Fp12 {
     let z = this.ONE;
     for (let i = this.X_LEN - 1; i >= 0; i--) {
@@ -855,10 +856,9 @@ export function tower12(opts: Tower12Opts): {
   Fp6: Fp6Bls;
   Fp12: Fp12Bls;
 } {
-  const { ORDER } = opts;
-  const Fp = mod.Field(ORDER);
-  const Fp2: Fp2Bls = new Fp2Creator(Fp, opts);
-  const Fp6: Fp6Bls = new Fp6Creator(Fp2);
-  const Fp12: Fp12Bls = new Fp12Creator(Fp6, opts);
+  const Fp = mod.Field(opts.ORDER);
+  const Fp2 = new _Field2(Fp, opts);
+  const Fp6 = new _Field6(Fp2);
+  const Fp12 = new _Field12(Fp6, opts);
   return { Fp, Fp2, Fp6, Fp12 };
 }
