@@ -93,7 +93,7 @@ const Fp2B = {
   c1: BigInt('266929791119991161246907387137283842545076965332900288569378510910307636690'),
 };
 
-const { Fp, Fp2, Fp6, Fp4Square, Fp12 } = tower12({
+const { Fp, Fp2, Fp6, Fp12 } = tower12({
   ORDER: bn254_G1_CURVE.p,
   FP2_NONRESIDUE: [BigInt(9), _1n],
   Fp2mulByB: (num) => Fp2.mul(num, Fp2B),
@@ -102,9 +102,9 @@ const { Fp, Fp2, Fp6, Fp4Square, Fp12 } = tower12({
   Fp12cyclotomicSquare: ({ c0, c1 }): Fp12 => {
     const { c0: c0c0, c1: c0c1, c2: c0c2 } = c0;
     const { c0: c1c0, c1: c1c1, c2: c1c2 } = c1;
-    const { first: t3, second: t4 } = Fp4Square(c0c0, c1c1);
-    const { first: t5, second: t6 } = Fp4Square(c1c0, c0c2);
-    const { first: t7, second: t8 } = Fp4Square(c0c1, c1c2);
+    const { first: t3, second: t4 } = Fp2.Fp4Square(c0c0, c1c1);
+    const { first: t5, second: t6 } = Fp2.Fp4Square(c1c0, c0c2);
+    const { first: t7, second: t8 } = Fp2.Fp4Square(c0c1, c1c2);
     let t9 = Fp2.mulByNonresidue(t8); // T8 * (u + 1)
     return {
       c0: Fp6.create({

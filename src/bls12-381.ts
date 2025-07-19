@@ -151,7 +151,7 @@ const bls12_381_CURVE_G1: WeierstrassOpts<bigint> = {
 // CURVE FIELDS
 // r = z⁴ − z² + 1; CURVE.n from other curves
 export const bls12_381_Fr: IField<bigint> = Field(bls12_381_CURVE_G1.n, { modFromBytes: true });
-const { Fp, Fp2, Fp6, Fp4Square, Fp12 } = tower12({
+const { Fp, Fp2, Fp6, Fp12 } = tower12({
   // Order of Fp
   ORDER: bls12_381_CURVE_G1.p,
   // Finite extension field over irreducible polynominal.
@@ -168,12 +168,12 @@ const { Fp, Fp2, Fp6, Fp4Square, Fp12 } = tower12({
   //   GΦₙ(p) = {α ∈ Fpⁿ : α^Φₙ(p) = 1}
   // The result of any pairing is in a cyclotomic subgroup
   // https://eprint.iacr.org/2009/565.pdf
-  Fp12cyclotomicSquare: ({ c0, c1 }): Fp12 => {
+  Fp12cyclotomicSquare: ({ c0, c1 }: Fp12): Fp12 => {
     const { c0: c0c0, c1: c0c1, c2: c0c2 } = c0;
     const { c0: c1c0, c1: c1c1, c2: c1c2 } = c1;
-    const { first: t3, second: t4 } = Fp4Square(c0c0, c1c1);
-    const { first: t5, second: t6 } = Fp4Square(c1c0, c0c2);
-    const { first: t7, second: t8 } = Fp4Square(c0c1, c1c2);
+    const { first: t3, second: t4 } = Fp2.Fp4Square(c0c0, c1c1);
+    const { first: t5, second: t6 } = Fp2.Fp4Square(c1c0, c0c2);
+    const { first: t7, second: t8 } = Fp2.Fp4Square(c0c1, c1c2);
     const t9 = Fp2.mulByNonresidue(t8); // T8 * (u + 1)
     return {
       c0: Fp6.create({
