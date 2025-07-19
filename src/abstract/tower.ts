@@ -10,7 +10,7 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { bitLen, concatBytes, notImplemented } from '../utils.ts';
+import { bitGet, bitLen, concatBytes, notImplemented } from '../utils.ts';
 import * as mod from './modular.ts';
 import type { WeierstrassPoint, WeierstrassPointCons } from './weierstrass.ts';
 
@@ -139,14 +139,11 @@ export function psiFrobenius(
 
 export type Tower12Opts = {
   ORDER: bigint;
+  X_LEN: number;
   NONRESIDUE?: Fp;
-  // Fp2
   FP2_NONRESIDUE: BigintTuple;
   Fp2sqrt?: (num: Fp2) => Fp2;
   Fp2mulByB: (num: Fp2) => Fp2;
-  // Fp12
-  Fp12cyclotomicSquare: (num: Fp12) => Fp12;
-  Fp12cyclotomicExp: (num: Fp12, n: bigint) => Fp12;
   Fp12finalExponentiate: (num: Fp12) => Fp12;
 };
 
@@ -606,8 +603,7 @@ class Fp12Creator implements Fp12Bls {
 
   readonly Fp6: Fp6Bls;
   readonly FROBENIUS_COEFFICIENTS: Fp2[];
-  readonly _cyclotomicSquare: Tower12Opts['Fp12cyclotomicSquare'];
-  readonly _cyclotomicExp: Tower12Opts['Fp12cyclotomicExp'];
+  readonly X_LEN: number;
   readonly finalExponentiate: Tower12Opts['Fp12finalExponentiate'];
 
   constructor(Fp6: Fp6Bls, opts: Tower12Opts) {
@@ -630,15 +626,7 @@ class Fp12Creator implements Fp12Bls {
       1,
       6
     )[0];
-
-    // A cyclotomic group is a subgroup of Fp^n defined by
-    //   GΦₙ(p) = {α ∈ Fpⁿ : α^Φₙ(p) = 1}
-    // The result of any pairing is in a cyclotomic subgroup
-    // https://eprint.iacr.org/2009/565.pdf
-    this._cyclotomicSquare = opts.Fp12cyclotomicSquare;
-    this._cyclotomicExp = opts.Fp12cyclotomicExp;
-    // https://eprint.iacr.org/2010/354.pdf
-    // https://eprint.iacr.org/2009/565.pdf
+    this.X_LEN = opts.X_LEN;
     this.finalExponentiate = opts.Fp12finalExponentiate;
   }
   create(num: Fp12) {
@@ -822,6 +810,42 @@ class Fp12Creator implements Fp12Bls {
       c0: Fp6.add(Fp6.mulByNonresidue(b), a),
       c1: Fp6.sub(e, Fp6.add(a, b)),
     };
+  }
+
+  // A cyclotomic group is a subgroup of Fp^n defined by
+  //   GΦₙ(p) = {α ∈ Fpⁿ : α^Φₙ(p) = 1}
+  // The result of any pairing is in a cyclotomic subgroup
+  // https://eprint.iacr.org/2009/565.pdf
+  // https://eprint.iacr.org/2010/354.pdf
+  _cyclotomicSquare({ c0, c1 }: Fp12): Fp12 {
+    const { Fp6 } = this;
+    const { Fp2 } = Fp6;
+    const { c0: c0c0, c1: c0c1, c2: c0c2 } = c0;
+    const { c0: c1c0, c1: c1c1, c2: c1c2 } = c1;
+    const { first: t3, second: t4 } = Fp2.Fp4Square(c0c0, c1c1);
+    const { first: t5, second: t6 } = Fp2.Fp4Square(c1c0, c0c2);
+    const { first: t7, second: t8 } = Fp2.Fp4Square(c0c1, c1c2);
+    const t9 = Fp2.mulByNonresidue(t8); // T8 * (u + 1)
+    return {
+      c0: Fp6.create({
+        c0: Fp2.add(Fp2.mul(Fp2.sub(t3, c0c0), _2n), t3), // 2 * (T3 - c0c0)  + T3
+        c1: Fp2.add(Fp2.mul(Fp2.sub(t5, c0c1), _2n), t5), // 2 * (T5 - c0c1)  + T5
+        c2: Fp2.add(Fp2.mul(Fp2.sub(t7, c0c2), _2n), t7),
+      }), // 2 * (T7 - c0c2)  + T7
+      c1: Fp6.create({
+        c0: Fp2.add(Fp2.mul(Fp2.add(t9, c1c0), _2n), t9), // 2 * (T9 + c1c0) + T9
+        c1: Fp2.add(Fp2.mul(Fp2.add(t4, c1c1), _2n), t4), // 2 * (T4 + c1c1) + T4
+        c2: Fp2.add(Fp2.mul(Fp2.add(t6, c1c2), _2n), t6),
+      }),
+    }; // 2 * (T6 + c1c2) + T6
+  }
+  _cyclotomicExp(num: Fp12, n: bigint): Fp12 {
+    let z = this.ONE;
+    for (let i = this.X_LEN - 1; i >= 0; i--) {
+      z = this._cyclotomicSquare(z);
+      if (bitGet(n, i)) z = this.mul(z, num);
+    }
+    return z;
   }
 }
 
