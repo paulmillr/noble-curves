@@ -56,6 +56,7 @@ export interface EdwardsPointCons extends CurvePointCons<bigint, EdwardsPoint> {
   new (X: bigint, Y: bigint, Z: bigint, T: bigint): EdwardsPoint;
   fromBytes(bytes: Uint8Array, zip215?: boolean): EdwardsPoint;
   fromHex(hex: string, zip215?: boolean): EdwardsPoint;
+  CURVE(): EdwardsOpts;
 }
 
 /**
@@ -176,6 +177,7 @@ function isEdValidXY(Fp: IField<bigint>, CURVE: EdwardsOpts, x: bigint, y: bigin
 }
 
 export function edwards(CURVE: EdwardsOpts, curveOpts: EdwardsExtraOpts = {}): EdwardsPointCons {
+  CURVE = Object.assign({}, CURVE);
   const { Fp, Fn } = _createCurveFields('edwards', CURVE, curveOpts);
   const { h: cofactor, n: CURVE_ORDER } = CURVE;
   _validateObject(curveOpts, {}, { uvRatio: 'function' });
@@ -287,6 +289,10 @@ export function edwards(CURVE: EdwardsOpts, curveOpts: EdwardsExtraOpts = {}): E
       acoord('x', x);
       acoord('y', y);
       return new Point(x, y, _1n, modP(x * y));
+    }
+
+    static CURVE(): EdwardsOpts {
+      return Object.assign({}, CURVE);
     }
 
     precompute(windowSize: number = 8, isLazy = true) {

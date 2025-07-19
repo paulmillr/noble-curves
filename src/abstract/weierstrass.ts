@@ -169,6 +169,7 @@ export interface WeierstrassPoint<T> extends CurvePoint<T, WeierstrassPoint<T>> 
 export interface WeierstrassPointCons<T> extends CurvePointCons<T, WeierstrassPoint<T>> {
   /** Does NOT validate if the point is valid. Use `.assertValidity()`. */
   new (X: T, Y: T, Z: T): WeierstrassPoint<T>;
+  CURVE(): WeierstrassOpts<T>;
 }
 
 /**
@@ -371,6 +372,10 @@ export const DER: IDER = {
   },
 };
 
+function copy(obj: any) {
+  return Object.assign({}, obj);
+}
+
 // Be friendly to bad ECMAScript parsers by not using bigint literals
 // prettier-ignore
 const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3), _4n = BigInt(4);
@@ -379,6 +384,7 @@ export function weierstrass<T>(
   CURVE: WeierstrassOpts<T>,
   curveOpts: WeierstrassExtraOpts<T> = {}
 ): WeierstrassPointCons<T> {
+  CURVE = copy(CURVE);
   const { Fp, Fn } = _createCurveFields('weierstrass', CURVE, curveOpts);
   const { h: cofactor, n: CURVE_ORDER } = CURVE;
   _validateObject(
@@ -607,6 +613,10 @@ export function weierstrass<T>(
     /** Converts hash string or Uint8Array to Point. */
     static fromHex(hex: string): Point {
       return Point.fromBytes(hexToBytes(hex));
+    }
+
+    static CURVE(): WeierstrassOpts<T> {
+      return copy(CURVE);
     }
 
     /**
@@ -1150,7 +1160,7 @@ export function ecdsa(
     }
   );
 
-  ecdsaOpts = Object.assign({}, ecdsaOpts);
+  ecdsaOpts = copy(ecdsaOpts);
   if (ecdsaOpts.lowS === undefined) ecdsaOpts.lowS = true;
 
   const randomBytes_ = ecdsaOpts.randomBytes || randomBytes;
