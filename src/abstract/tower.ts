@@ -35,7 +35,7 @@ export type BigintTwelve = [
 
 export type Fp2Bls = mod.IField<Fp2> & {
   frobeniusMap(num: Fp2, power: number): Fp2;
-  fromBigTuple(num: [bigint, bigint]): Fp2;
+  fromBigTuple(num: BigintTuple): Fp2;
   mulByB: (num: Fp2) => Fp2;
   mulByNonresidue: (num: Fp2) => Fp2;
   reim: (num: Fp2) => { re: Fp; im: Fp };
@@ -146,6 +146,219 @@ export type Tower12Opts = {
   Fp12finalExponentiate: (num: Fp12) => Fp12;
 };
 
+const Fp2fromBigTuple = (Fp: mod.IField<bigint>, tuple: BigintTuple | bigint[]) => {
+  if (tuple.length !== 2) throw new Error('invalid tuple');
+  const fps = tuple.map((n) => Fp.create(n)) as BigintTuple;
+  return { c0: fps[0], c1: fps[1] };
+};
+
+class Fp2Creator implements mod.IField<Fp2> {
+  readonly ORDER: bigint;
+  readonly isLE: boolean;
+  readonly BITS: number;
+  readonly BYTES: number;
+  readonly ZERO: Fp2;
+  readonly ONE: Fp2;
+  readonly NONRESIDUE: Fp2;
+  readonly Fp: mod.IField<bigint>;
+
+  // mulByB: opts.Fp2mulByB,
+  readonly mulByB: Tower12Opts['Fp2mulByB'];
+  readonly Fp_NONRESIDUE: bigint;
+  readonly Fp_div2: bigint;
+  readonly FROBENIUS_COEFFICIENTS: Fp[];
+
+  constructor(
+    Fp: mod.IField<bigint>,
+    opts: Partial<{
+      NONRESIDUE: bigint;
+      FP2_NONRESIDUE: BigintTuple;
+      mulByB: Tower12Opts['Fp2mulByB'];
+    }> = {}
+  ) {
+    const ORDER = Fp.ORDER;
+    const FP2_ORDER = ORDER * ORDER;
+    this.Fp = Fp;
+    this.ORDER = FP2_ORDER;
+    this.isLE = Fp.isLE;
+    this.BITS = bitLen(FP2_ORDER);
+    this.BYTES = Math.ceil(bitLen(FP2_ORDER) / 8);
+    // MASK: bitMask(bitLen(FP2_ORDER)),
+    this.ZERO = { c0: Fp.ZERO, c1: Fp.ZERO };
+    this.ONE = { c0: Fp.ONE, c1: Fp.ZERO };
+
+    this.Fp_NONRESIDUE = Fp.create(opts.NONRESIDUE || BigInt(-1));
+    this.Fp_div2 = Fp.div(Fp.ONE, _2n); // 1/2
+    this.NONRESIDUE = Fp2fromBigTuple(Fp, opts.FP2_NONRESIDUE!);
+    // const Fp2Nonresidue = Fp2fromBigTuple(opts.FP2_NONRESIDUE);
+    this.FROBENIUS_COEFFICIENTS = calcFrobeniusCoefficients(Fp, this.Fp_NONRESIDUE, Fp.ORDER, 2)[0];
+    this.mulByB = opts.mulByB!;
+  }
+  fromBigTuple(tuple: BigintTuple) {
+    return Fp2fromBigTuple(this.Fp, tuple);
+  }
+  create(num: Fp2) {
+    return num;
+  }
+  isValid({ c0, c1 }: Fp2) {
+    function isValidC(num: bigint, ORDER: bigint) {
+      return typeof num === 'bigint' && _0n <= num && num < ORDER;
+    }
+    return isValidC(c0, this.ORDER) && isValidC(c1, this.ORDER);
+  }
+  is0({ c0, c1 }: Fp2) {
+    return this.Fp.is0(c0) && this.Fp.is0(c1);
+  }
+  isValidNot0(num: Fp2) {
+    return !this.is0(num) && this.isValid(num);
+  }
+  eql({ c0, c1 }: Fp2, { c0: r0, c1: r1 }: Fp2) {
+    return this.Fp.eql(c0, r0) && this.Fp.eql(c1, r1);
+  }
+  neg({ c0, c1 }: Fp2) {
+    return { c0: this.Fp.neg(c0), c1: this.Fp.neg(c1) };
+  }
+  pow(num: Fp2, power: bigint): Fp2 {
+    return mod.FpPow(this, num, power);
+  }
+  invertBatch(nums: Fp2[]): Fp2[] {
+    return mod.FpInvertBatch(this, nums);
+  }
+  // Normalized
+  add(f1: Fp2, f2: Fp2): Fp2 {
+    const { c0, c1 } = f1;
+    const { c0: r0, c1: r1 } = f2;
+    return {
+      c0: this.Fp.add(c0, r0),
+      c1: this.Fp.add(c1, r1),
+    };
+  }
+  sub({ c0, c1 }: Fp2, { c0: r0, c1: r1 }: Fp2) {
+    return {
+      c0: this.Fp.sub(c0, r0),
+      c1: this.Fp.sub(c1, r1),
+    };
+  }
+  mul({ c0, c1 }: Fp2, rhs: Fp2) {
+    const { Fp } = this;
+    if (typeof rhs === 'bigint') return { c0: Fp.mul(c0, rhs), c1: Fp.mul(c1, rhs) };
+    // (a+bi)(c+di) = (ac−bd) + (ad+bc)i
+    const { c0: r0, c1: r1 } = rhs;
+    let t1 = Fp.mul(c0, r0); // c0 * o0
+    let t2 = Fp.mul(c1, r1); // c1 * o1
+    // (T1 - T2) + ((c0 + c1) * (r0 + r1) - (T1 + T2))*i
+    const o0 = Fp.sub(t1, t2);
+    const o1 = Fp.sub(Fp.mul(Fp.add(c0, c1), Fp.add(r0, r1)), Fp.add(t1, t2));
+    return { c0: o0, c1: o1 };
+  }
+  sqr({ c0, c1 }: Fp2) {
+    const { Fp } = this;
+    const a = Fp.add(c0, c1);
+    const b = Fp.sub(c0, c1);
+    const c = Fp.add(c0, c0);
+    return { c0: Fp.mul(a, b), c1: Fp.mul(c, c1) };
+  }
+  // NonNormalized stuff
+  addN(a: Fp2, b: Fp2): Fp2 {
+    return this.add(a, b);
+  }
+  subN(a: Fp2, b: Fp2): Fp2 {
+    return this.sub(a, b);
+  }
+  mulN(a: Fp2, b: Fp2): Fp2 {
+    return this.mul(a, b);
+  }
+  sqrN(a: Fp2): Fp2 {
+    return this.sqr(a);
+  }
+  // Why inversion for bigint inside Fp instead of Fp2? it is even used in that context?
+  div(lhs: Fp2, rhs: Fp2): Fp2 {
+    const { Fp } = this;
+    // @ts-ignore
+    return this.mul(lhs, typeof rhs === 'bigint' ? Fp.inv(Fp.create(rhs)) : this.inv(rhs));
+  }
+  inv({ c0: a, c1: b }: Fp2): Fp2 {
+    // We wish to find the multiplicative inverse of a nonzero
+    // element a + bu in Fp2. We leverage an identity
+    //
+    // (a + bu)(a - bu) = a² + b²
+    //
+    // which holds because u² = -1. This can be rewritten as
+    //
+    // (a + bu)(a - bu)/(a² + b²) = 1
+    //
+    // because a² + b² = 0 has no nonzero solutions for (a, b).
+    // This gives that (a - bu)/(a² + b²) is the inverse
+    // of (a + bu). Importantly, this can be computing using
+    // only a single inversion in Fp.
+    const { Fp } = this;
+    const factor = Fp.inv(Fp.create(a * a + b * b));
+    return { c0: Fp.mul(factor, Fp.create(a)), c1: Fp.mul(factor, Fp.create(-b)) };
+  }
+  sqrt(num: Fp2) {
+    // This is generic for all quadratic extensions (Fp2)
+    const { Fp } = this;
+    const Fp2 = this;
+    const { c0, c1 } = num;
+    if (Fp.is0(c1)) {
+      // if c0 is quadratic residue
+      if (mod.FpLegendre(Fp, c0) === 1) return Fp2.create({ c0: Fp.sqrt(c0), c1: Fp.ZERO });
+      else return Fp2.create({ c0: Fp.ZERO, c1: Fp.sqrt(Fp.div(c0, this.Fp_NONRESIDUE)) });
+    }
+    const a = Fp.sqrt(Fp.sub(Fp.sqr(c0), Fp.mul(Fp.sqr(c1), this.Fp_NONRESIDUE)));
+    let d = Fp.mul(Fp.add(a, c0), this.Fp_div2);
+    const legendre = mod.FpLegendre(Fp, d);
+    // -1, Quadratic non residue
+    if (legendre === -1) d = Fp.sub(d, a);
+    const a0 = Fp.sqrt(d);
+    const candidateSqrt = Fp2.create({ c0: a0, c1: Fp.div(Fp.mul(c1, this.Fp_div2), a0) });
+    if (!Fp2.eql(Fp2.sqr(candidateSqrt), num)) throw new Error('Cannot find square root');
+    // Normalize root: at this point candidateSqrt ** 2 = num, but also -candidateSqrt ** 2 = num
+    const x1 = candidateSqrt;
+    const x2 = Fp2.neg(x1);
+    const { re: re1, im: im1 } = Fp2.reim(x1);
+    const { re: re2, im: im2 } = Fp2.reim(x2);
+    if (im1 > im2 || (im1 === im2 && re1 > re2)) return x1;
+    return x2;
+  }
+  // Same as sgn0_m_eq_2 in RFC 9380
+  isOdd(x: Fp2) {
+    const { re: x0, im: x1 } = this.reim(x);
+    const sign_0 = x0 % _2n;
+    const zero_0 = x0 === _0n;
+    const sign_1 = x1 % _2n;
+    return BigInt(sign_0 || (zero_0 && sign_1)) == _1n;
+  }
+  // Bytes util
+  fromBytes(b: Uint8Array): Fp2 {
+    const { Fp } = this;
+    if (b.length !== this.BYTES) throw new Error('fromBytes invalid length=' + b.length);
+    return { c0: Fp.fromBytes(b.subarray(0, Fp.BYTES)), c1: Fp.fromBytes(b.subarray(Fp.BYTES)) };
+  }
+  toBytes({ c0, c1 }: Fp2) {
+    return concatBytes(this.Fp.toBytes(c0), this.Fp.toBytes(c1));
+  }
+  cmov({ c0, c1 }: Fp2, { c0: r0, c1: r1 }: Fp2, c: boolean) {
+    return {
+      c0: this.Fp.cmov(c0, r0, c),
+      c1: this.Fp.cmov(c1, r1, c),
+    };
+  }
+  reim({ c0, c1 }: Fp2) {
+    return { re: c0, im: c1 };
+  }
+  // multiply by u + 1
+  mulByNonresidue({ c0, c1 }: Fp2) {
+    return this.mul({ c0, c1 }, this.NONRESIDUE);
+  }
+  frobeniusMap({ c0, c1 }: Fp2, power: number): Fp2 {
+    return {
+      c0,
+      c1: this.Fp.mul(c1, this.FROBENIUS_COEFFICIENTS[power % 2]),
+    };
+  }
+}
+
 export function tower12(opts: Tower12Opts): {
   Fp: Readonly<mod.IField<bigint> & Required<Pick<mod.IField<bigint>, 'isOdd'>>>;
   Fp2: Fp2Bls;
@@ -156,148 +369,23 @@ export function tower12(opts: Tower12Opts): {
   const { ORDER } = opts;
   // Fp
   const Fp = mod.Field(ORDER);
-  const FpNONRESIDUE = Fp.create(opts.NONRESIDUE || BigInt(-1));
-  const Fpdiv2 = Fp.div(Fp.ONE, _2n); // 1/2
 
   // Fp2
-  const FP2_FROBENIUS_COEFFICIENTS = calcFrobeniusCoefficients(Fp, FpNONRESIDUE, Fp.ORDER, 2)[0];
-  const Fp2Add = ({ c0, c1 }: Fp2, { c0: r0, c1: r1 }: Fp2) => ({
-    c0: Fp.add(c0, r0),
-    c1: Fp.add(c1, r1),
-  });
-  const Fp2Subtract = ({ c0, c1 }: Fp2, { c0: r0, c1: r1 }: Fp2) => ({
-    c0: Fp.sub(c0, r0),
-    c1: Fp.sub(c1, r1),
-  });
-  const Fp2Multiply = ({ c0, c1 }: Fp2, rhs: Fp2) => {
-    if (typeof rhs === 'bigint') return { c0: Fp.mul(c0, rhs), c1: Fp.mul(c1, rhs) };
-    // (a+bi)(c+di) = (ac−bd) + (ad+bc)i
-    const { c0: r0, c1: r1 } = rhs;
-    let t1 = Fp.mul(c0, r0); // c0 * o0
-    let t2 = Fp.mul(c1, r1); // c1 * o1
-    // (T1 - T2) + ((c0 + c1) * (r0 + r1) - (T1 + T2))*i
-    const o0 = Fp.sub(t1, t2);
-    const o1 = Fp.sub(Fp.mul(Fp.add(c0, c1), Fp.add(r0, r1)), Fp.add(t1, t2));
-    return { c0: o0, c1: o1 };
-  };
-  const Fp2Square = ({ c0, c1 }: Fp2) => {
-    const a = Fp.add(c0, c1);
-    const b = Fp.sub(c0, c1);
-    const c = Fp.add(c0, c0);
-    return { c0: Fp.mul(a, b), c1: Fp.mul(c, c1) };
-  };
-  const Fp2fromBigTuple = (tuple: BigintTuple | bigint[]) => {
-    if (tuple.length !== 2) throw new Error('invalid tuple');
-    const fps = tuple.map((n) => Fp.create(n)) as [Fp, Fp];
-    return { c0: fps[0], c1: fps[1] };
-  };
+  // const Fp2Add = ;
+  // const Fp2Subtract = ;
+  // const Fp2Multiply = ;
+  // const Fp2Square = ;
 
-  function isValidC(num: bigint, ORDER: bigint) {
-    return typeof num === 'bigint' && _0n <= num && num < ORDER;
-  }
+  // function isValidC(num: bigint, ORDER: bigint) {
+  //   return typeof num === 'bigint' && _0n <= num && num < ORDER;
+  // }
 
-  const FP2_ORDER = ORDER * ORDER;
-  const Fp2Nonresidue = Fp2fromBigTuple(opts.FP2_NONRESIDUE);
-  const Fp2: Fp2Bls = {
-    ORDER: FP2_ORDER,
-    isLE: Fp.isLE,
-    NONRESIDUE: Fp2Nonresidue,
-    BITS: bitLen(FP2_ORDER),
-    BYTES: Math.ceil(bitLen(FP2_ORDER) / 8),
-    // MASK: bitMask(bitLen(FP2_ORDER)),
-    ZERO: { c0: Fp.ZERO, c1: Fp.ZERO },
-    ONE: { c0: Fp.ONE, c1: Fp.ZERO },
-    create: (num) => num,
-    isValid: ({ c0, c1 }) => isValidC(c0, FP2_ORDER) && isValidC(c1, FP2_ORDER),
-    is0: ({ c0, c1 }) => Fp.is0(c0) && Fp.is0(c1),
-    isValidNot0: (num) => !Fp2.is0(num) && Fp2.isValid(num),
-    eql: ({ c0, c1 }: Fp2, { c0: r0, c1: r1 }: Fp2) => Fp.eql(c0, r0) && Fp.eql(c1, r1),
-    neg: ({ c0, c1 }) => ({ c0: Fp.neg(c0), c1: Fp.neg(c1) }),
-    pow: (num, power) => mod.FpPow(Fp2, num, power),
-    invertBatch: (nums) => mod.FpInvertBatch(Fp2, nums),
-    // Normalized
-    add: Fp2Add,
-    sub: Fp2Subtract,
-    mul: Fp2Multiply,
-    sqr: Fp2Square,
-    // NonNormalized stuff
-    addN: Fp2Add,
-    subN: Fp2Subtract,
-    mulN: Fp2Multiply,
-    sqrN: Fp2Square,
-    // Why inversion for bigint inside Fp instead of Fp2? it is even used in that context?
-    div: (lhs, rhs) =>
-      Fp2.mul(lhs, typeof rhs === 'bigint' ? Fp.inv(Fp.create(rhs)) : Fp2.inv(rhs)),
-    inv: ({ c0: a, c1: b }) => {
-      // We wish to find the multiplicative inverse of a nonzero
-      // element a + bu in Fp2. We leverage an identity
-      //
-      // (a + bu)(a - bu) = a² + b²
-      //
-      // which holds because u² = -1. This can be rewritten as
-      //
-      // (a + bu)(a - bu)/(a² + b²) = 1
-      //
-      // because a² + b² = 0 has no nonzero solutions for (a, b).
-      // This gives that (a - bu)/(a² + b²) is the inverse
-      // of (a + bu). Importantly, this can be computing using
-      // only a single inversion in Fp.
-      const factor = Fp.inv(Fp.create(a * a + b * b));
-      return { c0: Fp.mul(factor, Fp.create(a)), c1: Fp.mul(factor, Fp.create(-b)) };
-    },
-    sqrt: (num) => {
-      if (opts.Fp2sqrt) return opts.Fp2sqrt(num);
-      // This is generic for all quadratic extensions (Fp2)
-      const { c0, c1 } = num;
-      if (Fp.is0(c1)) {
-        // if c0 is quadratic residue
-        if (mod.FpLegendre(Fp, c0) === 1) return Fp2.create({ c0: Fp.sqrt(c0), c1: Fp.ZERO });
-        else return Fp2.create({ c0: Fp.ZERO, c1: Fp.sqrt(Fp.div(c0, FpNONRESIDUE)) });
-      }
-      const a = Fp.sqrt(Fp.sub(Fp.sqr(c0), Fp.mul(Fp.sqr(c1), FpNONRESIDUE)));
-      let d = Fp.mul(Fp.add(a, c0), Fpdiv2);
-      const legendre = mod.FpLegendre(Fp, d);
-      // -1, Quadratic non residue
-      if (legendre === -1) d = Fp.sub(d, a);
-      const a0 = Fp.sqrt(d);
-      const candidateSqrt = Fp2.create({ c0: a0, c1: Fp.div(Fp.mul(c1, Fpdiv2), a0) });
-      if (!Fp2.eql(Fp2.sqr(candidateSqrt), num)) throw new Error('Cannot find square root');
-      // Normalize root: at this point candidateSqrt ** 2 = num, but also -candidateSqrt ** 2 = num
-      const x1 = candidateSqrt;
-      const x2 = Fp2.neg(x1);
-      const { re: re1, im: im1 } = Fp2.reim(x1);
-      const { re: re2, im: im2 } = Fp2.reim(x2);
-      if (im1 > im2 || (im1 === im2 && re1 > re2)) return x1;
-      return x2;
-    },
-    // Same as sgn0_m_eq_2 in RFC 9380
-    isOdd: (x: Fp2) => {
-      const { re: x0, im: x1 } = Fp2.reim(x);
-      const sign_0 = x0 % _2n;
-      const zero_0 = x0 === _0n;
-      const sign_1 = x1 % _2n;
-      return BigInt(sign_0 || (zero_0 && sign_1)) == _1n;
-    },
-    // Bytes util
-    fromBytes(b: Uint8Array): Fp2 {
-      if (b.length !== Fp2.BYTES) throw new Error('fromBytes invalid length=' + b.length);
-      return { c0: Fp.fromBytes(b.subarray(0, Fp.BYTES)), c1: Fp.fromBytes(b.subarray(Fp.BYTES)) };
-    },
-    toBytes: ({ c0, c1 }) => concatBytes(Fp.toBytes(c0), Fp.toBytes(c1)),
-    cmov: ({ c0, c1 }, { c0: r0, c1: r1 }, c) => ({
-      c0: Fp.cmov(c0, r0, c),
-      c1: Fp.cmov(c1, r1, c),
-    }),
-    reim: ({ c0, c1 }) => ({ re: c0, im: c1 }),
-    // multiply by u + 1
-    mulByNonresidue: ({ c0, c1 }) => Fp2.mul({ c0, c1 }, Fp2Nonresidue),
+  // const FP2_ORDER = ORDER * ORDER;
+  const Fp2: Fp2Bls = new Fp2Creator(Fp, {
+    NONRESIDUE: opts.NONRESIDUE,
+    FP2_NONRESIDUE: opts.FP2_NONRESIDUE,
     mulByB: opts.Fp2mulByB,
-    fromBigTuple: Fp2fromBigTuple,
-    frobeniusMap: ({ c0, c1 }, power: number): Fp2 => ({
-      c0,
-      c1: Fp.mul(c1, FP2_FROBENIUS_COEFFICIENTS[power % 2]),
-    }),
-  };
+  });
   // Fp6
   const Fp6Add = ({ c0, c1, c2 }: Fp6, { c0: r0, c1: r1, c2: r2 }: Fp6) => ({
     c0: Fp2.add(c0, r0),
@@ -350,7 +438,7 @@ export function tower12(opts: Tower12Opts): {
   };
   const [FP6_FROBENIUS_COEFFICIENTS_1, FP6_FROBENIUS_COEFFICIENTS_2] = calcFrobeniusCoefficients(
     Fp2,
-    Fp2Nonresidue,
+    Fp2.NONRESIDUE,
     Fp.ORDER,
     6,
     2,
@@ -458,7 +546,7 @@ export function tower12(opts: Tower12Opts): {
   // Fp12
   const FP12_FROBENIUS_COEFFICIENTS = calcFrobeniusCoefficients(
     Fp2,
-    Fp2Nonresidue,
+    Fp2.NONRESIDUE,
     Fp.ORDER,
     12,
     1,
