@@ -158,9 +158,9 @@ const Fp2fromBigTuple = (Fp: mod.IField<bigint>, tuple: BigintTuple | bigint[]) 
 
 class Fp2Creator implements mod.IField<Fp2> {
   readonly ORDER: bigint;
-  readonly isLE: boolean;
   readonly BITS: number;
   readonly BYTES: number;
+  readonly isLE: boolean;
 
   readonly ZERO: Fp2;
   readonly ONE: Fp2;
@@ -184,10 +184,9 @@ class Fp2Creator implements mod.IField<Fp2> {
     const FP2_ORDER = ORDER * ORDER;
     this.Fp = Fp;
     this.ORDER = FP2_ORDER;
-    this.isLE = Fp.isLE;
     this.BITS = bitLen(FP2_ORDER);
     this.BYTES = Math.ceil(bitLen(FP2_ORDER) / 8);
-    // MASK: bitMask(bitLen(FP2_ORDER)),
+    this.isLE = Fp.isLE;
     this.ZERO = { c0: Fp.ZERO, c1: Fp.ZERO };
     this.ONE = { c0: Fp.ONE, c1: Fp.ZERO };
 
@@ -197,6 +196,7 @@ class Fp2Creator implements mod.IField<Fp2> {
     // const Fp2Nonresidue = Fp2fromBigTuple(opts.FP2_NONRESIDUE);
     this.FROBENIUS_COEFFICIENTS = calcFrobeniusCoefficients(Fp, this.Fp_NONRESIDUE, Fp.ORDER, 2)[0];
     this.mulByB = opts.Fp2mulByB!;
+    Object.seal(this);
   }
   fromBigTuple(tuple: BigintTuple) {
     return Fp2fromBigTuple(this.Fp, tuple);
@@ -374,9 +374,9 @@ class Fp2Creator implements mod.IField<Fp2> {
 
 class Fp6Creator implements Fp6Bls {
   readonly ORDER: bigint;
-  readonly isLE: boolean;
   readonly BITS: number;
   readonly BYTES: number;
+  readonly isLE: boolean;
 
   readonly ZERO: Fp6;
   readonly ONE: Fp6;
@@ -387,16 +387,16 @@ class Fp6Creator implements Fp6Bls {
   constructor(Fp2: Fp2Bls) {
     this.Fp2 = Fp2;
     this.ORDER = Fp2.ORDER; // TODO: unused, but need to verify
-    this.isLE = Fp2.isLE;
     this.BITS = 3 * Fp2.BITS;
     this.BYTES = 3 * Fp2.BYTES;
-    // MASK: bitMask(3 * Fp2.BITS),
+    this.isLE = Fp2.isLE;
     this.ZERO = { c0: Fp2.ZERO, c1: Fp2.ZERO, c2: Fp2.ZERO };
     this.ONE = { c0: Fp2.ONE, c1: Fp2.ZERO, c2: Fp2.ZERO };
     const { Fp } = Fp2;
     const frob = calcFrobeniusCoefficients(Fp2, Fp2.NONRESIDUE, Fp.ORDER, 6, 2, 3);
     this.FROBENIUS_COEFFICIENTS_1 = frob[0];
     this.FROBENIUS_COEFFICIENTS_2 = frob[1];
+    Object.seal(this);
   }
   add({ c0, c1, c2 }: Fp6, { c0: r0, c1: r1, c2: r2 }: Fp6) {
     const { Fp2 } = this;
@@ -597,9 +597,9 @@ class Fp6Creator implements Fp6Bls {
 
 class Fp12Creator implements Fp12Bls {
   readonly ORDER: bigint;
-  readonly isLE: boolean;
   readonly BITS: number;
   readonly BYTES: number;
+  readonly isLE: boolean;
 
   readonly ZERO: Fp12;
   readonly ONE: Fp12;
@@ -616,10 +616,9 @@ class Fp12Creator implements Fp12Bls {
     this.Fp6 = Fp6;
 
     this.ORDER = Fp2.ORDER; // TODO: verify if it's unuesd
-    this.isLE = Fp6.isLE;
     this.BITS = 2 * Fp6.BITS;
     this.BYTES = 2 * Fp6.BYTES;
-    // MASK: bitMask(2 * Fp6.BITS),
+    this.isLE = Fp6.isLE;
     this.ZERO = { c0: Fp6.ZERO, c1: Fp6.ZERO };
     this.ONE = { c0: Fp6.ONE, c1: Fp6.ZERO };
 

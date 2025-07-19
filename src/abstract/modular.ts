@@ -226,10 +226,9 @@ export const isNegativeLE = (num: bigint, modulo: bigint): boolean =>
 /** Field is not always over prime: for example, Fp2 has ORDER(q)=p^m. */
 export interface IField<T> {
   ORDER: bigint;
-  isLE: boolean;
   BYTES: number;
   BITS: number;
-  // MASK: bigint;
+  isLE: boolean;
   ZERO: T;
   ONE: T;
   // 1-arg
