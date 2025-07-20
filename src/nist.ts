@@ -160,6 +160,10 @@ export const p521: CurveFnWithCreate = createCurve(
   sha512
 );
 
+export const secp256r1: typeof p256 = p256;
+export const secp384r1: typeof p384 = p384;
+export const secp521r1: typeof p521 = p521;
+
 /** Hashing / encoding to p521 points / field. RFC 9380 methods. */
 export const p521_hasher: H2CHasher<bigint> = /* @__PURE__ */ (() => {
   return createHasher(
