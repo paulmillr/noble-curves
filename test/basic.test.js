@@ -974,6 +974,9 @@ for (const name in CURVES) {
               if (/recovery id is ambiguous/.test(error.message)) return;
             }
             eql(res, pub);
+            // Old API: by default we do same thing as sign/verify, this allows generic API even when curve prehash: true,
+            // otherwise user would need to prehash manually which is weird.
+            eql(res, C.recoverPublicKey(sigb, C.hash(msg), { prehash: false })); // can still provide hash manually
             // Create identical sig
             const sig2 = C.Signature.fromBytes(sig.toBytes('compact'), 'compact');
             const sig3 = sig2.addRecoveryBit(sig.recovery);

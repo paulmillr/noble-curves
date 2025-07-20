@@ -19,7 +19,6 @@ import {
   type WeierstrassPoint as PointType,
   weierstrass,
   type WeierstrassOpts,
-  type WeierstrassPoint,
   type WeierstrassPointCons,
 } from './abstract/weierstrass.ts';
 import {
@@ -322,7 +321,7 @@ const mapSWU = /* @__PURE__ */ (() =>
   }))();
 
 /** Hashing / encoding to secp256k1 points / field. RFC 9380 methods. */
-export const secp256k1_hasher: H2CHasher<bigint, WeierstrassPoint<bigint>> = /* @__PURE__ */ (() =>
+export const secp256k1_hasher: H2CHasher<WeierstrassPointCons<bigint>> = /* @__PURE__ */ (() =>
   createHasher(
     secp256k1_Point,
     (scalars: bigint[]) => {

@@ -44,6 +44,7 @@ import {
   numberToHexUnpadded,
   randomBytes,
   type CHash,
+  type Signer,
 } from '../utils.ts';
 import {
   _createCurveFields,
@@ -131,21 +132,40 @@ export function _splitEndoScalar(k: bigint, basis: EndoBasis, n: bigint): Scalar
 
 export type ECDSASigFormat = 'compact' | 'recovered' | 'der';
 export type Entropy = Uint8Array | boolean;
-export type SignOpts = Partial<{
-  lowS: boolean;
-  extraEntropy: Uint8Array | boolean;
-  prehash: boolean;
-  format: ECDSASigFormat;
-}>;
-export type VerOpts = Partial<{
-  lowS: boolean;
-  prehash: boolean;
-  format: ECDSASigFormat | undefined;
-}>;
+export type RecoverOpts = {
+  prehash?: boolean;
+};
+export type VerOpts = {
+  prehash?: boolean;
+  lowS?: boolean;
+  format?: ECDSASigFormat;
+};
+export type SignOpts = {
+  prehash?: boolean;
+  lowS?: boolean;
+  format?: ECDSASigFormat;
+  extraEntropy?: Uint8Array | boolean;
+};
 
-function validateSigVerOpts(opts: SignOpts | VerOpts) {
-  if (opts.lowS !== undefined) abool('lowS', opts.lowS);
-  if (opts.prehash !== undefined) abool('prehash', opts.prehash);
+function validateSigFormat(format: string): ECDSASigFormat {
+  if (!['compact', 'recovered', 'der'].includes(format))
+    throw new Error('Signature format must be "compact", "recovered", or "der"');
+  return format as ECDSASigFormat;
+}
+
+function validateSigVerOpts<T extends SignOpts | VerOpts, D extends SignOpts & Required<VerOpts>>(
+  opts: T,
+  def: D
+): T & D {
+  // {...def, ...opts} will overwrite default options if 'key: undefined' present in opts.
+  const prehash = opts.prehash === undefined ? def.prehash : opts.prehash;
+  const lowS = opts.lowS === undefined ? def.lowS : opts.lowS;
+  const format = validateSigFormat(opts.format === undefined ? def.format : opts.format);
+  const sigOpts = opts as SignOpts;
+  const extraEntropy = sigOpts.extraEntropy === undefined ? def.extraEntropy : sigOpts.extraEntropy;
+  abool(lowS, 'lowS');
+  abool(prehash, 'prehash');
+  return { prehash, lowS, format, extraEntropy } as T & D;
 }
 
 /** Instance methods for 3D XYZ projective points. */
@@ -166,7 +186,7 @@ export interface WeierstrassPoint<T> extends CurvePoint<T, WeierstrassPoint<T>> 
 }
 
 /** Static methods for 3D XYZ projective points. */
-export interface WeierstrassPointCons<T> extends CurvePointCons<T, WeierstrassPoint<T>> {
+export interface WeierstrassPointCons<T> extends CurvePointCons<WeierstrassPoint<T>> {
   /** Does NOT validate if the point is valid. Use `.assertValidity()`. */
   new (X: T, Y: T, Z: T): WeierstrassPoint<T>;
   CURVE(): WeierstrassOpts<T>;
@@ -243,14 +263,14 @@ export interface ECDH {
 
 /** ECDSA is only supported for prime fields, not Fp2 (extension fields). */
 export interface ECDSA extends ECDH {
-  sign: (msgHash: Uint8Array, secretKey: Uint8Array, opts?: SignOpts) => Uint8Array;
+  sign: (message: Uint8Array, secretKey: Uint8Array, opts?: SignOpts) => Uint8Array;
   verify: (
     signature: Uint8Array,
-    msgHash: Uint8Array,
+    message: Uint8Array,
     publicKey: Uint8Array,
     opts?: VerOpts
   ) => boolean;
-  recoverPublicKey(signature: Uint8Array, msgHash: Uint8Array): Uint8Array;
+  recoverPublicKey(signature: Uint8Array, message: Uint8Array, opts?: RecoverOpts): Uint8Array;
   Signature: ECDSASignatureCons;
   info: CurveInfo;
 }
@@ -421,7 +441,7 @@ export function weierstrass<T>(
   ): Uint8Array {
     const { x, y } = point.toAffine();
     const bx = Fp.toBytes(x);
-    abool('isCompressed', isCompressed);
+    abool(isCompressed, 'isCompressed');
     if (isCompressed) {
       assertCompressionIsSupported();
       const hasEvenY = !Fp.isOdd!(y);
@@ -800,7 +820,7 @@ export function weierstrass<T>(
      */
     multiplyUnsafe(sc: bigint): Point {
       const { endo } = curveOpts;
-      const p = this;
+      const p = this as Point;
       if (!Fn.isValid(sc)) throw new Error('invalid scalar: out of range'); // 0 is valid
       if (sc === _0n || p.is0()) return Point.ZERO;
       if (sc === _1n) return p; // fast-path
@@ -851,7 +871,7 @@ export function weierstrass<T>(
     }
 
     toBytes(isCompressed = true): Uint8Array {
-      abool('isCompressed', isCompressed);
+      abool(isCompressed, 'isCompressed');
       this.assertValidity();
       return toBytes(Point, this, isCompressed);
     }
@@ -1073,6 +1093,7 @@ export function ecdh(
    * (groupLen + ceil(groupLen / 2)) with modulo bias being negligible.
    */
   function randomSecretKey(seed = randomBytes_(lengths.seed)): Uint8Array {
+    abytes(seed, lengths.seed, 'seed');
     return mapHashToField(seed, Fn.ORDER);
   }
 
@@ -1171,11 +1192,16 @@ export function ecdsa(
   const { Fp, Fn } = Point;
   const { ORDER: CURVE_ORDER, BITS: fnBits } = Fn;
   const { keygen, getPublicKey, getSharedSecret, utils, lengths } = ecdh(Point, ecdsaOpts);
-  const defaultSigOpts: SignOpts = { lowS: ecdsaOpts.lowS, prehash: false, format: 'compact' };
-  const defaultVerOpts: Required<VerOpts> = {
+  const defaultRecOpts = { prehash: true };
+  const defaultVerOpts = {
+    prehash: true,
     lowS: ecdsaOpts.lowS,
-    prehash: false,
-    format: 'compact',
+    format: 'compact' as ECDSASigFormat,
+  };
+  const defaultSigOpts = {
+    prehash: true,
+    lowS: ecdsaOpts.lowS,
+    format: 'compact' as ECDSASigFormat,
   };
 
   function isBiggerThanHalfOrder(number: bigint) {
@@ -1189,10 +1215,6 @@ export function ecdsa(
     if (!Fn.isValidNot0(num))
       throw new Error(`invalid signature ${title}: out of range 1..Point.Fn.ORDER`);
     return num;
-  }
-  function validateSigFormat(format: ECDSASigFormat): void {
-    if (!['compact', 'recovered', 'der'].includes(format as string))
-      throw new Error('Signature format must be "compact", "recovered", or "der"');
   }
 
   /**
@@ -1334,17 +1356,16 @@ export function ecdsa(
   // Used only in sign, not in verify.
   // NOTE: we cannot assume here that msgHash has same amount of bytes as curve order,
   // this will be invalid at least for P521. Also it can be bigger for P224 + SHA256
-  function prepSig(msgHash: Uint8Array, privateKey: Uint8Array, opts = defaultSigOpts) {
-    let { lowS, prehash, extraEntropy: ent } = opts; // generates low-s sigs by default
-    if (lowS == null) lowS = true; // RFC6979 3.2: we skip step A, because we already provide hash
-    msgHash = abytes(msgHash, undefined, 'msgHash');
-    validateSigVerOpts(opts);
-    if (prehash) msgHash = abytes(hash(msgHash), undefined, 'prehashed msgHash');
+  function prepSig(message: Uint8Array, privateKey: Uint8Array, opts: SignOpts = defaultSigOpts) {
+    const { lowS, prehash, extraEntropy: ent } = validateSigVerOpts(opts, defaultSigOpts);
+    // RFC6979 3.2: we skip step A, because we already provide hash
+    message = abytes(message, undefined, 'message');
+    if (prehash) message = abytes(hash(message), undefined, 'prehashed message');
 
     // We can't later call bits2octets, since nested bits2int is broken for curves
     // with fnBits % 8 !== 0. Because of that, we unwrap it here as int2octets call.
     // const bits2octets = (bits) => int2octets(bits2int_modN(bits))
-    const h1int = bits2int_modN(msgHash);
+    const h1int = bits2int_modN(message);
     const d = Fn.fromBytes(privateKey); // validate secret key, convert to bigint
     if (!Fn.isValidNot0(d)) throw new Error('invalid private key');
     const seedArgs = [int2octets(d), int2octets(h1int)];
@@ -1396,11 +1417,11 @@ export function ecdsa(
    * ```
    */
   function sign(
-    msgHash: Uint8Array,
+    message: Uint8Array,
     secretKey: Uint8Array,
     opts: SignOpts = defaultSigOpts
   ): Uint8Array {
-    const { seed, k2sig } = prepSig(msgHash, secretKey, opts); // Steps A, D of RFC6979 3.2.
+    const { seed, k2sig } = prepSig(message, secretKey, opts); // Steps A, D of RFC6979 3.2.
     const drbg = createHmacDrbg<RecoveredSignature>(hash.outputLen, Fn.BYTES, hmac_);
     const sig = drbg(seed, k2sig); // Steps B, C, D, E, F, G
     return sig.toBytes(opts.format);
@@ -1424,27 +1445,17 @@ export function ecdsa(
    */
   function verify(
     signature: Uint8Array,
-    msgHash: Uint8Array,
+    message: Uint8Array,
     publicKey: Uint8Array,
     opts: VerOpts = defaultVerOpts
   ): boolean {
     const sg = signature;
-    msgHash = abytes(msgHash, undefined, 'msgHash');
+    message = abytes(message, undefined, 'message');
     publicKey = abytes(publicKey, undefined, 'publicKey');
-
     // Verify opts
-    validateSigVerOpts(opts);
-    let format: ECDSASigFormat = opts.format ?? defaultVerOpts.format;
-    let { lowS, prehash } = opts;
-    if (lowS === undefined) lowS = defaultVerOpts.lowS;
-    if (prehash === undefined) prehash = defaultVerOpts.prehash;
-    if (format === undefined) format = defaultVerOpts.format;
-
+    const { lowS, prehash, format } = validateSigVerOpts(opts, defaultVerOpts);
     let _sig: Signature | undefined = undefined;
     let P: WeierstrassPoint<bigint>;
-
-    // Those errors should not be swallowed
-    validateSigFormat(format);
     if (!isBytes(signature)) {
       const end = (signature as any) instanceof Signature ? ', use sig.toBytes()' : '';
       throw new Error('verify expects Uint8Array signature' + end);
@@ -1456,9 +1467,9 @@ export function ecdsa(
       P = Point.fromBytes(publicKey);
       if (lowS && _sig.hasHighS()) return false;
       // todo: optional.hash => hash
-      if (prehash) msgHash = hash(msgHash);
+      if (prehash) message = hash(message);
       const { r, s } = _sig;
-      const h = bits2int_modN(msgHash); // Cannot use fields methods, since it is group element
+      const h = bits2int_modN(message); // Cannot use fields methods, since it is group element
       const is = Fn.inv(s); // s^-1
       const u1 = Fn.create(h * is); // u1 = hs^-1 mod n
       const u2 = Fn.create(r * is); // u2 = rs^-1 mod n
@@ -1471,8 +1482,16 @@ export function ecdsa(
     }
   }
 
-  function recoverPublicKey(signature: Uint8Array, msgHash: Uint8Array): Uint8Array {
-    return Signature.fromBytes(signature, 'recovered').recoverPublicKey(msgHash).toBytes();
+  function recoverPublicKey(
+    signature: Uint8Array,
+    message: Uint8Array,
+    opts: RecoverOpts = defaultRecOpts
+  ): Uint8Array {
+    const prehash = opts.prehash !== undefined ? opts.prehash : defaultRecOpts.prehash;
+    abool(prehash, 'prehash');
+    message = abytes(message, undefined, 'message');
+    if (prehash) message = abytes(hash(message), undefined, 'prehashed message');
+    return Signature.fromBytes(signature, 'recovered').recoverPublicKey(message).toBytes();
   }
 
   return Object.freeze({
@@ -1490,5 +1509,5 @@ export function ecdsa(
     info: { type: 'weierstrass' as const, publicKeyHasPrefix: true },
     lengths,
     hash,
-  });
+  }) satisfies Signer;
 }

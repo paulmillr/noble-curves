@@ -13,6 +13,7 @@ import {
   copyBytes,
   numberToBytesLE,
   randomBytes,
+  type CryptoKeys,
 } from '../utils.ts';
 import type { CurveLengths } from './curve.ts';
 import { mod } from './modular.ts';
@@ -164,7 +165,15 @@ export function montgomery(curveDef: CurveType): MontgomeryECDH {
     const z2 = powPminus2(z_2); // `Fp.pow(x, P - _2n)` is much slower equivalent
     return modP(x_2 * z2); // Return x_2 * (z_2^(p - 2))
   }
-  const randomSecretKey = (seed = randomBytes_(fieldLen)) => seed;
+  const lengths = {
+    secret: fieldLen,
+    public: fieldLen,
+    seed: fieldLen,
+  };
+  const randomSecretKey = (seed = randomBytes_(fieldLen)) => {
+    abytes(seed, lengths.seed, 'seed');
+    return seed;
+  };
   const utils = {
     randomSecretKey,
     randomPrivateKey: randomSecretKey,
@@ -173,12 +182,8 @@ export function montgomery(curveDef: CurveType): MontgomeryECDH {
     const secretKey = utils.randomSecretKey(seed);
     return { secretKey, publicKey: scalarMultBase(secretKey) };
   }
-  const lengths = {
-    secret: fieldLen,
-    public: fieldLen,
-    seed: fieldLen,
-  };
-  return {
+
+  return Object.freeze({
     keygen,
     getSharedSecret: (secretKey: Uint8Array, publicKey: Uint8Array) =>
       scalarMult(secretKey, publicKey),
@@ -189,5 +194,5 @@ export function montgomery(curveDef: CurveType): MontgomeryECDH {
     GuBytes: GuBytes.slice(),
     info: { type: 'montgomery' as const },
     lengths,
-  };
+  }) satisfies CryptoKeys;
 }

@@ -17,6 +17,7 @@ import {
   type EdDSAOpts,
   type EdwardsOpts,
   type EdwardsPoint,
+  type EdwardsPointCons,
 } from './abstract/edwards.ts';
 import {
   _DST_scalar,
@@ -247,7 +248,7 @@ function map_to_curve_elligator2_edwards25519(u: bigint) {
 }
 
 /** Hashing to ed25519 points / field. RFC 9380 methods. */
-export const ed25519_hasher: H2CHasher<bigint, EdwardsPoint> = /* @__PURE__ */ (() =>
+export const ed25519_hasher: H2CHasher<EdwardsPointCons> = /* @__PURE__ */ (() =>
   createHasher(
     ed25519_Point,
     (scalars: bigint[]) => map_to_curve_elligator2_edwards25519(scalars[0]),
@@ -462,7 +463,7 @@ export const ristretto255: {
 } = { Point: _RistrettoPoint };
 
 /** Hashing to ristretto255 points / field. RFC 9380 methods. */
-export const ristretto255_hasher: H2CHasherBase<bigint, _RistrettoPoint> = {
+export const ristretto255_hasher: H2CHasherBase<_RistrettoPoint> = {
   hashToCurve(msg: Uint8Array, options?: htfBasicOpts): _RistrettoPoint {
     const DST = options?.DST || 'ristretto255_XMD:SHA-512_R255MAP_RO_';
     return ristretto255_map(expand_message_xmd(msg, DST, 64, sha512));

@@ -34,8 +34,8 @@ describe('ristretto255', () => {
     let B = RistrettoPoint.BASE;
     let P = RistrettoPoint.ZERO;
     for (const encoded of encodingsOfSmallMultiples) {
-      eql(bytesToHex(P.toBytes()), encoded);
       const enc = hexToBytes(encoded);
+      eql(P.toBytes(), enc);
       eql(RistrettoPoint.fromBytes(enc).toBytes(), enc);
       eql(RistrettoPoint.fromAffine(RistrettoPoint.fromBytes(enc).ep.toAffine()).toBytes(), enc);
       eql(RistrettoPoint.fromBytes(enc).toBytes(), enc);
@@ -164,8 +164,9 @@ describe('decaf448', () => {
     let B = DecafPoint.BASE;
     let P = DecafPoint.ZERO;
     for (const encoded of encodingsOfSmallMultiples) {
-      eql(bytesToHex(P.toBytes()), encoded);
-      eql(bytesToHex(DecafPoint.fromBytes(hexToBytes(encoded)).toBytes()), encoded);
+      const enc = hexToBytes(encoded);
+      eql(P.toBytes(), enc);
+      eql(bytesToHex(DecafPoint.fromBytes(enc).toBytes()), encoded);
       P = P.add(B);
     }
   });

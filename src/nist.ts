@@ -14,7 +14,6 @@ import {
   weierstrass,
   type ECDSA,
   type WeierstrassOpts,
-  type WeierstrassPoint,
   type WeierstrassPointCons,
 } from './abstract/weierstrass.ts';
 
@@ -91,7 +90,7 @@ function createSWU(Point: WeierstrassPointCons<bigint>, opts: SwuOpts) {
 const p256_Point = /* @__PURE__ */ weierstrass(p256_CURVE);
 export const p256: ECDSA = /* @__PURE__ */ ecdsa(p256_Point, sha256);
 /** Hashing / encoding to p256 points / field. RFC 9380 methods. */
-export const p256_hasher: H2CHasher<bigint, WeierstrassPoint<bigint>> = /* @__PURE__ */ (() => {
+export const p256_hasher: H2CHasher<WeierstrassPointCons<bigint>> = /* @__PURE__ */ (() => {
   return createHasher(
     p256_Point,
     createSWU(p256_Point, {
@@ -124,7 +123,7 @@ const p384_Point = /* @__PURE__ */ weierstrass(p384_CURVE);
 /** NIST P384 (aka secp384r1) curve, ECDSA and ECDH methods. */
 export const p384: ECDSA = /* @__PURE__ */ ecdsa(p384_Point, sha384);
 /** Hashing / encoding to p384 points / field. RFC 9380 methods. */
-export const p384_hasher: H2CHasher<bigint, WeierstrassPoint<bigint>> = /* @__PURE__ */ (() => {
+export const p384_hasher: H2CHasher<WeierstrassPointCons<bigint>> = /* @__PURE__ */ (() => {
   return createHasher(
     p384_Point,
     createSWU(p384_Point, {
@@ -159,7 +158,7 @@ const p521_Point = /* @__PURE__ */ weierstrass(p521_CURVE, { Fn: Fn521 });
 export const p521: ECDSA = /* @__PURE__ */ ecdsa(p521_Point, sha512);
 
 /** Hashing / encoding to p521 points / field. RFC 9380 methods. */
-export const p521_hasher: H2CHasher<bigint, WeierstrassPoint<bigint>> = /* @__PURE__ */ (() => {
+export const p521_hasher: H2CHasher<WeierstrassPointCons<bigint>> = /* @__PURE__ */ (() => {
   return createHasher(
     p521_Point,
     createSWU(p521_Point, {

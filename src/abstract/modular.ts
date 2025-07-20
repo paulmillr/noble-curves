@@ -605,6 +605,7 @@ export function getMinHashLength(fieldOrder: bigint): number {
  * @returns valid private scalar
  */
 export function mapHashToField(key: Uint8Array, fieldOrder: bigint, isLE = false): Uint8Array {
+  abytes(key);
   const len = key.length;
   const fieldLen = getFieldBytesLength(fieldOrder);
   const minLen = getMinHashLength(fieldOrder);

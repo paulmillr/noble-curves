@@ -2,68 +2,76 @@ import { sha224, sha256, sha384, sha512 } from '@noble/hashes/sha2.js';
 import { sha3_224, sha3_256, sha3_384, sha3_512, shake128, shake256 } from '@noble/hashes/sha3.js';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql, throws } from 'node:assert';
-import { bytesToHex, hexToBytes, utf8ToBytes } from '../abstract/utils.js';
+import {
+  bytesToHex,
+  hexToBytes,
+  utf8ToBytes,
+  concatBytes,
+  bytesToNumberBE,
+  numberToBytesBE,
+} from '../abstract/utils.js';
 import { DER, ecdsa } from '../abstract/weierstrass.js';
 import { brainpoolP256r1, brainpoolP384r1, brainpoolP512r1 } from '../misc.js';
 import { p256, p384, p521 } from '../nist.js';
 import { secp256k1 } from '../secp256k1.js';
 import { p192, p224, secp192r1, secp224r1 } from './_more-curves.helpers.js';
-import { json } from './utils.js';
+import { json, deepHexToBytes } from './utils.js';
 
 const rfc6979 = json('./vectors/rfc6979.json');
 const endoVectors = json('./vectors/secp256k1/endomorphism.json');
 
 const PREFIX = './vectors/wycheproof/';
-const vecdsa = json(PREFIX + 'ecdsa_test.json');
-const vecdh = json(PREFIX + 'ecdh_test.json');
-const ecdh_secp224r1_test = json(PREFIX + 'ecdh_secp224r1_test.json');
-const ecdh_secp256r1_test = json(PREFIX + 'ecdh_secp256r1_test.json');
-const ecdh_secp256k1_test = json(PREFIX + 'ecdh_secp256k1_test.json');
-const ecdh_secp384r1_test = json(PREFIX + 'ecdh_secp384r1_test.json');
-const ecdh_secp521r1_test = json(PREFIX + 'ecdh_secp521r1_test.json');
+const deepJson = (name) => deepHexToBytes(json(PREFIX + name + '_test.json'));
+const vecdsa = deepJson('ecdsa');
+const vecdh = deepJson('ecdh');
+const ecdh_secp224r1_test = deepJson('ecdh_secp224r1');
+const ecdh_secp256r1_test = deepJson('ecdh_secp256r1');
+const ecdh_secp256k1_test = deepJson('ecdh_secp256k1');
+const ecdh_secp384r1_test = deepJson('ecdh_secp384r1');
+const ecdh_secp521r1_test = deepJson('ecdh_secp521r1');
 // Tests with custom hashes
-const secp224r1_sha224_test = json(PREFIX + 'ecdsa_secp224r1_sha224_test.json');
-const secp224r1_sha256_test = json(PREFIX + 'ecdsa_secp224r1_sha256_test.json');
-const secp224r1_sha3_224_test = json(PREFIX + 'ecdsa_secp224r1_sha3_224_test.json');
-const secp224r1_sha3_256_test = json(PREFIX + 'ecdsa_secp224r1_sha3_256_test.json');
-const secp224r1_sha3_512_test = json(PREFIX + 'ecdsa_secp224r1_sha3_512_test.json');
-const secp224r1_sha512_test = json(PREFIX + 'ecdsa_secp224r1_sha512_test.json');
-const secp224r1_shake128_test = json(PREFIX + 'ecdsa_secp224r1_shake128_test.json');
+const secp224r1_sha224_test = deepJson('ecdsa_secp224r1_sha224');
+const secp224r1_sha256_test = deepJson('ecdsa_secp224r1_sha256');
+const secp224r1_sha3_224_test = deepJson('ecdsa_secp224r1_sha3_224');
+const secp224r1_sha3_256_test = deepJson('ecdsa_secp224r1_sha3_256');
+const secp224r1_sha3_512_test = deepJson('ecdsa_secp224r1_sha3_512');
+const secp224r1_sha512_test = deepJson('ecdsa_secp224r1_sha512');
+const secp224r1_shake128_test = deepJson('ecdsa_secp224r1_shake128');
 
-const secp256k1_sha256_bitcoin_test = json(PREFIX + 'ecdsa_secp256k1_sha256_bitcoin_test.json');
-const secp256k1_sha256_test = json(PREFIX + 'ecdsa_secp256k1_sha256_test.json');
-const secp256k1_sha3_256_test = json(PREFIX + 'ecdsa_secp256k1_sha3_256_test.json');
-const secp256k1_sha3_512_test = json(PREFIX + 'ecdsa_secp256k1_sha3_512_test.json');
-const secp256k1_sha512_test = json(PREFIX + 'ecdsa_secp256k1_sha512_test.json');
-const secp256k1_shake128_test = json(PREFIX + 'ecdsa_secp256k1_shake128_test.json');
-const secp256k1_shake256_test = json(PREFIX + 'ecdsa_secp256k1_shake256_test.json');
+const secp256k1_sha256_bitcoin_test = deepJson('ecdsa_secp256k1_sha256_bitcoin');
 
-const secp256r1_sha256_test = json(PREFIX + 'ecdsa_secp256r1_sha256_test.json');
-const secp256r1_sha3_256_test = json(PREFIX + 'ecdsa_secp256r1_sha3_256_test.json');
-const secp256r1_sha3_512_test = json(PREFIX + 'ecdsa_secp256r1_sha3_512_test.json');
-const secp256r1_sha512_test = json(PREFIX + 'ecdsa_secp256r1_sha512_test.json');
-const secp256r1_shake128_test = json(PREFIX + 'ecdsa_secp256r1_shake128_test.json');
+const secp256k1_sha256_test = deepJson('ecdsa_secp256k1_sha256');
+const secp256k1_sha3_256_test = deepJson('ecdsa_secp256k1_sha3_256');
+const secp256k1_sha3_512_test = deepJson('ecdsa_secp256k1_sha3_512');
+const secp256k1_sha512_test = deepJson('ecdsa_secp256k1_sha512');
+const secp256k1_shake128_test = deepJson('ecdsa_secp256k1_shake128');
+const secp256k1_shake256_test = deepJson('ecdsa_secp256k1_shake256');
 
-const secp384r1_sha384_test = json(PREFIX + 'ecdsa_secp384r1_sha384_test.json');
-const secp384r1_sha3_384_test = json(PREFIX + 'ecdsa_secp384r1_sha3_384_test.json');
-const secp384r1_sha3_512_test = json(PREFIX + 'ecdsa_secp384r1_sha3_512_test.json');
-const secp384r1_sha512_test = json(PREFIX + 'ecdsa_secp384r1_sha512_test.json');
-const secp384r1_shake256_test = json(PREFIX + 'ecdsa_secp384r1_shake256_test.json');
+const secp256r1_sha256_test = deepJson('ecdsa_secp256r1_sha256');
+const secp256r1_sha3_256_test = deepJson('ecdsa_secp256r1_sha3_256');
+const secp256r1_sha3_512_test = deepJson('ecdsa_secp256r1_sha3_512');
+const secp256r1_sha512_test = deepJson('ecdsa_secp256r1_sha512');
+const secp256r1_shake128_test = deepJson('ecdsa_secp256r1_shake128');
 
-const secp521r1_sha3_512_test = json(PREFIX + 'ecdsa_secp521r1_sha3_512_test.json');
-const secp521r1_sha512_test = json(PREFIX + 'ecdsa_secp521r1_sha512_test.json');
-const secp521r1_shake256_test = json(PREFIX + 'ecdsa_secp521r1_shake256_test.json');
+const secp384r1_sha384_test = deepJson('ecdsa_secp384r1_sha384');
+const secp384r1_sha3_384_test = deepJson('ecdsa_secp384r1_sha3_384');
+const secp384r1_sha3_512_test = deepJson('ecdsa_secp384r1_sha3_512');
+const secp384r1_sha512_test = deepJson('ecdsa_secp384r1_sha512');
+const secp384r1_shake256_test = deepJson('ecdsa_secp384r1_shake256');
 
+const secp521r1_sha3_512_test = deepJson('ecdsa_secp521r1_sha3_512');
+const secp521r1_sha512_test = deepJson('ecdsa_secp521r1_sha512');
+const secp521r1_shake256_test = deepJson('ecdsa_secp521r1_shake256');
 // brainpool
-const ecdh_brainpoolP256r1_test = json(PREFIX + 'ecdh_brainpoolP256r1_test.json');
-const ecdh_brainpoolP384r1_test = json(PREFIX + 'ecdh_brainpoolP384r1_test.json');
-const ecdh_brainpoolP512r1_test = json(PREFIX + 'ecdh_brainpoolP512r1_test.json');
-const brainpoolP256r1_sha256_test = json(PREFIX + 'ecdsa_brainpoolP256r1_sha256_test.json');
-const brainpoolP256r1_sha3_256_test = json(PREFIX + 'ecdsa_brainpoolP256r1_sha3_256_test.json');
-const brainpoolP384r1_sha384_test = json(PREFIX + 'ecdsa_brainpoolP384r1_sha384_test.json');
-const brainpoolP384r1_sha3_384_test = json(PREFIX + 'ecdsa_brainpoolP384r1_sha3_384_test.json');
-const brainpoolP512r1_sha512_test = json(PREFIX + 'ecdsa_brainpoolP512r1_sha512_test.json');
-const brainpoolP512r1_sha3_512_test = json(PREFIX + 'ecdsa_brainpoolP512r1_sha3_512_test.json');
+const ecdh_brainpoolP256r1_test = deepJson('ecdh_brainpoolP256r1');
+const ecdh_brainpoolP384r1_test = deepJson('ecdh_brainpoolP384r1');
+const ecdh_brainpoolP512r1_test = deepJson('ecdh_brainpoolP512r1');
+const brainpoolP256r1_sha256_test = deepJson('ecdsa_brainpoolP256r1_sha256');
+const brainpoolP256r1_sha3_256_test = deepJson('ecdsa_brainpoolP256r1_sha3_256');
+const brainpoolP384r1_sha384_test = deepJson('ecdsa_brainpoolP384r1_sha384');
+const brainpoolP384r1_sha3_384_test = deepJson('ecdsa_brainpoolP384r1_sha3_384');
+const brainpoolP512r1_sha512_test = deepJson('ecdsa_brainpoolP512r1_sha512');
+const brainpoolP512r1_sha3_512_test = deepJson('ecdsa_brainpoolP512r1_sha3_512');
 
 // TODO: maybe add to noble-hashes?
 const wrapShake = (shake, dkLen) => {
@@ -109,38 +117,19 @@ should('fields', () => {
 // If that doesn't work, we ignore such vector.
 function verifyECDHVector(test, curve) {
   if (test.flags.includes('InvalidAsn')) return; // Ignore invalid ASN
-  if (test.result === 'valid' || test.result === 'acceptable') {
-    const fnLen = curve.Point.Fn.BYTES; // 32 for P256
-    const fpLen = curve.Point.Fp.BYTES; // 32 for P256
-    const encodedHexLen = fpLen * 2 * 2 + 2; // 130 (65 * 2) for P256
-    const pubB = test.public.slice(-encodedHexLen); // slice(-130) for P256
-    let privA = test.private;
+  const { public: pkW, private: skW, shared } = test;
+  const pk = test.flags.includes('CompressedPoint')
+    ? pkW.subarray(-curve.lengths.public)
+    : concatBytes(new Uint8Array([0x04]), pkW.subarray(-(curve.lengths.publicUncompressed - 1)));
 
-    // Some wycheproof vectors are padded with 00 (because c6 > 128 and would be negative number otherwise):
-    // 00c6cafb74e2a50c83b3d232c4585237f44d4c5433c4b3f50ce978e6aeda3a4f5d
-    // instead of
-    // c6cafb74e2a50c83b3d232c4585237f44d4c5433c4b3f50ce978e6aeda3a4f5d
-    if (privA.length / 2 === fnLen + 1 && privA.startsWith('00')) privA = privA.slice(2);
-    // privA = DER._int.decode(privA);
-    if (!curve.utils.isValidSecretKey(privA)) return; // Ignore invalid private key size
-    const pubB_b = hexToBytes(pubB);
-    try {
-      curve.Point.fromBytes(pubB_b);
-    } catch (e) {
-      if (e.message.startsWith('bad point: got length')) return; // Ignore
-      throw e;
-    }
-    const privA_b = hexToBytes(privA);
-    const shared = curve.getSharedSecret(privA_b, pubB_b).subarray(1);
-    eql(bytesToHex(shared), test.shared, 'valid');
+  const sk = new Uint8Array(curve.lengths.secret);
+  sk.set(skW.subarray(-curve.lengths.secret), Math.max(sk.length - skW.length, 0));
+  if (test.result === 'valid' || test.result === 'acceptable') {
+    eql(curve.getSharedSecret(sk, pk).slice(1), shared, 'valid');
   } else if (test.result === 'invalid') {
-    let failed = false;
-    try {
-      curve.getSharedSecret(hexToBytes(test.private), hexToBytes(test.public));
-    } catch (error) {
-      failed = true;
-    }
-    eql(failed, true, 'invalid');
+    // These are SPKI decodeding errors (wrong curve oid/order inside pubkey)
+    if (test.flags.includes('UnnamedCurve') || test.flags.includes('WrongCurve')) return;
+    throws(() => curve.getSharedSecret(sk, pk));
   } else throw new Error('unknown test result');
 }
 
@@ -355,22 +344,24 @@ const WYCHEPROOF_ECDSA = {
 
 function runWycheproof(name, CURVE, group, index) {
   const key = group.publicKey;
-  const uncomp = hexToBytes(key.uncompressed);
-  const pubKey = CURVE.Point.fromBytes(uncomp);
-  eql(pubKey.x, BigInt(`0x${key.wx}`));
-  eql(pubKey.y, BigInt(`0x${key.wy}`));
+  const pubKey = CURVE.Point.fromBytes(key.uncompressed);
+  eql(pubKey.x, bytesToNumberBE(key.wx));
+  eql(pubKey.y, bytesToNumberBE(key.wy));
   const pubR = pubKey.toBytes();
   for (const test of group.tests) {
-    const m = CURVE.hash(hexToBytes(test.msg));
-    const { sig } = test;
+    const { msg: m, sig } = test;
     if (test.result === 'valid' || test.result === 'acceptable') {
-      const verified = CURVE.verify(hexToBytes(sig), m, pubR, {
+      const verified = CURVE.verify(sig, m, pubR, {
         lowS: name === 'secp256k1',
         format: 'der',
       });
       if (name === 'secp256k1') {
         // lowS: true for secp256k1
-        eql(verified, !CURVE.Signature.fromHex(sig, 'der').hasHighS(), `${index}: verify invalid`);
+        eql(
+          verified,
+          !CURVE.Signature.fromBytes(sig, 'der').hasHighS(),
+          `${index}: verify invalid`
+        );
       } else {
         eql(verified, true, `${index}: verify invalid`);
       }
@@ -396,10 +387,9 @@ describe('wycheproof ECDSA', () => {
       if (group.key.curve === 'secp224r1' && group.sha !== 'SHA-224') {
         if (group.sha === 'SHA-256') CURVE = ecdsa(CURVE.Point, sha256);
       }
-      const uncomp = hexToBytes(group.key.uncompressed);
-      const pubKey = CURVE.Point.fromBytes(uncomp);
-      eql(pubKey.x, BigInt(`0x${group.key.wx}`));
-      eql(pubKey.y, BigInt(`0x${group.key.wy}`));
+      const pubKey = CURVE.Point.fromBytes(group.key.uncompressed);
+      eql(pubKey.x, bytesToNumberBE(group.key.wx));
+      eql(pubKey.y, bytesToNumberBE(group.key.wy));
       for (const test of group.tests) {
         if (['Hash weaker than DL-group'].includes(test.comment)) {
           continue;
@@ -407,22 +397,22 @@ describe('wycheproof ECDSA', () => {
         // These old Wycheproof vectors which still accept missing zero, new one is not.
         if (test.flags.includes('MissingZero') && test.result === 'acceptable')
           test.result = 'invalid';
-        const m = CURVE.hash(hexToBytes(test.msg));
-        if (test.result === 'valid' || test.result === 'acceptable') {
-          const verified = CURVE.verify(hexToBytes(test.sig), m, pubKey.toBytes(), {
+        const { msg: m, sig, result } = test;
+        if (result === 'valid' || result === 'acceptable') {
+          const verified = CURVE.verify(sig, m, pubKey.toBytes(), {
             lowS: hasLowS,
             format: 'der',
           });
           if (hasLowS) {
             // lowS: true for secp256k1
-            eql(verified, !CURVE.Signature.fromHex(test.sig, 'der').hasHighS(), `valid`);
+            eql(verified, !CURVE.Signature.fromBytes(sig, 'der').hasHighS(), `valid`);
           } else {
             eql(verified, true, `valid`);
           }
-        } else if (test.result === 'invalid') {
+        } else if (result === 'invalid') {
           let failed = false;
           try {
-            failed = !CURVE.verify(test.sig, m, pubKey.toBytes());
+            failed = !CURVE.verify(sig, m, pubKey.toBytes());
           } catch (error) {
             failed = true;
           }
@@ -465,32 +455,21 @@ describe('RFC6979', () => {
       eql(pubPoint.x, hexToBigint(v.Ux));
       eql(pubPoint.y, hexToBigint(v.Uy));
       for (const c of v.cases) {
-        const h = curve.hash(utf8ToBytes(c.message));
+        const h = utf8ToBytes(c.message);
         const opts = { lowS: hasLowS, format: 'der' };
         const sig = curve.sign(h, priv, opts);
         const sigObj = curve.Signature.fromBytes(sig, 'der');
         eql(sigObj.r, hexToBigint(c.r), 'R');
         eql(sigObj.s, hexToBigint(c.s), 'S');
+        eql(curve.verify(sigObj.toBytes('der'), h, pubKey, opts), true, 'verify(1)');
         eql(
-          curve.verify(
-            sigObj.toBytes('der'),
-            h,
-            pubKey,
-            Object.assign({}, opts, { format: 'der' })
-          ),
-          true,
-          'verify(1)'
-        );
-        eql(
-          curve.verify(
-            sigObj.toBytes('compact'),
-            h,
-            pubKey,
-            Object.assign({}, opts, { format: 'compact' })
-          ),
+          curve.verify(sigObj.toBytes('compact'), h, pubKey, { ...opts, format: 'compact' }),
           true,
           'verify(2)'
         );
+        // default format
+        eql(curve.verify(sigObj.toBytes(), h, pubKey, { lowS: hasLowS }), true, 'verify(3)');
+        // overwrite to use default
         eql(
           curve.verify(sigObj.toBytes(), h, pubKey, Object.assign({}, opts, { format: undefined })),
           true,
@@ -575,7 +554,7 @@ should('handle edge-case in P521', () => {
   //   '14e8dafcb8f6a7d59757ec8896981466d6f0eb5ca07dcaa46e6bb86eb20471e4' +
   //   '5702429ef132e0c96615';
 
-  const hexp = p521.sign(msg, privKey, { lowS: false, prehash: true, format: 'der' });
+  const hexp = p521.sign(msg, privKey, { lowS: false, format: 'der' });
   eql(bytesToHex(hexp), sig);
 });
 

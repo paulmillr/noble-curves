@@ -17,6 +17,11 @@ export type AffinePoint<T> = {
 
 // We can't "abstract out" coordinates (X, Y, Z; and T in Edwards): argument names of constructor
 // are not accessible. See Typescript gh-56093, gh-41594.
+//
+// We have to use recursive types, so it will return actual point, not constained `CurvePoint`.
+// If, at any point, P is `any`, it will erase all types and replace it
+// with `any`, because of recursion, `any implements CurvePoint`,
+// but we lose all constrains on methods.
 
 /** Base interface for all elliptic curve Points. */
 export interface CurvePoint<F, P extends CurvePoint<F, P>> {
@@ -49,24 +54,65 @@ export interface CurvePoint<F, P extends CurvePoint<F, P>> {
 }
 
 /** Base interface for all elliptic curve Point constructors. */
-export interface CurvePointCons<F, P extends CurvePoint<F, P>> {
+export interface CurvePointCons<P extends CurvePoint<any, P>> {
   [Symbol.hasInstance]: (item: unknown) => boolean;
   BASE: P;
   ZERO: P;
   /** Field for basic curve math */
-  Fp: IField<F>;
+  Fp: IField<P_F<P>>;
   /** Scalar field, for scalars in multiply and others */
   Fn: IField<bigint>;
   /** Creates point from x, y. Does NOT validate if the point is valid. Use `.assertValidity()`. */
-  fromAffine(p: AffinePoint<F>): P;
+  fromAffine(p: AffinePoint<P_F<P>>): P;
   fromBytes(bytes: Uint8Array): P;
   fromHex(hex: string): P;
 }
 
-// Type inference helpers
-// PC - PointConstructor, P - Point, Fp - Field element
-export type GetPointConsF<PC> = PC extends CurvePointCons<infer F, any> ? F : never;
-export type GetPointConsPoint<PC> = PC extends CurvePointCons<any, infer P> ? P : never;
+// Type inference helpers: PC - PointConstructor, P - Point, Fp - Field element
+// Short names, because we use them a lot in result types:
+// * we can't do 'P = GetCurvePoint<PC>': this is default value and doesn't constrain anything
+// * we can't do 'type X = GetCurvePoint<PC>': it won't be accesible for arguments/return types
+// * `CurvePointCons<P extends CurvePoint<any, P>>` constraints from interface definition
+//   won't propagate, if `PC extends CurvePointCons<any>`: the P would be 'any', which is incorrect
+// * PC could be super specific with super specific P, which implements CurvePoint<any, P>.
+//   this means we need to do stuff like
+//   `function test<P extends CurvePoint<any, P>, PC extends CurvePointCons<P>>(`
+//   if we want type safety around P, otherwise PC_P<PC> will be any
+
+/** Returns Fp type from Point (P_F<P> == P.F) */
+export type P_F<P extends CurvePoint<any, P>> = P extends CurvePoint<infer F, P> ? F : never;
+/** Returns Fp type from PointCons (PC_F<PC> == PC.P.F) */
+export type PC_F<PC extends CurvePointCons<CurvePoint<any, any>>> = PC['Fp']['ZERO'];
+/** Returns Point type from PointCons (PC_P<PC> == PC.P) */
+export type PC_P<PC extends CurvePointCons<CurvePoint<any, any>>> = PC['ZERO'];
+
+// Ugly hack to get proper type inference, because in typescript fails to infer resursively.
+// The hack allows to do up to 10 chained operations without applying type erasure.
+//
+// Types which won't work:
+// * `CurvePointCons<CurvePoint<any, any>>`, will return `any` after 1 operation
+// * `CurvePointCons<any>: WeierstrassPointCons<bigint> extends CurvePointCons<any> = false`
+// * `P extends CurvePoint, PC extends CurvePointCons<P>`
+//     * It can't infer P from PC alone
+//     * Too many relations between F, P & PC
+//     * It will infer P/F if `arg: CurvePointCons<F, P>`, but will fail if PC is generic
+//     * It will work correctly if there is an additional argument of type P
+//     * But generally, we don't want to parametrize `CurvePointCons` over `F`: it will complicate
+//       types, making them un-inferable
+// prettier-ignore
+export type PC_ANY = CurvePointCons<
+  CurvePoint<any,
+  CurvePoint<any,
+  CurvePoint<any,
+  CurvePoint<any,
+  CurvePoint<any,
+  CurvePoint<any,
+  CurvePoint<any,
+  CurvePoint<any,
+  CurvePoint<any,
+  CurvePoint<any, any>
+  >>>>>>>>>
+>;
 
 // More like SigAlgorithmInfo, not CurveInfo
 export interface CurveInfo {
@@ -94,11 +140,10 @@ export function negateCt<T extends { negate: () => T }>(condition: boolean, item
  * so this improves performance massively.
  * Optimization: converts a list of projective points to a list of identical points with Z=1.
  */
-export function normalizeZ<
-  PC extends CurvePointCons<any, any>,
-  F = GetPointConsF<PC>,
-  P extends CurvePoint<F, P> = GetPointConsPoint<PC>,
->(c: CurvePointCons<F, P>, points: P[]): P[] {
+export function normalizeZ<P extends CurvePoint<any, P>, PC extends CurvePointCons<P>>(
+  c: PC,
+  points: P[]
+): P[] {
   const invertedZs = FpInvertBatch(
     c.Fp,
     points.map((p) => p.Z!)
@@ -202,14 +247,14 @@ function assert0(n: bigint): void {
  * @todo Research returning 2d JS array of windows, instead of a single window.
  * This would allow windows to be in different memory locations
  */
-export class wNAF<F, P extends CurvePoint<F, P>> {
-  private readonly BASE: P;
-  private readonly ZERO: P;
-  private readonly Fn: CurvePointCons<F, P>['Fn'];
+export class wNAF<PC extends PC_ANY> {
+  private readonly BASE: PC_P<PC>;
+  private readonly ZERO: PC_P<PC>;
+  private readonly Fn: PC['Fn'];
   readonly bits: number;
 
   // Parametrized with a given Point class (not individual point)
-  constructor(Point: CurvePointCons<F, P>, bits: number) {
+  constructor(Point: PC, bits: number) {
     this.BASE = Point.BASE;
     this.ZERO = Point.ZERO;
     this.Fn = Point.Fn;
@@ -217,8 +262,8 @@ export class wNAF<F, P extends CurvePoint<F, P>> {
   }
 
   // non-const time multiplication ladder
-  _unsafeLadder(elm: P, n: bigint, p: P = this.ZERO): P {
-    let d: P = elm;
+  _unsafeLadder(elm: PC_P<PC>, n: bigint, p: PC_P<PC> = this.ZERO): PC_P<PC> {
+    let d: PC_P<PC> = elm;
     while (n > _0n) {
       if (n & _1n) p = p.add(d);
       d = d.double();
@@ -239,10 +284,10 @@ export class wNAF<F, P extends CurvePoint<F, P>> {
    * @param W window size
    * @returns precomputed point tables flattened to a single array
    */
-  private precomputeWindow(point: P, W: number): P[] {
+  private precomputeWindow(point: PC_P<PC>, W: number): PC_P<PC>[] {
     const { windows, windowSize } = calcWOpts(W, this.bits);
-    const points: P[] = [];
-    let p: P = point;
+    const points: PC_P<PC>[] = [];
+    let p: PC_P<PC> = point;
     let base = p;
     for (let window = 0; window < windows; window++) {
       base = p;
@@ -263,7 +308,7 @@ export class wNAF<F, P extends CurvePoint<F, P>> {
    * https://github.com/paulmillr/noble-secp256k1/blob/47cb1669b6e506ad66b35fe7d76132ae97465da2/index.ts#L502-L541
    * @returns real and fake (for const-time) points
    */
-  private wNAF(W: number, precomputes: P[], n: bigint): { p: P; f: P } {
+  private wNAF(W: number, precomputes: PC_P<PC>[], n: bigint): { p: PC_P<PC>; f: PC_P<PC> } {
     // Scalar should be smaller than field order
     if (!this.Fn.isValid(n)) throw new Error('invalid scalar');
     // Accumulators
@@ -300,7 +345,12 @@ export class wNAF<F, P extends CurvePoint<F, P>> {
    * @param acc accumulator point to add result of multiplication
    * @returns point
    */
-  private wNAFUnsafe(W: number, precomputes: P[], n: bigint, acc: P = this.ZERO): P {
+  private wNAFUnsafe(
+    W: number,
+    precomputes: PC_P<PC>[],
+    n: bigint,
+    acc: PC_P<PC> = this.ZERO
+  ): PC_P<PC> {
     const wo = calcWOpts(W, this.bits);
     for (let window = 0; window < wo.windows; window++) {
       if (n === _0n) break; // Early-exit, skip 0 value
@@ -319,11 +369,11 @@ export class wNAF<F, P extends CurvePoint<F, P>> {
     return acc;
   }
 
-  private getPrecomputes(W: number, point: P, transform?: Mapper<P>): P[] {
+  private getPrecomputes(W: number, point: PC_P<PC>, transform?: Mapper<PC_P<PC>>): PC_P<PC>[] {
     // Calculate precomputes on a first run, reuse them after
     let comp = pointPrecomputes.get(point);
     if (!comp) {
-      comp = this.precomputeWindow(point, W) as P[];
+      comp = this.precomputeWindow(point, W) as PC_P<PC>[];
       if (W !== 1) {
         // Doing transform outside of if brings 15% perf hit
         if (typeof transform === 'function') comp = transform(comp);
@@ -333,12 +383,16 @@ export class wNAF<F, P extends CurvePoint<F, P>> {
     return comp;
   }
 
-  cached(point: P, scalar: bigint, transform?: Mapper<P>): { p: P; f: P } {
+  cached(
+    point: PC_P<PC>,
+    scalar: bigint,
+    transform?: Mapper<PC_P<PC>>
+  ): { p: PC_P<PC>; f: PC_P<PC> } {
     const W = getW(point);
     return this.wNAF(W, this.getPrecomputes(W, point, transform), scalar);
   }
 
-  unsafe(point: P, scalar: bigint, transform?: Mapper<P>, prev?: P): P {
+  unsafe(point: PC_P<PC>, scalar: bigint, transform?: Mapper<PC_P<PC>>, prev?: PC_P<PC>): PC_P<PC> {
     const W = getW(point);
     if (W === 1) return this._unsafeLadder(point, scalar, prev); // For W=1 ladder is ~x2 faster
     return this.wNAFUnsafe(W, this.getPrecomputes(W, point, transform), scalar, prev);
@@ -347,13 +401,13 @@ export class wNAF<F, P extends CurvePoint<F, P>> {
   // We calculate precomputes for elliptic curve point multiplication
   // using windowed method. This specifies window size and
   // stores precomputed values. Usually only base point would be precomputed.
-  createCache(P: P, W: number): void {
+  createCache(P: PC_P<PC>, W: number): void {
     validateW(W, this.bits);
     pointWindowSizes.set(P, W);
     pointPrecomputes.delete(P);
   }
 
-  hasCache(elm: P): boolean {
+  hasCache(elm: PC_P<PC>): boolean {
     return getW(elm) !== 1;
   }
 }
@@ -362,8 +416,8 @@ export class wNAF<F, P extends CurvePoint<F, P>> {
  * Endomorphism-specific multiplication for Koblitz curves.
  * Cost: 128 dbl, 0-256 adds.
  */
-export function mulEndoUnsafe<F, P extends CurvePoint<F, P>>(
-  Point: CurvePointCons<F, P>,
+export function mulEndoUnsafe<P extends CurvePoint<any, P>, PC extends CurvePointCons<P>>(
+  Point: PC,
   point: P,
   k1: bigint,
   k2: bigint
@@ -391,8 +445,8 @@ export function mulEndoUnsafe<F, P extends CurvePoint<F, P>>(
  * @param points array of L curve points
  * @param scalars array of L scalars (aka secret keys / bigints)
  */
-export function pippenger<F, P extends CurvePoint<F, P>>(
-  c: CurvePointCons<F, P>,
+export function pippenger<P extends CurvePoint<any, P>, PC extends CurvePointCons<P>>(
+  c: PC,
   points: P[],
   scalars: bigint[]
 ): P {
@@ -444,8 +498,8 @@ export function pippenger<F, P extends CurvePoint<F, P>>(
  * @param points array of L curve points
  * @returns function which multiplies points with scaars
  */
-export function precomputeMSMUnsafe<F, P extends CurvePoint<F, P>>(
-  c: CurvePointCons<F, P>,
+export function precomputeMSMUnsafe<P extends CurvePoint<any, P>, PC extends CurvePointCons<P>>(
+  c: PC,
   points: P[],
   windowSize: number
 ): (scalars: bigint[]) => P {

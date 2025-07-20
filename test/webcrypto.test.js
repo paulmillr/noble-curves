@@ -92,17 +92,14 @@ describe('webcrypto', () => {
           // Sign
           if (canSign) {
             const sigWeb = await web.sign(MSG, randomWeb, { format: secFormat });
-            let sigNoble = noble.sign(MSG, randomNoble, { prehash: true });
+            let sigNoble = noble.sign(MSG, randomNoble);
             // if (c !== 'ed25519' && c !== 'ed448') sigNoble = sigNoble.toBytes('compact');
             deepStrictEqual(await web.verify(sigWeb, MSG, publicWeb, { format: pubFormat }), true);
             deepStrictEqual(
               await web.verify(sigNoble, MSG, randomNoblePub, { format: pubFormat }),
               true
             );
-            deepStrictEqual(
-              noble.verify(sigWeb, MSG, rawPubWeb, { prehash: true, lowS: false }),
-              true
-            );
+            deepStrictEqual(noble.verify(sigWeb, MSG, rawPubWeb, { lowS: false }), true);
           }
           // Get shared secret
           if (canDerive && secFormat === pubFormat) {

@@ -4,6 +4,7 @@
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import {
+  anumber,
   bytesToHex as bytesToHex_,
   concatBytes as concatBytes_,
   hexToBytes as hexToBytes_,
@@ -21,8 +22,7 @@ export {
 } from '@noble/hashes/utils.js';
 const _0n = /* @__PURE__ */ BigInt(0);
 const _1n = /* @__PURE__ */ BigInt(1);
-export type Hex = Uint8Array | string; // hex strings are accepted for simplicity
-export type PrivKey = Hex | bigint; // bigints are accepted to ease learning curve
+
 export type CHash = {
   (message: Uint8Array): Uint8Array;
   blockLen: number;
@@ -44,33 +44,39 @@ export type FHash = (message: Uint8Array) => Uint8Array;
 //   ) => boolean;
 // }
 
-export function abool(title: string, value: boolean): void {
-  if (typeof value !== 'boolean') throw new Error(title + ' boolean expected, got ' + value);
+export function abool(value: boolean, title: string = ''): boolean {
+  if (typeof value !== 'boolean') {
+    const prefix = title && '"' + title + '" ';
+    throw new Error(prefix + 'expected boolean, got type=' + typeof value);
+  }
+  return value;
 }
 
 // TODO: add, re-export from noble-hashes
 /** Asserts something is Uint8Array. */
-export function abytes(
-  b: Uint8Array | undefined,
-  expectedLength?: number,
-  message: string = ''
-): Uint8Array {
-  const notbytes = !isBytes_(b);
-  const length = b?.length;
-  const diffLen = expectedLength !== undefined && length !== expectedLength;
-  if (notbytes || diffLen) {
-    const prefix = message && '"' + message + '" ';
-    const suffix = notbytes
-      ? `, got type=${typeof b}`
-      : ` of length ${expectedLength}, got length=${length}`;
-    throw new Error(prefix + 'expected Uint8Array' + suffix);
+export function abytes(value: Uint8Array, length?: number, title: string = ''): Uint8Array {
+  const notBytes = !isBytes_(value);
+  const len = value?.length;
+  const needsLen = length !== undefined;
+  if (notBytes || (needsLen && len !== length)) {
+    const prefix = title && '"' + title + '" ';
+    const ofLen = needsLen ? ` of length ${length}` : '';
+    const got = notBytes ? `, got type=${typeof value}` : `, got length=${len}`;
+    throw new Error(prefix + 'expected Uint8Array' + ofLen + got);
   }
-  return b;
+  return value;
 }
 
 // Used in weierstrass, der
+function abignumer(n: number | bigint) {
+  if (typeof n === 'bigint') {
+    if (!isPosBig(n)) throw new Error('positive bigint expected, got ' + n);
+  } else anumber(n);
+  return n;
+}
+
 export function numberToHexUnpadded(num: number | bigint): string {
-  const hex = num.toString(16);
+  const hex = abignumer(num).toString(16);
   return hex.length & 1 ? '0' + hex : hex;
 }
 
@@ -89,14 +95,18 @@ export function bytesToNumberLE(bytes: Uint8Array): bigint {
 }
 
 export function numberToBytesBE(n: number | bigint, len: number): Uint8Array {
-  return hexToBytes_(n.toString(16).padStart(len * 2, '0'));
+  anumber(len);
+  n = abignumer(n);
+  const res = hexToBytes_(n.toString(16).padStart(len * 2, '0'));
+  if (res.length !== len) throw new Error('number too large');
+  return res;
 }
 export function numberToBytesLE(n: number | bigint, len: number): Uint8Array {
   return numberToBytesBE(n, len).reverse();
 }
 // Unpadded, rarely used
 export function numberToVarBytesBE(n: number | bigint): Uint8Array {
-  return hexToBytes_(numberToHexUnpadded(n));
+  return hexToBytes_(numberToHexUnpadded(abignumer(n)));
 }
 
 // Compares 2 u8a-s in kinda constant time
@@ -115,8 +125,21 @@ export function copyBytes(bytes: Uint8Array): Uint8Array {
   return Uint8Array.from(bytes);
 }
 
+/**
+ * Decodes 7-bit ASCII string to Uint8Array, throws on non-ascii symbols
+ * Should be safe to use for things expected to be ASCII.
+ * Returns exact same result as utf8ToBytes for ASCII or throws.
+ */
 export function asciiToBytes(ascii: string): Uint8Array {
-  return Uint8Array.from(ascii, (c) => c.charCodeAt(0));
+  return Uint8Array.from(ascii, (c, i) => {
+    const charCode = c.charCodeAt(0);
+    if (c.length !== 1 || charCode > 127) {
+      throw new Error(
+        `string contains non-ASCII character "${ascii[i]}" with code ${charCode} at position ${i}`
+      );
+    }
+    return charCode;
+  });
 }
 
 /**
@@ -338,4 +361,24 @@ export function memoized<T extends object, R, O extends any[]>(
     map.set(arg, computed);
     return computed;
   };
+}
+
+export interface CryptoKeys {
+  lengths: { seed?: number; public?: number; secret?: number };
+  keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
+  getPublicKey: (secretKey: Uint8Array) => Uint8Array;
+}
+
+/** Generic interface for signatures. Has keygen, sign and verify. */
+export interface Signer extends CryptoKeys {
+  // Interfaces are fun. We cannot just add new fields without copying old ones.
+  lengths: {
+    seed?: number;
+    public?: number;
+    secret?: number;
+    signRand?: number;
+    signature?: number;
+  };
+  sign: (msg: Uint8Array, secretKey: Uint8Array) => Uint8Array;
+  verify: (sig: Uint8Array, msg: Uint8Array, publicKey: Uint8Array) => boolean;
 }

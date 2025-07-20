@@ -20,7 +20,7 @@ import {
   numberToBytesLE,
   randomBytes,
   type FHash,
-  type Hex,
+  type Signer,
 } from '../utils.ts';
 import {
   _createCurveFields,
@@ -52,7 +52,7 @@ export interface EdwardsPoint extends CurvePoint<bigint, EdwardsPoint> {
   readonly T: bigint;
 }
 /** Static methods of Extended Point with coordinates in X, Y, Z, T. */
-export interface EdwardsPointCons extends CurvePointCons<bigint, EdwardsPoint> {
+export interface EdwardsPointCons extends CurvePointCons<EdwardsPoint> {
   new (X: bigint, Y: bigint, Z: bigint, T: bigint): EdwardsPoint;
   fromBytes(bytes: Uint8Array, zip215?: boolean): EdwardsPoint;
   fromHex(hex: string, zip215?: boolean): EdwardsPoint;
@@ -427,7 +427,7 @@ export function edwards(CURVE: EdwardsOpts, curveOpts: EdwardsExtraOpts = {}): E
       abytes(bytes, len, 'point');
       const { a, d } = CURVE;
       bytes = copyBytes(bytes); // copy hex to a new array
-      abool('zip215', zip215);
+      abool(zip215, 'zip215');
       const normed = bytes.slice(); // copy again, we'll manipulate it
       const lastByte = bytes[len - 1]; // select last byte
       normed[len - 1] = lastByte & ~0x80; // clear last bit
@@ -507,7 +507,7 @@ export abstract class PrimeEdwardsPoint<T extends PrimeEdwardsPoint<T>>
     notImplemented();
   }
 
-  static fromHex(_hex: Hex): any {
+  static fromHex(_hex: string): any {
     notImplemented();
   }
 
@@ -610,7 +610,7 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
   const domain =
     eddsaOpts.domain ||
     ((data: Uint8Array, ctx: Uint8Array, phflag: boolean) => {
-      abool('phflag', phflag);
+      abool(phflag, 'phflag');
       if (ctx.length || phflag) throw new Error('Contexts/pre-hash are not supported');
       return data;
     }); // NOOP
@@ -694,7 +694,7 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
     sig = abytes(sig, 2 * len, 'signature'); // An extended group equation is checked.
     msg = abytes(msg, undefined, 'message');
     publicKey = abytes(publicKey, len, 'publicKey');
-    if (zip215 !== undefined) abool('zip215', zip215);
+    if (zip215 !== undefined) abool(zip215, 'zip215');
     if (prehash) msg = prehash(msg); // for ed25519ph, etc
 
     const s = bytesToNumberLE(sig.slice(len, 2 * len));
@@ -728,6 +728,7 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
     seed: size,
   };
   function randomSecretKey(seed = randomBytes_!(lengths.seed)): Uint8Array {
+    abytes(seed, lengths.seed, 'seed');
     return seed;
   }
   function keygen(seed?: Uint8Array) {
@@ -793,5 +794,5 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
     Point,
     info: { type: 'edwards' as const },
     lengths,
-  });
+  }) satisfies Signer;
 }

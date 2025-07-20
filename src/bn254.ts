@@ -55,7 +55,7 @@ Ate loop size: 6x+2
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import {
-  bls,
+  blsBasic,
   type BLSCurvePair,
   type PostPrecomputeFn,
   type PostPrecomputePointAddFn,
@@ -216,4 +216,4 @@ const bn254_params = {
  * Contains G1 / G2 operations and pairings.
  */
 // bn254_hasher
-export const bn254: BLSCurvePair = bls(fields, bn254_G1, bn254_G2, bn254_params);
+export const bn254: BLSCurvePair = blsBasic(fields, bn254_G1, bn254_G2, bn254_params);

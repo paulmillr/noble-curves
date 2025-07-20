@@ -15,13 +15,7 @@ import {
   isBytes,
   isHash,
 } from '../utils.ts';
-import type {
-  AffinePoint,
-  CurvePoint,
-  CurvePointCons,
-  GetPointConsF,
-  GetPointConsPoint,
-} from './curve.ts';
+import type { AffinePoint, PC_ANY, PC_F, PC_P } from './curve.ts';
 import { FpInvertBatch, mod, type IField } from './modular.ts';
 
 export type UnicodeOrBytes = string | Uint8Array;
@@ -75,8 +69,11 @@ function anum(item: unknown): void {
   if (!Number.isSafeInteger(item)) throw new Error('number expected');
 }
 
+// User can always use utf8 if they want, by passing Uint8Array.
+// If string is passed, we treat it as ASCII: other formats are likely a mistake.
 function normDST(DST: UnicodeOrBytes): Uint8Array {
-  if (!isBytes(DST) && typeof DST !== 'string') throw new Error('DST must be Uint8Array or string');
+  if (!isBytes(DST) && typeof DST !== 'string')
+    throw new Error('DST must be Uint8Array or ascii string');
   return typeof DST === 'string' ? asciiToBytes(DST) : DST;
 }
 
@@ -219,13 +216,10 @@ export type MapToCurve<T> = (scalar: bigint[]) => AffinePoint<T>;
 // Separated from initialization opts, so users won't accidentally change per-curve parameters
 // (changing DST is ok!)
 export type htfBasicOpts = { DST: UnicodeOrBytes };
-export type H2CMethod<F, P extends CurvePoint<F, P>> = (
-  msg: Uint8Array,
-  options?: htfBasicOpts
-) => CurvePoint<F, P>;
+export type H2CMethod<P> = (msg: Uint8Array, options?: htfBasicOpts) => P;
 // TODO: remove
-export type H2CHasherBase<F, P extends CurvePoint<F, P>> = {
-  hashToCurve: H2CMethod<F, P>;
+export type H2CHasherBase<P> = {
+  hashToCurve: H2CMethod<P>;
   hashToScalar: (msg: Uint8Array, options?: htfBasicOpts) => bigint;
 };
 /**
@@ -235,48 +229,44 @@ export type H2CHasherBase<F, P extends CurvePoint<F, P>> = {
  * * encodeToCurve: `map(hash(input))`, encodes NON-UNIFORM bytes to curve (WITH hashing)
  * * mapToCurve: `map(scalars)`, encodes NON-UNIFORM scalars to curve (NO hashing)
  */
-export type H2CHasher<F, P extends CurvePoint<F, P>> = H2CHasherBase<F, P> & {
-  Point: CurvePointCons<F, P>;
-  encodeToCurve: H2CMethod<F, P>;
-  mapToCurve: MapToCurve<F>;
+export type H2CHasher<PC extends PC_ANY> = H2CHasherBase<PC_P<PC>> & {
+  Point: PC;
+  encodeToCurve: H2CMethod<PC_P<PC>>;
+  mapToCurve: MapToCurve<PC_F<PC>>;
   defaults: H2COpts & { encodeDST?: UnicodeOrBytes };
 };
 
 export const _DST_scalar: Uint8Array = asciiToBytes('HashToScalar-');
 
 /** Creates hash-to-curve methods from EC Point and mapToCurve function. See {@link H2CHasher}. */
-export function createHasher<
-  PC extends CurvePointCons<any, any>,
-  F = GetPointConsF<PC>,
-  P extends CurvePoint<F, P> = GetPointConsPoint<PC>,
->(
-  Point: CurvePointCons<F, P>,
-  mapToCurve: MapToCurve<F>,
+export function createHasher<PC extends PC_ANY>(
+  Point: PC,
+  mapToCurve: MapToCurve<PC_F<PC>>,
   defaults: H2COpts & { encodeDST?: UnicodeOrBytes }
-): H2CHasher<F, P> {
+): H2CHasher<PC> {
   if (typeof mapToCurve !== 'function') throw new Error('mapToCurve() must be defined');
-  function map(num: bigint[]) {
-    return Point.fromAffine(mapToCurve(num));
+  function map(num: bigint[]): PC_P<PC> {
+    return Point.fromAffine(mapToCurve(num)) as PC_P<PC>;
   }
-  function clear(initial: CurvePoint<F, P>) {
+  function clear(initial: PC_P<PC>): PC_P<PC> {
     const P = initial.clearCofactor();
-    if (P.equals(Point.ZERO)) return Point.ZERO; // zero will throw in assert
+    if (P.equals(Point.ZERO)) return Point.ZERO as PC_P<PC>; // zero will throw in assert
     P.assertValidity();
-    return P;
+    return P as PC_P<PC>;
   }
 
   return {
     defaults,
     Point,
 
-    hashToCurve(msg: Uint8Array, options?: htfBasicOpts): P {
+    hashToCurve(msg: Uint8Array, options?: htfBasicOpts): PC_P<PC> {
       const opts = Object.assign({}, defaults, options);
       const u = hash_to_field(msg, 2, opts);
       const u0 = map(u[0]);
       const u1 = map(u[1]);
-      return clear(u0.add(u1));
+      return clear(u0.add(u1) as PC_P<PC>);
     },
-    encodeToCurve(msg: Uint8Array, options?: htfBasicOpts): P {
+    encodeToCurve(msg: Uint8Array, options?: htfBasicOpts): PC_P<PC> {
       const optsDst = defaults.encodeDST ? { DST: defaults.encodeDST } : {};
       const opts = Object.assign({}, defaults, optsDst, options);
       const u = hash_to_field(msg, 1, opts);
@@ -284,7 +274,7 @@ export function createHasher<
       return clear(u0);
     },
     /** See {@link H2CHasher} */
-    mapToCurve(scalars: bigint[]): P {
+    mapToCurve(scalars: bigint[]): PC_P<PC> {
       if (!Array.isArray(scalars)) throw new Error('expected array of bigints');
       for (const i of scalars)
         if (typeof i !== 'bigint') throw new Error('expected array of bigints');

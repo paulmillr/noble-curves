@@ -275,7 +275,7 @@ function map_to_curve_elligator2_edwards448(u: bigint) {
 }
 
 /** Hashing / encoding to ed448 points / field. RFC 9380 methods. */
-export const ed448_hasher: H2CHasher<bigint, EdwardsPoint> = /* @__PURE__ */ (() =>
+export const ed448_hasher: H2CHasher<EdwardsPointCons> = /* @__PURE__ */ (() =>
   createHasher(ed448_Point, (scalars: bigint[]) => map_to_curve_elligator2_edwards448(scalars[0]), {
     DST: 'edwards448_XOF:SHAKE256_ELL2_RO_',
     encodeDST: 'edwards448_XOF:SHAKE256_ELL2_NU_',
@@ -473,7 +473,7 @@ export const decaf448: {
 } = { Point: _DecafPoint };
 
 /** Hashing to decaf448 points / field. RFC 9380 methods. */
-export const decaf448_hasher: H2CHasherBase<bigint, _DecafPoint> = {
+export const decaf448_hasher: H2CHasherBase<_DecafPoint> = {
   hashToCurve(msg: Uint8Array, options?: htfBasicOpts): _DecafPoint {
     const DST = options?.DST || 'decaf448_XOF:SHAKE256_D448MAP_RO_';
     return decaf448_map(expand_message_xof(msg, DST, 112, 224, shake256));
