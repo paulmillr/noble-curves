@@ -160,8 +160,11 @@ export const p521: CurveFnWithCreate = createCurve(
   sha512
 );
 
+/** @deprecated use `p256` for consistency with `p256_hasher` */
 export const secp256r1: typeof p256 = p256;
+/** @deprecated use `p384` for consistency with `p384_hasher` */
 export const secp384r1: typeof p384 = p384;
+/** @deprecated use `p521` for consistency with `p521_hasher` */
 export const secp521r1: typeof p521 = p521;
 
 /** Hashing / encoding to p521 points / field. RFC 9380 methods. */
