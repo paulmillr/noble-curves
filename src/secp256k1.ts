@@ -9,7 +9,7 @@
 import { sha256 } from '@noble/hashes/sha2.js';
 import { randomBytes } from '@noble/hashes/utils.js';
 import { createCurve, type CurveFnWithCreate } from './_shortw_utils.ts';
-import type { CurveInfo } from './abstract/curve.ts';
+import type { CurveLengths } from './abstract/curve.ts';
 import {
   createHasher,
   type H2CHasher,
@@ -237,7 +237,8 @@ export type SecpSchnorr = {
     /** @deprecated use `modular` */
     mod: typeof mod;
   };
-  info: { type: 'weierstrass'; publicKeyHasPrefix: false; lengths: CurveInfo['lengths'] };
+  info: { type: 'weierstrass'; publicKeyHasPrefix: false };
+  lengths: CurveLengths;
 };
 /**
  * Schnorr signatures over secp256k1.
@@ -285,12 +286,12 @@ export const schnorr: SecpSchnorr = /* @__PURE__ */ (() => {
     info: {
       type: 'weierstrass',
       publicKeyHasPrefix: false,
-      lengths: {
-        secret: size,
-        public: size,
-        signature: size * 2,
-        seed: seedLength,
-      },
+    },
+    lengths: {
+      secret: size,
+      public: size,
+      signature: size * 2,
+      seed: seedLength,
     },
   };
 })();

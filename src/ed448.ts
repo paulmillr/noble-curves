@@ -144,7 +144,7 @@ function uvRatio(u: bigint, v: bigint): { isValid: boolean; value: bigint } {
 const Fp = /* @__PURE__ */ (() => Field(ed448_CURVE.p, { BITS: 456, isLE: true }))();
 // RFC 7748 has 56-byte keys, RFC 8032 has 57-byte keys
 const Fn = /* @__PURE__ */ (() => Field(ed448_CURVE.n, { BITS: 448, isLE: true }))();
-// const Fn456 = /* @__PURE__ */ (() => Field(ed448_CURVE.n, { BITS: 456, isLE: true }))();
+// Fn456 has BITS: 456
 
 // SHAKE256(dom4(phflag,context)||x, 114)
 const ED448_DEF = /* @__PURE__ */ (() => ({

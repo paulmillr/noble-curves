@@ -28,6 +28,7 @@ import {
   type AffinePoint,
   type BasicCurve,
   type CurveInfo,
+  type CurveLengths,
   type CurvePoint,
   type CurvePointCons,
 } from './curve.ts';
@@ -200,6 +201,7 @@ export interface EdDSA {
     precompute: (windowSize?: number, point?: EdwardsPoint) => EdwardsPoint;
   };
   info: CurveInfo;
+  lengths: CurveLengths;
 }
 
 // Legacy params. TODO: remove
@@ -215,6 +217,7 @@ export type CurveFn = {
   ExtendedPoint: EdwardsPointCons;
   utils: EdDSA['utils'];
   info: CurveInfo;
+  lengths: CurveLengths;
 };
 
 function isEdValidXY(Fp: IField<bigint>, CURVE: EdwardsOpts, x: bigint, y: bigint): boolean {
@@ -875,7 +878,8 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
     verify,
     utils,
     Point,
-    info: { type: 'edwards' as const, lengths },
+    info: { type: 'edwards' as const },
+    lengths,
   });
 }
 

@@ -1681,7 +1681,8 @@ export function ecdsa(
     utils,
     Point,
     Signature,
-    info: { type: 'weierstrass' as const, lengths, publicKeyHasPrefix: true },
+    info: { type: 'weierstrass' as const, publicKeyHasPrefix: true },
+    lengths,
   });
 }
 

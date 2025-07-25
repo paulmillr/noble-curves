@@ -13,7 +13,7 @@ import {
   numberToBytesLE,
   randomBytes,
 } from '../utils.ts';
-import type { CurveInfo } from './curve.ts';
+import type { CurveLengths } from './curve.ts';
 import { mod } from './modular.ts';
 
 const _0n = BigInt(0);
@@ -42,9 +42,9 @@ export type MontgomeryECDH = {
   GuBytes: Uint8Array;
   info: {
     type: 'montgomery';
-    lengths: Omit<CurveInfo['lengths'], 'signature'>;
     publicKeyHasPrefix?: boolean;
   };
+  lengths: CurveLengths;
   keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
 };
 export type CurveFn = MontgomeryECDH;
@@ -189,6 +189,7 @@ export function montgomery(curveDef: CurveType): MontgomeryECDH {
     scalarMultBase,
     utils,
     GuBytes: GuBytes.slice(),
-    info: { type: 'montgomery' as const, lengths },
+    info: { type: 'montgomery' as const },
+    lengths,
   };
 }
