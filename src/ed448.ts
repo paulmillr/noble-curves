@@ -102,12 +102,11 @@ function ed448_pow_Pminus3div4(x: bigint): bigint {
 }
 
 function adjustScalarBytes(bytes: Uint8Array): Uint8Array {
-  // Section 5: Likewise, for X448, set the two least significant bits of the first byte to 0, and the most
-  // significant bit of the last byte to 1.
+  // Section 5: Likewise, for X448, set the two least significant bits of the first byte to 0,
   bytes[0] &= 252; // 0b11111100
   // and the most significant bit of the last byte to 1.
   bytes[55] |= 128; // 0b10000000
-  // NOTE: is is NOOP for 56 bytes scalars (X25519/X448)
+  // NOTE: is NOOP for 56 bytes scalars (X25519/X448)
   bytes[56] = 0; // Byte outside of group (456 buts vs 448 bits)
   return bytes;
 }
@@ -138,7 +137,7 @@ function uvRatio(u: bigint, v: bigint): { isValid: boolean; value: bigint } {
 const Fp = /* @__PURE__ */ (() => Field(ed448_CURVE.p, { BITS: 456, isLE: true }))();
 // RFC 7748 has 56-byte keys, RFC 8032 has 57-byte keys
 const Fn = /* @__PURE__ */ (() => Field(ed448_CURVE.n, { BITS: 448, isLE: true }))();
-// const Fn456 = /* @__PURE__ */ (() => Field(ed448_CURVE.n, { BITS: 456, isLE: true }))();
+// Fn456 has BITS: 456
 
 // SHAKE256(dom4(phflag,context)||x, 114)
 function dom4(data: Uint8Array, ctx: Uint8Array, phflag: boolean) {

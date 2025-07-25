@@ -463,7 +463,9 @@ export function edwards(CURVE: EdwardsOpts, curveOpts: EdwardsExtraOpts = {}): E
     }
     toBytes(): Uint8Array {
       const { x, y } = this.toAffine();
-      const bytes = numberToBytesLE(y, Fp.BYTES); // each y has 2 x values (x, -y)
+
+      // const bytes = numberToBytesLE(y, Fp.BYTES); // each y has 2 x values (x, -y)
+      const bytes = Fp.toBytes(y);
       bytes[bytes.length - 1] |= x & _1n ? 0x80 : 0; // when compressing, it's enough to store y
       return bytes; // and use the last byte to encode sign of x
     }
@@ -627,8 +629,8 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
 
   // Get the hashed private scalar per RFC8032 5.1.5
   function getPrivateScalar(key: Uint8Array) {
-    const len = Fp.BYTES;
-    abytes(key, len, 'secretKey');
+    const len = lengths.secret;
+    abytes(key, lengths.secret, 'secretKey');
     // Hash private key with curve's hash function to produce uniformingly random input
     // Check byte lengths: ensure(64, h(ensure(32, key)))
     const hashed = abytes(cHash(key), 2 * len, 'hashedSecretKey');
@@ -671,9 +673,8 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
     const k = hashDomainToScalar(options.context, R, pointBytes, msg); // R || A || PH(M)
     const s = modN(r + k * scalar); // S = (r + k * s) mod L
     aInRange('signature.s', s, _0n, CURVE_ORDER); // 0 <= s < l
-    const L = Fp.BYTES;
-    const res = concatBytes(R, numberToBytesLE(s, L));
-    return abytes(res, L * 2, 'result'); // 64-byte signature
+    const res = concatBytes(R, numberToBytesLE(s, Fp.BYTES));
+    return abytes(res, lengths.signature, 'result'); // 64-byte signature
   }
 
   // verification rule is either zip215 or rfc8032 / nist186-5. Consult fromHex:
@@ -690,21 +691,22 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
     options = verifyOpts
   ): boolean {
     const { context, zip215 } = options;
-    const len = Fp.BYTES; // Verifies EdDSA signature against message and public key. RFC8032 5.1.7.
-    sig = abytes(sig, 2 * len, 'signature'); // An extended group equation is checked.
+    const len = lengths.signature;
+    sig = abytes(sig, len, 'signature'); // An extended group equation is checked.
     msg = abytes(msg, undefined, 'message');
-    publicKey = abytes(publicKey, len, 'publicKey');
+    publicKey = abytes(publicKey, lengths.public, 'publicKey');
     if (zip215 !== undefined) abool(zip215, 'zip215');
     if (prehash) msg = prehash(msg); // for ed25519ph, etc
-
-    const s = bytesToNumberLE(sig.slice(len, 2 * len));
+    const mid = len / 2;
+    const r = sig.subarray(0, mid);
+    const s = bytesToNumberLE(sig.subarray(mid, len));
     let A, R, SB;
     try {
       // zip215=true is good for consensus-critical apps. =false follows RFC8032 / NIST186-5.
       // zip215=true:  0 <= y < MASK (2^256 for ed25519)
       // zip215=false: 0 <= y < P (2^255-19 for ed25519)
       A = Point.fromBytes(publicKey, zip215);
-      R = Point.fromBytes(sig.slice(0, len), zip215);
+      R = Point.fromBytes(r, zip215);
       SB = G.multiplyUnsafe(s); // 0 <= s < l is done inside
     } catch (error) {
       return false;
@@ -778,9 +780,9 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
       const u = is25519 ? Fp.div(_1n + y, _1n - y) : Fp.div(y - _1n, y + _1n);
       return Fp.toBytes(u);
     },
-    toMontgomeryPriv(privateKey: Uint8Array): Uint8Array {
-      abytes(privateKey, size);
-      const hashed = cHash(privateKey.subarray(0, size));
+    toMontgomeryPriv(secretKey: Uint8Array): Uint8Array {
+      abytes(secretKey, lengths.secret);
+      const hashed = cHash(secretKey.subarray(0, size));
       return adjustScalarBytes(hashed).subarray(0, size);
     },
   };

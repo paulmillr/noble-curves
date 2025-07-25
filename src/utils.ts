@@ -46,7 +46,7 @@ export type FHash = (message: Uint8Array) => Uint8Array;
 
 export function abool(value: boolean, title: string = ''): boolean {
   if (typeof value !== 'boolean') {
-    const prefix = title && '"' + title + '" ';
+    const prefix = title && `"${title}"`;
     throw new Error(prefix + 'expected boolean, got type=' + typeof value);
   }
   return value;
@@ -55,14 +55,14 @@ export function abool(value: boolean, title: string = ''): boolean {
 // TODO: add, re-export from noble-hashes
 /** Asserts something is Uint8Array. */
 export function abytes(value: Uint8Array, length?: number, title: string = ''): Uint8Array {
-  const notBytes = !isBytes_(value);
+  const bytes = isBytes_(value);
   const len = value?.length;
   const needsLen = length !== undefined;
-  if (notBytes || (needsLen && len !== length)) {
-    const prefix = title && '"' + title + '" ';
+  if (!bytes || (needsLen && len !== length)) {
+    const prefix = title && `"${title}"`;
     const ofLen = needsLen ? ` of length ${length}` : '';
-    const got = notBytes ? `, got type=${typeof value}` : `, got length=${len}`;
-    throw new Error(prefix + 'expected Uint8Array' + ofLen + got);
+    const got = bytes ? `length=${len}` : `type=${typeof value}`;
+    throw new Error(prefix + 'expected Uint8Array' + ofLen + ', got ' + got);
   }
   return value;
 }
