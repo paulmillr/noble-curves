@@ -25,7 +25,7 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { hmac } from '@noble/hashes/hmac.js';
+import { hmac as nobleHmac } from '@noble/hashes/hmac.js';
 import { ahash } from '@noble/hashes/utils';
 import {
   _validateObject,
@@ -44,7 +44,7 @@ import {
   isBytes,
   memoized,
   numberToHexUnpadded,
-  randomBytes,
+  randomBytes as wcRandomBytes,
   type CHash,
   type Hex,
   type PrivKey,
@@ -138,8 +138,7 @@ export function _splitEndoScalar(k: bigint, basis: EndoBasis, n: bigint): Scalar
   return { k1neg, k1, k2neg, k2 };
 }
 
-export type ECDSASigFormat = 'compact' | 'der' | 'recovered';
-export type Entropy = Hex | boolean;
+export type ECDSASigFormat = 'compact' | 'recovered' | 'der';
 export type ECDSARecoverOpts = {
   prehash?: boolean;
 };
@@ -213,7 +212,7 @@ export interface WeierstrassPoint<T> extends CurvePoint<T, WeierstrassPoint<T>> 
 }
 
 /** Static methods for 3D XYZ projective points. */
-export interface WeierstrassPointCons<T> extends CurvePointCons<T, WeierstrassPoint<T>> {
+export interface WeierstrassPointCons<T> extends CurvePointCons<WeierstrassPoint<T>> {
   /** Does NOT validate if the point is valid. Use `.assertValidity()`. */
   new (X: T, Y: T, Z: T): WeierstrassPoint<T>;
   CURVE(): WeierstrassOpts<T>;
@@ -267,6 +266,11 @@ export type WeierstrassExtraOpts<T> = Partial<{
 
 /**
  * Options for ECDSA signatures over a Weierstrass curve.
+ *
+ * * lowS: (default: true) whether produced / verified signatures occupy low half of ecdsaOpts.p. Prevents malleability.
+ * * hmac: (default: noble-hashes hmac) function, would be used to init hmac-drbg for k generation.
+ * * randomBytes: (default: webcrypto os-level CSPRNG) custom method for fetching secure randomness.
+ * * bits2int, bits2int_modN: used in sigs, sometimes overridden by curves
  */
 export type ECDSAOpts = Partial<{
   lowS: boolean;
@@ -276,7 +280,10 @@ export type ECDSAOpts = Partial<{
   bits2int_modN: (bytes: Uint8Array) => bigint;
 }>;
 
-/** Elliptic Curve Diffie-Hellman. */
+/**
+ * Elliptic Curve Diffie-Hellman interface.
+ * Provides keygen, secret-to-public conversion, calculating shared secrets.
+ */
 export interface ECDH {
   keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
   getPublicKey: (secretKey: PrivKey, isCompressed?: boolean) => Uint8Array;
@@ -298,7 +305,10 @@ export interface ECDH {
   lengths: CurveLengths;
 }
 
-/** ECDSA is only supported for prime fields, not Fp2 (extension fields). */
+/**
+ * ECDSA interface.
+ * Only supported for prime fields, not Fp2 (extension fields).
+ */
 export interface ECDSA extends ECDH {
   sign: (message: Hex, secretKey: PrivKey, opts?: ECDSASignOpts) => ECDSASigRecovered;
   verify: (
@@ -449,6 +459,23 @@ export function _normFnElement(Fn: IField<bigint>, key: PrivKey): bigint {
   return num;
 }
 
+/**
+ * Creates weierstrass Point constructor, based on specified curve options.
+ *
+ * @example
+```js
+const opts = {
+  p: BigInt('0xffffffff00000001000000000000000000000000ffffffffffffffffffffffff'),
+  n: BigInt('0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551'),
+  h: BigInt(1),
+  a: BigInt('0xffffffff00000001000000000000000000000000fffffffffffffffffffffffc'),
+  b: BigInt('0x5ac635d8aa3a93e7b3ebbd55769886bc651d06b0cc53b0f63bce3c3e27d2604b'),
+  Gx: BigInt('0x6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296'),
+  Gy: BigInt('0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5'),
+};
+const p256_Point = weierstrass(opts);
+```
+ */
 export function weierstrassN<T>(
   params: WeierstrassOpts<T>,
   extraOpts: WeierstrassExtraOpts<T> = {}
@@ -538,8 +565,8 @@ export function weierstrassN<T>(
     }
   }
 
-  const toBytes = extraOpts.toBytes || pointToBytes;
-  const fromBytes = extraOpts.fromBytes || pointFromBytes;
+  const encodePoint = extraOpts.toBytes || pointToBytes;
+  const decodePoint = extraOpts.fromBytes || pointFromBytes;
   function weierstrassEquation(x: T): T {
     const x2 = Fp.sqr(x); // x * x
     const x3 = Fp.mul(x2, x); // x² * x
@@ -640,13 +667,10 @@ export function weierstrassN<T>(
     static readonly BASE = new Point(CURVE.Gx, CURVE.Gy, Fp.ONE);
     // zero / infinity / identity point
     static readonly ZERO = new Point(Fp.ZERO, Fp.ONE, Fp.ZERO); // 0, 1, 0
-    // fields
+    // math field
     static readonly Fp = Fp;
+    // scalar field
     static readonly Fn = Fn;
-    // curve params
-    static CURVE(): WeierstrassOpts<T> {
-      return CURVE;
-    }
 
     readonly X: T;
     readonly Y: T;
@@ -660,6 +684,11 @@ export function weierstrassN<T>(
       Object.freeze(this);
     }
 
+    // curve params
+    static CURVE(): WeierstrassOpts<T> {
+      return CURVE;
+    }
+
     /** Does NOT validate if the point is valid. Use `.assertValidity()`. */
     static fromAffine(p: AffinePoint<T>): Point {
       const { x, y } = p || {};
@@ -671,7 +700,7 @@ export function weierstrassN<T>(
     }
 
     static fromBytes(bytes: Uint8Array): Point {
-      const P = Point.fromAffine(fromBytes(abytes(bytes)));
+      const P = Point.fromAffine(decodePoint(abytes(bytes, undefined, 'point')));
       P.assertValidity();
       return P;
     }
@@ -920,7 +949,7 @@ export function weierstrassN<T>(
     toBytes(isCompressed = true): Uint8Array {
       abool(isCompressed, 'isCompressed');
       this.assertValidity();
-      return toBytes(Point, this, isCompressed);
+      return encodePoint(Point, this, isCompressed);
     }
 
     toHex(isCompressed = true): string {
@@ -962,20 +991,21 @@ export function weierstrassN<T>(
   return Point;
 }
 
-// Instance
+/** Methods of ECDSA signature instance. */
 export interface ECDSASignature {
   readonly r: bigint;
   readonly s: bigint;
   readonly recovery?: number;
   addRecoveryBit(recovery: number): ECDSASigRecovered;
   hasHighS(): boolean;
-  normalizeS(): ECDSASignature;
   toBytes(format?: string): Uint8Array;
   toHex(format?: string): string;
 
   /** @deprecated */
   assertValidity(): void;
-  /** @deprecated use standalone method `recoverPublicKey(sig.toBytes('recovered'), msg)` */
+  /** @deprecated */
+  normalizeS(): ECDSASignature;
+  /** @deprecated use standalone method `curve.recoverPublicKey(sig.toBytes('recovered'), msg)` */
   recoverPublicKey(msgHash: Hex): WeierstrassPoint<bigint>;
   /** @deprecated use `.toBytes('compact')` */
   toCompactRawBytes(): Uint8Array;
@@ -989,7 +1019,7 @@ export interface ECDSASignature {
 export type ECDSASigRecovered = ECDSASignature & {
   readonly recovery: number;
 };
-// Static methods
+/** Methods of ECDSA signature constructor. */
 export type ECDSASignatureCons = {
   new (r: bigint, s: bigint, recovery?: number): ECDSASignature;
   fromBytes(bytes: Uint8Array, format?: ECDSASigFormat): ECDSASignature;
@@ -1000,6 +1030,7 @@ export type ECDSASignatureCons = {
   /** @deprecated use `.fromBytes(bytes, 'der')` */
   fromDER(hex: Hex): ECDSASignature;
 };
+
 // Points start with byte 0x02 when y is even; otherwise 0x03
 function pprefix(hasEvenY: boolean): Uint8Array {
   return Uint8Array.of(hasEvenY ? 0x02 : 0x03);
@@ -1143,8 +1174,8 @@ function getWLengths<T>(Fp: IField<T>, Fn: IField<bigint>) {
     secret: Fn.BYTES,
     public: 1 + Fp.BYTES,
     publicUncompressed: 1 + 2 * Fp.BYTES,
-    signature: 2 * Fn.BYTES,
     publicKeyHasPrefix: true,
+    signature: 2 * Fn.BYTES,
   };
 }
 
@@ -1154,10 +1185,10 @@ function getWLengths<T>(Fp: IField<T>, Fn: IField<bigint>) {
  */
 export function ecdh(
   Point: WeierstrassPointCons<bigint>,
-  ecdhOpts: Partial<{ randomBytes: (bytesLength?: number) => Uint8Array }> = {}
+  ecdhOpts: { randomBytes?: (bytesLength?: number) => Uint8Array } = {}
 ): ECDH {
   const { Fn } = Point;
-  const randomBytes_ = ecdhOpts.randomBytes || randomBytes;
+  const randomBytes_ = ecdhOpts.randomBytes || wcRandomBytes;
   const lengths = Object.assign(getWLengths(Point.Fp, Fn), { seed: getMinHashLength(Fn.ORDER) });
 
   function isValidSecretKey(secretKey: PrivKey) {
@@ -1185,8 +1216,7 @@ export function ecdh(
    * (groupLen + ceil(groupLen / 2)) with modulo bias being negligible.
    */
   function randomSecretKey(seed = randomBytes_(lengths.seed)): Uint8Array {
-    abytes(seed, lengths.seed, 'seed');
-    return mapHashToField(seed, Fn.ORDER);
+    return mapHashToField(abytes(seed, lengths.seed, 'seed'), Fn.ORDER);
   }
 
   /**
@@ -1278,14 +1308,21 @@ export function ecdsa(
     }
   );
 
-  const randomBytes_ = ecdsaOpts.randomBytes || randomBytes;
+  const randomBytes_ = ecdsaOpts.randomBytes || wcRandomBytes;
   const hmac_: HmacFnSync =
     ecdsaOpts.hmac ||
-    (((key, ...msgs) => hmac(hash, key, concatBytes(...msgs))) satisfies HmacFnSync);
+    (((key, ...msgs) => nobleHmac(hash, key, concatBytes(...msgs))) satisfies HmacFnSync);
 
   const { Fp, Fn } = Point;
   const { ORDER: CURVE_ORDER, BITS: fnBits } = Fn;
   const { keygen, getPublicKey, getSharedSecret, utils, lengths } = ecdh(Point, ecdsaOpts);
+  const defaultSigOpts: Required<ECDSASignOpts> = {
+    prehash: false,
+    lowS: typeof ecdsaOpts.lowS === 'boolean' ? ecdsaOpts.lowS : false,
+    format: undefined as any, //'compact' as ECDSASigFormat,
+    extraEntropy: false,
+  };
+  const defaultSigOpts_format = 'compact';
 
   function isBiggerThanHalfOrder(number: bigint) {
     const HALF = CURVE_ORDER >> _1n;
@@ -1315,13 +1352,12 @@ export function ecdsa(
       Object.freeze(this);
     }
 
-    static fromBytes(bytes: Uint8Array, format: ECDSASigFormat = 'compact'): Signature {
+    static fromBytes(bytes: Uint8Array, format: ECDSASigFormat = defaultSigOpts_format): Signature {
       validateSigFormat(format);
       const size = lengths.signature!;
       let recid: number | undefined;
       if (format === 'der') {
-        abytes(bytes);
-        const { r, s } = DER.toSig(bytes);
+        const { r, s } = DER.toSig(abytes(bytes));
         return new Signature(r, s);
       }
       if (format === 'recovered') {
@@ -1345,7 +1381,6 @@ export function ecdsa(
       return new Signature(this.r, this.s, recovery) as RecoveredSignature;
     }
 
-    // ProjPointType<bigint>
     recoverPublicKey(msgHash: Hex): typeof Point.BASE {
       const FIELD_ORDER = Fp.ORDER;
       const { r, s, recovery: rec } = this;
@@ -1386,7 +1421,7 @@ export function ecdsa(
       return this.hasHighS() ? new Signature(this.r, Fn.neg(this.s), this.recovery) : this;
     }
 
-    toBytes(format: ECDSASigFormat = 'compact') {
+    toBytes(format: ECDSASigFormat = defaultSigOpts_format) {
       validateSigFormat(format);
       if (format === 'der') return hexToBytes(DER.hexFromSig(this));
       const r = Fn.toBytes(this.r);
@@ -1464,7 +1499,7 @@ export function ecdsa(
   function prepSig(message: Uint8Array, privateKey: PrivKey, opts: ECDSASignOpts) {
     if (['recovered', 'canonical'].some((k) => k in opts))
       throw new Error('sign() legacy options not supported');
-    const { lowS, prehash, extraEntropy: ent } = validateSigOpts(opts, defaultSigOpts);
+    const { lowS, prehash, extraEntropy } = validateSigOpts(opts, defaultSigOpts);
     // RFC6979 3.2: we skip step A, because we already provide hash
     message = abytes(message, undefined, 'message');
     if (prehash) message = abytes(hash(message), undefined, 'prehashed message');
@@ -1476,9 +1511,10 @@ export function ecdsa(
     const d = _normFnElement(Fn, privateKey); // validate secret key, convert to bigint
     const seedArgs = [int2octets(d), int2octets(h1int)];
     // extraEntropy. RFC6979 3.6: additional k' (optional).
-    if (ent != null && ent !== false) {
+    if (extraEntropy != null && extraEntropy !== false) {
       // K = HMAC_K(V || 0x00 || int2octets(x) || bits2octets(h1) || k')
-      const e = ent === true ? randomBytes_(lengths.secret) : ent; // gen random bytes OR pass as-is
+      // gen random bytes OR pass as-is
+      const e = extraEntropy === true ? randomBytes_(lengths.secret) : extraEntropy;
       seedArgs.push(ensureBytes('extraEntropy', e)); // check for being bytes
     }
     const seed = concatBytes(...seedArgs); // Step D of RFC6979 3.2
@@ -1494,7 +1530,7 @@ export function ecdsa(
     function k2sig(kBytes: Uint8Array): RecoveredSignature | undefined {
       // RFC 6979 Section 3.2, step 3: k = bits2int(T)
       // Important: all mod() calls here must be done over N
-      const k = bits2int(kBytes); // Cannot use fields methods, since it is group element
+      const k = bits2int(kBytes); // mod n, not mod p
       if (!Fn.isValidNot0(k)) return; // Valid scalars (including k) must be in 1..N-1
       const ik = Fn.inv(k); // k^-1 mod n
       const q = Point.BASE.multiply(k).toAffine(); // q = k⋅G
@@ -1512,20 +1548,16 @@ export function ecdsa(
     }
     return { seed, k2sig };
   }
-  const defaultSigOpts: Required<ECDSASignOpts> = {
-    prehash: false,
-    lowS: typeof ecdsaOpts.lowS === 'boolean' ? ecdsaOpts.lowS : false,
-    format: undefined as any, //'compact' as ECDSASigFormat,
-    extraEntropy: false,
-  };
 
   /**
    * Signs message hash with a secret key.
+   *
    * ```
-   * sign(m, d, k) where
+   * sign(m, d) where
+   *   k = rfc6979_hmac_drbg(m, d)
    *   (x, y) = G × k
    *   r = x mod n
-   *   s = (m + dr)/k mod n
+   *   s = (m + dr) / k mod n
    * ```
    */
   function sign(msgHash: Hex, secretKey: PrivKey, opts: ECDSASignOpts = {}): RecoveredSignature {
@@ -1539,15 +1571,15 @@ export function ecdsa(
   Point.BASE.precompute(8);
 
   /**
-   * Verifies a signature against message hash and public key.
-   * Rejects lowS signatures by default: to override,
-   * specify option `{lowS: false}`. Implements section 4.1.4 from https://www.secg.org/sec1-v2.pdf:
+   * Verifies a signature against message and public key.
+   * Rejects lowS signatures by default: see {@link ECDSAVerifyOpts}.
+   * Implements section 4.1.4 from https://www.secg.org/sec1-v2.pdf:
    *
    * ```
    * verify(r, s, h, P) where
-   *   U1 = hs^-1 mod n
-   *   U2 = rs^-1 mod n
-   *   R = U1⋅G - U2⋅P
+   *   u1 = hs^-1 mod n
+   *   u2 = rs^-1 mod n
+   *   R = u1⋅G + u2⋅P
    *   mod(R.x, n) == r
    * ```
    */
@@ -1615,11 +1647,11 @@ export function ecdsa(
       // todo: optional.hash => hash
       if (prehash) message = hash(message);
       const { r, s } = _sig;
-      const h = bits2int_modN(message); // Cannot use fields methods, since it is group element
-      const is = Fn.inv(s); // s^-1
+      const h = bits2int_modN(message); // mod n, not mod p
+      const is = Fn.inv(s); // s^-1 mod n
       const u1 = Fn.create(h * is); // u1 = hs^-1 mod n
       const u2 = Fn.create(r * is); // u2 = rs^-1 mod n
-      const R = Point.BASE.multiplyUnsafe(u1).add(P.multiplyUnsafe(u2));
+      const R = Point.BASE.multiplyUnsafe(u1).add(P.multiplyUnsafe(u2)); // u1⋅G + u2⋅P
       if (R.is0()) return false;
       const v = Fn.create(R.x); // v = r.x mod n
       return v === r;
@@ -1645,19 +1677,25 @@ export function ecdsa(
     getPublicKey,
     getSharedSecret,
     utils,
+    lengths,
     Point,
     sign,
     verify,
     recoverPublicKey,
     Signature,
-    lengths,
+    hash,
   });
 }
 
 // TODO: remove everything below
+/** @deprecated */
 export type SignatureType = ECDSASignature;
+/** @deprecated */
 export type RecoveredSignatureType = ECDSASigRecovered;
+/** @deprecated */
 export type SignatureLike = { r: bigint; s: bigint };
+/** @deprecated use `Uint8Array | boolean` */
+export type Entropy = Hex | boolean;
 export type BasicWCurve<T> = BasicCurve<T> & {
   // Params: a, b
   a: T;
@@ -1731,7 +1769,7 @@ export type CurveType = BasicWCurve<bigint> & {
   bits2int_modN?: (bytes: Uint8Array) => bigint;
 };
 export type CurveFn = {
-  /** @deprecated the property will be removed in next release */
+  /** @deprecated use `Point.CURVE()` */
   CURVE: CurvePointsType<bigint>;
   keygen: ECDSA['keygen'];
   getPublicKey: ECDSA['getPublicKey'];

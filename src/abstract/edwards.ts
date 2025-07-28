@@ -66,7 +66,7 @@ export interface EdwardsPoint extends CurvePoint<bigint, EdwardsPoint> {
   readonly et: bigint;
 }
 /** Static methods of Extended Point with coordinates in X, Y, Z, T. */
-export interface EdwardsPointCons extends CurvePointCons<bigint, EdwardsPoint> {
+export interface EdwardsPointCons extends CurvePointCons<EdwardsPoint> {
   new (X: bigint, Y: bigint, Z: bigint, T: bigint): EdwardsPoint;
   CURVE(): EdwardsOpts;
   fromBytes(bytes: Uint8Array, zip215?: boolean): EdwardsPoint;
@@ -198,7 +198,7 @@ function isEdValidXY(Fp: IField<bigint>, CURVE: EdwardsOpts, x: bigint, y: bigin
 }
 
 export function edwards(params: EdwardsOpts, extraOpts: EdwardsExtraOpts = {}): EdwardsPointCons {
-  let validated = _createCurveFields('edwards', params, extraOpts, extraOpts.FpFnLE);
+  const validated = _createCurveFields('edwards', params, extraOpts, extraOpts.FpFnLE);
   const { Fp, Fn } = validated;
   let CURVE = validated.CURVE as EdwardsOpts;
   const { h: cofactor, n: CURVE_ORDER } = CURVE;
@@ -281,13 +281,10 @@ export function edwards(params: EdwardsOpts, extraOpts: EdwardsExtraOpts = {}): 
     static readonly BASE = new Point(CURVE.Gx, CURVE.Gy, _1n, modP(CURVE.Gx * CURVE.Gy));
     // zero / infinity / identity point
     static readonly ZERO = new Point(_0n, _1n, _1n, _0n); // 0, 1, 1, 0
-    // fields
+    // math field
     static readonly Fp = Fp;
+    // scalar field
     static readonly Fn = Fn;
-
-    static CURVE(): EdwardsOpts {
-      return CURVE as EdwardsOpts;
-    }
 
     readonly X: bigint;
     readonly Y: bigint;
@@ -302,11 +299,8 @@ export function edwards(params: EdwardsOpts, extraOpts: EdwardsExtraOpts = {}): 
       Object.freeze(this);
     }
 
-    get x(): bigint {
-      return this.toAffine().x;
-    }
-    get y(): bigint {
-      return this.toAffine().y;
+    static CURVE(): EdwardsOpts {
+      return CURVE as EdwardsOpts;
     }
 
     static fromAffine(p: AffinePoint<bigint>): Point {
@@ -315,6 +309,50 @@ export function edwards(params: EdwardsOpts, extraOpts: EdwardsExtraOpts = {}): 
       acoord('x', x);
       acoord('y', y);
       return new Point(x, y, _1n, modP(x * y));
+    }
+
+    // Uses algo from RFC8032 5.1.3.
+    static fromBytes(bytes: Uint8Array, zip215 = false): Point {
+      const len = Fp.BYTES;
+      const { a, d } = CURVE;
+      bytes = copyBytes(abytes(bytes, len, 'point'));
+      abool(zip215, 'zip215');
+      const normed = copyBytes(bytes); // copy again, we'll manipulate it
+      const lastByte = bytes[len - 1]; // select last byte
+      normed[len - 1] = lastByte & ~0x80; // clear last bit
+      const y = bytesToNumberLE(normed);
+
+      // zip215=true is good for consensus-critical apps. =false follows RFC8032 / NIST186-5.
+      // RFC8032 prohibits >= p, but ZIP215 doesn't
+      // zip215=true:  0 <= y < MASK (2^256 for ed25519)
+      // zip215=false: 0 <= y < P (2^255-19 for ed25519)
+      const max = zip215 ? MASK : Fp.ORDER;
+      aInRange('pointHex.y', y, _0n, max);
+
+      // Ed25519: x² = (y²-1)/(dy²+1) mod p. Ed448: x² = (y²-1)/(dy²-1) mod p. Generic case:
+      // ax²+y²=1+dx²y² => y²-1=dx²y²-ax² => y²-1=x²(dy²-a) => x²=(y²-1)/(dy²-a)
+      const y2 = modP(y * y); // denominator is always non-0 mod p.
+      const u = modP(y2 - _1n); // u = y² - 1
+      const v = modP(d * y2 - a); // v = d y² + 1.
+      let { isValid, value: x } = uvRatio(u, v); // √(u/v)
+      if (!isValid) throw new Error('Point.fromHex: invalid y coordinate');
+      const isXOdd = (x & _1n) === _1n; // There are 2 square roots. Use x_0 bit to select proper
+      const isLastByteOdd = (lastByte & 0x80) !== 0; // x_0, last bit
+      if (!zip215 && x === _0n && isLastByteOdd)
+        // if x=0 and x_0 = 1, fail
+        throw new Error('Point.fromHex: x=0 and x_0=1');
+      if (isLastByteOdd !== isXOdd) x = modP(-x); // if x_0 != x mod 2, set x = p-x
+      return Point.fromAffine({ x, y });
+    }
+    static fromHex(bytes: Uint8Array, zip215 = false): Point {
+      return Point.fromBytes(ensureBytes('point', bytes), zip215);
+    }
+
+    get x(): bigint {
+      return this.toAffine().x;
+    }
+    get y(): bigint {
+      return this.toAffine().y;
     }
 
     precompute(windowSize: number = 8, isLazy = true) {
@@ -444,44 +482,6 @@ export function edwards(params: EdwardsOpts, extraOpts: EdwardsExtraOpts = {}): 
       return this.multiplyUnsafe(cofactor);
     }
 
-    // Converts hash string or Uint8Array to Point.
-    // Uses algo from RFC8032 5.1.3.
-    static fromBytes(bytes: Uint8Array, zip215 = false): Point {
-      const len = Fp.BYTES;
-      abytes(bytes, len, 'point');
-      const { a, d } = CURVE;
-      bytes = copyBytes(bytes);
-      abool(zip215, 'zip215');
-      const normed = bytes.slice(); // copy again, we'll manipulate it
-      const lastByte = bytes[len - 1]; // select last byte
-      normed[len - 1] = lastByte & ~0x80; // clear last bit
-      const y = bytesToNumberLE(normed);
-
-      // zip215=true is good for consensus-critical apps. =false follows RFC8032 / NIST186-5.
-      // RFC8032 prohibits >= p, but ZIP215 doesn't
-      // zip215=true:  0 <= y < MASK (2^256 for ed25519)
-      // zip215=false: 0 <= y < P (2^255-19 for ed25519)
-      const max = zip215 ? MASK : Fp.ORDER;
-      aInRange('pointHex.y', y, _0n, max);
-
-      // Ed25519: x² = (y²-1)/(dy²+1) mod p. Ed448: x² = (y²-1)/(dy²-1) mod p. Generic case:
-      // ax²+y²=1+dx²y² => y²-1=dx²y²-ax² => y²-1=x²(dy²-a) => x²=(y²-1)/(dy²-a)
-      const y2 = modP(y * y); // denominator is always non-0 mod p.
-      const u = modP(y2 - _1n); // u = y² - 1
-      const v = modP(d * y2 - a); // v = d y² + 1.
-      let { isValid, value: x } = uvRatio(u, v); // √(u/v)
-      if (!isValid) throw new Error('Point.fromHex: invalid y coordinate');
-      const isXOdd = (x & _1n) === _1n; // There are 2 square roots. Use x_0 bit to select proper
-      const isLastByteOdd = (lastByte & 0x80) !== 0; // x_0, last bit
-      if (!zip215 && x === _0n && isLastByteOdd)
-        // if x=0 and x_0 = 1, fail
-        throw new Error('Point.fromHex: x=0 and x_0=1');
-      if (isLastByteOdd !== isXOdd) x = modP(-x); // if x_0 != x mod 2, set x = p-x
-      return Point.fromAffine({ x, y });
-    }
-    static fromHex(bytes: Uint8Array, zip215 = false): Point {
-      return Point.fromBytes(ensureBytes('point', bytes), zip215);
-    }
     toBytes(): Uint8Array {
       const { x, y } = this.toAffine();
       const bytes = numberToBytesLE(y, Fp.BYTES); // each y has 2 x values (x, -y)
@@ -766,16 +766,15 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
 
   G.precompute(8); // Enable precomputes. Slows down first publicKey computation by 20ms.
 
-  const size = Fp.BYTES;
+  const _size = Fp.BYTES;
   const lengths = {
-    secret: size,
-    public: size,
-    signature: 2 * size,
-    seed: size,
+    secret: _size,
+    public: _size,
+    signature: 2 * _size,
+    seed: _size,
   };
   function randomSecretKey(seed = randomBytes_!(lengths.seed)): Uint8Array {
-    abytes(seed, lengths.seed, 'seed');
-    return seed;
+    return abytes(seed, lengths.seed, 'seed');
   }
   function keygen(seed?: Uint8Array) {
     const secretKey = utils.randomSecretKey(seed);
@@ -819,6 +818,7 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
      */
     toMontgomery(publicKey: Uint8Array): Uint8Array {
       const { y } = Point.fromBytes(publicKey);
+      const size = lengths.public;
       const is25519 = size === 32;
       if (!is25519 && size !== 57) throw new Error('only defined for 25519 and 448');
       const u = is25519 ? Fp.div(_1n + y, _1n - y) : Fp.div(y - _1n, y + _1n);
@@ -826,7 +826,8 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
     },
 
     toMontgomeryPriv(secretKey: Uint8Array): Uint8Array {
-      abytes(secretKey, lengths.secret);
+      const size = lengths.secret;
+      abytes(secretKey, size);
       const hashed = cHash(secretKey.subarray(0, size));
       return adjustScalarBytes(hashed).subarray(0, size);
     },

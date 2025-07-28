@@ -59,13 +59,7 @@ import {
   randomBytes,
   validateObject,
 } from '../utils.ts';
-import {
-  pippenger,
-  type CurvePoint,
-  type CurvePointCons,
-  type GetPointConsF,
-  type GetPointConsPoint,
-} from './curve.ts';
+import { pippenger, type CurvePoint, type CurvePointCons } from './curve.ts';
 import { _DST_scalar, type H2CMethod, type htfBasicOpts } from './hash-to-curve.js';
 import { getMinHashLength, mapHashToField } from './modular.js';
 
@@ -75,9 +69,9 @@ export type ScalarBytes = Uint8Array;
 export type Bytes = Uint8Array;
 export type RNG = typeof randomBytes;
 
-export type OPRFOpts<F, P extends CurvePoint<F, P>, PC extends CurvePointCons<F, P>> = {
+export type OPRFOpts<P extends CurvePoint<any, P>> = {
   name: string;
-  Point: PC;
+  Point: CurvePointCons<P>; // we don't return Point, so we need generic interface only
   // Fn: IField<bigint>;
   hash: (msg: Bytes) => Bytes;
   hashToScalar: (msg: Uint8Array, options: htfBasicOpts) => bigint;
@@ -329,12 +323,7 @@ export type OPRF = {
 };
 
 // welcome to generic hell
-export function createORPF<
-  PC extends CurvePointCons<any, any>,
-  F = GetPointConsF<PC>,
-  P extends CurvePoint<F, P> = GetPointConsPoint<PC>,
-  Opts extends OPRFOpts<F, P, PC> = OPRFOpts<F, P, PC>,
->(opts: Opts): OPRF {
+export function createORPF<P extends CurvePoint<any, P>>(opts: OPRFOpts<P>): OPRF {
   validateObject(opts, {
     name: 'string',
     hash: 'function',
@@ -385,7 +374,7 @@ export function createORPF<
   function getTranscripts(B: P, C: P[], D: P[], ctx: Bytes) {
     const Bm = B.toBytes();
     const seed = hash(encode(Bm, concatBytes(asciiToBytes('Seed-'), ctx)));
-    const res = [];
+    const res: bigint[] = [];
     for (let i = 0; i < C.length; i++) {
       const Ci = C[i].toBytes();
       const Di = D[i].toBytes();
@@ -421,7 +410,7 @@ export function createORPF<
     const t3 = M.multiply(r);
     const c = challengeTranscript(B, M, Z, t2, t3, ctx);
     const s = Fn.sub(r, Fn.mul(c, k)); // r - c*k
-    return concatBytes(...[c, s].map(Fn.toBytes));
+    return concatBytes(...[c, s].map((i) => Fn.toBytes(i)));
   }
 
   function verifyProof(ctx: Bytes, B: P, C: P[], D: P[], proof: Bytes) {
