@@ -41,10 +41,6 @@ export type MontgomeryECDH = {
     randomPrivateKey: () => Uint8Array;
   };
   GuBytes: Uint8Array;
-  info: {
-    type: 'montgomery';
-    publicKeyHasPrefix?: boolean;
-  };
   lengths: CurveLengths;
   keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
 };
@@ -193,7 +189,6 @@ export function montgomery(curveDef: CurveType): MontgomeryECDH {
     scalarMultBase,
     utils,
     GuBytes: GuBytes.slice(),
-    info: { type: 'montgomery' as const },
     lengths,
   };
 }

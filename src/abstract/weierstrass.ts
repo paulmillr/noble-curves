@@ -58,7 +58,6 @@ import {
   wNAF,
   type AffinePoint,
   type BasicCurve,
-  type CurveInfo,
   type CurveLengths,
   type CurvePoint,
   type CurvePointCons,
@@ -193,11 +192,11 @@ export interface WeierstrassPoint<T> extends CurvePoint<T, WeierstrassPoint<T>> 
   toBytes(isCompressed?: boolean): Uint8Array;
   toHex(isCompressed?: boolean): string;
 
-  /** @deprecated use .X */
+  /** @deprecated use `.X` */
   readonly px: T;
-  /** @deprecated use .Y */
+  /** @deprecated use `.Y` */
   readonly py: T;
-  /** @deprecated use .Z */
+  /** @deprecated use `.Z` */
   readonly pz: T;
   /** @deprecated use `toBytes` */
   toRawBytes(isCompressed?: boolean): Uint8Array;
@@ -310,7 +309,6 @@ export interface ECDSA extends ECDH {
   ) => boolean;
   recoverPublicKey(signature: Uint8Array, message: Uint8Array, opts?: ECDSARecoverOpts): Uint8Array;
   Signature: ECDSASignatureCons;
-  info: CurveInfo;
 }
 export class DERErr extends Error {
   constructor(m = '') {
@@ -1146,6 +1144,7 @@ function getWLengths<T>(Fp: IField<T>, Fn: IField<bigint>) {
     public: 1 + Fp.BYTES,
     publicUncompressed: 1 + 2 * Fp.BYTES,
     signature: 2 * Fn.BYTES,
+    publicKeyHasPrefix: true,
   };
 }
 
@@ -1651,7 +1650,6 @@ export function ecdsa(
     verify,
     recoverPublicKey,
     Signature,
-    info: { type: 'weierstrass' as const, publicKeyHasPrefix: true },
     lengths,
   });
 }
@@ -1702,7 +1700,7 @@ export type CurvePointsTypeWithLength<T> = Readonly<CurvePointsType<T> & Partial
 export type CurvePointsRes<T> = {
   Point: WeierstrassPointCons<T>;
 
-  /** @deprecated the property will be removed in next release */
+  /** @deprecated use `Point.CURVE()` */
   CURVE: CurvePointsType<T>;
   /** @deprecated use `Point` */
   ProjectivePoint: WeierstrassPointCons<T>;
@@ -1722,9 +1720,8 @@ export type CurvePointsRes<T> = {
 // export type CurvePointsTypeWithLength<T> = LegacyWeierstrassOpts<T>;
 // export type BasicWCurve<T> = LegacyWeierstrassOpts<T>;
 
-// TODO: remove
+/** @deprecated use `Uint8Array` */
 export type PubKey = Hex | WeierstrassPoint<bigint>;
-// TODO: remove
 export type CurveType = BasicWCurve<bigint> & {
   hash: CHash; // CHash not FHash because we need outputLen for DRBG
   hmac?: HmacFnSync;
@@ -1733,7 +1730,6 @@ export type CurveType = BasicWCurve<bigint> & {
   bits2int?: (bytes: Uint8Array) => bigint;
   bits2int_modN?: (bytes: Uint8Array) => bigint;
 };
-// TODO: remove
 export type CurveFn = {
   /** @deprecated the property will be removed in next release */
   CURVE: CurvePointsType<bigint>;
@@ -1747,30 +1743,25 @@ export type CurveFn = {
   ProjectivePoint: WeierstrassPointCons<bigint>;
   Signature: ECDSASignatureCons;
   utils: ECDSA['utils'];
-  /** @deprecated do not use for now, unstable */
-  info: CurveInfo;
+  lengths: ECDSA['lengths'];
 };
-// _legacyWeierstrass
-// TODO: remove
 /** @deprecated use `weierstrass` in newer releases */
 export function weierstrassPoints<T>(c: CurvePointsTypeWithLength<T>): CurvePointsRes<T> {
   const { CURVE, curveOpts } = _weierstrass_legacy_opts_to_new(c);
   const Point = weierstrassN(CURVE, curveOpts);
   return _weierstrass_new_output_to_legacy(c, Point);
 }
-// TODO: remove
 export type WsPointComposed<T> = {
   CURVE: WeierstrassOpts<T>;
   curveOpts: WeierstrassExtraOpts<T>;
 };
-// TODO: remove
 export type WsComposed = {
+  /** @deprecated use `Point.CURVE()` */
   CURVE: WeierstrassOpts<bigint>;
   hash: CHash;
   curveOpts: WeierstrassExtraOpts<bigint>;
   ecdsaOpts: ECDSAOpts;
 };
-// TODO: remove
 function _weierstrass_legacy_opts_to_new<T>(c: CurvePointsType<T>): WsPointComposed<T> {
   const CURVE: WeierstrassOpts<T> = {
     a: c.a,

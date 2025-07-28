@@ -73,15 +73,11 @@ export interface CurvePointCons<F, P extends CurvePoint<F, P>> extends GroupCons
 export type GetPointConsF<PC> = PC extends CurvePointCons<infer F, any> ? F : never;
 export type GetPointConsPoint<PC> = PC extends CurvePointCons<any, infer P> ? P : never;
 
-// More like SigAlgorithmInfo, not CurveInfo
-export interface CurveInfo {
-  type: 'weierstrass' | 'edwards' | 'montgomery';
-  publicKeyHasPrefix?: boolean;
-}
 export interface CurveLengths {
   secret?: number;
   public?: number;
   publicUncompressed?: number;
+  publicKeyHasPrefix?: boolean;
   signature?: number;
   seed?: number;
 }

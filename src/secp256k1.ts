@@ -238,7 +238,6 @@ export type SecpSchnorr = {
     /** @deprecated use `modular` */
     mod: typeof mod;
   };
-  info: { type: 'weierstrass'; publicKeyHasPrefix: false };
   lengths: CurveLengths;
 };
 /**
@@ -284,15 +283,12 @@ export const schnorr: SecpSchnorr = /* @__PURE__ */ (() => {
       bytesToNumberBE,
       mod,
     },
-    info: {
-      type: 'weierstrass',
-      publicKeyHasPrefix: false,
-    },
     lengths: {
       secret: size,
       public: size,
       signature: size * 2,
       seed: seedLength,
+      publicKeyHasPrefix: false,
     },
   };
 })();

@@ -29,7 +29,6 @@ import {
   wNAF,
   type AffinePoint,
   type BasicCurve,
-  type CurveInfo,
   type CurveLengths,
   type CurvePoint,
   type CurvePointCons,
@@ -187,7 +186,6 @@ export interface EdDSA {
     /** @deprecated use `point.precompute()` */
     precompute: (windowSize?: number, point?: EdwardsPoint) => EdwardsPoint;
   };
-  info: CurveInfo;
   lengths: CurveLengths;
 }
 
@@ -848,7 +846,6 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
     verify,
     utils,
     Point,
-    info: { type: 'edwards' as const },
     lengths,
   });
 }
@@ -878,7 +875,6 @@ export type CurveFn = {
   /** @deprecated use `Point` */
   ExtendedPoint: EdwardsPointCons;
   utils: EdDSA['utils'];
-  info: CurveInfo;
   lengths: CurveLengths;
 };
 export type EdComposed = {
