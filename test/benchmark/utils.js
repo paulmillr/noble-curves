@@ -1,14 +1,16 @@
-import { hash_to_field } from '@noble/curves/abstract/hash-to-curve';
-import { Field as Fp, hashToPrivateScalar } from '@noble/curves/abstract/modular';
-import { hexToBytes, utf8ToBytes } from '@noble/curves/abstract/utils';
-import { ed25519, ristretto255, ristretto255_hasher } from '@noble/curves/ed25519';
-import { decaf448, decaf448_hasher, ed448 } from '@noble/curves/ed448';
-import { secp256k1 } from '@noble/curves/secp256k1';
+import { hash_to_field } from '@noble/curves/abstract/hash-to-curve.js';
+import * as md from '@noble/curves/abstract/modular.js';
+import { hexToBytes, utf8ToBytes } from '@noble/curves/abstract/utils.js';
+import { ed25519, ristretto255, ristretto255_hasher } from '@noble/curves/ed25519.js';
+import { decaf448, decaf448_hasher, ed448 } from '@noble/curves/ed448.js';
+import { secp256k1 } from '@noble/curves/secp256k1.js';
 import { sha256, sha512 } from '@noble/hashes/sha2.js';
-import { shake256 } from '@noble/hashes/sha3';
-import { randomBytes } from '@noble/hashes/utils';
+import { shake256 } from '@noble/hashes/sha3.js';
+import { randomBytes } from '@noble/hashes/utils.js';
 import mark from 'micro-bmark';
 import { title } from './_shared.js';
+
+const { Field } = md;
 
 const RistrettoPoint = ristretto255.Point;
 const DecafPoint = decaf448.Point;
@@ -21,10 +23,10 @@ const DecafPoint = decaf448.Point;
   await mark('hexToBytes 256b', () => hexToBytes(hex256));
 
   title('modular over secp256k1 P field');
-  const { Fp: secpFp } = secp256k1.CURVE;
-  const Fp25519 = Fp(2n ** 255n - 19n);
-  const Fp383 = Fp(BigInt('2462625387274654950767440006258975862817483704404090416745738034557663054564649171262659326683244604346084081047321'));
-  const FpStark = Fp(BigInt('0x800000000000011000000000000000000000000000000000000000000000001'));
+  const secpFp = secp256k1.Point.Fp;
+  const Fp25519 = Field(2n ** 255n - 19n);
+  const Fp383 = Field(BigInt('2462625387274654950767440006258975862817483704404090416745738034557663054564649171262659326683244604346084081047321'));
+  const FpStark = Field(BigInt('0x800000000000011000000000000000000000000000000000000000000000001'));
 
   const NUM0 = 2n ** 232n - 5910n;
   const NUM1 = 2n ** 231n - 5910n;
@@ -42,7 +44,7 @@ const DecafPoint = decaf448.Point;
   title('hashing to fields')
   const N = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n;
   const rand = randomBytes(40);
-  await mark('hashToPrivateScalar', () => hashToPrivateScalar(rand, N));
+  // await mark('hashToPrivateScalar', () => hashToPrivateScalar(rand, N));
   // - p, the characteristic of F
   // - m, the extension degree of F, m >= 1
   // - L = ceil((ceil(log2(p)) + k) / 8), where k is the security of suite (e.g. 128)
@@ -59,7 +61,7 @@ const DecafPoint = decaf448.Point;
   await mark('add', () => pub.add(RistrettoPoint.BASE));
   await mark('multiply', () => RistrettoPoint.BASE.multiply(priv));
   await mark('encode', () => RistrettoPoint.BASE.toBytes());
-  await mark('decode', () => RistrettoPoint.fromHex(encoded));
+  await mark('decode', () => RistrettoPoint.fromBytes(encoded));
   await mark('ristretto255_hasher', 1000, () =>
     ristretto255_hasher.hashToCurve(msg, { DST: 'ristretto255_XMD:SHA-512_R255MAP_RO_' })
   );
@@ -73,9 +75,8 @@ const DecafPoint = decaf448.Point;
   await mark('add', () => dpub.add(DecafPoint.BASE));
   await mark('multiply', () => DecafPoint.BASE.multiply(dpriv));
   await mark('encode', () => DecafPoint.BASE.toBytes());
-  await mark('decode', () => DecafPoint.fromHex(dencoded));
+  await mark('decode', () => DecafPoint.fromBytes(dencoded));
   await mark('decaf448_hasher', () =>
     decaf448_hasher.hashToCurve(msg, { DST: 'decaf448_XOF:SHAKE256_D448MAP_RO_' })
   );
 })();
-
