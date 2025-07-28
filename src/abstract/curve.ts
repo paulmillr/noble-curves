@@ -587,37 +587,42 @@ export function validateBasic<FP, T>(
 
 export type ValidCurveParams<T> = {
   a: T;
+  b?: T;
+  d?: T;
   p: bigint;
   n: bigint;
   h: bigint;
   Gx: T;
   Gy: T;
-} & ({ b: T } | { d: T });
+};
 
-function createField<T>(order: bigint, field?: IField<T>): IField<T> {
+function createField<T>(order: bigint, field?: IField<T>, isLE?: boolean): IField<T> {
   if (field) {
     if (field.ORDER !== order) throw new Error('Field.ORDER must match order: Fp == p, Fn == n');
     validateField(field);
     return field;
   } else {
-    return Field(order) as unknown as IField<T>;
+    return Field(order, { isLE }) as unknown as IField<T>;
   }
 }
 export type FpFn<T> = { Fp: IField<T>; Fn: IField<bigint> };
+
 /** Validates CURVE opts and creates fields */
 export function _createCurveFields<T>(
   type: 'weierstrass' | 'edwards',
   CURVE: ValidCurveParams<T>,
-  curveOpts: Partial<FpFn<T>> = {}
-): FpFn<T> {
+  curveOpts: Partial<FpFn<T>> = {},
+  FpFnLE?: boolean
+): FpFn<T> & { CURVE: ValidCurveParams<T> } {
+  if (FpFnLE === undefined) FpFnLE = type === 'edwards';
   if (!CURVE || typeof CURVE !== 'object') throw new Error(`expected valid ${type} CURVE object`);
   for (const p of ['p', 'n', 'h'] as const) {
     const val = CURVE[p];
     if (!(typeof val === 'bigint' && val > _0n))
       throw new Error(`CURVE.${p} must be positive bigint`);
   }
-  const Fp = createField(CURVE.p, curveOpts.Fp);
-  const Fn = createField(CURVE.n, curveOpts.Fn);
+  const Fp = createField(CURVE.p, curveOpts.Fp, FpFnLE);
+  const Fn = createField(CURVE.n, curveOpts.Fn, FpFnLE);
   const _b: 'b' | 'd' = type === 'weierstrass' ? 'b' : 'd';
   const params = ['Gx', 'Gy', 'a', _b] as const;
   for (const p of params) {
@@ -625,5 +630,6 @@ export function _createCurveFields<T>(
     if (!Fp.isValid(CURVE[p]))
       throw new Error(`CURVE.${p} must be valid field element of CURVE.Fp`);
   }
-  return { Fp, Fn };
+  CURVE = Object.freeze(Object.assign({}, CURVE));
+  return { CURVE, Fp, Fn };
 }

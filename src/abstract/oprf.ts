@@ -51,12 +51,12 @@ Flow:
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import {
   abytes,
+  asciiToBytes,
   bytesToNumberBE,
   bytesToNumberLE,
   concatBytes,
   numberToBytesBE,
   randomBytes,
-  utf8ToBytes,
   validateObject,
 } from '../utils.ts';
 import {
@@ -84,11 +84,11 @@ export type OPRFOpts<F, P extends CurvePoint<F, P>, PC extends CurvePointCons<F,
   hashToGroup: ((msg: Uint8Array, options: htfBasicOpts) => P) | H2CMethod<P>;
 };
 
-export type Keys = { secretKey: ScalarBytes; publicKey: PointBytes };
-export type Blind = { blind: Uint8Array; blinded: Uint8Array };
-export type BlindEval = { evaluated: PointBytes; proof: Bytes };
-export type BlindEvalBatch = { evaluated: PointBytes[]; proof: Bytes };
-export type FinalizeItem = {
+export type OPRFKeys = { secretKey: ScalarBytes; publicKey: PointBytes };
+export type OPRFBlind = { blind: Uint8Array; blinded: Uint8Array };
+export type OPRFBlindEval = { evaluated: PointBytes; proof: Bytes };
+export type OPRFBlindEvalBatch = { evaluated: PointBytes[]; proof: Bytes };
+export type OPRFFinalizeItem = {
   input: Bytes;
   blind: ScalarBytes;
   evaluated: PointBytes;
@@ -123,7 +123,7 @@ export type OPRF = {
      * (Server-side) Generates a new random private/public key pair for the server.
      * @returns A new key pair.
      */
-    generateKeyPair(): Keys;
+    generateKeyPair(): OPRFKeys;
 
     /**
      * (Server-side) Deterministically derives a private/public key pair from a seed.
@@ -131,7 +131,7 @@ export type OPRF = {
      * @param keyInfo An optional byte string for domain separation.
      * @returns The derived key pair.
      */
-    deriveKeyPair(seed: Bytes, keyInfo: Bytes): Keys;
+    deriveKeyPair(seed: Bytes, keyInfo: Bytes): OPRFKeys;
 
     /**
      * (Client-side) The first step of the protocol. The client blinds its private input.
@@ -140,7 +140,7 @@ export type OPRF = {
      * @returns An object containing the `blind` scalar (which the client MUST keep secret)
      * and the `blinded` element (which the client sends to the server).
      */
-    blind(input: Bytes, rng?: RNG): Blind;
+    blind(input: Bytes, rng?: RNG): OPRFBlind;
 
     /**
      * (Server-side) The second step. The server evaluates the client's blinded element
@@ -169,11 +169,11 @@ export type OPRF = {
    */
   readonly voprf: {
     /** (Server-side) Generates a key pair for the VOPRF mode. */
-    generateKeyPair(): Keys;
+    generateKeyPair(): OPRFKeys;
     /** (Server-side) Deterministically derives a key pair for the VOPRF mode. */
-    deriveKeyPair(seed: Bytes, keyInfo: Bytes): Keys;
+    deriveKeyPair(seed: Bytes, keyInfo: Bytes): OPRFKeys;
     /** (Client-side) Blinds the client's private input for the VOPRF protocol. */
-    blind(input: Bytes, rng?: RNG): Blind;
+    blind(input: Bytes, rng?: RNG): OPRFBlind;
 
     /**
      * (Server-side) Evaluates the client's blinded element and generates a DLEQ proof
@@ -189,7 +189,7 @@ export type OPRF = {
       publicKey: PointBytes,
       blinded: PointBytes,
       rng?: RNG
-    ): BlindEval;
+    ): OPRFBlindEval;
 
     /**
      * (Server-side) An optimized batch version of `blindEvaluate`. It evaluates multiple
@@ -206,7 +206,7 @@ export type OPRF = {
       publicKey: PointBytes,
       blinded: PointBytes[],
       rng?: RNG
-    ): BlindEvalBatch;
+    ): OPRFBlindEvalBatch;
 
     /**
      * (Client-side) The final step. The client verifies the server's proof, and if valid,
@@ -238,7 +238,7 @@ export type OPRF = {
      * @returns An array of final VOPRF outputs, one for each item in the input.
      * @throws If the proof verification fails.
      */
-    finalizeBatch(items: FinalizeItem[], publicKey: PointBytes, proof: Bytes): Bytes[];
+    finalizeBatch(items: OPRFFinalizeItem[], publicKey: PointBytes, proof: Bytes): Bytes[];
   };
 
   /**
@@ -251,9 +251,9 @@ export type OPRF = {
    */
   readonly poprf: (info: Bytes) => {
     /** (Server-side) Generates a key pair for the POPRF mode. */
-    generateKeyPair(): Keys;
+    generateKeyPair(): OPRFKeys;
     /** (Server-side) Deterministically derives a key pair for the POPRF mode. */
-    deriveKeyPair(seed: Bytes, keyInfo: Bytes): Keys;
+    deriveKeyPair(seed: Bytes, keyInfo: Bytes): OPRFKeys;
 
     /**
      * (Client-side) Blinds the client's private input and computes the "tweaked key".
@@ -263,7 +263,7 @@ export type OPRF = {
      * @param rng An optional cryptographically secure random number generator.
      * @returns The `blind`, `blinded` element, and the `tweakedKey` which the client uses for verification.
      */
-    blind(input: Bytes, publicKey: PointBytes, rng?: RNG): Blind & { tweakedKey: PointBytes };
+    blind(input: Bytes, publicKey: PointBytes, rng?: RNG): OPRFBlind & { tweakedKey: PointBytes };
 
     /**
      * (Server-side) Evaluates the blinded element using a key derived from its secret key and the public `info`.
@@ -273,7 +273,7 @@ export type OPRF = {
      * @param rng An optional RNG for the proof.
      * @returns The evaluated element and a proof of correct computation.
      */
-    blindEvaluate(secretKey: ScalarBytes, blinded: PointBytes, rng?: RNG): BlindEval;
+    blindEvaluate(secretKey: ScalarBytes, blinded: PointBytes, rng?: RNG): OPRFBlindEval;
 
     /**
      * (Server-side) A batch-aware version of `blindEvaluate` for the POPRF mode.
@@ -282,7 +282,7 @@ export type OPRF = {
      * @param rng An optional RNG for the proof.
      * @returns An array of evaluated elements and a single proof for the batch.
      */
-    blindEvaluateBatch(secretKey: ScalarBytes, blinded: PointBytes[], rng: RNG): BlindEvalBatch;
+    blindEvaluateBatch(secretKey: ScalarBytes, blinded: PointBytes[], rng: RNG): OPRFBlindEvalBatch;
 
     /**
      * (Client-side) A batch-aware version of `finalize` for the POPRF mode.
@@ -293,7 +293,7 @@ export type OPRF = {
      * @returns An array of final POPRF outputs.
      * @throws If proof verification fails.
      */
-    finalizeBatch(items: FinalizeItem[], proof: Bytes, tweakedKey: PointBytes): Bytes[];
+    finalizeBatch(items: OPRFFinalizeItem[], proof: Bytes, tweakedKey: PointBytes): Bytes[];
 
     /**
      * (Client-side) Finalizes the POPRF protocol. It verifies the server's proof against the
@@ -348,7 +348,7 @@ export function createORPF<
 
   const hashToGroup = (msg: Uint8Array, ctx: Uint8Array) =>
     opts.hashToGroup(msg, {
-      DST: concatBytes(utf8ToBytes('HashToGroup-'), ctx),
+      DST: concatBytes(asciiToBytes('HashToGroup-'), ctx),
     }) as P;
   const hashToScalarPrefixed = (msg: Uint8Array, ctx: Uint8Array) =>
     opts.hashToScalar(msg, { DST: concatBytes(_DST_scalar, ctx) });
@@ -362,7 +362,7 @@ export function createORPF<
   const msm = (points: P[], scalars: bigint[]) => pippenger(Point, Point.Fn, points, scalars);
 
   const getCtx = (mode: number) =>
-    concatBytes(utf8ToBytes('OPRFV1-'), new Uint8Array([mode]), utf8ToBytes('-' + name));
+    concatBytes(asciiToBytes('OPRFV1-'), new Uint8Array([mode]), asciiToBytes('-' + name));
   const ctxOPRF = getCtx(0x00);
   const ctxVOPRF = getCtx(0x01);
   const ctxPOPRF = getCtx(0x02);
@@ -371,7 +371,7 @@ export function createORPF<
     const res = [];
     for (const a of args) {
       if (typeof a === 'number') res.push(numberToBytesBE(a, 2));
-      else if (typeof a === 'string') res.push(utf8ToBytes(a));
+      else if (typeof a === 'string') res.push(asciiToBytes(a));
       else {
         abytes(a);
         res.push(numberToBytesBE(a.length, 2), a);
@@ -384,7 +384,7 @@ export function createORPF<
 
   function getTranscripts(B: P, C: P[], D: P[], ctx: Bytes) {
     const Bm = B.toBytes();
-    const seed = hash(encode(Bm, concatBytes(utf8ToBytes('Seed-'), ctx)));
+    const seed = hash(encode(Bm, concatBytes(asciiToBytes('Seed-'), ctx)));
     const res = [];
     for (let i = 0; i < C.length; i++) {
       const Ci = C[i].toBytes();
@@ -443,7 +443,7 @@ export function createORPF<
   }
 
   function deriveKeyPair(ctx: Bytes, seed: Bytes, info: Bytes) {
-    const dst = concatBytes(utf8ToBytes('DeriveKeyPair'), ctx);
+    const dst = concatBytes(asciiToBytes('DeriveKeyPair'), ctx);
     const msg = concatBytes(seed, encode(info), new Uint8Array([0]));
     for (let counter = 0; counter <= 255; counter++) {
       msg[msg.length - 1] = counter;
@@ -512,7 +512,7 @@ export function createORPF<
       const res = this.blindEvaluateBatch(secretKey, publicKey, [blinded], rng);
       return { evaluated: res.evaluated[0], proof: res.proof };
     },
-    finalizeBatch(items: FinalizeItem[], publicKey: PointBytes, proof: Bytes) {
+    finalizeBatch(items: OPRFFinalizeItem[], publicKey: PointBytes, proof: Bytes) {
       if (!Array.isArray(items)) throw new Error('expected array');
       const pkS = Point.fromBytes(publicKey);
       const blindedPoints = items.map((i) => i.blinded).map(Point.fromBytes);
@@ -570,7 +570,7 @@ export function createORPF<
         const res = this.blindEvaluateBatch(secretKey, [blinded], rng);
         return { evaluated: res.evaluated[0], proof: res.proof };
       },
-      finalizeBatch(items: FinalizeItem[], proof: Bytes, tweakedKey: PointBytes) {
+      finalizeBatch(items: OPRFFinalizeItem[], proof: Bytes, tweakedKey: PointBytes) {
         if (!Array.isArray(items)) throw new Error('expected array');
         const evalPoints = items.map((i) => i.evaluated).map(Point.fromBytes);
         verifyProof(

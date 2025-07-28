@@ -132,6 +132,7 @@ function createKeyUtils(algo: Algo, derive: boolean, keyLen: number, pcks8header
         const base64 = jwk.d.replace(/-/g, '+').replace(/_/g, '/'); // base64url
         const pad = base64.length % 4 ? '='.repeat(4 - (base64.length % 4)) : ''; // add padding
         const binary = atob(base64 + pad);
+        // This is not ASCII, and not text: this is only semi-safe with atob output
         const raw = Uint8Array.from(binary, (c) => c.charCodeAt(0));
         // Pad key to key len because Bun strips leading zero for P-521 only
         const res = new Uint8Array(keyLen);

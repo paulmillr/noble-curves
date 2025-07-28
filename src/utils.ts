@@ -37,6 +37,30 @@ export function abool(title: string, value: boolean): void {
   if (typeof value !== 'boolean') throw new Error(title + ' boolean expected, got ' + value);
 }
 
+// tmp name until v2
+export function _abool2(value: boolean, title: string = ''): boolean {
+  if (typeof value !== 'boolean') {
+    const prefix = title && `"${title}"`;
+    throw new Error(prefix + 'expected boolean, got type=' + typeof value);
+  }
+  return value;
+}
+
+// tmp name until v2
+/** Asserts something is Uint8Array. */
+export function _abytes2(value: Uint8Array, length?: number, title: string = ''): Uint8Array {
+  const bytes = isBytes_(value);
+  const len = value?.length;
+  const needsLen = length !== undefined;
+  if (!bytes || (needsLen && len !== length)) {
+    const prefix = title && `"${title}"`;
+    const ofLen = needsLen ? ` of length ${length}` : '';
+    const got = bytes ? `length=${len}` : `type=${typeof value}`;
+    throw new Error(prefix + 'expected Uint8Array' + ofLen + ', got ' + got);
+  }
+  return value;
+}
+
 // Used in weierstrass, der
 export function numberToHexUnpadded(num: number | bigint): string {
   const hex = num.toString(16);
@@ -104,6 +128,30 @@ export function equalBytes(a: Uint8Array, b: Uint8Array): boolean {
   let diff = 0;
   for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
   return diff === 0;
+}
+/**
+ * Copies Uint8Array. We can't use u8a.slice(), because u8a can be Buffer,
+ * and Buffer#slice creates mutable copy. Never use Buffers!
+ */
+export function copyBytes(bytes: Uint8Array): Uint8Array {
+  return Uint8Array.from(bytes);
+}
+
+/**
+ * Decodes 7-bit ASCII string to Uint8Array, throws on non-ascii symbols
+ * Should be safe to use for things expected to be ASCII.
+ * Returns exact same result as utf8ToBytes for ASCII or throws.
+ */
+export function asciiToBytes(ascii: string): Uint8Array {
+  return Uint8Array.from(ascii, (c, i) => {
+    const charCode = c.charCodeAt(0);
+    if (c.length !== 1 || charCode > 127) {
+      throw new Error(
+        `string contains non-ASCII character "${ascii[i]}" with code ${charCode} at position ${i}`
+      );
+    }
+    return charCode;
+  });
 }
 
 /**

@@ -33,6 +33,7 @@ import {
   ensureBytes,
   inRange,
   numberToBytesBE,
+  utf8ToBytes,
 } from './utils.ts';
 
 // Seems like generator was produced from some seed:
@@ -88,7 +89,7 @@ function sqrtMod(y: bigint): bigint {
   return root;
 }
 
-const Fpk1 = Field(secp256k1_CURVE.p, undefined, undefined, { sqrt: sqrtMod });
+const Fpk1 = Field(secp256k1_CURVE.p, { sqrt: sqrtMod });
 
 /**
  * secp256k1 curve, ECDSA and ECDH methods.
@@ -116,7 +117,7 @@ const TAGGED_HASH_PREFIXES: { [tag: string]: Uint8Array } = {};
 function taggedHash(tag: string, ...messages: Uint8Array[]): Uint8Array {
   let tagP = TAGGED_HASH_PREFIXES[tag];
   if (tagP === undefined) {
-    const tagH = sha256(Uint8Array.from(tag, (c) => c.charCodeAt(0)));
+    const tagH = sha256(utf8ToBytes(tag));
     tagP = concatBytes(tagH, tagH);
     TAGGED_HASH_PREFIXES[tag] = tagP;
   }

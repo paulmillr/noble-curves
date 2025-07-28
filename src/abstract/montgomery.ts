@@ -7,6 +7,7 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import {
   _validateObject,
+  abytes,
   aInRange,
   bytesToNumberLE,
   ensureBytes,
@@ -167,19 +168,22 @@ export function montgomery(curveDef: CurveType): MontgomeryECDH {
     const z2 = powPminus2(z_2); // `Fp.pow(x, P - _2n)` is much slower equivalent
     return modP(x_2 * z2); // Return x_2 * (z_2^(p - 2))
   }
-  const randomSecretKey = (seed = randomBytes_(fieldLen)) => seed;
-  const utils = {
-    randomSecretKey,
-    randomPrivateKey: randomSecretKey,
-  };
-  function keygen(seed?: Uint8Array) {
-    const secretKey = utils.randomSecretKey(seed);
-    return { secretKey, publicKey: scalarMultBase(secretKey) };
-  }
   const lengths = {
     secret: fieldLen,
     public: fieldLen,
     seed: fieldLen,
+  };
+  const randomSecretKey = (seed = randomBytes_(fieldLen)) => {
+    abytes(seed, lengths.seed);
+    return seed;
+  };
+  function keygen(seed?: Uint8Array) {
+    const secretKey = randomSecretKey(seed);
+    return { secretKey, publicKey: scalarMultBase(secretKey) };
+  }
+  const utils = {
+    randomSecretKey,
+    randomPrivateKey: randomSecretKey,
   };
   return {
     keygen,

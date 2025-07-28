@@ -113,7 +113,7 @@ function adjustScalarBytes(bytes: Uint8Array): Uint8Array {
   bytes[0] &= 252; // 0b11111100
   // and the most significant bit of the last byte to 1.
   bytes[55] |= 128; // 0b10000000
-  // NOTE: is is NOOP for 56 bytes scalars (X25519/X448)
+  // NOTE: is NOOP for 56 bytes scalars (X25519/X448)
   bytes[56] = 0; // Byte outside of group (456 buts vs 448 bits)
   return bytes;
 }
@@ -146,6 +146,18 @@ const Fp = /* @__PURE__ */ (() => Field(ed448_CURVE.p, { BITS: 456, isLE: true }
 const Fn = /* @__PURE__ */ (() => Field(ed448_CURVE.n, { BITS: 448, isLE: true }))();
 // Fn456 has BITS: 456
 
+function dom4(data: Uint8Array, ctx: Uint8Array, phflag: boolean) {
+  if (ctx.length > 255) throw new Error('context must be smaller than 255, got: ' + ctx.length);
+  return concatBytes(
+    utf8ToBytes('SigEd448'),
+    new Uint8Array([phflag ? 1 : 0, ctx.length]),
+    ctx,
+    data
+  );
+}
+// const ed448_eddsa_opts = { adjustScalarBytes, domain: dom4 };
+// const ed448_Point = edwards(ed448_CURVE, { Fp, Fn, uvRatio });
+
 // SHAKE256(dom4(phflag,context)||x, 114)
 const ED448_DEF = /* @__PURE__ */ (() => ({
   ...ed448_CURVE,
@@ -153,16 +165,7 @@ const ED448_DEF = /* @__PURE__ */ (() => ({
   Fn,
   hash: shake256_114,
   adjustScalarBytes,
-  // dom4
-  domain: (data: Uint8Array, ctx: Uint8Array, phflag: boolean) => {
-    if (ctx.length > 255) throw new Error('context must be smaller than 255, got: ' + ctx.length);
-    return concatBytes(
-      utf8ToBytes('SigEd448'),
-      new Uint8Array([phflag ? 1 : 0, ctx.length]),
-      ctx,
-      data
-    );
-  },
+  domain: dom4,
   uvRatio,
 }))();
 
@@ -210,14 +213,6 @@ export const x448: XCurveFn = /* @__PURE__ */ (() => {
     adjustScalarBytes,
   });
 })();
-
-/** @deprecated use `ed448.utils.toMontgomery` */
-export function edwardsToMontgomeryPub(edwardsPub: string | Uint8Array): Uint8Array {
-  return ed448.utils.toMontgomery(ensureBytes('pub', edwardsPub));
-}
-
-/** @deprecated use `ed448.utils.toMontgomery` */
-export const edwardsToMontgomery: typeof edwardsToMontgomeryPub = edwardsToMontgomeryPub;
 
 // Hash To Curve Elligator2 Map
 const ELL2_C1 = /* @__PURE__ */ (() => (Fp.ORDER - BigInt(3)) / BigInt(4))(); // 1. c1 = (q - 3) / 4         # Integer arithmetic
@@ -336,9 +331,9 @@ type ExtendedPoint = EdwardsPoint;
  * and [RFC9496](https://www.rfc-editor.org/rfc/rfc9496#name-element-derivation-2).
  */
 function calcElligatorDecafMap(r0: bigint): ExtendedPoint {
-  const { d } = ed448.CURVE;
+  const { d } = ed448_CURVE;
   const P = Fp.ORDER;
-  const mod = Fp.create;
+  const mod = (n: bigint) => Fp.create(n);
 
   const r = mod(-(r0 * r0)); // 1
   const u0 = mod(d * (r - _1n)); // 2
@@ -390,10 +385,10 @@ class _DecafPoint extends PrimeEdwardsPoint<_DecafPoint> {
     /* @__PURE__ */ (() => new _DecafPoint(ed448.Point.ZERO))();
   // prettier-ignore
   static Fp: IField<bigint> =
-    /* @__PURE__ */ Fp;
+    /* @__PURE__ */ (() => Fp)();
   // prettier-ignore
   static Fn: IField<bigint> =
-    /* @__PURE__ */ Fn;
+    /* @__PURE__ */ (() => Fn)();
 
   constructor(ep: ExtendedPoint) {
     super(ep);
@@ -418,9 +413,9 @@ class _DecafPoint extends PrimeEdwardsPoint<_DecafPoint> {
 
   static fromBytes(bytes: Uint8Array): _DecafPoint {
     abytes(bytes, 56);
-    const { d } = ed448.CURVE;
+    const { d } = ed448_CURVE;
     const P = Fp.ORDER;
-    const mod = Fp.create;
+    const mod = (n: bigint) => Fp.create(n);
     const s = bytes448ToNumberLE(bytes);
 
     // 1. Check that s_bytes is the canonical encoding of a field element, or else abort.
@@ -467,7 +462,7 @@ class _DecafPoint extends PrimeEdwardsPoint<_DecafPoint> {
   toBytes(): Uint8Array {
     const { X, Z, T } = this.ep;
     const P = Fp.ORDER;
-    const mod = Fp.create;
+    const mod = (n: bigint) => Fp.create(n);
 
     const u1 = mod(mod(X + T) * mod(X - T)); // 1
     const x2 = mod(X * X);
@@ -492,7 +487,7 @@ class _DecafPoint extends PrimeEdwardsPoint<_DecafPoint> {
     this.assertSame(other);
     const { X: X1, Y: Y1 } = this.ep;
     const { X: X2, Y: Y2 } = other.ep;
-    const mod = Fp.create;
+    const mod = (n: bigint) => Fp.create(n);
     // (x1 * y2 == y1 * x2)
     return mod(X1 * Y2) === mod(Y1 * X2);
   }
@@ -502,8 +497,6 @@ class _DecafPoint extends PrimeEdwardsPoint<_DecafPoint> {
   }
 }
 
-/** @deprecated use `decaf448.Point` */
-export const DecafPoint: typeof _DecafPoint = _DecafPoint;
 export const decaf448: {
   Point: typeof _DecafPoint;
 } = { Point: _DecafPoint };
@@ -527,20 +520,6 @@ export const decaf448_hasher: H2CHasherBase<bigint> = {
 //   hashToScalar: decaf448_hasher.hashToScalar,
 // });
 
-type DcfHasher = (msg: Uint8Array, options: htfBasicOpts) => _DecafPoint;
-
-/** @deprecated use `import { ed448_hasher } from '@noble/curves/ed448.js';` */
-export const hashToCurve: H2CMethod<bigint> = /* @__PURE__ */ (() => ed448_hasher.hashToCurve)();
-/** @deprecated use `import { ed448_hasher } from '@noble/curves/ed448.js';` */
-export const encodeToCurve: H2CMethod<bigint> = /* @__PURE__ */ (() =>
-  ed448_hasher.encodeToCurve)();
-/** @deprecated use `import { decaf448_hasher } from '@noble/curves/ed448.js';` */
-export const hashToDecaf448: DcfHasher = /* @__PURE__ */ (() =>
-  decaf448_hasher.hashToCurve as DcfHasher)();
-/** @deprecated use `import { decaf448_hasher } from '@noble/curves/ed448.js';` */
-export const hash_to_decaf448: DcfHasher = /* @__PURE__ */ (() =>
-  decaf448_hasher.hashToCurve as DcfHasher)();
-
 /**
  * Weird / bogus points, useful for debugging.
  * Unlike ed25519, there is no ed448 generator point which can produce full T subgroup.
@@ -553,3 +532,27 @@ export const ED448_TORSION_SUBGROUP: string[] = [
   '000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
   '000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000080',
 ];
+
+type DcfHasher = (msg: Uint8Array, options: htfBasicOpts) => _DecafPoint;
+
+/** @deprecated use `decaf448.Point` */
+export const DecafPoint: typeof _DecafPoint = _DecafPoint;
+/** @deprecated use `import { ed448_hasher } from '@noble/curves/ed448.js';` */
+export const hashToCurve: H2CMethod<bigint> = /* @__PURE__ */ (() => ed448_hasher.hashToCurve)();
+/** @deprecated use `import { ed448_hasher } from '@noble/curves/ed448.js';` */
+export const encodeToCurve: H2CMethod<bigint> = /* @__PURE__ */ (() =>
+  ed448_hasher.encodeToCurve)();
+/** @deprecated use `import { decaf448_hasher } from '@noble/curves/ed448.js';` */
+export const hashToDecaf448: DcfHasher = /* @__PURE__ */ (() =>
+  decaf448_hasher.hashToCurve as DcfHasher)();
+/** @deprecated use `import { decaf448_hasher } from '@noble/curves/ed448.js';` */
+export const hash_to_decaf448: DcfHasher = /* @__PURE__ */ (() =>
+  decaf448_hasher.hashToCurve as DcfHasher)();
+
+/** @deprecated use `ed448.utils.toMontgomery` */
+export function edwardsToMontgomeryPub(edwardsPub: string | Uint8Array): Uint8Array {
+  return ed448.utils.toMontgomery(ensureBytes('pub', edwardsPub));
+}
+
+/** @deprecated use `ed448.utils.toMontgomery` */
+export const edwardsToMontgomery: typeof edwardsToMontgomeryPub = edwardsToMontgomeryPub;

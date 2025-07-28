@@ -42,12 +42,17 @@ const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3);
 // prettier-ignore
 const _5n = BigInt(5), _8n = BigInt(8);
 
+// 2n**255n-19n
+const ed25519_CURVE_p = BigInt(
+  '0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed'
+);
+
 // P = 2n**255n - 19n
 // N = 2n**252n + 27742317777372353535851937790883648493n
 // a = Fp.create(BigInt(-1))
 // d = -121665/121666 a.k.a. Fp.neg(121665 * Fp.inv(121666))
 const ed25519_CURVE: EdwardsOpts = {
-  p: BigInt('0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed'),
+  p: ed25519_CURVE_p,
   n: BigInt('0x1000000000000000000000000000000014def9dea2f79cd65812631a5cf5d3ed'),
   h: _8n,
   a: BigInt('0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffec'),
@@ -59,7 +64,7 @@ const ed25519_CURVE: EdwardsOpts = {
 function ed25519_pow_2_252_3(x: bigint) {
   // prettier-ignore
   const _10n = BigInt(10), _20n = BigInt(20), _40n = BigInt(40), _80n = BigInt(80);
-  const P = ed25519_CURVE.p;
+  const P = ed25519_CURVE_p;
   const x2 = (x * x) % P;
   const b2 = (x2 * x) % P; // x^3, 11
   const b4 = (pow2(b2, _2n, P) * b2) % P; // x^15, 1111
@@ -94,7 +99,7 @@ const ED25519_SQRT_M1 = /* @__PURE__ */ BigInt(
 );
 // sqrt(u/v)
 function uvRatio(u: bigint, v: bigint): { isValid: boolean; value: bigint } {
-  const P = ed25519_CURVE.p;
+  const P = ed25519_CURVE_p;
   const v3 = mod(v * v * v, P); // v³
   const v7 = mod(v3 * v3 * v, P); // v⁷
   // (p+3)/8 and (p-5)/8
@@ -313,8 +318,7 @@ const invertSqrt = (number: bigint) => uvRatio(_1n, number);
 const MAX_255B = /* @__PURE__ */ BigInt(
   '0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
 );
-const bytes255ToNumberLE = (bytes: Uint8Array) =>
-  ed25519.CURVE.Fp.create(bytesToNumberLE(bytes) & MAX_255B);
+const bytes255ToNumberLE = (bytes: Uint8Array) => Fp.create(bytesToNumberLE(bytes) & MAX_255B);
 
 type ExtendedPoint = EdwardsPoint;
 
@@ -324,9 +328,9 @@ type ExtendedPoint = EdwardsPoint;
  * the [website](https://ristretto.group/formulas/elligator.html).
  */
 function calcElligatorRistrettoMap(r0: bigint): ExtendedPoint {
-  const { d } = ed25519.CURVE;
-  const P = ed25519.CURVE.Fp.ORDER;
-  const mod = ed25519.CURVE.Fp.create;
+  const { d } = ed25519_CURVE;
+  const P = Fp.ORDER;
+  const mod = (n: bigint) => Fp.create(n);
   const r = mod(SQRT_M1 * r0 * r0); // 1
   const Ns = mod((r + _1n) * ONE_MINUS_D_SQ); // 2
   let c = BigInt(-1); // 3
@@ -374,10 +378,10 @@ class _RistrettoPoint extends PrimeEdwardsPoint<_RistrettoPoint> {
     /* @__PURE__ */ (() => new _RistrettoPoint(ed25519.Point.ZERO))();
   // prettier-ignore
   static Fp: IField<bigint> =
-    /* @__PURE__ */ Fp;
+    /* @__PURE__ */ (() => Fp)();
   // prettier-ignore
   static Fn: IField<bigint> =
-    /* @__PURE__ */ Fn;
+    /* @__PURE__ */ (() => Fn)();
 
   constructor(ep: ExtendedPoint) {
     super(ep);
@@ -404,7 +408,7 @@ class _RistrettoPoint extends PrimeEdwardsPoint<_RistrettoPoint> {
     abytes(bytes, 32);
     const { a, d } = ed25519.CURVE;
     const P = Fp.ORDER;
-    const mod = Fp.create;
+    const mod = (n: bigint) => Fp.create(n);
     const s = bytes255ToNumberLE(bytes);
     // 1. Check that s_bytes is the canonical encoding of a field element, or else abort.
     // 3. Check that s is non-negative, or else abort
@@ -448,7 +452,7 @@ class _RistrettoPoint extends PrimeEdwardsPoint<_RistrettoPoint> {
   toBytes(): Uint8Array {
     let { X, Y, Z, T } = this.ep;
     const P = Fp.ORDER;
-    const mod = Fp.create;
+    const mod = (n: bigint) => Fp.create(n);
     const u1 = mod(mod(Z + Y) * mod(Z - Y)); // 1
     const u2 = mod(X * Y); // 2
     // Square root always exists
@@ -481,7 +485,7 @@ class _RistrettoPoint extends PrimeEdwardsPoint<_RistrettoPoint> {
     this.assertSame(other);
     const { X: X1, Y: Y1 } = this.ep;
     const { X: X2, Y: Y2 } = other.ep;
-    const mod = Fp.create;
+    const mod = (n: bigint) => Fp.create(n);
     // (x1 * y2 == y1 * x2) | (y1 * y2 == x1 * x2)
     const one = mod(X1 * Y2) === mod(Y1 * X2);
     const two = mod(Y1 * Y2) === mod(X1 * X2);
@@ -492,9 +496,6 @@ class _RistrettoPoint extends PrimeEdwardsPoint<_RistrettoPoint> {
     return this.equals(_RistrettoPoint.ZERO);
   }
 }
-
-/** @deprecated use `ristretto255.Point` */
-export const RistrettoPoint: typeof _RistrettoPoint = _RistrettoPoint;
 
 export const ristretto255: {
   Point: typeof _RistrettoPoint;
@@ -519,6 +520,8 @@ export const ristretto255_hasher: H2CHasherBase<bigint> = {
 //   hashToScalar: ristretto255_hasher.hashToScalar,
 // });
 
+/** @deprecated use `ristretto255.Point` */
+export const RistrettoPoint: typeof _RistrettoPoint = _RistrettoPoint;
 /** @deprecated use `import { ed25519_hasher } from '@noble/curves/ed25519.js';` */
 export const hashToCurve: H2CMethod<bigint> = /* @__PURE__ */ (() => ed25519_hasher.hashToCurve)();
 /** @deprecated use `import { ed25519_hasher } from '@noble/curves/ed25519.js';` */

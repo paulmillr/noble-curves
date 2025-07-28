@@ -64,9 +64,9 @@ export function jubjub_groupHash(tag: Uint8Array, personalization: Uint8Array): 
   h.update(jubjub_gh_first_block);
   h.update(tag);
   // NOTE: returns ExtendedPoint, in case it will be multiplied later
-  let p = jubjub.Point.fromHex(h.digest());
+  let p = jubjub.Point.fromBytes(h.digest());
   // NOTE: cannot replace with isSmallOrder, returns Point*8
-  p = p.multiply(jubjub.CURVE.h);
+  p = p.multiply(jubjub_CURVE.h);
   if (p.equals(jubjub.Point.ZERO)) throw new Error('Point has small order');
   return p;
 }
