@@ -84,6 +84,7 @@ import {
   abytes,
   bitGet,
   bitLen,
+  bitMask,
   bytesToHex,
   bytesToNumberBE,
   concatBytes,
@@ -146,7 +147,7 @@ const bls12_381_CURVE_G1: WeierstrassOpts<bigint> = {
 };
 
 // CURVE FIELDS
-export const bls12_381_Fr: IField<bigint> = Field(bls12_381_CURVE_G1.n, { modOnDecode: true });
+export const bls12_381_Fr: IField<bigint> = Field(bls12_381_CURVE_G1.n, { modFromBytes: true });
 const { Fp, Fp2, Fp6, Fp4Square, Fp12 } = tower12({
   // Order of Fp
   ORDER: bls12_381_CURVE_G1.p,
@@ -330,7 +331,7 @@ function pointG1FromBytes(bytes: Uint8Array): AffinePoint<Fp> {
   if (value.length === 48 && compressed) {
     const compressedValue = bytesToNumberBE(value);
     // Zero
-    const x = Fp.create(compressedValue & Fp.MASK);
+    const x = Fp.create(compressedValue & bitMask(Fp.BITS));
     if (infinity) {
       if (x !== _0n) throw new Error('invalid G1 point: non-empty, at infinity, with compression');
       return { x: _0n, y: _0n };
@@ -361,7 +362,7 @@ function signatureG1FromBytes(hex: Hex): WeierstrassPoint<Fp> {
   const compressedValue = bytesToNumberBE(value);
   // Zero
   if (infinity) return Point.ZERO;
-  const x = Fp.create(compressedValue & Fp.MASK);
+  const x = Fp.create(compressedValue & bitMask(Fp.BITS));
   const right = Fp.add(Fp.pow(x, _3n), Fp.create(bls12_381_CURVE_G1.b)); // y² = x³ + b
   let y = Fp.sqrt(right);
   if (!y) throw new Error('invalid G1 point: compressed');
@@ -472,7 +473,7 @@ function signatureG2FromBytes(hex: Hex) {
   const z2 = bytesToNumberBE(value.slice(half));
   // Indicates the infinity point
   if (infinity) return Point.ZERO;
-  const x1 = Fp.create(z1 & Fp.MASK);
+  const x1 = Fp.create(z1 & bitMask(Fp.BITS));
   const x2 = Fp.create(z2);
   const x = Fp2.create({ c0: x2, c1: x1 });
   const y2 = Fp2.add(Fp2.pow(x, _3n), bls12_381_CURVE_G2.b); // y² = x³ + 4

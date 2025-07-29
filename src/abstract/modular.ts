@@ -384,7 +384,7 @@ type FieldOpts = Partial<{
   sqrt: SqrtFn;
   isLE: boolean;
   BITS: number;
-  modOnDecode: boolean; // bls12-381 requires mod(n) instead of rejecting keys >= n
+  modFromBytes: boolean; // bls12-381 requires mod(n) instead of rejecting keys >= n
   allowedLengths?: readonly number[]; // for P521 (adds padding for smaller sizes)
 }>;
 /**
@@ -415,7 +415,7 @@ export function Field(
   if (ORDER <= _0n) throw new Error('invalid field: expected ORDER > 0, got ' + ORDER);
   let _nbitLength: number | undefined = undefined;
   let _sqrt: SqrtFn | undefined = undefined;
-  let modOnDecode: boolean = false;
+  let modFromBytes: boolean = false;
   let allowedLengths: undefined | readonly number[] = undefined;
   if (typeof bitLenOrOpts === 'object' && bitLenOrOpts != null) {
     if (opts.sqrt || isLE) throw new Error('cannot specify opts in two arguments');
@@ -423,7 +423,7 @@ export function Field(
     if (_opts.BITS) _nbitLength = _opts.BITS;
     if (_opts.sqrt) _sqrt = _opts.sqrt;
     if (typeof _opts.isLE === 'boolean') isLE = _opts.isLE;
-    if (typeof _opts.modOnDecode === 'boolean') modOnDecode = _opts.modOnDecode;
+    if (typeof _opts.modFromBytes === 'boolean') modFromBytes = _opts.modFromBytes;
     allowedLengths = _opts.allowedLengths;
   } else {
     if (typeof bitLenOrOpts === 'number') _nbitLength = bitLenOrOpts;
@@ -490,7 +490,7 @@ export function Field(
       if (bytes.length !== BYTES)
         throw new Error('Field.fromBytes: expected ' + BYTES + ' bytes, got ' + bytes.length);
       let scalar = isLE ? bytesToNumberLE(bytes) : bytesToNumberBE(bytes);
-      if (modOnDecode) scalar = mod(scalar, ORDER);
+      if (modFromBytes) scalar = mod(scalar, ORDER);
       if (!skipValidation)
         if (!f.isValid(scalar)) throw new Error('invalid field element: outside of range 0..ORDER');
       // NOTE: we don't validate scalar here, please use isValid. This done such way because some

@@ -180,7 +180,7 @@ export const ed25519ph: CurveFn = /* @__PURE__ */ (() =>
  * x25519.getPublicKey(x25519.utils.randomSecretKey());
  */
 export const x25519: XCurveFn = /* @__PURE__ */ (() => {
-  const P = ed25519_CURVE.p;
+  const P = ed25519.CURVE.Fp.ORDER;
   return montgomery({
     P,
     type: 'x25519',
@@ -192,18 +192,6 @@ export const x25519: XCurveFn = /* @__PURE__ */ (() => {
     adjustScalarBytes,
   });
 })();
-
-/** @deprecated use `ed25519.utils.toMontgomery` */
-export function edwardsToMontgomeryPub(edwardsPub: Hex): Uint8Array {
-  return ed25519.utils.toMontgomery(ensureBytes('pub', edwardsPub));
-}
-/** @deprecated use `ed25519.utils.toMontgomery` */
-export const edwardsToMontgomery: typeof edwardsToMontgomeryPub = edwardsToMontgomeryPub;
-
-/** @deprecated use `ed25519.utils.toMontgomeryPriv` */
-export function edwardsToMontgomeryPriv(edwardsPriv: Uint8Array): Uint8Array {
-  return ed25519.utils.toMontgomeryPriv(ensureBytes('pub', edwardsPriv));
-}
 
 // Hash To Curve Elligator2 Map (NOTE: different from ristretto255 elligator)
 // NOTE: very important part is usage of FpSqrtEven for ELL2_C1_EDWARDS, since
@@ -254,7 +242,7 @@ function map_to_curve_elligator2_curve25519(u: bigint) {
   let e3 = Fp.eql(tv2, gx1);    //  34.  e3 = tv2 == gx1
   let xn = Fp.cmov(x2n, x1n, e3); //  35.  xn = CMOV(x2n, x1n, e3)  # If e3, x = x1, else x = x2
   let y = Fp.cmov(y2, y1, e3);  //  36.   y = CMOV(y2, y1, e3)    # If e3, y = y1, else y = y2
-  let e4 = Fp.isOdd(y);         //  37.  e4 = sgn0(y) == 1        # Fix sign of y
+  let e4 = Fp.isOdd!(y);         //  37.  e4 = sgn0(y) == 1        # Fix sign of y
   y = Fp.cmov(y, Fp.neg(y), e3 !== e4); //  38.   y = CMOV(y, -y, e3 XOR e4)
   return { xMn: xn, xMd: xd, yMn: y, yMd: _1n }; //  39. return (xn, xd, y, 1)
 }
@@ -318,7 +306,8 @@ const invertSqrt = (number: bigint) => uvRatio(_1n, number);
 const MAX_255B = /* @__PURE__ */ BigInt(
   '0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
 );
-const bytes255ToNumberLE = (bytes: Uint8Array) => Fp.create(bytesToNumberLE(bytes) & MAX_255B);
+const bytes255ToNumberLE = (bytes: Uint8Array) =>
+  ed25519.Point.Fp.create(bytesToNumberLE(bytes) & MAX_255B);
 
 type ExtendedPoint = EdwardsPoint;
 
@@ -406,8 +395,8 @@ class _RistrettoPoint extends PrimeEdwardsPoint<_RistrettoPoint> {
 
   static fromBytes(bytes: Uint8Array): _RistrettoPoint {
     abytes(bytes, 32);
-    const { a, d } = ed25519.CURVE;
-    const P = Fp.ORDER;
+    const { a, d } = ed25519_CURVE;
+    const P = ed25519_CURVE_p;
     const mod = (n: bigint) => Fp.create(n);
     const s = bytes255ToNumberLE(bytes);
     // 1. Check that s_bytes is the canonical encoding of a field element, or else abort.
@@ -451,7 +440,7 @@ class _RistrettoPoint extends PrimeEdwardsPoint<_RistrettoPoint> {
    */
   toBytes(): Uint8Array {
     let { X, Y, Z, T } = this.ep;
-    const P = Fp.ORDER;
+    const P = ed25519_CURVE_p;
     const mod = (n: bigint) => Fp.create(n);
     const u1 = mod(mod(Z + Y) * mod(Z - Y)); // 1
     const u2 = mod(X * Y); // 2
@@ -508,7 +497,8 @@ export const ristretto255_hasher: H2CHasherBase<bigint> = {
     return ristretto255_map(expand_message_xmd(msg, DST, 64, sha512));
   },
   hashToScalar(msg: Uint8Array, options: htfBasicOpts = { DST: _DST_scalar }) {
-    return Fn.create(bytesToNumberLE(expand_message_xmd(msg, options.DST, 64, sha512)));
+    const xmd = expand_message_xmd(msg, options.DST, 64, sha512);
+    return ristretto255.Point.Fn.create(bytesToNumberLE(xmd));
   },
 };
 
@@ -519,21 +509,6 @@ export const ristretto255_hasher: H2CHasherBase<bigint> = {
 //   hashToGroup: ristretto255_hasher.hashToCurve,
 //   hashToScalar: ristretto255_hasher.hashToScalar,
 // });
-
-/** @deprecated use `ristretto255.Point` */
-export const RistrettoPoint: typeof _RistrettoPoint = _RistrettoPoint;
-/** @deprecated use `import { ed25519_hasher } from '@noble/curves/ed25519.js';` */
-export const hashToCurve: H2CMethod<bigint> = /* @__PURE__ */ (() => ed25519_hasher.hashToCurve)();
-/** @deprecated use `import { ed25519_hasher } from '@noble/curves/ed25519.js';` */
-export const encodeToCurve: H2CMethod<bigint> = /* @__PURE__ */ (() =>
-  ed25519_hasher.encodeToCurve)();
-type RistHasher = (msg: Uint8Array, options: htfBasicOpts) => _RistrettoPoint;
-/** @deprecated use `import { ristretto255_hasher } from '@noble/curves/ed25519.js';` */
-export const hashToRistretto255: RistHasher = /* @__PURE__ */ (() =>
-  ristretto255_hasher.hashToCurve as RistHasher)();
-/** @deprecated use `import { ristretto255_hasher } from '@noble/curves/ed25519.js';` */
-export const hash_to_ristretto255: RistHasher = /* @__PURE__ */ (() =>
-  ristretto255_hasher.hashToCurve as RistHasher)();
 
 /**
  * Weird / bogus points, useful for debugging.
@@ -551,3 +526,30 @@ export const ED25519_TORSION_SUBGROUP: string[] = [
   '0000000000000000000000000000000000000000000000000000000000000000',
   'c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa',
 ];
+
+/** @deprecated use `ed25519.utils.toMontgomery` */
+export function edwardsToMontgomeryPub(edwardsPub: Hex): Uint8Array {
+  return ed25519.utils.toMontgomery(ensureBytes('pub', edwardsPub));
+}
+/** @deprecated use `ed25519.utils.toMontgomery` */
+export const edwardsToMontgomery: typeof edwardsToMontgomeryPub = edwardsToMontgomeryPub;
+
+/** @deprecated use `ed25519.utils.toMontgomeryPriv` */
+export function edwardsToMontgomeryPriv(edwardsPriv: Uint8Array): Uint8Array {
+  return ed25519.utils.toMontgomeryPriv(ensureBytes('pub', edwardsPriv));
+}
+
+/** @deprecated use `ristretto255.Point` */
+export const RistrettoPoint: typeof _RistrettoPoint = _RistrettoPoint;
+/** @deprecated use `import { ed25519_hasher } from '@noble/curves/ed25519.js';` */
+export const hashToCurve: H2CMethod<bigint> = /* @__PURE__ */ (() => ed25519_hasher.hashToCurve)();
+/** @deprecated use `import { ed25519_hasher } from '@noble/curves/ed25519.js';` */
+export const encodeToCurve: H2CMethod<bigint> = /* @__PURE__ */ (() =>
+  ed25519_hasher.encodeToCurve)();
+type RistHasher = (msg: Uint8Array, options: htfBasicOpts) => _RistrettoPoint;
+/** @deprecated use `import { ristretto255_hasher } from '@noble/curves/ed25519.js';` */
+export const hashToRistretto255: RistHasher = /* @__PURE__ */ (() =>
+  ristretto255_hasher.hashToCurve as RistHasher)();
+/** @deprecated use `import { ristretto255_hasher } from '@noble/curves/ed25519.js';` */
+export const hash_to_ristretto255: RistHasher = /* @__PURE__ */ (() =>
+  ristretto255_hasher.hashToCurve as RistHasher)();

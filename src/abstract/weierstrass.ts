@@ -507,6 +507,7 @@ export function weierstrassN<T>(
   }
 
   const lengths = getWLengths(Fp, Fn);
+
   function assertCompressionIsSupported() {
     if (!Fp.isOdd) throw new Error('compression is not supported: Field does not have .isOdd()');
   }
@@ -684,7 +685,6 @@ export function weierstrassN<T>(
       Object.freeze(this);
     }
 
-    // curve params
     static CURVE(): WeierstrassOpts<T> {
       return CURVE;
     }
@@ -1283,6 +1283,8 @@ export function ecdh(
  * 1. Message prehash-ing. NOT used if `sign` / `verify` are called with `prehash: false`
  * 2. k generation in `sign`, using HMAC-drbg(hash)
  *
+ * ECDSAOpts are only rarely needed.
+ *
  * @example
  * ```js
  * const p256_Point = weierstrass(...);
@@ -1328,7 +1330,6 @@ export function ecdsa(
     const HALF = CURVE_ORDER >> _1n;
     return number > HALF;
   }
-
   function normalizeS(s: bigint) {
     return isBiggerThanHalfOrder(s) ? Fn.neg(s) : s;
   }
@@ -1339,7 +1340,7 @@ export function ecdsa(
   }
 
   /**
-   * ECDSA signature with its (r, s) properties. Supports DER & compact representations.
+   * ECDSA signature with its (r, s) properties. Supports compact, recovered & DER representations.
    */
   class Signature implements ECDSASignature {
     readonly r: bigint;
@@ -1417,10 +1418,6 @@ export function ecdsa(
       return isBiggerThanHalfOrder(this.s);
     }
 
-    normalizeS() {
-      return this.hasHighS() ? new Signature(this.r, Fn.neg(this.s), this.recovery) : this;
-    }
-
     toBytes(format: ECDSASigFormat = defaultSigOpts_format) {
       validateSigFormat(format);
       if (format === 'der') return hexToBytes(DER.hexFromSig(this));
@@ -1444,6 +1441,9 @@ export function ecdsa(
     }
     static fromDER(hex: Hex) {
       return Signature.fromBytes(ensureBytes('sig', hex), 'der');
+    }
+    normalizeS() {
+      return this.hasHighS() ? new Signature(this.r, Fn.neg(this.s), this.recovery) : this;
     }
     toDERRawBytes() {
       return this.toBytes('der');
@@ -1491,11 +1491,14 @@ export function ecdsa(
     return Fn.toBytes(num);
   }
 
-  // Steps A, D of RFC6979 3.2
-  // Creates RFC6979 seed; converts msg/privKey to numbers.
-  // Used only in sign, not in verify.
-  // NOTE: we cannot assume here that msgHash has same amount of bytes as curve order,
-  // this will be invalid at least for P521. Also it can be bigger for P224 + SHA256
+  /**
+   * Steps A, D of RFC6979 3.2.
+   * Creates RFC6979 seed; converts msg/privKey to numbers.
+   * Used only in sign, not in verify.
+   *
+   * Warning: we cannot assume here that message has same amount of bytes as curve order,
+   * this will be invalid at least for P521. Also it can be bigger for P224 + SHA256.
+   */
   function prepSig(message: Uint8Array, privateKey: PrivKey, opts: ECDSASignOpts) {
     if (['recovered', 'canonical'].some((k) => k in opts))
       throw new Error('sign() legacy options not supported');
@@ -1560,11 +1563,12 @@ export function ecdsa(
    *   s = (m + dr) / k mod n
    * ```
    */
-  function sign(msgHash: Hex, secretKey: PrivKey, opts: ECDSASignOpts = {}): RecoveredSignature {
-    msgHash = ensureBytes('message', msgHash);
-    const { seed, k2sig } = prepSig(msgHash, secretKey, opts); // Steps A, D of RFC6979 3.2.
+  function sign(message: Hex, secretKey: PrivKey, opts: ECDSASignOpts = {}): RecoveredSignature {
+    message = ensureBytes('message', message);
+    const { seed, k2sig } = prepSig(message, secretKey, opts); // Steps A, D of RFC6979 3.2.
     const drbg = createHmacDrbg<RecoveredSignature>(hash.outputLen, Fn.BYTES, hmac_);
-    return drbg(seed, k2sig); // Steps B, C, D, E, F, G
+    const sig = drbg(seed, k2sig); // Steps B, C, D, E, F, G
+    return sig;
   }
 
   // Enable precomputes. Slows down first publicKey computation by 20ms.
@@ -1593,13 +1597,10 @@ export function ecdsa(
     message = ensureBytes('msgHash', message);
     publicKey = ensureBytes('publicKey', publicKey);
     const { lowS, prehash, format } = validateSigOpts(opts, defaultSigOpts);
-
-    // TODO: remove
-    if ('strict' in opts) throw new Error('options.strict was renamed to lowS');
-
     let _sig: Signature | undefined = undefined;
     let P: WeierstrassPoint<bigint>;
 
+    if ('strict' in opts) throw new Error('options.strict was renamed to lowS');
     if (format === undefined) {
       // Try to deduce format
       const isHex = typeof sg === 'string' || isBytes(sg);
@@ -1817,7 +1818,7 @@ function _weierstrass_legacy_opts_to_new<T>(c: CurvePointsType<T>): WsPointCompo
   const Fn = Field(CURVE.n, {
     BITS: c.nBitLength,
     allowedLengths: allowedLengths,
-    modOnDecode: c.wrapPrivateKey,
+    modFromBytes: c.wrapPrivateKey,
   });
   const curveOpts: WeierstrassExtraOpts<T> = {
     Fp,

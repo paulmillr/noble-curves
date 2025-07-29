@@ -13,7 +13,7 @@ const _1n = BigInt(1);
 export type AffinePoint<T> = {
   x: T;
   y: T;
-} & { Z?: never; };
+} & { Z?: never };
 
 // This was initialy do this way to re-use montgomery ladder in field (add->mul,double->sqr), but
 // that didn't happen and there is probably not much reason to have separate Group like this?
