@@ -56,18 +56,18 @@ export type ShortSignatureCoder<Fp> = {
   fromBytes(bytes: Uint8Array): WeierstrassPoint<Fp>;
   fromHex(hex: Hex): WeierstrassPoint<Fp>;
   toBytes(point: WeierstrassPoint<Fp>): Uint8Array;
+  toHex(point: WeierstrassPoint<Fp>): string;
   /** @deprecated use `toBytes` */
   toRawBytes(point: WeierstrassPoint<Fp>): Uint8Array;
-  toHex(point: WeierstrassPoint<Fp>): string;
 };
 
 export type SignatureCoder<Fp> = {
   fromBytes(bytes: Uint8Array): WeierstrassPoint<Fp>;
   fromHex(hex: Hex): WeierstrassPoint<Fp>;
   toBytes(point: WeierstrassPoint<Fp>): Uint8Array;
+  toHex(point: WeierstrassPoint<Fp>): string;
   /** @deprecated use `toBytes` */
   toRawBytes(point: WeierstrassPoint<Fp>): Uint8Array;
-  toHex(point: WeierstrassPoint<Fp>): string;
 };
 
 export type BlsFields = {
