@@ -53,7 +53,7 @@ export function _abytes2(value: Uint8Array, length?: number, title: string = '')
   const len = value?.length;
   const needsLen = length !== undefined;
   if (!bytes || (needsLen && len !== length)) {
-    const prefix = title && `"${title}"`;
+    const prefix = title && `"${title}" `;
     const ofLen = needsLen ? ` of length ${length}` : '';
     const got = bytes ? `length=${len}` : `type=${typeof value}`;
     throw new Error(prefix + 'expected Uint8Array' + ofLen + ', got ' + got);
