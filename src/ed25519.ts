@@ -35,7 +35,7 @@ import {
   type IField,
 } from './abstract/modular.ts';
 import { montgomery, type MontgomeryECDH as XCurveFn } from './abstract/montgomery.ts';
-import { bytesToNumberLE, ensureBytes, equalBytes, numberToBytesLE, type Hex } from './utils.ts';
+import { bytesToNumberLE, ensureBytes, equalBytes, type Hex } from './utils.ts';
 
 // prettier-ignore
 const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3);
@@ -401,7 +401,7 @@ class _RistrettoPoint extends PrimeEdwardsPoint<_RistrettoPoint> {
     const s = bytes255ToNumberLE(bytes);
     // 1. Check that s_bytes is the canonical encoding of a field element, or else abort.
     // 3. Check that s is non-negative, or else abort
-    if (!equalBytes(numberToBytesLE(s, 32), bytes) || isNegativeLE(s, P))
+    if (!equalBytes(Fp.toBytes(s), bytes) || isNegativeLE(s, P))
       throw new Error('invalid ristretto255 encoding 1');
     const s2 = mod(s * s);
     const u1 = mod(_1n + a * s2); // 4 (a is -1)
@@ -463,7 +463,7 @@ class _RistrettoPoint extends PrimeEdwardsPoint<_RistrettoPoint> {
     if (isNegativeLE(X * zInv, P)) Y = mod(-Y); // 9
     let s = mod((Z - Y) * D); // 10 (check footer's note, no sqrt(-a))
     if (isNegativeLE(s, P)) s = mod(-s);
-    return numberToBytesLE(s, 32); // 11
+    return Fp.toBytes(s); // 11
   }
 
   /**

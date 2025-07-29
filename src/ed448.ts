@@ -36,7 +36,7 @@ import {
 } from './abstract/hash-to-curve.ts';
 import { Field, FpInvertBatch, isNegativeLE, mod, pow2, type IField } from './abstract/modular.ts';
 import { montgomery, type MontgomeryECDH as XCurveFn } from './abstract/montgomery.ts';
-import { bytesToNumberLE, ensureBytes, equalBytes, numberToBytesLE, type Hex } from './utils.ts';
+import { bytesToNumberLE, ensureBytes, equalBytes, type Hex } from './utils.ts';
 
 // edwards448 curve
 // a = 1n
@@ -140,10 +140,14 @@ function uvRatio(u: bigint, v: bigint): { isValid: boolean; value: bigint } {
 }
 
 // Finite field 2n**448n - 2n**224n - 1n
+// The value fits in 448 bits, but we use 456-bit (57-byte) elements because of bitflags.
+// - ed25519 fits in 255 bits, allowing using last 1 byte for specifying bit flag of point negation.
+// - ed448 fits in 448 bits. We can't use last 1 byte: we can only use a bit 224 in the middle.
 const Fp = /* @__PURE__ */ (() => Field(ed448_CURVE.p, { BITS: 456, isLE: true }))();
-// RFC 7748 has 56-byte keys, RFC 8032 has 57-byte keys
-const Fn = /* @__PURE__ */ (() => Field(ed448_CURVE.n, { BITS: 448, isLE: true }))();
-// Fn456 has BITS: 456
+const Fn = /* @__PURE__ */ (() => Field(ed448_CURVE.n, { BITS: 456, isLE: true }))();
+// decaf448 uses 448-bit (56-byte) keys
+const Fp448 = /* @__PURE__ */ (() => Field(ed448_CURVE.p, { BITS: 448, isLE: true }))();
+const Fn448 = /* @__PURE__ */ (() => Field(ed448_CURVE.n, { BITS: 448, isLE: true }))();
 
 // SHAKE256(dom4(phflag,context)||x, 114)
 function dom4(data: Uint8Array, ctx: Uint8Array, phflag: boolean) {
@@ -162,6 +166,7 @@ const ED448_DEF = /* @__PURE__ */ (() => ({
   ...ed448_CURVE,
   Fp,
   Fn,
+  nBitLength: Fn.BITS,
   hash: shake256_114,
   adjustScalarBytes,
   domain: dom4,
@@ -317,19 +322,12 @@ const INVSQRT_MINUS_D = /* @__PURE__ */ BigInt(
 // Calculates 1/√(number)
 const invertSqrt = (number: bigint) => uvRatio(_1n, number);
 
-const MAX_448B = /* @__PURE__ */ BigInt(
-  '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
-);
-const bytes448ToNumberLE = (bytes: Uint8Array) => Fp.create(bytesToNumberLE(bytes) & MAX_448B);
-
-type ExtendedPoint = EdwardsPoint;
-
 /**
  * Elligator map for hash-to-curve of decaf448.
  * Described in [RFC9380](https://www.rfc-editor.org/rfc/rfc9380#appendix-C)
  * and [RFC9496](https://www.rfc-editor.org/rfc/rfc9496#name-element-derivation-2).
  */
-function calcElligatorDecafMap(r0: bigint): ExtendedPoint {
+function calcElligatorDecafMap(r0: bigint): EdwardsPoint {
   const { d } = ed448_CURVE;
   const P = Fp.ORDER;
   const mod = (n: bigint) => Fp.create(n);
@@ -360,9 +358,13 @@ function calcElligatorDecafMap(r0: bigint): ExtendedPoint {
 
 function decaf448_map(bytes: Uint8Array): _DecafPoint {
   abytes(bytes, 112);
-  const r1 = bytes448ToNumberLE(bytes.slice(0, 56));
+  const skipValidation = true;
+  // Note: Similar to the field element decoding described in
+  // [RFC7748], and unlike the field element decoding described in
+  // Section 5.3.1, non-canonical values are accepted.
+  const r1 = Fp448.create(Fp448.fromBytes(bytes.subarray(0, 56), skipValidation));
   const R1 = calcElligatorDecafMap(r1);
-  const r2 = bytes448ToNumberLE(bytes.slice(56, 112));
+  const r2 = Fp448.create(Fp448.fromBytes(bytes.subarray(56, 112), skipValidation));
   const R2 = calcElligatorDecafMap(r2);
   return new _DecafPoint(R1.add(R2));
 }
@@ -384,12 +386,12 @@ class _DecafPoint extends PrimeEdwardsPoint<_DecafPoint> {
     /* @__PURE__ */ (() => new _DecafPoint(ed448.Point.ZERO))();
   // prettier-ignore
   static Fp: IField<bigint> =
-    /* @__PURE__ */ (() => Fp)();
+    /* @__PURE__ */ (() => Fp448)();
   // prettier-ignore
   static Fn: IField<bigint> =
-    /* @__PURE__ */ (() => Fn)();
+    /* @__PURE__ */ (() => Fn448)();
 
-  constructor(ep: ExtendedPoint) {
+  constructor(ep: EdwardsPoint) {
     super(ep);
   }
 
@@ -414,12 +416,13 @@ class _DecafPoint extends PrimeEdwardsPoint<_DecafPoint> {
     abytes(bytes, 56);
     const { d } = ed448_CURVE;
     const P = Fp.ORDER;
-    const mod = (n: bigint) => Fp.create(n);
-    const s = bytes448ToNumberLE(bytes);
+    const mod = (n: bigint) => Fp448.create(n);
+    const s = Fp448.fromBytes(bytes);
 
     // 1. Check that s_bytes is the canonical encoding of a field element, or else abort.
     // 2. Check that s is non-negative, or else abort
-    if (!equalBytes(numberToBytesLE(s, 56), bytes) || isNegativeLE(s, P))
+
+    if (!equalBytes(Fn448.toBytes(s), bytes) || isNegativeLE(s, P))
       throw new Error('invalid decaf448 encoding 1');
 
     const s2 = mod(s * s); // 1
@@ -462,20 +465,15 @@ class _DecafPoint extends PrimeEdwardsPoint<_DecafPoint> {
     const { X, Z, T } = this.ep;
     const P = Fp.ORDER;
     const mod = (n: bigint) => Fp.create(n);
-
     const u1 = mod(mod(X + T) * mod(X - T)); // 1
     const x2 = mod(X * X);
     const { value: invsqrt } = invertSqrt(mod(u1 * ONE_MINUS_D * x2)); // 2
-
     let ratio = mod(invsqrt * u1 * SQRT_MINUS_D); // 3
     if (isNegativeLE(ratio, P)) ratio = mod(-ratio);
-
     const u2 = mod(INVSQRT_MINUS_D * ratio * Z - T); // 4
-
     let s = mod(ONE_MINUS_D * invsqrt * X * u2); // 5
     if (isNegativeLE(s, P)) s = mod(-s);
-
-    return numberToBytesLE(s, 56);
+    return Fn448.toBytes(s);
   }
 
   /**
@@ -506,8 +504,13 @@ export const decaf448_hasher: H2CHasherBase<bigint> = {
     const DST = options?.DST || 'decaf448_XOF:SHAKE256_D448MAP_RO_';
     return decaf448_map(expand_message_xof(msg, DST, 112, 224, shake256));
   },
+  // Warning: has big modulo bias of 2^-64.
+  // RFC is invalid. RFC says "use 64-byte xof", while for 2^-112 bias
+  // it must use 84-byte xof (56+56/2), not 64.
   hashToScalar(msg: Uint8Array, options: htfBasicOpts = { DST: _DST_scalar }) {
-    return Fn.create(bytesToNumberLE(expand_message_xof(msg, options.DST, 64, 256, shake256)));
+    // Can't use `Fn448.fromBytes()`. 64-byte input => 56-byte field element
+    const xof = expand_message_xof(msg, options.DST, 64, 256, shake256);
+    return Fn448.create(bytesToNumberLE(xof));
   },
 };
 
@@ -547,11 +550,9 @@ export const hashToDecaf448: DcfHasher = /* @__PURE__ */ (() =>
 /** @deprecated use `import { decaf448_hasher } from '@noble/curves/ed448.js';` */
 export const hash_to_decaf448: DcfHasher = /* @__PURE__ */ (() =>
   decaf448_hasher.hashToCurve as DcfHasher)();
-
 /** @deprecated use `ed448.utils.toMontgomery` */
 export function edwardsToMontgomeryPub(edwardsPub: string | Uint8Array): Uint8Array {
   return ed448.utils.toMontgomery(ensureBytes('pub', edwardsPub));
 }
-
 /** @deprecated use `ed448.utils.toMontgomery` */
 export const edwardsToMontgomery: typeof edwardsToMontgomeryPub = edwardsToMontgomeryPub;
