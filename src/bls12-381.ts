@@ -147,7 +147,10 @@ const bls12_381_CURVE_G1: WeierstrassOpts<bigint> = {
 };
 
 // CURVE FIELDS
-export const bls12_381_Fr: IField<bigint> = Field(bls12_381_CURVE_G1.n, { modFromBytes: true });
+export const bls12_381_Fr: IField<bigint> = Field(bls12_381_CURVE_G1.n, {
+  modFromBytes: true,
+  isLE: true,
+});
 const { Fp, Fp2, Fp6, Fp4Square, Fp12 } = tower12({
   // Order of Fp
   ORDER: bls12_381_CURVE_G1.p,
