@@ -1290,6 +1290,7 @@ export function ecdh(
  * const p256_Point = weierstrass(...);
  * const p256_sha256 = ecdsa(p256_Point, sha256);
  * const p256_sha224 = ecdsa(p256_Point, sha224);
+ * const p256_sha224_r = ecdsa(p256_Point, sha224, { randomBytes: (length) => { ... } });
  * ```
  */
 export function ecdsa(
@@ -1310,8 +1311,8 @@ export function ecdsa(
     }
   );
 
-  const randomBytes_ = ecdsaOpts.randomBytes || wcRandomBytes;
-  const hmac_: HmacFnSync =
+  const randomBytes = ecdsaOpts.randomBytes || wcRandomBytes;
+  const hmac: HmacFnSync =
     ecdsaOpts.hmac ||
     (((key, ...msgs) => nobleHmac(hash, key, concatBytes(...msgs))) satisfies HmacFnSync);
 
@@ -1329,9 +1330,6 @@ export function ecdsa(
   function isBiggerThanHalfOrder(number: bigint) {
     const HALF = CURVE_ORDER >> _1n;
     return number > HALF;
-  }
-  function normalizeS(s: bigint) {
-    return isBiggerThanHalfOrder(s) ? Fn.neg(s) : s;
   }
   function validateRS(title: string, num: bigint): bigint {
     if (!Fn.isValidNot0(num))
@@ -1364,6 +1362,7 @@ export function ecdsa(
       if (format === 'recovered') {
         abytes(bytes, size + 1);
         recid = bytes[0];
+
         format = 'compact';
         bytes = bytes.subarray(1);
       }
@@ -1382,7 +1381,7 @@ export function ecdsa(
       return new Signature(this.r, this.s, recovery) as RecoveredSignature;
     }
 
-    recoverPublicKey(msgHash: Hex): typeof Point.BASE {
+    recoverPublicKey(messageHash: Hex): WeierstrassPoint<bigint> {
       const FIELD_ORDER = Fp.ORDER;
       const { r, s, recovery: rec } = this;
       if (rec == null || ![0, 1, 2, 3].includes(rec)) throw new Error('recovery id invalid');
@@ -1403,7 +1402,7 @@ export function ecdsa(
       const x = Fp.toBytes(radj);
       const R = Point.fromBytes(concatBytes(pprefix((rec & 1) === 0), x));
       const ir = Fn.inv(radj); // r^-1
-      const h = bits2int_modN(ensureBytes('msgHash', msgHash)); // Truncate hash
+      const h = bits2int_modN(ensureBytes('msgHash', messageHash)); // Truncate hash
       const u1 = Fn.create(-h * ir); // -hr^-1
       const u2 = Fn.create(s * ir); // sr^-1
       // (sr^-1)R-(hr^-1)G = -(hr^-1)G + (sr^-1). unsafe is fine: there is no private data.
@@ -1466,7 +1465,7 @@ export function ecdsa(
   // int2octets can't be used; pads small msgs with 0: unacceptatble for trunc as per RFC vectors
   const bits2int =
     ecdsaOpts.bits2int ||
-    function (bytes: Uint8Array): bigint {
+    function bits2int_def(bytes: Uint8Array): bigint {
       // Our custom check "just in case", for protection against DoS
       if (bytes.length > 8192) throw new Error('input is too large');
       // For curves with nBitLength % 8 !== 0: bits2octets(bits2octets(m)) !== bits2octets(m)
@@ -1477,18 +1476,21 @@ export function ecdsa(
     };
   const bits2int_modN =
     ecdsaOpts.bits2int_modN ||
-    function (bytes: Uint8Array): bigint {
+    function bits2int_modN_def(bytes: Uint8Array): bigint {
       return Fn.create(bits2int(bytes)); // can't use bytesToNumberBE here
     };
-  // NOTE: pads output with zero as per spec
+  // Pads output with zero as per spec
   const ORDER_MASK = bitMask(fnBits);
-  /**
-   * Converts to bytes. Checks if num in `[0..ORDER_MASK-1]` e.g.: `[0..2^256-1]`.
-   */
+  /** Converts to bytes. Checks if num in `[0..ORDER_MASK-1]` e.g.: `[0..2^256-1]`. */
   function int2octets(num: bigint): Uint8Array {
     // IMPORTANT: the check ensures working for case `Fn.BYTES != Fn.BITS * 8`
     aInRange('num < 2^' + fnBits, num, _0n, ORDER_MASK);
     return Fn.toBytes(num);
+  }
+
+  function validateMsgAndHash(message: Uint8Array, prehash: boolean) {
+    abytes(message, undefined, 'message');
+    return prehash ? abytes(hash(message), undefined, 'prehashed message') : message;
   }
 
   /**
@@ -1503,10 +1505,7 @@ export function ecdsa(
     if (['recovered', 'canonical'].some((k) => k in opts))
       throw new Error('sign() legacy options not supported');
     const { lowS, prehash, extraEntropy } = validateSigOpts(opts, defaultSigOpts);
-    // RFC6979 3.2: we skip step A, because we already provide hash
-    message = abytes(message, undefined, 'message');
-    if (prehash) message = abytes(hash(message), undefined, 'prehashed message');
-
+    message = validateMsgAndHash(message, prehash); // RFC6979 3.2 A: h1 = H(m)
     // We can't later call bits2octets, since nested bits2int is broken for curves
     // with fnBits % 8 !== 0. Because of that, we unwrap it here as int2octets call.
     // const bits2octets = (bits) => int2octets(bits2int_modN(bits))
@@ -1517,7 +1516,7 @@ export function ecdsa(
     if (extraEntropy != null && extraEntropy !== false) {
       // K = HMAC_K(V || 0x00 || int2octets(x) || bits2octets(h1) || k')
       // gen random bytes OR pass as-is
-      const e = extraEntropy === true ? randomBytes_(lengths.secret) : extraEntropy;
+      const e = extraEntropy === true ? randomBytes(lengths.secret) : extraEntropy;
       seedArgs.push(ensureBytes('extraEntropy', e)); // check for being bytes
     }
     const seed = concatBytes(...seedArgs); // Step D of RFC6979 3.2
@@ -1544,7 +1543,7 @@ export function ecdsa(
       let recovery = (q.x === r ? 0 : 2) | Number(q.y & _1n); // recovery bit (2 or 3, when q.x > n)
       let normS = s;
       if (lowS && isBiggerThanHalfOrder(s)) {
-        normS = normalizeS(s); // if lowS was passed, ensure s is always
+        normS = Fn.neg(s); // if lowS was passed, ensure s is always
         recovery ^= 1; // // in the bottom half of N
       }
       return new Signature(r, normS, recovery) as RecoveredSignature; // use normS, not s
@@ -1566,13 +1565,45 @@ export function ecdsa(
   function sign(message: Hex, secretKey: PrivKey, opts: ECDSASignOpts = {}): RecoveredSignature {
     message = ensureBytes('message', message);
     const { seed, k2sig } = prepSig(message, secretKey, opts); // Steps A, D of RFC6979 3.2.
-    const drbg = createHmacDrbg<RecoveredSignature>(hash.outputLen, Fn.BYTES, hmac_);
+    const drbg = createHmacDrbg<RecoveredSignature>(hash.outputLen, Fn.BYTES, hmac);
     const sig = drbg(seed, k2sig); // Steps B, C, D, E, F, G
     return sig;
   }
 
   // Enable precomputes. Slows down first publicKey computation by 20ms.
   Point.BASE.precompute(8);
+
+  function tryParsingSig(sg: Hex | SignatureLike) {
+    // Try to deduce format
+    let sig: Signature | undefined = undefined;
+    const isHex = typeof sg === 'string' || isBytes(sg);
+    const isObj =
+      !isHex &&
+      sg !== null &&
+      typeof sg === 'object' &&
+      typeof sg.r === 'bigint' &&
+      typeof sg.s === 'bigint';
+    if (!isHex && !isObj)
+      throw new Error('invalid signature, expected Uint8Array, hex string or Signature instance');
+    if (isObj) {
+      sig = new Signature(sg.r, sg.s);
+    } else if (isHex) {
+      try {
+        sig = Signature.fromBytes(ensureBytes('sig', sg), 'der');
+      } catch (derError) {
+        if (!(derError instanceof DER.Err)) throw derError;
+      }
+      if (!sig) {
+        try {
+          sig = Signature.fromBytes(ensureBytes('sig', sg), 'compact');
+        } catch (error) {
+          return false;
+        }
+      }
+    }
+    if (!sig) return false;
+    return sig;
+  }
 
   /**
    * Verifies a signature against message and public key.
@@ -1593,61 +1624,19 @@ export function ecdsa(
     publicKey: Hex,
     opts: ECDSAVerifyOpts = {}
   ): boolean {
-    const sg = signature;
-    message = ensureBytes('msgHash', message);
-    publicKey = ensureBytes('publicKey', publicKey);
     const { lowS, prehash, format } = validateSigOpts(opts, defaultSigOpts);
-    let _sig: Signature | undefined = undefined;
-    let P: WeierstrassPoint<bigint>;
-
+    publicKey = ensureBytes('publicKey', publicKey);
+    message = validateMsgAndHash(ensureBytes('message', message), prehash);
     if ('strict' in opts) throw new Error('options.strict was renamed to lowS');
-    if (format === undefined) {
-      // Try to deduce format
-      const isHex = typeof sg === 'string' || isBytes(sg);
-      const isObj =
-        !isHex &&
-        sg !== null &&
-        typeof sg === 'object' &&
-        typeof sg.r === 'bigint' &&
-        typeof sg.s === 'bigint';
-      if (!isHex && !isObj)
-        throw new Error('invalid signature, expected Uint8Array, hex string or Signature instance');
-      if (isObj) {
-        _sig = new Signature(sg.r, sg.s);
-      } else if (isHex) {
-        // TODO: remove this malleable check
-        // Signature can be represented in 2 ways: compact (2*Fn.BYTES) & DER (variable-length).
-        // Since DER can also be 2*Fn.BYTES bytes, we check for it first.
-        try {
-          _sig = Signature.fromDER(sg);
-        } catch (derError) {
-          if (!(derError instanceof DER.Err)) throw derError;
-        }
-        if (!_sig) {
-          try {
-            _sig = Signature.fromCompact(sg);
-          } catch (error) {
-            return false;
-          }
-        }
-      }
-    } else {
-      if (format === 'compact' || format === 'der') {
-        if (typeof sg !== 'string' && !isBytes(sg))
-          throw new Error('"der" / "compact" format expects Uint8Array signature');
-        _sig = Signature.fromBytes(ensureBytes('sig', sg), format);
-      } else {
-        throw new Error('format must be "compact", "der" or "js"');
-      }
-    }
-
-    if (!_sig) return false;
+    const sig =
+      format === undefined
+        ? tryParsingSig(signature)
+        : Signature.fromBytes(ensureBytes('sig', signature as Hex), format);
+    if (sig === false) return false;
     try {
-      P = Point.fromHex(publicKey);
-      if (lowS && _sig.hasHighS()) return false;
-      // todo: optional.hash => hash
-      if (prehash) message = hash(message);
-      const { r, s } = _sig;
+      const P = Point.fromBytes(publicKey);
+      if (lowS && sig.hasHighS()) return false;
+      const { r, s } = sig;
       const h = bits2int_modN(message); // mod n, not mod p
       const is = Fn.inv(s); // s^-1 mod n
       const u1 = Fn.create(h * is); // u1 = hs^-1 mod n
@@ -1666,10 +1655,8 @@ export function ecdsa(
     message: Uint8Array,
     opts: ECDSARecoverOpts = {}
   ): Uint8Array {
-    const prehash = opts.prehash !== undefined ? opts.prehash : defaultSigOpts.prehash;
-    abool(prehash, 'prehash');
-    message = abytes(message, undefined, 'message');
-    if (prehash) message = abytes(hash(message), undefined, 'prehashed message');
+    const { prehash } = validateSigOpts(opts, defaultSigOpts);
+    message = validateMsgAndHash(message, prehash);
     return Signature.fromBytes(signature, 'recovered').recoverPublicKey(message).toBytes();
   }
 
