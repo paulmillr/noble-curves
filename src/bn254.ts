@@ -65,7 +65,7 @@ import { Field, type IField } from './abstract/modular.ts';
 import type { Fp, Fp12, Fp2, Fp6 } from './abstract/tower.ts';
 import { psiFrobenius, tower12 } from './abstract/tower.ts';
 import { type CurveFn, weierstrass, type WeierstrassOpts } from './abstract/weierstrass.ts';
-import { bitGet, bitLen, notImplemented } from './utils.ts';
+import { bitLen, notImplemented } from './utils.ts';
 // prettier-ignore
 const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3);
 const _6n = BigInt(6);
@@ -94,42 +94,11 @@ const Fp2B = {
   c1: BigInt('266929791119991161246907387137283842545076965332900288569378510910307636690'),
 };
 
-const { Fp, Fp2, Fp6, Fp4Square, Fp12 } = tower12({
+const { Fp, Fp2, Fp6, Fp12 } = tower12({
   ORDER: bn254_G1_CURVE.p,
+  X_LEN: BN_X_LEN,
   FP2_NONRESIDUE: [BigInt(9), _1n],
   Fp2mulByB: (num) => Fp2.mul(num, Fp2B),
-  // The result of any pairing is in a cyclotomic subgroup
-  // https://eprint.iacr.org/2009/565.pdf
-  Fp12cyclotomicSquare: ({ c0, c1 }): Fp12 => {
-    const { c0: c0c0, c1: c0c1, c2: c0c2 } = c0;
-    const { c0: c1c0, c1: c1c1, c2: c1c2 } = c1;
-    const { first: t3, second: t4 } = Fp4Square(c0c0, c1c1);
-    const { first: t5, second: t6 } = Fp4Square(c1c0, c0c2);
-    const { first: t7, second: t8 } = Fp4Square(c0c1, c1c2);
-    let t9 = Fp2.mulByNonresidue(t8); // T8 * (u + 1)
-    return {
-      c0: Fp6.create({
-        c0: Fp2.add(Fp2.mul(Fp2.sub(t3, c0c0), _2n), t3), // 2 * (T3 - c0c0)  + T3
-        c1: Fp2.add(Fp2.mul(Fp2.sub(t5, c0c1), _2n), t5), // 2 * (T5 - c0c1)  + T5
-        c2: Fp2.add(Fp2.mul(Fp2.sub(t7, c0c2), _2n), t7),
-      }), // 2 * (T7 - c0c2)  + T7
-      c1: Fp6.create({
-        c0: Fp2.add(Fp2.mul(Fp2.add(t9, c1c0), _2n), t9), // 2 * (T9 + c1c0) + T9
-        c1: Fp2.add(Fp2.mul(Fp2.add(t4, c1c1), _2n), t4), // 2 * (T4 + c1c1) + T4
-        c2: Fp2.add(Fp2.mul(Fp2.add(t6, c1c2), _2n), t6),
-      }),
-    }; // 2 * (T6 + c1c2) + T6
-  },
-  Fp12cyclotomicExp(num, n) {
-    let z = Fp12.ONE;
-    for (let i = BN_X_LEN - 1; i >= 0; i--) {
-      z = Fp12._cyclotomicSquare(z);
-      if (bitGet(n, i)) z = Fp12.mul(z, num);
-    }
-    return z;
-  },
-  // https://eprint.iacr.org/2010/354.pdf
-  // https://eprint.iacr.org/2009/565.pdf
   Fp12finalExponentiate: (num) => {
     const powMinusX = (num: Fp12) => Fp12.conjugate(Fp12._cyclotomicExp(num, BN_X));
     const r0 = Fp12.mul(Fp12.conjugate(num), Fp12.inv(num));
