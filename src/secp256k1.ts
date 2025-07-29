@@ -125,14 +125,14 @@ function taggedHash(tag: string, ...messages: Uint8Array[]): Uint8Array {
 
 // ECDSA compact points are 33-byte. Schnorr is 32: we strip first byte 0x02 or 0x03
 const pointToBytes = (point: PointType<bigint>) => point.toBytes(true).slice(1);
-const Point = /* @__PURE__ */ (() => secp256k1.Point)();
+const Pointk1 = /* @__PURE__ */ (() => secp256k1.Point)();
 const hasEven = (y: bigint) => y % _2n === _0n;
 
 // Calculate point, scalar and bytes
 function schnorrGetExtPubKey(priv: PrivKey) {
-  const { Fn } = Point;
+  const { Fn, BASE } = Pointk1;
   const d_ = _normFnElement(Fn, priv);
-  const p = Point.BASE.multiply(d_); // P = d'⋅G; 0 < d' < n check is done inside
+  const p = BASE.multiply(d_); // P = d'⋅G; 0 < d' < n check is done inside
   const scalar = hasEven(p.y) ? d_ : Fn.neg(d_);
   return { scalar, bytes: pointToBytes(p) };
 }
@@ -149,7 +149,7 @@ function lift_x(x: bigint): PointType<bigint> {
   // Return the unique point P such that x(P) = x and
   // y(P) = y if y mod 2 = 0 or y(P) = p-y otherwise.
   if (!hasEven(y)) y = Fp.neg(y);
-  const p = Point.fromAffine({ x, y });
+  const p = Pointk1.fromAffine({ x, y });
   p.assertValidity();
   return p;
 }
@@ -158,7 +158,7 @@ const num = bytesToNumberBE;
  * Create tagged hash, convert it to bigint, reduce modulo-n.
  */
 function challenge(...args: Uint8Array[]): bigint {
-  return Point.Fn.create(num(taggedHash('BIP0340/challenge', ...args)));
+  return Pointk1.Fn.create(num(taggedHash('BIP0340/challenge', ...args)));
 }
 
 /**
@@ -173,7 +173,7 @@ function schnorrGetPublicKey(secretKey: Hex): Uint8Array {
  * auxRand is optional and is not the sole source of k generation: bad CSPRNG won't be dangerous.
  */
 function schnorrSign(message: Hex, secretKey: PrivKey, auxRand: Hex = randomBytes(32)): Uint8Array {
-  const { Fn } = Point;
+  const { Fn } = Pointk1;
   const m = ensureBytes('message', message);
   const { bytes: px, scalar: d } = schnorrGetExtPubKey(secretKey); // checks for isWithinCurveOrder
   const a = ensureBytes('auxRand', auxRand, 32); // Auxiliary random data a: a 32-byte array
@@ -196,7 +196,7 @@ function schnorrSign(message: Hex, secretKey: PrivKey, auxRand: Hex = randomByte
  * Will swallow errors & return false except for initial type validation of arguments.
  */
 function schnorrVerify(signature: Hex, message: Hex, publicKey: Hex): boolean {
-  const { Fn } = Point;
+  const { Fn, BASE } = Pointk1;
   const sig = ensureBytes('signature', signature, 64);
   const m = ensureBytes('message', message);
   const pub = ensureBytes('publicKey', publicKey, 32);
@@ -209,7 +209,7 @@ function schnorrVerify(signature: Hex, message: Hex, publicKey: Hex): boolean {
     // int(challenge(bytes(r)||bytes(P)||m))%n
     const e = challenge(Fn.toBytes(r), pointToBytes(P), m);
     // R = s⋅G - e⋅P, where -eP == (n-e)P
-    const R = Point.BASE.multiplyUnsafe(s).add(P.multiplyUnsafe(Fn.neg(e)));
+    const R = BASE.multiplyUnsafe(s).add(P.multiplyUnsafe(Fn.neg(e)));
     const { x, y } = R.toAffine();
     // Fail if is_infinite(R) / not has_even_y(R) / x(R) ≠ r.
     if (R.is0() || !hasEven(y) || x !== r) return false;
@@ -272,7 +272,7 @@ export const schnorr: SecpSchnorr = /* @__PURE__ */ (() => {
     getPublicKey: schnorrGetPublicKey,
     sign: schnorrSign,
     verify: schnorrVerify,
-    Point,
+    Point: Pointk1,
     utils: {
       randomSecretKey: randomSecretKey,
       randomPrivateKey: randomSecretKey,
@@ -288,9 +288,9 @@ export const schnorr: SecpSchnorr = /* @__PURE__ */ (() => {
     lengths: {
       secret: size,
       public: size,
+      publicKeyHasPrefix: false,
       signature: size * 2,
       seed: seedLength,
-      publicKeyHasPrefix: false,
     },
   };
 })();
