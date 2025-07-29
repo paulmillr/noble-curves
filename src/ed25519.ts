@@ -38,20 +38,19 @@ import { montgomery, type MontgomeryECDH as XCurveFn } from './abstract/montgome
 import { bytesToNumberLE, ensureBytes, equalBytes, type Hex } from './utils.ts';
 
 // prettier-ignore
-const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3);
+const _0n = /* @__PURE__ */ BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3);
 // prettier-ignore
 const _5n = BigInt(5), _8n = BigInt(8);
 
-// 2n**255n-19n
+// P = 2n**255n-19n
 const ed25519_CURVE_p = BigInt(
   '0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed'
 );
 
-// P = 2n**255n - 19n
 // N = 2n**252n + 27742317777372353535851937790883648493n
 // a = Fp.create(BigInt(-1))
 // d = -121665/121666 a.k.a. Fp.neg(121665 * Fp.inv(121666))
-const ed25519_CURVE: EdwardsOpts = {
+const ed25519_CURVE: EdwardsOpts = /* @__PURE__ */ (() => ({
   p: ed25519_CURVE_p,
   n: BigInt('0x1000000000000000000000000000000014def9dea2f79cd65812631a5cf5d3ed'),
   h: _8n,
@@ -59,7 +58,7 @@ const ed25519_CURVE: EdwardsOpts = {
   d: BigInt('0x52036cee2b6ffe738cc740797779e89800700a4d4141d8ab75eb4dca135978a3'),
   Gx: BigInt('0x216936d3cd6e53fec0a4e231fdd6dc5c692cc7609525a7b2c9562d608f25d51a'),
   Gy: BigInt('0x6666666666666666666666666666666666666666666666666666666666666658'),
-};
+}))();
 
 function ed25519_pow_2_252_3(x: bigint) {
   // prettier-ignore
@@ -180,7 +179,7 @@ export const ed25519ph: CurveFn = /* @__PURE__ */ (() =>
  * x25519.getPublicKey(x25519.utils.randomSecretKey());
  */
 export const x25519: XCurveFn = /* @__PURE__ */ (() => {
-  const P = ed25519.CURVE.Fp.ORDER;
+  const P = Fp.ORDER;
   return montgomery({
     P,
     type: 'x25519',
@@ -196,14 +195,13 @@ export const x25519: XCurveFn = /* @__PURE__ */ (() => {
 // Hash To Curve Elligator2 Map (NOTE: different from ristretto255 elligator)
 // NOTE: very important part is usage of FpSqrtEven for ELL2_C1_EDWARDS, since
 // SageMath returns different root first and everything falls apart
-
-const ELL2_C1 = /* @__PURE__ */ (() => (Fp.ORDER + _3n) / _8n)(); // 1. c1 = (q + 3) / 8       # Integer arithmetic
+const ELL2_C1 = /* @__PURE__ */ (() => (ed25519_CURVE_p + _3n) / _8n)(); // 1. c1 = (q + 3) / 8       # Integer arithmetic
 const ELL2_C2 = /* @__PURE__ */ (() => Fp.pow(_2n, ELL2_C1))(); // 2. c2 = 2^c1
 const ELL2_C3 = /* @__PURE__ */ (() => Fp.sqrt(Fp.neg(Fp.ONE)))(); // 3. c3 = sqrt(-1)
 
 // prettier-ignore
 function map_to_curve_elligator2_curve25519(u: bigint) {
-  const ELL2_C4 = (Fp.ORDER - _5n) / _8n; // 4. c4 = (q - 5) / 8       # Integer arithmetic
+  const ELL2_C4 = (ed25519_CURVE_p - _5n) / _8n; // 4. c4 = (q - 5) / 8       # Integer arithmetic
   const ELL2_J = BigInt(486662);
 
   let tv1 = Fp.sqr(u);          //  1.  tv1 = u^2
@@ -274,7 +272,7 @@ export const ed25519_hasher: H2CHasher<bigint> = /* @__PURE__ */ (() =>
     {
       DST: 'edwards25519_XMD:SHA-512_ELL2_RO_',
       encodeDST: 'edwards25519_XMD:SHA-512_ELL2_NU_',
-      p: Fp.ORDER,
+      p: ed25519_CURVE_p,
       m: 1,
       k: 128,
       expand: 'xmd',
@@ -318,7 +316,7 @@ type ExtendedPoint = EdwardsPoint;
  */
 function calcElligatorRistrettoMap(r0: bigint): ExtendedPoint {
   const { d } = ed25519_CURVE;
-  const P = Fp.ORDER;
+  const P = ed25519_CURVE_p;
   const mod = (n: bigint) => Fp.create(n);
   const r = mod(SQRT_M1 * r0 * r0); // 1
   const Ns = mod((r + _1n) * ONE_MINUS_D_SQ); // 2
@@ -494,11 +492,12 @@ export const ristretto255: {
 export const ristretto255_hasher: H2CHasherBase<bigint> = {
   hashToCurve(msg: Uint8Array, options?: htfBasicOpts): _RistrettoPoint {
     const DST = options?.DST || 'ristretto255_XMD:SHA-512_R255MAP_RO_';
-    return ristretto255_map(expand_message_xmd(msg, DST, 64, sha512));
+    const xmd = expand_message_xmd(msg, DST, 64, sha512);
+    return ristretto255_map(xmd);
   },
   hashToScalar(msg: Uint8Array, options: htfBasicOpts = { DST: _DST_scalar }) {
     const xmd = expand_message_xmd(msg, options.DST, 64, sha512);
-    return ristretto255.Point.Fn.create(bytesToNumberLE(xmd));
+    return Fn.create(bytesToNumberLE(xmd));
   },
 };
 

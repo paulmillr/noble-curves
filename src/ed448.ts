@@ -8,12 +8,7 @@
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { shake256 } from '@noble/hashes/sha3.js';
-import {
-  abytes,
-  concatBytes,
-  utf8ToBytes,
-  createHasher as wrapConstructor,
-} from '@noble/hashes/utils.js';
+import { abytes, concatBytes, createHasher as wrapConstructor } from '@noble/hashes/utils.js';
 import type { AffinePoint } from './abstract/curve.ts';
 import { pippenger } from './abstract/curve.ts';
 import {
@@ -36,7 +31,7 @@ import {
 } from './abstract/hash-to-curve.ts';
 import { Field, FpInvertBatch, isNegativeLE, mod, pow2, type IField } from './abstract/modular.ts';
 import { montgomery, type MontgomeryECDH as XCurveFn } from './abstract/montgomery.ts';
-import { bytesToNumberLE, ensureBytes, equalBytes, type Hex } from './utils.ts';
+import { asciiToBytes, bytesToNumberLE, ensureBytes, equalBytes, type Hex } from './utils.ts';
 
 // edwards448 curve
 // a = 1n
@@ -153,7 +148,7 @@ const Fn448 = /* @__PURE__ */ (() => Field(ed448_CURVE.n, { BITS: 448, isLE: tru
 function dom4(data: Uint8Array, ctx: Uint8Array, phflag: boolean) {
   if (ctx.length > 255) throw new Error('context must be smaller than 255, got: ' + ctx.length);
   return concatBytes(
-    utf8ToBytes('SigEd448'),
+    asciiToBytes('SigEd448'),
     new Uint8Array([phflag ? 1 : 0, ctx.length]),
     ctx,
     data
@@ -370,9 +365,9 @@ function decaf448_map(bytes: Uint8Array): _DecafPoint {
 }
 
 /**
- * Each ed448/ExtendedPoint has 4 different equivalent points. This can be
+ * Each ed448/EdwardsPoint has 4 different equivalent points. This can be
  * a source of bugs for protocols like ring signatures. Decaf was created to solve this.
- * Decaf point operates in X:Y:Z:T extended coordinates like ExtendedPoint,
+ * Decaf point operates in X:Y:Z:T extended coordinates like EdwardsPoint,
  * but it should work in its own namespace: do not combine those two.
  * See [RFC9496](https://www.rfc-editor.org/rfc/rfc9496).
  */
@@ -484,9 +479,8 @@ class _DecafPoint extends PrimeEdwardsPoint<_DecafPoint> {
     this.assertSame(other);
     const { X: X1, Y: Y1 } = this.ep;
     const { X: X2, Y: Y2 } = other.ep;
-    const mod = (n: bigint) => Fp.create(n);
     // (x1 * y2 == y1 * x2)
-    return mod(X1 * Y2) === mod(Y1 * X2);
+    return Fp.create(X1 * Y2) === Fp.create(Y1 * X2);
   }
 
   is0(): boolean {

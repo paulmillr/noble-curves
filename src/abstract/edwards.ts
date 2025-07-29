@@ -341,12 +341,12 @@ export function edwards(params: EdwardsOpts, extraOpts: EdwardsExtraOpts = {}): 
       const u = modP(y2 - _1n); // u = y² - 1
       const v = modP(d * y2 - a); // v = d y² + 1.
       let { isValid, value: x } = uvRatio(u, v); // √(u/v)
-      if (!isValid) throw new Error('Point.fromBytes: invalid y coordinate');
+      if (!isValid) throw new Error('bad point: invalid y coordinate');
       const isXOdd = (x & _1n) === _1n; // There are 2 square roots. Use x_0 bit to select proper
       const isLastByteOdd = (lastByte & 0x80) !== 0; // x_0, last bit
       if (!zip215 && x === _0n && isLastByteOdd)
         // if x=0 and x_0 = 1, fail
-        throw new Error('Point.fromHex: x=0 and x_0=1');
+        throw new Error('bad point: x=0 and x_0=1');
       if (isLastByteOdd !== isXOdd) x = modP(-x); // if x_0 != x mod 2, set x = p-x
       return Point.fromAffine({ x, y });
     }
