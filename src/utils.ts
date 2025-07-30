@@ -4,6 +4,7 @@
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import {
+  abytes as abytes_,
   anumber,
   bytesToHex as bytesToHex_,
   concatBytes as concatBytes_,
@@ -11,6 +12,7 @@ import {
   isBytes as isBytes_,
 } from '@noble/hashes/utils.js';
 export {
+  abytes,
   anumber,
   bytesToHex,
   bytesToUtf8,
@@ -18,7 +20,7 @@ export {
   hexToBytes,
   isBytes,
   randomBytes,
-  utf8ToBytes,
+  utf8ToBytes
 } from '@noble/hashes/utils.js';
 const _0n = /* @__PURE__ */ BigInt(0);
 const _1n = /* @__PURE__ */ BigInt(1);
@@ -34,21 +36,6 @@ export function abool(value: boolean, title: string = ''): boolean {
   if (typeof value !== 'boolean') {
     const prefix = title && `"${title}"`;
     throw new Error(prefix + 'expected boolean, got type=' + typeof value);
-  }
-  return value;
-}
-
-// TODO: add, re-export from noble-hashes
-/** Asserts something is Uint8Array. */
-export function abytes(value: Uint8Array, length?: number, title: string = ''): Uint8Array {
-  const bytes = isBytes_(value);
-  const len = value?.length;
-  const needsLen = length !== undefined;
-  if (!bytes || (needsLen && len !== length)) {
-    const prefix = title && `"${title}"`;
-    const ofLen = needsLen ? ` of length ${length}` : '';
-    const got = bytes ? `length=${len}` : `type=${typeof value}`;
-    throw new Error(prefix + 'expected Uint8Array' + ofLen + ', got ' + got);
   }
   return value;
 }
@@ -76,8 +63,7 @@ export function bytesToNumberBE(bytes: Uint8Array): bigint {
   return hexToNumber(bytesToHex_(bytes));
 }
 export function bytesToNumberLE(bytes: Uint8Array): bigint {
-  abytes(bytes);
-  return hexToNumber(bytesToHex_(copyBytes(bytes).reverse()));
+  return hexToNumber(bytesToHex_(copyBytes(abytes_(bytes)).reverse()));
 }
 
 export function numberToBytesBE(n: number | bigint, len: number): Uint8Array {
