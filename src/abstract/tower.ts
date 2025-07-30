@@ -158,7 +158,6 @@ class _Field2 implements mod.IField<Fp2> {
   readonly BITS: number;
   readonly BYTES: number;
   readonly isLE: boolean;
-  readonly MASK = _1n;
 
   readonly ZERO: Fp2;
   readonly ONE: Fp2;
@@ -375,7 +374,6 @@ class _Field6 implements Fp6Bls {
   readonly BITS: number;
   readonly BYTES: number;
   readonly isLE: boolean;
-  readonly MASK = _1n;
 
   readonly ZERO: Fp6;
   readonly ONE: Fp6;
@@ -599,7 +597,6 @@ class _Field12 implements Fp12Bls {
   readonly BITS: number;
   readonly BYTES: number;
   readonly isLE: boolean;
-  readonly MASK = _1n;
 
   readonly ZERO: Fp12;
   readonly ONE: Fp12;

@@ -348,7 +348,7 @@ export function createORPF<P extends CurvePoint<any, P>>(opts: OPRFOpts<P>): OPR
     return Fn.isLE ? bytesToNumberLE(t) : bytesToNumberBE(t);
   };
 
-  const msm = (points: P[], scalars: bigint[]) => pippenger(Point, Point.Fn, points, scalars);
+  const msm = (points: P[], scalars: bigint[]) => pippenger(Point, points, scalars);
 
   const getCtx = (mode: number) =>
     concatBytes(asciiToBytes('OPRFV1-'), new Uint8Array([mode]), asciiToBytes('-' + name));

@@ -1,15 +1,16 @@
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql } from 'node:assert';
-import { numberToBytesLE } from '../esm/abstract/utils.js';
-import { ed25519, ed25519ctx, ed25519ph, x25519 } from '../esm/ed25519.js';
-import { ed448 } from '../esm/ed448.js';
-import { json } from './utils.js';
+import { ed25519, ed25519ctx, ed25519ph, x25519 } from '../ed25519.js';
+import { ed448 } from '../ed448.js';
+import { numberToBytesLE } from '../utils.js';
+import { deepHexToBytes, json } from './utils.js';
 
 const x25519vectors = json('./vectors/wycheproof/x25519_test.json');
 
-const VECTORS_RFC8032_CTX = [
+const VECTORS_RFC8032 = deepHexToBytes([
   {
+    fn: ed25519ctx,
     secretKey: '0305334e381af78f141cb666f6199f57bc3495335a256a95bd2a55bf546663f6',
     publicKey: 'dfc9425e4f968f7f0c29f0259cf5f9aed6851c2bb4ad8bfb860cfee0ab248292',
     message: 'f726936d19c800494e3fdaff20b276a8',
@@ -21,6 +22,7 @@ const VECTORS_RFC8032_CTX = [
       'f6cca685a587b4b21f4b888e4e7edb0d',
   },
   {
+    fn: ed25519ctx,
     secretKey: '0305334e381af78f141cb666f6199f57bc3495335a256a95bd2a55bf546663f6',
     publicKey: 'dfc9425e4f968f7f0c29f0259cf5f9aed6851c2bb4ad8bfb860cfee0ab248292',
     message: 'f726936d19c800494e3fdaff20b276a8',
@@ -32,6 +34,7 @@ const VECTORS_RFC8032_CTX = [
       '5a5ca2df6668346291c2043d4eb3e90d',
   },
   {
+    fn: ed25519ctx,
     secretKey: '0305334e381af78f141cb666f6199f57bc3495335a256a95bd2a55bf546663f6',
     publicKey: 'dfc9425e4f968f7f0c29f0259cf5f9aed6851c2bb4ad8bfb860cfee0ab248292',
     message: '508e9e6882b979fea900f62adceaca35',
@@ -43,6 +46,7 @@ const VECTORS_RFC8032_CTX = [
       '4085ae75890d02df26269d8945f84b0b',
   },
   {
+    fn: ed25519ctx,
     secretKey: 'ab9c2853ce297ddab85c993b3ae14bcad39b2c682beabc27d6d4eb20711d6560',
     publicKey: '0f1d1274943b91415889152e893d80e93275a1fc0b65fd71b4b0dda10ad7d772',
     message: 'f726936d19c800494e3fdaff20b276a8',
@@ -53,21 +57,8 @@ const VECTORS_RFC8032_CTX = [
       'e9b86a7b6005ea868337ff2d20a7f5fb' +
       'd4cd10b0be49a68da2b2e0dc0ad8960f',
   },
-];
-
-describe('RFC8032ctx', () => {
-  for (let i = 0; i < VECTORS_RFC8032_CTX.length; i++) {
-    const v = VECTORS_RFC8032_CTX[i];
-    should(`${i}`, () => {
-      eql(bytesToHex(ed25519ctx.getPublicKey(v.secretKey)), v.publicKey);
-      eql(bytesToHex(ed25519ctx.sign(v.message, v.secretKey, { context: v.context })), v.signature);
-      eql(ed25519ctx.verify(v.signature, v.message, v.publicKey, { context: v.context }), true);
-    });
-  }
-});
-
-const VECTORS_RFC8032_PH = [
   {
+    fn: ed25519ph,
     secretKey: '833fe62409237b9d62ec77587520911e9a759cec1d19755b7da901b96dca3d42',
     publicKey: 'ec172b93ad5e563bf4932c70e1245034c35467ef2efd4d64ebf819683467e2bf',
     message: '616263',
@@ -77,22 +68,23 @@ const VECTORS_RFC8032_PH = [
       '31f85042463c2a355a2003d062adf5aa' +
       'a10b8c61e636062aaad11c2a26083406',
   },
-];
+]);
 
-describe('RFC8032ph', () => {
-  for (let i = 0; i < VECTORS_RFC8032_PH.length; i++) {
-    const v = VECTORS_RFC8032_PH[i];
+describe('RFC8032', () => {
+  for (let i = 0; i < VECTORS_RFC8032.length; i++) {
+    const v = VECTORS_RFC8032[i];
     should(`${i}`, () => {
-      eql(bytesToHex(ed25519ph.getPublicKey(v.secretKey)), v.publicKey);
-      eql(bytesToHex(ed25519ph.sign(v.message, v.secretKey)), v.signature);
-      eql(ed25519ph.verify(v.signature, v.message, v.publicKey), true);
+      const { context } = v;
+      eql(v.fn.getPublicKey(v.secretKey), v.publicKey);
+      eql(v.fn.sign(v.message, v.secretKey, { context }), v.signature);
+      eql(v.fn.verify(v.signature, v.message, v.publicKey, { context }), true);
     });
   }
 });
 
 // x25519
 describe('X25519 RFC7748 ECDH', () => {
-  const rfc7748Mul = [
+  const rfc7748Mul = deepHexToBytes([
     {
       scalar: 'a546e36bf0527c9d3b16154b82465edd62144c0ac1fc5a18506a2244ba449ac4',
       u: 'e6db6867583030db3594c1a424b15f7c726624ec26b3353b10a903a6d0ab1c4c',
@@ -103,11 +95,11 @@ describe('X25519 RFC7748 ECDH', () => {
       u: 'e5210f12786811d3f4b7959d0538ae2c31dbe7106fc03c3efc4cd549c715a493',
       outputU: '95cbde9476e8907d7aade45cb4b873f88b595a68799fa152e6f8f7647aac7957',
     },
-  ];
+  ]);
   for (let i = 0; i < rfc7748Mul.length; i++) {
     const v = rfc7748Mul[i];
     should(`scalarMult (${i})`, () => {
-      eql(bytesToHex(x25519.scalarMult(v.scalar, v.u)), v.outputU);
+      eql(x25519.scalarMult(v.scalar, v.u), v.outputU);
     });
   }
 
@@ -127,15 +119,17 @@ describe('X25519 RFC7748 ECDH', () => {
   }
 
   should('getSharedKey', () => {
-    const alicePrivate = '77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a';
-    const alicePublic = '8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a';
-    const bobPrivate = '5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb';
-    const bobPublic = 'de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f';
-    const shared = '4a5d9d5ba4ce2de1728e3bf480350f25e07e21c947d19e3376f09b3c1e161742';
-    eql(alicePublic, bytesToHex(x25519.getPublicKey(alicePrivate)));
-    eql(bobPublic, bytesToHex(x25519.getPublicKey(bobPrivate)));
-    eql(bytesToHex(x25519.scalarMult(alicePrivate, bobPublic)), shared);
-    eql(bytesToHex(x25519.scalarMult(bobPrivate, alicePublic)), shared);
+    const { alicePrivate, alicePublic, bobPrivate, bobPublic, shared } = deepHexToBytes({
+      alicePrivate: '77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a',
+      alicePublic: '8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a',
+      bobPrivate: '5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb',
+      bobPublic: 'de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f',
+      shared: '4a5d9d5ba4ce2de1728e3bf480350f25e07e21c947d19e3376f09b3c1e161742',
+    });
+    eql(alicePublic, x25519.getPublicKey(alicePrivate));
+    eql(bobPublic, x25519.getPublicKey(bobPrivate));
+    eql(x25519.scalarMult(alicePrivate, bobPublic), shared);
+    eql(x25519.scalarMult(bobPrivate, alicePublic), shared);
   });
 
   should('X25519/getSharedSecret() should be commutative', () => {
@@ -206,18 +200,18 @@ describe('X25519 RFC7748 ECDH', () => {
 
   should('base point', () => {
     const { y } = ed25519ph.Point.BASE;
-    const { Fp } = ed25519ph.CURVE;
+    const { Fp } = ed25519ph.Point;
     const u = Fp.create((y + 1n) * Fp.inv(1n - y));
     eql(numberToBytesLE(u, 32), x25519.GuBytes);
   });
 
-  const group = x25519vectors.testGroups[0];
+  const group = deepHexToBytes(x25519vectors.testGroups[0]);
   should('wycheproof', () => {
     group.tests.forEach((v, i) => {
       const comment = `(${i}, ${v.result}) ${v.comment}`;
       if (v.result === 'valid' || v.result === 'acceptable') {
         try {
-          const shared = bytesToHex(x25519.scalarMult(v.private, v.public));
+          const shared = x25519.scalarMult(v.private, v.public);
           eql(shared, v.shared, comment);
         } catch (e) {
           // We are more strict

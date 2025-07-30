@@ -78,7 +78,7 @@ Filecoin uses little endian byte arrays for secret keys - make sure to reverse b
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha256 } from '@noble/hashes/sha2.js';
-import { bls, type CurveFn } from './abstract/bls.ts';
+import { bls, type BlsCurvePairWithSignatures } from './abstract/bls.ts';
 import { Field, type IField } from './abstract/modular.ts';
 import {
   abytes,
@@ -87,9 +87,10 @@ import {
   bytesToHex,
   bytesToNumberBE,
   concatBytes,
-  ensureBytes,
+  copyBytes,
+  hexToBytes,
   numberToBytesBE,
-  type Hex,
+  randomBytes,
 } from './utils.ts';
 // Types
 import { isogenyMap } from './abstract/hash-to-curve.ts';
@@ -97,6 +98,7 @@ import type { BigintTuple, Fp, Fp12, Fp2, Fp6 } from './abstract/tower.ts';
 import { psiFrobenius, tower12 } from './abstract/tower.ts';
 import {
   mapToCurveSimpleSWU,
+  weierstrass,
   type AffinePoint,
   type WeierstrassOpts,
   type WeierstrassPoint,
@@ -146,9 +148,9 @@ const bls12_381_CURVE_G1: WeierstrassOpts<bigint> = {
 };
 
 // CURVE FIELDS
+// r = z⁴ − z² + 1; CURVE.n from other curves
 export const bls12_381_Fr: IField<bigint> = Field(bls12_381_CURVE_G1.n, {
   modFromBytes: true,
-  isLE: true,
 });
 const { Fp, Fp2, Fp6, Fp12 } = tower12({
   ORDER: bls12_381_CURVE_G1.p,
@@ -193,7 +195,7 @@ const { G2psi, G2psi2 } = psiFrobenius(Fp, Fp2, Fp2.div(Fp2.ONE, Fp2.NONRESIDUE)
  * hash: any function, e.g. BBS+ uses BLAKE2: see [github](https://github.com/hyperledger/aries-framework-go/issues/2247).
  * Parameter values come from [section 8.8.2 of RFC 9380](https://www.rfc-editor.org/rfc/rfc9380#section-8.8.2).
  */
-const htfDefaults = Object.freeze({
+const hasher_opts = Object.freeze({
   DST: 'BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_NUL_',
   encodeDST: 'BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_NUL_',
   p: Fp.ORDER,
@@ -241,8 +243,9 @@ const bls12_381_CURVE_G2 = {
 const COMPZERO = setMask(Fp.toBytes(_0n), { infinity: true, compressed: true });
 
 function parseMask(bytes: Uint8Array) {
-  // Copy, so we can remove mask data. It will be removed also later, when Fp.create will call modulo.
-  bytes = bytes.slice();
+  // Copy, so we can remove mask data.
+  // It will be removed also later, when Fp.create will call modulo.
+  bytes = copyBytes(bytes);
   const mask = bytes[0] & 0b1110_0000;
   const compressed = !!((mask >> 7) & 1); // compression bit (0b1000_0000)
   const infinity = !!((mask >> 6) & 1); // point at infinity bit (0b0100_0000)
@@ -322,8 +325,8 @@ function pointG1FromBytes(bytes: Uint8Array): AffinePoint<Fp> {
   }
 }
 
-function signatureG1FromBytes(hex: Hex): WeierstrassPoint<Fp> {
-  const { infinity, sort, value } = parseMask(ensureBytes('signatureHex', hex, 48));
+function signatureG1FromBytes(bytes: Uint8Array): WeierstrassPoint<Fp> {
+  const { infinity, sort, value } = parseMask(abytes(bytes, 48, 'signature'));
   const P = Fp.ORDER;
   const Point = bls12_381.G1.Point;
   const compressedValue = bytesToNumberBE(value);
@@ -428,10 +431,10 @@ function pointG2FromBytes(bytes: Uint8Array): AffinePoint<Fp2> {
   }
 }
 
-function signatureG2FromBytes(hex: Hex) {
+function signatureG2FromBytes(bytes: Uint8Array) {
   const { ORDER: P } = Fp;
   // TODO: Optimize, it's very slow because of sqrt.
-  const { infinity, sort, value } = parseMask(ensureBytes('signatureHex', hex));
+  const { infinity, sort, value } = parseMask(abytes(bytes));
   const Point = bls12_381.G2.Point;
   const half = value.length / 2;
   if (half !== 48 && half !== 96)
@@ -460,6 +463,127 @@ function signatureG2FromBytes(hex: Hex) {
   return point;
 }
 
+const signatureCoders = {
+  ShortSignature: {
+    fromBytes(bytes: Uint8Array) {
+      return signatureG1FromBytes(abytes(bytes));
+    },
+    fromHex(hex: string): WeierstrassPoint<Fp> {
+      return signatureG1FromBytes(hexToBytes(hex));
+    },
+    toBytes(point: WeierstrassPoint<Fp>) {
+      return signatureG1ToBytes(point);
+    },
+    toRawBytes(point: WeierstrassPoint<Fp>) {
+      return signatureG1ToBytes(point);
+    },
+    toHex(point: WeierstrassPoint<Fp>) {
+      return bytesToHex(signatureG1ToBytes(point));
+    },
+  },
+  LongSignature: {
+    fromBytes(bytes: Uint8Array): WeierstrassPoint<Fp2> {
+      return signatureG2FromBytes(abytes(bytes));
+    },
+    fromHex(hex: string): WeierstrassPoint<Fp2> {
+      return signatureG2FromBytes(hexToBytes(hex));
+    },
+    toBytes(point: WeierstrassPoint<Fp2>) {
+      return signatureG2ToBytes(point);
+    },
+    toRawBytes(point: WeierstrassPoint<Fp2>) {
+      return signatureG2ToBytes(point);
+    },
+    toHex(point: WeierstrassPoint<Fp2>) {
+      return bytesToHex(signatureG2ToBytes(point));
+    },
+  },
+};
+
+const fields = {
+  Fp,
+  Fp2,
+  Fp6,
+  Fp12,
+  Fr: bls12_381_Fr,
+};
+const G1_Point = weierstrass(bls12_381_CURVE_G1, {
+  allowInfinityPoint: true,
+  Fn: bls12_381_Fr,
+  fromBytes: pointG1FromBytes,
+  toBytes: pointG1ToBytes,
+  // Checks is the point resides in prime-order subgroup.
+  // point.isTorsionFree() should return true for valid points
+  // It returns false for shitty points.
+  // https://eprint.iacr.org/2021/1130.pdf
+  isTorsionFree: (c, point): boolean => {
+    // GLV endomorphism ψ(P)
+    const beta = BigInt(
+      '0x5f19672fdf76ce51ba69c6076a0f77eaddb3a93be6f89688de17d813620a00022e01fffffffefffe'
+    );
+    const phi = new c(Fp.mul(point.X, beta), point.Y, point.Z);
+    // TODO: unroll
+    const xP = point.multiplyUnsafe(BLS_X).negate(); // [x]P
+    const u2P = xP.multiplyUnsafe(BLS_X); // [u2]P
+    return u2P.equals(phi);
+  },
+  // Clear cofactor of G1
+  // https://eprint.iacr.org/2019/403
+  clearCofactor: (_c, point) => {
+    // return this.multiplyUnsafe(CURVE.h);
+    return point.multiplyUnsafe(BLS_X).add(point); // x*P + P
+  },
+});
+const G2_Point = weierstrass(bls12_381_CURVE_G2, {
+  Fp: Fp2,
+  allowInfinityPoint: true,
+  Fn: bls12_381_Fr,
+  fromBytes: pointG2FromBytes,
+  toBytes: pointG2ToBytes,
+  // https://eprint.iacr.org/2021/1130.pdf
+  // Older version: https://eprint.iacr.org/2019/814.pdf
+  isTorsionFree: (c, P): boolean => {
+    return P.multiplyUnsafe(BLS_X).negate().equals(G2psi(c, P)); // ψ(P) == [u](P)
+  },
+  // clear_cofactor_bls12381_g2 from RFC 9380.
+  // https://eprint.iacr.org/2017/419.pdf
+  // prettier-ignore
+  clearCofactor: (c, P) => {
+    const x = BLS_X;
+    let t1 = P.multiplyUnsafe(x).negate();  // [-x]P
+    let t2 = G2psi(c, P);                   // Ψ(P)
+    let t3 = P.double();                    // 2P
+    t3 = G2psi2(c, t3);                     // Ψ²(2P)
+    t3 = t3.subtract(t2);                   // Ψ²(2P) - Ψ(P)
+    t2 = t1.add(t2);                        // [-x]P + Ψ(P)
+    t2 = t2.multiplyUnsafe(x).negate();     // [x²]P - [x]Ψ(P)
+    t3 = t3.add(t2);                        // Ψ²(2P) - Ψ(P) + [x²]P - [x]Ψ(P)
+    t3 = t3.subtract(t1);                   // Ψ²(2P) - Ψ(P) + [x²]P - [x]Ψ(P) + [x]P
+    const Q = t3.subtract(P);               // Ψ²(2P) - Ψ(P) + [x²]P - [x]Ψ(P) + [x]P - 1P
+    return Q;                               // [x²-x-1]P + [x-1]Ψ(P) + Ψ²(2P)
+  },
+});
+
+const bls12_hasher_opts = {
+  mapToG1: mapToG1,
+  mapToG2: mapToG2,
+  hasherOpts: hasher_opts,
+  hasherOptsG1: { ...hasher_opts, m: 1, DST: 'BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_' },
+  hasherOptsG2: { ...hasher_opts },
+};
+
+const bls12_params = {
+  ateLoopSize: BLS_X, // The BLS parameter x for BLS12-381
+  xNegative: true,
+  twistType: 'multiplicative' as const,
+  randomBytes: randomBytes,
+  // https://datatracker.ietf.org/doc/html/rfc9380#name-clearing-the-cofactor
+  // https://datatracker.ietf.org/doc/html/rfc9380#name-cofactor-clearing-for-bls12
+  // G2hEff: BigInt(
+  //   '0xbc69f08f2ee75b3584c6a0ea91b352888e2a8e9145ad7689986ff031508ffe1329c2f178731db956d82bf015d1212b02ec0ec69d7477c1ae954cbc06689f6a359894c0adebbf6b4e8020005aaa95551'
+  // ),
+};
+
 /**
  * bls12-381 pairing-friendly curve.
  * @example
@@ -471,133 +595,14 @@ function signatureG2FromBytes(hex: Hex) {
  * const signature = bls.sign(message, privateKey);
  * const isValid = bls.verify(signature, message, publicKey);
  */
-export const bls12_381: CurveFn = bls({
-  // Fields
-  fields: {
-    Fp,
-    Fp2,
-    Fp6,
-    Fp12,
-    Fr: bls12_381_Fr,
-  },
-  // G1: y² = x³ + 4
-  G1: {
-    ...bls12_381_CURVE_G1,
-    Fp,
-    htfDefaults: { ...htfDefaults, m: 1, DST: 'BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_' },
-    wrapPrivateKey: true,
-    allowInfinityPoint: true,
-    // Checks is the point resides in prime-order subgroup.
-    // point.isTorsionFree() should return true for valid points
-    // It returns false for shitty points.
-    // https://eprint.iacr.org/2021/1130.pdf
-    isTorsionFree: (c, point): boolean => {
-      // GLV endomorphism ψ(P)
-      const beta = BigInt(
-        '0x5f19672fdf76ce51ba69c6076a0f77eaddb3a93be6f89688de17d813620a00022e01fffffffefffe'
-      );
-      const phi = new c(Fp.mul(point.X, beta), point.Y, point.Z);
-      // TODO: unroll
-      const xP = point.multiplyUnsafe(BLS_X).negate(); // [x]P
-      const u2P = xP.multiplyUnsafe(BLS_X); // [u2]P
-      return u2P.equals(phi);
-    },
-    // Clear cofactor of G1
-    // https://eprint.iacr.org/2019/403
-    clearCofactor: (_c, point) => {
-      // return this.multiplyUnsafe(CURVE.h);
-      return point.multiplyUnsafe(BLS_X).add(point); // x*P + P
-    },
-    mapToCurve: mapToG1,
-    fromBytes: pointG1FromBytes,
-    toBytes: pointG1ToBytes,
-    ShortSignature: {
-      fromBytes(bytes: Uint8Array) {
-        abytes(bytes);
-        return signatureG1FromBytes(bytes);
-      },
-      fromHex(hex: Hex): WeierstrassPoint<Fp> {
-        return signatureG1FromBytes(hex);
-      },
-      toBytes(point: WeierstrassPoint<Fp>) {
-        return signatureG1ToBytes(point);
-      },
-      toRawBytes(point: WeierstrassPoint<Fp>) {
-        return signatureG1ToBytes(point);
-      },
-      toHex(point: WeierstrassPoint<Fp>) {
-        return bytesToHex(signatureG1ToBytes(point));
-      },
-    },
-  },
-  G2: {
-    ...bls12_381_CURVE_G2,
-    Fp: Fp2,
-    // https://datatracker.ietf.org/doc/html/rfc9380#name-clearing-the-cofactor
-    // https://datatracker.ietf.org/doc/html/rfc9380#name-cofactor-clearing-for-bls12
-    hEff: BigInt(
-      '0xbc69f08f2ee75b3584c6a0ea91b352888e2a8e9145ad7689986ff031508ffe1329c2f178731db956d82bf015d1212b02ec0ec69d7477c1ae954cbc06689f6a359894c0adebbf6b4e8020005aaa95551'
-    ),
-    htfDefaults: { ...htfDefaults },
-    wrapPrivateKey: true,
-    allowInfinityPoint: true,
-    mapToCurve: mapToG2,
-    // Checks is the point resides in prime-order subgroup.
-    // point.isTorsionFree() should return true for valid points
-    // It returns false for shitty points.
-    // https://eprint.iacr.org/2021/1130.pdf
-    // Older version: https://eprint.iacr.org/2019/814.pdf
-    isTorsionFree: (c, P): boolean => {
-      return P.multiplyUnsafe(BLS_X).negate().equals(G2psi(c, P)); // ψ(P) == [u](P)
-    },
-    // Maps the point into the prime-order subgroup G2.
-    // clear_cofactor_bls12381_g2 from RFC 9380.
-    // https://eprint.iacr.org/2017/419.pdf
-    // prettier-ignore
-    clearCofactor: (c, P) => {
-      const x = BLS_X;
-      let t1 = P.multiplyUnsafe(x).negate();  // [-x]P
-      let t2 = G2psi(c, P);                   // Ψ(P)
-      let t3 = P.double();                    // 2P
-      t3 = G2psi2(c, t3);                     // Ψ²(2P)
-      t3 = t3.subtract(t2);                   // Ψ²(2P) - Ψ(P)
-      t2 = t1.add(t2);                        // [-x]P + Ψ(P)
-      t2 = t2.multiplyUnsafe(x).negate();     // [x²]P - [x]Ψ(P)
-      t3 = t3.add(t2);                        // Ψ²(2P) - Ψ(P) + [x²]P - [x]Ψ(P)
-      t3 = t3.subtract(t1);                   // Ψ²(2P) - Ψ(P) + [x²]P - [x]Ψ(P) + [x]P
-      const Q = t3.subtract(P);               // Ψ²(2P) - Ψ(P) + [x²]P - [x]Ψ(P) + [x]P - 1P
-      return Q;                               // [x²-x-1]P + [x-1]Ψ(P) + Ψ²(2P)
-    },
-    fromBytes: pointG2FromBytes,
-    toBytes: pointG2ToBytes,
-    Signature: {
-      fromBytes(bytes: Uint8Array): WeierstrassPoint<Fp2> {
-        abytes(bytes);
-        return signatureG2FromBytes(bytes);
-      },
-      fromHex(hex: Hex): WeierstrassPoint<Fp2> {
-        return signatureG2FromBytes(hex);
-      },
-      toBytes(point: WeierstrassPoint<Fp2>) {
-        return signatureG2ToBytes(point);
-      },
-      toRawBytes(point: WeierstrassPoint<Fp2>) {
-        return signatureG2ToBytes(point);
-      },
-      toHex(point: WeierstrassPoint<Fp2>) {
-        return bytesToHex(signatureG2ToBytes(point));
-      },
-    },
-  },
-  params: {
-    ateLoopSize: BLS_X, // The BLS parameter x for BLS12-381
-    r: bls12_381_CURVE_G1.n, // order; z⁴ − z² + 1; CURVE.n from other curves
-    xNegative: true,
-    twistType: 'multiplicative',
-  },
-  htfDefaults,
-  hash: sha256,
-});
+export const bls12_381: BlsCurvePairWithSignatures = bls(
+  fields,
+  G1_Point,
+  G2_Point,
+  bls12_params,
+  bls12_hasher_opts,
+  signatureCoders
+);
 
 // 3-isogeny map from E' to E https://www.rfc-editor.org/rfc/rfc9380#appendix-E.3
 const isogenyMapG2 = isogenyMap(

@@ -7,17 +7,16 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import {
   _validateObject,
+  abytes,
   anumber,
-  bitMask,
   bytesToNumberBE,
   bytesToNumberLE,
-  ensureBytes,
   numberToBytesBE,
   numberToBytesLE,
 } from '../utils.ts';
 
 // prettier-ignore
-const _0n = BigInt(0), _1n = BigInt(1), _2n = /* @__PURE__ */ BigInt(2), _3n = /* @__PURE__ */ BigInt(3);
+const _0n = BigInt(0), _1n = /* @__PURE__ */ BigInt(1), _2n = /* @__PURE__ */ BigInt(2), _3n = /* @__PURE__ */ BigInt(3);
 // prettier-ignore
 const _4n = /* @__PURE__ */ BigInt(4), _5n = /* @__PURE__ */ BigInt(5), _7n = /* @__PURE__ */ BigInt(7);
 // prettier-ignore
@@ -227,10 +226,9 @@ export const isNegativeLE = (num: bigint, modulo: bigint): boolean =>
 /** Field is not always over prime: for example, Fp2 has ORDER(q)=p^m. */
 export interface IField<T> {
   ORDER: bigint;
-  isLE: boolean;
   BYTES: number;
   BITS: number;
-  MASK: bigint;
+  isLE: boolean;
   ZERO: T;
   ONE: T;
   // 1-arg
@@ -260,7 +258,6 @@ export interface IField<T> {
   // [RFC9380](https://www.rfc-editor.org/rfc/rfc9380#section-4.1).
   // NOTE: sgn0 is 'negative in LE', which is same as odd. And negative in LE is kinda strange definition anyway.
   isOdd?(num: T): boolean; // Odd instead of even since we have it for Fp2
-  allowedLengths?: number[];
   // legendre?(num: T): T;
   invertBatch: (lst: T[]) => T[];
   toBytes(num: T): Uint8Array;
@@ -277,7 +274,6 @@ const FIELD_FIELDS = [
 export function validateField<T>(field: IField<T>): IField<T> {
   const initial = {
     ORDER: 'bigint',
-    MASK: 'bigint',
     BYTES: 'number',
     BITS: 'number',
   } as Record<string, string>;
@@ -381,12 +377,147 @@ export function nLength(n: bigint, nBitLength?: number): NLength {
 type FpField = IField<bigint> & Required<Pick<IField<bigint>, 'isOdd'>>;
 type SqrtFn = (n: bigint) => bigint;
 type FieldOpts = Partial<{
-  sqrt: SqrtFn;
   isLE: boolean;
   BITS: number;
-  modFromBytes: boolean; // bls12-381 requires mod(n) instead of rejecting keys >= n
+  sqrt: SqrtFn;
   allowedLengths?: readonly number[]; // for P521 (adds padding for smaller sizes)
+  modFromBytes: boolean; // bls12-381 requires mod(n) instead of rejecting keys >= n
 }>;
+class _Field implements IField<bigint> {
+  readonly ORDER: bigint;
+  readonly BITS: number;
+  readonly BYTES: number;
+  readonly isLE: boolean;
+  readonly ZERO = _0n;
+  readonly ONE = _1n;
+  readonly _lengths?: number[];
+  private _sqrt: ReturnType<typeof FpSqrt> | undefined; // cached sqrt
+  private readonly _mod?: boolean;
+  constructor(ORDER: bigint, opts: FieldOpts = {}) {
+    if (ORDER <= _0n) throw new Error('invalid field: expected ORDER > 0, got ' + ORDER);
+    let _nbitLength: number | undefined = undefined;
+    this.isLE = false;
+    if (opts != null && typeof opts === 'object') {
+      if (typeof opts.BITS === 'number') _nbitLength = opts.BITS;
+      if (typeof opts.sqrt === 'function') this.sqrt = opts.sqrt;
+      if (typeof opts.isLE === 'boolean') this.isLE = opts.isLE;
+      if (opts.allowedLengths) this._lengths = opts.allowedLengths?.slice();
+      if (typeof opts.modFromBytes === 'boolean') this._mod = opts.modFromBytes;
+    }
+    const { nBitLength, nByteLength } = nLength(ORDER, _nbitLength);
+    if (nByteLength > 2048) throw new Error('invalid field: expected ORDER of <= 2048 bytes');
+    this.ORDER = ORDER;
+    this.BITS = nBitLength;
+    this.BYTES = nByteLength;
+    this._sqrt = undefined;
+    Object.preventExtensions(this);
+  }
+
+  create(num: bigint) {
+    return mod(num, this.ORDER);
+  }
+  isValid(num: bigint) {
+    if (typeof num !== 'bigint')
+      throw new Error('invalid field element: expected bigint, got ' + typeof num);
+    return _0n <= num && num < this.ORDER; // 0 is valid element, but it's not invertible
+  }
+  is0(num: bigint) {
+    return num === _0n;
+  }
+  // is valid and invertible
+  isValidNot0(num: bigint) {
+    return !this.is0(num) && this.isValid(num);
+  }
+  isOdd(num: bigint) {
+    return (num & _1n) === _1n;
+  }
+  neg(num: bigint) {
+    return mod(-num, this.ORDER);
+  }
+  eql(lhs: bigint, rhs: bigint) {
+    return lhs === rhs;
+  }
+
+  sqr(num: bigint) {
+    return mod(num * num, this.ORDER);
+  }
+  add(lhs: bigint, rhs: bigint) {
+    return mod(lhs + rhs, this.ORDER);
+  }
+  sub(lhs: bigint, rhs: bigint) {
+    return mod(lhs - rhs, this.ORDER);
+  }
+  mul(lhs: bigint, rhs: bigint) {
+    return mod(lhs * rhs, this.ORDER);
+  }
+  pow(num: bigint, power: bigint): bigint {
+    return FpPow(this, num, power);
+  }
+  div(lhs: bigint, rhs: bigint) {
+    return mod(lhs * invert(rhs, this.ORDER), this.ORDER);
+  }
+
+  // Same as above, but doesn't normalize
+  sqrN(num: bigint) {
+    return num * num;
+  }
+  addN(lhs: bigint, rhs: bigint) {
+    return lhs + rhs;
+  }
+  subN(lhs: bigint, rhs: bigint) {
+    return lhs - rhs;
+  }
+  mulN(lhs: bigint, rhs: bigint) {
+    return lhs * rhs;
+  }
+
+  inv(num: bigint) {
+    return invert(num, this.ORDER);
+  }
+  sqrt(num: bigint): bigint {
+    // Caching _sqrt speeds up sqrt9mod16 by 5x and tonneli-shanks by 10%
+    if (!this._sqrt) this._sqrt = FpSqrt(this.ORDER);
+    return this._sqrt(this, num);
+  }
+  toBytes(num: bigint) {
+    return this.isLE ? numberToBytesLE(num, this.BYTES) : numberToBytesBE(num, this.BYTES);
+  }
+  fromBytes(bytes: Uint8Array, skipValidation = false) {
+    abytes(bytes);
+    const { _lengths: allowedLengths, BYTES, isLE, ORDER, _mod: modFromBytes } = this;
+    if (allowedLengths) {
+      if (!allowedLengths.includes(bytes.length) || bytes.length > BYTES) {
+        throw new Error(
+          'Field.fromBytes: expected ' + allowedLengths + ' bytes, got ' + bytes.length
+        );
+      }
+      const padded = new Uint8Array(BYTES);
+      // isLE add 0 to right, !isLE to the left.
+      padded.set(bytes, isLE ? 0 : padded.length - bytes.length);
+      bytes = padded;
+    }
+    if (bytes.length !== BYTES)
+      throw new Error('Field.fromBytes: expected ' + BYTES + ' bytes, got ' + bytes.length);
+    let scalar = isLE ? bytesToNumberLE(bytes) : bytesToNumberBE(bytes);
+    if (modFromBytes) scalar = mod(scalar, ORDER);
+    if (!skipValidation)
+      if (!this.isValid(scalar))
+        throw new Error('invalid field element: outside of range 0..ORDER');
+    // NOTE: we don't validate scalar here, please use isValid. This done such way because some
+    // protocol may allow non-reduced scalar that reduced later or changed some other way.
+    return scalar;
+  }
+  // TODO: we don't need it here, move out to separate fn
+  invertBatch(lst: bigint[]): bigint[] {
+    return FpInvertBatch(this, lst);
+  }
+  // We can't move this out because Fp6, Fp12 implement it
+  // and it's unclear what to return in there.
+  cmov(a: bigint, b: bigint, condition: boolean) {
+    return condition ? b : a;
+  }
+}
+
 /**
  * Creates a finite field. Major performance optimizations:
  * * 1. Denormalized operations like mulN instead of mul.
@@ -406,104 +537,8 @@ type FieldOpts = Partial<{
  * @param isLE (default: false) if encoding / decoding should be in little-endian
  * @param redef optional faster redefinitions of sqrt and other methods
  */
-export function Field(
-  ORDER: bigint,
-  bitLenOrOpts?: number | FieldOpts, // TODO: use opts only in v2?
-  isLE = false,
-  opts: { sqrt?: SqrtFn } = {}
-): Readonly<FpField> {
-  if (ORDER <= _0n) throw new Error('invalid field: expected ORDER > 0, got ' + ORDER);
-  let _nbitLength: number | undefined = undefined;
-  let _sqrt: SqrtFn | undefined = undefined;
-  let modFromBytes: boolean = false;
-  let allowedLengths: undefined | readonly number[] = undefined;
-  if (typeof bitLenOrOpts === 'object' && bitLenOrOpts != null) {
-    if (opts.sqrt || isLE) throw new Error('cannot specify opts in two arguments');
-    const _opts = bitLenOrOpts;
-    if (_opts.BITS) _nbitLength = _opts.BITS;
-    if (_opts.sqrt) _sqrt = _opts.sqrt;
-    if (typeof _opts.isLE === 'boolean') isLE = _opts.isLE;
-    if (typeof _opts.modFromBytes === 'boolean') modFromBytes = _opts.modFromBytes;
-    allowedLengths = _opts.allowedLengths;
-  } else {
-    if (typeof bitLenOrOpts === 'number') _nbitLength = bitLenOrOpts;
-    if (opts.sqrt) _sqrt = opts.sqrt;
-  }
-  const { nBitLength: BITS, nByteLength: BYTES } = nLength(ORDER, _nbitLength);
-  if (BYTES > 2048) throw new Error('invalid field: expected ORDER of <= 2048 bytes');
-  let sqrtP: ReturnType<typeof FpSqrt>; // cached sqrtP
-  const f: Readonly<FpField> = Object.freeze({
-    ORDER,
-    isLE,
-    BITS,
-    BYTES,
-    MASK: bitMask(BITS),
-    ZERO: _0n,
-    ONE: _1n,
-    allowedLengths: allowedLengths,
-    create: (num) => mod(num, ORDER),
-    isValid: (num) => {
-      if (typeof num !== 'bigint')
-        throw new Error('invalid field element: expected bigint, got ' + typeof num);
-      return _0n <= num && num < ORDER; // 0 is valid element, but it's not invertible
-    },
-    is0: (num) => num === _0n,
-    // is valid and invertible
-    isValidNot0: (num: bigint) => !f.is0(num) && f.isValid(num),
-    isOdd: (num) => (num & _1n) === _1n,
-    neg: (num) => mod(-num, ORDER),
-    eql: (lhs, rhs) => lhs === rhs,
-
-    sqr: (num) => mod(num * num, ORDER),
-    add: (lhs, rhs) => mod(lhs + rhs, ORDER),
-    sub: (lhs, rhs) => mod(lhs - rhs, ORDER),
-    mul: (lhs, rhs) => mod(lhs * rhs, ORDER),
-    pow: (num, power) => FpPow(f, num, power),
-    div: (lhs, rhs) => mod(lhs * invert(rhs, ORDER), ORDER),
-
-    // Same as above, but doesn't normalize
-    sqrN: (num) => num * num,
-    addN: (lhs, rhs) => lhs + rhs,
-    subN: (lhs, rhs) => lhs - rhs,
-    mulN: (lhs, rhs) => lhs * rhs,
-
-    inv: (num) => invert(num, ORDER),
-    sqrt:
-      _sqrt ||
-      ((n) => {
-        if (!sqrtP) sqrtP = FpSqrt(ORDER);
-        return sqrtP(f, n);
-      }),
-    toBytes: (num) => (isLE ? numberToBytesLE(num, BYTES) : numberToBytesBE(num, BYTES)),
-    fromBytes: (bytes, skipValidation = true) => {
-      if (allowedLengths) {
-        if (!allowedLengths.includes(bytes.length) || bytes.length > BYTES) {
-          throw new Error(
-            'Field.fromBytes: expected ' + allowedLengths + ' bytes, got ' + bytes.length
-          );
-        }
-        const padded = new Uint8Array(BYTES);
-        // isLE add 0 to right, !isLE to the left.
-        padded.set(bytes, isLE ? 0 : padded.length - bytes.length);
-        bytes = padded;
-      }
-      if (bytes.length !== BYTES)
-        throw new Error('Field.fromBytes: expected ' + BYTES + ' bytes, got ' + bytes.length);
-      let scalar = isLE ? bytesToNumberLE(bytes) : bytesToNumberBE(bytes);
-      if (modFromBytes) scalar = mod(scalar, ORDER);
-      if (!skipValidation)
-        if (!f.isValid(scalar)) throw new Error('invalid field element: outside of range 0..ORDER');
-      // NOTE: we don't validate scalar here, please use isValid. This done such way because some
-      // protocol may allow non-reduced scalar that reduced later or changed some other way.
-      return scalar;
-    },
-    // TODO: we don't need it here, move out to separate fn
-    invertBatch: (lst) => FpInvertBatch(f, lst),
-    // We can't move this out because Fp6, Fp12 implement it
-    // and it's unclear what to return in there.
-    cmov: (a, b, c) => (c ? b : a),
-  } as FpField);
-  return Object.freeze(f);
+export function Field(ORDER: bigint, opts: FieldOpts = {}): Readonly<FpField> {
+  return new _Field(ORDER, opts);
 }
 
 // Generic random scalar, we can do same for other fields if via Fp2.mul(Fp2.ONE, Fp2.random)?
@@ -530,28 +565,6 @@ export function FpSqrtEven<T>(Fp: IField<T>, elm: T): T {
   if (!Fp.isOdd) throw new Error("Field doesn't have isOdd");
   const root = Fp.sqrt(elm);
   return Fp.isOdd(root) ? Fp.neg(root) : root;
-}
-
-/**
- * "Constant-time" private key generation utility.
- * Same as mapKeyToField, but accepts less bytes (40 instead of 48 for 32-byte field).
- * Which makes it slightly more biased, less secure.
- * @deprecated use `mapKeyToField` instead
- */
-export function hashToPrivateScalar(
-  hash: string | Uint8Array,
-  groupOrder: bigint,
-  isLE = false
-): bigint {
-  hash = ensureBytes('privateHash', hash);
-  const hashLen = hash.length;
-  const minLen = nLength(groupOrder).nByteLength + 8;
-  if (minLen < 24 || hashLen < minLen || hashLen > 1024)
-    throw new Error(
-      'hashToPrivateScalar: expected ' + minLen + '-1024 bytes of input, got ' + hashLen
-    );
-  const num = isLE ? bytesToNumberLE(hash) : bytesToNumberBE(hash);
-  return mod(num, groupOrder - _1n) + _1n;
 }
 
 /**
@@ -587,11 +600,12 @@ export function getMinHashLength(fieldOrder: bigint): number {
  * FIPS 186-5, A.2 https://csrc.nist.gov/publications/detail/fips/186/5/final
  * RFC 9380, https://www.rfc-editor.org/rfc/rfc9380#section-5
  * @param hash hash output from SHA3 or a similar function
- * @param groupOrder size of subgroup - (e.g. secp256k1.CURVE.n)
+ * @param groupOrder size of subgroup - (e.g. secp256k1.Point.Fn.ORDER)
  * @param isLE interpret hash bytes as LE num
  * @returns valid private scalar
  */
 export function mapHashToField(key: Uint8Array, fieldOrder: bigint, isLE = false): Uint8Array {
+  abytes(key);
   const len = key.length;
   const fieldLen = getFieldBytesLength(fieldOrder);
   const minLen = getMinHashLength(fieldOrder);

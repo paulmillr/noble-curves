@@ -8,35 +8,23 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha256 } from '@noble/hashes/sha2.js';
 import { randomBytes } from '@noble/hashes/utils.js';
-import { createCurve, type CurveFnWithCreate } from './_shortw_utils.ts';
 import type { CurveLengths } from './abstract/curve.ts';
+import { createHasher, type H2CHasher, isogenyMap } from './abstract/hash-to-curve.ts';
+import { Field, mapHashToField, pow2 } from './abstract/modular.ts';
 import {
-  createHasher,
-  type H2CHasher,
-  type H2CMethod,
-  isogenyMap,
-} from './abstract/hash-to-curve.ts';
-import { Field, mapHashToField, mod, pow2 } from './abstract/modular.ts';
-import {
-  _normFnElement,
+  type ECDSA,
+  ecdsa,
   type EndomorphismOpts,
   mapToCurveSimpleSWU,
   type WeierstrassPoint as PointType,
+  weierstrass,
   type WeierstrassOpts,
   type WeierstrassPointCons,
 } from './abstract/weierstrass.ts';
-import type { Hex, PrivKey } from './utils.ts';
-import {
-  bytesToNumberBE,
-  concatBytes,
-  ensureBytes,
-  inRange,
-  numberToBytesBE,
-  utf8ToBytes,
-} from './utils.ts';
+import { abytes, asciiToBytes, bytesToNumberBE, concatBytes, inRange } from './utils.ts';
 
 // Seems like generator was produced from some seed:
-// `Point.BASE.multiply(Point.Fn.inv(2n, N)).toAffine().x`
+// `Pointk1.BASE.multiply(Pointk1.Fn.inv(2n, N)).toAffine().x`
 // // gives short x 0x3b78ce563f89a0ed9414f5aa28ad0d96d6795f9c63n
 const secp256k1_CURVE: WeierstrassOpts<bigint> = {
   p: BigInt('0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f'),
@@ -89,6 +77,10 @@ function sqrtMod(y: bigint): bigint {
 }
 
 const Fpk1 = Field(secp256k1_CURVE.p, { sqrt: sqrtMod });
+const Pointk1 = /* @__PURE__ */ weierstrass(secp256k1_CURVE, {
+  Fp: Fpk1,
+  endo: secp256k1_ENDO,
+});
 
 /**
  * secp256k1 curve, ECDSA and ECDH methods.
@@ -104,10 +96,8 @@ const Fpk1 = Field(secp256k1_CURVE.p, { sqrt: sqrtMod });
  * const isValid = secp256k1.verify(sig, msg, publicKey) === true;
  * ```
  */
-export const secp256k1: CurveFnWithCreate = createCurve(
-  { ...secp256k1_CURVE, Fp: Fpk1, lowS: true, endo: secp256k1_ENDO },
-  sha256
-);
+
+export const secp256k1: ECDSA = /* @__PURE__ */ ecdsa(Pointk1, sha256);
 
 // Schnorr signatures are superior to ECDSA from above. Below is Schnorr-specific BIP0340 code.
 // https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki
@@ -116,7 +106,7 @@ const TAGGED_HASH_PREFIXES: { [tag: string]: Uint8Array } = {};
 function taggedHash(tag: string, ...messages: Uint8Array[]): Uint8Array {
   let tagP = TAGGED_HASH_PREFIXES[tag];
   if (tagP === undefined) {
-    const tagH = sha256(utf8ToBytes(tag));
+    const tagH = sha256(asciiToBytes(tag));
     tagP = concatBytes(tagH, tagH);
     TAGGED_HASH_PREFIXES[tag] = tagP;
   }
@@ -125,13 +115,12 @@ function taggedHash(tag: string, ...messages: Uint8Array[]): Uint8Array {
 
 // ECDSA compact points are 33-byte. Schnorr is 32: we strip first byte 0x02 or 0x03
 const pointToBytes = (point: PointType<bigint>) => point.toBytes(true).slice(1);
-const Pointk1 = /* @__PURE__ */ (() => secp256k1.Point)();
 const hasEven = (y: bigint) => y % _2n === _0n;
 
 // Calculate point, scalar and bytes
-function schnorrGetExtPubKey(priv: PrivKey) {
+function schnorrGetExtPubKey(priv: Uint8Array) {
   const { Fn, BASE } = Pointk1;
-  const d_ = _normFnElement(Fn, priv);
+  const d_ = Fn.fromBytes(priv);
   const p = BASE.multiply(d_); // P = d'⋅G; 0 < d' < n check is done inside
   const scalar = hasEven(p.y) ? d_ : Fn.neg(d_);
   return { scalar, bytes: pointToBytes(p) };
@@ -164,7 +153,7 @@ function challenge(...args: Uint8Array[]): bigint {
 /**
  * Schnorr public key is just `x` coordinate of Point as per BIP340.
  */
-function schnorrGetPublicKey(secretKey: Hex): Uint8Array {
+function schnorrGetPublicKey(secretKey: Uint8Array): Uint8Array {
   return schnorrGetExtPubKey(secretKey).bytes; // d'=int(sk). Fail if d'=0 or d'≥n. Ret bytes(d'⋅G)
 }
 
@@ -172,11 +161,15 @@ function schnorrGetPublicKey(secretKey: Hex): Uint8Array {
  * Creates Schnorr signature as per BIP340. Verifies itself before returning anything.
  * auxRand is optional and is not the sole source of k generation: bad CSPRNG won't be dangerous.
  */
-function schnorrSign(message: Hex, secretKey: PrivKey, auxRand: Hex = randomBytes(32)): Uint8Array {
+function schnorrSign(
+  message: Uint8Array,
+  secretKey: Uint8Array,
+  auxRand: Uint8Array = randomBytes(32)
+): Uint8Array {
   const { Fn } = Pointk1;
-  const m = ensureBytes('message', message);
+  const m = abytes(message, undefined, 'message');
   const { bytes: px, scalar: d } = schnorrGetExtPubKey(secretKey); // checks for isWithinCurveOrder
-  const a = ensureBytes('auxRand', auxRand, 32); // Auxiliary random data a: a 32-byte array
+  const a = abytes(auxRand, 32, 'auxRand'); // Auxiliary random data a: a 32-byte array
   const t = Fn.toBytes(d ^ num(taggedHash('BIP0340/aux', a))); // Let t be the byte-wise xor of bytes(d) and hash/aux(a)
   const rand = taggedHash('BIP0340/nonce', t, px, m); // Let rand = hash/nonce(t || bytes(P) || m)
   // Let k' = int(rand) mod n. Fail if k' = 0. Let R = k'⋅G
@@ -194,19 +187,18 @@ function schnorrSign(message: Hex, secretKey: PrivKey, auxRand: Hex = randomByte
  * Verifies Schnorr signature.
  * Will swallow errors & return false except for initial type validation of arguments.
  */
-function schnorrVerify(signature: Hex, message: Hex, publicKey: Hex): boolean {
+function schnorrVerify(signature: Uint8Array, message: Uint8Array, publicKey: Uint8Array): boolean {
   const { Fn, BASE } = Pointk1;
-  const sig = ensureBytes('signature', signature, 64);
-  const m = ensureBytes('message', message);
-  const pub = ensureBytes('publicKey', publicKey, 32);
+  const sig = abytes(signature, 64, 'signature');
+  const m = abytes(message, undefined, 'message');
+  const pub = abytes(publicKey, 32, 'publicKey');
   try {
     const P = lift_x(num(pub)); // P = lift_x(int(pk)); fail if that fails
     const r = num(sig.subarray(0, 32)); // Let r = int(sig[0:32]); fail if r ≥ p.
     if (!inRange(r, _1n, secp256k1_CURVE.p)) return false;
     const s = num(sig.subarray(32, 64)); // Let s = int(sig[32:64]); fail if s ≥ n.
     if (!inRange(s, _1n, secp256k1_CURVE.n)) return false;
-    // int(challenge(bytes(r)||bytes(P)||m))%n
-    const e = challenge(Fn.toBytes(r), pointToBytes(P), m);
+    const e = challenge(Fn.toBytes(r), pointToBytes(P), m); // int(challenge(bytes(r)||bytes(P)||m))%n
     // R = s⋅G - e⋅P, where -eP == (n-e)P
     const R = BASE.multiplyUnsafe(s).add(P.multiplyUnsafe(Fn.neg(e)));
     const { x, y } = R.toAffine();
@@ -229,15 +221,6 @@ export type SecpSchnorr = {
     pointToBytes: (point: PointType<bigint>) => Uint8Array;
     lift_x: typeof lift_x;
     taggedHash: typeof taggedHash;
-
-    /** @deprecated use `randomSecretKey` */
-    randomPrivateKey: (seed?: Uint8Array) => Uint8Array;
-    /** @deprecated use `utils` */
-    numberToBytesBE: typeof numberToBytesBE;
-    /** @deprecated use `utils` */
-    bytesToNumberBE: typeof bytesToNumberBE;
-    /** @deprecated use `modular` */
-    mod: typeof mod;
   };
   lengths: CurveLengths;
 };
@@ -260,8 +243,6 @@ export const schnorr: SecpSchnorr = /* @__PURE__ */ (() => {
   const randomSecretKey = (seed = randomBytes(seedLength)): Uint8Array => {
     return mapHashToField(seed, secp256k1_CURVE.n);
   };
-  // TODO: remove
-  secp256k1.utils.randomSecretKey;
   function keygen(seed?: Uint8Array) {
     const secretKey = randomSecretKey(seed);
     return { secretKey, publicKey: schnorrGetPublicKey(secretKey) };
@@ -273,16 +254,10 @@ export const schnorr: SecpSchnorr = /* @__PURE__ */ (() => {
     verify: schnorrVerify,
     Point: Pointk1,
     utils: {
-      randomSecretKey: randomSecretKey,
-      randomPrivateKey: randomSecretKey,
+      randomSecretKey,
       taggedHash,
-
-      // TODO: remove
       lift_x,
       pointToBytes,
-      numberToBytesBE,
-      bytesToNumberBE,
-      mod,
     },
     lengths: {
       secretKey: size,
@@ -335,9 +310,9 @@ const mapSWU = /* @__PURE__ */ (() =>
   }))();
 
 /** Hashing / encoding to secp256k1 points / field. RFC 9380 methods. */
-export const secp256k1_hasher: H2CHasher<bigint> = /* @__PURE__ */ (() =>
+export const secp256k1_hasher: H2CHasher<WeierstrassPointCons<bigint>> = /* @__PURE__ */ (() =>
   createHasher(
-    secp256k1.Point,
+    Pointk1,
     (scalars: bigint[]) => {
       const { x, y } = mapSWU(Fpk1.create(scalars[0]));
       return isoMap(x, y);
@@ -352,11 +327,3 @@ export const secp256k1_hasher: H2CHasher<bigint> = /* @__PURE__ */ (() =>
       hash: sha256,
     }
   ))();
-
-/** @deprecated use `import { secp256k1_hasher } from '@noble/curves/secp256k1.js';` */
-export const hashToCurve: H2CMethod<bigint> = /* @__PURE__ */ (() =>
-  secp256k1_hasher.hashToCurve)();
-
-/** @deprecated use `import { secp256k1_hasher } from '@noble/curves/secp256k1.js';` */
-export const encodeToCurve: H2CMethod<bigint> = /* @__PURE__ */ (() =>
-  secp256k1_hasher.encodeToCurve)();

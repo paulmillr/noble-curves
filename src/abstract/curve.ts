@@ -4,8 +4,8 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { bitLen, bitMask, validateObject } from '../utils.ts';
-import { Field, FpInvertBatch, nLength, validateField, type IField } from './modular.ts';
+import { bitLen, bitMask } from '../utils.ts';
+import { Field, FpInvertBatch, validateField, type IField } from './modular.ts';
 
 const _0n = BigInt(0);
 const _1n = BigInt(1);
@@ -14,18 +14,6 @@ export type AffinePoint<T> = {
   x: T;
   y: T;
 } & { Z?: never };
-
-// This was initialy do this way to re-use montgomery ladder in field (add->mul,double->sqr), but
-// that didn't happen and there is probably not much reason to have separate Group like this?
-export interface Group<T extends Group<T>> {
-  double(): T;
-  negate(): T;
-  add(other: T): T;
-  subtract(other: T): T;
-  equals(other: T): boolean;
-  multiply(scalar: bigint): T;
-  toAffine?(invertedZ?: any): AffinePoint<any>;
-}
 
 // We can't "abstract out" coordinates (X, Y, Z; and T in Edwards): argument names of constructor
 // are not accessible. See Typescript gh-56093, gh-41594.
@@ -36,7 +24,7 @@ export interface Group<T extends Group<T>> {
 // but we lose all constrains on methods.
 
 /** Base interface for all elliptic curve Points. */
-export interface CurvePoint<F, P extends CurvePoint<F, P>> extends Group<P> {
+export interface CurvePoint<F, P extends CurvePoint<F, P>> {
   /** Affine x coordinate. Different from projective / extended X coordinate. */
   x: F;
   /** Affine y coordinate. Different from projective / extended Y coordinate. */
@@ -77,7 +65,7 @@ export interface CurvePointCons<P extends CurvePoint<any, P>> {
   /** Creates point from x, y. Does NOT validate if the point is valid. Use `.assertValidity()`. */
   fromAffine(p: AffinePoint<P_F<P>>): P;
   fromBytes(bytes: Uint8Array): P;
-  fromHex(hex: Uint8Array | string): P;
+  fromHex(hex: string): P;
 }
 
 // Type inference helpers: PC - PointConstructor, P - Point, Fp - Field element
@@ -134,16 +122,7 @@ export interface CurveLengths {
   signature?: number;
   seed?: number;
 }
-export type GroupConstructor<T> = {
-  BASE: T;
-  ZERO: T;
-};
-/** @deprecated */
-export type ExtendedGroupConstructor<T> = GroupConstructor<T> & {
-  Fp: IField<any>;
-  Fn: IField<bigint>;
-  fromAffine(ap: AffinePoint<any>): T;
-};
+
 export type Mapper<T> = (i: T[]) => T[];
 
 export function negateCt<T extends { negate: () => T }>(condition: boolean, item: T): T {
@@ -464,7 +443,6 @@ export function mulEndoUnsafe<P extends CurvePoint<any, P>, PC extends CurvePoin
  */
 export function pippenger<P extends CurvePoint<any, P>, PC extends CurvePointCons<P>>(
   c: PC,
-  fieldN: IField<bigint>,
   points: P[],
   scalars: bigint[]
 ): P {
@@ -474,6 +452,7 @@ export function pippenger<P extends CurvePoint<any, P>, PC extends CurvePointCon
   // - https://eprint.iacr.org/2024/750.pdf
   // - https://tches.iacr.org/index.php/TCHES/article/view/10287
   // 0 is accepted in scalars
+  const fieldN = c.Fn;
   validateMSMPoints(points, c);
   validateMSMScalars(scalars, fieldN);
   const plength = points.length;
@@ -517,7 +496,6 @@ export function pippenger<P extends CurvePoint<any, P>, PC extends CurvePointCon
  */
 export function precomputeMSMUnsafe<P extends CurvePoint<any, P>, PC extends CurvePointCons<P>>(
   c: PC,
-  fieldN: IField<bigint>,
   points: P[],
   windowSize: number
 ): (scalars: bigint[]) => P {
@@ -556,6 +534,7 @@ export function precomputeMSMUnsafe<P extends CurvePoint<any, P>, PC extends Cur
    *   - Optimal for ~256 scalars
    *   - Less efficient for 4096+ scalars (Pippenger preferred)
    */
+  const fieldN = c.Fn;
   validateW(windowSize, fieldN.BITS);
   validateMSMPoints(points, c);
   const zero = c.ZERO;
@@ -588,58 +567,6 @@ export function precomputeMSMUnsafe<P extends CurvePoint<any, P>, PC extends Cur
     }
     return res;
   };
-}
-
-// TODO: remove
-/**
- * Generic BasicCurve interface: works even for polynomial fields (BLS): P, n, h would be ok.
- * Though generator can be different (Fp2 / Fp6 for BLS).
- */
-export type BasicCurve<T> = {
-  Fp: IField<T>; // Field over which we'll do calculations (Fp)
-  n: bigint; // Curve order, total count of valid points in the field
-  nBitLength?: number; // bit length of curve order
-  nByteLength?: number; // byte length of curve order
-  h: bigint; // cofactor. we can assign default=1, but users will just ignore it w/o validation
-  hEff?: bigint; // Number to multiply to clear cofactor
-  Gx: T; // base point X coordinate
-  Gy: T; // base point Y coordinate
-  allowInfinityPoint?: boolean; // bls12-381 requires it. ZERO point is valid, but invalid pubkey
-};
-
-// TODO: remove
-/** @deprecated */
-export function validateBasic<FP, T>(
-  curve: BasicCurve<FP> & T
-): Readonly<
-  {
-    readonly nBitLength: number;
-    readonly nByteLength: number;
-  } & BasicCurve<FP> &
-    T & {
-      p: bigint;
-    }
-> {
-  validateField(curve.Fp);
-  validateObject(
-    curve,
-    {
-      n: 'bigint',
-      h: 'bigint',
-      Gx: 'field',
-      Gy: 'field',
-    },
-    {
-      nBitLength: 'isSafeInteger',
-      nByteLength: 'isSafeInteger',
-    }
-  );
-  // Set defaults
-  return Object.freeze({
-    ...nLength(curve.n, curve.nBitLength),
-    ...curve,
-    ...{ p: curve.Fp.ORDER },
-  } as const);
 }
 
 export type ValidCurveParams<T> = {

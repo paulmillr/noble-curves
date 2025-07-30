@@ -1,9 +1,9 @@
 import { hash_to_field } from '@noble/curves/abstract/hash-to-curve.js';
 import * as md from '@noble/curves/abstract/modular.js';
-import { hexToBytes, utf8ToBytes } from '@noble/curves/abstract/utils.js';
 import { ed25519, ristretto255, ristretto255_hasher } from '@noble/curves/ed25519.js';
 import { decaf448, decaf448_hasher, ed448 } from '@noble/curves/ed448.js';
 import { secp256k1 } from '@noble/curves/secp256k1.js';
+import { hexToBytes, utf8ToBytes } from '@noble/curves/utils.js';
 import { sha256, sha512 } from '@noble/hashes/sha2.js';
 import { shake256 } from '@noble/hashes/sha3.js';
 import { randomBytes } from '@noble/hashes/utils.js';
@@ -80,3 +80,4 @@ const DecafPoint = decaf448.Point;
     decaf448_hasher.hashToCurve(msg, { DST: 'decaf448_XOF:SHAKE256_D448MAP_RO_' })
   );
 })();
+

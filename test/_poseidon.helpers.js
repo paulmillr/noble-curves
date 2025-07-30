@@ -1,9 +1,9 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha256 } from '@noble/hashes/sha2.js';
-import { utf8ToBytes } from '@noble/hashes/utils.js';
-import { Field as Fp, validateField } from '../esm/abstract/modular.js';
-import { poseidon } from '../esm/abstract/poseidon.js';
-import * as u from '../esm/abstract/utils.js';
+import { Field as Fp, validateField } from '../abstract/modular.js';
+import { poseidon } from '../abstract/poseidon.js';
+import * as u from '../utils.js';
+import { asciiToBytes } from '../utils.js';
 
 // Poseidon hash https://docs.starkware.co/starkex/stark-curve.html
 export const Fp253 = Fp(
@@ -14,7 +14,7 @@ export const Fp251 = Fp(
 ); // 2^251 + 17 * 2^192 + 1
 
 function poseidonRoundConstant(Fp, name, idx) {
-  const val = Fp.fromBytes(sha256(utf8ToBytes(`${name}${idx}`)), true);
+  const val = Fp.fromBytes(sha256(asciiToBytes(`${name}${idx}`)), true);
   return Fp.create(val);
 }
 

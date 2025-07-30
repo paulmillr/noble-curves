@@ -7,8 +7,8 @@ import {
 import * as fc from 'fast-check';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql, throws } from 'node:assert';
-import { numberToBytesLE } from '../esm/abstract/utils.js';
-import { ed448, ed448ph, x448 } from '../esm/ed448.js';
+import { ed448, ed448ph, x448 } from '../ed448.js';
+import { numberToBytesLE } from '../utils.js';
 import { json } from './utils.js';
 
 const VECTORS_rfc8032_ed448 = json('./vectors/rfc8032-ed448.json');
@@ -19,7 +19,7 @@ const x448vectors = json('./vectors/wycheproof/x448_test.json');
 
 describe('ed448', () => {
   const ed = ed448;
-  ed.utils.precompute(4);
+  ed448.Point.BASE.precompute(4, false);
   const Point = ed.Point;
 
   should(`Basic`, () => {
@@ -64,16 +64,14 @@ describe('ed448', () => {
   should('RFC8032', () => {
     for (let i = 0; i < VECTORS_rfc8032_ed448.length; i++) {
       const v = VECTORS_rfc8032_ed448[i];
-      eql(hex(ed.getPublicKey(v.secretKey)), v.publicKey);
-      eql(hex(ed.sign(v.message, v.secretKey)), v.signature);
-      eql(ed.verify(v.signature, v.message, v.publicKey), true);
+      eql(hex(ed.getPublicKey(bytes(v.secretKey))), v.publicKey);
+      eql(hex(ed.sign(bytes(v.message), bytes(v.secretKey))), v.signature);
+      eql(ed.verify(bytes(v.signature), bytes(v.message), bytes(v.publicKey)), true);
     }
   });
 
   should('not accept >57byte private keys', () => {
-    const invalidPriv =
-      100000000000000000000000000000000000009000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000090000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000800073278156000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000n;
-    throws(() => ed.getPublicKey(invalidPriv));
+    throws(() => ed.getPublicKey(new Uint8Array(58).fill(2)));
   });
 
   function bytes57(numOrStr) {
@@ -93,7 +91,7 @@ describe('ed448', () => {
     fc.assert(
       fc.property(
         hexaString({ minLength: 2, maxLength: 57 }),
-        fc.bigInt(2n, ed.CURVE.n),
+        fc.bigInt(2n, ed.Point.Fn.ORDER),
         (message, privateKey) => {
           const publicKey = ed.getPublicKey(bytes57(privateKey));
           const signature = ed.sign(bytes57(message), bytes57(privateKey));
@@ -110,7 +108,7 @@ describe('ed448', () => {
       fc.property(
         fc.array(fc.integer({ min: 0x00, max: 0xff })),
         fc.array(fc.integer({ min: 0x00, max: 0xff })),
-        fc.bigInt(1n, ed.CURVE.n),
+        fc.bigInt(1n, ed.Point.Fn.ORDER),
         (bytes, wrongBytes, privateKey) => {
           const message = new Uint8Array(bytes);
           const wrongMessage = new Uint8Array(wrongBytes);
@@ -198,19 +196,19 @@ describe('ed448', () => {
       const group = ed448vectorsOld.testGroups[g];
       const key = group.key;
       should(`ED448(${g}, public)`, () => {
-        eql(hex(ed.getPublicKey(key.sk)), key.pk);
+        eql(hex(ed.getPublicKey(bytes(key.sk))), key.pk);
       });
       should(`ED448`, () => {
         for (let i = 0; i < group.tests.length; i++) {
           const v = group.tests[i];
           const index = `${g}/${i} ${v.comment}`;
           if (v.result === 'valid' || v.result === 'acceptable') {
-            eql(hex(ed.sign(v.msg, key.sk)), v.sig, index);
-            eql(ed.verify(v.sig, v.msg, key.pk), true, index);
+            eql(hex(ed.sign(bytes(v.msg), bytes(key.sk))), v.sig, index);
+            eql(ed.verify(bytes(v.sig), bytes(v.msg), bytes(key.pk)), true, index);
           } else if (v.result === 'invalid') {
             let failed = false;
             try {
-              failed = !ed.verify(v.sig, v.msg, key.pk);
+              failed = !ed.verify(bytes(v.sig), bytes(v.msg), bytes(key.pk));
             } catch (error) {
               failed = true;
             }
@@ -230,11 +228,11 @@ describe('ed448', () => {
           const v = group.tests[i];
           const index = `${g}/${i} ${v.comment}`;
           if (v.result === 'valid' || v.result === 'acceptable') {
-            eql(ed.verify(v.sig, v.msg, key.pk), true, index);
+            eql(ed.verify(bytes(v.sig), bytes(v.msg), bytes(key.pk)), true, index);
           } else if (v.result === 'invalid') {
             let failed = false;
             try {
-              failed = !ed.verify(v.sig, v.msg, key.pk);
+              failed = !ed.verify(bytes(v.sig), bytes(v.msg), bytes(key.pk));
             } catch (error) {
               failed = true;
             }
@@ -289,9 +287,17 @@ describe('ed448', () => {
     for (let i = 0; i < VECTORS_RFC8032_CTX.length; i++) {
       const v = VECTORS_RFC8032_CTX[i];
       should(`${i}`, () => {
-        eql(hex(ed.getPublicKey(v.secretKey)), v.publicKey);
-        eql(hex(ed.sign(v.message, v.secretKey, { context: v.context })), v.signature);
-        eql(ed.verify(v.signature, v.message, v.publicKey, { context: v.context }), true);
+        eql(hex(ed.getPublicKey(bytes(v.secretKey))), v.publicKey);
+        eql(
+          hex(ed.sign(bytes(v.message), bytes(v.secretKey), { context: bytes(v.context) })),
+          v.signature
+        );
+        eql(
+          ed.verify(bytes(v.signature), bytes(v.message), bytes(v.publicKey), {
+            context: bytes(v.context),
+          }),
+          true
+        );
       });
     }
   });
@@ -344,7 +350,7 @@ describe('ed448', () => {
         );
         eql(
           ed448ph.verify(bytes(v.signature), bytes(v.message), bytes(v.publicKey), {
-            context: v.context || '',
+            context: v.context ? bytes(v.context) : Uint8Array.of(),
           }),
           true
         );
@@ -364,7 +370,7 @@ describe('ed448', () => {
 
       s = hex(s.slice().reverse());
       s = BigInt('0x' + s);
-      s = s + ed448.CURVE.n;
+      s = s + ed448.Point.Fn.ORDER;
       s = numberToBytesLE(s, 56);
 
       const sig_invalid = concatBytes(R, s);
@@ -405,7 +411,7 @@ describe('ed448', () => {
     for (let i = 0; i < rfc7748Mul.length; i++) {
       const v = rfc7748Mul[i];
       should(`scalarMult (${i})`, () => {
-        eql(hex(x448.scalarMult(v.scalar, v.u)), v.outputU);
+        eql(hex(x448.scalarMult(bytes(v.scalar), bytes(v.u))), v.outputU);
       });
     }
 
@@ -442,10 +448,10 @@ describe('ed448', () => {
         '3eb7a829b0cd20f5bcfc0b599b6feccf6da4627107bdb0d4f345b43027d8b972fc3e34fb4232a13ca706dcb57aec3dae07bdc1c67bf33609';
       const shared =
         '07fff4181ac6cc95ec1c16a94a0f74d12da232ce40a77552281d282bb60c0b56fd2464c335543936521c24403085d59a449a5037514a879d';
-      eql(alicePublic, hex(x448.getPublicKey(alicePrivate)));
-      eql(bobPublic, hex(x448.getPublicKey(bobPrivate)));
-      eql(hex(x448.scalarMult(alicePrivate, bobPublic)), shared);
-      eql(hex(x448.scalarMult(bobPrivate, alicePublic)), shared);
+      eql(alicePublic, hex(x448.getPublicKey(bytes(alicePrivate))));
+      eql(bobPublic, hex(x448.getPublicKey(bytes(bobPrivate))));
+      eql(hex(x448.scalarMult(bytes(alicePrivate), bytes(bobPublic))), shared);
+      eql(hex(x448.scalarMult(bytes(bobPrivate), bytes(alicePublic))), shared);
     });
 
     should('wycheproof', () => {
@@ -454,7 +460,7 @@ describe('ed448', () => {
         const index = `(${i}, ${v.result}) ${v.comment}`;
         if (v.result === 'valid' || v.result === 'acceptable') {
           try {
-            const shared = hex(x448.scalarMult(v.private, v.public));
+            const shared = hex(x448.scalarMult(bytes(v.private), bytes(v.public)));
             eql(shared, v.shared, index);
           } catch (e) {
             // We are more strict
@@ -464,7 +470,7 @@ describe('ed448', () => {
         } else if (v.result === 'invalid') {
           let failed = false;
           try {
-            x448.scalarMult(v.private, v.public);
+            x448.scalarMult(bytes(v.private), bytes(v.public));
           } catch (error) {
             failed = true;
           }
@@ -475,7 +481,7 @@ describe('ed448', () => {
 
     should('have proper base point', () => {
       const { x, y } = Point.BASE;
-      const { Fp } = ed448.CURVE;
+      const { Fp } = ed448.Point;
       // const invX = Fp.invert(x * x); // x²
       const u = Fp.div(Fp.create(y * y), Fp.create(x * x)); // (y²/x²)
       // const u = Fp.create(y * y * invX);

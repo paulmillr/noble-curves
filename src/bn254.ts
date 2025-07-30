@@ -54,18 +54,17 @@ Ate loop size: 6x+2
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { sha256 } from '@noble/hashes/sha2.js';
 import {
-  bls,
-  type CurveFn as BLSCurveFn,
+  blsBasic,
+  type BLSCurvePair,
   type PostPrecomputeFn,
   type PostPrecomputePointAddFn,
 } from './abstract/bls.ts';
 import { Field, type IField } from './abstract/modular.ts';
 import type { Fp, Fp12, Fp2, Fp6 } from './abstract/tower.ts';
 import { psiFrobenius, tower12 } from './abstract/tower.ts';
-import { type CurveFn, weierstrass, type WeierstrassOpts } from './abstract/weierstrass.ts';
-import { bitLen, notImplemented } from './utils.ts';
+import { weierstrass, type WeierstrassOpts } from './abstract/weierstrass.ts';
+import { bitLen } from './utils.ts';
 // prettier-ignore
 const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3);
 const _6n = BigInt(6);
@@ -122,24 +121,6 @@ const { Fp, Fp2, Fp6, Fp12 } = tower12({
 // END OF CURVE FIELDS
 const { G2psi, psi } = psiFrobenius(Fp, Fp2, Fp2.NONRESIDUE);
 
-/*
-No hashToCurve for now (and signatures):
-
-- RFC 9380 doesn't mention bn254 and doesn't provide test vectors
-- Overall seems like nobody is using BLS signatures on top of bn254
-- Seems like it can utilize SVDW, which is not implemented yet
-*/
-const htfDefaults = Object.freeze({
-  // DST: a domain separation tag defined in section 2.2.5
-  DST: 'BN254G2_XMD:SHA-256_SVDW_RO_',
-  encodeDST: 'BN254G2_XMD:SHA-256_SVDW_RO_',
-  p: Fp.ORDER,
-  m: 2,
-  k: 128,
-  expand: 'xmd',
-  hash: sha256,
-});
-
 export const _postPrecompute: PostPrecomputeFn = (
   Rx: Fp2,
   Ry: Fp2,
@@ -171,73 +152,68 @@ const bn254_G2_CURVE: WeierstrassOpts<Fp2> = {
   ]),
 };
 
+const fields = { Fp, Fp2, Fp6, Fp12, Fr: bn254_Fr };
+const bn254_G1 = weierstrass(bn254_G1_CURVE, {
+  Fp,
+  Fn: bn254_Fr,
+  allowInfinityPoint: true,
+});
+const bn254_G2 = weierstrass(bn254_G2_CURVE, {
+  Fp: Fp2,
+  Fn: bn254_Fr,
+  allowInfinityPoint: true,
+  isTorsionFree: (c, P) => P.multiplyUnsafe(SIX_X_SQUARED).equals(G2psi(c, P)), // [p]P = [6X^2]P
+});
+/*
+No hashToCurve for now (and signatures):
+
+- RFC 9380 doesn't mention bn254 and doesn't provide test vectors
+- Overall seems like nobody is using BLS signatures on top of bn254
+- Seems like it can utilize SVDW, which is not implemented yet
+*/
+// const htfDefaults = Object.freeze({
+//   // DST: a domain separation tag defined in section 2.2.5
+//   DST: 'BN254G2_XMD:SHA-256_SVDW_RO_',
+//   encodeDST: 'BN254G2_XMD:SHA-256_SVDW_RO_',
+//   p: Fp.ORDER,
+//   m: 2,
+//   k: 128,
+//   expand: 'xmd',
+//   hash: sha256,
+// });
+// const hasherOpts = {
+//   { ...htfDefaults, m: 1, DST: 'BN254G2_XMD:SHA-256_SVDW_RO_' }
+// };
+const bn254_params = {
+  ateLoopSize: BN_X * _6n + _2n,
+  r: bn254_Fr.ORDER,
+  xNegative: false,
+  twistType: 'divisive' as const,
+  postPrecompute: _postPrecompute,
+};
+// const bn254_hasher = {
+//   hasherOpts: htfDefaults,
+//   hasherOptsG1: { m: 1, DST: 'BN254G2_XMD:SHA-256_SVDW_RO_' },
+//   hasherOptsG2: htfDefaults
+// };
+// G2_heff     hEff: BigInt('21888242871839275222246405745257275088844257914179612981679871602714643921549'),
+// fromBytes: notImplemented,
+// toBytes: notImplemented,
+
+// mapToCurve: notImplemented,
+// fromBytes: notImplemented,
+// toBytes: notImplemented,
+// ShortSignature: {
+//   fromBytes: notImplemented,
+//   fromHex: notImplemented,
+//   toBytes: notImplemented,
+//   toRawBytes: notImplemented,
+//   toHex: notImplemented,
+// },
+
 /**
  * bn254 (a.k.a. alt_bn128) pairing-friendly curve.
  * Contains G1 / G2 operations and pairings.
  */
-export const bn254: BLSCurveFn = bls({
-  // Fields
-  fields: { Fp, Fp2, Fp6, Fp12, Fr: bn254_Fr },
-  G1: {
-    ...bn254_G1_CURVE,
-    Fp,
-    htfDefaults: { ...htfDefaults, m: 1, DST: 'BN254G2_XMD:SHA-256_SVDW_RO_' },
-    wrapPrivateKey: true,
-    allowInfinityPoint: true,
-    mapToCurve: notImplemented,
-    fromBytes: notImplemented,
-    toBytes: notImplemented,
-    ShortSignature: {
-      fromBytes: notImplemented,
-      fromHex: notImplemented,
-      toBytes: notImplemented,
-      toRawBytes: notImplemented,
-      toHex: notImplemented,
-    },
-  },
-  G2: {
-    ...bn254_G2_CURVE,
-    Fp: Fp2,
-    hEff: BigInt('21888242871839275222246405745257275088844257914179612981679871602714643921549'),
-    htfDefaults: { ...htfDefaults },
-    wrapPrivateKey: true,
-    allowInfinityPoint: true,
-    isTorsionFree: (c, P) => P.multiplyUnsafe(SIX_X_SQUARED).equals(G2psi(c, P)), // [p]P = [6X^2]P
-    mapToCurve: notImplemented,
-    fromBytes: notImplemented,
-    toBytes: notImplemented,
-    Signature: {
-      fromBytes: notImplemented,
-      fromHex: notImplemented,
-      toBytes: notImplemented,
-      toRawBytes: notImplemented,
-      toHex: notImplemented,
-    },
-  },
-  params: {
-    ateLoopSize: BN_X * _6n + _2n,
-    r: bn254_Fr.ORDER,
-    xNegative: false,
-    twistType: 'divisive',
-  },
-  htfDefaults,
-  hash: sha256,
-  postPrecompute: _postPrecompute,
-});
-
-/**
- * bn254 weierstrass curve with ECDSA.
- * This is very rare and probably not used anywhere.
- * Instead, you should use G1 / G2, defined above.
- * @deprecated
- */
-export const bn254_weierstrass: CurveFn = weierstrass({
-  a: BigInt(0),
-  b: BigInt(3),
-  Fp,
-  n: BigInt('21888242871839275222246405745257275088548364400416034343698204186575808495617'),
-  Gx: BigInt(1),
-  Gy: BigInt(2),
-  h: BigInt(1),
-  hash: sha256,
-});
+// bn254_hasher
+export const bn254: BLSCurvePair = blsBasic(fields, bn254_G1, bn254_G2, bn254_params);

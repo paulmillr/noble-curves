@@ -1,16 +1,16 @@
 import { sha1 } from '@noble/hashes/legacy.js';
 import { sha224, sha256, sha384, sha512, sha512_224, sha512_256 } from '@noble/hashes/sha2.js';
 import { sha3_224, sha3_256, sha3_384, sha3_512 } from '@noble/hashes/sha3.js';
-import { hexToBytes } from '@noble/hashes/utils.js';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql } from 'node:assert';
-import { ed25519, ed25519ctx, ed25519ph } from '../esm/ed25519.js';
-import { ed448, ed448ph } from '../esm/ed448.js';
-import { p256, p384, p521 } from '../esm/nist.js';
-import { hexToNumber } from '../esm/utils.js';
-import { jsonGZ } from './utils.js';
+import { ecdsa } from '../abstract/weierstrass.js';
+import { ed25519, ed25519ctx, ed25519ph } from '../ed25519.js';
+import { ed448, ed448ph } from '../ed448.js';
+import { p256, p384, p521 } from '../nist.js';
+import { bytesToNumberBE } from '../utils.js';
+import { jsonGZ, deepHexToBytes } from './utils.js';
 
-const loadACVP = (name, gzip = true) => {
+const loadACVP = (name, gzip = true, bytes = true) => {
   const json = (fname) =>
     jsonGZ(`vectors/acvp-vectors/gen-val/json-files/${name}/${fname}.json${gzip ? '.gz' : ''}`);
   const prompt = json('prompt');
@@ -35,7 +35,7 @@ const loadACVP = (name, gzip = true) => {
     }
     groups.push(group);
   }
-  return groups;
+  return bytes ? deepHexToBytes(groups) : groups;
 };
 
 const CURVES = {
@@ -75,10 +75,10 @@ describe('ACVP', () => {
       const curve = CURVES[info.ip.curve];
       if (!curve) continue;
       for (const t of tests) {
-        const pub = curve.getPublicKey(hexToBytes(t.ip.d));
-        const { x, y } = curve.Point.fromHex(pub).toAffine();
-        eql(curve.Point.Fp.toBytes(x), hexToBytes(t.ip.qx));
-        eql(curve.Point.Fp.toBytes(y), hexToBytes(t.ip.qy));
+        const pub = curve.getPublicKey(t.ip.d);
+        const { x, y } = curve.Point.fromBytes(pub).toAffine();
+        eql(curve.Point.Fp.toBytes(x), t.ip.qx);
+        eql(curve.Point.Fp.toBytes(y), t.ip.qy);
       }
     }
   });
@@ -89,8 +89,8 @@ describe('ACVP', () => {
       const curve = CURVES[info.ip.curve];
       if (!curve) continue;
       for (const t of tests) {
-        const x = hexToNumber(t.ip.qx);
-        const y = hexToNumber(t.ip.qy);
+        const x = bytesToNumberBE(t.ip.qx);
+        const y = bytesToNumberBE(t.ip.qy);
         let ok;
         try {
           const p = curve.Point.fromAffine({ x, y });
@@ -118,22 +118,25 @@ describe('ACVP', () => {
       const curve = CURVES[info.ip.curve];
       if (!curve) continue;
       const hash = HASHES[info.ip.hashAlg];
-      const curveWithHash = curve.create(hash);
+      const curveWithHash = ecdsa(curve.Point, hash);
+      const { d: sk } = info.ip;
+
       for (const t of tests) {
         if (t.ip.randomValue) continue; // mesage randomization
-        const sk = hexToBytes(info.ip.d);
-        const x = hexToNumber(info.ip.qx);
-        const y = hexToNumber(info.ip.qy);
+        const { message } = t.ip;
+        const x = bytesToNumberBE(info.ip.qx);
+        const y = bytesToNumberBE(info.ip.qy);
         const pk = curve.Point.fromAffine({ x, y }).toBytes();
         eql(pk, curve.getPublicKey(sk));
-        const opts = { lowS: false, prehash: true };
-        const msg = hexToBytes(t.ip.message);
-        const sig = curveWithHash.sign(hexToBytes(t.ip.message), sk, opts);
-        const r = curve.Point.Fn.toBytes(sig.r);
-        const s = curve.Point.Fn.toBytes(sig.s);
-        eql(r, hexToBytes(t.ip.r));
-        eql(s, hexToBytes(t.ip.s));
-        eql(curveWithHash.verify(sig, msg, curve.getPublicKey(sk), opts), true);
+        const opts = { lowS: false };
+        const sig = curveWithHash.sign(message, sk, opts);
+        const { r, s } = curve.Signature.fromBytes(sig);
+        // const r = curve.Point.Fn.toBytes(sig.r);
+        // const s = curve.Point.Fn.toBytes(sig.s);
+        eql(r, bytesToNumberBE(t.ip.r));
+        eql(s, bytesToNumberBE(t.ip.s));
+        const isValid = curveWithHash.verify(sig, message, curve.getPublicKey(sk), opts);
+        eql(isValid, true, 'isValid false');
       }
     }
   });
@@ -146,23 +149,22 @@ describe('ACVP', () => {
       if (info.ip.hashAlg.startsWith('SHAKE-')) continue;
       // console.log(info.ip.hashAlg);
       const hash = HASHES[info.ip.hashAlg];
-      const curveWithHash = curve.create(hash);
+      const curveWithHash = ecdsa(curve.Point, hash);
       for (const t of tests) {
         if (t.ip.randomValue) continue; // mesage randomization
-        const opts = { lowS: false, prehash: true };
-        const msg = hexToBytes(t.ip.message);
-        const x = hexToNumber(t.ip.qx);
-        const y = hexToNumber(t.ip.qy);
+        const opts = { lowS: false };
+        const msg = t.ip.message;
+        const x = bytesToNumberBE(t.ip.qx);
+        const y = bytesToNumberBE(t.ip.qy);
         const pk = curve.Point.fromAffine({ x, y }).toBytes();
         if (info.ip.d) {
-          const sk = hexToBytes(info.ip.d);
-          eql(pk, curve.getPublicKey(sk));
+          eql(pk, curve.getPublicKey(info.ip.d));
         }
-        const r = hexToNumber(t.ip.r);
-        const s = hexToNumber(t.ip.s);
+        const r = bytesToNumberBE(t.ip.r);
+        const s = bytesToNumberBE(t.ip.s);
         let passed;
         try {
-          const sig = new curve.Signature(r, s);
+          const sig = new curve.Signature(r, s).toBytes();
           passed = curveWithHash.verify(sig, msg, pk, opts);
         } catch (e) {
           passed = false;
@@ -177,7 +179,7 @@ describe('ACVP', () => {
       const curve = ED_CURVES[info.ip.curve].basic;
       if (!curve) continue;
       for (const t of tests) {
-        eql(curve.getPublicKey(hexToBytes(t.ip.d)), hexToBytes(t.ip.q));
+        eql(curve.getPublicKey(t.ip.d), t.ip.q);
       }
     }
   });
@@ -189,7 +191,7 @@ describe('ACVP', () => {
       for (const t of tests) {
         let passed;
         try {
-          curve.Point.fromHex(hexToBytes(t.ip.q)).assertValidity();
+          curve.Point.fromBytes(t.ip.q).assertValidity();
           passed = true;
         } catch {
           passed = false;
@@ -205,11 +207,10 @@ describe('ACVP', () => {
       if (!curve) continue;
       curve = info.ip.preHash ? curve.prehash : curve.basic;
       for (const t of tests) {
-        const msg = hexToBytes(t.ip.message);
-        const sk = hexToBytes(info.ip.d);
-        const ctx = t.ip.context ? hexToBytes(t.ip.context) : undefined;
-        const sig = curve.sign(msg, sk, { prehash: info.ip.preHash, context: ctx });
-        eql(sig, hexToBytes(t.ip.signature));
+        const { d: sk, preHash: prehash } = info.ip;
+        const { message, context, signature } = t.ip;
+        const sig = curve.sign(message, sk, { prehash, context });
+        eql(sig, signature);
       }
     }
   });
@@ -218,15 +219,13 @@ describe('ACVP', () => {
     for (const { info, tests } of groups) {
       let curve = ED_CURVES[info.ip.curve];
       if (!curve) continue;
-      curve = info.ip.preHash ? curve.prehash : curve.basic;
+      const { preHash: prehash } = info.ip;
+      curve = prehash ? curve.prehash : curve.basic;
       for (const t of tests) {
-        const msg = hexToBytes(t.ip.message);
-        const pk = hexToBytes(t.ip.q);
-        const ctx = t.ip.context ? hexToBytes(t.ip.context) : undefined;
-        const sig = hexToBytes(t.ip.signature);
+        const { message, q: pk, context, signature } = t.ip;
         let passed;
         try {
-          passed = curve.verify(sig, msg, pk, { prehash: info.ip.preHash, context: ctx });
+          passed = curve.verify(signature, message, pk, { prehash, context });
         } catch {
           passed = false;
         }

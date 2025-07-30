@@ -7,33 +7,31 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import {
   _validateObject,
-  _abool2 as abool,
-  _abytes2 as abytes,
+  abool,
+  abytes,
   aInRange,
   bytesToHex,
   bytesToNumberLE,
   concatBytes,
   copyBytes,
-  ensureBytes,
+  hexToBytes,
   isBytes,
   memoized,
   notImplemented,
-  randomBytes as randomBytesWeb,
+  randomBytes as wcRandomBytes,
   type FHash,
-  type Hex,
+  type Signer,
 } from '../utils.ts';
 import {
   _createCurveFields,
   normalizeZ,
-  pippenger,
   wNAF,
   type AffinePoint,
-  type BasicCurve,
   type CurveLengths,
   type CurvePoint,
   type CurvePointCons,
 } from './curve.ts';
-import { Field, type IField, type NLength } from './modular.ts';
+import { type IField } from './modular.ts';
 
 // Be friendly to bad ECMAScript parsers by not using bigint literals
 // prettier-ignore
@@ -51,33 +49,14 @@ export interface EdwardsPoint extends CurvePoint<bigint, EdwardsPoint> {
   readonly Z: bigint;
   /** extended T coordinate */
   readonly T: bigint;
-
-  /** @deprecated use `toBytes` */
-  toRawBytes(): Uint8Array;
-  /** @deprecated use `p.precompute(windowSize)` */
-  _setWindowSize(windowSize: number): void;
-  /** @deprecated use .X */
-  readonly ex: bigint;
-  /** @deprecated use .Y */
-  readonly ey: bigint;
-  /** @deprecated use .Z */
-  readonly ez: bigint;
-  /** @deprecated use .T */
-  readonly et: bigint;
 }
 /** Static methods of Extended Point with coordinates in X, Y, Z, T. */
 export interface EdwardsPointCons extends CurvePointCons<EdwardsPoint> {
   new (X: bigint, Y: bigint, Z: bigint, T: bigint): EdwardsPoint;
   CURVE(): EdwardsOpts;
   fromBytes(bytes: Uint8Array, zip215?: boolean): EdwardsPoint;
-  fromHex(hex: Hex, zip215?: boolean): EdwardsPoint;
-  /** @deprecated use `import { pippenger } from '@noble/curves/abstract/curve.js';` */
-  msm(points: EdwardsPoint[], scalars: bigint[]): EdwardsPoint;
+  fromHex(hex: string, zip215?: boolean): EdwardsPoint;
 }
-/** @deprecated use EdwardsPoint */
-export type ExtPointType = EdwardsPoint;
-/** @deprecated use EdwardsPointCons */
-export type ExtPointConstructor = EdwardsPointCons;
 
 /**
  * Twisted Edwards curve options.
@@ -139,13 +118,17 @@ export type EdDSAOpts = Partial<{
  */
 export interface EdDSA {
   keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
-  getPublicKey: (secretKey: Hex) => Uint8Array;
-  sign: (message: Hex, secretKey: Hex, options?: { context?: Hex }) => Uint8Array;
+  getPublicKey: (secretKey: Uint8Array) => Uint8Array;
+  sign: (
+    message: Uint8Array,
+    secretKey: Uint8Array,
+    options?: { context?: Uint8Array }
+  ) => Uint8Array;
   verify: (
-    sig: Hex,
-    message: Hex,
-    publicKey: Hex,
-    options?: { context?: Hex; zip215: boolean }
+    sig: Uint8Array,
+    message: Uint8Array,
+    publicKey: Uint8Array,
+    options?: { context?: Uint8Array; zip215: boolean }
   ) => boolean;
   Point: EdwardsPointCons;
   utils: {
@@ -179,18 +162,13 @@ export interface EdDSA {
      * ```
      */
     toMontgomeryPriv: (privateKey: Uint8Array) => Uint8Array;
-    getExtendedPublicKey: (key: Hex) => {
+    getExtendedPublicKey: (key: Uint8Array) => {
       head: Uint8Array;
       prefix: Uint8Array;
       scalar: bigint;
       point: EdwardsPoint;
       pointBytes: Uint8Array;
     };
-
-    /** @deprecated use `randomSecretKey` */
-    randomPrivateKey: (seed?: Uint8Array) => Uint8Array;
-    /** @deprecated use `point.precompute()` */
-    precompute: (windowSize?: number, point?: EdwardsPoint) => EdwardsPoint;
   };
   lengths: CurveLengths;
 }
@@ -350,8 +328,9 @@ export function edwards(params: EdwardsOpts, extraOpts: EdwardsExtraOpts = {}): 
       if (isLastByteOdd !== isXOdd) x = modP(-x); // if x_0 != x mod 2, set x = p-x
       return Point.fromAffine({ x, y });
     }
-    static fromHex(bytes: Uint8Array, zip215 = false): Point {
-      return Point.fromBytes(ensureBytes('point', bytes), zip215);
+
+    static fromHex(hex: string, zip215 = false): Point {
+      return Point.fromBytes(hexToBytes(hex), zip215);
     }
 
     get x(): bigint {
@@ -504,32 +483,6 @@ export function edwards(params: EdwardsOpts, extraOpts: EdwardsExtraOpts = {}): 
     toString() {
       return `<Point ${this.is0() ? 'ZERO' : this.toHex()}>`;
     }
-
-    // TODO: remove
-    get ex(): bigint {
-      return this.X;
-    }
-    get ey(): bigint {
-      return this.Y;
-    }
-    get ez(): bigint {
-      return this.Z;
-    }
-    get et(): bigint {
-      return this.T;
-    }
-    static normalizeZ(points: Point[]): Point[] {
-      return normalizeZ(Point, points);
-    }
-    static msm(points: Point[], scalars: bigint[]): Point {
-      return pippenger(Point, Fn, points, scalars);
-    }
-    _setWindowSize(windowSize: number) {
-      this.precompute(windowSize);
-    }
-    toRawBytes(): Uint8Array {
-      return this.toBytes();
-    }
   }
   const wnaf = new wNAF(Point, Fn.BITS);
   Point.BASE.precompute(8); // Enable precomputes. Slows down first publicKey computation by 20ms.
@@ -564,7 +517,7 @@ export abstract class PrimeEdwardsPoint<T extends PrimeEdwardsPoint<T>>
     notImplemented();
   }
 
-  static fromHex(_hex: Hex): any {
+  static fromHex(_hex: string): any {
     notImplemented();
   }
 
@@ -639,11 +592,6 @@ export abstract class PrimeEdwardsPoint<T extends PrimeEdwardsPoint<T>>
   abstract is0(): boolean;
   protected abstract assertSame(other: T): void;
   protected abstract init(ep: EdwardsPoint): T;
-
-  /** @deprecated use `toBytes` */
-  toRawBytes(): Uint8Array {
-    return this.toBytes();
-  }
 }
 
 /**
@@ -666,7 +614,7 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
   const { prehash } = eddsaOpts;
   const { BASE, Fp, Fn } = Point;
 
-  const randomBytes = eddsaOpts.randomBytes || randomBytesWeb;
+  const randomBytes = eddsaOpts.randomBytes || wcRandomBytes;
   const adjustScalarBytes = eddsaOpts.adjustScalarBytes || ((bytes: Uint8Array) => bytes);
   const domain =
     eddsaOpts.domain ||
@@ -682,12 +630,12 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
   }
 
   // Get the hashed private scalar per RFC8032 5.1.5
-  function getPrivateScalar(key: Hex) {
+  function getPrivateScalar(key: Uint8Array) {
     const len = lengths.secretKey;
-    key = ensureBytes('private key', key, len);
+    abytes(key, lengths.secretKey, 'secretKey');
     // Hash private key with curve's hash function to produce uniformingly random input
     // Check byte lengths: ensure(64, h(ensure(32, key)))
-    const hashed = ensureBytes('hashed private key', cHash(key), 2 * len);
+    const hashed = abytes(cHash(key), 2 * len, 'hashedSecretKey');
     const head = adjustScalarBytes(hashed.slice(0, len)); // clear first half bits, produce FE
     const prefix = hashed.slice(len, 2 * len); // second half is called key prefix (5.1.6)
     const scalar = modN_LE(head); // The actual private scalar
@@ -695,7 +643,7 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
   }
 
   /** Convenience method that creates public key from scalar. RFC8032 5.1.5 */
-  function getExtendedPublicKey(secretKey: Hex) {
+  function getExtendedPublicKey(secretKey: Uint8Array) {
     const { head, prefix, scalar } = getPrivateScalar(secretKey);
     const point = BASE.multiply(scalar); // Point on Edwards curve aka public key
     const pointBytes = point.toBytes();
@@ -703,19 +651,23 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
   }
 
   /** Calculates EdDSA pub key. RFC8032 5.1.5. */
-  function getPublicKey(secretKey: Hex): Uint8Array {
+  function getPublicKey(secretKey: Uint8Array): Uint8Array {
     return getExtendedPublicKey(secretKey).pointBytes;
   }
 
   // int('LE', SHA512(dom2(F, C) || msgs)) mod N
-  function hashDomainToScalar(context: Hex = Uint8Array.of(), ...msgs: Uint8Array[]) {
+  function hashDomainToScalar(context: Uint8Array = Uint8Array.of(), ...msgs: Uint8Array[]) {
     const msg = concatBytes(...msgs);
-    return modN_LE(cHash(domain(msg, ensureBytes('context', context), !!prehash)));
+    return modN_LE(cHash(domain(msg, abytes(context, undefined, 'context'), !!prehash)));
   }
 
   /** Signs message with privateKey. RFC8032 5.1.6 */
-  function sign(msg: Hex, secretKey: Hex, options: { context?: Hex } = {}): Uint8Array {
-    msg = ensureBytes('message', msg);
+  function sign(
+    msg: Uint8Array,
+    secretKey: Uint8Array,
+    options: { context?: Uint8Array } = {}
+  ): Uint8Array {
+    msg = abytes(msg, undefined, 'message');
     if (prehash) msg = prehash(msg); // for ed25519ph etc.
     const { prefix, scalar, pointBytes } = getExtendedPublicKey(secretKey);
     const r = hashDomainToScalar(options.context, prefix, msg); // r = dom2(F, C) || prefix || PH(M)
@@ -728,18 +680,23 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
   }
 
   // verification rule is either zip215 or rfc8032 / nist186-5. Consult fromHex:
-  const verifyOpts: { context?: Hex; zip215?: boolean } = { zip215: true };
+  const verifyOpts: { context?: Uint8Array; zip215?: boolean } = { zip215: true };
 
   /**
    * Verifies EdDSA signature against message and public key. RFC8032 5.1.7.
    * An extended group equation is checked.
    */
-  function verify(sig: Hex, msg: Hex, publicKey: Hex, options = verifyOpts): boolean {
+  function verify(
+    sig: Uint8Array,
+    msg: Uint8Array,
+    publicKey: Uint8Array,
+    options = verifyOpts
+  ): boolean {
     const { context, zip215 } = options;
     const len = lengths.signature;
-    sig = ensureBytes('signature', sig, len);
-    msg = ensureBytes('message', msg);
-    publicKey = ensureBytes('publicKey', publicKey, lengths.publicKey);
+    sig = abytes(sig, len, 'signature');
+    msg = abytes(msg, undefined, 'message');
+    publicKey = abytes(publicKey, lengths.publicKey, 'publicKey');
     if (zip215 !== undefined) abool(zip215, 'zip215');
     if (prehash) msg = prehash(msg); // for ed25519ph, etc
 
@@ -780,9 +737,11 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
     const secretKey = utils.randomSecretKey(seed);
     return { secretKey, publicKey: getPublicKey(secretKey) };
   }
+
   function isValidSecretKey(key: Uint8Array): boolean {
     return isBytes(key) && key.length === Fn.BYTES;
   }
+
   function isValidPublicKey(key: Uint8Array, zip215?: boolean): boolean {
     try {
       return !!Point.fromBytes(key, zip215);
@@ -813,19 +772,11 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
       const u = is25519 ? Fp.div(_1n + y, _1n - y) : Fp.div(y - _1n, y + _1n);
       return Fp.toBytes(u);
     },
-
     toMontgomeryPriv(secretKey: Uint8Array): Uint8Array {
       const size = lengths.secretKey;
       abytes(secretKey, size);
       const hashed = cHash(secretKey.subarray(0, size));
       return adjustScalarBytes(hashed).subarray(0, size);
-    },
-
-    /** @deprecated */
-    randomPrivateKey: randomSecretKey,
-    /** @deprecated */
-    precompute(windowSize = 8, point: EdwardsPoint = Point.BASE): EdwardsPoint {
-      return point.precompute(windowSize, false);
     },
   };
 
@@ -837,78 +788,5 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
     utils,
     Point,
     lengths,
-  });
-}
-
-// TODO: remove everything below
-export type CurveType = BasicCurve<bigint> & {
-  a: bigint; // curve param a
-  d: bigint; // curve param d
-  /** @deprecated the property will be removed in next release */
-  hash: FHash; // Hashing
-  randomBytes?: (bytesLength?: number) => Uint8Array; // CSPRNG
-  adjustScalarBytes?: (bytes: Uint8Array) => Uint8Array; // clears bits to get valid field elemtn
-  domain?: (data: Uint8Array, ctx: Uint8Array, phflag: boolean) => Uint8Array; // Used for hashing
-  uvRatio?: UVRatio; // Ratio √(u/v)
-  prehash?: FHash; // RFC 8032 pre-hashing of messages to sign() / verify()
-  mapToCurve?: (scalar: bigint[]) => AffinePoint<bigint>; // for hash-to-curve standard
-};
-export type CurveTypeWithLength = Readonly<CurveType & Partial<NLength>>;
-export type CurveFn = {
-  /** @deprecated the property will be removed in next release */
-  CURVE: CurveType;
-  keygen: EdDSA['keygen'];
-  getPublicKey: EdDSA['getPublicKey'];
-  sign: EdDSA['sign'];
-  verify: EdDSA['verify'];
-  Point: EdwardsPointCons;
-  /** @deprecated use `Point` */
-  ExtendedPoint: EdwardsPointCons;
-  utils: EdDSA['utils'];
-  lengths: CurveLengths;
-};
-export type EdComposed = {
-  CURVE: EdwardsOpts;
-  curveOpts: EdwardsExtraOpts;
-  hash: FHash;
-  eddsaOpts: EdDSAOpts;
-};
-function _eddsa_legacy_opts_to_new(c: CurveTypeWithLength): EdComposed {
-  const CURVE: EdwardsOpts = {
-    a: c.a,
-    d: c.d,
-    p: c.Fp.ORDER,
-    n: c.n,
-    h: c.h,
-    Gx: c.Gx,
-    Gy: c.Gy,
-  };
-  const Fp = c.Fp;
-  const Fn = Field(CURVE.n, c.nBitLength, true);
-  const curveOpts: EdwardsExtraOpts = { Fp, Fn, uvRatio: c.uvRatio };
-  const eddsaOpts: EdDSAOpts = {
-    randomBytes: c.randomBytes,
-    adjustScalarBytes: c.adjustScalarBytes,
-    domain: c.domain,
-    prehash: c.prehash,
-    mapToCurve: c.mapToCurve,
-  };
-  return { CURVE, curveOpts, hash: c.hash, eddsaOpts };
-}
-function _eddsa_new_output_to_legacy(c: CurveTypeWithLength, eddsa: EdDSA): CurveFn {
-  const Point = eddsa.Point;
-  const legacy = Object.assign({}, eddsa, {
-    ExtendedPoint: Point,
-    CURVE: c,
-    nBitLength: Point.Fn.BITS,
-    nByteLength: Point.Fn.BYTES,
-  });
-  return legacy;
-}
-// TODO: remove. Use eddsa
-export function twistedEdwards(c: CurveTypeWithLength): CurveFn {
-  const { CURVE, curveOpts, hash, eddsaOpts } = _eddsa_legacy_opts_to_new(c);
-  const Point = edwards(CURVE, curveOpts);
-  const EDDSA = eddsa(Point, hash, eddsaOpts);
-  return _eddsa_new_output_to_legacy(c, EDDSA);
+  }) satisfies Signer;
 }

@@ -3,9 +3,10 @@ export function generateData(curve) {
   const pub = curve.getPublicKey(priv, true);
   const msg = curve.utils.randomSecretKey();
   const sig = curve.sign(msg, priv);
-  const Point = curve.Point;
+  const isWeierstrass = !!curve.Point;
+  const Point = isWeierstrass ? curve.Point : curve.Point;
   const point = Point.fromBytes(pub);
-  return { priv, pub, msg, sig, point, Point };
+  return { priv, pub, msg, sig, point, Point, isWeierstrass };
 }
 
 export function title(str) {

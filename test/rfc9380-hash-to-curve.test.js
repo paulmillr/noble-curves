@@ -5,13 +5,13 @@ import { json } from './utils.js';
 // Generic tests for all curves in package
 import { sha256, sha512 } from '@noble/hashes/sha2.js';
 import { shake128, shake256 } from '@noble/hashes/sha3.js';
-import { expand_message_xmd, expand_message_xof } from '../esm/abstract/hash-to-curve.js';
-import { utf8ToBytes } from '../esm/abstract/utils.js';
-import { bls12_381 } from '../esm/bls12-381.js';
-import { ed25519_hasher } from '../esm/ed25519.js';
-import { ed448_hasher } from '../esm/ed448.js';
-import * as nist from '../esm/nist.js';
-import { secp256k1_hasher } from '../esm/secp256k1.js';
+import { expand_message_xmd, expand_message_xof } from '../abstract/hash-to-curve.js';
+import { bls12_381 } from '../bls12-381.js';
+import { ed25519_hasher } from '../ed25519.js';
+import { ed448_hasher } from '../ed448.js';
+import * as nist from '../nist.js';
+import { secp256k1_hasher } from '../secp256k1.js';
+import { utf8ToBytes } from '../utils.js';
 const PREFIX = './vectors/rfc9380-hash-to-curve/';
 // XMD
 const xmd_sha256_38 = json(PREFIX + 'expand_message_xmd_SHA256_38.json');

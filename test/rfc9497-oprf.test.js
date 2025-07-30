@@ -1,18 +1,12 @@
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql, notDeepEqual, throws } from 'node:assert';
-import * as mod from '../esm/abstract/modular.js';
-import {
-  bytesToHex,
-  hexToBytes,
-  numberToBytesBE,
-  numberToBytesLE,
-  utf8ToBytes,
-} from '../esm/abstract/utils.js';
-import { ristretto255_OPRF } from '../esm/ed25519.js';
-import { decaf448_OPRF } from '../esm/ed448.js';
-import { p256_OPRF, p384_OPRF, p521_OPRF } from '../esm/nist.js';
-import { json } from './utils.js';
-const VECTORS = json('./vectors/rfc9497-oprf.json'); // Generated using rfc9497-oprf-parser.js
+import * as mod from '../abstract/modular.js';
+import { ristretto255_oprf } from '../ed25519.js';
+import { decaf448_oprf } from '../ed448.js';
+import { p256_oprf, p384_oprf, p521_oprf } from '../nist.js';
+import { numberToBytesBE, numberToBytesLE, utf8ToBytes } from '../utils.js';
+import { deepHexToBytes, json } from './utils.js';
+const VECTORS = deepHexToBytes(json('./vectors/rfc9497-oprf.json')); // Generated using rfc9497-oprf-parser.js
 
 const BufferRNG = (lst) => {
   return (len) => {
@@ -29,11 +23,11 @@ const MockScalar = (Fn, bytes) => {
 };
 
 const SUITES = {
-  'P256-SHA256': p256_OPRF,
-  'P384-SHA384': p384_OPRF,
-  'P521-SHA512': p521_OPRF,
-  'ristretto255-SHA512': ristretto255_OPRF,
-  'decaf448-SHAKE256': decaf448_OPRF,
+  'P256-SHA256': p256_oprf,
+  'P384-SHA384': p384_oprf,
+  'P521-SHA512': p521_oprf,
+  'ristretto255-SHA512': ristretto255_oprf,
+  'decaf448-SHAKE256': decaf448_oprf,
 };
 
 function testExample(name, oprf) {
@@ -171,16 +165,18 @@ describe('RFC-9497 (OPRF)', () => {
       if (!SUITES[suite]) throw new Error('missing');
       const prf = SUITES[suite];
       const Fn = prf.__tests.Fn;
-      const mockRng = (lst) => BufferRNG(lst.map((i) => MockScalar(Fn, hexToBytes(i))));
+      const mockRng = (lst) => BufferRNG(lst.map((i) => MockScalar(Fn, i)));
 
       for (const mode of modes) {
         const name = mode.mode.split(' ')[0].toLowerCase();
         const OPRF = prf[name];
-        const seed = hexToBytes(mode.common.Seed);
-        const keyInfo = hexToBytes(mode.common.KeyInfo);
+        const seed = mode.common.Seed;
+        const keyInfo = mode.common.KeyInfo;
 
         for (const t of mode.tests) {
           //console.log('T', name, t, mode, t.data);
+          const Proof = t.data.Proof ? t.data.Proof : undefined;
+          const ProofRandomScalar = t.data.ProofRandomScalar ? t.data.ProofRandomScalar : undefined;
           const items = [];
           for (let i = 0; i < t.data.Input.length; i++) {
             let cur = {};
@@ -196,7 +192,7 @@ describe('RFC-9497 (OPRF)', () => {
                 Output: 'output',
               }[k];
               if (!k2) throw new Error('no field: ' + k);
-              cur[k2] = hexToBytes(v[i]);
+              cur[k2] = v[i];
             }
             items.push(cur);
           }
@@ -209,140 +205,118 @@ describe('RFC-9497 (OPRF)', () => {
 
           if (name === 'oprf' || name === 'voprf') {
             const keys = OPRF.deriveKeyPair(seed, keyInfo);
-            eql(bytesToHex(keys.secretKey), mode.common.skSm);
-            if (mode.common.pkSm) eql(bytesToHex(keys.publicKey), mode.common.pkSm);
+            eql(keys.secretKey, mode.common.skSm);
+            if (mode.common.pkSm) eql(keys.publicKey, mode.common.pkSm);
 
             for (let i = 0; i < t.data.Input.length; i++) {
-              const input = hexToBytes(t.data.Input[i]);
-              const b = OPRF.blind(input, mockRng([t.data.Blind[i]]));
-              eql(bytesToHex(b.blind), t.data.Blind[i]);
-              eql(bytesToHex(b.blinded), t.data.BlindedElement[i]);
+              const b = OPRF.blind(items[i].input, mockRng([items[i].blind]));
+              eql(b.blind, items[i].blind);
+              eql(b.blinded, items[i].blinded);
             }
             if (name === 'oprf') {
-              const ev = OPRF.blindEvaluate(keys.secretKey, hexToBytes(t.data.BlindedElement[0]));
-              eql(bytesToHex(ev), t.data.EvaluationElement[0]);
-              const input = hexToBytes(t.data.Input[0]);
-              eql(
-                bytesToHex(OPRF.finalize(input, hexToBytes(t.data.Blind[0]), ev)),
-                t.data.Output[0]
-              );
-              eql(bytesToHex(OPRF.evaluate(keys.secretKey, input)), t.data.Output[0]);
+              const ev = OPRF.blindEvaluate(keys.secretKey, items[0].blinded);
+              eql(ev, items[0].evaluated);
+              const input = items[0].input;
+              eql(OPRF.finalize(input, items[0].blind, ev), items[0].output);
+              eql(OPRF.evaluate(keys.secretKey, input), items[0].output);
             }
             if (name === 'voprf') {
               for (let i = 0; i < t.data.Input.length; i++) {
-                const input = hexToBytes(t.data.Input[i]);
-                const b = OPRF.blind(input, mockRng([t.data.Blind[i]]));
-                eql(bytesToHex(b.blind), t.data.Blind[i]);
-                eql(bytesToHex(b.blinded), t.data.BlindedElement[i]);
+                const b = OPRF.blind(items[i].input, mockRng([items[i].blind]));
+                eql(b.blind, items[i].blind);
+                eql(b.blinded, items[i].blinded);
               }
               if (t.data.Input.length === 1) {
                 const { evaluated, proof } = OPRF.blindEvaluate(
                   keys.secretKey,
                   keys.publicKey,
-                  hexToBytes(t.data.BlindedElement[0]),
-                  mockRng([t.data.ProofRandomScalar])
+                  items[0].blinded,
+                  mockRng([ProofRandomScalar])
                 );
-                eql(bytesToHex(evaluated), t.data.EvaluationElement[0]);
-                eql(bytesToHex(proof), t.data.Proof);
+                eql(evaluated, items[0].evaluated);
+                eql(proof, Proof);
                 eql(
-                  bytesToHex(
-                    OPRF.finalize(
-                      hexToBytes(t.data.Input[0]),
-                      hexToBytes(t.data.Blind[0]),
-                      hexToBytes(t.data.EvaluationElement[0]),
-                      hexToBytes(t.data.BlindedElement[0]),
-                      keys.publicKey,
-                      hexToBytes(t.data.Proof)
-                    )
+                  OPRF.finalize(
+                    items[0].input,
+                    items[0].blind,
+                    items[0].evaluated,
+                    items[0].blinded,
+                    keys.publicKey,
+                    Proof
                   ),
-                  t.data.Output[0]
+                  items[0].output
                 );
               }
               // Batch works for size=1 too!
               const { evaluated, proof } = OPRF.blindEvaluateBatch(
                 keys.secretKey,
                 keys.publicKey,
-                t.data.BlindedElement.map(hexToBytes),
-                mockRng([t.data.ProofRandomScalar])
+                items.map((i) => i.blinded),
+                mockRng([ProofRandomScalar])
               );
-              eql(evaluated.map(bytesToHex), t.data.EvaluationElement);
-              eql(bytesToHex(proof), t.data.Proof);
               eql(
-                OPRF.finalizeBatch(finalizeItems, keys.publicKey, hexToBytes(t.data.Proof)).map(
-                  bytesToHex
-                ),
-                t.data.Output
+                evaluated,
+                items.map((i) => i.evaluated)
+              );
+              eql(proof, Proof);
+              eql(
+                OPRF.finalizeBatch(finalizeItems, keys.publicKey, Proof),
+                items.map((i) => i.output)
               );
               for (let i = 0; i < t.data.Input.length; i++) {
-                eql(
-                  bytesToHex(OPRF.evaluate(keys.secretKey, hexToBytes(t.data.Input[i]))),
-                  t.data.Output[i]
-                );
+                eql(OPRF.evaluate(keys.secretKey, items[i].input), items[i].output);
               }
             }
           }
           if (name === 'poprf') {
-            const POPRF = OPRF(hexToBytes(t.data.Info));
+            const POPRF = OPRF(t.data.Info);
             const keys = POPRF.deriveKeyPair(seed, keyInfo);
 
             for (let i = 0; i < t.data.Input.length; i++) {
-              const input = hexToBytes(t.data.Input[i]);
-              const b = POPRF.blind(input, keys.publicKey, mockRng([t.data.Blind[i]]));
-              eql(bytesToHex(b.blind), t.data.Blind[i]);
-              eql(bytesToHex(b.blinded), t.data.BlindedElement[i]);
+              const b = POPRF.blind(items[i].input, keys.publicKey, mockRng([items[i].blind]));
+              eql(b.blind, items[i].blind);
+              eql(b.blinded, items[i].blinded);
             }
             if (t.data.Input.length === 1) {
               const { evaluated, proof } = POPRF.blindEvaluate(
                 keys.secretKey,
-                hexToBytes(t.data.BlindedElement[0]),
-                mockRng([t.data.ProofRandomScalar])
+                items[0].blinded,
+                mockRng([ProofRandomScalar])
               );
-              eql(bytesToHex(evaluated), t.data.EvaluationElement[0]);
-              eql(bytesToHex(proof), t.data.Proof);
+              eql(evaluated, items[0].evaluated);
+              eql(proof, Proof);
 
-              const b = POPRF.blind(
-                hexToBytes(t.data.Input[0]),
-                keys.publicKey,
-                mockRng([t.data.Blind[0]])
-              );
+              const b = POPRF.blind(items[0].input, keys.publicKey, mockRng([items[0].blind]));
               eql(
-                bytesToHex(
-                  POPRF.finalize(
-                    hexToBytes(t.data.Input[0]),
-                    hexToBytes(t.data.Blind[0]),
-                    hexToBytes(t.data.EvaluationElement[0]),
-                    hexToBytes(t.data.BlindedElement[0]),
-                    hexToBytes(t.data.Proof),
-                    b.tweakedKey
-                  )
+                POPRF.finalize(
+                  items[0].input,
+                  items[0].blind,
+                  items[0].evaluated,
+                  items[0].blinded,
+                  Proof,
+                  b.tweakedKey
                 ),
-                t.data.Output[0]
+                items[0].output
               );
             }
             // Batch works for size=1 too!
             const { evaluated, proof } = POPRF.blindEvaluateBatch(
               keys.secretKey,
-              t.data.BlindedElement.map(hexToBytes),
-              mockRng([t.data.ProofRandomScalar])
-            );
-            eql(evaluated.map(bytesToHex), t.data.EvaluationElement);
-            eql(bytesToHex(proof), t.data.Proof);
-            const b = POPRF.blind(
-              hexToBytes(t.data.Input[0]),
-              keys.publicKey,
-              mockRng([t.data.Blind[0]])
+              items.map((i) => i.blinded),
+              mockRng([ProofRandomScalar])
             );
             eql(
-              POPRF.finalizeBatch(finalizeItems, hexToBytes(t.data.Proof), b.tweakedKey).map(
-                bytesToHex
-              ),
-              t.data.Output
+              evaluated,
+              items.map((i) => i.evaluated)
+            );
+            eql(proof, Proof);
+            const b = POPRF.blind(items[0].input, keys.publicKey, mockRng([items[0].blind]));
+            eql(
+              POPRF.finalizeBatch(finalizeItems, Proof, b.tweakedKey),
+              items.map((i) => i.output)
             );
             for (let i = 0; i < t.data.Input.length; i++) {
-              eql(
-                bytesToHex(POPRF.evaluate(keys.secretKey, hexToBytes(t.data.Input[i]))),
-                t.data.Output[i]
-              );
+              eql(POPRF.evaluate(keys.secretKey, items[i].input), items[i].output);
             }
           }
         }
