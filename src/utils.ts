@@ -4,14 +4,13 @@
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import {
-  abytes as abytes_,
+  anumber,
   bytesToHex as bytesToHex_,
   concatBytes as concatBytes_,
   hexToBytes as hexToBytes_,
   isBytes as isBytes_,
 } from '@noble/hashes/utils.js';
 export {
-  abytes,
   anumber,
   bytesToHex,
   bytesToUtf8,
@@ -23,22 +22,15 @@ export {
 } from '@noble/hashes/utils.js';
 const _0n = /* @__PURE__ */ BigInt(0);
 const _1n = /* @__PURE__ */ BigInt(1);
-export type Hex = Uint8Array | string; // hex strings are accepted for simplicity
-export type PrivKey = Hex | bigint; // bigints are accepted to ease learning curve
+
 export type CHash = {
-  (message: Uint8Array | string): Uint8Array;
+  (message: Uint8Array): Uint8Array;
   blockLen: number;
   outputLen: number;
   create(opts?: { dkLen?: number }): any; // For shake
 };
-export type FHash = (message: Uint8Array | string) => Uint8Array;
-
-export function abool(title: string, value: boolean): void {
-  if (typeof value !== 'boolean') throw new Error(title + ' boolean expected, got ' + value);
-}
-
-// tmp name until v2
-export function _abool2(value: boolean, title: string = ''): boolean {
+export type FHash = (message: Uint8Array) => Uint8Array;
+export function abool(value: boolean, title: string = ''): boolean {
   if (typeof value !== 'boolean') {
     const prefix = title && `"${title}"`;
     throw new Error(prefix + 'expected boolean, got type=' + typeof value);
@@ -46,14 +38,14 @@ export function _abool2(value: boolean, title: string = ''): boolean {
   return value;
 }
 
-// tmp name until v2
+// TODO: add, re-export from noble-hashes
 /** Asserts something is Uint8Array. */
-export function _abytes2(value: Uint8Array, length?: number, title: string = ''): Uint8Array {
+export function abytes(value: Uint8Array, length?: number, title: string = ''): Uint8Array {
   const bytes = isBytes_(value);
   const len = value?.length;
   const needsLen = length !== undefined;
   if (!bytes || (needsLen && len !== length)) {
-    const prefix = title && `"${title}" `;
+    const prefix = title && `"${title}"`;
     const ofLen = needsLen ? ` of length ${length}` : '';
     const got = bytes ? `length=${len}` : `type=${typeof value}`;
     throw new Error(prefix + 'expected Uint8Array' + ofLen + ', got ' + got);
@@ -62,8 +54,15 @@ export function _abytes2(value: Uint8Array, length?: number, title: string = '')
 }
 
 // Used in weierstrass, der
+function abignumer(n: number | bigint) {
+  if (typeof n === 'bigint') {
+    if (!isPosBig(n)) throw new Error('positive bigint expected, got ' + n);
+  } else anumber(n);
+  return n;
+}
+
 export function numberToHexUnpadded(num: number | bigint): string {
-  const hex = num.toString(16);
+  const hex = abignumer(num).toString(16);
   return hex.length & 1 ? '0' + hex : hex;
 }
 
@@ -77,49 +76,23 @@ export function bytesToNumberBE(bytes: Uint8Array): bigint {
   return hexToNumber(bytesToHex_(bytes));
 }
 export function bytesToNumberLE(bytes: Uint8Array): bigint {
-  abytes_(bytes);
-  return hexToNumber(bytesToHex_(Uint8Array.from(bytes).reverse()));
+  abytes(bytes);
+  return hexToNumber(bytesToHex_(copyBytes(bytes).reverse()));
 }
 
 export function numberToBytesBE(n: number | bigint, len: number): Uint8Array {
-  return hexToBytes_(n.toString(16).padStart(len * 2, '0'));
+  anumber(len);
+  n = abignumer(n);
+  const res = hexToBytes_(n.toString(16).padStart(len * 2, '0'));
+  if (res.length !== len) throw new Error('number too large');
+  return res;
 }
 export function numberToBytesLE(n: number | bigint, len: number): Uint8Array {
   return numberToBytesBE(n, len).reverse();
 }
 // Unpadded, rarely used
 export function numberToVarBytesBE(n: number | bigint): Uint8Array {
-  return hexToBytes_(numberToHexUnpadded(n));
-}
-
-/**
- * Takes hex string or Uint8Array, converts to Uint8Array.
- * Validates output length.
- * Will throw error for other types.
- * @param title descriptive title for an error e.g. 'secret key'
- * @param hex hex string or Uint8Array
- * @param expectedLength optional, will compare to result array's length
- * @returns
- */
-export function ensureBytes(title: string, hex: Hex, expectedLength?: number): Uint8Array {
-  let res: Uint8Array;
-  if (typeof hex === 'string') {
-    try {
-      res = hexToBytes_(hex);
-    } catch (e) {
-      throw new Error(title + ' must be hex string or Uint8Array, cause: ' + e);
-    }
-  } else if (isBytes_(hex)) {
-    // Uint8Array.from() instead of hash.slice() because node.js Buffer
-    // is instance of Uint8Array, and its slice() creates **mutable** copy
-    res = Uint8Array.from(hex);
-  } else {
-    throw new Error(title + ' must be hex string or Uint8Array');
-  }
-  const len = res.length;
-  if (typeof expectedLength === 'number' && len !== expectedLength)
-    throw new Error(title + ' of length ' + expectedLength + ' expected, got ' + len);
-  return res;
+  return hexToBytes_(numberToHexUnpadded(abignumer(n)));
 }
 
 // Compares 2 u8a-s in kinda constant time
@@ -129,6 +102,7 @@ export function equalBytes(a: Uint8Array, b: Uint8Array): boolean {
   for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
   return diff === 0;
 }
+
 /**
  * Copies Uint8Array. We can't use u8a.slice(), because u8a can be Buffer,
  * and Buffer#slice creates mutable copy. Never use Buffers!
@@ -373,4 +347,24 @@ export function memoized<T extends object, R, O extends any[]>(
     map.set(arg, computed);
     return computed;
   };
+}
+
+export interface CryptoKeys {
+  lengths: { seed?: number; public?: number; secret?: number };
+  keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
+  getPublicKey: (secretKey: Uint8Array) => Uint8Array;
+}
+
+/** Generic interface for signatures. Has keygen, sign and verify. */
+export interface Signer extends CryptoKeys {
+  // Interfaces are fun. We cannot just add new fields without copying old ones.
+  lengths: {
+    seed?: number;
+    public?: number;
+    secret?: number;
+    signRand?: number;
+    signature?: number;
+  };
+  sign: (msg: Uint8Array, secretKey: Uint8Array) => Uint8Array;
+  verify: (sig: Uint8Array, msg: Uint8Array, publicKey: Uint8Array) => boolean;
 }
