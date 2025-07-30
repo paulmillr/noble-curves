@@ -1,7 +1,13 @@
 {
   "extends": "@paulmillr/jsbt/tsconfig.esm.json",
   "compilerOptions": {
-    "outDir": "esm"
+    "outDir": ".",
+    "target": "es2022",
+    "lib": [
+      "es2022"
+    ],
+    "module": "es2022",
+    "moduleResolution": "bundler"
   },
   "include": [
     "src"
