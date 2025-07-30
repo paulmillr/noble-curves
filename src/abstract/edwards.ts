@@ -18,7 +18,7 @@ import {
   isBytes,
   memoized,
   notImplemented,
-  randomBytes as wcRandomBytes,
+  randomBytes as randomBytesWeb,
   type FHash,
   type Hex,
 } from '../utils.ts';
@@ -531,7 +531,8 @@ export function edwards(params: EdwardsOpts, extraOpts: EdwardsExtraOpts = {}): 
       return this.toBytes();
     }
   }
-  const wnaf = new wNAF(Point, Fn.BYTES * 8); // Fn.BITS?
+  const wnaf = new wNAF(Point, Fn.BITS);
+  Point.BASE.precompute(8); // Enable precomputes. Slows down first publicKey computation by 20ms.
   return Point;
 }
 
@@ -665,7 +666,7 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
   const { prehash } = eddsaOpts;
   const { BASE, Fp, Fn } = Point;
 
-  const randomBytes = eddsaOpts.randomBytes || wcRandomBytes;
+  const randomBytes = eddsaOpts.randomBytes || randomBytesWeb;
   const adjustScalarBytes = eddsaOpts.adjustScalarBytes || ((bytes: Uint8Array) => bytes);
   const domain =
     eddsaOpts.domain ||
@@ -765,8 +766,6 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
     return RkA.subtract(SB).clearCofactor().is0();
   }
 
-  BASE.precompute(8); // Enable precomputes. Slows down first publicKey computation by 20ms.
-
   const _size = Fp.BYTES; // 32 for ed25519, 57 for ed448
   const lengths = {
     secret: _size,
@@ -781,11 +780,9 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
     const secretKey = utils.randomSecretKey(seed);
     return { secretKey, publicKey: getPublicKey(secretKey) };
   }
-
   function isValidSecretKey(key: Uint8Array): boolean {
     return isBytes(key) && key.length === Fn.BYTES;
   }
-
   function isValidPublicKey(key: Uint8Array, zip215?: boolean): boolean {
     try {
       return !!Point.fromBytes(key, zip215);

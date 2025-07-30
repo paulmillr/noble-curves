@@ -44,7 +44,7 @@ import {
   isBytes,
   memoized,
   numberToHexUnpadded,
-  randomBytes as wcRandomBytes,
+  randomBytes as randomBytesWeb,
   type CHash,
   type Hex,
   type PrivKey,
@@ -988,6 +988,7 @@ export function weierstrassN<T>(
   }
   const bits = Fn.BITS;
   const wnaf = new wNAF(Point, extraOpts.endo ? Math.ceil(bits / 2) : bits);
+  Point.BASE.precompute(8); // Enable precomputes. Slows down first publicKey computation by 20ms.
   return Point;
 }
 
@@ -1188,7 +1189,7 @@ export function ecdh(
   ecdhOpts: { randomBytes?: (bytesLength?: number) => Uint8Array } = {}
 ): ECDH {
   const { Fn } = Point;
-  const randomBytes_ = ecdhOpts.randomBytes || wcRandomBytes;
+  const randomBytes_ = ecdhOpts.randomBytes || randomBytesWeb;
   const lengths = Object.assign(getWLengths(Point.Fp, Fn), { seed: getMinHashLength(Fn.ORDER) });
 
   function isValidSecretKey(secretKey: PrivKey) {
@@ -1311,7 +1312,7 @@ export function ecdsa(
     }
   );
 
-  const randomBytes = ecdsaOpts.randomBytes || wcRandomBytes;
+  const randomBytes = ecdsaOpts.randomBytes || randomBytesWeb;
   const hmac: HmacFnSync =
     ecdsaOpts.hmac ||
     (((key, ...msgs) => nobleHmac(hash, key, concatBytes(...msgs))) satisfies HmacFnSync);
@@ -1571,9 +1572,6 @@ export function ecdsa(
     const sig = drbg(seed, k2sig); // Steps B, C, D, E, F, G
     return sig;
   }
-
-  // Enable precomputes. Slows down first publicKey computation by 20ms.
-  Point.BASE.precompute(8);
 
   function tryParsingSig(sg: Hex | SignatureLike) {
     // Try to deduce format
