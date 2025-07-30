@@ -1,6 +1,6 @@
 {
   "name": "@noble/curves",
-  "version": "1.9.5",
+  "version": "2.0.0-beta.1",
   "exports": {
     ".": "./src/index.ts",
     "./abstract/bls.js": "./src/abstract/bls.ts",
@@ -10,26 +10,22 @@
     "./abstract/hash-to-curve.js": "./src/abstract/hash-to-curve.ts",
     "./abstract/modular.js": "./src/abstract/modular.ts",
     "./abstract/montgomery.js": "./src/abstract/montgomery.ts",
+    "./abstract/oprf.js": "./src/abstract/oprf.ts",
     "./abstract/poseidon.js": "./src/abstract/poseidon.ts",
     "./abstract/tower.js": "./src/abstract/tower.ts",
-    "./abstract/utils.js": "./src/abstract/utils.ts",
     "./abstract/weierstrass.js": "./src/abstract/weierstrass.ts",
-    "./_shortw_utils.js": "./src/_shortw_utils.ts",
     "./bls12-381.js": "./src/bls12-381.ts",
     "./bn254.js": "./src/bn254.ts",
     "./ed448.js": "./src/ed448.ts",
     "./ed25519.js": "./src/ed25519.ts",
-    "./jubjub.js": "./src/jubjub.ts",
     "./misc.js": "./src/misc.ts",
     "./nist.js": "./src/nist.ts",
-    "./p256.js": "./src/p256.ts",
-    "./p384.js": "./src/p384.ts",
-    "./p521.js": "./src/p521.ts",
-    "./pasta.js": "./src/pasta.ts",
-    "./secp256k1.js": "./src/secp256k1.ts"
+    "./secp256k1.js": "./src/secp256k1.ts",
+    "./webcrypto.js": "./src/webcrypto.ts",
+    "./utils.js": "./src/utils.ts"
   },
   "imports": {
-    "@noble/hashes": "jsr:@noble/hashes@1.8.0"
+    "@noble/hashes": "jsr:@noble/hashes@^2.0.0-beta.3"
   },
   "publish": {
     "include": [
