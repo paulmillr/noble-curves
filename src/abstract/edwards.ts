@@ -896,7 +896,13 @@ function _eddsa_legacy_opts_to_new(c: CurveTypeWithLength): EdComposed {
   return { CURVE, curveOpts, hash: c.hash, eddsaOpts };
 }
 function _eddsa_new_output_to_legacy(c: CurveTypeWithLength, eddsa: EdDSA): CurveFn {
-  const legacy = Object.assign({}, eddsa, { ExtendedPoint: eddsa.Point, CURVE: c });
+  const Point = eddsa.Point;
+  const legacy = Object.assign({}, eddsa, {
+    ExtendedPoint: Point,
+    CURVE: c,
+    nBitLength: Point.Fn.BITS,
+    nByteLength: Point.Fn.BYTES,
+  });
   return legacy;
 }
 // TODO: remove. Use eddsa
