@@ -179,9 +179,8 @@ function schnorrSign(message: Hex, secretKey: PrivKey, auxRand: Hex = randomByte
   const a = ensureBytes('auxRand', auxRand, 32); // Auxiliary random data a: a 32-byte array
   const t = Fn.toBytes(d ^ num(taggedHash('BIP0340/aux', a))); // Let t be the byte-wise xor of bytes(d) and hash/aux(a)
   const rand = taggedHash('BIP0340/nonce', t, px, m); // Let rand = hash/nonce(t || bytes(P) || m)
-  const k_ = Fn.create(num(rand)); // Let k' = int(rand) mod n
-  if (k_ === _0n) throw new Error('sign failed: k is zero'); // Fail if k' = 0.
-  const { bytes: rx, scalar: k } = schnorrGetExtPubKey(k_); // Let R = k'⋅G.
+  // Let k' = int(rand) mod n. Fail if k' = 0. Let R = k'⋅G
+  const { bytes: rx, scalar: k } = schnorrGetExtPubKey(rand);
   const e = challenge(rx, px, m); // Let e = int(hash/challenge(bytes(R) || bytes(P) || m)) mod n.
   const sig = new Uint8Array(64); // Let sig = bytes(R) || bytes((k + ed) mod n).
   sig.set(rx, 0);

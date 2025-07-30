@@ -1336,6 +1336,12 @@ export function ecdsa(
       throw new Error(`invalid signature ${title}: out of range 1..Point.Fn.ORDER`);
     return num;
   }
+  function validateSigLength(bytes: Uint8Array, format: ECDSASigFormat) {
+    validateSigFormat(format);
+    const size = lengths.signature!;
+    const sizer = format === 'compact' ? size : format === 'recovered' ? size + 1 : undefined;
+    return abytes(bytes, sizer, `${format} signature`);
+  }
 
   /**
    * ECDSA signature with its (r, s) properties. Supports compact, recovered & DER representations.
@@ -1352,22 +1358,18 @@ export function ecdsa(
     }
 
     static fromBytes(bytes: Uint8Array, format: ECDSASigFormat = defaultSigOpts_format): Signature {
-      validateSigFormat(format);
-      const size = lengths.signature!;
+      validateSigLength(bytes, format)
       let recid: number | undefined;
       if (format === 'der') {
         const { r, s } = DER.toSig(abytes(bytes));
         return new Signature(r, s);
       }
       if (format === 'recovered') {
-        abytes(bytes, size + 1);
         recid = bytes[0];
-
         format = 'compact';
         bytes = bytes.subarray(1);
       }
-      abytes(bytes, size);
-      const L = size / 2;
+      const L = Fn.BYTES;
       const r = bytes.subarray(0, L);
       const s = bytes.subarray(L, L * 2);
       return new Signature(Fn.fromBytes(r), Fn.fromBytes(s), recid);
