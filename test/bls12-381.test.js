@@ -1,25 +1,23 @@
 import * as fc from 'fast-check';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql, throws } from 'node:assert';
-import { wNAF } from '../esm/abstract/curve.js';
-import { hash_to_field } from '../esm/abstract/hash-to-curve.js';
-import {
-  bytesToHex,
-  bytesToNumberBE,
-  concatBytes,
-  hexToBytes,
-  utf8ToBytes,
-} from '../esm/abstract/utils.js';
-import { bls12_381 as bls, bls12_381 } from '../esm/bls12-381.js';
+import { wNAF } from '../abstract/curve.js';
+import { hash_to_field } from '../abstract/hash-to-curve.js';
+import { bls12_381 as bls, bls12_381 } from '../bls12-381.js';
+import { bytesToHex, concatBytes, hexToBytes, utf8ToBytes } from '../utils.js';
 import { json, txt } from './utils.js';
 
-import * as utils from '../esm/abstract/utils.js';
+import * as utils from '../utils.js';
 
 const eip2537 = json('./vectors/bls12-381/eip2537.json');
 const zkVectors = json('./vectors/bls12-381/zkcrypto/converted.json');
 const pairingVectors = json('./vectors/bls12-381/go_pairing_vectors/pairing.json');
-const G1_VECTORS = txt('vectors/bls12-381/bls12-381-g1-test-vectors.txt');
-const G2_VECTORS = txt('vectors/bls12-381/bls12-381-g2-test-vectors.txt');
+const G1_VECTORS = txt('vectors/bls12-381/bls12-381-g1-test-vectors.txt').map((v) => {
+  return [hexToBytes(v[0]), hexToBytes(v[1]), v[2]];
+});
+const G2_VECTORS = txt('vectors/bls12-381/bls12-381-g2-test-vectors.txt').map((v) => {
+  return [hexToBytes(v[0]), hexToBytes(v[1]), v[2]];
+});
 // Vectors come from
 // https://github.com/zkcrypto/bls12-381/blob/e501265cd36849a4981fe55e10dc87c38ee2213d/src/hash_to_curve/map_scalar.rs#L20
 const SCALAR_VECTORS = txt('vectors/bls12-381/bls12-381-scalar-test-vectors.txt');
@@ -162,7 +160,7 @@ fc.configureGlobal({ numRuns: NUM_RUNS });
 const G1Point = bls.G1.Point;
 const G2Point = bls.G2.Point;
 const G1Aff = (x, y) => G1Point.fromAffine({ x, y });
-const CURVE_ORDER = bls.params.r;
+const CURVE_ORDER = bls.G1.Point.Fn.ORDER;
 
 function hexa() {
   const items = '0123456789abcdef';
@@ -172,13 +170,16 @@ function hexaString(constraints = {}) {
   return fc.string({ ...constraints, unit: hexa() });
 }
 
+const privKeyNumToBytes = (priv) => utils.numberToBytesBE(priv, 32);
+
 const FC_MSG = hexaString({ minLength: 64, maxLength: 64 });
 const FC_MSG_5 = fc.array(FC_MSG, { minLength: 5, maxLength: 5 });
 const FC_BIGINT = fc.bigInt(1n, CURVE_ORDER - 1n);
 const FC_BIGINT_5 = fc.array(FC_BIGINT, { minLength: 5, maxLength: 5 });
 const B_192_40 = '40'.padEnd(192, '0');
+const B_192_40_BYTES = hexToBytes(B_192_40);
 const B_384_40 = '40'.padEnd(384, '0'); // [0x40, 0, 0...]
-
+const B_384_40_BYTES = hexToBytes(B_384_40);
 const getPubKey = (priv) => blsl.getPublicKey(priv);
 /**
  *
@@ -188,7 +189,7 @@ const getPubKey = (priv) => blsl.getPublicKey(priv);
 function replaceZeroPoint(item) {
   const zeros = '0000000000000000000000000000000000000000000000000000000000000000';
   const ones = '1000000000000000000000000000000000000000000000000000000000000001';
-  return item === zeros ? ones : item;
+  return item === zeros ? hexToBytes(ones) : hexToBytes(item);
 }
 
 function equal(a, b, comment) {
@@ -757,7 +758,7 @@ describe('bls12-381 Point', () => {
 describe('bls12-381 encoding', () => {
   should('G1.fromBytes', () => {
     // Test Zero
-    const g1 = G1Point.fromBytes(hexToBytes(B_192_40));
+    const g1 = G1Point.fromBytes(B_192_40_BYTES);
     eql(g1.x, G1Point.ZERO.x);
     eql(g1.y, G1Point.ZERO.y);
     // Test Non-Zero
@@ -784,7 +785,7 @@ describe('bls12-381 encoding', () => {
 
   should('G1.fromBytes', () => {
     // Test Zero
-    const g1 = G1Point.fromBytes(hexToBytes(B_192_40));
+    const g1 = G1Point.fromBytes(B_192_40_BYTES);
 
     eql(g1.x, G1Point.ZERO.x);
     eql(g1.y, G1Point.ZERO.y);
@@ -812,7 +813,7 @@ describe('bls12-381 encoding', () => {
 
   should('G2.fromBytes', () => {
     // Test Zero
-    const g2 = G2Point.fromBytes(hexToBytes(B_384_40));
+    const g2 = G2Point.fromBytes(B_384_40_BYTES);
     eql(g2.x, G2Point.ZERO.x, 'zero(x)');
     eql(g2.y, G2Point.ZERO.y, 'zero(y)');
     // Test Non-Zero
@@ -845,7 +846,7 @@ describe('bls12-381 encoding', () => {
 
   should('G2.fromBytes', () => {
     // Test Zero
-    const g2 = G2Point.fromBytes(hexToBytes(B_384_40));
+    const g2 = G2Point.fromBytes(B_384_40_BYTES);
 
     eql(g2.x, G2Point.ZERO.x);
     eql(g2.y, G2Point.ZERO.y);
@@ -975,24 +976,24 @@ describe('bls12-381 encoding', () => {
   });
 
   should('G1 toBytes + fromBytes roundtrip', () => {
-    const priv = G1Point.fromPrivateKey(42n);
+    const priv = G1Point.BASE.multiply(42n);
     const publicKey = priv.toBytes(true);
     const decomp = G1Point.fromBytes(publicKey);
     eql(publicKey, decomp.toBytes(true));
   });
 
   should('G2 toBytes + fromBytes roundtrip', () => {
-    const priv = G2Point.fromPrivateKey(42n);
+    const priv = G2Point.BASE.multiply(42n);
     const publicKey = priv.toBytes(true);
     const decomp = G2Point.fromBytes(publicKey);
     eql(publicKey, decomp.toBytes(true));
   });
 
   should('G1 fromPrivateKey throws on 0', () => {
-    throws(() => G1Point.fromPrivateKey(0n));
+    throws(() => G1Point.BASE.multiply(0n));
   });
   should('G2 fromPrivateKey throws on 0', () => {
-    throws(() => G2Point.fromPrivateKey(0n));
+    throws(() => G2Point.BASE.multiply(0n));
   });
 
   describe('aggregatePublicKeys', () => {
@@ -1044,10 +1045,10 @@ describe('bls12-381 encoding', () => {
 
 describe('bls12-381 verify', () => {
   describe('longSignatures', () => {
-    should(`sign + verify`, () => {
+    should('sign + verify', () => {
       for (let vector of G2_VECTORS) {
         const [priv, msgs, expected] = vector;
-        const msg = blsl.hash(hexToBytes(msgs));
+        const msg = blsl.hash(msgs);
         const sig = blsl.sign(msg, priv);
         const sigb = blsl.Signature.toBytes(sig);
         eql(blsl.Signature.toHex(sig), expected, 'h');
@@ -1060,7 +1061,7 @@ describe('bls12-381 verify', () => {
     should('works', () => {
       for (let i = 0; i < NUM_RUNS; i++) {
         const [priv, msgs] = G2_VECTORS[i];
-        const msg = blsl.hash(hexToBytes(msgs));
+        const msg = blsl.hash(msgs);
         const sig = blsl.sign(msg, priv);
         const pub = blsl.getPublicKey(priv);
         const res = blsl.verify(sig, msg, pub);
@@ -1073,8 +1074,8 @@ describe('bls12-381 verify', () => {
       for (let i = 0; i < NUM_RUNS; i++) {
         const [priv, msgs] = G2_VECTORS[i];
         const invMsgs = G2_VECTORS[i + 1][1];
-        const msg = blsl.hash(hexToBytes(msgs));
-        const invMsg = blsl.hash(hexToBytes(invMsgs));
+        const msg = blsl.hash(msgs);
+        const invMsg = blsl.hash(invMsgs);
         const sig = blsl.sign(msg, priv);
         const pub = blsl.getPublicKey(priv);
         const res = blsl.verify(sig, invMsg, pub);
@@ -1084,9 +1085,9 @@ describe('bls12-381 verify', () => {
     should('false for wrong key', () => {
       for (let i = 0; i < NUM_RUNS; i++) {
         const [priv, msgs] = G2_VECTORS[i];
-        const msg = blsl.hash(hexToBytes(msgs));
+        const msg = blsl.hash(msgs);
         const sig = blsl.sign(msg, priv);
-        const invPriv = G2_VECTORS[i + 1][1].padStart(64, '0');
+        const invPriv = hexToBytes(bytesToHex(G2_VECTORS[i + 1][1]).padStart(64, '0'));
         const invPub = blsl.getPublicKey(invPriv);
         const res = blsl.verify(sig, msg, invPub);
         eql(res, false);
@@ -1099,7 +1100,7 @@ describe('bls12-381 verify', () => {
     should(`sign + verify`, () => {
       for (let vector of G1_VECTORS) {
         const [priv, msgs, expected] = vector;
-        const msg = blss.hash(hexToBytes(msgs.slice()));
+        const msg = blss.hash(msgs.slice());
         const sig = blss.sign(msg, priv);
         const sigb = blss.Signature.toBytes(sig);
         eql(blss.Signature.toHex(sig), expected);
@@ -1110,7 +1111,7 @@ describe('bls12-381 verify', () => {
     should('works', () => {
       for (let i = 0; i < NUM_RUNS; i++) {
         const [priv, msg] = G1_VECTORS[i];
-        const hmsg = blss.hash(hexToBytes(msg));
+        const hmsg = blss.hash(msg);
         const sig = blss.sign(hmsg, priv);
         const pub = blss.getPublicKey(priv);
         const res = blss.verify(sig, hmsg, pub);
@@ -1123,8 +1124,8 @@ describe('bls12-381 verify', () => {
       for (let i = 0; i < NUM_RUNS; i++) {
         const [priv, msgs] = G1_VECTORS[i];
         const invMsgs = G1_VECTORS[i + 1][1];
-        const msg = blss.hash(hexToBytes(msgs));
-        const invMsg = blss.hash(hexToBytes(invMsgs));
+        const msg = blss.hash(msgs);
+        const invMsg = blss.hash(invMsgs);
         const sig = blss.sign(msg, priv);
         const pub = blss.getPublicKey(priv);
         const res = blss.verify(sig, invMsg, pub);
@@ -1136,9 +1137,9 @@ describe('bls12-381 verify', () => {
     should('false for wrong key', () => {
       for (let i = 0; i < NUM_RUNS; i++) {
         const [priv, msgs] = G1_VECTORS[i];
-        const msg = blss.hash(hexToBytes(msgs));
+        const msg = blss.hash(msgs);
         const sig = blss.sign(msg, priv);
-        const invPriv = G1_VECTORS[i + 1][1].padStart(64, '0');
+        const invPriv = hexToBytes(bytesToHex(G1_VECTORS[i + 1][1]).padStart(64, '0'));
         const invPub = blss.getPublicKey(invPriv);
         const res = blss.verify(sig, msg, invPub);
         eql(res, false);
@@ -1175,26 +1176,26 @@ describe('bls12-381 verify', () => {
       fc.assert(
         // @ts-ignore
         fc.property(FC_MSG_5, FC_BIGINT_5, (messagesS, privateKeys) => {
-          privateKeys = privateKeys.slice(0, messagesS.length);
+          privateKeys = privateKeys.slice(0, messagesS.length).map(privKeyNumToBytes);
           const messages = messagesS
             .slice(0, privateKeys.length)
             .map((m) => blsl.hash(hexToBytes(m)));
           const publicKey = privateKeys.map(getPubKey);
           const signatures = messages.map((message, i) => blsl.sign(message, privateKeys[i]));
           const aggregatedSignature = blsl.aggregateSignatures(signatures);
-          eql(bls.verifyBatch(aggregatedSignature, messagesS, publicKey), true);
-          eql(
-            bls.verifyBatch(blsl.Signature.toHex(aggregatedSignature), messagesS, publicKey),
-            true
-          );
+          const items = messages.map((i, j) => ({ message: i, publicKey: publicKey[j] }));
+
+          eql(blsl.verifyBatch(aggregatedSignature, items), true);
+          const aggSigHex = blsl.Signature.toBytes(aggregatedSignature);
+          eql(blsl.verifyBatch(aggSigHex, items), true);
         })
       );
     });
-    should('batch verify multi-signatures', () => {
+    should('batch verify multi-signatures 2', () => {
       fc.assert(
         // @ts-ignore
         fc.property(FC_MSG_5, FC_MSG_5, FC_BIGINT_5, (messagesS, wrongMessagesS, privateKeys) => {
-          privateKeys = privateKeys.slice(0, messagesS.length);
+          privateKeys = privateKeys.slice(0, messagesS.length).map(privKeyNumToBytes);
           const messages = messagesS
             .slice(0, privateKeys.length)
             .map((m) => blsl.hash(hexToBytes(m)));
@@ -1204,12 +1205,16 @@ describe('bls12-381 verify', () => {
           const publicKey = privateKeys.map(getPubKey);
           const signatures = messages.map((message, i) => blsl.sign(message, privateKeys[i]));
           const aggregatedSignature = blsl.aggregateSignatures(signatures);
+          const items = wrongMessages.map((i, j) => ({
+            message: i,
+            publicKey: publicKey[j],
+          }));
           eql(
-            bls.verifyBatch(aggregatedSignature, wrongMessages, publicKey),
+            blsl.verifyBatch(aggregatedSignature, items),
             messages.every((m, i) => m === wrongMessages[i])
           );
           eql(
-            bls.verifyBatch(blsl.Signature.toHex(aggregatedSignature), wrongMessages, publicKey),
+            blsl.verifyBatch(blsl.Signature.toBytes(aggregatedSignature), items),
             messages.every((m, i) => m === wrongMessages[i])
           );
         })
@@ -1224,7 +1229,8 @@ describe('bls12-381 verify', () => {
           FC_BIGINT_5,
           FC_BIGINT_5,
           (messagesS, privateKeys, wrongPrivateKeys) => {
-            privateKeys = privateKeys.slice(0, messagesS.length);
+            privateKeys = privateKeys.map(privKeyNumToBytes);
+            wrongPrivateKeys = wrongPrivateKeys.map(privKeyNumToBytes);
             wrongPrivateKeys = privateKeys.map((a, i) =>
               wrongPrivateKeys[i] !== undefined ? wrongPrivateKeys[i] : a
             );
@@ -1234,12 +1240,13 @@ describe('bls12-381 verify', () => {
             const wrongPublicKeys = wrongPrivateKeys.map(getPubKey);
             const signatures = messages.map((message, i) => blsl.sign(message, privateKeys[i]));
             const aggregatedSignature = blsl.aggregateSignatures(signatures);
+            const items = messages.map((i, j) => ({ message: i, publicKey: wrongPublicKeys[j] }));
             eql(
-              bls.verifyBatch(aggregatedSignature, messages, wrongPublicKeys),
+              blsl.verifyBatch(aggregatedSignature, items),
               wrongPrivateKeys.every((p, i) => p === privateKeys[i])
             );
             eql(
-              bls.verifyBatch(blsl.Signature.toHex(aggregatedSignature), messages, wrongPublicKeys),
+              blsl.verifyBatch(blsl.Signature.toBytes(aggregatedSignature), items),
               wrongPrivateKeys.every((p, i) => p === privateKeys[i])
             );
           }
@@ -1250,7 +1257,8 @@ describe('bls12-381 verify', () => {
       fc.assert(
         // @ts-ignore
         fc.property(FC_MSG, FC_BIGINT_5, (messageS, privateKeys) => {
-          const message = blsl.hash(hexToBytes(replaceZeroPoint(messageS)));
+          privateKeys = privateKeys.map(privKeyNumToBytes);
+          const message = blsl.hash(replaceZeroPoint(messageS));
           const publicKey = privateKeys.map(getPubKey);
           const signatures = privateKeys.map((privateKey) => blsl.sign(message, privateKey));
           const aggregatedSignature = blsl.aggregateSignatures(signatures);
@@ -1261,7 +1269,7 @@ describe('bls12-381 verify', () => {
           // Counterexample: ["0000000000000000000000000000000000000000000000000000000000000000",[4n,52435875175126190479447740508185965837690552500527637822603658699938581184445n,43n,75n,52435875175126190479447740508185965837690552500527637822603658699938581184459n]]
           eql(blsl.verify(aggregatedSignature, message, aggregatedPublicKey), true);
           eql(
-            blsl.verify(blsl.Signature.toHex(aggregatedSignature), message, aggregatedPublicKey),
+            blsl.verify(blsl.Signature.toBytes(aggregatedSignature), message, aggregatedPublicKey),
             true
           );
         })
@@ -1271,7 +1279,8 @@ describe('bls12-381 verify', () => {
       fc.assert(
         // @ts-ignore
         fc.property(FC_MSG, FC_MSG, FC_BIGINT_5, (messageS, wrongMessageS, privateKeys) => {
-          const message = blsl.hash(hexToBytes(replaceZeroPoint(messageS)));
+          privateKeys = privateKeys.map(privKeyNumToBytes);
+          const message = blsl.hash(replaceZeroPoint(messageS));
           const wrongMessage = blsl.hash(hexToBytes(wrongMessageS));
           const publicKey = privateKeys.map(getPubKey);
           const signatures = privateKeys.map((privateKey) => blsl.sign(message, privateKey));
@@ -1283,7 +1292,7 @@ describe('bls12-381 verify', () => {
           );
           eql(
             blsl.verify(
-              blsl.Signature.toHex(aggregatedSignature),
+              blsl.Signature.toBytes(aggregatedSignature),
               wrongMessage,
               aggregatedPublicKey
             ),
@@ -1348,7 +1357,7 @@ describe('bls12-381 deterministic', () => {
 
     should(`hash_to_field for scalars`, () => {
       const options = {
-        p: bls.params.r,
+        p: bls.G1.Point.Fn.ORDER,
         m: 1,
         expand: '_internal_pass',
       };
@@ -1356,13 +1365,13 @@ describe('bls12-381 deterministic', () => {
         const [okmAscii, expectedHex] = vector;
         const expected = BigInt('0x' + expectedHex);
         const okm = utf8ToBytes(okmAscii);
-        const scalars = hash_to_field(okm, 1, Object.assign({}, bls.G2.CURVE.htfDefaults, options));
+        const scalars = hash_to_field(okm, 1, Object.assign({}, bls.G2.defaults, options));
         eql(scalars[0][0], expected);
       }
     });
     should(`hash_to_field for XMD scalars`, () => {
       const options = {
-        p: bls.params.r,
+        p: bls.G1.Point.Fn.ORDER,
         m: 1,
         expand: 'xmd',
         DST: 'QUUX-V01-CS02-with-BLS12381SCALAR_XMD:SHA-256_SSWU_RO_',
@@ -1371,7 +1380,7 @@ describe('bls12-381 deterministic', () => {
         const [okmAscii, expectedHex] = vector;
         const expected = BigInt('0x' + expectedHex);
         const okm = utf8ToBytes(okmAscii);
-        const scalars = hash_to_field(okm, 1, Object.assign({}, bls.G2.CURVE.htfDefaults, options));
+        const scalars = hash_to_field(okm, 1, Object.assign({}, bls.G2.defaults, options));
         eql(scalars[0][0], expected);
       }
     });
@@ -1500,7 +1509,7 @@ describe('bls12-381 deterministic', () => {
       let p1 = G1Point.ZERO;
       for (let i = 0; i < zkVectors.G1_Uncompressed.length; i++) {
         const t = zkVectors.G1_Uncompressed[i];
-        const P = G1Point.fromBytes(hexToBytes(t));
+        const P = G1Point.fromHex(t);
         eql(P.toHex(false), t);
         eql(P.equals(p1), true);
         eql(p1.toHex(false), t);
@@ -1516,7 +1525,7 @@ describe('bls12-381 deterministic', () => {
       let p1 = G2Point.ZERO;
       for (let i = 0; i < zkVectors.G2_Compressed.length; i++) {
         const t = zkVectors.G2_Compressed[i];
-        const P = G2Point.fromBytes(hexToBytes(t));
+        const P = G2Point.fromHex(t);
         eql(P.toHex(true), t);
         eql(P.equals(p1), true);
         eql(p1.toHex(true), t);
@@ -1534,7 +1543,7 @@ describe('bls12-381 deterministic', () => {
       let p1 = G2Point.ZERO;
       for (let i = 0; i < zkVectors.G2_Uncompressed.length; i++) {
         const t = zkVectors.G2_Uncompressed[i];
-        const P = G2Point.fromBytes(hexToBytes(t));
+        const P = G2Point.fromHex(t);
         eql(P.toHex(false), t);
         eql(P.equals(p1), true);
         eql(p1.toHex(false), t);
@@ -1619,8 +1628,7 @@ describe('bls12-381 deterministic', () => {
     const toEthHex = (n) => n.toString(16).padStart(128, '0');
     should('G1', () => {
       for (const v of eip2537.G1) {
-        const input = hexToBytes(v.Input);
-        const { x, y } = bls12_381.G1.mapToCurve([bytesToNumberBE(input)]).toAffine();
+        const { x, y } = bls12_381.G1.mapToCurve([utils.hexToNumber(v.Input)]).toAffine();
         const val = toEthHex(x) + toEthHex(y);
         eql(val, v.Expected);
       }
@@ -1639,7 +1647,7 @@ describe('bls12-381 deterministic', () => {
       const t = BigInt(
         '1006044755431560595281793557931171729984964515682961911911398807521437683216171091013202870577238485832047490326971'
       );
-      eql(bls12_381.G1.mapToCurve([t]).equals(bls12_381.G1.ProjectivePoint.ZERO), true);
+      eql(bls12_381.G1.mapToCurve([t]).equals(bls12_381.G1.Point.ZERO), true);
     });
   });
 });

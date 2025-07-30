@@ -1,10 +1,10 @@
 import { sha512 } from '@noble/hashes/sha2.js';
-import { randomBytes } from '@noble/hashes/utils';
+import { randomBytes } from '@noble/hashes/utils.js';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual } from 'node:assert';
-import { mod } from '../esm/abstract/modular.js';
-import { ed25519, x25519 } from '../esm/ed25519.js';
-import { bytesToNumberLE, concatBytes, ensureBytes, equalBytes, numberToBytesLE } from '../esm/utils.js';
+import { mod } from '../abstract/modular.js';
+import { ed25519, x25519 } from '../ed25519.js';
+import { bytesToNumberLE, concatBytes, ensureBytes, equalBytes, numberToBytesLE } from '../utils.js';
 
 /*
 Half-broken implementation of Hedged EdDSA / XEdDSA.
@@ -35,7 +35,7 @@ export function montgomeryToEdwards(
 export const xeddsa25519 = {
   sign(secret: Uint8Array, message: Uint8Array, random: Uint8Array = randomBytes(64)): Uint8Array {
     secret = ensureBytes('secret', secret, 32);
-    const N = ed25519.CURVE.n;
+    const N = ed25519.Point.Fn.ORDER;
     const a = mod(bytesToNumberLE(secret), N); // Interpret secret as scalar a.
     const A = ed25519.Point.BASE.multiply(a); // Compute public key A = a·B.
     const Abytes = A.toBytes();
@@ -61,7 +61,7 @@ export const xeddsa25519 = {
   verify(publicKey: Uint8Array, message: Uint8Array, signature: Uint8Array): boolean {
     publicKey = ensureBytes('publicKey', publicKey, 32);
     signature = ensureBytes('signature', signature, 64);
-    const N = ed25519.CURVE.n;
+    const N = ed25519.Point.Fn.ORDER;
     const signBit = (signature[63] & 0b1000_0000) >> 7 === 1; // Extract sign bit from signature last byte.
     const Aed = montgomeryToEdwards(publicKey, signBit);
     const Abytes = Aed.toBytes();

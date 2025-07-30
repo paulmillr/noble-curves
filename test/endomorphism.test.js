@@ -1,8 +1,11 @@
 import * as fc from 'fast-check';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual } from 'node:assert';
-import { _splitEndoScalar as splitScalar, weierstrassN } from '../esm/abstract/weierstrass.js';
-import { bitLen } from '../esm/utils.js';
+import {
+  _splitEndoScalar as splitScalar,
+  weierstrass as weierstrassN,
+} from '../abstract/weierstrass.js';
+import { bitLen } from '../utils.js';
 import { calcEndo, calculateScalarBound, config } from './misc/endomorphism.js';
 
 // TODO: calculate endomorphism

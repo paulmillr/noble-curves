@@ -9,7 +9,7 @@ import { ed448, ed448ph, ed448ctx, x448 } from '@noble/curves/ed448.js';
 import { p256, p384, p521 } from '@noble/curves/nist.js';
 import { bls12_381 } from '@noble/curves/bls12-381.js';
 import { bn254 } from '@noble/curves/bn254.js';
-import { bytesToHex, hexToBytes, concatBytes, utf8ToBytes } from '@noble/curves/abstract/utils.js';
+import { bytesToHex, hexToBytes, concatBytes, utf8ToBytes } from '@noble/curves/utils.js';
 ```
  */
 throw new Error('root module cannot be imported: import submodules instead. Check out README');

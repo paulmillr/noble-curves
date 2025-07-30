@@ -28,7 +28,7 @@ describe('ed25519', () => {
     return bytes(hex2.padStart(64, '0'));
   }
 
-  ed.utils.precompute(8);
+  ed.Point.BASE.precompute(8, false);
 
   describe('getPublicKey()', () => {
     should('not accept >32byte private keys in Uint8Array format', () => {
@@ -69,7 +69,7 @@ describe('ed25519', () => {
         eql(hex(pub), expectedPub);
         eql(pub, Point.fromBytes(pub).toBytes());
 
-        const signature = hex(ed.sign(msg, priv));
+        const signature = hex(ed.sign(bytes(msg), bytes(priv)));
         // console.log('vector', i);
         // expect(pub).toBe(expectedPub);
         eql(signature, expectedSignature);
@@ -120,7 +120,7 @@ describe('ed25519', () => {
         fc.property(
           hexaString({ minLength: 2, maxLength: 32 }),
           // @ts-ignore
-          fc.bigInt(2n, ed.CURVE.n),
+          fc.bigInt(2n, ed.Point.Fn.ORDER),
           (msgh, privnum) => {
             const priv = bytes32(privnum);
             const pub = ed.getPublicKey(priv);
@@ -141,7 +141,7 @@ describe('ed25519', () => {
           fc.array(fc.integer({ min: 0x00, max: 0xff })),
           // @ts-ignore
           fc.array(fc.integer({ min: 0x00, max: 0xff })),
-          fc.bigInt(1n, ed.CURVE.n),
+          fc.bigInt(1n, ed.Point.Fn.ORDER),
           (bytes, wrongBytes, privateKey) => {
             const privKey = bytes32(privateKey);
             const message = new Uint8Array(bytes);
@@ -198,7 +198,7 @@ describe('ed25519', () => {
       let s_0 = signature.slice(32, 64);
       let s_1 = hex(s_0.slice().reverse());
       let s_2 = BigInt('0x' + s_1);
-      s_2 = s_2 + ed.CURVE.n;
+      s_2 = s_2 + ed.Point.Fn.ORDER;
       let s_3 = numberToBytesLE(s_2, 32);
 
       const sig_invalid = concatBytes(R, s_3);
@@ -209,7 +209,9 @@ describe('ed25519', () => {
       // https://eprint.iacr.org/2020/1244
       const list = [0, 1, 6, 7, 8, 9, 10, 11].map((i) => edgeCases[i]);
       for (let v of list) {
-        const result = ed.verify(v.signature, v.message, v.pub_key, { zip215: false });
+        const result = ed.verify(bytes(v.signature), bytes(v.message), bytes(v.pub_key), {
+          zip215: false,
+        });
         strictEqual(result, false, `zip215: false must not validate: ${v.signature}`);
       }
     });
@@ -309,7 +311,7 @@ describe('ed25519', () => {
       for (let v of zip215) {
         let noble = false;
         try {
-          noble = ed.verify(v.sig_bytes, str, v.vk_bytes);
+          noble = ed.verify(bytes(v.sig_bytes), str, bytes(v.vk_bytes));
         } catch (e) {
           noble = false;
         }
@@ -335,13 +337,13 @@ describe('ed25519', () => {
     for (let g = 0; g < ed25519vectors_OLD.testGroups.length; g++) {
       const group = ed25519vectors_OLD.testGroups[g];
       const key = group.key;
-      eql(hex(ed.getPublicKey(key.sk)), key.pk, `(${g}, public)`);
+      eql(hex(ed.getPublicKey(bytes(key.sk))), key.pk, `(${g}, public)`);
       for (let i = 0; i < group.tests.length; i++) {
         const v = group.tests[i];
         const comment = `(${g}/${i}, ${v.result}): ${v.comment}`;
         if (v.result === 'valid' || v.result === 'acceptable') {
-          eql(hex(ed.sign(v.msg, key.sk)), v.sig, comment);
-          eql(ed.verify(v.sig, v.msg, key.pk), true, comment);
+          eql(hex(ed.sign(bytes(v.msg), bytes(key.sk))), v.sig, comment);
+          eql(ed.verify(bytes(v.sig), bytes(v.msg), bytes(key.pk)), true, comment);
         } else if (v.result === 'invalid') {
           let failed = false;
           try {
@@ -363,11 +365,11 @@ describe('ed25519', () => {
         const v = group.tests[i];
         const comment = `(${g}/${i}, ${v.result}): ${v.comment}`;
         if (v.result === 'valid' || v.result === 'acceptable') {
-          eql(ed.verify(v.sig, v.msg, key.pk), true, comment);
+          eql(ed.verify(bytes(v.sig), bytes(v.msg), bytes(key.pk)), true, comment);
         } else if (v.result === 'invalid') {
           let failed = false;
           try {
-            failed = !ed.verify(v.sig, v.msg, key.pk);
+            failed = !ed.verify(bytes(v.sig), bytes(v.msg), bytes(key.pk));
           } catch (error) {
             failed = true;
           }

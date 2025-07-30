@@ -1,10 +1,10 @@
 import * as fc from 'fast-check';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql, throws } from 'node:assert';
-import * as fft from '../esm/abstract/fft.js';
-import { bitLen } from '../esm/abstract/utils.js';
-import { bls12_381 } from '../esm/bls12-381.js';
-import { bn254 } from '../esm/bn254.js';
+import * as fft from '../abstract/fft.js';
+import { bls12_381 } from '../bls12-381.js';
+import { bn254 } from '../bn254.js';
+import { bitLen } from '../utils.js';
 
 // Very useful to debug brp related stuff!
 const indices = (a, b) => a.map((i) => b.indexOf(i));

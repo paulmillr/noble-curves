@@ -1,9 +1,9 @@
 import { describe, should } from 'micro-should';
 import { deepStrictEqual } from 'node:assert';
-import { ed25519, x25519 } from '../esm/ed25519.js';
-import { ed448, x448 } from '../esm/ed448.js';
-import { p256, p384, p521 } from '../esm/nist.js';
-import * as webcrypto from '../esm/webcrypto.js';
+import { ed25519, x25519 } from '../ed25519.js';
+import { ed448, x448 } from '../ed448.js';
+import { p256, p384, p521 } from '../nist.js';
+import * as webcrypto from '../webcrypto.js';
 
 // import {  base64urlnopad } from '@scure/base';
 
@@ -92,14 +92,14 @@ describe('webcrypto', () => {
           // Sign
           if (canSign) {
             const sigWeb = await web.sign(MSG, randomWeb, { format: secFormat });
-            let sigNoble = noble.sign(MSG, randomNoble, { prehash: true });
-            if (c !== 'ed25519' && c !== 'ed448') sigNoble = sigNoble.toBytes('compact');
+            let sigNoble = noble.sign(MSG, randomNoble);
+            // if (c !== 'ed25519' && c !== 'ed448') sigNoble = sigNoble.toBytes('compact');
             deepStrictEqual(await web.verify(sigWeb, MSG, publicWeb, { format: pubFormat }), true);
             deepStrictEqual(
               await web.verify(sigNoble, MSG, randomNoblePub, { format: pubFormat }),
               true
             );
-            deepStrictEqual(noble.verify(sigWeb, MSG, rawPubWeb, { prehash: true }), true);
+            deepStrictEqual(noble.verify(sigWeb, MSG, rawPubWeb, { lowS: false }), true);
           }
           // Get shared secret
           if (canDerive && secFormat === pubFormat) {

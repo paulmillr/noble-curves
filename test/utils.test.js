@@ -1,8 +1,20 @@
 import * as fc from 'fast-check';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql, throws } from 'node:assert';
-import { invert, mod } from '../esm/abstract/modular.js';
-import { bytesToHex, concatBytes, hexToBytes } from '../esm/abstract/utils.js';
+import { invert, mod } from '../abstract/modular.js';
+import {
+  abytes,
+  asciiToBytes,
+  bytesToHex,
+  bytesToUtf8,
+  concatBytes,
+  hexToBytes,
+  numberToBytesBE,
+  numberToBytesLE,
+  numberToHexUnpadded,
+  numberToVarBytesBE,
+  utf8ToBytes,
+} from '../utils.js';
 import { getTypeTests } from './utils.js';
 
 describe('utils', () => {
@@ -70,6 +82,145 @@ describe('utils', () => {
       })
     )
   );
+  should('asciiToBytes', () => {
+    const strings = [
+      'H2C-OVERSIZE-DST-',
+      'Seed-',
+      'SigEd448',
+      'SigEd25519 no Ed25519 collisions',
+      'HashToGroup-',
+      'DeriveKeyPair',
+      'OPRFV1-',
+      'SigEd448\0\0', // FROST
+      '`',
+    ];
+    for (const s of strings) {
+      eql(asciiToBytes(s), utf8ToBytes(s));
+    }
+    const UTF8 = [
+      '┌─────',
+      'some 🦁 ',
+      // anything over 127 is extended ascii and depends on code-page
+      '\x80',
+      'e\u0301', // A "decomposed" character: 'e' followed by a combining accent '´'.
+      '\uD83D', // A lone high surrogate, which is an invalid UTF-16 sequence.
+      '\uDE00', // A lone low surrogate, also invalid.
+    ];
+    for (const s of UTF8) throws(() => asciiToBytes(s));
+    const bytesOK = [
+      new Uint8Array([72, 101, 108, 108, 111]),
+      new Uint8Array([0]),
+      new Uint8Array([]),
+      new Uint8Array([127]),
+    ];
+    const bytesFAIL = [
+      new Uint8Array([233]),
+      new Uint8Array([233]),
+      new Uint8Array([0xff, 0xfe]),
+      new Uint8Array([128]),
+      new Uint8Array([0xe9]),
+      new Uint8Array([0xff, 0xfe]),
+      new Uint8Array([0xc2]), // Incomplete 2-byte sequence
+      new Uint8Array([0xe2, 0x82]), // Incomplete 3-byte sequence
+      new Uint8Array([0xe2, 0x82, 0xac]),
+    ];
+    for (const b of bytesOK) {
+      const s = bytesToUtf8(b);
+      eql(asciiToBytes(s), utf8ToBytes(s));
+    }
+    for (const b of bytesFAIL) {
+      const s = bytesToUtf8(b);
+      throws(() => asciiToBytes(s));
+    }
+  });
+  should('numberToHexUnpadded/numberToBytesBE/numberToVarBytesBE', () => {
+    const VECTORS = [
+      { value: 0n, expected: '00' },
+      { value: 0, expected: '00' },
+      { value: 1n, expected: '01' },
+      { value: 1, expected: '01' },
+      { value: 255, expected: 'ff' },
+      { value: 256, expected: '0100' },
+      { value: 0x123456789abcdefn, expected: '0123456789abcdef' },
+      { value: Number.MAX_SAFE_INTEGER, expected: '1fffffffffffff' },
+      { value: BigInt(Number.MAX_SAFE_INTEGER) + 1n, expected: '20000000000000' },
+      // Errors
+      { value: 0x123456789abcdef, error: 'overflow' },
+      { value: -1, error: 'negative' },
+      { value: NaN, error: 'NaN' },
+      { value: Infinity, error: 'Infinity' },
+      { value: -Infinity, error: '-Infinity' },
+      { value: 1.5, error: 'float' },
+      { value: -1n, error: 'negative bigint' },
+    ];
+    for (const { value, expected, error } of VECTORS) {
+      if (error) {
+        throws(() => numberToHexUnpadded(value), `numberToHexUnpadded: ${error}`);
+        throws(() => numberToVarBytesBE(value), `numberToVarBytesBE: ${error}`);
+        throws(() => numberToBytesBE(value, expected.length / 2), `numberToBytesBE: ${error}`);
+      } else {
+        eql(numberToHexUnpadded(value), expected);
+        eql(numberToVarBytesBE(value), hexToBytes(expected));
+        eql(numberToBytesBE(value, expected.length / 2), hexToBytes(expected));
+      }
+    }
+  });
+  should('numberToBytesBE/numberToBytesLE', () => {
+    const VECTORS = [
+      { value: 0n, len: 1, expectedBE: '00', expectedLE: '00' },
+      { value: 1n, len: 1, expectedBE: '01', expectedLE: '01' },
+      { value: 1n, len: 2, expectedBE: '0001', expectedLE: '0100' },
+      { value: 0xff, len: 2, expectedBE: '00ff', expectedLE: 'ff00' },
+      { value: 256, len: 2, expectedBE: '0100', expectedLE: '0001' },
+      { value: 256, len: 1, error: 'overflow (len=3)' },
+      { value: 0xff_ff, len: 1, error: 'overflow (len=4)' },
+      // Errors
+      { value: -1, len: 1, error: 'negative' },
+      { value: NaN, len: 1, error: 'NaN' },
+      { value: Infinity, len: 1, error: 'Infinity' },
+      { value: -Infinity, len: 1, error: '-Infinity' },
+      { value: 1.5, len: 1, error: 'float' },
+      { value: -1n, len: 1, error: 'negative bigint' },
+      { value: 0n, len: 0, error: 'zero length' },
+      { value: 0n, len: -1, error: 'negative length' },
+      { value: 0n, len: true, error: 'true length' },
+    ];
+    for (const { value, len, error, expectedBE, expectedLE } of VECTORS) {
+      if (error) {
+        throws(() => numberToBytesLE(value, len), `numberToBytesBE: ${error}`);
+        throws(() => numberToBytesBE(value, len), `numberToBytesBE: ${error}`);
+      } else {
+        eql(numberToBytesLE(value, len), hexToBytes(expectedLE), `numberToBytesLE: ${expectedLE}`);
+        eql(numberToBytesBE(value, len), hexToBytes(expectedBE), `numberToBytesBE: ${expectedBE}`);
+      }
+    }
+  });
+  should('abytes', () => {
+    const VECTORS = [
+      { b: 1, comment: 'number' },
+      { b: true, comment: 'boolean' },
+      { b: '00', comment: 'hex' },
+      { b: NaN, comment: 'NaN' },
+      { b: [], comment: 'array' },
+      { b: new Uint16Array(2), comment: 'u16' },
+      { b: new Uint32Array(2), comment: 'u32' },
+      { b: new Uint8Array(2), len: 1, comment: 'len' },
+      { b: null, comment: 'null' },
+      { b: undefined, comment: 'undefined' },
+      { b: new DataView(new Uint8Array(10).buffer), comment: 'dataview' },
+      { b: { length: 10, constructor: { name: 'Uint8Array' } }, comment: 'obj' },
+      { b: () => {}, comment: 'closure' },
+      { b: function () {}, comment: 'fn' },
+    ];
+    for (const { b, len, comment } of VECTORS) {
+      throws(() => abytes(b, len, comment), comment);
+      try {
+        abytes(b, len, comment);
+      } catch (e) {
+        // console.log('abytes', e.message);
+      }
+    }
+  });
 });
 
 describe('utils math', () => {

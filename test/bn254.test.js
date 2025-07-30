@@ -1,8 +1,8 @@
 import { hexToBytes } from '@noble/hashes/utils.js';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql, throws } from 'node:assert';
-import { bytesToNumberBE } from '../esm/abstract/utils.js';
-import { bn254 } from '../esm/bn254.js';
+import { bn254 } from '../bn254.js';
+import { bytesToNumberBE } from '../utils.js';
 import { jsonGZ } from './utils.js';
 import { default as ethDump } from './vectors/bn254/eth-dump.js';
 import { default as seda } from './vectors/bn254/seda.js';
@@ -737,7 +737,7 @@ describe('bn254', () => {
       let res;
       try {
         let A = bn254.G1.Point.fromAffine({ x: Ax, y: Ay });
-        A = A.multiply(scalar % bn254.G1.CURVE.n);
+        A = A.multiply(scalar % bn254.G1.Point.Fn.ORDER);
         A.assertValidity();
         res = A.toAffine();
       } catch (e) {
@@ -782,7 +782,7 @@ describe('bn254', () => {
           A.assertValidity();
           B.assertValidity();
           // zero is just skipped (was set to Fp12.ONE before)
-          if (A.equals(G1.Point.ZERO) || B.equals(G2.Point.ZERO)) continue;
+          if (A.is0() || B.is0()) continue;
           pairs.push({ g1: A, g2: B });
         }
         f = bn254.pairingBatch(pairs);
@@ -842,7 +842,7 @@ describe('bn254', () => {
       for (const t of seda.mul) {
         const Ax = BigInt(`0x${t.x}`);
         const Ay = BigInt(`0x${t.y}`);
-        const scalar = BigInt(`0x${t.scalar}`) % bn254.G1.CURVE.n;
+        const scalar = BigInt(`0x${t.scalar}`) % bn254.G1.Point.Fn.ORDER;
         const Cx = BigInt(`0x${t.result.slice(0, 64)}`);
         const Cy = BigInt(`0x${t.result.slice(64)}`);
         const A = bn254.G1.Point.fromAffine({ x: Ax, y: Ay });

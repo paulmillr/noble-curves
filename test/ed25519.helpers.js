@@ -1,7 +1,2 @@
-export { numberToBytesLE } from '../esm/abstract/utils.js';
-export {
-  ed25519,
-  ED25519_TORSION_SUBGROUP,
-  edwardsToMontgomeryPub,
-  x25519,
-} from '../esm/ed25519.js';
+export { ED25519_TORSION_SUBGROUP, ed25519, x25519 } from '../ed25519.js';
+export { numberToBytesLE } from '../utils.js';
