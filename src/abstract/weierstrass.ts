@@ -26,11 +26,11 @@
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { hmac as nobleHmac } from '@noble/hashes/hmac.js';
-import { ahash } from '@noble/hashes/utils';
+import { ahash } from '@noble/hashes/utils.js';
 import {
   _validateObject,
-  _abool2 as abool,
-  _abytes2 as abytes,
+  abool,
+  abytes,
   aInRange,
   bitLen,
   bitMask,
@@ -38,39 +38,31 @@ import {
   bytesToNumberBE,
   concatBytes,
   createHmacDrbg,
-  ensureBytes,
   hexToBytes,
-  inRange,
   isBytes,
   memoized,
   numberToHexUnpadded,
-  randomBytes as randomBytesWeb,
+  randomBytes as wcRandomBytes,
   type CHash,
-  type Hex,
-  type PrivKey,
+  type Signer,
 } from '../utils.ts';
 import {
   _createCurveFields,
   mulEndoUnsafe,
   negateCt,
   normalizeZ,
-  pippenger,
   wNAF,
   type AffinePoint,
-  type BasicCurve,
   type CurveLengths,
   type CurvePoint,
   type CurvePointCons,
 } from './curve.ts';
 import {
-  Field,
   FpInvertBatch,
   getMinHashLength,
   mapHashToField,
-  nLength,
   validateField,
   type IField,
-  type NLength,
 } from './modular.ts';
 
 export type { AffinePoint };
@@ -105,7 +97,6 @@ export type EndomorphismOpts = {
   basises?: EndoBasis;
   splitScalar?: (k: bigint) => { k1neg: boolean; k1: bigint; k2neg: boolean; k2: bigint };
 };
-
 // We construct basis in such way that den is always positive and equals n, but num sign depends on basis (not on secret value)
 const divNearest = (num: bigint, den: bigint) => (num + (num >= 0 ? den : -den) / _2n) / den;
 
@@ -190,25 +181,6 @@ export interface WeierstrassPoint<T> extends CurvePoint<T, WeierstrassPoint<T>> 
   /** Encodes point using IEEE P1363 (DER) encoding. First byte is 2/3/4. Default = isCompressed. */
   toBytes(isCompressed?: boolean): Uint8Array;
   toHex(isCompressed?: boolean): string;
-
-  /** @deprecated use `.X` */
-  readonly px: T;
-  /** @deprecated use `.Y` */
-  readonly py: T;
-  /** @deprecated use `.Z` */
-  readonly pz: T;
-  /** @deprecated use `toBytes` */
-  toRawBytes(isCompressed?: boolean): Uint8Array;
-  /** @deprecated use `multiplyUnsafe` */
-  multiplyAndAddUnsafe(
-    Q: WeierstrassPoint<T>,
-    a: bigint,
-    b: bigint
-  ): WeierstrassPoint<T> | undefined;
-  /** @deprecated use `p.y % 2n === 0n` */
-  hasEvenY(): boolean;
-  /** @deprecated use `p.precompute(windowSize)` */
-  _setWindowSize(windowSize: number): void;
 }
 
 /** Static methods for 3D XYZ projective points. */
@@ -216,12 +188,6 @@ export interface WeierstrassPointCons<T> extends CurvePointCons<WeierstrassPoint
   /** Does NOT validate if the point is valid. Use `.assertValidity()`. */
   new (X: T, Y: T, Z: T): WeierstrassPoint<T>;
   CURVE(): WeierstrassOpts<T>;
-  /** @deprecated use `Point.BASE.multiply(Point.Fn.fromBytes(privateKey))` */
-  fromPrivateKey(privateKey: PrivKey): WeierstrassPoint<T>;
-  /** @deprecated use `import { normalizeZ } from '@noble/curves/abstract/curve.js';` */
-  normalizeZ(points: WeierstrassPoint<T>[]): WeierstrassPoint<T>[];
-  /** @deprecated use `import { pippenger } from '@noble/curves/abstract/curve.js';` */
-  msm(points: WeierstrassPoint<T>[], scalars: bigint[]): WeierstrassPoint<T>;
 }
 
 /**
@@ -286,21 +252,17 @@ export type ECDSAOpts = Partial<{
  */
 export interface ECDH {
   keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
-  getPublicKey: (secretKey: PrivKey, isCompressed?: boolean) => Uint8Array;
-  getSharedSecret: (secretKeyA: PrivKey, publicKeyB: Hex, isCompressed?: boolean) => Uint8Array;
+  getPublicKey: (secretKey: Uint8Array, isCompressed?: boolean) => Uint8Array;
+  getSharedSecret: (
+    secretKeyA: Uint8Array,
+    publicKeyB: Uint8Array,
+    isCompressed?: boolean
+  ) => Uint8Array;
   Point: WeierstrassPointCons<bigint>;
   utils: {
-    isValidSecretKey: (secretKey: PrivKey) => boolean;
+    isValidSecretKey: (secretKey: Uint8Array) => boolean;
     isValidPublicKey: (publicKey: Uint8Array, isCompressed?: boolean) => boolean;
     randomSecretKey: (seed?: Uint8Array) => Uint8Array;
-    /** @deprecated use `randomSecretKey` */
-    randomPrivateKey: (seed?: Uint8Array) => Uint8Array;
-    /** @deprecated use `isValidSecretKey` */
-    isValidPrivateKey: (secretKey: PrivKey) => boolean;
-    /** @deprecated use `Point.Fn.fromBytes()` */
-    normPrivateKeyToScalar: (key: PrivKey) => bigint;
-    /** @deprecated use `point.precompute()` */
-    precompute: (windowSize?: number, point?: WeierstrassPoint<bigint>) => WeierstrassPoint<bigint>;
   };
   lengths: CurveLengths;
 }
@@ -310,7 +272,7 @@ export interface ECDH {
  * Only supported for prime fields, not Fp2 (extension fields).
  */
 export interface ECDSA extends ECDH {
-  sign: (message: Hex, secretKey: PrivKey, opts?: ECDSASignOpts) => ECDSASigRecovered;
+  sign: (message: Uint8Array, secretKey: Uint8Array, opts?: ECDSASignOpts) => Uint8Array;
   verify: (
     signature: Uint8Array,
     message: Uint8Array,
@@ -418,10 +380,10 @@ export const DER: IDER = {
       return bytesToNumberBE(data);
     },
   },
-  toSig(hex: string | Uint8Array): { r: bigint; s: bigint } {
+  toSig(bytes: Uint8Array): { r: bigint; s: bigint } {
     // parse DER signature
     const { Err: E, _int: int, _tlv: tlv } = DER;
-    const data = ensureBytes('signature', hex);
+    const data = abytes(bytes, undefined, 'signature');
     const { v: seqBytes, l: seqLeftBytes } = tlv.decode(0x30, data);
     if (seqLeftBytes.length) throw new E('invalid signature: left bytes after parsing');
     const { v: rBytes, l: rLeftBytes } = tlv.decode(0x02, seqBytes);
@@ -442,23 +404,6 @@ export const DER: IDER = {
 // prettier-ignore
 const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3), _4n = BigInt(4);
 
-export function _normFnElement(Fn: IField<bigint>, key: PrivKey): bigint {
-  const { BYTES: expected } = Fn;
-  let num: bigint;
-  if (typeof key === 'bigint') {
-    num = key;
-  } else {
-    let bytes = ensureBytes('private key', key);
-    try {
-      num = Fn.fromBytes(bytes);
-    } catch (error) {
-      throw new Error(`invalid private key: expected ui8a of size ${expected}, got ${typeof key}`);
-    }
-  }
-  if (!Fn.isValidNot0(num)) throw new Error('invalid private key: out of range [1..N-1]');
-  return num;
-}
-
 /**
  * Creates weierstrass Point constructor, based on specified curve options.
  *
@@ -476,7 +421,7 @@ const opts = {
 const p256_Point = weierstrass(opts);
 ```
  */
-export function weierstrassN<T>(
+export function weierstrass<T>(
   params: WeierstrassOpts<T>,
   extraOpts: WeierstrassExtraOpts<T> = {}
 ): WeierstrassPointCons<T> {
@@ -704,8 +649,9 @@ export function weierstrassN<T>(
       P.assertValidity();
       return P;
     }
-    static fromHex(hex: Hex): Point {
-      return Point.fromBytes(ensureBytes('pointHex', hex));
+
+    static fromHex(hex: string): Point {
+      return Point.fromBytes(hexToBytes(hex));
     }
 
     get x(): T {
@@ -959,32 +905,6 @@ export function weierstrassN<T>(
     toString() {
       return `<Point ${this.is0() ? 'ZERO' : this.toHex()}>`;
     }
-
-    // TODO: remove
-    get px(): T {
-      return this.X;
-    }
-    get py(): T {
-      return this.X;
-    }
-    get pz(): T {
-      return this.Z;
-    }
-    toRawBytes(isCompressed = true): Uint8Array {
-      return this.toBytes(isCompressed);
-    }
-    _setWindowSize(windowSize: number) {
-      this.precompute(windowSize);
-    }
-    static normalizeZ(points: Point[]): Point[] {
-      return normalizeZ(Point, points);
-    }
-    static msm(points: Point[], scalars: bigint[]): Point {
-      return pippenger(Point, Fn, points, scalars);
-    }
-    static fromPrivateKey(privateKey: PrivKey) {
-      return Point.BASE.multiply(_normFnElement(Fn, privateKey));
-    }
   }
   const bits = Fn.BITS;
   const wnaf = new wNAF(Point, extraOpts.endo ? Math.ceil(bits / 2) : bits);
@@ -997,39 +917,16 @@ export interface ECDSASignature {
   readonly r: bigint;
   readonly s: bigint;
   readonly recovery?: number;
-  addRecoveryBit(recovery: number): ECDSASigRecovered;
+  addRecoveryBit(recovery: number): ECDSASignature & { readonly recovery: number };
   hasHighS(): boolean;
   toBytes(format?: string): Uint8Array;
   toHex(format?: string): string;
-
-  /** @deprecated */
-  assertValidity(): void;
-  /** @deprecated */
-  normalizeS(): ECDSASignature;
-  /** @deprecated use standalone method `curve.recoverPublicKey(sig.toBytes('recovered'), msg)` */
-  recoverPublicKey(msgHash: Hex): WeierstrassPoint<bigint>;
-  /** @deprecated use `.toBytes('compact')` */
-  toCompactRawBytes(): Uint8Array;
-  /** @deprecated use `.toBytes('compact')` */
-  toCompactHex(): string;
-  /** @deprecated use `.toBytes('der')` */
-  toDERRawBytes(): Uint8Array;
-  /** @deprecated use `.toBytes('der')` */
-  toDERHex(): string;
 }
-export type ECDSASigRecovered = ECDSASignature & {
-  readonly recovery: number;
-};
 /** Methods of ECDSA signature constructor. */
 export type ECDSASignatureCons = {
   new (r: bigint, s: bigint, recovery?: number): ECDSASignature;
   fromBytes(bytes: Uint8Array, format?: ECDSASigFormat): ECDSASignature;
   fromHex(hex: string, format?: ECDSASigFormat): ECDSASignature;
-
-  /** @deprecated use `.fromBytes(bytes, 'compact')` */
-  fromCompact(hex: Hex): ECDSASignature;
-  /** @deprecated use `.fromBytes(bytes, 'der')` */
-  fromDER(hex: Hex): ECDSASignature;
 };
 
 // Points start with byte 0x02 when y is even; otherwise 0x03
@@ -1189,12 +1086,13 @@ export function ecdh(
   ecdhOpts: { randomBytes?: (bytesLength?: number) => Uint8Array } = {}
 ): ECDH {
   const { Fn } = Point;
-  const randomBytes_ = ecdhOpts.randomBytes || randomBytesWeb;
+  const randomBytes_ = ecdhOpts.randomBytes || wcRandomBytes;
   const lengths = Object.assign(getWLengths(Point.Fp, Fn), { seed: getMinHashLength(Fn.ORDER) });
 
-  function isValidSecretKey(secretKey: PrivKey) {
+  function isValidSecretKey(secretKey: Uint8Array) {
     try {
-      return !!_normFnElement(Fn, secretKey);
+      const num = Fn.fromBytes(secretKey);
+      return Fn.isValidNot0(num);
     } catch (error) {
       return false;
     }
@@ -1225,8 +1123,8 @@ export function ecdh(
    * @param isCompressed whether to return compact (default), or full key
    * @returns Public key, full when isCompressed=false; short when isCompressed=true
    */
-  function getPublicKey(secretKey: PrivKey, isCompressed = true): Uint8Array {
-    return Point.BASE.multiply(_normFnElement(Fn, secretKey)).toBytes(isCompressed);
+  function getPublicKey(secretKey: Uint8Array, isCompressed = true): Uint8Array {
+    return Point.BASE.multiply(Fn.fromBytes(secretKey)).toBytes(isCompressed);
   }
 
   function keygen(seed?: Uint8Array) {
@@ -1237,12 +1135,11 @@ export function ecdh(
   /**
    * Quick and dirty check for item being public key. Does not validate hex, or being on-curve.
    */
-  function isProbPub(item: PrivKey | PubKey): boolean | undefined {
-    if (typeof item === 'bigint') return false;
-    if (item instanceof Point) return true;
+  function isProbPub(item: Uint8Array): boolean | undefined {
     const { secretKey, publicKey, publicKeyUncompressed } = lengths;
-    if (Fn.allowedLengths || secretKey === publicKey) return undefined;
-    const l = ensureBytes('key', item).length;
+    if (!isBytes(item)) return undefined;
+    if (('_lengths' in Fn && Fn._lengths) || secretKey === publicKey) return undefined;
+    const l = abytes(item, undefined, 'key').length;
     return l === publicKey || l === publicKeyUncompressed;
   }
 
@@ -1254,11 +1151,15 @@ export function ecdh(
    * @param isCompressed whether to return compact (default), or full key
    * @returns shared public key
    */
-  function getSharedSecret(secretKeyA: PrivKey, publicKeyB: Hex, isCompressed = true): Uint8Array {
+  function getSharedSecret(
+    secretKeyA: Uint8Array,
+    publicKeyB: Uint8Array,
+    isCompressed = true
+  ): Uint8Array {
     if (isProbPub(secretKeyA) === true) throw new Error('first arg must be private key');
     if (isProbPub(publicKeyB) === false) throw new Error('second arg must be public key');
-    const s = _normFnElement(Fn, secretKeyA);
-    const b = Point.fromHex(publicKeyB); // checks for being on-curve
+    const s = Fn.fromBytes(secretKeyA);
+    const b = Point.fromBytes(publicKeyB); // checks for being on-curve
     return b.multiply(s).toBytes(isCompressed);
   }
 
@@ -1266,14 +1167,6 @@ export function ecdh(
     isValidSecretKey,
     isValidPublicKey,
     randomSecretKey,
-
-    // TODO: remove
-    isValidPrivateKey: isValidSecretKey,
-    randomPrivateKey: randomSecretKey,
-    normPrivateKeyToScalar: (key: PrivKey) => _normFnElement(Fn, key),
-    precompute(windowSize = 8, point = Point.BASE): WeierstrassPoint<bigint> {
-      return point.precompute(windowSize, false);
-    },
   };
 
   return Object.freeze({ getPublicKey, getSharedSecret, keygen, Point, utils, lengths });
@@ -1312,8 +1205,8 @@ export function ecdsa(
       bits2int_modN: 'function',
     }
   );
-
-  const randomBytes = ecdsaOpts.randomBytes || randomBytesWeb;
+  ecdsaOpts = Object.assign({}, ecdsaOpts);
+  const randomBytes = ecdsaOpts.randomBytes || wcRandomBytes;
   const hmac: HmacFnSync =
     ecdsaOpts.hmac ||
     (((key, ...msgs) => nobleHmac(hash, key, concatBytes(...msgs))) satisfies HmacFnSync);
@@ -1322,12 +1215,11 @@ export function ecdsa(
   const { ORDER: CURVE_ORDER, BITS: fnBits } = Fn;
   const { keygen, getPublicKey, getSharedSecret, utils, lengths } = ecdh(Point, ecdsaOpts);
   const defaultSigOpts: Required<ECDSASignOpts> = {
-    prehash: false,
-    lowS: typeof ecdsaOpts.lowS === 'boolean' ? ecdsaOpts.lowS : false,
-    format: undefined as any, //'compact' as ECDSASigFormat,
+    prehash: true,
+    lowS: typeof ecdsaOpts.lowS === 'boolean' ? ecdsaOpts.lowS : true,
+    format: 'compact' as ECDSASigFormat,
     extraEntropy: false,
   };
-  const defaultSigOpts_format = 'compact';
 
   function isBiggerThanHalfOrder(number: bigint) {
     const HALF = CURVE_ORDER >> _1n;
@@ -1342,7 +1234,7 @@ export function ecdsa(
     validateSigFormat(format);
     const size = lengths.signature!;
     const sizer = format === 'compact' ? size : format === 'recovered' ? size + 1 : undefined;
-    return abytes(bytes, sizer, `${format} signature`);
+    return abytes(bytes, sizer);
   }
 
   /**
@@ -1352,6 +1244,7 @@ export function ecdsa(
     readonly r: bigint;
     readonly s: bigint;
     readonly recovery?: number;
+
     constructor(r: bigint, s: bigint, recovery?: number) {
       this.r = validateRS('r', r); // r in [1..N-1];
       this.s = validateRS('s', s); // s in [1..N-1];
@@ -1359,7 +1252,7 @@ export function ecdsa(
       Object.freeze(this);
     }
 
-    static fromBytes(bytes: Uint8Array, format: ECDSASigFormat = defaultSigOpts_format): Signature {
+    static fromBytes(bytes: Uint8Array, format: ECDSASigFormat = defaultSigOpts.format): Signature {
       validateSigLength(bytes, format);
       let recid: number | undefined;
       if (format === 'der') {
@@ -1371,7 +1264,7 @@ export function ecdsa(
         format = 'compact';
         bytes = bytes.subarray(1);
       }
-      const L = Fn.BYTES;
+      const L = lengths.signature! / 2;
       const r = bytes.subarray(0, L);
       const s = bytes.subarray(L, L * 2);
       return new Signature(Fn.fromBytes(r), Fn.fromBytes(s), recid);
@@ -1385,7 +1278,7 @@ export function ecdsa(
       return new Signature(this.r, this.s, recovery) as RecoveredSignature;
     }
 
-    recoverPublicKey(messageHash: Hex): WeierstrassPoint<bigint> {
+    recoverPublicKey(messageHash: Uint8Array): WeierstrassPoint<bigint> {
       const FIELD_ORDER = Fp.ORDER;
       const { r, s, recovery: rec } = this;
       if (rec == null || ![0, 1, 2, 3].includes(rec)) throw new Error('recovery id invalid');
@@ -1406,7 +1299,7 @@ export function ecdsa(
       const x = Fp.toBytes(radj);
       const R = Point.fromBytes(concatBytes(pprefix((rec & 1) === 0), x));
       const ir = Fn.inv(radj); // r^-1
-      const h = bits2int_modN(ensureBytes('msgHash', messageHash)); // Truncate hash
+      const h = bits2int_modN(abytes(messageHash, undefined, 'msgHash')); // Truncate hash
       const u1 = Fn.create(-h * ir); // -hr^-1
       const u2 = Fn.create(s * ir); // sr^-1
       // (sr^-1)R-(hr^-1)G = -(hr^-1)G + (sr^-1). unsafe is fine: there is no private data.
@@ -1421,7 +1314,7 @@ export function ecdsa(
       return isBiggerThanHalfOrder(this.s);
     }
 
-    toBytes(format: ECDSASigFormat = defaultSigOpts_format) {
+    toBytes(format: ECDSASigFormat = defaultSigOpts.format) {
       validateSigFormat(format);
       if (format === 'der') return hexToBytes(DER.hexFromSig(this));
       const r = Fn.toBytes(this.r);
@@ -1435,30 +1328,6 @@ export function ecdsa(
 
     toHex(format?: ECDSASigFormat) {
       return bytesToHex(this.toBytes(format));
-    }
-
-    // TODO: remove
-    assertValidity(): void {}
-    static fromCompact(hex: Hex) {
-      return Signature.fromBytes(ensureBytes('sig', hex), 'compact');
-    }
-    static fromDER(hex: Hex) {
-      return Signature.fromBytes(ensureBytes('sig', hex), 'der');
-    }
-    normalizeS() {
-      return this.hasHighS() ? new Signature(this.r, Fn.neg(this.s), this.recovery) : this;
-    }
-    toDERRawBytes() {
-      return this.toBytes('der');
-    }
-    toDERHex() {
-      return bytesToHex(this.toBytes('der'));
-    }
-    toCompactRawBytes() {
-      return this.toBytes('compact');
-    }
-    toCompactHex() {
-      return bytesToHex(this.toBytes('compact'));
     }
   }
   type RecoveredSignature = Signature & { recovery: number };
@@ -1505,26 +1374,25 @@ export function ecdsa(
    * Warning: we cannot assume here that message has same amount of bytes as curve order,
    * this will be invalid at least for P521. Also it can be bigger for P224 + SHA256.
    */
-  function prepSig(message: Uint8Array, privateKey: PrivKey, opts: ECDSASignOpts) {
-    if (['recovered', 'canonical'].some((k) => k in opts))
-      throw new Error('sign() legacy options not supported');
+  function prepSig(message: Uint8Array, privateKey: Uint8Array, opts: ECDSASignOpts) {
     const { lowS, prehash, extraEntropy } = validateSigOpts(opts, defaultSigOpts);
     message = validateMsgAndHash(message, prehash); // RFC6979 3.2 A: h1 = H(m)
     // We can't later call bits2octets, since nested bits2int is broken for curves
     // with fnBits % 8 !== 0. Because of that, we unwrap it here as int2octets call.
     // const bits2octets = (bits) => int2octets(bits2int_modN(bits))
     const h1int = bits2int_modN(message);
-    const d = _normFnElement(Fn, privateKey); // validate secret key, convert to bigint
+    const d = Fn.fromBytes(privateKey); // validate secret key, convert to bigint
+    if (!Fn.isValidNot0(d)) throw new Error('invalid private key');
     const seedArgs = [int2octets(d), int2octets(h1int)];
     // extraEntropy. RFC6979 3.6: additional k' (optional).
     if (extraEntropy != null && extraEntropy !== false) {
       // K = HMAC_K(V || 0x00 || int2octets(x) || bits2octets(h1) || k')
       // gen random bytes OR pass as-is
       const e = extraEntropy === true ? randomBytes(lengths.secretKey) : extraEntropy;
-      seedArgs.push(ensureBytes('extraEntropy', e)); // check for being bytes
+      seedArgs.push(abytes(e, undefined, 'extraEntropy')); // check for being bytes
     }
     const seed = concatBytes(...seedArgs); // Step D of RFC6979 3.2
-    const m = h1int; // NOTE: no need to call bits2int second time here, it is inside truncateHash!
+    const m = h1int; // no need to call bits2int second time here, it is inside truncateHash!
     // Converts signature params into point w r/s, checks result for validity.
     // To transform k => Signature:
     // q = k⋅G
@@ -1536,7 +1404,7 @@ export function ecdsa(
     function k2sig(kBytes: Uint8Array): RecoveredSignature | undefined {
       // RFC 6979 Section 3.2, step 3: k = bits2int(T)
       // Important: all mod() calls here must be done over N
-      const k = bits2int(kBytes); // mod n, not mod p
+      const k = bits2int(kBytes); // Cannot use fields methods, since it is group element
       if (!Fn.isValidNot0(k)) return; // Valid scalars (including k) must be in 1..N-1
       const ik = Fn.inv(k); // k^-1 mod n
       const q = Point.BASE.multiply(k).toAffine(); // q = k⋅G
@@ -1566,44 +1434,11 @@ export function ecdsa(
    *   s = (m + dr) / k mod n
    * ```
    */
-  function sign(message: Hex, secretKey: PrivKey, opts: ECDSASignOpts = {}): RecoveredSignature {
-    message = ensureBytes('message', message);
+  function sign(message: Uint8Array, secretKey: Uint8Array, opts: ECDSASignOpts = {}): Uint8Array {
     const { seed, k2sig } = prepSig(message, secretKey, opts); // Steps A, D of RFC6979 3.2.
     const drbg = createHmacDrbg<RecoveredSignature>(hash.outputLen, Fn.BYTES, hmac);
     const sig = drbg(seed, k2sig); // Steps B, C, D, E, F, G
-    return sig;
-  }
-
-  function tryParsingSig(sg: Hex | SignatureLike) {
-    // Try to deduce format
-    let sig: Signature | undefined = undefined;
-    const isHex = typeof sg === 'string' || isBytes(sg);
-    const isObj =
-      !isHex &&
-      sg !== null &&
-      typeof sg === 'object' &&
-      typeof sg.r === 'bigint' &&
-      typeof sg.s === 'bigint';
-    if (!isHex && !isObj)
-      throw new Error('invalid signature, expected Uint8Array, hex string or Signature instance');
-    if (isObj) {
-      sig = new Signature(sg.r, sg.s);
-    } else if (isHex) {
-      try {
-        sig = Signature.fromBytes(ensureBytes('sig', sg), 'der');
-      } catch (derError) {
-        if (!(derError instanceof DER.Err)) throw derError;
-      }
-      if (!sig) {
-        try {
-          sig = Signature.fromBytes(ensureBytes('sig', sg), 'compact');
-        } catch (error) {
-          return false;
-        }
-      }
-    }
-    if (!sig) return false;
-    return sig;
+    return sig.toBytes(opts.format);
   }
 
   /**
@@ -1620,21 +1455,21 @@ export function ecdsa(
    * ```
    */
   function verify(
-    signature: Hex | SignatureLike,
-    message: Hex,
-    publicKey: Hex,
+    signature: Uint8Array,
+    message: Uint8Array,
+    publicKey: Uint8Array,
     opts: ECDSAVerifyOpts = {}
   ): boolean {
     const { lowS, prehash, format } = validateSigOpts(opts, defaultSigOpts);
-    publicKey = ensureBytes('publicKey', publicKey);
-    message = validateMsgAndHash(ensureBytes('message', message), prehash);
-    if ('strict' in opts) throw new Error('options.strict was renamed to lowS');
-    const sig =
-      format === undefined
-        ? tryParsingSig(signature)
-        : Signature.fromBytes(ensureBytes('sig', signature as Hex), format);
-    if (sig === false) return false;
+    publicKey = abytes(publicKey, undefined, 'publicKey');
+    message = validateMsgAndHash(message, prehash);
+    if (!isBytes(signature as any)) {
+      const end = signature instanceof Signature ? ', use sig.toBytes()' : '';
+      throw new Error('verify expects Uint8Array signature' + end);
+    }
+    validateSigLength(signature, format); // execute this twice because we want loud error
     try {
+      const sig = Signature.fromBytes(signature, format);
       const P = Point.fromBytes(publicKey);
       if (lowS && sig.hasHighS()) return false;
       const { r, s } = sig;
@@ -1673,209 +1508,5 @@ export function ecdsa(
     recoverPublicKey,
     Signature,
     hash,
-  });
-}
-
-// TODO: remove everything below
-/** @deprecated */
-export type SignatureType = ECDSASignature;
-/** @deprecated */
-export type RecoveredSignatureType = ECDSASigRecovered;
-/** @deprecated */
-export type SignatureLike = { r: bigint; s: bigint };
-/** @deprecated use `Uint8Array | boolean` */
-export type Entropy = Hex | boolean;
-export type BasicWCurve<T> = BasicCurve<T> & {
-  // Params: a, b
-  a: T;
-  b: T;
-
-  // Optional params
-  allowedPrivateKeyLengths?: readonly number[]; // for P521
-  wrapPrivateKey?: boolean; // bls12-381 requires mod(n) instead of rejecting keys >= n
-  endo?: EndomorphismOpts;
-  // When a cofactor != 1, there can be an effective methods to:
-  // 1. Determine whether a point is torsion-free
-  isTorsionFree?: (c: WeierstrassPointCons<T>, point: WeierstrassPoint<T>) => boolean;
-  // 2. Clear torsion component
-  clearCofactor?: (c: WeierstrassPointCons<T>, point: WeierstrassPoint<T>) => WeierstrassPoint<T>;
-};
-/** @deprecated use ECDSASignOpts */
-export type SignOpts = ECDSASignOpts;
-/** @deprecated use ECDSASignOpts */
-export type VerOpts = ECDSAVerifyOpts;
-
-/** @deprecated use WeierstrassPoint */
-export type ProjPointType<T> = WeierstrassPoint<T>;
-/** @deprecated use WeierstrassPointCons */
-export type ProjConstructor<T> = WeierstrassPointCons<T>;
-
-// TODO: remove
-export type CurvePointsType<T> = BasicWCurve<T> & {
-  fromBytes?: (bytes: Uint8Array) => AffinePoint<T>;
-  toBytes?: (
-    c: WeierstrassPointCons<T>,
-    point: WeierstrassPoint<T>,
-    isCompressed: boolean
-  ) => Uint8Array;
-};
-
-// LegacyWeierstrassOpts
-export type CurvePointsTypeWithLength<T> = Readonly<CurvePointsType<T> & Partial<NLength>>;
-
-// LegacyWeierstrass
-export type CurvePointsRes<T> = {
-  Point: WeierstrassPointCons<T>;
-
-  /** @deprecated use `Point.CURVE()` */
-  CURVE: CurvePointsType<T>;
-  /** @deprecated use `Point` */
-  ProjectivePoint: WeierstrassPointCons<T>;
-  /** @deprecated use `Point.Fn.fromBytes(privateKey)` */
-  normPrivateKeyToScalar: (key: PrivKey) => bigint;
-  /** @deprecated */
-  weierstrassEquation: (x: T) => T;
-  /** @deprecated use `Point.Fn.isValidNot0(num)` */
-  isWithinCurveOrder: (num: bigint) => boolean;
-};
-
-// Aliases to legacy types
-// export type CurveType = LegacyECDSAOpts;
-// export type CurveFn = LegacyECDSA;
-// export type CurvePointsRes<T> = LegacyWeierstrass<T>;
-// export type CurvePointsType<T> = LegacyWeierstrassOpts<T>;
-// export type CurvePointsTypeWithLength<T> = LegacyWeierstrassOpts<T>;
-// export type BasicWCurve<T> = LegacyWeierstrassOpts<T>;
-
-/** @deprecated use `Uint8Array` */
-export type PubKey = Hex | WeierstrassPoint<bigint>;
-export type CurveType = BasicWCurve<bigint> & {
-  hash: CHash; // CHash not FHash because we need outputLen for DRBG
-  hmac?: HmacFnSync;
-  randomBytes?: (bytesLength?: number) => Uint8Array;
-  lowS?: boolean;
-  bits2int?: (bytes: Uint8Array) => bigint;
-  bits2int_modN?: (bytes: Uint8Array) => bigint;
-};
-export type CurveFn = {
-  /** @deprecated use `Point.CURVE()` */
-  CURVE: CurvePointsType<bigint>;
-  keygen: ECDSA['keygen'];
-  getPublicKey: ECDSA['getPublicKey'];
-  getSharedSecret: ECDSA['getSharedSecret'];
-  sign: ECDSA['sign'];
-  verify: ECDSA['verify'];
-  Point: WeierstrassPointCons<bigint>;
-  /** @deprecated use `Point` */
-  ProjectivePoint: WeierstrassPointCons<bigint>;
-  Signature: ECDSASignatureCons;
-  utils: ECDSA['utils'];
-  lengths: ECDSA['lengths'];
-};
-/** @deprecated use `weierstrass` in newer releases */
-export function weierstrassPoints<T>(c: CurvePointsTypeWithLength<T>): CurvePointsRes<T> {
-  const { CURVE, curveOpts } = _weierstrass_legacy_opts_to_new(c);
-  const Point = weierstrassN(CURVE, curveOpts);
-  return _weierstrass_new_output_to_legacy(c, Point);
-}
-export type WsPointComposed<T> = {
-  CURVE: WeierstrassOpts<T>;
-  curveOpts: WeierstrassExtraOpts<T>;
-};
-export type WsComposed = {
-  /** @deprecated use `Point.CURVE()` */
-  CURVE: WeierstrassOpts<bigint>;
-  hash: CHash;
-  curveOpts: WeierstrassExtraOpts<bigint>;
-  ecdsaOpts: ECDSAOpts;
-};
-function _weierstrass_legacy_opts_to_new<T>(c: CurvePointsType<T>): WsPointComposed<T> {
-  const CURVE: WeierstrassOpts<T> = {
-    a: c.a,
-    b: c.b,
-    p: c.Fp.ORDER,
-    n: c.n,
-    h: c.h,
-    Gx: c.Gx,
-    Gy: c.Gy,
-  };
-  const Fp = c.Fp;
-  let allowedLengths = c.allowedPrivateKeyLengths
-    ? Array.from(new Set(c.allowedPrivateKeyLengths.map((l) => Math.ceil(l / 2))))
-    : undefined;
-  const Fn = Field(CURVE.n, {
-    BITS: c.nBitLength,
-    allowedLengths: allowedLengths,
-    modFromBytes: c.wrapPrivateKey,
-  });
-  const curveOpts: WeierstrassExtraOpts<T> = {
-    Fp,
-    Fn,
-    allowInfinityPoint: c.allowInfinityPoint,
-    endo: c.endo,
-    isTorsionFree: c.isTorsionFree,
-    clearCofactor: c.clearCofactor,
-    fromBytes: c.fromBytes,
-    toBytes: c.toBytes,
-  };
-  return { CURVE, curveOpts };
-}
-function _ecdsa_legacy_opts_to_new(c: CurveType): WsComposed {
-  const { CURVE, curveOpts } = _weierstrass_legacy_opts_to_new(c);
-  const ecdsaOpts: ECDSAOpts = {
-    hmac: c.hmac,
-    randomBytes: c.randomBytes,
-    lowS: c.lowS,
-    bits2int: c.bits2int,
-    bits2int_modN: c.bits2int_modN,
-  };
-  return { CURVE, curveOpts, hash: c.hash, ecdsaOpts };
-}
-export function _legacyHelperEquat<T>(Fp: IField<T>, a: T, b: T): (x: T) => T {
-  /**
-   * y² = x³ + ax + b: Short weierstrass curve formula. Takes x, returns y².
-   * @returns y²
-   */
-  function weierstrassEquation(x: T): T {
-    const x2 = Fp.sqr(x); // x * x
-    const x3 = Fp.mul(x2, x); // x² * x
-    return Fp.add(Fp.add(x3, Fp.mul(x, a)), b); // x³ + a * x + b
-  }
-  return weierstrassEquation;
-}
-function _weierstrass_new_output_to_legacy<T>(
-  c: CurvePointsType<T>,
-  Point: WeierstrassPointCons<T>
-): CurvePointsRes<T> {
-  const { Fp, Fn } = Point;
-  function isWithinCurveOrder(num: bigint): boolean {
-    return inRange(num, _1n, Fn.ORDER);
-  }
-  const weierstrassEquation = _legacyHelperEquat(Fp, c.a, c.b);
-  return Object.assign(
-    {},
-    {
-      CURVE: c,
-      Point: Point,
-      ProjectivePoint: Point,
-      normPrivateKeyToScalar: (key: PrivKey) => _normFnElement(Fn, key),
-      weierstrassEquation,
-      isWithinCurveOrder,
-    }
-  );
-}
-function _ecdsa_new_output_to_legacy(c: CurveType, _ecdsa: ECDSA): CurveFn {
-  const Point = _ecdsa.Point;
-  return Object.assign({}, _ecdsa, {
-    ProjectivePoint: Point,
-    CURVE: Object.assign({}, c, nLength(Point.Fn.ORDER, Point.Fn.BITS)),
-  });
-}
-
-// _ecdsa_legacy
-export function weierstrass(c: CurveType): CurveFn {
-  const { CURVE, curveOpts, hash, ecdsaOpts } = _ecdsa_legacy_opts_to_new(c);
-  const Point = weierstrassN(CURVE, curveOpts);
-  const signs = ecdsa(Point, hash, ecdsaOpts);
-  return _ecdsa_new_output_to_legacy(c, signs);
+  }) satisfies Signer;
 }
