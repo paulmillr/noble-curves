@@ -531,7 +531,7 @@ export function weierstrassN<T>(
   }
   function pointFromBytes(bytes: Uint8Array) {
     abytes(bytes, undefined, 'Point');
-    const { public: comp, publicUncompressed: uncomp } = lengths; // e.g. for 32-byte: 33, 65
+    const { publicKey: comp, publicKeyUncompressed: uncomp } = lengths; // e.g. for 32-byte: 33, 65
     const length = bytes.length;
     const head = bytes[0];
     const tail = bytes.subarray(1);
@@ -1172,9 +1172,9 @@ export function mapToCurveSimpleSWU<T>(
 
 function getWLengths<T>(Fp: IField<T>, Fn: IField<bigint>) {
   return {
-    secret: Fn.BYTES,
-    public: 1 + Fp.BYTES,
-    publicUncompressed: 1 + 2 * Fp.BYTES,
+    secretKey: Fn.BYTES,
+    publicKey: 1 + Fp.BYTES,
+    publicKeyUncompressed: 1 + 2 * Fp.BYTES,
     publicKeyHasPrefix: true,
     signature: 2 * Fn.BYTES,
   };
@@ -1201,11 +1201,11 @@ export function ecdh(
   }
 
   function isValidPublicKey(publicKey: Uint8Array, isCompressed?: boolean): boolean {
-    const { public: comp, publicUncompressed } = lengths;
+    const { publicKey: comp, publicKeyUncompressed } = lengths;
     try {
       const l = publicKey.length;
       if (isCompressed === true && l !== comp) return false;
-      if (isCompressed === false && l !== publicUncompressed) return false;
+      if (isCompressed === false && l !== publicKeyUncompressed) return false;
       return !!Point.fromBytes(publicKey);
     } catch (error) {
       return false;
@@ -1240,9 +1240,10 @@ export function ecdh(
   function isProbPub(item: PrivKey | PubKey): boolean | undefined {
     if (typeof item === 'bigint') return false;
     if (item instanceof Point) return true;
-    if (Fn.allowedLengths || lengths.secret === lengths.public) return undefined;
+    const { secretKey, publicKey, publicKeyUncompressed } = lengths;
+    if (Fn.allowedLengths || secretKey === publicKey) return undefined;
     const l = ensureBytes('key', item).length;
-    return l === lengths.public || l === lengths.publicUncompressed;
+    return l === publicKey || l === publicKeyUncompressed;
   }
 
   /**
@@ -1359,7 +1360,7 @@ export function ecdsa(
     }
 
     static fromBytes(bytes: Uint8Array, format: ECDSASigFormat = defaultSigOpts_format): Signature {
-      validateSigLength(bytes, format)
+      validateSigLength(bytes, format);
       let recid: number | undefined;
       if (format === 'der') {
         const { r, s } = DER.toSig(abytes(bytes));
@@ -1519,7 +1520,7 @@ export function ecdsa(
     if (extraEntropy != null && extraEntropy !== false) {
       // K = HMAC_K(V || 0x00 || int2octets(x) || bits2octets(h1) || k')
       // gen random bytes OR pass as-is
-      const e = extraEntropy === true ? randomBytes(lengths.secret) : extraEntropy;
+      const e = extraEntropy === true ? randomBytes(lengths.secretKey) : extraEntropy;
       seedArgs.push(ensureBytes('extraEntropy', e)); // check for being bytes
     }
     const seed = concatBytes(...seedArgs); // Step D of RFC6979 3.2

@@ -26,12 +26,12 @@ describe('info', () => {
       should('keys', () => {
         const len = curve.lengths;
         const privateKey = curve.utils.randomSecretKey();
-        eql(privateKey.length, len.secret);
+        eql(privateKey.length, len.secretKey);
         const publicKey = curve.getPublicKey(privateKey);
-        eql(publicKey.length, len.public);
+        eql(publicKey.length, len.publicKey);
         if (curve.getSharedSecret) {
           const shared = curve.getSharedSecret(privateKey, publicKey);
-          eql(shared.length, len.public);
+          eql(shared.length, len.publicKey);
         }
         if (curve.sign) {
           const msg = new Uint8Array([1, 2, 3]);

@@ -683,7 +683,7 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
 
   // Get the hashed private scalar per RFC8032 5.1.5
   function getPrivateScalar(key: Hex) {
-    const len = lengths.secret;
+    const len = lengths.secretKey;
     key = ensureBytes('private key', key, len);
     // Hash private key with curve's hash function to produce uniformingly random input
     // Check byte lengths: ensure(64, h(ensure(32, key)))
@@ -739,7 +739,7 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
     const len = lengths.signature;
     sig = ensureBytes('signature', sig, len);
     msg = ensureBytes('message', msg);
-    publicKey = ensureBytes('publicKey', publicKey, lengths.public);
+    publicKey = ensureBytes('publicKey', publicKey, lengths.publicKey);
     if (zip215 !== undefined) abool(zip215, 'zip215');
     if (prehash) msg = prehash(msg); // for ed25519ph, etc
 
@@ -768,8 +768,8 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
 
   const _size = Fp.BYTES; // 32 for ed25519, 57 for ed448
   const lengths = {
-    secret: _size,
-    public: _size,
+    secretKey: _size,
+    publicKey: _size,
     signature: 2 * _size,
     seed: _size,
   };
@@ -807,7 +807,7 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
      */
     toMontgomery(publicKey: Uint8Array): Uint8Array {
       const { y } = Point.fromBytes(publicKey);
-      const size = lengths.public;
+      const size = lengths.publicKey;
       const is25519 = size === 32;
       if (!is25519 && size !== 57) throw new Error('only defined for 25519 and 448');
       const u = is25519 ? Fp.div(_1n + y, _1n - y) : Fp.div(y - _1n, y + _1n);
@@ -815,7 +815,7 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
     },
 
     toMontgomeryPriv(secretKey: Uint8Array): Uint8Array {
-      const size = lengths.secret;
+      const size = lengths.secretKey;
       abytes(secretKey, size);
       const hashed = cHash(secretKey.subarray(0, size));
       return adjustScalarBytes(hashed).subarray(0, size);

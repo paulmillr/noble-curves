@@ -285,8 +285,8 @@ export const schnorr: SecpSchnorr = /* @__PURE__ */ (() => {
       mod,
     },
     lengths: {
-      secret: size,
-      public: size,
+      secretKey: size,
+      publicKey: size,
       publicKeyHasPrefix: false,
       signature: size * 2,
       seed: seedLength,

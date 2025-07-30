@@ -127,9 +127,9 @@ export type PC_ANY = CurvePointCons<
 >;
 
 export interface CurveLengths {
-  secret?: number;
-  public?: number;
-  publicUncompressed?: number;
+  secretKey?: number;
+  publicKey?: number;
+  publicKeyUncompressed?: number;
   publicKeyHasPrefix?: boolean;
   signature?: number;
   seed?: number;

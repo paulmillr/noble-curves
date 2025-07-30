@@ -165,8 +165,8 @@ export function montgomery(curveDef: CurveType): MontgomeryECDH {
     return modP(x_2 * z2); // Return x_2 * (z_2^(p - 2))
   }
   const lengths = {
-    secret: fieldLen,
-    public: fieldLen,
+    secretKey: fieldLen,
+    publicKey: fieldLen,
     seed: fieldLen,
   };
   const randomSecretKey = (seed = randomBytes_(fieldLen)) => {
