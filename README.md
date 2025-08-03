@@ -50,12 +50,12 @@ A standalone file [noble-curves.js](https://github.com/paulmillr/noble-curves/re
 ```ts
 // import * from '@noble/curves'; // Error: use sub-imports, to ensure small app size
 import { secp256k1, schnorr } from '@noble/curves/secp256k1.js';
-import { ed25519, ed25519ph, ed25519ctx, x25519 } from '@noble/curves/ed25519.js';
-import { ed448, ed448ph, ed448ctx, x448 } from '@noble/curves/ed448.js';
+import { ed25519, ed25519ph, ed25519ctx, x25519, ristretto255 } from '@noble/curves/ed25519.js';
+import { ed448, ed448ph, ed448ctx, x448, decaf448 } from '@noble/curves/ed448.js';
 import { p256, p384, p521 } from '@noble/curves/nist.js';
 import { bls12_381 } from '@noble/curves/bls12-381.js';
 import { bn254 } from '@noble/curves/bn254.js';
-import { jubjub, babyjubjub } from '@noble/curves/misc.js';
+import { jubjub, babyjubjub, brainpoolP256r1, brainpoolP384r1, brainpoolP512r1 } from '@noble/curves/misc.js';
 
 // hash-to-curve
 import { secp256k1_hasher } from '@noble/curves/secp256k1.js';
@@ -80,17 +80,23 @@ import { bytesToHex, hexToBytes, concatBytes, utf8ToBytes } from '@noble/curves/
 
 ### ECDSA, EdDSA, Schnorr signatures
 
-#### secp256k1, p256, p384, p521, ed25519, ed448
+#### secp256k1, p256, p384, p521, ed25519, ed448, brainpool
 
 ```js
 import { secp256k1, schnorr } from '@noble/curves/secp256k1.js';
 import { p256, p384, p521 } from '@noble/curves/nist.js';
 import { ed25519 } from '@noble/curves/ed25519.js';
 import { ed448 } from '@noble/curves/ed448.js';
+import { brainpoolP256r1, brainpoolP384r1, brainpoolP512r1 } from '@noble/curves/misc.js';
 
 import { hexToBytes, utf8ToBytes } from '@noble/curves/utils.js';
 
-for (const curve of [secp256k1, schnorr, p256, p384, p521, ed25519, ed448]) {
+for (const curve of [
+  secp256k1, schnorr,
+  p256, p384, p521,
+  ed25519, ed448,
+  brainpoolP256r1, brainpoolP384r1, brainpoolP512r1
+]) {
   const { secretKey, publicKey } = curve.keygen();
   const msg = utf8ToBytes('hello noble');
   const sig = curve.sign(msg, secretKey);
