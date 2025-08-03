@@ -129,26 +129,43 @@ export function _splitEndoScalar(k: bigint, basis: EndoBasis, n: bigint): Scalar
   return { k1neg, k1, k2neg, k2 };
 }
 
-export type ECDSASigFormat = 'compact' | 'recovered' | 'der';
+/**
+ * Option to enable hedged signatures with improved security.
+ *
+ * * Randomly generated k is bad, because broken CSPRNG would leak private keys.
+ * * Deterministic k (RFC6979) is better; but is suspectible to fault attacks.
+ *
+ * We allow using technique described in RFC6979 3.6: additional k', a.k.a. adding randomness
+ * to deterministic sig. If CSPRNG is broken & randomness is weak, it would STILL be as secure
+ * as ordinary sig without ExtraEntropy.
+ *
+ * * `true` means "fetch data, from CSPRNG, incorporate it into k generation"
+ * * `false` means "disable extra entropy, use purely deterministic k"
+ * * `Uint8Array` passed means "incorporate following data into k generation"
+ *
+ * https://paulmillr.com/posts/deterministic-signatures/
+ */
+export type ECDSAExtraEntropy = boolean | Uint8Array;
+export type ECDSASignatureFormat = 'compact' | 'recovered' | 'der';
 export type ECDSARecoverOpts = {
   prehash?: boolean;
 };
 export type ECDSAVerifyOpts = {
   prehash?: boolean;
   lowS?: boolean;
-  format?: ECDSASigFormat;
+  format?: ECDSASignatureFormat;
 };
 export type ECDSASignOpts = {
   prehash?: boolean;
   lowS?: boolean;
-  format?: ECDSASigFormat;
-  extraEntropy?: Uint8Array | boolean;
+  format?: ECDSASignatureFormat;
+  extraEntropy?: ECDSAExtraEntropy;
 };
 
-function validateSigFormat(format: string): ECDSASigFormat {
+function validateSigFormat(format: string): ECDSASignatureFormat {
   if (!['compact', 'recovered', 'der'].includes(format))
     throw new Error('Signature format must be "compact", "recovered", or "der"');
-  return format as ECDSASigFormat;
+  return format as ECDSASignatureFormat;
 }
 
 function validateSigOpts<T extends ECDSASignOpts, D extends Required<ECDSASignOpts>>(
@@ -925,8 +942,8 @@ export interface ECDSASignature {
 /** Methods of ECDSA signature constructor. */
 export type ECDSASignatureCons = {
   new (r: bigint, s: bigint, recovery?: number): ECDSASignature;
-  fromBytes(bytes: Uint8Array, format?: ECDSASigFormat): ECDSASignature;
-  fromHex(hex: string, format?: ECDSASigFormat): ECDSASignature;
+  fromBytes(bytes: Uint8Array, format?: ECDSASignatureFormat): ECDSASignature;
+  fromHex(hex: string, format?: ECDSASignatureFormat): ECDSASignature;
 };
 
 // Points start with byte 0x02 when y is even; otherwise 0x03
@@ -1217,7 +1234,7 @@ export function ecdsa(
   const defaultSigOpts: Required<ECDSASignOpts> = {
     prehash: true,
     lowS: typeof ecdsaOpts.lowS === 'boolean' ? ecdsaOpts.lowS : true,
-    format: 'compact' as ECDSASigFormat,
+    format: 'compact' as ECDSASignatureFormat,
     extraEntropy: false,
   };
 
@@ -1230,7 +1247,7 @@ export function ecdsa(
       throw new Error(`invalid signature ${title}: out of range 1..Point.Fn.ORDER`);
     return num;
   }
-  function validateSigLength(bytes: Uint8Array, format: ECDSASigFormat) {
+  function validateSigLength(bytes: Uint8Array, format: ECDSASignatureFormat) {
     validateSigFormat(format);
     const size = lengths.signature!;
     const sizer = format === 'compact' ? size : format === 'recovered' ? size + 1 : undefined;
@@ -1252,7 +1269,10 @@ export function ecdsa(
       Object.freeze(this);
     }
 
-    static fromBytes(bytes: Uint8Array, format: ECDSASigFormat = defaultSigOpts.format): Signature {
+    static fromBytes(
+      bytes: Uint8Array,
+      format: ECDSASignatureFormat = defaultSigOpts.format
+    ): Signature {
       validateSigLength(bytes, format);
       let recid: number | undefined;
       if (format === 'der') {
@@ -1270,7 +1290,7 @@ export function ecdsa(
       return new Signature(Fn.fromBytes(r), Fn.fromBytes(s), recid);
     }
 
-    static fromHex(hex: string, format?: ECDSASigFormat) {
+    static fromHex(hex: string, format?: ECDSASignatureFormat) {
       return this.fromBytes(hexToBytes(hex), format);
     }
 
@@ -1314,7 +1334,7 @@ export function ecdsa(
       return isBiggerThanHalfOrder(this.s);
     }
 
-    toBytes(format: ECDSASigFormat = defaultSigOpts.format) {
+    toBytes(format: ECDSASignatureFormat = defaultSigOpts.format) {
       validateSigFormat(format);
       if (format === 'der') return hexToBytes(DER.hexFromSig(this));
       const r = Fn.toBytes(this.r);
@@ -1326,7 +1346,7 @@ export function ecdsa(
       return concatBytes(r, s);
     }
 
-    toHex(format?: ECDSASigFormat) {
+    toHex(format?: ECDSASignatureFormat) {
       return bytesToHex(this.toBytes(format));
     }
   }
