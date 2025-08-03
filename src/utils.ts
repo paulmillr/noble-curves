@@ -20,7 +20,7 @@ export {
   hexToBytes,
   isBytes,
   randomBytes,
-  utf8ToBytes
+  utf8ToBytes,
 } from '@noble/hashes/utils.js';
 const _0n = /* @__PURE__ */ BigInt(0);
 const _1n = /* @__PURE__ */ BigInt(1);

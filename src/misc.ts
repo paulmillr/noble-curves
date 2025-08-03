@@ -56,7 +56,7 @@ export function jubjub_groupHash(tag: Uint8Array, personalization: Uint8Array): 
   const h = blake2s.create({ personalization, dkLen: 32 });
   h.update(jubjub_gh_first_block);
   h.update(tag);
-  // NOTE: returns ExtendedPoint, in case it will be multiplied later
+  // NOTE: returns EdwardsPoint, in case it will be multiplied later
   let p = jubjub.Point.fromBytes(h.digest());
   // NOTE: cannot replace with isSmallOrder, returns Point*8
   p = p.multiply(jubjub_CURVE.h);

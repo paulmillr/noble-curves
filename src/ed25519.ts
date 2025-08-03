@@ -290,14 +290,12 @@ const MAX_255B = /* @__PURE__ */ BigInt(
 );
 const bytes255ToNumberLE = (bytes: Uint8Array) => Fp.create(bytesToNumberLE(bytes) & MAX_255B);
 
-type ExtendedPoint = EdwardsPoint;
-
 /**
  * Computes Elligator map for Ristretto255.
  * Described in [RFC9380](https://www.rfc-editor.org/rfc/rfc9380#appendix-B) and on
  * the [website](https://ristretto.group/formulas/elligator.html).
  */
-function calcElligatorRistrettoMap(r0: bigint): ExtendedPoint {
+function calcElligatorRistrettoMap(r0: bigint): EdwardsPoint {
   const { d } = ed25519_CURVE;
   const P = ed25519_CURVE_p;
   const mod = (n: bigint) => Fp.create(n);
@@ -331,9 +329,9 @@ function ristretto255_map(bytes: Uint8Array): _RistrettoPoint {
 /**
  * Wrapper over Edwards Point for ristretto255.
  *
- * Each ed25519/ExtendedPoint has 8 different equivalent points. This can be
+ * Each ed25519/EdwardsPoint has 8 different equivalent points. This can be
  * a source of bugs for protocols like ring signatures. Ristretto was created to solve this.
- * Ristretto point operates in X:Y:Z:T extended coordinates like ExtendedPoint,
+ * Ristretto point operates in X:Y:Z:T extended coordinates like EdwardsPoint,
  * but it should work in its own namespace: do not combine those two.
  * See [RFC9496](https://www.rfc-editor.org/rfc/rfc9496).
  */
@@ -353,7 +351,7 @@ class _RistrettoPoint extends PrimeEdwardsPoint<_RistrettoPoint> {
   static Fn: IField<bigint> =
     /* @__PURE__ */ (() => Fn)();
 
-  constructor(ep: ExtendedPoint) {
+  constructor(ep: EdwardsPoint) {
     super(ep);
   }
 

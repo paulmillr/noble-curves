@@ -221,8 +221,8 @@ export function edwards(params: EdwardsOpts, extraOpts: EdwardsExtraOpts = {}): 
     return n;
   }
 
-  function aextpoint(other: unknown) {
-    if (!(other instanceof Point)) throw new Error('ExtendedPoint expected');
+  function aedpoint(other: unknown) {
+    if (!(other instanceof Point)) throw new Error('EdwardsPoint expected');
   }
   // Converts Extended point to default (x, y) coordinates.
   // Can accept precomputed Z^-1 - for example, from invertBatch.
@@ -353,7 +353,7 @@ export function edwards(params: EdwardsOpts, extraOpts: EdwardsExtraOpts = {}): 
 
     // Compare one point to another.
     equals(other: Point): boolean {
-      aextpoint(other);
+      aedpoint(other);
       const { X: X1, Y: Y1, Z: Z1 } = this;
       const { X: X2, Y: Y2, Z: Z2 } = other;
       const X1Z2 = modP(X1 * Z2);
@@ -398,7 +398,7 @@ export function edwards(params: EdwardsOpts, extraOpts: EdwardsExtraOpts = {}): 
     // https://hyperelliptic.org/EFD/g1p/auto-twisted-extended.html#addition-add-2008-hwcd
     // Cost: 9M + 1*a + 1*d + 7add.
     add(other: Point) {
-      aextpoint(other);
+      aedpoint(other);
       const { a, d } = CURVE;
       const { X: X1, Y: Y1, Z: Z1, T: T1 } = this;
       const { X: X2, Y: Y2, Z: Z2, T: T2 } = other;

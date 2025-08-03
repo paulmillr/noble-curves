@@ -493,9 +493,9 @@ export function weierstrass<T>(
         throw new Error('bad point: is not on curve, sqrt error' + err);
       }
       assertCompressionIsSupported();
-      const isYOdd = Fp.isOdd!(y); // (y & _1n) === _1n;
-      const isHeadOdd = (head & 1) === 1; // ECDSA-specific
-      if (isHeadOdd !== isYOdd) y = Fp.neg(y);
+      const evenY = Fp.isOdd!(y);
+      const evenH = (head & 1) === 1; // ECDSA-specific
+      if (evenH !== evenY) y = Fp.neg(y);
       return { x, y };
     } else if (length === uncomp && head === 0x04) {
       // TODO: more checks
@@ -544,7 +544,7 @@ export function weierstrass<T>(
   }
 
   function aprjpoint(other: unknown) {
-    if (!(other instanceof Point)) throw new Error('ProjectivePoint expected');
+    if (!(other instanceof Point)) throw new Error('Weierstrass Point expected');
   }
 
   function splitEndoScalarN(k: bigint) {
@@ -1410,7 +1410,7 @@ export function ecdsa(
       const q = Point.BASE.multiply(k).toAffine(); // q = k⋅G
       const r = Fn.create(q.x); // r = q.x mod n
       if (r === _0n) return;
-      const s = Fn.create(ik * Fn.create(m + r * d)); // Not using blinding here, see comment above
+      const s = Fn.create(ik * Fn.create(m + r * d)); // s = k^-1(m + rd) mod n
       if (s === _0n) return;
       let recovery = (q.x === r ? 0 : 2) | Number(q.y & _1n); // recovery bit (2 or 3, when q.x > n)
       let normS = s;
