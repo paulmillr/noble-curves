@@ -1,9 +1,9 @@
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql, throws } from 'node:assert';
-import { ed25519ctx, ristretto255, ristretto255_hasher } from '../ed25519.js';
-import { decaf448, decaf448_hasher, ed448 } from '../ed448.js';
-import { bytesToNumberLE } from '../utils.js';
+import { ed25519ctx, ristretto255, ristretto255_hasher } from '../src/ed25519.ts';
+import { decaf448, decaf448_hasher, ed448 } from '../src/ed448.ts';
+import { bytesToNumberLE } from '../src/utils.ts';
 
 const RistrettoPoint = ristretto255.Point;
 const DecafPoint = decaf448.Point;

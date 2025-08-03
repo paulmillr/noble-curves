@@ -1,13 +1,13 @@
 import { sha256 } from '@noble/hashes/sha2.js';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql, notDeepStrictEqual, throws } from 'node:assert';
-import { Field } from '../abstract/modular.js';
-import { ecdsa, weierstrass } from '../abstract/weierstrass.js';
-import { bls12_381 } from '../bls12-381.js';
-import { bn254 } from '../bn254.js';
-import { ed25519, x25519 } from '../ed25519.js';
-import { secp256k1 } from '../secp256k1.js';
-import { json } from './utils.js';
+import { Field } from '../src/abstract/modular.ts';
+import { ecdsa, weierstrass } from '../src/abstract/weierstrass.ts';
+import { bls12_381 } from '../src/bls12-381.ts';
+import { bn254 } from '../src/bn254.ts';
+import { ed25519, x25519 } from '../src/ed25519.ts';
+import { secp256k1 } from '../src/secp256k1.ts';
+import { json } from './utils.ts';
 const wyche_curves = json('./vectors/wycheproof/ec_prime_order_curves_test.json');
 
 describe('edge cases', () => {

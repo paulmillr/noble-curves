@@ -2,10 +2,10 @@ import { isBytes } from '@noble/hashes/utils.js';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql } from 'node:assert';
 import { randomBytes } from 'node:crypto';
-import { ed25519, x25519 } from '../ed25519.js';
-import { ed448, x448 } from '../ed448.js';
-import { p256 as secp256r1, p384 as secp384r1, p521 as secp521r1 } from '../nist.js';
-import { schnorr, secp256k1 } from '../secp256k1.js';
+import { ed25519, x25519 } from '../src/ed25519.ts';
+import { ed448, x448 } from '../src/ed448.ts';
+import { p256 as secp256r1, p384 as secp384r1, p521 as secp521r1 } from '../src/nist.ts';
+import { schnorr, secp256k1 } from '../src/secp256k1.ts';
 
 const CURVES = {
   secp256k1,

@@ -1,9 +1,9 @@
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql } from 'node:assert';
-import * as mod from '../abstract/modular.js';
-import * as poseidon from '../abstract/poseidon.js';
-import * as stark from './_poseidon.helpers.js';
-import { json } from './utils.js';
+import * as mod from '../src/abstract/modular.ts';
+import * as poseidon from '../src/abstract/poseidon.ts';
+import * as stark from './_poseidon.helpers.ts';
+import { json } from './utils.ts';
 const vecp = json('./vectors/poseidon.json');
 
 const parseArrBig = (arr) => arr.map((n) => BigInt(n));

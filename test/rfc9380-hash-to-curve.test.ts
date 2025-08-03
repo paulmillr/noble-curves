@@ -1,17 +1,17 @@
 import { bytesToHex } from '@noble/hashes/utils.js';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql } from 'node:assert';
-import { json } from './utils.js';
+import { json } from './utils.ts';
 // Generic tests for all curves in package
 import { sha256, sha512 } from '@noble/hashes/sha2.js';
 import { shake128, shake256 } from '@noble/hashes/sha3.js';
-import { expand_message_xmd, expand_message_xof } from '../abstract/hash-to-curve.js';
-import { bls12_381 } from '../bls12-381.js';
-import { ed25519_hasher } from '../ed25519.js';
-import { ed448_hasher } from '../ed448.js';
-import * as nist from '../nist.js';
-import { secp256k1_hasher } from '../secp256k1.js';
-import { utf8ToBytes } from '../utils.js';
+import { expand_message_xmd, expand_message_xof } from '../src/abstract/hash-to-curve.ts';
+import { bls12_381 } from '../src/bls12-381.ts';
+import { ed25519_hasher } from '../src/ed25519.ts';
+import { ed448_hasher } from '../src/ed448.ts';
+import * as nist from '../src/nist.ts';
+import { secp256k1_hasher } from '../src/secp256k1.ts';
+import { utf8ToBytes } from '../src/utils.ts';
 const PREFIX = './vectors/rfc9380-hash-to-curve/';
 // XMD
 const xmd_sha256_38 = json(PREFIX + 'expand_message_xmd_SHA256_38.json');

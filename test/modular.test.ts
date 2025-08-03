@@ -1,17 +1,23 @@
 import * as fc from 'fast-check';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql, throws } from 'node:assert';
-import * as mod from '../abstract/modular.js';
-import { Field } from '../abstract/modular.js';
-import { bls12_381 } from '../bls12-381.js';
-import { bn254 } from '../bn254.js';
-import { ed25519 } from '../ed25519.js';
-import { ed448 } from '../ed448.js';
-import { babyjubjub, brainpoolP256r1, brainpoolP384r1, brainpoolP512r1, jubjub } from '../misc.js';
-import { p256 as secp256r1, p521 as secp521r1 } from '../nist.js';
-import { secp256k1 } from '../secp256k1.js';
-import { secp192r1, secp224r1 } from './_more-curves.helpers.js';
-import { json } from './utils.js';
+import * as mod from '../src/abstract/modular.ts';
+import { Field } from '../src/abstract/modular.ts';
+import { bls12_381 } from '../src/bls12-381.ts';
+import { bn254 } from '../src/bn254.ts';
+import { ed25519 } from '../src/ed25519.ts';
+import { ed448 } from '../src/ed448.ts';
+import {
+  babyjubjub,
+  brainpoolP256r1,
+  brainpoolP384r1,
+  brainpoolP512r1,
+  jubjub,
+} from '../src/misc.ts';
+import { p256 as secp256r1, p521 as secp521r1 } from '../src/nist.ts';
+import { secp256k1 } from '../src/secp256k1.ts';
+import { secp192r1, secp224r1 } from './_more-curves.helpers.ts';
+import { json } from './utils.ts';
 const wyche_curves = json('./vectors/wycheproof/ec_prime_order_curves_test.json');
 
 // const FC_HEX = fc.stringMatching(/[0-9a-fA-F]+/, { size: 64 });

@@ -4,7 +4,7 @@ import { p256, p256_hasher, p384, p384_hasher, p521, p521_hasher } from '@noble/
 import { secp256k1, secp256k1_hasher } from '@noble/curves/secp256k1.js';
 import { randomBytes } from '@noble/hashes/utils.js';
 import compare from 'micro-bmark/compare.js';
-import { generateData } from './_shared.js';
+import { generateData } from './_shared.ts';
 
 (async () => {
   const curves_ = { ed25519, ed448, secp256k1, p256, p384, p521 };

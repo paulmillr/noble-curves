@@ -4,8 +4,8 @@ import { deepStrictEqual } from 'node:assert';
 import {
   _splitEndoScalar as splitScalar,
   weierstrass as weierstrassN,
-} from '../abstract/weierstrass.js';
-import { bitLen } from '../utils.js';
+} from '../src/abstract/weierstrass.ts';
+import { bitLen } from '../src/utils.ts';
 import { calcEndo, calculateScalarBound, config } from './misc/endomorphism.js';
 
 // TODO: calculate endomorphism

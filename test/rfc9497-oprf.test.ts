@@ -1,11 +1,11 @@
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql, notDeepEqual, throws } from 'node:assert';
-import * as mod from '../abstract/modular.js';
-import { ristretto255_oprf } from '../ed25519.js';
-import { decaf448_oprf } from '../ed448.js';
-import { p256_oprf, p384_oprf, p521_oprf } from '../nist.js';
-import { numberToBytesBE, numberToBytesLE, utf8ToBytes } from '../utils.js';
-import { deepHexToBytes, json } from './utils.js';
+import * as mod from '../src/abstract/modular.ts';
+import { ristretto255_oprf } from '../src/ed25519.ts';
+import { decaf448_oprf } from '../src/ed448.ts';
+import { p256_oprf, p384_oprf, p521_oprf } from '../src/nist.ts';
+import { numberToBytesBE, numberToBytesLE, utf8ToBytes } from '../src/utils.ts';
+import { deepHexToBytes, json } from './utils.ts';
 const VECTORS = deepHexToBytes(json('./vectors/rfc9497-oprf.json')); // Generated using rfc9497-oprf-parser.js
 
 const BufferRNG = (lst) => {

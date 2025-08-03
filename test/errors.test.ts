@@ -1,10 +1,10 @@
 import { should } from 'micro-should';
 import { deepStrictEqual as eql } from 'node:assert';
 import { randomBytes } from 'node:crypto';
-import { bls12_381 } from '../bls12-381.js';
-import { ed25519, x25519 } from '../ed25519.js';
-import { p256 } from '../nist.js';
-import { bytesToHex } from '../utils.js';
+import { bls12_381 } from '../src/bls12-381.ts';
+import { ed25519, x25519 } from '../src/ed25519.ts';
+import { p256 } from '../src/nist.ts';
+import { bytesToHex } from '../src/utils.ts';
 
 const CURVES = {
   p256,

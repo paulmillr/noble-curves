@@ -2,17 +2,17 @@ import { bytesToHex, hexToBytes, isBytes } from '@noble/hashes/utils.js';
 import * as fc from 'fast-check';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql, throws } from 'node:assert';
-import { deepHexToBytes, getTypeTestsNonUi8a, json, txt } from './utils.js';
+import { deepHexToBytes, getTypeTestsNonUi8a, json, txt } from './utils.ts';
 // prettier-ignore
 import {
-  bytesToNumberBE,
-  mod,
-  numberToBytesBE,
-  schnorr,
-  secp,
-  selectHash,
-  sigFromDER
-} from './secp256k1.helpers.js';
+    bytesToNumberBE,
+    mod,
+    numberToBytesBE,
+    schnorr,
+    secp,
+    selectHash,
+    sigFromDER
+} from './secp256k1.helpers.ts';
 
 const VECTORS_ecdsa = deepHexToBytes(json('./vectors/secp256k1/ecdsa.json'));
 const VECTORS_ecdh = deepHexToBytes(json('./vectors/wycheproof/ecdh_secp256k1_test.json'));

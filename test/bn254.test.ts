@@ -1,9 +1,9 @@
 import { hexToBytes } from '@noble/hashes/utils.js';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql, throws } from 'node:assert';
-import { bn254 } from '../bn254.js';
-import { bytesToNumberBE } from '../utils.js';
-import { jsonGZ } from './utils.js';
+import { bn254 } from '../src/bn254.ts';
+import { bytesToNumberBE } from '../src/utils.ts';
+import { jsonGZ } from './utils.ts';
 import { default as ethDump } from './vectors/bn254/eth-dump.js';
 import { default as seda } from './vectors/bn254/seda.js';
 const CROSS_PATH_GZ = './vectors/bn254/cross1000.json.gz'; // bundler hint: readFileSync('./test/bn254/cross1000.json.gz')

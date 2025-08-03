@@ -2,7 +2,7 @@ import * as fft from '@noble/curves/abstract/fft.js';
 import { bls12_381 } from '@noble/curves/bls12-381.js';
 
 import mark from 'micro-bmark';
-import { title } from './_shared.js';
+import { title } from './_shared.ts';
 
 (async () => {
   title('fft');

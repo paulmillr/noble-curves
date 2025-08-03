@@ -7,8 +7,8 @@ import {
 import * as fc from 'fast-check';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql, strictEqual, throws } from 'node:assert';
-import { ed25519 as ed, ED25519_TORSION_SUBGROUP, numberToBytesLE } from './ed25519.helpers.js';
-import { getTypeTestsNonUi8a, json, txt } from './utils.js';
+import { ed25519 as ed, ED25519_TORSION_SUBGROUP, numberToBytesLE } from './ed25519.helpers.ts';
+import { getTypeTestsNonUi8a, json, txt } from './utils.ts';
 
 const VECTORS_rfc8032_ed25519 = json('./vectors/rfc8032-ed25519.json');
 // Old vectors allow to test sign() because they include private key

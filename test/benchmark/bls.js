@@ -5,7 +5,7 @@ import bench from 'micro-bmark';
 import { readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { title } from './_shared.js';
+import { title } from './_shared.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const G2_VECTORS = readFileSync(

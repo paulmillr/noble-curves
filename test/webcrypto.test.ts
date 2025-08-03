@@ -1,9 +1,9 @@
 import { describe, should } from 'micro-should';
 import { deepStrictEqual } from 'node:assert';
-import { ed25519, x25519 } from '../ed25519.js';
-import { ed448, x448 } from '../ed448.js';
-import { p256, p384, p521 } from '../nist.js';
-import * as webcrypto from '../webcrypto.js';
+import { ed25519, x25519 } from '../src/ed25519.ts';
+import { ed448, x448 } from '../src/ed448.ts';
+import { p256, p384, p521 } from '../src/nist.ts';
+import * as webcrypto from '../src/webcrypto.ts';
 
 // import {  base64urlnopad } from '@scure/base';
 

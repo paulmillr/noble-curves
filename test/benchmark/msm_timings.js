@@ -1,6 +1,6 @@
 import { pippenger } from '@noble/curves/abstract/curve.js';
 import { bls12_381 } from '@noble/curves/bls12-381.js';
-import { title } from './_shared.js';
+import { title } from './_shared.ts';
 
 (async () => {
   title('MSM timings');

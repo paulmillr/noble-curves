@@ -1,7 +1,7 @@
 import * as fc from 'fast-check';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql, throws } from 'node:assert';
-import { invert, mod } from '../abstract/modular.js';
+import { invert, mod } from '../src/abstract/modular.ts';
 import {
   abytes,
   asciiToBytes,
@@ -14,8 +14,8 @@ import {
   numberToHexUnpadded,
   numberToVarBytesBE,
   utf8ToBytes,
-} from '../utils.js';
-import { getTypeTests } from './utils.js';
+} from '../src/utils.ts';
+import { getTypeTests } from './utils.ts';
 
 describe('utils', () => {
   const staticHexVectors = [

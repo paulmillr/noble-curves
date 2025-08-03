@@ -2,9 +2,9 @@ import { sha512 } from '@noble/hashes/sha2.js';
 import { randomBytes } from '@noble/hashes/utils.js';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual } from 'node:assert';
-import { mod } from '../abstract/modular.js';
-import { ed25519, x25519 } from '../ed25519.js';
-import { bytesToNumberLE, concatBytes, ensureBytes, equalBytes, numberToBytesLE } from '../utils.js';
+import { mod } from '../src/abstract/modular.ts';
+import { ed25519, x25519 } from '../src/ed25519.ts';
+import { abytes, bytesToNumberLE, concatBytes, equalBytes, numberToBytesLE } from '../src/utils.ts';
 
 /*
 Half-broken implementation of Hedged EdDSA / XEdDSA.
@@ -20,10 +20,7 @@ const XEDDSA25519_PREFIX = new Uint8Array([
   0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
 ]);
 const { Fp } = ed25519.Point;
-export function montgomeryToEdwards(
-  mont: Uint8Array,
-  sign: boolean
-): typeof ed25519.Point.BASE {
+export function montgomeryToEdwards(mont: Uint8Array, sign: boolean): typeof ed25519.Point.BASE {
   const u = Fp.fromBytes(mont);
   if (Fp.eql(u, Fp.neg(Fp.ONE))) throw new Error('u=-1');
   const y = Fp.mul(Fp.sub(u, Fp.ONE), Fp.inv(Fp.add(u, Fp.ONE)));
@@ -34,7 +31,7 @@ export function montgomeryToEdwards(
 
 export const xeddsa25519 = {
   sign(secret: Uint8Array, message: Uint8Array, random: Uint8Array = randomBytes(64)): Uint8Array {
-    secret = ensureBytes('secret', secret, 32);
+    abytes(secret, 32, 'secret');
     const N = ed25519.Point.Fn.ORDER;
     const a = mod(bytesToNumberLE(secret), N); // Interpret secret as scalar a.
     const A = ed25519.Point.BASE.multiply(a); // Compute public key A = a·B.
@@ -59,8 +56,8 @@ export const xeddsa25519 = {
     return sig;
   },
   verify(publicKey: Uint8Array, message: Uint8Array, signature: Uint8Array): boolean {
-    publicKey = ensureBytes('publicKey', publicKey, 32);
-    signature = ensureBytes('signature', signature, 64);
+    abytes(publicKey, 32, 'publicKey');
+    abytes(signature, 64, 'signature');
     const N = ed25519.Point.Fn.ORDER;
     const signBit = (signature[63] & 0b1000_0000) >> 7 === 1; // Extract sign bit from signature last byte.
     const Aed = montgomeryToEdwards(publicKey, signBit);

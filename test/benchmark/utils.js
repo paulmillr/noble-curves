@@ -8,7 +8,7 @@ import { sha256, sha512 } from '@noble/hashes/sha2.js';
 import { shake256 } from '@noble/hashes/sha3.js';
 import { randomBytes } from '@noble/hashes/utils.js';
 import mark from 'micro-bmark';
-import { title } from './_shared.js';
+import { title } from './_shared.ts';
 
 const { Field } = md;
 

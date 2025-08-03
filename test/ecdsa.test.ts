@@ -13,11 +13,11 @@ import { sha3_224, sha3_256, sha3_384, sha3_512, shake128, shake256 } from '@nob
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql, throws } from 'node:assert';
 import { randomBytes } from 'node:crypto';
-import { ecdh, ecdsa } from '../abstract/weierstrass.js';
-import { brainpoolP256r1, brainpoolP384r1, brainpoolP512r1 } from '../misc.js';
-import { p256, p384, p521 } from '../nist.js';
-import { secp256k1 } from '../secp256k1.js';
-import { p192, p224 } from './_more-curves.helpers.js';
+import { ecdh, ecdsa } from '../src/abstract/weierstrass.ts';
+import { brainpoolP256r1, brainpoolP384r1, brainpoolP512r1 } from '../src/misc.ts';
+import { p256, p384, p521 } from '../src/nist.ts';
+import { secp256k1 } from '../src/secp256k1.ts';
+import { p192, p224 } from './_more-curves.helpers.ts';
 
 const ECDSA = {
   P192: p192,

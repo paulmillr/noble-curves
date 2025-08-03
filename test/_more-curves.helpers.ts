@@ -1,6 +1,6 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha224, sha256, sha512 } from '@noble/hashes/sha2.js';
-import { ecdsa, weierstrass } from '../abstract/weierstrass.js';
+import { ecdsa, weierstrass } from '../src/abstract/weierstrass.ts';
 import curvesInit from './vectors/curves-init.json' with { type: 'json' };
 const { categories: JSON_CATEGORIES } = curvesInit;
 
