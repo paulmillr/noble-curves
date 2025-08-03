@@ -30,7 +30,9 @@ export function phex(point) {
 // the file is shared between noble-curves and noble-secp256k1.
 
 const Point = secp.Point;
-const FC_BIGINT = fc.bigInt(1n + 1n, secp.Point.Fn.ORDER - 1n);
+const isNobleCurves = !!Point.Fp;
+const CURVE_N = secp.Point.CURVE().n;
+const FC_BIGINT = fc.bigInt(1n + 1n, CURVE_N - 1n);
 // TODO: Real implementation.
 function derToPub(der) {
   return der.slice(46 / 2);
@@ -130,7 +132,7 @@ describe('secp256k1 static vectors', () => {
 
       for (const vector of VECTORS_points.invalid.pointMultiply) {
         let { P, d } = vector;
-        if (bytesToNumberBE(d) < secp.Point.Fn.ORDER) {
+        if (bytesToNumberBE(d) < CURVE_N) {
           throws(() => {
             const p = Point.fromBytes(P);
             p.multiply(bytesToNumberBE(d)).toBytes(true);
@@ -146,13 +148,11 @@ describe('secp256k1 static vectors', () => {
   should('sign() RFC 6979 vectors', async () => {
     for (const vector of VECTORS_ecdsa.valid) {
       const { m, d, signature: vsig } = vector;
-      const usig = secp.sign(m, d, { prehash: false });
-      const sig = usig;
+      const opts = { prehash: false };
+      const sig = secp.sign(m, d, opts);
       eql(sig, vsig);
-
       if (secp.signAsync) {
-        const usig = await secp.signAsync(m, d);
-        const sig = usig.toBytes();
+        const sig = await secp.signAsync(m, d, opts);
         eql(sig, vsig);
       }
     }
@@ -166,6 +166,7 @@ describe('secp256k1 static vectors', () => {
   });
 
   should('sign() with format: der', () => {
+    if (!isNobleCurves) return;
     const CASES = deepHexToBytes([
       [
         'd1a9dc8ed4e46a6a3e5e594615ca351d7d7ef44df1e4c94c1802f3592183794b',
@@ -257,9 +258,8 @@ describe('secp256k1 static vectors', () => {
             if (e.message === 'Invalid signature integer: negative') continue;
             throw e;
           }
-          const verified = secp.verify(sig, m, pubKey, {
+          const verified = secp.verify(_sig.toBytes(), m, pubKey, {
             prehash: false,
-            format: 'der',
           });
           if (_sig.hasHighS()) {
             eql(verified, false, 'sig should have high s');
@@ -328,8 +328,8 @@ describe('secp256k1 static vectors', () => {
       let sig = secp.sign(m, d, { prehash: false, format: 'recovered' });
       // let sig = sigToDER(usig);
       const vpub = secp.getPublicKey(d);
-      const recovered = secp.Signature.fromBytes(sig, 'recovered').recoverPublicKey(m);
-      eql(recovered.toBytes(), vpub);
+      const recovered = secp.recoverPublicKey(sig, m, { prehash: false });
+      eql(recovered, vpub);
     }
   });
 
@@ -347,20 +347,17 @@ describe('secp256k1 static vectors', () => {
     };
     const tweakUtils = {
       privateAdd: (privateKey, tweak) => {
-        return numberToBytesBE(
-          mod(normPriv(privateKey) + normPriv(tweak), secp.Point.Fn.ORDER),
-          32
-        );
+        return numberToBytesBE(mod(normPriv(privateKey) + normPriv(tweak), CURVE_N), 32);
       },
 
       privateNegate: (privateKey) => {
-        return numberToBytesBE(mod(-normPriv(privateKey), secp.Point.Fn.ORDER), 32);
+        return numberToBytesBE(mod(-normPriv(privateKey), CURVE_N), 32);
       },
 
       pointAddScalar: (p, tweak, isCompressed) => {
         p = normPub(p);
         tweak = normPub(tweak);
-        const tweaked = Point.fromBytes(p).add(Point.BASE.multiply(Point.Fn.fromBytes(tweak)));
+        const tweaked = Point.fromBytes(p).add(Point.BASE.multiply(bytesToNumberBE(tweak)));
         if (tweaked.is0()) throw new Error('Tweaked point at infinity');
         return tweaked.toBytes(isCompressed);
       },
@@ -420,6 +417,7 @@ describe('secp256k1', () => {
     }
   });
   should('precompute', () => {
+    if (!isNobleCurves) return;
     secp.Point.BASE.precompute(4, false);
     checkPrivatesTxt();
   });
@@ -477,6 +475,7 @@ describe('Signature', () => {
   });
 
   should('.fromDERHex() roundtrip', () => {
+    if (!isNobleCurves) return;
     fc.assert(
       fc.property(FC_BIGINT, FC_BIGINT, (r, s) => {
         const sig = new secp.Signature(r, s).toBytes('der');
@@ -512,7 +511,7 @@ describe('Signature', () => {
     eql(bytesToHex(sig.toBytes()), hi);
 
     const normalizeS = (sig) => {
-      return new secp.Signature(sig.r, secp.Point.Fn.neg(sig.s));
+      return new secp.Signature(sig.r, CURVE_N - sig.s);
     };
     const lowSig = normalizeS(sig);
     eql(lowSig.hasHighS(), false);
@@ -522,6 +521,7 @@ describe('Signature', () => {
     eql(secp.verify(sig.toBytes(), msg, pub, { prehash: false, lowS: false }), true);
     eql(secp.verify(sig.toBytes(), msg, pub, { prehash: false, lowS: true }), false);
     for (let format of ['der', 'compact']) {
+      if (format === 'der' && !isNobleCurves) continue;
       eql(
         secp.verify(sig.toBytes(format), msg, pub, { prehash: false, lowS: false, format }),
         true
@@ -572,12 +572,12 @@ describe('verify()', () => {
         // @ts-ignore
         hexaString({ minLength: 64, maxLength: 64 }),
         async (privKeyNum, msgh) => {
-          const privKey = secp.Point.Fn.toBytes(privKeyNum);
+          const privKey = numberToBytesBE(privKeyNum, 32);
           const msg = hexToBytes(msgh);
           const pub = secp.getPublicKey(privKey);
           const sig = secp.sign(msg, privKey);
           eql(secp.verify(sig, msg, pub), true);
-          if (secp.signAsync) {
+          if ('signAsync' in secp) {
             const sig = await secp.signAsync(msg, privKey);
             eql(secp.verify(sig, msg, pub), true);
           }
@@ -637,12 +637,10 @@ describe('verify()', () => {
         '00000000000000000000000000000000000000000000000000000000deadbeef'
       );
       const privateKey = numberToBytesBE(123456789n, 32);
-      const publicKey = Point.fromBytes(secp.getPublicKey(privateKey)).toBytes(false);
+      const publicKey = secp.getPublicKey(privateKey);
       const sig = secp.sign(message, privateKey, { prehash: false, format: 'recovered' });
-      const recoveredPubkey = secp.Signature.fromBytes(sig, 'recovered').recoverPublicKey(message);
-      // const recoveredPubkey = secp.recoverPublicKey(message, signature, recovery);
-      eql(recoveredPubkey !== null, true);
-      eql(recoveredPubkey.toBytes(false), publicKey);
+      const recoveredPubkey = secp.recoverPublicKey(sig, message, { prehash: false });
+      eql(recoveredPubkey, publicKey);
       eql(secp.verify(sig, message, publicKey, { prehash: false, format: 'recovered' }), true);
     });
     should('not recover zero points', () => {
@@ -653,8 +651,10 @@ describe('verify()', () => {
         '79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f817986b8d2c81b11b2d699528dde488dbdf2f94293d0d33c32e347f255fa4a6c1f0a9'
       );
       const recovery = 0;
-      const sig = secp.Signature.fromBytes(sigh, 'compact').addRecoveryBit(recovery);
-      throws(() => sig.recoverPublicKey(msgHash));
+      const sig = secp.Signature.fromBytes(sigh, 'compact')
+        .addRecoveryBit(recovery)
+        .toBytes('recovered');
+      throws(() => secp.recoverPublicKey(sig, msgHash, { prehash: false }));
     });
     should('handle all-zeros msghash', () => {
       const privKey = secp.utils.randomSecretKey();
@@ -667,8 +667,8 @@ describe('verify()', () => {
 
     should('have proper curve equation in assertValidity()', () => {
       throws(() => {
-        const { Fp } = secp.Point;
-        let point = new Point(Fp.create(-2n), Fp.create(-1n), Fp.create(1n));
+        const p = Point.CURVE().p;
+        let point = new Point(p - 2n, p - 1n, p + 1n);
         point.assertValidity();
       });
     });
