@@ -1,13 +1,13 @@
-import { hash_to_field } from '@noble/curves/abstract/hash-to-curve.js';
-import * as md from '@noble/curves/abstract/modular.js';
-import { ed25519, ristretto255, ristretto255_hasher } from '@noble/curves/ed25519.js';
-import { decaf448, decaf448_hasher, ed448 } from '@noble/curves/ed448.js';
-import { secp256k1 } from '@noble/curves/secp256k1.js';
-import { hexToBytes, utf8ToBytes } from '@noble/curves/utils.js';
 import { sha256, sha512 } from '@noble/hashes/sha2.js';
 import { shake256 } from '@noble/hashes/sha3.js';
 import { randomBytes } from '@noble/hashes/utils.js';
 import mark from 'micro-bmark';
+import { hash_to_field } from '../../src/abstract/hash-to-curve.ts';
+import * as md from '../../src/abstract/modular.ts';
+import { ed25519, ristretto255, ristretto255_hasher } from '../../src/ed25519.ts';
+import { decaf448, decaf448_hasher, ed448 } from '../../src/ed448.ts';
+import { secp256k1 } from '../../src/secp256k1.ts';
+import { hexToBytes, utf8ToBytes } from '../../src/utils.ts';
 import { title } from './_shared.ts';
 
 const { Field } = md;

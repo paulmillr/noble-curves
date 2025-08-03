@@ -1,7 +1,6 @@
-import * as fft from '@noble/curves/abstract/fft.js';
-import { bls12_381 } from '@noble/curves/bls12-381.js';
-
 import mark from 'micro-bmark';
+import * as fft from '../../src/abstract/fft.ts';
+import { bls12_381 } from '../../src/bls12-381.ts';
 import { title } from './_shared.ts';
 
 (async () => {

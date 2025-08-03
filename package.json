@@ -11,7 +11,7 @@
     "src"
   ],
   "scripts": {
-    "bench": "npm run bench:install; cd test/benchmark; node secp256k1.js; node curves.js; node utils.js; node bls.js",
+    "bench": "npm run bench:install; cd test/benchmark; node secp256k1.ts; node curves.ts; node utils.ts; node bls.ts",
     "bench:install": "cd test/benchmark; npm install; npm install ../.. --install-links",
     "build": "tsc",
     "build:release": "npx --no @paulmillr/jsbt esbuild test/build",

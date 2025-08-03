@@ -1,5 +1,5 @@
-import { pippenger } from '@noble/curves/abstract/curve.js';
-import { bls12_381 } from '@noble/curves/bls12-381.js';
+import { pippenger } from '../../src/abstract/curve.ts';
+import { bls12_381 } from '../../src/bls12-381.ts';
 import { title } from './_shared.ts';
 
 (async () => {

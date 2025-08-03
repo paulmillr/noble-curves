@@ -1,10 +1,10 @@
-import { pippenger } from '@noble/curves/abstract/curve.js';
-import { bls12_381 as bls } from '@noble/curves/bls12-381.js';
 import { hexToBytes } from '@noble/hashes/utils.js';
 import bench from 'micro-bmark';
 import { readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { pippenger } from '../../src/abstract/curve.ts';
+import { bls12_381 as bls } from '../../src/bls12-381.ts';
 import { title } from './_shared.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
