@@ -60,8 +60,8 @@ import {
   validateObject,
 } from '../utils.ts';
 import { pippenger, type CurvePoint, type CurvePointCons } from './curve.ts';
-import { _DST_scalar, type H2CMethod, type htfBasicOpts } from './hash-to-curve.js';
-import { getMinHashLength, mapHashToField } from './modular.js';
+import { _DST_scalar, type H2CMethod, type htfBasicOpts } from './hash-to-curve.ts';
+import { getMinHashLength, mapHashToField } from './modular.ts';
 
 // OPRF is designed to be used across network, so we default to serialized values.
 export type PointBytes = Uint8Array;
