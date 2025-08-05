@@ -936,6 +936,7 @@ export interface ECDSASignature {
   readonly recovery?: number;
   addRecoveryBit(recovery: number): ECDSASignature & { readonly recovery: number };
   hasHighS(): boolean;
+  recoverPublicKey(messageHash: Uint8Array): WeierstrassPoint<bigint>;
   toBytes(format?: string): Uint8Array;
   toHex(format?: string): string;
 }
@@ -1237,6 +1238,7 @@ export function ecdsa(
     format: 'compact' as ECDSASignatureFormat,
     extraEntropy: false,
   };
+  const hasLargeCofactor = CURVE_ORDER * _2n < Fp.ORDER; // Won't CURVE().h > 2n be more effective?
 
   function isBiggerThanHalfOrder(number: bigint) {
     const HALF = CURVE_ORDER >> _1n;
@@ -1246,6 +1248,18 @@ export function ecdsa(
     if (!Fn.isValidNot0(num))
       throw new Error(`invalid signature ${title}: out of range 1..Point.Fn.ORDER`);
     return num;
+  }
+  function assertSmallCofactor(): void {
+    // ECDSA recovery is hard for cofactor > 1 curves.
+    // In sign, `r = q.x mod n`, and here we recover q.x from r.
+    // While recovering q.x >= n, we need to add r+n for cofactor=1 curves.
+    // However, for cofactor>1, r+n may not get q.x:
+    // r+n*i would need to be done instead where i is unknown.
+    // To easily get i, we either need to:
+    // a. increase amount of valid recid values (4, 5...); OR
+    // b. prohibit non-prime-order signatures (recid > 1).
+    if (hasLargeCofactor)
+      throw new Error('"recovered" sig type is not supported for cofactor >2 curves');
   }
   function validateSigLength(bytes: Uint8Array, format: ECDSASignatureFormat) {
     validateSigFormat(format);
@@ -1265,7 +1279,11 @@ export function ecdsa(
     constructor(r: bigint, s: bigint, recovery?: number) {
       this.r = validateRS('r', r); // r in [1..N-1];
       this.s = validateRS('s', s); // s in [1..N-1];
-      if (recovery != null) this.recovery = recovery;
+      if (recovery != null) {
+        assertSmallCofactor();
+        if (![0, 1, 2, 3].includes(recovery)) throw new Error('invalid recovery id');
+        this.recovery = recovery;
+      }
       Object.freeze(this);
     }
 
@@ -1294,37 +1312,30 @@ export function ecdsa(
       return this.fromBytes(hexToBytes(hex), format);
     }
 
+    private assertRecovery(): number {
+      const { recovery } = this;
+      if (recovery == null) throw new Error('invalid recovery id: must be present');
+      return recovery;
+    }
+
     addRecoveryBit(recovery: number): RecoveredSignature {
       return new Signature(this.r, this.s, recovery) as RecoveredSignature;
     }
 
     recoverPublicKey(messageHash: Uint8Array): WeierstrassPoint<bigint> {
-      const FIELD_ORDER = Fp.ORDER;
-      const { r, s, recovery: rec } = this;
-      if (rec == null || ![0, 1, 2, 3].includes(rec)) throw new Error('recovery id invalid');
-
-      // ECDSA recovery is hard for cofactor > 1 curves.
-      // In sign, `r = q.x mod n`, and here we recover q.x from r.
-      // While recovering q.x >= n, we need to add r+n for cofactor=1 curves.
-      // However, for cofactor>1, r+n may not get q.x:
-      // r+n*i would need to be done instead where i is unknown.
-      // To easily get i, we either need to:
-      // a. increase amount of valid recid values (4, 5...); OR
-      // b. prohibit non-prime-order signatures (recid > 1).
-      const hasCofactor = CURVE_ORDER * _2n < FIELD_ORDER;
-      if (hasCofactor && rec > 1) throw new Error('recovery id is ambiguous for h>1 curve');
-
-      const radj = rec === 2 || rec === 3 ? r + CURVE_ORDER : r;
-      if (!Fp.isValid(radj)) throw new Error('recovery id 2 or 3 invalid');
+      const { r, s } = this;
+      const recovery = this.assertRecovery();
+      const radj = recovery === 2 || recovery === 3 ? r + CURVE_ORDER : r;
+      if (!Fp.isValid(radj)) throw new Error('invalid recovery id: sig.r+curve.n != R.x');
       const x = Fp.toBytes(radj);
-      const R = Point.fromBytes(concatBytes(pprefix((rec & 1) === 0), x));
+      const R = Point.fromBytes(concatBytes(pprefix((recovery & 1) === 0), x));
       const ir = Fn.inv(radj); // r^-1
       const h = bits2int_modN(abytes(messageHash, undefined, 'msgHash')); // Truncate hash
       const u1 = Fn.create(-h * ir); // -hr^-1
       const u2 = Fn.create(s * ir); // sr^-1
       // (sr^-1)R-(hr^-1)G = -(hr^-1)G + (sr^-1). unsafe is fine: there is no private data.
       const Q = Point.BASE.multiplyUnsafe(u1).add(R.multiplyUnsafe(u2));
-      if (Q.is0()) throw new Error('point at infinify');
+      if (Q.is0()) throw new Error('invalid recovery: point at infinify');
       Q.assertValidity();
       return Q;
     }
@@ -1337,13 +1348,14 @@ export function ecdsa(
     toBytes(format: ECDSASignatureFormat = defaultSigOpts.format) {
       validateSigFormat(format);
       if (format === 'der') return hexToBytes(DER.hexFromSig(this));
-      const r = Fn.toBytes(this.r);
-      const s = Fn.toBytes(this.s);
+      const { r, s } = this;
+      const rb = Fn.toBytes(r);
+      const sb = Fn.toBytes(s);
       if (format === 'recovered') {
-        if (this.recovery == null) throw new Error('recovery bit must be present');
-        return concatBytes(Uint8Array.of(this.recovery), r, s);
+        assertSmallCofactor();
+        return concatBytes(Uint8Array.of(this.assertRecovery()), rb, sb);
       }
-      return concatBytes(r, s);
+      return concatBytes(rb, sb);
     }
 
     toHex(format?: ECDSASignatureFormat) {
@@ -1421,7 +1433,7 @@ export function ecdsa(
     // Can use scalar blinding b^-1(bm + bdr) where b ∈ [1,q−1] according to
     // https://tches.iacr.org/index.php/TCHES/article/view/7337/6509. We've decided against it:
     // a) dependency on CSPRNG b) 15% slowdown c) doesn't really help since bigints are not CT
-    function k2sig(kBytes: Uint8Array): RecoveredSignature | undefined {
+    function k2sig(kBytes: Uint8Array): Signature | undefined {
       // RFC 6979 Section 3.2, step 3: k = bits2int(T)
       // Important: all mod() calls here must be done over N
       const k = bits2int(kBytes); // Cannot use fields methods, since it is group element
@@ -1432,13 +1444,13 @@ export function ecdsa(
       if (r === _0n) return;
       const s = Fn.create(ik * Fn.create(m + r * d)); // s = k^-1(m + rd) mod n
       if (s === _0n) return;
-      let recovery = (q.x === r ? 0 : 2) | Number(q.y & _1n); // recovery bit (2 or 3, when q.x > n)
+      let recovery = (q.x === r ? 0 : 2) | Number(q.y & _1n); // recovery bit (2 or 3 when q.x>n)
       let normS = s;
       if (lowS && isBiggerThanHalfOrder(s)) {
-        normS = Fn.neg(s); // if lowS was passed, ensure s is always
-        recovery ^= 1; // // in the bottom half of N
+        normS = Fn.neg(s); // if lowS was passed, ensure s is always in the bottom half of N
+        recovery ^= 1;
       }
-      return new Signature(r, normS, recovery) as RecoveredSignature; // use normS, not s
+      return new Signature(r, normS, hasLargeCofactor ? undefined : recovery);
     }
     return { seed, k2sig };
   }
@@ -1456,7 +1468,7 @@ export function ecdsa(
    */
   function sign(message: Uint8Array, secretKey: Uint8Array, opts: ECDSASignOpts = {}): Uint8Array {
     const { seed, k2sig } = prepSig(message, secretKey, opts); // Steps A, D of RFC6979 3.2.
-    const drbg = createHmacDrbg<RecoveredSignature>(hash.outputLen, Fn.BYTES, hmac);
+    const drbg = createHmacDrbg<Signature>(hash.outputLen, Fn.BYTES, hmac);
     const sig = drbg(seed, k2sig); // Steps B, C, D, E, F, G
     return sig.toBytes(opts.format);
   }
