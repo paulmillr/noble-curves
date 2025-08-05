@@ -1,0 +1,10 @@
+name: Run TS tests
+on:
+  - push
+  - pull_request
+jobs:
+  test-js:
+    name: 'jsbt v0.4.1'
+    uses: paulmillr/jsbt/.github/workflows/test-ts.yml@0c0607ce4602e9bce388c025de91abf5ea9a87c5
+    # with:
+    #   submodules: false

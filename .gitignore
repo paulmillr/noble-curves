@@ -8,4 +8,5 @@ node_modules
 *.js.map
 *.tgz
 /test/build
+/test/compiled
 .vscode/settings.json

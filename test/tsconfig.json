@@ -1,0 +1,13 @@
+{
+  "extends": "@paulmillr/jsbt/tsconfig.test.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "outDir": "compiled",
+  },
+  "include": [
+    "*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}
