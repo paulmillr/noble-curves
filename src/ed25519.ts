@@ -461,11 +461,16 @@ export const ristretto255: {
 } = { Point: _RistrettoPoint };
 
 /** Hashing to ristretto255 points / field. RFC 9380 methods. */
-export const ristretto255_hasher: H2CHasherBase<_RistrettoPoint> = {
+export const ristretto255_hasher: H2CHasherBase<_RistrettoPoint> & {
+  mapToCurve(msg: Uint8Array): _RistrettoPoint;
+} = {
   hashToCurve(msg: Uint8Array, options?: htfBasicOpts): _RistrettoPoint {
     const DST = options?.DST || 'ristretto255_XMD:SHA-512_R255MAP_RO_';
     const xmd = expand_message_xmd(msg, DST, 64, sha512);
     return ristretto255_map(xmd);
+  },
+  mapToCurve(msg: Uint8Array): _RistrettoPoint {
+    return ristretto255_map(msg);
   },
   hashToScalar(msg: Uint8Array, options: htfBasicOpts = { DST: _DST_scalar }) {
     const xmd = expand_message_xmd(msg, options.DST, 64, sha512);

@@ -469,10 +469,15 @@ export const decaf448: {
 } = { Point: _DecafPoint };
 
 /** Hashing to decaf448 points / field. RFC 9380 methods. */
-export const decaf448_hasher: H2CHasherBase<_DecafPoint> = {
+export const decaf448_hasher: H2CHasherBase<_DecafPoint> & {
+  mapToCurve(msg: Uint8Array): _DecafPoint;
+} = {
   hashToCurve(msg: Uint8Array, options?: htfBasicOpts): _DecafPoint {
     const DST = options?.DST || 'decaf448_XOF:SHAKE256_D448MAP_RO_';
     return decaf448_map(expand_message_xof(msg, DST, 112, 224, shake256));
+  },
+  mapToCurve(msg: Uint8Array): _DecafPoint {
+    return decaf448_map(msg);
   },
   // Warning: has big modulo bias of 2^-64.
   // RFC is invalid. RFC says "use 64-byte xof", while for 2^-112 bias
