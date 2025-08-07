@@ -21,7 +21,7 @@ import {
   type WeierstrassOpts,
   type WeierstrassPointCons,
 } from './abstract/weierstrass.ts';
-import { abytes, asciiToBytes, bytesToNumberBE, concatBytes, inRange } from './utils.ts';
+import { abytes, asciiToBytes, bytesToNumberBE, concatBytes } from './utils.ts';
 
 // Seems like generator was produced from some seed:
 // `Pointk1.BASE.multiply(Pointk1.Fn.inv(2n, N)).toAffine().x`
@@ -45,7 +45,6 @@ const secp256k1_ENDO: EndomorphismOpts = {
 };
 
 const _0n = /* @__PURE__ */ BigInt(0);
-const _1n = /* @__PURE__ */ BigInt(1);
 const _2n = /* @__PURE__ */ BigInt(2);
 
 /**
@@ -188,16 +187,17 @@ function schnorrSign(
  * Will swallow errors & return false except for initial type validation of arguments.
  */
 function schnorrVerify(signature: Uint8Array, message: Uint8Array, publicKey: Uint8Array): boolean {
-  const { Fn, BASE } = Pointk1;
+  const { Fp, Fn, BASE } = Pointk1;
   const sig = abytes(signature, 64, 'signature');
   const m = abytes(message, undefined, 'message');
   const pub = abytes(publicKey, 32, 'publicKey');
   try {
     const P = lift_x(num(pub)); // P = lift_x(int(pk)); fail if that fails
     const r = num(sig.subarray(0, 32)); // Let r = int(sig[0:32]); fail if r ≥ p.
-    if (!inRange(r, _1n, secp256k1_CURVE.p)) return false;
+
+    if (!Fp.isValidNot0(r)) return false;
     const s = num(sig.subarray(32, 64)); // Let s = int(sig[32:64]); fail if s ≥ n.
-    if (!inRange(s, _1n, secp256k1_CURVE.n)) return false;
+    if (!Fn.isValidNot0(s)) return false;
     const e = challenge(Fn.toBytes(r), pointToBytes(P), m); // int(challenge(bytes(r)||bytes(P)||m))%n
     // R = s⋅G - e⋅P, where -eP == (n-e)P
     const R = BASE.multiplyUnsafe(s).add(P.multiplyUnsafe(Fn.neg(e)));
