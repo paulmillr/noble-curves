@@ -861,9 +861,11 @@ export function weierstrass<T>(
       const { endo } = extraOpts;
       const p = this as Point;
       if (!Fn.isValid(sc)) throw new Error('invalid scalar: out of range'); // 0 is valid
-      if (sc === _0n || p.is0()) return Point.ZERO;
-      if (sc === _1n) return p; // fast-path
-      if (wnaf.hasCache(this)) return this.multiply(sc);
+      if (sc === _0n || p.is0()) return Point.ZERO; // 0
+      if (sc === _1n) return p; // 1
+      if (wnaf.hasCache(this)) return this.multiply(sc); // precomputes
+      // We don't have method for double scalar multiplication (aP + bQ):
+      // Even with using Strauss-Shamir trick, it's 35% slower than naïve mul+add.
       if (endo) {
         const { k1neg, k1, k2neg, k2 } = splitEndoScalarN(sc);
         const { p1, p2 } = mulEndoUnsafe(Point, p, k1, k2); // 30% faster vs wnaf.unsafe
@@ -871,11 +873,6 @@ export function weierstrass<T>(
       } else {
         return wnaf.unsafe(p, sc);
       }
-    }
-
-    multiplyAndAddUnsafe(Q: Point, a: bigint, b: bigint): Point | undefined {
-      const sum = this.multiplyUnsafe(a).add(Q.multiplyUnsafe(b));
-      return sum.is0() ? undefined : sum;
     }
 
     /**
