@@ -19,9 +19,9 @@ import { abytes, memoized, notImplemented, randomBytes } from '../utils.ts';
 import { normalizeZ, type CurveLengths } from './curve.ts';
 import {
   createHasher,
+  type H2CDSTOpts,
   type H2CHasher,
   type H2CHashOpts,
-  type H2CMethod,
   type H2COpts,
   type MapToCurve,
 } from './hash-to-curve.ts';
@@ -346,7 +346,7 @@ function createBlsSig<P, S>(
   PubPoint: WeierstrassPointCons<P>,
   SigPoint: WeierstrassPointCons<S>,
   isSigG1: boolean,
-  hashToSigCurve: H2CMethod<WeierstrassPoint<S>>,
+  hashToSigCurve: (msg: Uint8Array, options?: H2CDSTOpts) => WeierstrassPoint<S>,
   SignatureCoder?: LongSignatureCoder<S>
 ): BLSSigs<P, S> {
   const { Fr, Fp12, pairingBatch, randomSecretKey, lengths } = blsPairing;

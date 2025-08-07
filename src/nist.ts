@@ -89,6 +89,7 @@ function createSWU(Point: WeierstrassPointCons<bigint>, opts: SwuOpts) {
 
 const p256_Point = /* @__PURE__ */ weierstrass(p256_CURVE);
 export const p256: ECDSA = /* @__PURE__ */ ecdsa(p256_Point, sha256);
+
 /** Hashing / encoding to p256 points / field. RFC 9380 methods. */
 export const p256_hasher: H2CHasher<WeierstrassPointCons<bigint>> = /* @__PURE__ */ (() => {
   return createHasher(

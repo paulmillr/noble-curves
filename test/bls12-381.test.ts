@@ -1628,7 +1628,7 @@ describe('bls12-381 deterministic', () => {
     const toEthHex = (n) => n.toString(16).padStart(128, '0');
     should('G1', () => {
       for (const v of eip2537.G1) {
-        const { x, y } = bls12_381.G1.mapToCurve([utils.hexToNumber(v.Input)]).toAffine();
+        const { x, y } = bls12_381.G1.mapToCurve(utils.hexToNumber(v.Input)).toAffine();
         const val = toEthHex(x) + toEthHex(y);
         eql(val, v.Expected);
       }
@@ -1647,7 +1647,7 @@ describe('bls12-381 deterministic', () => {
       const t = BigInt(
         '1006044755431560595281793557931171729984964515682961911911398807521437683216171091013202870577238485832047490326971'
       );
-      eql(bls12_381.G1.mapToCurve([t]).equals(bls12_381.G1.Point.ZERO), true);
+      eql(bls12_381.G1.mapToCurve(t).equals(bls12_381.G1.Point.ZERO), true);
     });
   });
 });

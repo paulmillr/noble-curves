@@ -23,9 +23,9 @@ import {
   _DST_scalar,
   createHasher,
   expand_message_xmd,
+  type H2CDSTOpts,
   type H2CHasher,
   type H2CHasherBase,
-  type htfBasicOpts,
 } from './abstract/hash-to-curve.ts';
 import {
   FpInvertBatch,
@@ -317,15 +317,6 @@ function calcElligatorRistrettoMap(r0: bigint): EdwardsPoint {
   return new ed25519_Point(mod(W0 * W3), mod(W2 * W1), mod(W1 * W3), mod(W0 * W2));
 }
 
-function ristretto255_map(bytes: Uint8Array): _RistrettoPoint {
-  abytes(bytes, 64);
-  const r1 = bytes255ToNumberLE(bytes.subarray(0, 32));
-  const R1 = calcElligatorRistrettoMap(r1);
-  const r2 = bytes255ToNumberLE(bytes.subarray(32, 64));
-  const R2 = calcElligatorRistrettoMap(r2);
-  return new _RistrettoPoint(R1.add(R2));
-}
-
 /**
  * Wrapper over Edwards Point for ristretto255.
  *
@@ -461,20 +452,46 @@ export const ristretto255: {
 } = { Point: _RistrettoPoint };
 
 /** Hashing to ristretto255 points / field. RFC 9380 methods. */
-export const ristretto255_hasher: H2CHasherBase<_RistrettoPoint> & {
-  mapToCurve(msg: Uint8Array): _RistrettoPoint;
-} = {
-  hashToCurve(msg: Uint8Array, options?: htfBasicOpts): _RistrettoPoint {
+export const ristretto255_hasher: H2CHasherBase<_RistrettoPoint> & { deriveToCurve: any } = {
+  /**
+  * Spec: https://www.rfc-editor.org/rfc/rfc9380.html#name-hashing-to-ristretto255. Caveats:
+  * * There are no test vectors
+  * * encodeToCurve / mapToCurve is undefined
+  * * mapToCurve would be `calcElligatorRistrettoMap(scalars[0])`, not ristretto255_map!
+  * * hashToScalar is undefined too, so we just use OPRF implementation
+  * * We cannot re-use 'createHasher', because ristretto255_map is different algorithm/RFC
+    (os2ip -> bytes255ToNumberLE)
+  * * mapToCurve == calcElligatorRistrettoMap, hashToCurve == ristretto255_map
+  * * hashToScalar is undefined in RFC9380 for ristretto, we are using version from OPRF here, using bytes255ToNumblerLE will create different result if we use bytes255ToNumberLE as os2ip
+  * * current version is closest to spec.
+  */
+  hashToCurve(msg: Uint8Array, options?: H2CDSTOpts): _RistrettoPoint {
+    // == 'hash_to_ristretto255'
     const DST = options?.DST || 'ristretto255_XMD:SHA-512_R255MAP_RO_';
     const xmd = expand_message_xmd(msg, DST, 64, sha512);
-    return ristretto255_map(xmd);
+    // NOTE: RFC 9380 incorrectly calls this function 'ristretto255_map', in RFC 9496 map was function inside (per point)
+    // That also lead to confustion that ristretto255_map is mapToCurve (it is not! it is old hashToCurve)
+    return ristretto255_hasher.deriveToCurve(xmd);
   },
-  mapToCurve(msg: Uint8Array): _RistrettoPoint {
-    return ristretto255_map(msg);
-  },
-  hashToScalar(msg: Uint8Array, options: htfBasicOpts = { DST: _DST_scalar }) {
+  hashToScalar(msg: Uint8Array, options: H2CDSTOpts = { DST: _DST_scalar }) {
     const xmd = expand_message_xmd(msg, options.DST, 64, sha512);
     return Fn.create(bytesToNumberLE(xmd));
+  },
+  /**
+   * HashToCurve-like construction based on RFC 9496 (Element Derivation).
+   * Converts 64 uniform random bytes into a curve point.
+   *
+   * WARNING: This represents an older hash-to-curve construction, preceding the finalization of RFC 9380.
+   * It was later reused as a component in the newer `hash_to_ristretto255` function defined in RFC 9380.
+   */
+  deriveToCurve(bytes: Uint8Array): _RistrettoPoint {
+    // https://www.rfc-editor.org/rfc/rfc9496.html#name-element-derivation
+    abytes(bytes, 64);
+    const r1 = bytes255ToNumberLE(bytes.subarray(0, 32));
+    const R1 = calcElligatorRistrettoMap(r1);
+    const r2 = bytes255ToNumberLE(bytes.subarray(32, 64));
+    const R2 = calcElligatorRistrettoMap(r2);
+    return new _RistrettoPoint(R1.add(R2));
   },
 };
 

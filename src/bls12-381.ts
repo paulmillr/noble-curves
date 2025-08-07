@@ -570,7 +570,7 @@ const bls12_hasher_opts = {
   hasherOpts: hasher_opts,
   hasherOptsG1: { ...hasher_opts, m: 1, DST: 'BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_' },
   hasherOptsG2: { ...hasher_opts },
-};
+} as const;
 
 const bls12_params = {
   ateLoopSize: BLS_X, // The BLS parameter x for BLS12-381

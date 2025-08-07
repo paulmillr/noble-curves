@@ -60,7 +60,7 @@ import {
   validateObject,
 } from '../utils.ts';
 import { pippenger, type CurvePoint, type CurvePointCons } from './curve.ts';
-import { _DST_scalar, type H2CMethod, type htfBasicOpts } from './hash-to-curve.ts';
+import { _DST_scalar, type H2CDSTOpts } from './hash-to-curve.ts';
 import { getMinHashLength, mapHashToField } from './modular.ts';
 
 // OPRF is designed to be used across network, so we default to serialized values.
@@ -73,9 +73,9 @@ export type OPRFOpts<P extends CurvePoint<any, P>> = {
   name: string;
   Point: CurvePointCons<P>; // we don't return Point, so we need generic interface only
   // Fn: IField<bigint>;
-  hash: (msg: Bytes) => Bytes;
-  hashToScalar: (msg: Uint8Array, options: htfBasicOpts) => bigint;
-  hashToGroup: ((msg: Uint8Array, options: htfBasicOpts) => P) | H2CMethod<P>;
+  hash(msg: Bytes): Bytes;
+  hashToScalar(msg: Uint8Array, options: H2CDSTOpts): bigint;
+  hashToGroup(msg: Uint8Array, options: H2CDSTOpts): P;
 };
 
 export type OPRFKeys = { secretKey: ScalarBytes; publicKey: PointBytes };

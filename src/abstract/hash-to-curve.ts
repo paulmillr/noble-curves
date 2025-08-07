@@ -40,6 +40,30 @@ export type H2CHashOpts = {
   expand: 'xmd' | 'xof';
   hash: CHash;
 };
+export type XY<T> = (x: T, y: T) => { x: T; y: T };
+export type XYRatio<T> = [T[], T[], T[], T[]]; // xn/xd, yn/yd
+export type MapToCurve<T> = (scalar: bigint[]) => AffinePoint<T>;
+
+// Separated from initialization opts, so users won't accidentally change per-curve parameters
+// (changing DST is ok!)
+export type H2CDSTOpts = { DST: UnicodeOrBytes };
+export type H2CHasherBase<P> = {
+  hashToCurve(msg: Uint8Array, options?: H2CDSTOpts): P;
+  hashToScalar(msg: Uint8Array, options?: H2CDSTOpts): bigint;
+};
+/**
+ * RFC 9380 methods, with cofactor clearing. See https://www.rfc-editor.org/rfc/rfc9380#section-3.
+ *
+ * * hashToCurve: `map(hash(input))`, encodes RANDOM bytes to curve (WITH hashing)
+ * * encodeToCurve: `map(hash(input))`, encodes NON-UNIFORM bytes to curve (WITH hashing)
+ * * mapToCurve: `map(scalars)`, encodes NON-UNIFORM scalars to curve (NO hashing)
+ */
+export type H2CHasher<PC extends PC_ANY> = H2CHasherBase<PC_P<PC>> & {
+  encodeToCurve(msg: Uint8Array, options?: H2CDSTOpts): PC_P<PC>;
+  mapToCurve: MapToCurve<PC_F<PC>>;
+  defaults: H2COpts & { encodeDST?: UnicodeOrBytes };
+  Point: PC;
+};
 
 // Octet Stream to Integer. "spec" implementation of os2ip is 2.5x slower vs bytesToNumberBE.
 const os2ip = bytesToNumberBE;
@@ -191,8 +215,6 @@ export function hash_to_field(msg: Uint8Array, count: number, options: H2COpts):
   return u;
 }
 
-export type XY<T> = (x: T, y: T) => { x: T; y: T };
-export type XYRatio<T> = [T[], T[], T[], T[]]; // xn/xd, yn/yd
 export function isogenyMap<T, F extends IField<T>>(field: F, map: XYRatio<T>): XY<T> {
   // Make same order as in spec
   const coeff = map.map((i) => Array.from(i).reverse());
@@ -210,31 +232,6 @@ export function isogenyMap<T, F extends IField<T>>(field: F, map: XYRatio<T>): X
     return { x, y };
   };
 }
-
-export type MapToCurve<T> = (scalar: bigint[]) => AffinePoint<T>;
-
-// Separated from initialization opts, so users won't accidentally change per-curve parameters
-// (changing DST is ok!)
-export type htfBasicOpts = { DST: UnicodeOrBytes };
-export type H2CMethod<P> = (msg: Uint8Array, options?: htfBasicOpts) => P;
-// TODO: remove
-export type H2CHasherBase<P> = {
-  hashToCurve: H2CMethod<P>;
-  hashToScalar: (msg: Uint8Array, options?: htfBasicOpts) => bigint;
-};
-/**
- * RFC 9380 methods, with cofactor clearing. See https://www.rfc-editor.org/rfc/rfc9380#section-3.
- *
- * * hashToCurve: `map(hash(input))`, encodes RANDOM bytes to curve (WITH hashing)
- * * encodeToCurve: `map(hash(input))`, encodes NON-UNIFORM bytes to curve (WITH hashing)
- * * mapToCurve: `map(scalars)`, encodes NON-UNIFORM scalars to curve (NO hashing)
- */
-export type H2CHasher<PC extends PC_ANY> = H2CHasherBase<PC_P<PC>> & {
-  Point: PC;
-  encodeToCurve: H2CMethod<PC_P<PC>>;
-  mapToCurve: MapToCurve<PC_F<PC>>;
-  defaults: H2COpts & { encodeDST?: UnicodeOrBytes };
-};
 
 export const _DST_scalar: Uint8Array = asciiToBytes('HashToScalar-');
 
@@ -256,17 +253,17 @@ export function createHasher<PC extends PC_ANY>(
   }
 
   return {
-    defaults,
+    defaults: Object.freeze(defaults),
     Point,
 
-    hashToCurve(msg: Uint8Array, options?: htfBasicOpts): PC_P<PC> {
+    hashToCurve(msg: Uint8Array, options?: H2CDSTOpts): PC_P<PC> {
       const opts = Object.assign({}, defaults, options);
       const u = hash_to_field(msg, 2, opts);
       const u0 = map(u[0]);
       const u1 = map(u[1]);
       return clear(u0.add(u1) as PC_P<PC>);
     },
-    encodeToCurve(msg: Uint8Array, options?: htfBasicOpts): PC_P<PC> {
+    encodeToCurve(msg: Uint8Array, options?: H2CDSTOpts): PC_P<PC> {
       const optsDst = defaults.encodeDST ? { DST: defaults.encodeDST } : {};
       const opts = Object.assign({}, defaults, optsDst, options);
       const u = hash_to_field(msg, 1, opts);
@@ -274,7 +271,12 @@ export function createHasher<PC extends PC_ANY>(
       return clear(u0);
     },
     /** See {@link H2CHasher} */
-    mapToCurve(scalars: bigint[]): PC_P<PC> {
+    mapToCurve(scalars: bigint | bigint[]): PC_P<PC> {
+      // Curves with m=1 accept only single scalar
+      if (defaults.m === 1) {
+        if (typeof scalars !== 'bigint') throw new Error('expected bigint (m=1)');
+        return clear(map([scalars]));
+      }
       if (!Array.isArray(scalars)) throw new Error('expected array of bigints');
       for (const i of scalars)
         if (typeof i !== 'bigint') throw new Error('expected array of bigints');
@@ -283,7 +285,7 @@ export function createHasher<PC extends PC_ANY>(
 
     // hash_to_scalar can produce 0: https://www.rfc-editor.org/errata/eid8393
     // RFC 9380, draft-irtf-cfrg-bbs-signatures-08
-    hashToScalar(msg: Uint8Array, options?: htfBasicOpts): bigint {
+    hashToScalar(msg: Uint8Array, options?: H2CDSTOpts): bigint {
       // @ts-ignore
       const N = Point.Fn.ORDER;
       const opts = Object.assign({}, defaults, { p: N, m: 1, DST: _DST_scalar }, options);

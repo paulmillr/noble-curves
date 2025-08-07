@@ -23,9 +23,9 @@ import {
   _DST_scalar,
   createHasher,
   expand_message_xof,
+  type H2CDSTOpts,
   type H2CHasher,
   type H2CHasherBase,
-  type htfBasicOpts,
 } from './abstract/hash-to-curve.ts';
 import { Field, FpInvertBatch, isNegativeLE, mod, pow2, type IField } from './abstract/modular.ts';
 import { montgomery, type MontgomeryECDH } from './abstract/montgomery.ts';
@@ -338,19 +338,6 @@ function calcElligatorDecafMap(r0: bigint): EdwardsPoint {
   return new ed448_Point(mod(W0 * W3), mod(W2 * W1), mod(W1 * W3), mod(W0 * W2));
 }
 
-function decaf448_map(bytes: Uint8Array): _DecafPoint {
-  abytes(bytes, 112);
-  const skipValidation = true;
-  // Note: Similar to the field element decoding described in
-  // [RFC7748], and unlike the field element decoding described in
-  // Section 5.3.1, non-canonical values are accepted.
-  const r1 = Fp448.create(Fp448.fromBytes(bytes.subarray(0, 56), skipValidation));
-  const R1 = calcElligatorDecafMap(r1);
-  const r2 = Fp448.create(Fp448.fromBytes(bytes.subarray(56, 112), skipValidation));
-  const R2 = calcElligatorDecafMap(r2);
-  return new _DecafPoint(R1.add(R2));
-}
-
 /**
  * Each ed448/EdwardsPoint has 4 different equivalent points. This can be
  * a source of bugs for protocols like ring signatures. Decaf was created to solve this.
@@ -469,23 +456,39 @@ export const decaf448: {
 } = { Point: _DecafPoint };
 
 /** Hashing to decaf448 points / field. RFC 9380 methods. */
-export const decaf448_hasher: H2CHasherBase<_DecafPoint> & {
-  mapToCurve(msg: Uint8Array): _DecafPoint;
-} = {
-  hashToCurve(msg: Uint8Array, options?: htfBasicOpts): _DecafPoint {
+export const decaf448_hasher: H2CHasherBase<_DecafPoint> & { deriveToCurve: any } = {
+  hashToCurve(msg: Uint8Array, options?: H2CDSTOpts): _DecafPoint {
     const DST = options?.DST || 'decaf448_XOF:SHAKE256_D448MAP_RO_';
-    return decaf448_map(expand_message_xof(msg, DST, 112, 224, shake256));
+    return decaf448_hasher.deriveToCurve(expand_message_xof(msg, DST, 112, 224, shake256));
   },
-  mapToCurve(msg: Uint8Array): _DecafPoint {
-    return decaf448_map(msg);
-  },
-  // Warning: has big modulo bias of 2^-64.
-  // RFC is invalid. RFC says "use 64-byte xof", while for 2^-112 bias
-  // it must use 84-byte xof (56+56/2), not 64.
-  hashToScalar(msg: Uint8Array, options: htfBasicOpts = { DST: _DST_scalar }) {
+  /**
+   * Warning: has big modulo bias of 2^-64.
+   * RFC is invalid. RFC says "use 64-byte xof", while for 2^-112 bias
+   * it must use 84-byte xof (56+56/2), not 64.
+   */
+  hashToScalar(msg: Uint8Array, options: H2CDSTOpts = { DST: _DST_scalar }): bigint {
     // Can't use `Fn448.fromBytes()`. 64-byte input => 56-byte field element
     const xof = expand_message_xof(msg, options.DST, 64, 256, shake256);
     return Fn448.create(bytesToNumberLE(xof));
+  },
+  /**
+   * HashToCurve-like construction based on RFC 9496 (Element Derivation).
+   * Converts 112 uniform random bytes into a curve point.
+   *
+   * WARNING: This represents an older hash-to-curve construction, preceding the finalization of RFC 9380.
+   * It was later reused as a component in the newer `hash_to_ristretto255` function defined in RFC 9380.
+   */
+  deriveToCurve(bytes: Uint8Array): _DecafPoint {
+    abytes(bytes, 112);
+    const skipValidation = true;
+    // Note: Similar to the field element decoding described in
+    // [RFC7748], and unlike the field element decoding described in
+    // Section 5.3.1, non-canonical values are accepted.
+    const r1 = Fp448.create(Fp448.fromBytes(bytes.subarray(0, 56), skipValidation));
+    const R1 = calcElligatorDecafMap(r1);
+    const r2 = Fp448.create(Fp448.fromBytes(bytes.subarray(56, 112), skipValidation));
+    const R2 = calcElligatorDecafMap(r2);
+    return new _DecafPoint(R1.add(R2));
   },
 };
 
