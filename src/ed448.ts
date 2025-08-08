@@ -159,32 +159,40 @@ const ed448_Point = edwards(ed448_CURVE, { Fp, Fn, uvRatio });
 /**
  * ed448 EdDSA curve and methods.
  * @example
- * import { ed448 } from '@noble/curves/ed448';
+ * ```js
+ * import { ed448 } from '@noble/curves/ed448.js';
  * const { secretKey, publicKey } = ed448.keygen();
- * const msg = new TextEncoder().encode('hello');
+ * // const publicKey = ed448.getPublicKey(secretKey);
+ * const msg = new TextEncoder().encode('hello noble');
  * const sig = ed448.sign(msg, secretKey);
  * const isValid = ed448.verify(sig, msg, publicKey);
+ * ```
  */
 export const ed448: EdDSA = eddsa(ed448_Point, shake256_114, ed448_eddsa_opts);
 
 // There is no ed448ctx, since ed448 supports ctx by default
-/** Prehashed version of ed448. Accepts already-hashed messages in sign() and verify(). */
+/** Prehashed version of ed448. See {@link ed448} */
 export const ed448ph: EdDSA = /* @__PURE__ */ eddsa(ed448_Point, shake256_114, {
   ...ed448_eddsa_opts,
   prehash: shake256_64,
 });
 
 /**
- * E448 curve, defined by NIST.
- * E448 != edwards448 used in ed448.
+ * E448 (NIST) != edwards448 used in ed448.
  * E448 is birationally equivalent to edwards448.
  */
 export const E448: EdwardsPointCons = edwards(E448_CURVE);
 
 /**
  * ECDH using curve448 aka x448.
- * x448 has 56-byte keys as per RFC 7748, while
- * ed448 has 57-byte keys as per RFC 8032.
+ *
+ * @example
+ * ```js
+ * import { x448 } from '@noble/curves/ed448.js';
+ * const alice = x448.keygen();
+ * const bob = x448.keygen();
+ * const shared = x448.getSharedSecret(alice.secretKey, bob.publicKey);
+ * ```
  */
 export const x448: MontgomeryECDH = /* @__PURE__ */ (() => {
   const P = ed448_CURVE.p;

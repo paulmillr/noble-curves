@@ -114,16 +114,6 @@ export function asciiToBytes(ascii: string): Uint8Array {
   });
 }
 
-/**
- * @example utf8ToBytes('abc') // new Uint8Array([97, 98, 99])
- */
-// export const utf8ToBytes: typeof utf8ToBytes_ = utf8ToBytes_;
-/**
- * Converts bytes to string using UTF8 encoding.
- * @example bytesToUtf8(Uint8Array.from([97, 98, 99])) // 'abc'
- */
-// export const bytesToUtf8: typeof bytesToUtf8_ = bytesToUtf8_;
-
 // Is positive bigint
 const isPosBig = (n: bigint) => typeof n === 'bigint' && _0n <= n;
 

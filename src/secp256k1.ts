@@ -82,20 +82,22 @@ const Pointk1 = /* @__PURE__ */ weierstrass(secp256k1_CURVE, {
 });
 
 /**
- * secp256k1 curve, ECDSA and ECDH methods.
+ * secp256k1 curve: ECDSA and ECDH methods.
  *
- * Field: `2n**256n - 2n**32n - 2n**9n - 2n**8n - 2n**7n - 2n**6n - 2n**4n - 1n`
+ * Uses sha256 to hash messages. To use a different hash,
+ * pass `{ prehash: false }` to sign / verify.
  *
  * @example
  * ```js
- * import { secp256k1 } from '@noble/curves/secp256k1';
+ * import { secp256k1 } from '@noble/curves/secp256k1.js';
  * const { secretKey, publicKey } = secp256k1.keygen();
- * const msg = new TextEncoder().encode('hello');
+ * // const publicKey = secp256k1.getPublicKey(secretKey);
+ * const msg = new TextEncoder().encode('hello noble');
  * const sig = secp256k1.sign(msg, secretKey);
- * const isValid = secp256k1.verify(sig, msg, publicKey) === true;
+ * const isValid = secp256k1.verify(sig, msg, publicKey);
+ * // const sigKeccak = secp256k1.sign(keccak256(msg), secretKey, { prehash: false });
  * ```
  */
-
 export const secp256k1: ECDSA = /* @__PURE__ */ ecdsa(Pointk1, sha256);
 
 // Schnorr signatures are superior to ECDSA from above. Below is Schnorr-specific BIP0340 code.
@@ -229,7 +231,7 @@ export type SecpSchnorr = {
  * https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki
  * @example
  * ```js
- * import { schnorr } from '@noble/curves/secp256k1';
+ * import { schnorr } from '@noble/curves/secp256k1.js';
  * const { secretKey, publicKey } = schnorr.keygen();
  * // const publicKey = schnorr.getPublicKey(secretKey);
  * const msg = new TextEncoder().encode('hello');

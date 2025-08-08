@@ -139,28 +139,32 @@ function _ed(opts: EdDSAOpts) {
 /**
  * ed25519 curve with EdDSA signatures.
  * @example
- * import { ed25519 } from '@noble/curves/ed25519';
+ * ```js
+ * import { ed25519 } from '@noble/curves/ed25519.js';
  * const { secretKey, publicKey } = ed25519.keygen();
- * const msg = new TextEncoder().encode('hello');
- * const sig = ed25519.sign(msg, priv);
- * ed25519.verify(sig, msg, pub); // Default mode: follows ZIP215
- * ed25519.verify(sig, msg, pub, { zip215: false }); // RFC8032 / FIPS 186-5
+ * // const publicKey = ed25519.getPublicKey(secretKey);
+ * const msg = new TextEncoder().encode('hello noble');
+ * const sig = ed25519.sign(msg, secretKey);
+ * const isValid = ed25519.verify(sig, msg, pub); // ZIP215
+ * // RFC8032 / FIPS 186-5
+ * const isValid2 = ed25519.verify(sig, msg, pub, { zip215: false });
+ * ```
  */
 export const ed25519: EdDSA = /* @__PURE__ */ _ed({});
-/** Context of ed25519. Uses context for domain separation. */
+/** Context version of ed25519 (ctx for domain separation). See {@link ed25519} */
 export const ed25519ctx: EdDSA = /* @__PURE__ */ _ed({ domain: ed25519_domain });
-/** Prehashed version of ed25519. Accepts already-hashed messages in sign() and verify(). */
+/** Prehashed version of ed25519. See {@link ed25519} */
 export const ed25519ph: EdDSA = /* @__PURE__ */ _ed({ domain: ed25519_domain, prehash: sha512 });
 
 /**
  * ECDH using curve25519 aka x25519.
  * @example
- * import { x25519 } from '@noble/curves/ed25519';
- * const priv = 'a546e36bf0527c9d3b16154b82465edd62144c0ac1fc5a18506a2244ba449ac4';
- * const pub = 'e6db6867583030db3594c1a424b15f7c726624ec26b3353b10a903a6d0ab1c4c';
- * x25519.getSharedSecret(priv, pub) === x25519.scalarMult(priv, pub); // aliases
- * x25519.getPublicKey(priv) === x25519.scalarMultBase(priv);
- * x25519.getPublicKey(x25519.utils.randomSecretKey());
+ * ```js
+ * import { x25519 } from '@noble/curves/ed25519.js';
+ * const alice = x25519.keygen();
+ * const bob = x25519.keygen();
+ * const shared = x25519.getSharedSecret(alice.secretKey, bob.publicKey);
+ * ```
  */
 export const x25519: MontgomeryECDH = /* @__PURE__ */ (() => {
   const P = ed25519_CURVE_p;

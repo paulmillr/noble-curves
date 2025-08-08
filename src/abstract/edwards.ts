@@ -146,9 +146,10 @@ export interface EdDSA {
      *
      * @example
      * ```js
-     * const someonesPub = ed25519.getPublicKey(ed25519.utils.randomSecretKey());
+     * const someonesPub_ed = ed25519.getPublicKey(ed25519.utils.randomSecretKey());
+     * const someonesPub = ed25519.utils.toMontgomery(someonesPub);
      * const aPriv = x25519.utils.randomSecretKey();
-     * x25519.getSharedSecret(aPriv, ed25519.utils.toMontgomery(someonesPub))
+     * const shared = x25519.getSharedSecret(aPriv, someonesPub)
      * ```
      */
     toMontgomery: (publicKey: Uint8Array) => Uint8Array;
@@ -157,8 +158,9 @@ export interface EdDSA {
      * @example
      * ```js
      * const someonesPub = x25519.getPublicKey(x25519.utils.randomSecretKey());
-     * const aPriv = ed25519.utils.randomSecretKey();
-     * x25519.getSharedSecret(ed25519.utils.toMontgomerySecret(aPriv), someonesPub)
+     * const aPriv_ed = ed25519.utils.randomSecretKey();
+     * const aPriv = ed25519.utils.toMontgomerySecret(aPriv_ed);
+     * const shared = x25519.getSharedSecret(aPriv, someonesPub)
      * ```
      */
     toMontgomerySecret: (secretKey: Uint8Array) => Uint8Array;

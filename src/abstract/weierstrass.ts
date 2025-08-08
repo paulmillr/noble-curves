@@ -423,18 +423,20 @@ const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3), _4n = 
 /**
  * Creates weierstrass Point constructor, based on specified curve options.
  *
+ * See {@link WeierstrassOpts}.
+ *
  * @example
 ```js
 const opts = {
-  p: BigInt('0xffffffff00000001000000000000000000000000ffffffffffffffffffffffff'),
-  n: BigInt('0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551'),
-  h: BigInt(1),
-  a: BigInt('0xffffffff00000001000000000000000000000000fffffffffffffffffffffffc'),
-  b: BigInt('0x5ac635d8aa3a93e7b3ebbd55769886bc651d06b0cc53b0f63bce3c3e27d2604b'),
-  Gx: BigInt('0x6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296'),
-  Gy: BigInt('0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5'),
+  p: 0xfffffffffffffffffffffffffffffffeffffac73n,
+  n: 0x100000000000000000001b8fa16dfab9aca16b6b3n,
+  h: 1n,
+  a: 0n,
+  b: 7n,
+  Gx: 0x3b4c382ce37aa192a4019e763036f4f5dd4d7ebbn,
+  Gy: 0x938cf935318fdced6bc28286531733c3f03c4feen,
 };
-const p256_Point = weierstrass(opts);
+const secp160k1_Point = weierstrass(opts);
 ```
  */
 export function weierstrass<T>(
@@ -1187,11 +1189,10 @@ export function ecdh(
 
 /**
  * Creates ECDSA signing interface for given elliptic curve `Point` and `hash` function.
- * We need `hash` for 2 features:
- * 1. Message prehash-ing. NOT used if `sign` / `verify` are called with `prehash: false`
- * 2. k generation in `sign`, using HMAC-drbg(hash)
  *
- * ECDSAOpts are only rarely needed.
+ * @param Point created using {@link weierstrass} function
+ * @param hash used for 1) message prehash-ing 2) k generation in `sign`, using hmac_drbg(hash)
+ * @param ecdsaOpts rarely needed, see {@link ECDSAOpts}
  *
  * @example
  * ```js
