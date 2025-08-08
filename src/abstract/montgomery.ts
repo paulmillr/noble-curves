@@ -176,7 +176,6 @@ export function montgomery(curveDef: CurveType): MontgomeryECDH {
   }
   const utils = {
     randomSecretKey,
-    randomPrivateKey: randomSecretKey,
   };
 
   return Object.freeze({

@@ -47,9 +47,11 @@ export type MapToCurve<T> = (scalar: bigint[]) => AffinePoint<T>;
 // Separated from initialization opts, so users won't accidentally change per-curve parameters
 // (changing DST is ok!)
 export type H2CDSTOpts = { DST: UnicodeOrBytes };
-export type H2CHasherBase<P> = {
-  hashToCurve(msg: Uint8Array, options?: H2CDSTOpts): P;
+export type H2CHasherBase<PC extends PC_ANY> = {
+  hashToCurve(msg: Uint8Array, options?: H2CDSTOpts): PC_P<PC>;
   hashToScalar(msg: Uint8Array, options?: H2CDSTOpts): bigint;
+  deriveToCurve?(msg: Uint8Array, options?: H2CDSTOpts): PC_P<PC>;
+  Point: PC;
 };
 /**
  * RFC 9380 methods, with cofactor clearing. See https://www.rfc-editor.org/rfc/rfc9380#section-3.
@@ -58,11 +60,10 @@ export type H2CHasherBase<P> = {
  * * encodeToCurve: `map(hash(input))`, encodes NON-UNIFORM bytes to curve (WITH hashing)
  * * mapToCurve: `map(scalars)`, encodes NON-UNIFORM scalars to curve (NO hashing)
  */
-export type H2CHasher<PC extends PC_ANY> = H2CHasherBase<PC_P<PC>> & {
+export type H2CHasher<PC extends PC_ANY> = H2CHasherBase<PC> & {
   encodeToCurve(msg: Uint8Array, options?: H2CDSTOpts): PC_P<PC>;
   mapToCurve: MapToCurve<PC_F<PC>>;
   defaults: H2COpts & { encodeDST?: UnicodeOrBytes };
-  Point: PC;
 };
 
 // Octet Stream to Integer. "spec" implementation of os2ip is 2.5x slower vs bytesToNumberBE.

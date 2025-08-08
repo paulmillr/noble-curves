@@ -231,7 +231,6 @@ export type WeierstrassOpts<T> = Readonly<{
 // When a cofactor != 1, there can be an effective methods to:
 // 1. Determine whether a point is torsion-free
 // 2. Clear torsion component
-// wrapPrivateKey: bls12-381 requires mod(n) instead of rejecting keys >= n
 export type WeierstrassExtraOpts<T> = Partial<{
   Fp: IField<T>;
   Fn: IField<bigint>;
@@ -456,7 +455,6 @@ export function weierstrass<T>(
       fromBytes: 'function',
       toBytes: 'function',
       endo: 'object',
-      wrapPrivateKey: 'boolean',
     }
   );
 
@@ -1403,14 +1401,14 @@ export function ecdsa(
    * Warning: we cannot assume here that message has same amount of bytes as curve order,
    * this will be invalid at least for P521. Also it can be bigger for P224 + SHA256.
    */
-  function prepSig(message: Uint8Array, privateKey: Uint8Array, opts: ECDSASignOpts) {
+  function prepSig(message: Uint8Array, secretKey: Uint8Array, opts: ECDSASignOpts) {
     const { lowS, prehash, extraEntropy } = validateSigOpts(opts, defaultSigOpts);
     message = validateMsgAndHash(message, prehash); // RFC6979 3.2 A: h1 = H(m)
     // We can't later call bits2octets, since nested bits2int is broken for curves
     // with fnBits % 8 !== 0. Because of that, we unwrap it here as int2octets call.
     // const bits2octets = (bits) => int2octets(bits2int_modN(bits))
     const h1int = bits2int_modN(message);
-    const d = Fn.fromBytes(privateKey); // validate secret key, convert to bigint
+    const d = Fn.fromBytes(secretKey); // validate secret key, convert to bigint
     if (!Fn.isValidNot0(d)) throw new Error('invalid private key');
     const seedArgs = [int2octets(d), int2octets(h1int)];
     // extraEntropy. RFC6979 3.6: additional k' (optional).

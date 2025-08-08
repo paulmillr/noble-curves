@@ -577,23 +577,10 @@ const bls12_params = {
   xNegative: true,
   twistType: 'multiplicative' as const,
   randomBytes: randomBytes,
-  // https://datatracker.ietf.org/doc/html/rfc9380#name-clearing-the-cofactor
-  // https://datatracker.ietf.org/doc/html/rfc9380#name-cofactor-clearing-for-bls12
-  // G2hEff: BigInt(
-  //   '0xbc69f08f2ee75b3584c6a0ea91b352888e2a8e9145ad7689986ff031508ffe1329c2f178731db956d82bf015d1212b02ec0ec69d7477c1ae954cbc06689f6a359894c0adebbf6b4e8020005aaa95551'
-  // ),
 };
 
 /**
  * bls12-381 pairing-friendly curve.
- * @example
- * import { bls12_381 as bls } from '@noble/curves/bls12-381';
- * // G1 keys, G2 signatures
- * const privateKey = '67d53f170b908cabb9eb326c3c337762d59289a8fec79f7bc9254b584b73265c';
- * const message = '64726e3da8';
- * const publicKey = bls.getPublicKey(privateKey);
- * const signature = bls.sign(message, privateKey);
- * const isValid = bls.verify(signature, message, publicKey);
  */
 export const bls12_381: BlsCurvePairWithSignatures = bls(
   fields,

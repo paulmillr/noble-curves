@@ -456,10 +456,11 @@ export const decaf448: {
 } = { Point: _DecafPoint };
 
 /** Hashing to decaf448 points / field. RFC 9380 methods. */
-export const decaf448_hasher: H2CHasherBase<_DecafPoint> & { deriveToCurve: any } = {
+export const decaf448_hasher: H2CHasherBase<typeof _DecafPoint> = {
+  Point: _DecafPoint,
   hashToCurve(msg: Uint8Array, options?: H2CDSTOpts): _DecafPoint {
     const DST = options?.DST || 'decaf448_XOF:SHAKE256_D448MAP_RO_';
-    return decaf448_hasher.deriveToCurve(expand_message_xof(msg, DST, 112, 224, shake256));
+    return decaf448_hasher.deriveToCurve!(expand_message_xof(msg, DST, 112, 224, shake256));
   },
   /**
    * Warning: has big modulo bias of 2^-64.

@@ -452,7 +452,8 @@ export const ristretto255: {
 } = { Point: _RistrettoPoint };
 
 /** Hashing to ristretto255 points / field. RFC 9380 methods. */
-export const ristretto255_hasher: H2CHasherBase<_RistrettoPoint> & { deriveToCurve: any } = {
+export const ristretto255_hasher: H2CHasherBase<typeof _RistrettoPoint> = {
+  Point: _RistrettoPoint,
   /**
   * Spec: https://www.rfc-editor.org/rfc/rfc9380.html#name-hashing-to-ristretto255. Caveats:
   * * There are no test vectors
@@ -471,7 +472,7 @@ export const ristretto255_hasher: H2CHasherBase<_RistrettoPoint> & { deriveToCur
     const xmd = expand_message_xmd(msg, DST, 64, sha512);
     // NOTE: RFC 9380 incorrectly calls this function 'ristretto255_map', in RFC 9496 map was function inside (per point)
     // That also lead to confustion that ristretto255_map is mapToCurve (it is not! it is old hashToCurve)
-    return ristretto255_hasher.deriveToCurve(xmd);
+    return ristretto255_hasher.deriveToCurve!(xmd);
   },
   hashToScalar(msg: Uint8Array, options: H2CDSTOpts = { DST: _DST_scalar }) {
     const xmd = expand_message_xmd(msg, options.DST, 64, sha512);
