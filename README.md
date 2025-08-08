@@ -84,8 +84,8 @@ import { bytesToHex, hexToBytes, concatBytes } from '@noble/curves/abstract/util
     - [Prehashed signing](#prehashed-signing)
     - [Hedged ECDSA with noise](#hedged-ecdsa-with-noise)
     - [Consensus-friendliness vs e-voting](#consensus-friendliness-vs-e-voting)
-    - [webcrypto: Friendly wrapper](#webcrypto-friendly-wrapper)
   - [ECDH: Diffie-Hellman shared secrets](#ecdh-diffie-hellman-shared-secrets)
+  - [webcrypto: Friendly wrapper](#webcrypto-friendly-wrapper)
   - [BLS signatures, bls12-381, bn254 aka alt\_bn128](#bls-signatures-bls12-381-bn254-aka-alt_bn128)
   - [Hashing to curve points](#hash-to-curve-hashing-to-curve-points)
   - [OPRFs](#oprfs)
@@ -142,10 +142,11 @@ Schnorr (secp256k1-only) conforms to [BIP 340](https://github.com/bitcoin/bips/b
 import { ristretto255, ristretto255_hasher, ristretto255_oprf } from '@noble/curves/ed25519.js';
 import { decaf448, decaf448_hasher, decaf448_oprf } from '@noble/curves/ed448.js';
 
-ristretto255.Point
+console.log(ristretto255.Point, decaf448.Point);
 ```
 
 Check out [RFC 9496](https://www.rfc-editor.org/rfc/rfc9496) more info on ristretto255 & decaf448.
+Check out separate documentation for [Point](#elliptic-curve-point-math), [hasher](#hash-to-curve-hashing-to-curve-points) and [oprf](#oprfs).
 
 #### Prehashed signing
 
@@ -226,16 +227,6 @@ In ed25519, there is an ability to choose between consensus-friendliness vs e-vo
 
 Both modes have SUF-CMA (strong unforgeability under chosen message attacks).
 
-#### webcrypto: Friendly wrapper
-
-
-```js
-const sig2 = curve.sign(msg, secretKey, { prehash: false })
-const msg = new Uint8Array(32).fill(1); // message hash (not message) in ecdsa
-const sig = secp256k1.sign(msg, secretKey); // `{prehash: true}` option is available
-const isValid = secp256k1.verify(sig, msg, pub) === true;
-```
-
 ### ECDH: Diffie-Hellman shared secrets
 
 ```js
@@ -255,7 +246,7 @@ for (const curve of [secp256k1, schnorr, x25519, x448, p256, p384, p521]) {
 import { ed25519 } from '@noble/curves/ed25519.js';
 const alice = ed25519.keygen();
 const bob = ed25519.keygen();
-const aliceSecX = ed25519.utils.toMontgomeryPriv(alice.secretKey);
+const aliceSecX = ed25519.utils.toMontgomerySecret(alice.secretKey);
 const bobPubX = ed25519.utils.toMontgomery(bob.publicKey);
 const sharedKey = x25519.getSharedSecret(aliceSecX, bobPubX);
 ```
@@ -267,6 +258,75 @@ In Weierstrass curves, shared secrets:
 
 - Include y-parity bytes: use `key.slice(1)` to strip it
 - Are not hashed: use hashing or KDF on top, like `sha256(shared)` or `hkdf(shared)`
+
+#### webcrypto: Friendly wrapper
+
+> [!NOTE]
+> Webcrypto methods are always async.
+
+##### webcrypto signatures
+
+```js
+import { ed25519, ed448, p256, p384, p521 } from './src/webcrypto.ts';
+
+(async () => {
+  for (let [name, curve] of Object.entries({ p256, p384, p521, ed25519, ed448 })) {
+    console.log('curve', name);
+    if (!await curve.isSupported()) {
+      console.log('is not supported, skipping');
+      continue;
+    }
+    const keys = await curve.keygen();
+    const msg = new TextEncoder().encode('hello noble');
+    const sig = await curve.sign(msg, keys.secretKey);
+    const isValid = await curve.verify(sig, msg, keys.publicKey);
+    console.log({
+      keys, msg, sig, isValid
+    });
+  }
+})();
+```
+
+##### webcrypto ecdh
+
+```js
+import { p256, p384, p521, x25519, x448 } from './src/webcrypto.ts';
+
+(async () => {
+  for (let [name, curve] of Object.entries({ p256, p384, p521, x25519, x448 })) {
+    console.log('curve', name);
+    if (!await curve.isSupported()) {
+      console.log('is not supported, skipping');
+      continue;
+    }
+    const alice = await curve.keygen();
+    const bob = await curve.keygen();
+    const shared = await curve.getSharedSecret(alice.secretKey, bob.publicKey);
+    const shared2 = await curve.getSharedSecret(bob.secretKey, alice.publicKey);
+    console.log({shared});
+  }
+})();
+```
+
+##### Key conversion from noble to webcrypto and back
+
+```js
+import { p256 as p256n } from './src/nist.ts';
+import { p256 } from './src/webcrypto.ts';
+(async () => {
+  const nobleKeys = p256n.keygen();
+  // convert noble keys to webcrypto
+  const webKeys = {
+    secretKey: await p256.utils.convertSecretKey(nobleKeys.secretKey, 'raw', 'pkcs8'),
+    publicKey: await p256.utils.convertPublicKey(nobleKeys.publicKey, 'raw', 'spki')
+  };
+  // convert webcrypto keys to noble
+  const nobleKeys2 = {
+    secretKey: await p256.utils.convertSecretKey(webKeys.secretKey, 'pkcs8', 'raw'),
+    publicKey: await p256.utils.convertPublicKey(webKeys.publicKey, 'spki', 'raw')
+  };
+})();
+```
 
 ### BLS signatures, bls12-381, bn254 aka alt_bn128
 
@@ -335,21 +395,48 @@ For example usage, check out [the implementation of bn254 EVM precompiles](https
 ### hash-to-curve: hashing to curve points
 
 ```ts
-import { secp256k1_hasher } from '@noble/curves/secp256k1.js';
-import { p256_hasher, p384_hasher, p521_hasher } from '@noble/curves/nist.js';
-import { ristretto255_hasher } from '@noble/curves/ed25519.js';
-import { decaf448_hasher } from '@noble/curves/ed448.js';
+import { bls12_381 } from './src/bls12-381.ts';
+import { ed25519_hasher, ristretto255_hasher } from './src/ed25519.ts';
+import { decaf448_hasher, ed448_hasher } from './src/ed448.ts';
+import { p256_hasher, p384_hasher, p521_hasher } from './src/nist.ts';
+import { secp256k1_hasher } from './src/secp256k1.ts';
 
-import { bls12_381 } from '@noble/curves/bls12-381.js';
-bls12_381.G1.hashToCurve(randomBytes(), { DST: 'another' });
-bls12_381.G2.hashToCurve(randomBytes(), { DST: 'custom' });
+const h = {
+  secp256k1_hasher,
+  p256_hasher, p384_hasher, p521_hasher,
+  ed25519_hasher,
+  ed448_hasher,
+  ristretto255_hasher,
+  decaf448_hasher,
+  bls_G1: bls12_381.G1,
+  bls_G2: bls12_381.G2
+};
 
+const msg = Uint8Array.from([0xca, 0xfe, 0x01, 0x23]);
+console.log('msg', msg);
+for (let [name, c] of Object.entries(h)) {
+  const hashToCurve = c.hashToCurve(msg).toHex();
+  const hashToCurve_customDST = c.hashToCurve(msg, { DST: 'hello noble' }).toHex();
+  const encodeToCurve = 'encodeToCurve' in c ? c.encodeToCurve(msg).toHex() : undefined;
+  // ristretto255, decaf448 only
+  const deriveToCurve = 'deriveToCurve' in c ?
+    c.deriveToCurve!(new Uint8Array(c.Point.Fp.BYTES * 2)).toHex() : undefined;
+  const hashToScalar = c.hashToScalar(msg);
+  console.log({
+    name, hashToCurve, hashToCurve_customDST, encodeToCurve, deriveToCurve, hashToScalar
+  });
+}
+
+// abstract methods
 import { expand_message_xmd, expand_message_xof, hash_to_field } from '@noble/curves/abstract/hash-to-curve.js';
 ```
 
 The module allows to hash arbitrary strings to elliptic curve points. Implements [RFC 9380](https://www.rfc-editor.org/rfc/rfc9380).
 
-Every curve has exported `hashToCurve` and `encodeToCurve` methods. You should always prefer `hashToCurve` for security:
+> [!NOTE]
+> Why is `p256_hasher` separate from `p256`?
+> The methods reside in separate _hasher namespace for tree-shaking:
+> this way users who don't need hash-to-curve, won't have it in their builds.
 
 ### OPRFs
 
@@ -405,12 +492,16 @@ const sponge = poseidon.poseidonSponge(opts); // use carefully, not specced
 
 ### fft: Fast Fourier Transform
 
-Experimental implementation of NTT / FFT (Fast Fourier Transform) over finite fields.
-API may change at any time. The code has not been audited. Feature requests are welcome.
-
 ```ts
 import * as fft from '@noble/curves/abstract/fft.js';
+import { bls12_381 } from '@noble/curves/bls12-381.js';
+const Fr = bls12_381.fields.Fr;
+const roots = fft.rootsOfUnity(Fr, 7n);
+const fftFr = fft.FFT(roots, Fr);
 ```
+
+Experimental implementation of NTT / FFT (Fast Fourier Transform) over finite fields.
+API may change at any time. The code has not been audited. Feature requests are welcome.
 
 ### utils: byte shuffling, conversion
 
@@ -841,7 +932,7 @@ This allows usage in bundler-less environments without source maps
     - randomPrivateKey => randomSecretKey
     - utils.precompute, Point#_setWindowSize => Point#precompute
     - edwardsToMontgomery => utils.toMontgomery
-    - edwardsToMontgomeryPriv => utils.toMontgomeryPriv
+    - edwardsToMontgomeryPriv => utils.toMontgomerySecret
 - Rename all curve-specific hash-to-curve methods to `*curve*_hasher`.
   Example: `secp256k1.hashToCurve` => `secp256k1_hasher.hashToCurve()`
 

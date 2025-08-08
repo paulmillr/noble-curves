@@ -57,7 +57,7 @@ for (let category of JSON_CATEGORIES) {
       n,
       h,
     };
-    if (c.name === 'secp521r1') norm.allowedPrivateKeyLengths = [130, 131, 132];
+    // if (c.name === 'secp521r1') norm.allowedPrivateKeyLengths = [130, 131, 132];
     miscCurves['misc_' + c.name] = ecdsa(weierstrass(norm), sha512);
   }
 }
