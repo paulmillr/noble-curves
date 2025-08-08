@@ -53,58 +53,53 @@ describe('webcrypto', () => {
       const { noble, web, canDerive, canSign } = CURVES[c];
       for (const keyType of ['raw', 'pkcs8', 'spki', 'jwk']) {
         should(keyType, async () => {
-          // if (!(await webcrypto.supportsWc(web))) {
-          //   console.log(`skipping test, unsupported webcrypto ${c} ${keyType}`);
-          //   return;
-          // }
           // Basic
-          deepStrictEqual(await web.isAvailable(), true);
-          deepStrictEqual(await webcrypto.supportsWc(web), true);
+          deepStrictEqual(await web.isSupported(), true);
           // Keygen
-          const secFormat = keyType === 'spki' ? 'raw' : keyType;
-          const pubFormat = keyType === 'pkcs8' ? 'raw' : keyType;
-          const randomWeb = await web.utils.randomSecretKey(secFormat);
+          const formatSec = keyType === 'spki' ? 'raw' : keyType;
+          const formatPub = keyType === 'pkcs8' ? 'raw' : keyType;
+          const randomWeb = await web.utils.randomSecretKey(formatSec);
           const randomNoble = noble.utils.randomSecretKey();
           const randomNobleConverted = await web.utils.convertSecretKey(
             randomNoble,
             'raw',
-            secFormat
+            formatSec
           );
           const randomNoblePub = await web.getPublicKey(randomNobleConverted, {
-            secFormat: secFormat,
-            pubFormat,
+            formatSec: formatSec,
+            formatPub: formatPub,
           });
-          const publicWeb = await web.getPublicKey(randomWeb, { secFormat: secFormat, pubFormat });
-          const rawPrivWeb = await web.utils.convertSecretKey(randomWeb, secFormat, 'raw');
-          const rawPubWeb = await web.utils.convertPublicKey(publicWeb, pubFormat, 'raw');
+          const publicWeb = await web.getPublicKey(randomWeb, {
+            formatSec: formatSec,
+            formatPub: formatPub,
+          });
+          const rawPrivWeb = await web.utils.convertSecretKey(randomWeb, formatSec, 'raw');
+          const rawPubWeb = await web.utils.convertPublicKey(publicWeb, formatPub, 'raw');
           deepStrictEqual(rawPubWeb, noble.getPublicKey(rawPrivWeb, false));
           deepStrictEqual(
             await web.getPublicKey(randomNobleConverted, {
-              secFormat: secFormat,
-              pubFormat: 'raw',
+              formatSec: formatSec,
+              formatPub: 'raw',
             }),
             noble.getPublicKey(randomNoble, false)
           );
           deepStrictEqual(
-            await web.utils.convertPublicKey(randomNoblePub, pubFormat, 'raw'),
+            await web.utils.convertPublicKey(randomNoblePub, formatPub, 'raw'),
             noble.getPublicKey(randomNoble, false)
           );
           // Sign
           if (canSign) {
-            const sigWeb = await web.sign(MSG, randomWeb, { format: secFormat });
-            let sigNoble = noble.sign(MSG, randomNoble);
-            // if (c !== 'ed25519' && c !== 'ed448') sigNoble = sigNoble.toBytes('compact');
-            deepStrictEqual(await web.verify(sigWeb, MSG, publicWeb, { format: pubFormat }), true);
-            deepStrictEqual(
-              await web.verify(sigNoble, MSG, randomNoblePub, { format: pubFormat }),
-              true
-            );
+            const sigWeb = await web.sign(MSG, randomWeb, { formatSec });
+            const sigNoble = noble.sign(MSG, randomNoble);
+            deepStrictEqual(await web.verify(sigWeb, MSG, publicWeb, { formatPub }), true);
+            deepStrictEqual(await web.verify(sigNoble, MSG, randomNoblePub, { formatPub }), true);
             deepStrictEqual(noble.verify(sigWeb, MSG, rawPubWeb, { lowS: false }), true);
           }
           // Get shared secret
-          if (canDerive && secFormat === pubFormat) {
+          if (canDerive && formatSec === formatPub) {
             const webShared = await web.getSharedSecret(randomWeb, randomNoblePub, {
-              format: secFormat,
+              formatSec,
+              formatPub,
             });
             const nobleShared = noble.getSharedSecret(rawPrivWeb, noble.getPublicKey(randomNoble));
             deepStrictEqual(
