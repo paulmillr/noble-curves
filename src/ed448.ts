@@ -15,6 +15,7 @@ import {
   edwards,
   PrimeEdwardsPoint,
   type EdDSA,
+  type EdDSAOpts,
   type EdwardsOpts,
   type EdwardsPoint,
   type EdwardsPointCons,
@@ -155,8 +156,11 @@ function dom4(data: Uint8Array, ctx: Uint8Array, phflag: boolean) {
     data
   );
 }
-const ed448_eddsa_opts = { adjustScalarBytes, domain: dom4 };
 const ed448_Point = /* @__PURE__ */ edwards(ed448_CURVE, { Fp, Fn, uvRatio });
+
+function ed4(opts: EdDSAOpts) {
+  return eddsa(ed448_Point, shake256_114, Object.assign({ adjustScalarBytes, domain: dom4 }, opts));
+}
 
 /**
  * ed448 EdDSA curve and methods.
@@ -170,16 +174,11 @@ const ed448_Point = /* @__PURE__ */ edwards(ed448_CURVE, { Fp, Fn, uvRatio });
  * const isValid = ed448.verify(sig, msg, publicKey);
  * ```
  */
-export const ed448: EdDSA = /* @__PURE__ */ eddsa(ed448_Point, shake256_114, ed448_eddsa_opts);
+export const ed448: EdDSA = /* @__PURE__ */ ed4({});
 
 // There is no ed448ctx, since ed448 supports ctx by default
 /** Prehashed version of ed448. See {@link ed448} */
-export const ed448ph: EdDSA = /* @__PURE__ */ (() =>
-  eddsa(ed448_Point, shake256_114, {
-    ...ed448_eddsa_opts,
-    prehash: shake256_64,
-  }))();
-
+export const ed448ph: EdDSA = /* @__PURE__ */ ed4({ prehash: shake256_64 });
 /**
  * E448 (NIST) != edwards448 used in ed448.
  * E448 is birationally equivalent to edwards448.

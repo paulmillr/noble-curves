@@ -6,13 +6,13 @@
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import {
-  _validateObject,
   abytes,
   anumber,
   bytesToNumberBE,
   bytesToNumberLE,
   numberToBytesBE,
   numberToBytesLE,
+  validateObject,
 } from '../utils.ts';
 
 // Numbers aren't used in x25519 / x448 builds
@@ -283,7 +283,7 @@ export function validateField<T>(field: IField<T>): IField<T> {
     map[val] = 'function';
     return map;
   }, initial);
-  _validateObject(field, opts);
+  validateObject(field, opts);
   // const max = 16384;
   // if (field.BYTES < 1 || field.BYTES > max) throw new Error('invalid field');
   // if (field.BITS < 1 || field.BITS > 8 * max) throw new Error('invalid field');

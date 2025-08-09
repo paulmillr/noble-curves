@@ -121,7 +121,6 @@ const ed25519_Point = /* @__PURE__ */ edwards(ed25519_CURVE, { uvRatio });
 const Fp = /* @__PURE__ */ (() => ed25519_Point.Fp)();
 const Fn = /* @__PURE__ */ (() => ed25519_Point.Fn)();
 
-const ed25519_eddsa_opts = { adjustScalarBytes };
 function ed25519_domain(data: Uint8Array, ctx: Uint8Array, phflag: boolean) {
   if (ctx.length > 255) throw new Error('Context is too big');
   return concatBytes(
@@ -132,8 +131,8 @@ function ed25519_domain(data: Uint8Array, ctx: Uint8Array, phflag: boolean) {
   );
 }
 
-function _ed(opts: EdDSAOpts) {
-  return eddsa(ed25519_Point, sha512, Object.assign({}, ed25519_eddsa_opts, opts));
+function ed(opts: EdDSAOpts) {
+  return eddsa(ed25519_Point, sha512, Object.assign({ adjustScalarBytes }, opts));
 }
 
 /**
@@ -150,11 +149,11 @@ function _ed(opts: EdDSAOpts) {
  * const isValid2 = ed25519.verify(sig, msg, pub, { zip215: false });
  * ```
  */
-export const ed25519: EdDSA = /* @__PURE__ */ _ed({});
+export const ed25519: EdDSA = /* @__PURE__ */ ed({});
 /** Context version of ed25519 (ctx for domain separation). See {@link ed25519} */
-export const ed25519ctx: EdDSA = /* @__PURE__ */ _ed({ domain: ed25519_domain });
+export const ed25519ctx: EdDSA = /* @__PURE__ */ ed({ domain: ed25519_domain });
 /** Prehashed version of ed25519. See {@link ed25519} */
-export const ed25519ph: EdDSA = /* @__PURE__ */ _ed({ domain: ed25519_domain, prehash: sha512 });
+export const ed25519ph: EdDSA = /* @__PURE__ */ ed({ domain: ed25519_domain, prehash: sha512 });
 
 /**
  * ECDH using curve25519 aka x25519.

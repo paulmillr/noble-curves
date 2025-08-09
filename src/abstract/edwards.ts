@@ -6,7 +6,6 @@
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import {
-  _validateObject,
   abool,
   abytes,
   aInRange,
@@ -18,6 +17,7 @@ import {
   isBytes,
   memoized,
   notImplemented,
+  validateObject,
   randomBytes as wcRandomBytes,
   type FHash,
   type Signer,
@@ -189,7 +189,7 @@ export function edwards(params: EdwardsOpts, extraOpts: EdwardsExtraOpts = {}): 
   const { Fp, Fn } = validated;
   let CURVE = validated.CURVE as EdwardsOpts;
   const { h: cofactor } = CURVE;
-  _validateObject(extraOpts, {}, { uvRatio: 'function' });
+  validateObject(extraOpts, {}, { uvRatio: 'function' });
 
   // Important:
   // There are some places where Fp.BYTES is used instead of nByteLength.
@@ -602,7 +602,7 @@ export abstract class PrimeEdwardsPoint<T extends PrimeEdwardsPoint<T>>
  */
 export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpts = {}): EdDSA {
   if (typeof cHash !== 'function') throw new Error('"hash" function param is required');
-  _validateObject(
+  validateObject(
     eddsaOpts,
     {},
     {

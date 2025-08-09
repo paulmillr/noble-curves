@@ -28,7 +28,6 @@
 import { hmac as nobleHmac } from '@noble/hashes/hmac.js';
 import { ahash } from '@noble/hashes/utils.js';
 import {
-  _validateObject,
   abool,
   abytes,
   aInRange,
@@ -42,6 +41,7 @@ import {
   isBytes,
   memoized,
   numberToHexUnpadded,
+  validateObject,
   randomBytes as wcRandomBytes,
   type CHash,
   type Signer,
@@ -147,15 +147,43 @@ export function _splitEndoScalar(k: bigint, basis: EndoBasis, n: bigint): Scalar
  * https://paulmillr.com/posts/deterministic-signatures/
  */
 export type ECDSAExtraEntropy = boolean | Uint8Array;
+/**
+ * - `compact` is the default format
+ * - `recovered` is the same as compact, but with an extra byte indicating recovery byte
+ * - `der` is ASN.1 DER encoding
+ */
 export type ECDSASignatureFormat = 'compact' | 'recovered' | 'der';
+/**
+ * - `prehash`: (default: true) indicates whether to do sha256(message).
+ *   When a custom hash is used, it must be set to `false`.
+ */
 export type ECDSARecoverOpts = {
   prehash?: boolean;
 };
+/**
+ * - `prehash`: (default: true) indicates whether to do sha256(message).
+ *   When a custom hash is used, it must be set to `false`.
+ * - `lowS`: (default: true) prohibits signatures which have (sig.s >= CURVE.n/2n).
+ *   Compatible with BTC/ETH. Setting `lowS: false` allows to create malleable signatures,
+ *   which is default openssl behavior.
+ *   Non-malleable signatures can still be successfully verified in openssl.
+ * - `format`: (default: 'compact') 'compact' or 'recovered' with recovery byte
+ */
 export type ECDSAVerifyOpts = {
   prehash?: boolean;
   lowS?: boolean;
   format?: ECDSASignatureFormat;
 };
+/**
+ * - `prehash`: (default: true) indicates whether to do sha256(message).
+ *   When a custom hash is used, it must be set to `false`.
+ * - `lowS`: (default: true) prohibits signatures which have (sig.s >= CURVE.n/2n).
+ *   Compatible with BTC/ETH. Setting `lowS: false` allows to create malleable signatures,
+ *   which is default openssl behavior.
+ *   Non-malleable signatures can still be successfully verified in openssl.
+ * - `format`: (default: 'compact') 'compact' or 'recovered' with recovery byte
+ * - `extraEntropy`: (default: false) creates sigs with increased security, see {@link ECDSAExtraEntropy}
+ */
 export type ECDSASignOpts = {
   prehash?: boolean;
   lowS?: boolean;
@@ -448,7 +476,7 @@ export function weierstrass<T>(
   const { Fp, Fn } = validated;
   let CURVE = validated.CURVE as WeierstrassOpts<T>;
   const { h: cofactor, n: CURVE_ORDER } = CURVE;
-  _validateObject(
+  validateObject(
     extraOpts,
     {},
     {
@@ -1205,7 +1233,7 @@ export function ecdsa(
   ecdsaOpts: ECDSAOpts = {}
 ): ECDSA {
   ahash(hash);
-  _validateObject(
+  validateObject(
     ecdsaOpts,
     {},
     {

@@ -6,13 +6,13 @@
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import {
-  _validateObject,
   abytes,
   aInRange,
   bytesToNumberLE,
   copyBytes,
   numberToBytesLE,
   randomBytes,
+  validateObject,
   type CryptoKeys,
 } from '../utils.ts';
 import { createKeygen, type CurveLengths } from './curve.ts';
@@ -44,7 +44,7 @@ export type MontgomeryECDH = {
 };
 
 function validateOpts(curve: CurveType) {
-  _validateObject(curve, {
+  validateObject(curve, {
     adjustScalarBytes: 'function',
     powPminus2: 'function',
   });

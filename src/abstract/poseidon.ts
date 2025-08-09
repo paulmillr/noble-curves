@@ -7,7 +7,7 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { _validateObject, bitGet } from '../utils.ts';
+import { bitGet, validateObject } from '../utils.ts';
 import { FpInvertBatch, FpPow, type IField, validateField } from './modular.ts';
 
 // Grain LFSR (Linear-Feedback Shift Register): https://eprint.iacr.org/2009/109.pdf
@@ -44,7 +44,7 @@ export type PoseidonBasicOpts = {
 function assertValidPosOpts(opts: PoseidonBasicOpts) {
   const { Fp, roundsFull } = opts;
   validateField(Fp);
-  _validateObject(
+  validateObject(
     opts,
     {
       t: 'number',

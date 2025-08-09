@@ -7,13 +7,12 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import type { CHash } from '../utils.ts';
 import {
-  _validateObject,
   abytes,
   asciiToBytes,
   bytesToNumberBE,
   concatBytes,
   isBytes,
-  isHash,
+  validateObject,
 } from '../utils.ts';
 import type { AffinePoint, PC_ANY, PC_F, PC_P } from './curve.ts';
 import { FpInvertBatch, mod, type IField } from './modular.ts';
@@ -179,14 +178,14 @@ export function expand_message_xof(
  * @returns [u_0, ..., u_(count - 1)], a list of field elements.
  */
 export function hash_to_field(msg: Uint8Array, count: number, options: H2COpts): bigint[][] {
-  _validateObject(options, {
+  validateObject(options, {
     p: 'bigint',
     m: 'number',
     k: 'number',
     hash: 'function',
   });
   const { p, k, m, hash, expand, DST } = options;
-  if (!isHash(options.hash)) throw new Error('expected valid hash');
+  if (!Number.isSafeInteger(hash.outputLen)) throw new Error('expected valid hash');
   abytes(msg);
   anum(count);
   const log2p = p.toString(2).length;
