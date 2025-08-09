@@ -500,6 +500,7 @@ export const ristretto255_hasher: H2CHasherBase<typeof _RistrettoPoint> = {
   },
 };
 
+/** ristretto255 OPRF, defined in RFC 9497. */
 export const ristretto255_oprf: OPRF = /* @__PURE__ */ (() =>
   createORPF({
     name: 'ristretto255-SHA512',

@@ -51,7 +51,7 @@ A standalone file [noble-curves.js](https://github.com/paulmillr/noble-curves/re
 // import * from '@noble/curves'; // Error: use sub-imports, to ensure small app size
 import { secp256k1, schnorr } from '@noble/curves/secp256k1.js';
 import { ed25519, ed25519ph, ed25519ctx, x25519, ristretto255 } from '@noble/curves/ed25519.js';
-import { ed448, ed448ph, ed448ctx, x448, decaf448 } from '@noble/curves/ed448.js';
+import { ed448, ed448ph, x448, decaf448 } from '@noble/curves/ed448.js';
 import { p256, p384, p521 } from '@noble/curves/nist.js';
 import { bls12_381 } from '@noble/curves/bls12-381.js';
 import { bn254 } from '@noble/curves/bn254.js';
@@ -66,15 +66,15 @@ import { decaf448_hasher } from '@noble/curves/ed448.js';
 // OPRFs
 import { p256_oprf, p384_oprf, p521_oprf } from '@noble/curves/nist.js';
 import { ristretto255_oprf } from '@noble/curves/ed25519.js';
-import { decaf448_orpf } from '@noble/curves/ed448.js';
+import { decaf448_oprf } from '@noble/curves/ed448.js';
 
 // utils
+import { bytesToHex, hexToBytes, concatBytes } from '@noble/curves/abstract/utils.js';
+import { Field } from '@noble/curves/abstract/modular.js';
 import { weierstrass, ecdsa } from '@noble/curves/abstract/weierstrass.js';
 import { edwards, eddsa } from '@noble/curves/abstract/edwards.js';
 import { poseidon, poseidonSponge } from '@noble/curves/abstract/poseidon.js';
-import { Field, mod, pow } from '@noble/curves/abstract/modular.js';
 import { FFT, poly } from '@noble/curves/abstract/fft.js';
-import { bytesToHex, hexToBytes, concatBytes } from '@noble/curves/abstract/utils.js';
 ```
 
 - Examples

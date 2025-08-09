@@ -4,7 +4,7 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { bitLen, bitMask } from '../utils.ts';
+import { bitLen, bitMask, type Signer } from '../utils.ts';
 import { Field, FpInvertBatch, validateField, type IField } from './modular.ts';
 
 const _0n = BigInt(0);
@@ -616,4 +616,18 @@ export function _createCurveFields<T>(
   }
   CURVE = Object.freeze(Object.assign({}, CURVE));
   return { CURVE, Fp, Fn };
+}
+
+type KeygenFn = (
+  seed?: Uint8Array,
+  isCompressed?: boolean
+) => { secretKey: Uint8Array; publicKey: Uint8Array };
+export function createKeygen(
+  randomSecretKey: Function,
+  getPublicKey: Signer['getPublicKey']
+): KeygenFn {
+  return function keygen(seed?: Uint8Array) {
+    const secretKey = randomSecretKey(seed);
+    return { secretKey, publicKey: getPublicKey(secretKey) };
+  };
 }

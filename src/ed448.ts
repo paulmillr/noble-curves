@@ -501,6 +501,7 @@ export const decaf448_hasher: H2CHasherBase<typeof _DecafPoint> = {
   },
 };
 
+/** decaf448 OPRF, defined in RFC 9497. */
 export const decaf448_oprf: OPRF = /* @__PURE__ */ (() =>
   createORPF({
     name: 'decaf448-SHAKE256',

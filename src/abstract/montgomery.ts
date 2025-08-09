@@ -15,7 +15,7 @@ import {
   randomBytes,
   type CryptoKeys,
 } from '../utils.ts';
-import type { CurveLengths } from './curve.ts';
+import { createKeygen, type CurveLengths } from './curve.ts';
 import { mod } from './modular.ts';
 
 const _0n = BigInt(0);
@@ -105,6 +105,8 @@ export function montgomery(curveDef: CurveType): MontgomeryECDH {
   function scalarMultBase(scalar: Uint8Array): Uint8Array {
     return scalarMult(scalar, GuBytes);
   }
+  const getPublicKey = scalarMultBase;
+  const getSharedSecret = scalarMult;
 
   // cswap from RFC7748 "example code"
   function cswap(swap: bigint, x_2: bigint, x_3: bigint): { x_2: bigint; x_3: bigint } {
@@ -170,19 +172,12 @@ export function montgomery(curveDef: CurveType): MontgomeryECDH {
     abytes(seed, lengths.seed, 'seed');
     return seed;
   };
-  function keygen(seed?: Uint8Array) {
-    const secretKey = randomSecretKey(seed);
-    return { secretKey, publicKey: scalarMultBase(secretKey) };
-  }
-  const utils = {
-    randomSecretKey,
-  };
+  const utils = { randomSecretKey };
 
   return Object.freeze({
-    keygen,
-    getSharedSecret: (secretKey: Uint8Array, publicKey: Uint8Array) =>
-      scalarMult(secretKey, publicKey),
-    getPublicKey: (secretKey: Uint8Array): Uint8Array => scalarMultBase(secretKey),
+    keygen: createKeygen(randomSecretKey, getPublicKey),
+    getSharedSecret,
+    getPublicKey,
     scalarMult,
     scalarMultBase,
     utils,

@@ -48,6 +48,7 @@ import {
 } from '../utils.ts';
 import {
   _createCurveFields,
+  createKeygen,
   mulEndoUnsafe,
   negateCt,
   normalizeZ,
@@ -1142,11 +1143,6 @@ export function ecdh(
     return Point.BASE.multiply(Fn.fromBytes(secretKey)).toBytes(isCompressed);
   }
 
-  function keygen(seed?: Uint8Array) {
-    const secretKey = randomSecretKey(seed);
-    return { secretKey, publicKey: getPublicKey(secretKey) };
-  }
-
   /**
    * Quick and dirty check for item being public key. Does not validate hex, or being on-curve.
    */
@@ -1183,6 +1179,7 @@ export function ecdh(
     isValidPublicKey,
     randomSecretKey,
   };
+  const keygen = createKeygen(randomSecretKey, getPublicKey);
 
   return Object.freeze({ getPublicKey, getSharedSecret, keygen, Point, utils, lengths });
 }

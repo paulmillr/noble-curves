@@ -111,6 +111,7 @@ export const p256_hasher: H2CHasher<WeierstrassPointCons<bigint>> = /* @__PURE__
   );
 })();
 
+/** p256 OPRF, defined in RFC 9497. */
 export const p256_oprf: OPRF = /* @__PURE__ */ (() =>
   createORPF({
     name: 'P256-SHA256',
@@ -144,6 +145,7 @@ export const p384_hasher: H2CHasher<WeierstrassPointCons<bigint>> = /* @__PURE__
   );
 })();
 
+/** p384 OPRF, defined in RFC 9497. */
 export const p384_oprf: OPRF = /* @__PURE__ */ (() =>
   createORPF({
     name: 'P384-SHA384',
@@ -179,6 +181,7 @@ export const p521_hasher: H2CHasher<WeierstrassPointCons<bigint>> = /* @__PURE__
   );
 })();
 
+/** p521 OPRF, defined in RFC 9497. */
 export const p521_oprf: OPRF = /* @__PURE__ */ (() =>
   createORPF({
     name: 'P521-SHA512',

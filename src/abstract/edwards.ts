@@ -24,6 +24,7 @@ import {
 } from '../utils.ts';
 import {
   _createCurveFields,
+  createKeygen,
   normalizeZ,
   wNAF,
   type AffinePoint,
@@ -735,10 +736,6 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
   function randomSecretKey(seed = randomBytes(lengths.seed)): Uint8Array {
     return abytes(seed, lengths.seed, 'seed');
   }
-  function keygen(seed?: Uint8Array) {
-    const secretKey = utils.randomSecretKey(seed);
-    return { secretKey, publicKey: getPublicKey(secretKey) };
-  }
 
   function isValidSecretKey(key: Uint8Array): boolean {
     return isBytes(key) && key.length === Fn.BYTES;
@@ -783,7 +780,7 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
   };
 
   return Object.freeze({
-    keygen,
+    keygen: createKeygen(randomSecretKey, getPublicKey),
     getPublicKey,
     sign,
     verify,

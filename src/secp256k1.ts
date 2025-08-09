@@ -8,7 +8,7 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha256 } from '@noble/hashes/sha2.js';
 import { randomBytes } from '@noble/hashes/utils.js';
-import type { CurveLengths } from './abstract/curve.ts';
+import { createKeygen, type CurveLengths } from './abstract/curve.ts';
 import { createHasher, type H2CHasher, isogenyMap } from './abstract/hash-to-curve.ts';
 import { Field, mapHashToField, pow2 } from './abstract/modular.ts';
 import {
@@ -245,12 +245,8 @@ export const schnorr: SecpSchnorr = /* @__PURE__ */ (() => {
   const randomSecretKey = (seed = randomBytes(seedLength)): Uint8Array => {
     return mapHashToField(seed, secp256k1_CURVE.n);
   };
-  function keygen(seed?: Uint8Array) {
-    const secretKey = randomSecretKey(seed);
-    return { secretKey, publicKey: schnorrGetPublicKey(secretKey) };
-  }
   return {
-    keygen,
+    keygen: createKeygen(randomSecretKey, schnorrGetPublicKey),
     getPublicKey: schnorrGetPublicKey,
     sign: schnorrSign,
     verify: schnorrVerify,
