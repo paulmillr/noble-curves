@@ -12,7 +12,7 @@ Audited & minimal JS implementation of elliptic curve cryptography.
 - 🥈 Optional, friendly wrapper over native WebCrypto
 - 🪶 36KB (gzipped) including bundled hashes, 11KB for single-curve build
 
-Curves have 4KB sister projects
+Curves have 5kb sister projects
 [secp256k1](https://github.com/paulmillr/noble-secp256k1) & [ed25519](https://github.com/paulmillr/noble-ed25519).
 They have smaller attack surface, but less features.
 
@@ -30,7 +30,7 @@ Take a glance at [GitHub Discussions](https://github.com/paulmillr/noble-curves/
   [curves](https://github.com/paulmillr/noble-curves),
   [hashes](https://github.com/paulmillr/noble-hashes),
   [post-quantum](https://github.com/paulmillr/noble-post-quantum),
-  4kb [secp256k1](https://github.com/paulmillr/noble-secp256k1) /
+  5kb [secp256k1](https://github.com/paulmillr/noble-secp256k1) /
   [ed25519](https://github.com/paulmillr/noble-ed25519)
 - [Check out homepage](https://paulmillr.com/noble/)
   for reading resources, documentation and apps built with noble
@@ -953,7 +953,7 @@ Previously, the library was split into single-feature packages
 [noble-bls12-381](https://github.com/paulmillr/noble-bls12-381).
 
 Curves continue their original work. The single-feature packages changed their
-direction towards providing minimal 4kb implementations of cryptography,
+direction towards providing minimal 5kb implementations of cryptography,
 which means they have less features.
 
 - `getPublicKey`
