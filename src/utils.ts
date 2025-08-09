@@ -9,7 +9,6 @@ import {
   bytesToHex as bytesToHex_,
   concatBytes as concatBytes_,
   hexToBytes as hexToBytes_,
-  isBytes as isBytes_,
 } from '@noble/hashes/utils.js';
 export {
   abytes,
@@ -186,12 +185,16 @@ export function createHmacDrbg<T>(
   qByteLen: number,
   hmacFn: (key: Uint8Array, ...messages: Uint8Array[]) => Uint8Array
 ): (seed: Uint8Array, predicate: Pred<T>) => T {
-  if (typeof hashLen !== 'number' || hashLen < 2) throw new Error('hashLen must be a number');
-  if (typeof qByteLen !== 'number' || qByteLen < 2) throw new Error('qByteLen must be a number');
+  anumber(hashLen, 'hashLen');
+  anumber(qByteLen, 'qByteLen');
   if (typeof hmacFn !== 'function') throw new Error('hmacFn must be a function');
-  // Step B, Step C: set hashLen to 8*ceil(hlen/8)
   const u8n = (len: number) => new Uint8Array(len); // creates Uint8Array
-  const u8of = (byte: number) => Uint8Array.of(byte); // another shortcut
+  const NULL = u8n(0);
+  const byte0 = Uint8Array.of(0x00);
+  const byte1 = Uint8Array.of(0x01);
+  const _maxDrbgIters = 1000;
+
+  // Step B, Step C: set hashLen to 8*ceil(hlen/8)
   let v = u8n(hashLen); // Minimal non-full-spec HMAC-DRBG from NIST 800-90 for RFC6979 sigs.
   let k = u8n(hashLen); // Steps B and C of RFC6979 3.2: set hashLen, in our case always same
   let i = 0; // Iterations counter, will throw when over 1000
@@ -201,17 +204,17 @@ export function createHmacDrbg<T>(
     i = 0;
   };
   const h = (...b: Uint8Array[]) => hmacFn(k, v, ...b); // hmac(k)(v, ...values)
-  const reseed = (seed = u8n(0)) => {
+  const reseed = (seed = NULL) => {
     // HMAC-DRBG reseed() function. Steps D-G
-    k = h(u8of(0x00), seed); // k = hmac(k || v || 0x00 || seed)
+    k = h(byte0, seed); // k = hmac(k || v || 0x00 || seed)
     v = h(); // v = hmac(k || v)
     if (seed.length === 0) return;
-    k = h(u8of(0x01), seed); // k = hmac(k || v || 0x01 || seed)
+    k = h(byte1, seed); // k = hmac(k || v || 0x01 || seed)
     v = h(); // v = hmac(k || v)
   };
   const gen = () => {
     // HMAC-DRBG generate() function
-    if (i++ >= 1000) throw new Error('drbg: tried 1000 values');
+    if (i++ >= _maxDrbgIters) throw new Error('drbg: tried max amount of iterations');
     let len = 0;
     const out: Uint8Array[] = [];
     while (len < qByteLen) {
@@ -233,59 +236,9 @@ export function createHmacDrbg<T>(
   return genUntil;
 }
 
-// Validating curves and fields
-
-const validatorFns = {
-  bigint: (val: any): boolean => typeof val === 'bigint',
-  function: (val: any): boolean => typeof val === 'function',
-  boolean: (val: any): boolean => typeof val === 'boolean',
-  string: (val: any): boolean => typeof val === 'string',
-  stringOrUint8Array: (val: any): boolean => typeof val === 'string' || isBytes_(val),
-  isSafeInteger: (val: any): boolean => Number.isSafeInteger(val),
-  array: (val: any): boolean => Array.isArray(val),
-  field: (val: any, object: any): any => (object as any).Fp.isValid(val),
-  hash: (val: any): boolean => typeof val === 'function' && Number.isSafeInteger(val.outputLen),
-} as const;
-type Validator = keyof typeof validatorFns;
-type ValMap<T extends Record<string, any>> = { [K in keyof T]?: Validator };
-// type Record<K extends string | number | symbol, T> = { [P in K]: T; }
-
-export function validateObject<T extends Record<string, any>>(
-  object: T,
-  validators: ValMap<T>,
-  optValidators: ValMap<T> = {}
-): T {
-  const checkField = (fieldName: keyof T, type: Validator, isOptional: boolean) => {
-    const checkVal = validatorFns[type];
-    if (typeof checkVal !== 'function') throw new Error('invalid validator function');
-
-    const val = object[fieldName as keyof typeof object];
-    if (isOptional && val === undefined) return;
-    if (!checkVal(val, object)) {
-      throw new Error(
-        'param ' + String(fieldName) + ' is invalid. Expected ' + type + ', got ' + val
-      );
-    }
-  };
-  for (const [fieldName, type] of Object.entries(validators)) checkField(fieldName, type!, false);
-  for (const [fieldName, type] of Object.entries(optValidators)) checkField(fieldName, type!, true);
-  return object;
-}
-// validate type tests
-// const o: { a: number; b: number; c: number } = { a: 1, b: 5, c: 6 };
-// const z0 = validateObject(o, { a: 'isSafeInteger' }, { c: 'bigint' }); // Ok!
-// // Should fail type-check
-// const z1 = validateObject(o, { a: 'tmp' }, { c: 'zz' });
-// const z2 = validateObject(o, { a: 'isSafeInteger' }, { c: 'zz' });
-// const z3 = validateObject(o, { test: 'boolean', z: 'bug' });
-// const z4 = validateObject(o, { a: 'boolean', z: 'bug' });
-
-export function isHash(val: CHash): boolean {
-  return typeof val === 'function' && Number.isSafeInteger(val.outputLen);
-}
-export function _validateObject(
+export function validateObject(
   object: Record<string, any>,
-  fields: Record<string, string>,
+  fields: Record<string, string> = {},
   optFields: Record<string, string> = {}
 ): void {
   if (!object || typeof object !== 'object') throw new Error('expected valid options object');
