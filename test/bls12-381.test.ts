@@ -4,7 +4,7 @@ import { deepStrictEqual as eql, throws } from 'node:assert';
 import { wNAF } from '../src/abstract/curve.ts';
 import { hash_to_field } from '../src/abstract/hash-to-curve.ts';
 import { bls12_381 as bls, bls12_381 } from '../src/bls12-381.ts';
-import { bytesToHex, concatBytes, hexToBytes, utf8ToBytes } from '../src/utils.ts';
+import { asciiToBytes, bytesToHex, concatBytes, hexToBytes } from '../src/utils.ts';
 import { json, txt } from './utils.ts';
 
 import * as utils from '../src/utils.ts';
@@ -26,25 +26,25 @@ const SCALAR_XMD_SHA256_VECTORS = txt(
 );
 const H2C_KILLIC_G1 = [
   {
-    msg: utf8ToBytes(''),
+    msg: asciiToBytes(''),
     expected:
       '0576730ab036cbac1d95b38dca905586f28d0a59048db4e8778782d89bff856ddef89277ead5a21e2975c4a6e3d8c79e' +
       '1273e568bebf1864393c517f999b87c1eaa1b8432f95aea8160cd981b5b05d8cd4a7cf00103b6ef87f728e4b547dd7ae',
   },
   {
-    msg: utf8ToBytes('abc'),
+    msg: asciiToBytes('abc'),
     expected:
       '061daf0cc00d8912dac1d4cf5a7c32fca97f8b3bf3f805121888e5eb89f77f9a9f406569027ac6d0e61b1229f42c43d6' +
       '0de1601e5ba02cb637c1d35266f5700acee9850796dc88e860d022d7b9e7e3dce5950952e97861e5bb16d215c87f030d',
   },
   {
-    msg: utf8ToBytes('abcdef0123456789'),
+    msg: asciiToBytes('abcdef0123456789'),
     expected:
       '0fb3455436843e76079c7cf3dfef75e5a104dfe257a29a850c145568d500ad31ccfe79be9ae0ea31a722548070cf98cd' +
       '177989f7e2c751658df1b26943ee829d3ebcf131d8f805571712f3a7527ee5334ecff8a97fc2a50cea86f5e6212e9a57',
   },
   {
-    msg: utf8ToBytes(
+    msg: asciiToBytes(
       'a512_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
     ),
     expected:
@@ -54,25 +54,25 @@ const H2C_KILLIC_G1 = [
 ];
 const BLS_H2C_VEC_ENCODE_G1 = [
   {
-    msg: utf8ToBytes(''),
+    msg: asciiToBytes(''),
     expected:
       '1223effdbb2d38152495a864d78eee14cb0992d89a241707abb03819a91a6d2fd65854ab9a69e9aacb0cbebfd490732c' +
       '0f925d61e0b235ecd945cbf0309291878df0d06e5d80d6b84aa4ff3e00633b26f9a7cb3523ef737d90e6d71e8b98b2d5',
   },
   {
-    msg: utf8ToBytes('abc'),
+    msg: asciiToBytes('abc'),
     expected:
       '179d3fd0b4fb1da43aad06cea1fb3f828806ddb1b1fa9424b1e3944dfdbab6e763c42636404017da03099af0dcca0fd6' +
       '0d037cb1c6d495c0f5f22b061d23f1be3d7fe64d3c6820cfcd99b6b36fa69f7b4c1f4addba2ae7aa46fb25901ab483e4',
   },
   {
-    msg: utf8ToBytes('abcdef0123456789'),
+    msg: asciiToBytes('abcdef0123456789'),
     expected:
       '15aa66c77eded1209db694e8b1ba49daf8b686733afaa7b68c683d0b01788dfb0617a2e2d04c0856db4981921d3004af' +
       '0952bb2f61739dd1d201dd0a79d74cda3285403d47655ee886afe860593a8a4e51c5b77a22d2133e3a4280eaaaa8b788',
   },
   {
-    msg: utf8ToBytes(
+    msg: asciiToBytes(
       'a512_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
     ),
     expected:
@@ -82,7 +82,7 @@ const BLS_H2C_VEC_ENCODE_G1 = [
 ];
 const BLS_H2C_VEC_HASH_G2 = [
   {
-    msg: utf8ToBytes(''),
+    msg: asciiToBytes(''),
     expected:
       '0fbdae26f9f9586a46d4b0b70390d09064ef2afe5c99348438a3c7d9756471e015cb534204c1b6824617a85024c772dc' +
       '0a650bd36ae7455cb3fe5d8bb1310594551456f5c6593aec9ee0c03d2f6cb693bd2c5e99d4e23cbaec767609314f51d3' +
@@ -90,7 +90,7 @@ const BLS_H2C_VEC_HASH_G2 = [
       '0d8d49e7737d8f9fc5cef7c4b8817633103faf2613016cb86a1f3fc29968fe2413e232d9208d2d74a89bf7a48ac36f83',
   },
   {
-    msg: utf8ToBytes('abc'),
+    msg: asciiToBytes('abc'),
     expected:
       '03578447618463deb106b60e609c6f7cc446dc6035f84a72801ba17c94cd800583b493b948eff0033f09086fdd7f6175' +
       '1953ce6d4267939c7360756d9cca8eb34aac4633ef35369a7dc249445069888e7d1b3f9d2e75fbd468fbcbba7110ea02' +
@@ -98,7 +98,7 @@ const BLS_H2C_VEC_HASH_G2 = [
       '0882ab045b8fe4d7d557ebb59a63a35ac9f3d312581b509af0f8eaa2960cbc5e1e36bb969b6e22980b5cbdd0787fcf4e',
   },
   {
-    msg: utf8ToBytes('abcdef0123456789'),
+    msg: asciiToBytes('abcdef0123456789'),
     expected:
       '195fad48982e186ce3c5c82133aefc9b26d55979b6f530992a8849d4263ec5d57f7a181553c8799bcc83da44847bdc8d' +
       '17b461fc3b96a30c2408958cbfa5f5927b6063a8ad199d5ebf2d7cdeffa9c20c85487204804fab53f950b2f87db365aa' +
@@ -106,7 +106,7 @@ const BLS_H2C_VEC_HASH_G2 = [
       '174a3473a3af2d0302b9065e895ca4adba4ece6ce0b41148ba597001abb152f852dd9a96fb45c9de0a43d944746f833e',
   },
   {
-    msg: utf8ToBytes(
+    msg: asciiToBytes(
       'a512_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
     ),
     expected:
@@ -118,7 +118,7 @@ const BLS_H2C_VEC_HASH_G2 = [
 ];
 const BLS_H2C_VEC_ENCODE_G2 = [
   {
-    msg: utf8ToBytes(''),
+    msg: asciiToBytes(''),
     expected:
       '0d4333b77becbf9f9dfa3ca928002233d1ecc854b1447e5a71f751c9042d000f42db91c1d6649a5e0ad22bd7bf7398b8' +
       '027e4bfada0b47f9f07e04aec463c7371e68f2fd0c738cd517932ea3801a35acf09db018deda57387b0f270f7a219e4d' +
@@ -126,7 +126,7 @@ const BLS_H2C_VEC_ENCODE_G2 = [
       '053674cba9ef516ddc218fedb37324e6c47de27f88ab7ef123b006127d738293c0277187f7e2f80a299a24d84ed03da7',
   },
   {
-    msg: utf8ToBytes('abc'),
+    msg: asciiToBytes('abc'),
     expected:
       '18f0f87b40af67c056915dbaf48534c592524e82c1c2b50c3734d02c0172c80df780a60b5683759298a3303c5d942778' +
       '09349f1cb5b2e55489dcd45a38545343451cc30a1681c57acd4fb0a6db125f8352c09f4a67eb7d1d8242cb7d3405f97b' +
@@ -134,7 +134,7 @@ const BLS_H2C_VEC_ENCODE_G2 = [
       '02f2d9deb2c7742512f5b8230bf0fd83ea42279d7d39779543c1a43b61c885982b611f6a7a24b514995e8a098496b811',
   },
   {
-    msg: utf8ToBytes('abcdef0123456789'),
+    msg: asciiToBytes('abcdef0123456789'),
     expected:
       '19808ec5930a53c7cf5912ccce1cc33f1b3dcff24a53ce1cc4cba41fd6996dbed4843ccdd2eaf6a0cd801e562718d163' +
       '149fe43777d34f0d25430dea463889bd9393bdfb4932946db23671727081c629ebb98a89604f3433fba1c67d356a4af7' +
@@ -142,7 +142,7 @@ const BLS_H2C_VEC_ENCODE_G2 = [
       '04c0d6793a766233b2982087b5f4a254f261003ccb3262ea7c50903eecef3e871d1502c293f9e063d7d293f6384f4551',
   },
   {
-    msg: utf8ToBytes(
+    msg: asciiToBytes(
       'a512_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
     ),
     expected:
@@ -1157,7 +1157,7 @@ describe('bls12-381 verify', () => {
       '972c4c6cc184b56121a1d27ef1ca3a2334d1a51be93573bd18e168f78f8fe15ce44fb029ffe8e9c3ee6bea2660f4f35e0774a35a80d6236c050fd8f831475b5e145116d3e83d26c533545f64b08464e4bcc755f990a381efa89804212d4eef5f';
     const signatureHex =
       '987db5406ce297e729c8564a106dc896943b00216a095fe9c5d32a16a330c02eb80e6f468ede83cde5462b5145b58f65';
-    const message = utf8ToBytes('message');
+    const message = asciiToBytes('message');
     const DST = 'BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_AUG_';
 
     const publicKey = G2Point.fromHex(publicKeyHex);
@@ -1364,7 +1364,7 @@ describe('bls12-381 deterministic', () => {
       for (let vector of SCALAR_VECTORS) {
         const [okmAscii, expectedHex] = vector;
         const expected = BigInt('0x' + expectedHex);
-        const okm = utf8ToBytes(okmAscii);
+        const okm = asciiToBytes(okmAscii);
         const scalars = hash_to_field(okm, 1, Object.assign({}, bls.G2.defaults, options));
         eql(scalars[0][0], expected);
       }
@@ -1379,7 +1379,7 @@ describe('bls12-381 deterministic', () => {
       for (let vector of SCALAR_XMD_SHA256_VECTORS) {
         const [okmAscii, expectedHex] = vector;
         const expected = BigInt('0x' + expectedHex);
-        const okm = utf8ToBytes(okmAscii);
+        const okm = asciiToBytes(okmAscii);
         const scalars = hash_to_field(okm, 1, Object.assign({}, bls.G2.defaults, options));
         eql(scalars[0][0], expected);
       }

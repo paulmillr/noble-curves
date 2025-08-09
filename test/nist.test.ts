@@ -6,7 +6,13 @@ import { DER, ecdsa } from '../src/abstract/weierstrass.ts';
 import { brainpoolP256r1, brainpoolP384r1, brainpoolP512r1 } from '../src/misc.ts';
 import { p256, p384, p521 } from '../src/nist.ts';
 import { secp256k1 } from '../src/secp256k1.ts';
-import { bytesToHex, bytesToNumberBE, concatBytes, hexToBytes, utf8ToBytes } from '../src/utils.ts';
+import {
+  asciiToBytes,
+  bytesToHex,
+  bytesToNumberBE,
+  concatBytes,
+  hexToBytes,
+} from '../src/utils.ts';
 import { p192, p224, secp192r1, secp224r1 } from './_more-curves.helpers.ts';
 import { deepHexToBytes, json } from './utils.ts';
 
@@ -448,7 +454,7 @@ describe('RFC6979', () => {
       eql(pubPoint.x, hexToBigint(v.Ux));
       eql(pubPoint.y, hexToBigint(v.Uy));
       for (const c of v.cases) {
-        const h = utf8ToBytes(c.message);
+        const h = asciiToBytes(c.message);
         const opts = { lowS: hasLowS, format: 'der' };
         const sig = curve.sign(h, priv, opts);
         const sigObj = curve.Signature.fromBytes(sig, 'der');

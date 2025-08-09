@@ -7,7 +7,7 @@ import * as md from '../../src/abstract/modular.ts';
 import { ed25519, ristretto255, ristretto255_hasher } from '../../src/ed25519.ts';
 import { decaf448, decaf448_hasher, ed448 } from '../../src/ed448.ts';
 import { secp256k1 } from '../../src/secp256k1.ts';
-import { hexToBytes, utf8ToBytes } from '../../src/utils.ts';
+import { asciiToBytes, hexToBytes } from '../../src/utils.ts';
 import { title } from './_shared.ts';
 
 const { Field } = md;
@@ -56,7 +56,7 @@ const DecafPoint = decaf448.Point;
   const priv = ristretto255_hasher.hashToScalar(sha512(ed25519.utils.randomSecretKey()));
   const pub = RistrettoPoint.BASE.multiply(priv);
   const encoded = pub.toBytes();
-  const msg = utf8ToBytes('message');
+  const msg = asciiToBytes('message');
 
   await mark('add', () => pub.add(RistrettoPoint.BASE));
   await mark('multiply', () => RistrettoPoint.BASE.multiply(priv));

@@ -11,7 +11,7 @@ import { ed25519_hasher } from '../src/ed25519.ts';
 import { ed448_hasher } from '../src/ed448.ts';
 import * as nist from '../src/nist.ts';
 import { secp256k1_hasher } from '../src/secp256k1.ts';
-import { utf8ToBytes } from '../src/utils.ts';
+import { asciiToBytes } from '../src/utils.ts';
 const PREFIX = './vectors/rfc9380-hash-to-curve/';
 // XMD
 const xmd_sha256_38 = json(PREFIX + 'expand_message_xmd_SHA256_38.json');
@@ -51,8 +51,8 @@ function testExpandXMD(hash, vectors) {
     for (let i = 0; i < vectors.tests.length; i++) {
       const t = vectors.tests[i];
       const p = expand_message_xmd(
-        utf8ToBytes(t.msg),
-        utf8ToBytes(vectors.DST),
+        asciiToBytes(t.msg),
+        asciiToBytes(vectors.DST),
         Number.parseInt(t.len_in_bytes),
         hash
       );
@@ -66,8 +66,8 @@ function testExpandXOF(hash, vectors) {
     for (let i = 0; i < vectors.tests.length; i++) {
       const t = vectors.tests[i];
       const p = expand_message_xof(
-        utf8ToBytes(t.msg),
-        utf8ToBytes(vectors.DST),
+        asciiToBytes(t.msg),
+        asciiToBytes(vectors.DST),
         Number.parseInt(t.len_in_bytes),
         vectors.k,
         hash
@@ -91,7 +91,7 @@ function testCurve(hasher, ro, nu) {
     for (let i = 0; i < ro.vectors.length; i++) {
       const t = ro.vectors[i];
       const p = hasher
-        .hashToCurve(utf8ToBytes(t.msg), {
+        .hashToCurve(asciiToBytes(t.msg), {
           DST: ro.dst,
         })
         .toAffine();
@@ -103,7 +103,7 @@ function testCurve(hasher, ro, nu) {
     for (let i = 0; i < nu.vectors.length; i++) {
       const t = nu.vectors[i];
       const p = hasher
-        .encodeToCurve(utf8ToBytes(t.msg), {
+        .encodeToCurve(asciiToBytes(t.msg), {
           DST: nu.dst,
         })
         .toAffine();

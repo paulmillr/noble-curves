@@ -4,7 +4,7 @@ import * as mod from '../src/abstract/modular.ts';
 import { ristretto255_oprf } from '../src/ed25519.ts';
 import { decaf448_oprf } from '../src/ed448.ts';
 import { p256_oprf, p384_oprf, p521_oprf } from '../src/nist.ts';
-import { numberToBytesBE, numberToBytesLE, utf8ToBytes } from '../src/utils.ts';
+import { asciiToBytes, numberToBytesBE, numberToBytesLE } from '../src/utils.ts';
 import { deepHexToBytes, json } from './utils.ts';
 const VECTORS = deepHexToBytes(json('./vectors/rfc9497-oprf.json')); // Generated using rfc9497-oprf-parser.js
 
@@ -39,7 +39,7 @@ function testExample(name, oprf) {
 
       // 2. BLIND (Client-side)
       // The client takes its private input and "blinds" it.
-      const clientInput = utf8ToBytes('my super secret password');
+      const clientInput = asciiToBytes('my super secret password');
       const { blind, blinded } = oprf.oprf.blind(clientInput);
       // The client MUST store the `blind` scalar locally for the final step.
 
@@ -67,7 +67,7 @@ function testExample(name, oprf) {
       const clientsKnownPublicKey = serverKeys.publicKey;
 
       // 2. BLIND (Client-side)
-      const clientInput = utf8ToBytes('another secret input');
+      const clientInput = asciiToBytes('another secret input');
       const { blind, blinded } = oprf.voprf.blind(clientInput);
 
       // 3. EVALUATE (Server-side)
@@ -108,7 +108,7 @@ function testExample(name, oprf) {
 
     should('POPRF mode (partially oblivious with domain separation)', () => {
       // The key difference: The protocol is initialized with a public `info` string.
-      const info = utf8ToBytes('example.com login v2');
+      const info = asciiToBytes('example.com login v2');
       const poprf = oprf.poprf(info); // This returns the API for this specific domain.
 
       // 1. SETUP
@@ -116,7 +116,7 @@ function testExample(name, oprf) {
       const clientsKnownPublicKey = serverKeys.publicKey;
 
       // 2. BLIND (Client-side)
-      const clientInput = utf8ToBytes('a password for a specific domain');
+      const clientInput = asciiToBytes('a password for a specific domain');
       // The client's blind function also needs the server's public key for POPRF.
       const { blind, blinded, tweakedKey } = poprf.blind(clientInput, clientsKnownPublicKey);
       // The client must store `blind` and `tweakedKey` for the final step.
@@ -141,7 +141,7 @@ function testExample(name, oprf) {
       eql(clientOutput, expectedOutput);
 
       // NEGATIVE TEST: Show that a different domain (`info`) produces a different output.
-      const differentInfo = utf8ToBytes('example.com password-reset');
+      const differentInfo = asciiToBytes('example.com password-reset');
       const poprfForReset = oprf.poprf(differentInfo);
       const outputForReset = poprfForReset.evaluate(serverKeys.secretKey, clientInput);
       notDeepEqual(

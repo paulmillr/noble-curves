@@ -1,3 +1,4 @@
+import { bytesToUtf8, utf8ToBytes } from '@noble/hashes/utils.js';
 import * as fc from 'fast-check';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql, throws } from 'node:assert';
@@ -6,17 +7,14 @@ import {
   abytes,
   asciiToBytes,
   bytesToHex,
-  bytesToUtf8,
   concatBytes,
   hexToBytes,
   numberToBytesBE,
   numberToBytesLE,
   numberToHexUnpadded,
   numberToVarBytesBE,
-  utf8ToBytes,
 } from '../src/utils.ts';
 import { getTypeTests } from './utils.ts';
-
 describe('utils', () => {
   const staticHexVectors = [
     { bytes: Uint8Array.from([]), hex: '' },
