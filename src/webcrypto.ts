@@ -104,7 +104,7 @@ function createKeyUtils(algo: Algo, derive: boolean, keyLen: number, pkcs8header
   const pubUsage: KeyUsage[] = derive ? [] : ['verify'];
   // Return Uint8Array instead of ArrayBuffer
   const arrBufToU8 = (res: Key, format: WebCryptoFormat) =>
-    format === TYPE_JWK ? res : new Uint8Array(res as ArrayBuffer);
+    format === TYPE_JWK ? res : new Uint8Array(res as unknown as ArrayBuffer);
   const pub: KeyUtils = {
     async import(key: Key, format: WebCryptoFormat): Promise<CryptoKey> {
       const keyi: CryptoKey = await getSubtle().importKey(format, key, algo, true, pubUsage);

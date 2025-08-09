@@ -181,7 +181,7 @@ type Pred<T> = (v: Uint8Array) => T | undefined;
 export function createHmacDrbg<T>(
   hashLen: number,
   qByteLen: number,
-  hmacFn: (key: Uint8Array, ...messages: Uint8Array[]) => Uint8Array
+  hmacFn: (key: Uint8Array, ...messages: Uint8Array[]) => Uint8Array<ArrayBuffer>
 ): (seed: Uint8Array, predicate: Pred<T>) => T {
   anumber(hashLen, 'hashLen');
   anumber(qByteLen, 'qByteLen');
@@ -201,7 +201,7 @@ export function createHmacDrbg<T>(
     k.fill(0);
     i = 0;
   };
-  const h = (...b: Uint8Array[]) => hmacFn(k, v, ...b); // hmac(k)(v, ...values)
+  const h = (...b: Uint8Array<ArrayBuffer>[]) => hmacFn(k, v, ...b); // hmac(k)(v, ...values)
   const reseed = (seed = NULL) => {
     // HMAC-DRBG reseed() function. Steps D-G
     k = h(byte0, seed); // k = hmac(k || v || 0x00 || seed)
@@ -223,7 +223,7 @@ export function createHmacDrbg<T>(
     }
     return concatBytes_(...out);
   };
-  const genUntil = (seed: Uint8Array, pred: Pred<T>): T => {
+  const genUntil = (seed: Uint8Array<any>, pred: Pred<T>): T => {
     reset();
     reseed(seed); // Steps D-G
     let res: T | undefined = undefined; // Step H: grind until k is in [1..n-1]

@@ -67,7 +67,7 @@ import {
 } from './modular.ts';
 
 export type { AffinePoint };
-export type HmacFnSync = (key: Uint8Array, ...messages: Uint8Array[]) => Uint8Array;
+export type HmacFnSync = (key: Uint8Array<any>, ...messages: Uint8Array<any>[]) => Uint8Array<any>;
 
 type EndoBasis = [[bigint, bigint], [bigint, bigint]];
 /**

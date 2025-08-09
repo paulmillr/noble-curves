@@ -36,12 +36,12 @@
   },
   "devDependencies": {
     "@paulmillr/jsbt": "0.4.1",
-    "@types/node": "22.15.21",
-    "fast-check": "4.1.1",
+    "@types/node": "24.2.1",
+    "fast-check": "4.2.0",
     "micro-bmark": "0.4.2",
     "micro-should": "0.5.3",
-    "prettier": "3.5.3",
-    "typescript": "5.8.3"
+    "prettier": "3.6.2",
+    "typescript": "5.9.2"
   },
   "sideEffects": false,
   "type": "module",
