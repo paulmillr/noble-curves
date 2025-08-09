@@ -66,7 +66,7 @@ export function jubjub_groupHash(tag: Uint8Array, personalization: Uint8Array): 
 
 // No secret data is leaked here at all.
 // It operates over public data:
-// const G_SPEND = jubjub.findGroupHash(Uint8Array.of(), utf8ToBytes('Item_G_'));
+// const G_SPEND = jubjub.findGroupHash(Uint8Array.of(), asciiToBytes('Item_G_'));
 export function jubjub_findGroupHash(m: Uint8Array, personalization: Uint8Array): EdwardsPoint {
   const tag = concatBytes(m, Uint8Array.of(0));
   const hashes = [];

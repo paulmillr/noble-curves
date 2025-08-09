@@ -14,12 +14,10 @@ export {
   abytes,
   anumber,
   bytesToHex,
-  bytesToUtf8,
   concatBytes,
   hexToBytes,
   isBytes,
-  randomBytes,
-  utf8ToBytes,
+  randomBytes
 } from '@noble/hashes/utils.js';
 const _0n = /* @__PURE__ */ BigInt(0);
 const _1n = /* @__PURE__ */ BigInt(1);
@@ -250,8 +248,10 @@ export function validateObject(
     if (current !== expectedType || val === null)
       throw new Error(`param "${fieldName}" is invalid: expected ${expectedType}, got ${current}`);
   }
-  Object.entries(fields).forEach(([k, v]) => checkField(k, v, false));
-  Object.entries(optFields).forEach(([k, v]) => checkField(k, v, true));
+  const iter = (f: typeof fields, isOpt: boolean) =>
+    Object.entries(f).forEach(([k, v]) => checkField(k, v, isOpt));
+  iter(fields, false);
+  iter(optFields, true);
 }
 
 /**
