@@ -47,7 +47,7 @@ import {
   type Signer,
 } from '../utils.ts';
 import {
-  _createCurveFields,
+  createCurveFields,
   createKeygen,
   mulEndoUnsafe,
   negateCt,
@@ -444,7 +444,7 @@ export function weierstrass<T>(
   params: WeierstrassOpts<T>,
   extraOpts: WeierstrassExtraOpts<T> = {}
 ): WeierstrassPointCons<T> {
-  const validated = _createCurveFields('weierstrass', params, extraOpts);
+  const validated = createCurveFields('weierstrass', params, extraOpts);
   const { Fp, Fn } = validated;
   let CURVE = validated.CURVE as WeierstrassOpts<T>;
   const { h: cofactor, n: CURVE_ORDER } = CURVE;

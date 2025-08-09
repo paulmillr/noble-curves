@@ -38,10 +38,11 @@ import { abytes, asciiToBytes, bytesToNumberLE, equalBytes } from './utils.ts';
 // Finite field 2n**448n - 2n**224n - 1n
 // Subgroup order
 // 2n**446n - 13818066809895115352007386748515426880336692474882178609894547503885n
-const ed448_CURVE: EdwardsOpts = {
-  p: BigInt(
-    '0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffeffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
-  ),
+const ed448_CURVE_p = BigInt(
+  '0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffeffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
+);
+const ed448_CURVE: EdwardsOpts = /* @__PURE__ */ (() => ({
+  p: ed448_CURVE_p,
   n: BigInt(
     '0x3fffffffffffffffffffffffffffffffffffffffffffffffffffffff7cca23e9c44edb49aed63690216cc2728dc58f552378c292ab5844f3'
   ),
@@ -56,28 +57,29 @@ const ed448_CURVE: EdwardsOpts = {
   Gy: BigInt(
     '0x693f46716eb6bc248876203756c9c7624bea73736ca3984087789c1e05a0c2d73ad3ff1ce67c39c4fdbd132c4ed7c8ad9808795bf230fa14'
   ),
-};
+}))();
 
 // E448 NIST curve is identical to edwards448, except for:
 // d = 39082/39081
 // Gx = 3/2
-const E448_CURVE: EdwardsOpts = Object.assign({}, ed448_CURVE, {
-  d: BigInt(
-    '0xd78b4bdc7f0daf19f24f38c29373a2ccad46157242a50f37809b1da3412a12e79ccc9c81264cfe9ad080997058fb61c4243cc32dbaa156b9'
-  ),
-  Gx: BigInt(
-    '0x79a70b2b70400553ae7c9df416c792c61128751ac92969240c25a07d728bdc93e21f7787ed6972249de732f38496cd11698713093e9c04fc'
-  ),
-  Gy: BigInt(
-    '0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffff80000000000000000000000000000000000000000000000000000001'
-  ),
-});
+const E448_CURVE: EdwardsOpts = /* @__PURE__ */ (() =>
+  Object.assign({}, ed448_CURVE, {
+    d: BigInt(
+      '0xd78b4bdc7f0daf19f24f38c29373a2ccad46157242a50f37809b1da3412a12e79ccc9c81264cfe9ad080997058fb61c4243cc32dbaa156b9'
+    ),
+    Gx: BigInt(
+      '0x79a70b2b70400553ae7c9df416c792c61128751ac92969240c25a07d728bdc93e21f7787ed6972249de732f38496cd11698713093e9c04fc'
+    ),
+    Gy: BigInt(
+      '0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffff80000000000000000000000000000000000000000000000000000001'
+    ),
+  }))();
 
 const shake256_114 = /* @__PURE__ */ wrapConstructor(() => shake256.create({ dkLen: 114 }));
 const shake256_64 = /* @__PURE__ */ wrapConstructor(() => shake256.create({ dkLen: 64 }));
 
 // prettier-ignore
-const _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3), _4n = BigInt(4), _11n = BigInt(11);
+const _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3), _4n = /* @__PURE__ */ BigInt(4), _11n = BigInt(11);
 // prettier-ignore
 const _22n = BigInt(22), _44n = BigInt(44), _88n = BigInt(88), _223n = BigInt(223);
 
@@ -85,7 +87,7 @@ const _22n = BigInt(22), _44n = BigInt(44), _88n = BigInt(88), _223n = BigInt(22
 // Used for efficient square root calculation.
 // ((P-3)/4).toString(2) would produce bits [223x 1, 0, 222x 1]
 function ed448_pow_Pminus3div4(x: bigint): bigint {
-  const P = ed448_CURVE.p;
+  const P = ed448_CURVE_p;
   const b2 = (x * x * x) % P;
   const b3 = (b2 * b2 * x) % P;
   const b6 = (pow2(b3, _3n, P) * b3) % P;
@@ -114,7 +116,7 @@ function adjustScalarBytes(bytes: Uint8Array): Uint8Array {
 // Constant-time ratio of u to v. Allows to combine inversion and square root u/√v.
 // Uses algo from RFC8032 5.1.3.
 function uvRatio(u: bigint, v: bigint): { isValid: boolean; value: bigint } {
-  const P = ed448_CURVE.p;
+  const P = ed448_CURVE_p;
   // https://www.rfc-editor.org/rfc/rfc8032#section-5.2.3
   // To compute the square root of (u/v), the first step is to compute the
   //   candidate root x = (u/v)^((p+1)/4).  This can be done using the
@@ -137,10 +139,10 @@ function uvRatio(u: bigint, v: bigint): { isValid: boolean; value: bigint } {
 // The value fits in 448 bits, but we use 456-bit (57-byte) elements because of bitflags.
 // - ed25519 fits in 255 bits, allowing using last 1 byte for specifying bit flag of point negation.
 // - ed448 fits in 448 bits. We can't use last 1 byte: we can only use a bit 224 in the middle.
-const Fp = /* @__PURE__ */ (() => Field(ed448_CURVE.p, { BITS: 456, isLE: true }))();
+const Fp = /* @__PURE__ */ (() => Field(ed448_CURVE_p, { BITS: 456, isLE: true }))();
 const Fn = /* @__PURE__ */ (() => Field(ed448_CURVE.n, { BITS: 456, isLE: true }))();
 // decaf448 uses 448-bit (56-byte) keys
-const Fp448 = /* @__PURE__ */ (() => Field(ed448_CURVE.p, { BITS: 448, isLE: true }))();
+const Fp448 = /* @__PURE__ */ (() => Field(ed448_CURVE_p, { BITS: 448, isLE: true }))();
 const Fn448 = /* @__PURE__ */ (() => Field(ed448_CURVE.n, { BITS: 448, isLE: true }))();
 
 // SHAKE256(dom4(phflag,context)||x, 114)
@@ -154,7 +156,7 @@ function dom4(data: Uint8Array, ctx: Uint8Array, phflag: boolean) {
   );
 }
 const ed448_eddsa_opts = { adjustScalarBytes, domain: dom4 };
-const ed448_Point = edwards(ed448_CURVE, { Fp, Fn, uvRatio });
+const ed448_Point = /* @__PURE__ */ edwards(ed448_CURVE, { Fp, Fn, uvRatio });
 
 /**
  * ed448 EdDSA curve and methods.
@@ -168,20 +170,21 @@ const ed448_Point = edwards(ed448_CURVE, { Fp, Fn, uvRatio });
  * const isValid = ed448.verify(sig, msg, publicKey);
  * ```
  */
-export const ed448: EdDSA = eddsa(ed448_Point, shake256_114, ed448_eddsa_opts);
+export const ed448: EdDSA = /* @__PURE__ */ eddsa(ed448_Point, shake256_114, ed448_eddsa_opts);
 
 // There is no ed448ctx, since ed448 supports ctx by default
 /** Prehashed version of ed448. See {@link ed448} */
-export const ed448ph: EdDSA = /* @__PURE__ */ eddsa(ed448_Point, shake256_114, {
-  ...ed448_eddsa_opts,
-  prehash: shake256_64,
-});
+export const ed448ph: EdDSA = /* @__PURE__ */ (() =>
+  eddsa(ed448_Point, shake256_114, {
+    ...ed448_eddsa_opts,
+    prehash: shake256_64,
+  }))();
 
 /**
  * E448 (NIST) != edwards448 used in ed448.
  * E448 is birationally equivalent to edwards448.
  */
-export const E448: EdwardsPointCons = edwards(E448_CURVE);
+export const E448: EdwardsPointCons = /* @__PURE__ */ edwards(E448_CURVE);
 
 /**
  * ECDH using curve448 aka x448.
@@ -195,7 +198,7 @@ export const E448: EdwardsPointCons = edwards(E448_CURVE);
  * ```
  */
 export const x448: MontgomeryECDH = /* @__PURE__ */ (() => {
-  const P = ed448_CURVE.p;
+  const P = ed448_CURVE_p;
   return montgomery({
     P,
     type: 'x448',
@@ -209,7 +212,7 @@ export const x448: MontgomeryECDH = /* @__PURE__ */ (() => {
 })();
 
 // Hash To Curve Elligator2 Map
-const ELL2_C1 = /* @__PURE__ */ (() => (Fp.ORDER - BigInt(3)) / BigInt(4))(); // 1. c1 = (q - 3) / 4         # Integer arithmetic
+const ELL2_C1 = /* @__PURE__ */ (() => (ed448_CURVE_p - BigInt(3)) / BigInt(4))(); // 1. c1 = (q - 3) / 4         # Integer arithmetic
 const ELL2_J = /* @__PURE__ */ BigInt(156326);
 
 function map_to_curve_elligator2_curve448(u: bigint) {
@@ -290,7 +293,7 @@ export const ed448_hasher: H2CHasher<EdwardsPointCons> = /* @__PURE__ */ (() =>
   createHasher(ed448_Point, (scalars: bigint[]) => map_to_curve_elligator2_edwards448(scalars[0]), {
     DST: 'edwards448_XOF:SHAKE256_ELL2_RO_',
     encodeDST: 'edwards448_XOF:SHAKE256_ELL2_NU_',
-    p: Fp.ORDER,
+    p: ed448_CURVE_p,
     m: 1,
     k: 224,
     expand: 'xof',
@@ -318,9 +321,8 @@ const invertSqrt = (number: bigint) => uvRatio(_1n, number);
  * and [RFC9496](https://www.rfc-editor.org/rfc/rfc9496#name-element-derivation-2).
  */
 function calcElligatorDecafMap(r0: bigint): EdwardsPoint {
-  const { d } = ed448_CURVE;
-  const P = Fp.ORDER;
-  const mod = (n: bigint) => Fp.create(n);
+  const { d, p: P } = ed448_CURVE;
+  const mod = (n: bigint) => Fp448.create(n);
 
   const r = mod(-(r0 * r0)); // 1
   const u0 = mod(d * (r - _1n)); // 2
@@ -386,8 +388,7 @@ class _DecafPoint extends PrimeEdwardsPoint<_DecafPoint> {
 
   static fromBytes(bytes: Uint8Array): _DecafPoint {
     abytes(bytes, 56);
-    const { d } = ed448_CURVE;
-    const P = Fp.ORDER;
+    const { d, p: P } = ed448_CURVE;
     const mod = (n: bigint) => Fp448.create(n);
     const s = Fp448.fromBytes(bytes);
 
@@ -429,8 +430,8 @@ class _DecafPoint extends PrimeEdwardsPoint<_DecafPoint> {
    */
   toBytes(): Uint8Array {
     const { X, Z, T } = this.ep;
-    const P = Fp.ORDER;
-    const mod = (n: bigint) => Fp.create(n);
+    const P = ed448_CURVE.p;
+    const mod = (n: bigint) => Fp448.create(n);
     const u1 = mod(mod(X + T) * mod(X - T)); // 1
     const x2 = mod(X * X);
     const { value: invsqrt } = invertSqrt(mod(u1 * ONE_MINUS_D * x2)); // 2
@@ -451,7 +452,7 @@ class _DecafPoint extends PrimeEdwardsPoint<_DecafPoint> {
     const { X: X1, Y: Y1 } = this.ep;
     const { X: X2, Y: Y2 } = other.ep;
     // (x1 * y2 == y1 * x2)
-    return Fp.create(X1 * Y2) === Fp.create(Y1 * X2);
+    return Fp448.create(X1 * Y2) === Fp448.create(Y1 * X2);
   }
 
   is0(): boolean {

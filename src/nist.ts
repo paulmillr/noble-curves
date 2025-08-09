@@ -19,7 +19,7 @@ import {
 
 // p = 2n**224n * (2n**32n-1n) + 2n**192n + 2n**96n - 1n
 // a = Fp256.create(BigInt('-3'));
-const p256_CURVE: WeierstrassOpts<bigint> = {
+const p256_CURVE: WeierstrassOpts<bigint> = /* @__PURE__ */ (() => ({
   p: BigInt('0xffffffff00000001000000000000000000000000ffffffffffffffffffffffff'),
   n: BigInt('0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551'),
   h: BigInt(1),
@@ -27,10 +27,10 @@ const p256_CURVE: WeierstrassOpts<bigint> = {
   b: BigInt('0x5ac635d8aa3a93e7b3ebbd55769886bc651d06b0cc53b0f63bce3c3e27d2604b'),
   Gx: BigInt('0x6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296'),
   Gy: BigInt('0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5'),
-};
+}))();
 
 // p = 2n**384n - 2n**128n - 2n**96n + 2n**32n - 1n
-const p384_CURVE: WeierstrassOpts<bigint> = {
+const p384_CURVE: WeierstrassOpts<bigint> = /* @__PURE__ */ (() => ({
   p: BigInt(
     '0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffeffffffff0000000000000000ffffffff'
   ),
@@ -50,10 +50,10 @@ const p384_CURVE: WeierstrassOpts<bigint> = {
   Gy: BigInt(
     '0x3617de4a96262c6f5d9e98bf9292dc29f8f41dbd289a147ce9da3113b5f0b8c00a60b1ce1d7e819d7a431d7c90ea0e5f'
   ),
-};
+}))();
 
 // p = 2n**521n - 1n
-const p521_CURVE: WeierstrassOpts<bigint> = {
+const p521_CURVE: WeierstrassOpts<bigint> = /* @__PURE__ */ (() => ({
   p: BigInt(
     '0x1ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
   ),
@@ -73,7 +73,7 @@ const p521_CURVE: WeierstrassOpts<bigint> = {
   Gy: BigInt(
     '0x011839296a789a3bc0045c8a5fb42c7d1bd998f54449579b446817afbd17273e662c97ee72995ef42640c550b9013fad0761353c7086a272c24088be94769fd16650'
   ),
-};
+}))();
 
 type SwuOpts = {
   A: bigint;
@@ -155,7 +155,7 @@ export const p384_oprf: OPRF = /* @__PURE__ */ (() =>
     hashToScalar: p384_hasher.hashToScalar,
   }))();
 
-const Fn521 = /* @__PURE__ */ Field(p521_CURVE.n, { allowedLengths: [65, 66] });
+const Fn521 = /* @__PURE__ */ (() => Field(p521_CURVE.n, { allowedLengths: [65, 66] }))();
 const p521_Point = /* @__PURE__ */ weierstrass(p521_CURVE, { Fn: Fn521 });
 /** NIST P521 (aka secp521r1) curve, ECDSA and ECDH methods. */
 export const p521: ECDSA = /* @__PURE__ */ ecdsa(p521_Point, sha512);

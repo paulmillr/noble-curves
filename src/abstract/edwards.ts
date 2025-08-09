@@ -23,7 +23,7 @@ import {
   type Signer,
 } from '../utils.ts';
 import {
-  _createCurveFields,
+  createCurveFields,
   createKeygen,
   normalizeZ,
   wNAF,
@@ -185,7 +185,7 @@ function isEdValidXY(Fp: IField<bigint>, CURVE: EdwardsOpts, x: bigint, y: bigin
 }
 
 export function edwards(params: EdwardsOpts, extraOpts: EdwardsExtraOpts = {}): EdwardsPointCons {
-  const validated = _createCurveFields('edwards', params, extraOpts, extraOpts.FpFnLE);
+  const validated = createCurveFields('edwards', params, extraOpts, extraOpts.FpFnLE);
   const { Fp, Fn } = validated;
   let CURVE = validated.CURVE as EdwardsOpts;
   const { h: cofactor } = CURVE;

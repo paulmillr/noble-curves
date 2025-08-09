@@ -40,7 +40,7 @@ import { createORPF, type OPRF } from './abstract/oprf.ts';
 import { asciiToBytes, bytesToNumberLE, equalBytes } from './utils.ts';
 
 // prettier-ignore
-const _0n = /* @__PURE__ */ BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3);
+const _0n = /* @__PURE__ */ BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = /* @__PURE__ */ BigInt(3);
 // prettier-ignore
 const _5n = BigInt(5), _8n = BigInt(8);
 

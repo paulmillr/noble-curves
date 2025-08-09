@@ -7,8 +7,8 @@
 import { bitLen, bitMask, type Signer } from '../utils.ts';
 import { Field, FpInvertBatch, validateField, type IField } from './modular.ts';
 
-const _0n = BigInt(0);
-const _1n = BigInt(1);
+const _0n = /* @__PURE__ */ BigInt(0);
+const _1n = /* @__PURE__ */ BigInt(1);
 
 export type AffinePoint<T> = {
   x: T;
@@ -592,7 +592,7 @@ function createField<T>(order: bigint, field?: IField<T>, isLE?: boolean): IFiel
 export type FpFn<T> = { Fp: IField<T>; Fn: IField<bigint> };
 
 /** Validates CURVE opts and creates fields */
-export function _createCurveFields<T>(
+export function createCurveFields<T>(
   type: 'weierstrass' | 'edwards',
   CURVE: ValidCurveParams<T>,
   curveOpts: Partial<FpFn<T>> = {},
