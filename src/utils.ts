@@ -17,7 +17,7 @@ export {
   concatBytes,
   hexToBytes,
   isBytes,
-  randomBytes,
+  randomBytes
 } from '@noble/hashes/utils.js';
 const _0n = /* @__PURE__ */ BigInt(0);
 const _1n = /* @__PURE__ */ BigInt(1);
@@ -181,12 +181,12 @@ type Pred<T> = (v: Uint8Array) => T | undefined;
 export function createHmacDrbg<T>(
   hashLen: number,
   qByteLen: number,
-  hmacFn: (key: Uint8Array, ...messages: Uint8Array[]) => Uint8Array<ArrayBuffer>
+  hmacFn: (key: Uint8Array, ...messages: Uint8Array[]) => Uint8Array
 ): (seed: Uint8Array, predicate: Pred<T>) => T {
   anumber(hashLen, 'hashLen');
   anumber(qByteLen, 'qByteLen');
   if (typeof hmacFn !== 'function') throw new Error('hmacFn must be a function');
-  const u8n = (len: number) => new Uint8Array(len); // creates Uint8Array
+  const u8n = (len: number): Uint8Array => new Uint8Array(len); // creates Uint8Array
   const NULL = u8n(0);
   const byte0 = Uint8Array.of(0x00);
   const byte1 = Uint8Array.of(0x01);
@@ -201,7 +201,7 @@ export function createHmacDrbg<T>(
     k.fill(0);
     i = 0;
   };
-  const h = (...b: Uint8Array<ArrayBuffer>[]) => hmacFn(k, v, ...b); // hmac(k)(v, ...values)
+  const h = (...b: Uint8Array[]) => hmacFn(k, v, ...b); // hmac(k)(v, ...values)
   const reseed = (seed = NULL) => {
     // HMAC-DRBG reseed() function. Steps D-G
     k = h(byte0, seed); // k = hmac(k || v || 0x00 || seed)
