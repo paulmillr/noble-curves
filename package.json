@@ -1,6 +1,6 @@
 {
   "name": "@noble/curves",
-  "version": "2.0.0-beta.1",
+  "version": "2.0.0-beta.2",
   "description": "Audited & minimal JS implementation of elliptic curve cryptography",
   "files": [
     "*.js",
@@ -32,7 +32,7 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@noble/hashes": "2.0.0-beta.3"
+    "@noble/hashes": "2.0.0-beta.4"
   },
   "devDependencies": {
     "@paulmillr/jsbt": "0.4.1",

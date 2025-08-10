@@ -332,27 +332,24 @@ import { p256 } from './src/webcrypto.ts';
 
 ```ts
 import { bls12_381 } from '@noble/curves/bls12-381.js';
-import { hexToBytes } from '@noble/curves/abstract/utils.js';
 
-// private keys are 32 bytes
-const privKey = hexToBytes('67d53f170b908cabb9eb326c3c337762d59289a8fec79f7bc9254b584b73265c');
-// const privKey = bls12_381.utils.randomSecretKey();
-
-// Long signatures (G2), short public keys (G1)
+// G1 pubkeys, G2 sigs
 const blsl = bls12_381.longSignatures;
-const publicKey = blsl.getPublicKey(secretKey);
-// Sign msg with custom (Ethereum) DST
-const msg = new TextEncoder().encode('hello');
-const DST = 'BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_';
-const msgp = blsl.hash(msg, DST);
+const { secretKey, publicKey } = blsl.keygen();
+// const publicKey = blsl.getPublicKey(secretKey);
+const msg = new TextEncoder().encode('hello noble');
+// default DST
+const msgp = blsl.hash(msg);
+// custom DST (Ethereum)
+const msgpd = blsl.hash(msg, 'BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_');
 const signature = blsl.sign(msgp, secretKey);
 const isValid = blsl.verify(signature, msgp, publicKey);
-console.log({ publicKey, signature, isValid });
+console.log('long', { publicKey, signature, isValid });
 
-// Short signatures (G1), long public keys (G2)
+// G1 sigs, G2 pubkeys
 const blss = bls12_381.shortSignatures;
 const publicKey2 = blss.getPublicKey(secretKey);
-const msgp2 = blss.hash(new TextEncoder().encode('hello'), 'BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_')
+const msgp2 = blss.hash(msg, 'BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_');
 const signature2 = blss.sign(msgp2, secretKey);
 const isValid2 = blss.verify(signature2, msgp2, publicKey);
 console.log({ publicKey2, signature2, isValid2 });
@@ -370,7 +367,7 @@ const aggregatedKey = bls12_381.longSignatures.aggregatePublicKeys([
 // bls.fields.Fp12.finalExponentiate(bls.fields.Fp12.mul(PointG1, PointG2));
 
 // Others
-// bls.G1.ProjectivePoint.BASE, bls.G2.ProjectivePoint.BASE;
+// bls.G1.Point.BASE, bls.G2.Point.BASE;
 // bls.fields.Fp, bls.fields.Fp2, bls.fields.Fp12, bls.fields.Fr;
 ```
 
@@ -381,16 +378,13 @@ The BN254 API mirrors [BLS](#bls12-381). The curve was previously called alt_bn1
 The implementation is compatible with [EIP-196](https://eips.ethereum.org/EIPS/eip-196) and
 [EIP-197](https://eips.ethereum.org/EIPS/eip-197).
 
-We don't implement Point methods toBytes.
-To work around this limitation, has to initialize points on their own from BigInts.
-Reason it's not implemented is because [there is no standard](https://github.com/privacy-scaling-explorations/halo2curves/issues/109).
+For BN254 usage, check out [the implementation of bn254 EVM precompiles](https://github.com/paulmillr/noble-curves/blob/3ed792f8ad9932765b84d1064afea8663a255457/test/bn254.test.js#L697).
+We don't implement Point methods toBytes. To work around this limitation, has to initialize points on their own from BigInts. Reason it's not implemented is because [there is no standard](https://github.com/privacy-scaling-explorations/halo2curves/issues/109).
 Points of divergence:
 
 - Endianness: LE vs BE (byte-swapped)
 - Flags as first hex bits (similar to BLS) vs no-flags
 - Imaginary part last in G2 vs first (c0, c1 vs c1, c0)
-
-For example usage, check out [the implementation of bn254 EVM precompiles](https://github.com/paulmillr/noble-curves/blob/3ed792f8ad9932765b84d1064afea8663a255457/test/bn254.test.js#L697).
 
 ### hash-to-curve: hashing to curve points
 
