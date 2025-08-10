@@ -153,7 +153,7 @@ function validateW(W: number, bits: number) {
 }
 
 /** Internal wNAF opts for specific W and scalarBits */
-export type WOpts = {
+type WOpts = {
   windows: number;
   windowSize: number;
   mask: bigint;

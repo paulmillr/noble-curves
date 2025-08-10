@@ -196,10 +196,10 @@ function schnorrVerify(signature: Uint8Array, message: Uint8Array, publicKey: Ui
   try {
     const P = lift_x(num(pub)); // P = lift_x(int(pk)); fail if that fails
     const r = num(sig.subarray(0, 32)); // Let r = int(sig[0:32]); fail if r ≥ p.
-
     if (!Fp.isValidNot0(r)) return false;
     const s = num(sig.subarray(32, 64)); // Let s = int(sig[32:64]); fail if s ≥ n.
     if (!Fn.isValidNot0(s)) return false;
+
     const e = challenge(Fn.toBytes(r), pointToBytes(P), m); // int(challenge(bytes(r)||bytes(P)||m))%n
     // R = s⋅G - e⋅P, where -eP == (n-e)P
     const R = BASE.multiplyUnsafe(s).add(P.multiplyUnsafe(Fn.neg(e)));

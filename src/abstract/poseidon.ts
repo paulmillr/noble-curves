@@ -7,7 +7,7 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { bitGet, validateObject } from '../utils.ts';
+import { asafenumber, bitGet, validateObject } from '../utils.ts';
 import { FpInvertBatch, FpPow, type IField, validateField } from './modular.ts';
 
 // Grain LFSR (Linear-Feedback Shift Register): https://eprint.iacr.org/2009/109.pdf
@@ -55,8 +55,9 @@ function assertValidPosOpts(opts: PoseidonBasicOpts) {
       isSboxInverse: 'boolean',
     }
   );
-  for (const i of ['t', 'roundsFull', 'roundsPartial'] as const) {
-    if (!Number.isSafeInteger(opts[i]) || opts[i] < 1) throw new Error('invalid number ' + i);
+  for (const k of ['t', 'roundsFull', 'roundsPartial'] as const) {
+    asafenumber(opts[k], k);
+    if (opts[k] < 1) throw new Error('invalid number ' + k);
   }
   if (roundsFull & 1) throw new Error('roundsFull is not even' + roundsFull);
 }
@@ -322,10 +323,7 @@ export type PoseidonSpongeOpts = Omit<PoseidonOpts, 't'> & {
  * - https://github.com/arkworks-rs/crypto-primitives/tree/main
  */
 export function poseidonSponge(opts: PoseidonSpongeOpts): () => PoseidonSponge {
-  for (const i of ['rate', 'capacity'] as const) {
-    if (typeof opts[i] !== 'number' || !Number.isSafeInteger(opts[i]))
-      throw new Error('invalid number ' + i);
-  }
+  for (const k of ['rate', 'capacity'] as const) asafenumber(opts[k], k);
   const { rate, capacity } = opts;
   const t = opts.rate + opts.capacity;
   // Re-use hash instance between multiple instances

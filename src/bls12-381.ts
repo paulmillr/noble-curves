@@ -149,6 +149,7 @@ const bls12_381_CURVE_G1: WeierstrassOpts<bigint> = {
 
 // CURVE FIELDS
 // r = z⁴ − z² + 1; CURVE.n from other curves
+/** bls12-381 Fr (Fn) field. Note: does mod() on fromBytes, due to modFromBytes option. */
 export const bls12_381_Fr: IField<bigint> = Field(bls12_381_CURVE_G1.n, {
   modFromBytes: true,
 });
@@ -580,7 +581,8 @@ const bls12_params = {
 };
 
 /**
- * bls12-381 pairing-friendly curve.
+ * bls12-381 pairing-friendly curve construction.
+ * Provides both longSignatures and shortSignatures.
  */
 export const bls12_381: BlsCurvePairWithSignatures = bls(
   fields,

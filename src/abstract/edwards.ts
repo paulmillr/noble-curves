@@ -38,8 +38,6 @@ import { type IField } from './modular.ts';
 // prettier-ignore
 const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _8n = BigInt(8);
 
-export type UVRatio = (u: bigint, v: bigint) => { isValid: boolean; value: bigint };
-
 /** Instance of Extended Point with coordinates in X, Y, Z, T. */
 export interface EdwardsPoint extends CurvePoint<bigint, EdwardsPoint> {
   /** extended X coordinate. Different from affine x. */

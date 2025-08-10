@@ -56,9 +56,9 @@ Ate loop size: 6x+2
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import {
   blsBasic,
-  type BLSCurvePair,
-  type PostPrecomputeFn,
-  type PostPrecomputePointAddFn,
+  type BlsCurvePair,
+  type BlsPostPrecomputeFn,
+  type BlsPostPrecomputePointAddFn,
 } from './abstract/bls.ts';
 import { Field, type IField } from './abstract/modular.ts';
 import type { Fp, Fp12, Fp2, Fp6 } from './abstract/tower.ts';
@@ -121,13 +121,13 @@ const { Fp, Fp2, Fp6, Fp12 } = tower12({
 // END OF CURVE FIELDS
 const { G2psi, psi } = psiFrobenius(Fp, Fp2, Fp2.NONRESIDUE);
 
-export const _postPrecompute: PostPrecomputeFn = (
+export const _postPrecompute: BlsPostPrecomputeFn = (
   Rx: Fp2,
   Ry: Fp2,
   Rz: Fp2,
   Qx: Fp2,
   Qy: Fp2,
-  pointAdd: PostPrecomputePointAddFn
+  pointAdd: BlsPostPrecomputePointAddFn
 ) => {
   const q = psi(Qx, Qy);
   ({ Rx, Ry, Rz } = pointAdd(Rx, Ry, Rz, q[0], q[1]));
@@ -216,4 +216,4 @@ const bn254_params = {
  * Contains G1 / G2 operations and pairings.
  */
 // bn254_hasher
-export const bn254: BLSCurvePair = blsBasic(fields, bn254_G1, bn254_G2, bn254_params);
+export const bn254: BlsCurvePair = blsBasic(fields, bn254_G1, bn254_G2, bn254_params);

@@ -80,16 +80,30 @@ type SwuOpts = {
   B: bigint;
   Z: bigint;
 };
+
 function createSWU(Point: WeierstrassPointCons<bigint>, opts: SwuOpts) {
   const map = mapToCurveSimpleSWU(Point.Fp, opts);
   return (scalars: bigint[]) => map(scalars[0]);
 }
 
-/** NIST P256 (aka secp256r1, prime256v1) curve, ECDSA and ECDH methods. */
-
+// NIST P256
 const p256_Point = /* @__PURE__ */ weierstrass(p256_CURVE);
+/**
+ * NIST P256 (aka secp256r1, prime256v1) curve, ECDSA and ECDH methods.
+ * Hashes inputs with sha256 by default.
+ *
+ * @example
+ * ```js
+ * import { p256 } from '@noble/curves/nist.js';
+ * const { secretKey, publicKey } = p256.keygen();
+ * // const publicKey = p256.getPublicKey(secretKey);
+ * const msg = new TextEncoder().encode('hello noble');
+ * const sig = p256.sign(msg, secretKey);
+ * const isValid = p256.verify(sig, msg, publicKey);
+ * // const sigKeccak = p256.sign(keccak256(msg), secretKey, { prehash: false });
+ * ```
+ */
 export const p256: ECDSA = /* @__PURE__ */ ecdsa(p256_Point, sha256);
-
 /** Hashing / encoding to p256 points / field. RFC 9380 methods. */
 export const p256_hasher: H2CHasher<WeierstrassPointCons<bigint>> = /* @__PURE__ */ (() => {
   return createHasher(
@@ -110,7 +124,6 @@ export const p256_hasher: H2CHasher<WeierstrassPointCons<bigint>> = /* @__PURE__
     }
   );
 })();
-
 /** p256 OPRF, defined in RFC 9497. */
 export const p256_oprf: OPRF = /* @__PURE__ */ (() =>
   createORPF({
@@ -121,8 +134,9 @@ export const p256_oprf: OPRF = /* @__PURE__ */ (() =>
     hashToScalar: p256_hasher.hashToScalar,
   }))();
 
+// NIST P384
 const p384_Point = /* @__PURE__ */ weierstrass(p384_CURVE);
-/** NIST P384 (aka secp384r1) curve, ECDSA and ECDH methods. */
+/** NIST P384 (aka secp384r1) curve, ECDSA and ECDH methods. Hashes inputs with sha384 by default. */
 export const p384: ECDSA = /* @__PURE__ */ ecdsa(p384_Point, sha384);
 /** Hashing / encoding to p384 points / field. RFC 9380 methods. */
 export const p384_hasher: H2CHasher<WeierstrassPointCons<bigint>> = /* @__PURE__ */ (() => {
@@ -144,7 +158,6 @@ export const p384_hasher: H2CHasher<WeierstrassPointCons<bigint>> = /* @__PURE__
     }
   );
 })();
-
 /** p384 OPRF, defined in RFC 9497. */
 export const p384_oprf: OPRF = /* @__PURE__ */ (() =>
   createORPF({
@@ -155,11 +168,11 @@ export const p384_oprf: OPRF = /* @__PURE__ */ (() =>
     hashToScalar: p384_hasher.hashToScalar,
   }))();
 
+// NIST P521
 const Fn521 = /* @__PURE__ */ (() => Field(p521_CURVE.n, { allowedLengths: [65, 66] }))();
 const p521_Point = /* @__PURE__ */ weierstrass(p521_CURVE, { Fn: Fn521 });
-/** NIST P521 (aka secp521r1) curve, ECDSA and ECDH methods. */
+/** NIST P521 (aka secp521r1) curve, ECDSA and ECDH methods. Hashes inputs with sha512 by default. */
 export const p521: ECDSA = /* @__PURE__ */ ecdsa(p521_Point, sha512);
-
 /** Hashing / encoding to p521 points / field. RFC 9380 methods. */
 export const p521_hasher: H2CHasher<WeierstrassPointCons<bigint>> = /* @__PURE__ */ (() => {
   return createHasher(
@@ -180,7 +193,6 @@ export const p521_hasher: H2CHasher<WeierstrassPointCons<bigint>> = /* @__PURE__
     }
   );
 })();
-
 /** p521 OPRF, defined in RFC 9497. */
 export const p521_oprf: OPRF = /* @__PURE__ */ (() =>
   createORPF({

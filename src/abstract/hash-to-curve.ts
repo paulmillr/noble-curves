@@ -8,6 +8,7 @@
 import type { CHash } from '../utils.ts';
 import {
   abytes,
+  asafenumber,
   asciiToBytes,
   bytesToNumberBE,
   concatBytes,
@@ -17,7 +18,7 @@ import {
 import type { AffinePoint, PC_ANY, PC_F, PC_P } from './curve.ts';
 import { FpInvertBatch, mod, type IField } from './modular.ts';
 
-export type UnicodeOrBytes = string | Uint8Array;
+export type AsciiOrBytes = string | Uint8Array;
 
 /**
  * * `DST` is a domain separation tag, defined in section 2.2.5
@@ -28,7 +29,7 @@ export type UnicodeOrBytes = string | Uint8Array;
  * * `hash` conforming to `utils.CHash` interface, with `outputLen` / `blockLen` props
  */
 export type H2COpts = {
-  DST: UnicodeOrBytes;
+  DST: AsciiOrBytes;
   expand: 'xmd' | 'xof';
   hash: CHash;
   p: bigint;
@@ -39,13 +40,11 @@ export type H2CHashOpts = {
   expand: 'xmd' | 'xof';
   hash: CHash;
 };
-export type XY<T> = (x: T, y: T) => { x: T; y: T };
-export type XYRatio<T> = [T[], T[], T[], T[]]; // xn/xd, yn/yd
 export type MapToCurve<T> = (scalar: bigint[]) => AffinePoint<T>;
 
 // Separated from initialization opts, so users won't accidentally change per-curve parameters
 // (changing DST is ok!)
-export type H2CDSTOpts = { DST: UnicodeOrBytes };
+export type H2CDSTOpts = { DST: AsciiOrBytes };
 export type H2CHasherBase<PC extends PC_ANY> = {
   hashToCurve(msg: Uint8Array, options?: H2CDSTOpts): PC_P<PC>;
   hashToScalar(msg: Uint8Array, options?: H2CDSTOpts): bigint;
@@ -62,7 +61,7 @@ export type H2CHasherBase<PC extends PC_ANY> = {
 export type H2CHasher<PC extends PC_ANY> = H2CHasherBase<PC> & {
   encodeToCurve(msg: Uint8Array, options?: H2CDSTOpts): PC_P<PC>;
   mapToCurve: MapToCurve<PC_F<PC>>;
-  defaults: H2COpts & { encodeDST?: UnicodeOrBytes };
+  defaults: H2COpts & { encodeDST?: AsciiOrBytes };
 };
 
 // Octet Stream to Integer. "spec" implementation of os2ip is 2.5x slower vs bytesToNumberBE.
@@ -70,8 +69,8 @@ const os2ip = bytesToNumberBE;
 
 // Integer to Octet Stream (numberToBytesBE)
 function i2osp(value: number, length: number): Uint8Array {
-  anum(value);
-  anum(length);
+  asafenumber(value);
+  asafenumber(length);
   if (value < 0 || value >= 1 << (8 * length)) throw new Error('invalid I2OSP input: ' + value);
   const res = Array.from({ length }).fill(0) as number[];
   for (let i = length - 1; i >= 0; i--) {
@@ -89,13 +88,9 @@ function strxor(a: Uint8Array, b: Uint8Array): Uint8Array {
   return arr;
 }
 
-function anum(item: unknown): void {
-  if (!Number.isSafeInteger(item)) throw new Error('number expected');
-}
-
 // User can always use utf8 if they want, by passing Uint8Array.
 // If string is passed, we treat it as ASCII: other formats are likely a mistake.
-function normDST(DST: UnicodeOrBytes): Uint8Array {
+function normDST(DST: AsciiOrBytes): Uint8Array {
   if (!isBytes(DST) && typeof DST !== 'string')
     throw new Error('DST must be Uint8Array or ascii string');
   return typeof DST === 'string' ? asciiToBytes(DST) : DST;
@@ -107,12 +102,12 @@ function normDST(DST: UnicodeOrBytes): Uint8Array {
  */
 export function expand_message_xmd(
   msg: Uint8Array,
-  DST: UnicodeOrBytes,
+  DST: AsciiOrBytes,
   lenInBytes: number,
   H: CHash
 ): Uint8Array {
   abytes(msg);
-  anum(lenInBytes);
+  asafenumber(lenInBytes);
   DST = normDST(DST);
   // https://www.rfc-editor.org/rfc/rfc9380#section-5.3.3
   if (DST.length > 255) DST = H(concatBytes(asciiToBytes('H2C-OVERSIZE-DST-'), DST));
@@ -142,13 +137,13 @@ export function expand_message_xmd(
  */
 export function expand_message_xof(
   msg: Uint8Array,
-  DST: UnicodeOrBytes,
+  DST: AsciiOrBytes,
   lenInBytes: number,
   k: number,
   H: CHash
 ): Uint8Array {
   abytes(msg);
-  anum(lenInBytes);
+  asafenumber(lenInBytes);
   DST = normDST(DST);
   // https://www.rfc-editor.org/rfc/rfc9380#section-5.3.3
   // DST = H('H2C-OVERSIZE-DST-' || a_very_long_DST, Math.ceil((lenInBytes * k) / 8));
@@ -185,9 +180,9 @@ export function hash_to_field(msg: Uint8Array, count: number, options: H2COpts):
     hash: 'function',
   });
   const { p, k, m, hash, expand, DST } = options;
-  if (!Number.isSafeInteger(hash.outputLen)) throw new Error('expected valid hash');
+  asafenumber(hash.outputLen, 'valid hash');
   abytes(msg);
-  anum(count);
+  asafenumber(count);
   const log2p = p.toString(2).length;
   const L = Math.ceil((log2p + k) / 8); // section 5.1 of ietf draft link above
   const len_in_bytes = count * m * L;
@@ -215,6 +210,8 @@ export function hash_to_field(msg: Uint8Array, count: number, options: H2COpts):
   return u;
 }
 
+type XY<T> = (x: T, y: T) => { x: T; y: T };
+type XYRatio<T> = [T[], T[], T[], T[]]; // xn/xd, yn/yd
 export function isogenyMap<T, F extends IField<T>>(field: F, map: XYRatio<T>): XY<T> {
   // Make same order as in spec
   const coeff = map.map((i) => Array.from(i).reverse());
@@ -239,7 +236,7 @@ export const _DST_scalar: Uint8Array = asciiToBytes('HashToScalar-');
 export function createHasher<PC extends PC_ANY>(
   Point: PC,
   mapToCurve: MapToCurve<PC_F<PC>>,
-  defaults: H2COpts & { encodeDST?: UnicodeOrBytes }
+  defaults: H2COpts & { encodeDST?: AsciiOrBytes }
 ): H2CHasher<PC> {
   if (typeof mapToCurve !== 'function') throw new Error('mapToCurve() must be defined');
   function map(num: bigint[]): PC_P<PC> {

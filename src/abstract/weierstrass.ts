@@ -67,7 +67,6 @@ import {
 } from './modular.ts';
 
 export type { AffinePoint };
-export type HmacFnSync = (key: Uint8Array<any>, ...messages: Uint8Array<any>[]) => Uint8Array<any>;
 
 type EndoBasis = [[bigint, bigint], [bigint, bigint]];
 /**
@@ -285,7 +284,7 @@ export type WeierstrassExtraOpts<T> = Partial<{
  */
 export type ECDSAOpts = Partial<{
   lowS: boolean;
-  hmac: HmacFnSync;
+  hmac: (key: Uint8Array, message: Uint8Array) => Uint8Array;
   randomBytes: (bytesLength?: number) => Uint8Array;
   bits2int: (bytes: Uint8Array) => bigint;
   bits2int_modN: (bytes: Uint8Array) => bigint;
@@ -1246,9 +1245,7 @@ export function ecdsa(
   );
   ecdsaOpts = Object.assign({}, ecdsaOpts);
   const randomBytes = ecdsaOpts.randomBytes || wcRandomBytes;
-  const hmac: HmacFnSync =
-    ecdsaOpts.hmac ||
-    (((key, ...msgs) => nobleHmac(hash, key, concatBytes(...msgs))) satisfies HmacFnSync);
+  const hmac = ecdsaOpts.hmac || ((key, msg) => nobleHmac(hash, key, msg));
 
   const { Fp, Fn } = Point;
   const { ORDER: CURVE_ORDER, BITS: fnBits } = Fn;

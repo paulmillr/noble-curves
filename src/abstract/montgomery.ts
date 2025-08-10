@@ -22,7 +22,7 @@ const _0n = BigInt(0);
 const _1n = BigInt(1);
 const _2n = BigInt(2);
 
-export type CurveType = {
+export type MontgomeryOpts = {
   P: bigint; // finite field prime
   type: 'x25519' | 'x448';
   adjustScalarBytes: (bytes: Uint8Array) => Uint8Array;
@@ -43,7 +43,7 @@ export type MontgomeryECDH = {
   keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
 };
 
-function validateOpts(curve: CurveType) {
+function validateOpts(curve: MontgomeryOpts) {
   validateObject(curve, {
     adjustScalarBytes: 'function',
     powPminus2: 'function',
@@ -51,7 +51,7 @@ function validateOpts(curve: CurveType) {
   return Object.freeze({ ...curve } as const);
 }
 
-export function montgomery(curveDef: CurveType): MontgomeryECDH {
+export function montgomery(curveDef: MontgomeryOpts): MontgomeryECDH {
   const CURVE = validateOpts(curveDef);
   const { P, type, adjustScalarBytes, powPminus2, randomBytes: rand } = CURVE;
   const is25519 = type === 'x25519';

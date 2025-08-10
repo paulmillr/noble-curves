@@ -31,22 +31,29 @@ export type CHash = {
 export type FHash = (message: Uint8Array) => Uint8Array;
 export function abool(value: boolean, title: string = ''): boolean {
   if (typeof value !== 'boolean') {
-    const prefix = title && `"${title}"`;
+    const prefix = title && `"${title}" `;
     throw new Error(prefix + 'expected boolean, got type=' + typeof value);
   }
   return value;
 }
 
 // Used in weierstrass, der
-function abignumer(n: number | bigint) {
+function abignumber(n: number | bigint) {
   if (typeof n === 'bigint') {
     if (!isPosBig(n)) throw new Error('positive bigint expected, got ' + n);
   } else anumber(n);
   return n;
 }
 
+export function asafenumber(value: number, title: string = ''): void {
+  if (!Number.isSafeInteger(value)) {
+    const prefix = title && `"${title}" `;
+    throw new Error(prefix + 'expected safe integer, got type=' + typeof value);
+  }
+}
+
 export function numberToHexUnpadded(num: number | bigint): string {
-  const hex = abignumer(num).toString(16);
+  const hex = abignumber(num).toString(16);
   return hex.length & 1 ? '0' + hex : hex;
 }
 
@@ -65,7 +72,7 @@ export function bytesToNumberLE(bytes: Uint8Array): bigint {
 
 export function numberToBytesBE(n: number | bigint, len: number): Uint8Array {
   anumber(len);
-  n = abignumer(n);
+  n = abignumber(n);
   const res = hexToBytes_(n.toString(16).padStart(len * 2, '0'));
   if (res.length !== len) throw new Error('number too large');
   return res;
@@ -75,7 +82,7 @@ export function numberToBytesLE(n: number | bigint, len: number): Uint8Array {
 }
 // Unpadded, rarely used
 export function numberToVarBytesBE(n: number | bigint): Uint8Array {
-  return hexToBytes_(numberToHexUnpadded(abignumer(n)));
+  return hexToBytes_(numberToHexUnpadded(abignumber(n)));
 }
 
 // Compares 2 u8a-s in kinda constant time
@@ -181,7 +188,7 @@ type Pred<T> = (v: Uint8Array) => T | undefined;
 export function createHmacDrbg<T>(
   hashLen: number,
   qByteLen: number,
-  hmacFn: (key: Uint8Array, ...messages: Uint8Array[]) => Uint8Array
+  hmacFn: (key: Uint8Array, message: Uint8Array) => Uint8Array
 ): (seed: Uint8Array, predicate: Pred<T>) => T {
   anumber(hashLen, 'hashLen');
   anumber(qByteLen, 'qByteLen');
@@ -201,7 +208,7 @@ export function createHmacDrbg<T>(
     k.fill(0);
     i = 0;
   };
-  const h = (...b: Uint8Array[]) => hmacFn(k, v, ...b); // hmac(k)(v, ...values)
+  const h = (...msgs: Uint8Array[]) => hmacFn(k, concatBytes_(v, ...msgs)); // hmac(k)(v, ...values)
   const reseed = (seed = NULL) => {
     // HMAC-DRBG reseed() function. Steps D-G
     k = h(byte0, seed); // k = hmac(k || v || 0x00 || seed)
