@@ -10,6 +10,18 @@
     "abstract",
     "src"
   ],
+  "dependencies": {
+    "@noble/hashes": "2.0.0-beta.4"
+  },
+  "devDependencies": {
+    "@paulmillr/jsbt": "0.4.1",
+    "@types/node": "24.2.1",
+    "fast-check": "4.2.0",
+    "micro-bmark": "0.4.2",
+    "micro-should": "0.5.3",
+    "prettier": "3.6.2",
+    "typescript": "5.9.2"
+  },
   "scripts": {
     "bench": "npm run bench:install; cd test/benchmark; node secp256k1.ts; node curves.ts; node utils.ts; node bls.ts",
     "bench:install": "cd test/benchmark; npm install; npm install ../.. --install-links",
@@ -31,18 +43,6 @@
     "url": "git+https://github.com/paulmillr/noble-curves.git"
   },
   "license": "MIT",
-  "dependencies": {
-    "@noble/hashes": "2.0.0-beta.4"
-  },
-  "devDependencies": {
-    "@paulmillr/jsbt": "0.4.1",
-    "@types/node": "24.2.1",
-    "fast-check": "4.2.0",
-    "micro-bmark": "0.4.2",
-    "micro-should": "0.5.3",
-    "prettier": "3.6.2",
-    "typescript": "5.9.2"
-  },
   "sideEffects": false,
   "type": "module",
   "main": "index.js",
@@ -51,8 +51,6 @@
     "node": ">= 20.19.0"
   },
   "keywords": [
-    "elliptic",
-    "curve",
     "cryptography",
     "secp256k1",
     "ed25519",
@@ -71,9 +69,7 @@
     "ecc",
     "ecdsa",
     "eddsa",
-    "weierstrass",
-    "montgomery",
-    "edwards",
+    "oprf",
     "schnorr",
     "fft"
   ],
