@@ -3,7 +3,7 @@ import { sha256 } from '@noble/hashes/sha2.js';
 import { Field as Fp, validateField } from '../src/abstract/modular.ts';
 import { poseidon } from '../src/abstract/poseidon.ts';
 import * as u from '../src/utils.ts';
-import { asciiToBytes } from '../src/utils.ts';
+import { asafenumber, asciiToBytes } from '../src/utils.ts';
 
 // Poseidon hash https://docs.starkware.co/starkex/stark-curve.html
 export const Fp253 = Fp(
@@ -41,8 +41,8 @@ const MDS_SMALL = [
 
 export function poseidonBasic(opts, mds) {
   validateField(opts.Fp);
-  if (!Number.isSafeInteger(opts.rate) || !Number.isSafeInteger(opts.capacity))
-    throw new Error(`Wrong poseidon opts: ${opts}`);
+  asafenumber(opts.rate);
+  asafenumber(opts.capacity);
   const m = opts.rate + opts.capacity;
   const rounds = opts.roundsFull + opts.roundsPartial;
   const roundConstants = [];
@@ -66,8 +66,8 @@ export function poseidonBasic(opts, mds) {
 }
 
 export function poseidonCreate(opts, mdsAttempt = 0) {
+  asafenumber(mdsAttempt, 'mdsAttempt');
   const m = opts.rate + opts.capacity;
-  if (!Number.isSafeInteger(mdsAttempt)) throw new Error(`Wrong mdsAttempt=${mdsAttempt}`);
   return poseidonBasic(opts, _poseidonMDS(opts.Fp, 'HadesMDS', m, mdsAttempt));
 }
 
