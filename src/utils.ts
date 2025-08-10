@@ -17,7 +17,7 @@ export {
   concatBytes,
   hexToBytes,
   isBytes,
-  randomBytes,
+  randomBytes
 } from '@noble/hashes/utils.js';
 const _0n = /* @__PURE__ */ BigInt(0);
 const _1n = /* @__PURE__ */ BigInt(1);
@@ -194,7 +194,7 @@ export function createHmacDrbg<T>(
   anumber(qByteLen, 'qByteLen');
   if (typeof hmacFn !== 'function') throw new Error('hmacFn must be a function');
   const u8n = (len: number): Uint8Array => new Uint8Array(len); // creates Uint8Array
-  const NULL = u8n(0);
+  const NULL = Uint8Array.of();
   const byte0 = Uint8Array.of(0x00);
   const byte1 = Uint8Array.of(0x01);
   const _maxDrbgIters = 1000;
