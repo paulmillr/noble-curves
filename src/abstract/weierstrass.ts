@@ -1677,11 +1677,11 @@ export function ecdsa(
 }
 
 // TODO: remove everything below
-/** @deprecated */
+/** @deprecated use ECDSASignature */
 export type SignatureType = ECDSASignature;
-/** @deprecated */
+/** @deprecated use ECDSASigRecovered */
 export type RecoveredSignatureType = ECDSASigRecovered;
-/** @deprecated */
+/** @deprecated switch to Uint8Array signatures in format 'compact' */
 export type SignatureLike = { r: bigint; s: bigint };
 export type ECDSAExtraEntropy = Hex | boolean;
 /** @deprecated use `ECDSAExtraEntropy` */
