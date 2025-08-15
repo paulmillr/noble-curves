@@ -1,6 +1,6 @@
 {
   "name": "@noble/curves",
-  "version": "1.9.5",
+  "version": "1.9.7",
   "exports": {
     ".": "./src/index.ts",
     "./abstract/bls.js": "./src/abstract/bls.ts",
