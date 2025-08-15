@@ -1683,7 +1683,8 @@ export type SignatureType = ECDSASignature;
 export type RecoveredSignatureType = ECDSASigRecovered;
 /** @deprecated */
 export type SignatureLike = { r: bigint; s: bigint };
-/** @deprecated use `Uint8Array | boolean` */
+export type ECDSAExtraEntropy = Hex | boolean;
+/** @deprecated use `ECDSAExtraEntropy` */
 export type Entropy = Hex | boolean;
 export type BasicWCurve<T> = BasicCurve<T> & {
   // Params: a, b
