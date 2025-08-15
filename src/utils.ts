@@ -104,7 +104,7 @@ export function copyBytes(bytes: Uint8Array): Uint8Array {
 /**
  * Decodes 7-bit ASCII string to Uint8Array, throws on non-ascii symbols
  * Should be safe to use for things expected to be ASCII.
- * Returns exact same result as utf8ToBytes for ASCII or throws.
+ * Returns exact same result as `TextEncoder` for ASCII or throws.
  */
 export function asciiToBytes(ascii: string): Uint8Array {
   return Uint8Array.from(ascii, (c, i) => {
