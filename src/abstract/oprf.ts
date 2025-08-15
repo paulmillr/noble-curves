@@ -433,7 +433,7 @@ export function createORPF<P extends CurvePoint<any, P>>(opts: OPRFOpts<P>): OPR
 
   function deriveKeyPair(ctx: Bytes, seed: Bytes, info: Bytes) {
     const dst = concatBytes(asciiToBytes('DeriveKeyPair'), ctx);
-    const msg = concatBytes(seed, encode(info), new Uint8Array([0]));
+    const msg = concatBytes(seed, encode(info), Uint8Array.of(0));
     for (let counter = 0; counter <= 255; counter++) {
       msg[msg.length - 1] = counter;
       const skS = opts.hashToScalar(msg, { DST: dst });

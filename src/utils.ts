@@ -17,7 +17,7 @@ export {
   concatBytes,
   hexToBytes,
   isBytes,
-  randomBytes
+  randomBytes,
 } from '@noble/hashes/utils.js';
 const _0n = /* @__PURE__ */ BigInt(0);
 const _1n = /* @__PURE__ */ BigInt(1);
@@ -209,7 +209,7 @@ export function createHmacDrbg<T>(
     i = 0;
   };
   const h = (...msgs: Uint8Array[]) => hmacFn(k, concatBytes_(v, ...msgs)); // hmac(k)(v, ...values)
-  const reseed = (seed = NULL) => {
+  const reseed = (seed: Uint8Array = NULL) => {
     // HMAC-DRBG reseed() function. Steps D-G
     k = h(byte0, seed); // k = hmac(k || v || 0x00 || seed)
     v = h(); // v = hmac(k || v)
@@ -230,7 +230,7 @@ export function createHmacDrbg<T>(
     }
     return concatBytes_(...out);
   };
-  const genUntil = (seed: Uint8Array<any>, pred: Pred<T>): T => {
+  const genUntil = (seed: Uint8Array, pred: Pred<T>): T => {
     reset();
     reseed(seed); // Steps D-G
     let res: T | undefined = undefined; // Step H: grind until k is in [1..n-1]
