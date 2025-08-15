@@ -1,4 +1,3 @@
-import { bytesToUtf8, utf8ToBytes } from '@noble/hashes/utils.js';
 import * as fc from 'fast-check';
 import { describe, should } from 'micro-should';
 import { deepStrictEqual as eql, throws } from 'node:assert';
@@ -93,7 +92,7 @@ describe('utils', () => {
       '`',
     ];
     for (const s of strings) {
-      eql(asciiToBytes(s), utf8ToBytes(s));
+      eql(asciiToBytes(s), new TextEncoder().encode(s));
     }
     const UTF8 = [
       '┌─────',
@@ -123,11 +122,11 @@ describe('utils', () => {
       new Uint8Array([0xe2, 0x82, 0xac]),
     ];
     for (const b of bytesOK) {
-      const s = bytesToUtf8(b);
-      eql(asciiToBytes(s), utf8ToBytes(s));
+      const s = new TextDecoder().decode(b);
+      eql(asciiToBytes(s), new TextEncoder().encode(s));
     }
     for (const b of bytesFAIL) {
-      const s = bytesToUtf8(b);
+      const s = new TextDecoder().decode(b);
       throws(() => asciiToBytes(s));
     }
   });
