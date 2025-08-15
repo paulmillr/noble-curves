@@ -1,12 +1,9 @@
 node_modules
+*.tgz
 /*.js
-/abstract
-/esm
-/cjs
+*.js.map
 *.d.ts
 *.d.ts.map
-*.js.map
-*.tgz
 /test/build
 /test/compiled
-.vscode/settings.json
+/abstract
