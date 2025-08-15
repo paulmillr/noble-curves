@@ -159,7 +159,7 @@ describe('X25519 RFC7748 ECDH', () => {
         '77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a'
       );
       const edPublic = ed25519.getPublicKey(edSecret);
-      const xPrivate = ed25519.utils.toMontgomeryPriv(edSecret);
+      const xPrivate = ed25519.utils.toMontgomerySecret(edSecret);
       eql(bytesToHex(xPrivate), 'a8cd44eb8e93319c0570bc11005c0e0189d34ff02f6c17773411ad191293c94f');
       const xPublic = ed25519.utils.toMontgomery(edPublic);
       eql(bytesToHex(xPublic), 'ed7749b4d989f6957f3bfde6c56767e988e21c9f8784d91d610011cd553f9b06');
@@ -168,7 +168,7 @@ describe('X25519 RFC7748 ECDH', () => {
     should('edwardsToMontgomery should produce correct keyPair', () => {
       const edSecret = ed25519.utils.randomSecretKey();
       const edPublic = ed25519.getPublicKey(edSecret);
-      const xSecret = ed25519.utils.toMontgomeryPriv(edSecret);
+      const xSecret = ed25519.utils.toMontgomerySecret(edSecret);
       const expectedXPublic = x25519.getPublicKey(xSecret);
       const xPublic = ed25519.utils.toMontgomery(edPublic);
       eql(xPublic, expectedXPublic);
@@ -181,11 +181,11 @@ describe('X25519 RFC7748 ECDH', () => {
       const edPublic2 = ed25519.getPublicKey(edSecret2);
       eql(
         x25519.getSharedSecret(
-          ed25519.utils.toMontgomeryPriv(edSecret1),
+          ed25519.utils.toMontgomerySecret(edSecret1),
           ed25519.utils.toMontgomery(edPublic2)
         ),
         x25519.getSharedSecret(
-          ed25519.utils.toMontgomeryPriv(edSecret2),
+          ed25519.utils.toMontgomerySecret(edSecret2),
           ed25519.utils.toMontgomery(edPublic1)
         )
       );

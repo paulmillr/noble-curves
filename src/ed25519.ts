@@ -533,9 +533,9 @@ export function edwardsToMontgomeryPub(edwardsPub: Hex): Uint8Array {
 /** @deprecated use `ed25519.utils.toMontgomery` */
 export const edwardsToMontgomery: typeof edwardsToMontgomeryPub = edwardsToMontgomeryPub;
 
-/** @deprecated use `ed25519.utils.toMontgomeryPriv` */
+/** @deprecated use `ed25519.utils.toMontgomerySecret` */
 export function edwardsToMontgomeryPriv(edwardsPriv: Uint8Array): Uint8Array {
-  return ed25519.utils.toMontgomeryPriv(ensureBytes('pub', edwardsPriv));
+  return ed25519.utils.toMontgomerySecret(ensureBytes('pub', edwardsPriv));
 }
 
 /** @deprecated use `ristretto255.Point` */

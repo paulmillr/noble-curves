@@ -175,10 +175,10 @@ export interface EdDSA {
      * ```js
      * const someonesPub = x25519.getPublicKey(x25519.utils.randomSecretKey());
      * const aPriv = ed25519.utils.randomSecretKey();
-     * x25519.getSharedSecret(ed25519.utils.toMontgomeryPriv(aPriv), someonesPub)
+     * x25519.getSharedSecret(ed25519.utils.toMontgomerySecret(aPriv), someonesPub)
      * ```
      */
-    toMontgomeryPriv: (privateKey: Uint8Array) => Uint8Array;
+    toMontgomerySecret: (privateKey: Uint8Array) => Uint8Array;
     getExtendedPublicKey: (key: Hex) => {
       head: Uint8Array;
       prefix: Uint8Array;
@@ -814,7 +814,7 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
       return Fp.toBytes(u);
     },
 
-    toMontgomeryPriv(secretKey: Uint8Array): Uint8Array {
+    toMontgomerySecret(secretKey: Uint8Array): Uint8Array {
       const size = lengths.secretKey;
       abytes(secretKey, size);
       const hashed = cHash(secretKey.subarray(0, size));

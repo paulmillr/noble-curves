@@ -124,7 +124,7 @@ describe('xeddsa25519', () => {
     for (let i = 0; i < 50; i++) {
       const msg = randomBytes(64);
       // x25519 can generate invalid U
-      const secret = ed25519.utils.toMontgomeryPriv(ed25519.utils.randomSecretKey());
+      const secret = ed25519.utils.toMontgomerySecret(ed25519.utils.randomSecretKey());
       const pub = x25519.getPublicKey(secret);
       const signature = xeddsa25519.sign(secret, msg);
       deepStrictEqual(xeddsa25519.verify(pub, msg, signature), true);
