@@ -1709,6 +1709,8 @@ export type VerOpts = ECDSAVerifyOpts;
 export type ProjPointType<T> = WeierstrassPoint<T>;
 /** @deprecated use WeierstrassPointCons */
 export type ProjConstructor<T> = WeierstrassPointCons<T>;
+/** @deprecated use ECDSASignatureCons */
+export type SignatureConstructor = ECDSASignatureCons;
 
 // TODO: remove
 export type CurvePointsType<T> = BasicWCurve<T> & {
