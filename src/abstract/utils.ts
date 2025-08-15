@@ -12,6 +12,26 @@ export type PrivKey = u.PrivKey;
 export type CHash = u.CHash;
 /** @deprecated moved to `@noble/curves/utils.js` */
 export type FHash = u.FHash;
+
+/** @deprecated moved to `@noble/curves/utils.js` */
+export const abytes: typeof u.abytes = u.abytes;
+/** @deprecated moved to `@noble/curves/utils.js` */
+export const anumber: typeof u.anumber = u.anumber;
+/** @deprecated moved to `@noble/curves/utils.js` */
+export const bytesToHex: typeof u.bytesToHex = u.bytesToHex;
+/** @deprecated moved to `@noble/curves/utils.js` */
+export const bytesToUtf8: typeof u.bytesToUtf8 = u.bytesToUtf8;
+/** @deprecated moved to `@noble/curves/utils.js` */
+export const concatBytes: typeof u.concatBytes = u.concatBytes;
+/** @deprecated moved to `@noble/curves/utils.js` */
+export const hexToBytes: typeof u.hexToBytes = u.hexToBytes;
+/** @deprecated moved to `@noble/curves/utils.js` */
+export const isBytes: typeof u.isBytes = u.isBytes;
+/** @deprecated moved to `@noble/curves/utils.js` */
+export const randomBytes: typeof u.randomBytes = u.randomBytes;
+/** @deprecated moved to `@noble/curves/utils.js` */
+export const utf8ToBytes: typeof u.utf8ToBytes = u.utf8ToBytes;
+
 /** @deprecated moved to `@noble/curves/utils.js` */
 export const abool: typeof u.abool = u.abool;
 /** @deprecated moved to `@noble/curves/utils.js` */
@@ -54,10 +74,6 @@ export const createHmacDrbg: typeof u.createHmacDrbg = u.createHmacDrbg;
 export const notImplemented: typeof u.notImplemented = u.notImplemented;
 /** @deprecated moved to `@noble/curves/utils.js` */
 export const memoized: typeof u.memoized = u.memoized;
-/** @deprecated moved to `@noble/curves/utils.js` */
-export const utf8ToBytes: typeof u.utf8ToBytes = u.utf8ToBytes;
-/** @deprecated moved to `@noble/curves/utils.js` */
-export const bytesToUtf8: typeof u.bytesToUtf8 = u.bytesToUtf8;
 /** @deprecated moved to `@noble/curves/utils.js` */
 export const validateObject: typeof u.validateObject = u.validateObject;
 /** @deprecated moved to `@noble/curves/utils.js` */
