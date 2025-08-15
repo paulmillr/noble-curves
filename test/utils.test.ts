@@ -107,8 +107,8 @@ describe('utils', () => {
     for (const s of UTF8) throws(() => asciiToBytes(s));
     const bytesOK = [
       new Uint8Array([72, 101, 108, 108, 111]),
-      new Uint8Array([0]),
-      new Uint8Array([]),
+      Uint8Array.of(0),
+      Uint8Array.of(),
       new Uint8Array([127]),
     ];
     const bytesFAIL = [

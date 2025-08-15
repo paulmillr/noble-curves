@@ -355,7 +355,7 @@ describe('basic curve tests', () => {
         }
         throws(() => C.getPublicKey('key'), "'key'");
         throws(() => C.getPublicKey({}));
-        throws(() => C.getPublicKey(new Uint8Array([])));
+        throws(() => C.getPublicKey(Uint8Array.of()));
         throws(() => C.getPublicKey(Array(32).fill(1)));
       });
 
@@ -388,7 +388,7 @@ describe('basic curve tests', () => {
         //   )
         // );
         should('.verify() should verify empty signatures', () => {
-          const msg = new Uint8Array([]);
+          const msg = Uint8Array.of();
           const k = C.keygen();
           const sig = C.sign(msg, k.secretKey);
           eql(
@@ -399,7 +399,7 @@ describe('basic curve tests', () => {
         });
 
         should('.sign() type tests', () => {
-          const msg = new Uint8Array([]);
+          const msg = Uint8Array.of();
           const k = C.keygen();
           C.sign(msg, k.secretKey);
           for (let [item, repr_] of getTypeTests()) {
@@ -513,7 +513,7 @@ describe('basic curve tests', () => {
       }
 
       // NOTE: fails for ed, because of empty message. Since we convert it to scalar,
-      // need to check what other implementations do. Empty message != new Uint8Array([0]), but what scalar should be in that case?
+      // need to check what other implementations do. Empty message != Uint8Array.of(0), but what scalar should be in that case?
       // should('should not verify signature with wrong message', () => {
       //   fc.assert(
       //     fc.property(
