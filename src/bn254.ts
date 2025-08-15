@@ -35,7 +35,7 @@ because it at least has specs:
     - https://github.com/arkworks-rs/curves/blob/master/bn254/src/lib.rs
 - Python implementations use different towers and produce different Fp12 outputs:
     - https://github.com/ethereum/py_pairing
-    - https://github.com/ethereum/execution-specs/blob/master/src/ethereum/crypto/alt_bn128.py
+    - https://github.com/ethereum/py_ecc/tree/main/py_ecc/bn128
 - Points are encoded differently in different implementations
 
 ### Params
