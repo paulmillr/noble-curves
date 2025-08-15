@@ -28,7 +28,6 @@
     "build": "tsc",
     "build:release": "npx --no @paulmillr/jsbt esbuild test/build",
     "build:clean": "rm {.,abstract}/*.{js,d.ts,d.ts.map,js.map} 2> /dev/null",
-    "lint": "prettier --check 'src/**/*.{js,ts}' 'test/*.{js,ts}'",
     "format": "prettier --write 'src/**/*.{js,ts}' 'test/*.{js,ts}'",
     "test": "node --experimental-strip-types --disable-warning=ExperimentalWarning test/index.ts",
     "test:bun": "bun test/index.ts",
