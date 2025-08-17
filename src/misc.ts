@@ -16,15 +16,13 @@ import {
   type EdwardsPoint,
 } from './abstract/edwards.ts';
 import { ecdsa, weierstrass, type ECDSA, type WeierstrassOpts } from './abstract/weierstrass.ts';
-import { bls12_381_Fr } from './bls12-381.ts';
-import { bn254_Fr } from './bn254.ts';
 import { asciiToBytes } from './utils.ts';
 
 // Jubjub curves have 𝔽p over scalar fields of other curves. They are friendly to ZK proofs.
-// jubjub Fp = bls n. babyjubjub Fp = bn254 n.
-// verify manually, check bls12-381.ts and bn254.ts.
+
+// jubjub p = bls n, verify in bls12-381.ts
 const jubjub_CURVE: EdwardsOpts = {
-  p: bls12_381_Fr.ORDER,
+  p: BigInt('0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001'),
   n: BigInt('0xe7db4ea6533afa906673b0101343b00a6682093ccc81082d0970e5ed6f72cb7'),
   h: BigInt(8),
   a: BigInt('0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000000'),
@@ -35,8 +33,9 @@ const jubjub_CURVE: EdwardsOpts = {
 /** Curve over scalar field of bls12-381. jubjub Fp = bls n */
 export const jubjub: EdDSA = /* @__PURE__ */ eddsa(edwards(jubjub_CURVE), sha512);
 
+// babyjubjub p = bn254 n, verify in bn254.ts
 const babyjubjub_CURVE: EdwardsOpts = {
-  p: bn254_Fr.ORDER,
+  p: BigInt('0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001'),
   n: BigInt('0x30644e72e131a029b85045b68181585d59f76dc1c90770533b94bee1c9093788'),
   h: BigInt(8),
   a: BigInt('168700'),
