@@ -10,7 +10,7 @@ Audited & minimal JS implementation of elliptic curve cryptography.
 - ✍️ ECDH, hash-to-curve, OPRF, Poseidon ZK-friendly hash
 - 🔖 Non-repudiation (SUF-CMA, SBS) & consensus-friendliness (ZIP215) in ed25519, ed448
 - 🥈 Optional, friendly wrapper over native WebCrypto
-- 🪶 36KB (gzipped) including bundled hashes, 11KB for single-curve build
+- 🪶 29KB (gzipped) including bundled hashes, 11KB for single-curve build
 
 Curves have 5kb sister projects
 [secp256k1](https://github.com/paulmillr/noble-secp256k1) & [ed25519](https://github.com/paulmillr/noble-ed25519).
@@ -40,8 +40,6 @@ Take a glance at [GitHub Discussions](https://github.com/paulmillr/noble-curves/
 > `npm install @noble/curves`
 
 > `deno add jsr:@noble/curves`
-
-> `deno doc jsr:@noble/curves` # command-line documentation
 
 We support all major platforms and runtimes.
 For React Native, you may need a [polyfill for getRandomValues](https://github.com/LinusU/react-native-get-random-values).
