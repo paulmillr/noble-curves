@@ -1,4 +1,4 @@
-import { describe, should } from 'micro-should';
+import { describe, should } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql } from 'node:assert';
 import * as mod from '../src/abstract/modular.ts';
 import * as poseidon from '../src/abstract/poseidon.ts';

@@ -1,5 +1,5 @@
 import * as fc from 'fast-check';
-import { describe, should } from 'micro-should';
+import { describe, should } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql, throws } from 'node:assert';
 import * as fft from '../src/abstract/fft.ts';
 import { bls12_381 } from '../src/bls12-381.ts';

@@ -1,4 +1,4 @@
-import { describe, should } from 'micro-should';
+import { describe, should } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql, notDeepEqual, throws } from 'node:assert';
 import * as mod from '../src/abstract/modular.ts';
 import { ristretto255_oprf } from '../src/ed25519.ts';

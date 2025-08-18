@@ -1,5 +1,5 @@
 import { sha256 } from '@noble/hashes/sha2.js';
-import { describe, should } from 'micro-should';
+import { describe, should } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql, notDeepStrictEqual, throws } from 'node:assert';
 import { Field } from '../src/abstract/modular.ts';
 import { ecdsa, weierstrass } from '../src/abstract/weierstrass.ts';

@@ -1,6 +1,6 @@
 import { sha512 } from '@noble/hashes/sha2.js';
 import { randomBytes } from '@noble/hashes/utils.js';
-import { describe, should } from 'micro-should';
+import { describe, should } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual } from 'node:assert';
 import { mod } from '../src/abstract/modular.ts';
 import { ed25519, x25519 } from '../src/ed25519.ts';

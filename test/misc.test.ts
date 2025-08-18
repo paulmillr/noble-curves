@@ -1,4 +1,4 @@
-import { describe, should } from 'micro-should';
+import { describe, should } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql, throws } from 'node:assert';
 import { jubjub, jubjub_findGroupHash } from '../src/misc.ts';
 const Point = jubjub.Point;

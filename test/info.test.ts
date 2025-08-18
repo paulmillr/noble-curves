@@ -1,5 +1,5 @@
 import { isBytes } from '@noble/hashes/utils.js';
-import { describe, should } from 'micro-should';
+import { describe, should } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql } from 'node:assert';
 import { randomBytes } from 'node:crypto';
 import { ed25519, x25519 } from '../src/ed25519.ts';

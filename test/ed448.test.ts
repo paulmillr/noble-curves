@@ -5,7 +5,7 @@ import {
   randomBytes,
 } from '@noble/hashes/utils.js';
 import * as fc from 'fast-check';
-import { describe, should } from 'micro-should';
+import { describe, should } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql, throws } from 'node:assert';
 import { ed448, ed448ph, x448 } from '../src/ed448.ts';
 import { numberToBytesLE } from '../src/utils.ts';

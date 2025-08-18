@@ -1,7 +1,7 @@
 import { sha256, sha512 } from '@noble/hashes/sha2.js';
 import { shake256 } from '@noble/hashes/sha3.js';
 import { randomBytes } from '@noble/hashes/utils.js';
-import mark from 'micro-bmark';
+import mark from '@paulmillr/jsbt/bench.js';
 import { hash_to_field } from '../../src/abstract/hash-to-curve.ts';
 import * as md from '../../src/abstract/modular.ts';
 import { ed25519, ristretto255, ristretto255_hasher } from '../../src/ed25519.ts';
@@ -62,7 +62,7 @@ const DecafPoint = decaf448.Point;
   await mark('multiply', () => RistrettoPoint.BASE.multiply(priv));
   await mark('encode', () => RistrettoPoint.BASE.toBytes());
   await mark('decode', () => RistrettoPoint.fromBytes(encoded));
-  await mark('ristretto255_hasher', 1000, () =>
+  await mark('ristretto255_hasher', () =>
     ristretto255_hasher.hashToCurve(msg, { DST: 'ristretto255_XMD:SHA-512_R255MAP_RO_' })
   );
 

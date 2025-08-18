@@ -1,5 +1,5 @@
 import * as fc from 'fast-check';
-import { describe, should } from 'micro-should';
+import { describe, should } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual } from 'node:assert';
 import {
   _splitEndoScalar as splitScalar,

@@ -1,5 +1,5 @@
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
-import { describe, should } from 'micro-should';
+import { describe, should } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql } from 'node:assert';
 import { ed25519, ed25519ctx, ed25519ph, x25519 } from '../src/ed25519.ts';
 import { ed448 } from '../src/ed448.ts';

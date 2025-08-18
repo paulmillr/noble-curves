@@ -1,10 +1,10 @@
-import mark from 'micro-bmark';
+import mark from '@paulmillr/jsbt/bench.js';
 import { schnorr, secp256k1 } from '../../src/secp256k1.ts';
 import { generateData, title } from './_shared.ts';
 
 (async () => {
   title('secp256k1');
-  await mark('init', 1, () => secp256k1.Point.BASE.precompute(8, false));
+  await mark('init', () => secp256k1.Point.BASE.precompute(8, false), 1);
   const d = generateData(secp256k1);
   await mark('getPublicKey', () => secp256k1.getPublicKey(d.priv));
   await mark('sign', () => secp256k1.sign(d.msg, d.priv));

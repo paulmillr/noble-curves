@@ -1,6 +1,6 @@
 import { sha512 } from '@noble/hashes/sha2.js';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
-import { describe, should } from 'micro-should';
+import { describe, should } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql, throws } from 'node:assert';
 import { ed25519ctx, ristretto255, ristretto255_hasher } from '../src/ed25519.ts';
 import { decaf448, decaf448_hasher, ed448 } from '../src/ed448.ts';

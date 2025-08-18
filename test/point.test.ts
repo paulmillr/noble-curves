@@ -1,5 +1,5 @@
 import * as fc from 'fast-check';
-import { describe, should } from 'micro-should';
+import { describe, should } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql, throws } from 'node:assert';
 import { pippenger, precomputeMSMUnsafe } from '../src/abstract/curve.ts';
 import { invert, mod } from '../src/abstract/modular.ts';

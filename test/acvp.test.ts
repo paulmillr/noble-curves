@@ -1,7 +1,7 @@
 import { sha1 } from '@noble/hashes/legacy.js';
 import { sha224, sha256, sha384, sha512, sha512_224, sha512_256 } from '@noble/hashes/sha2.js';
 import { sha3_224, sha3_256, sha3_384, sha3_512 } from '@noble/hashes/sha3.js';
-import { describe, should } from 'micro-should';
+import { describe, should } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql } from 'node:assert';
 import { ecdsa } from '../src/abstract/weierstrass.ts';
 import { ed25519, ed25519ctx, ed25519ph } from '../src/ed25519.ts';

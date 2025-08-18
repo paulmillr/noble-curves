@@ -10,7 +10,7 @@ import {
   turboshake256,
 } from '@noble/hashes/sha3-addons.js';
 import { sha3_224, sha3_256, sha3_384, sha3_512, shake128, shake256 } from '@noble/hashes/sha3.js';
-import { describe, should } from 'micro-should';
+import { describe, should } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql, throws } from 'node:assert';
 import { randomBytes } from 'node:crypto';
 import { ecdh, ecdsa } from '../src/abstract/weierstrass.ts';
