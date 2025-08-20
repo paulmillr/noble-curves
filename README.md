@@ -326,6 +326,9 @@ import { p256 } from './src/webcrypto.ts';
 })();
 ```
 
+Check out [micro-key-producer](https://github.com/paulmillr/micro-key-producer) for
+pure JS key conversion utils.
+
 ### BLS signatures, bls12-381, bn254 aka alt_bn128
 
 ```ts
@@ -747,7 +750,7 @@ NIST prohibits classical cryptography (RSA, DSA, ECDSA, ECDH) [after 2035](https
 ## Speed
 
 ```sh
-npm run bench:install && npm run bench
+npm run bench
 ```
 
 noble-curves spends 10+ ms to generate 20MB+ of base point precomputes.
@@ -1000,7 +1003,7 @@ Upgrading from [@noble/bls12-381](https://github.com/paulmillr/noble-bls12-381):
 
 - `npm install && npm run build && npm test` will build the code and run tests.
 - `npm run lint` / `npm run format` will run linter / fix linter issues.
-- `npm run bench` will run benchmarks, which may need their deps first (`npm run bench:install`)
+- `npm run bench` will run benchmarks
 - `npm run build:release` will build single file
 
 Check out [github.com/paulmillr/guidelines](https://github.com/paulmillr/guidelines)
