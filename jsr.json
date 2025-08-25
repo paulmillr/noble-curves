@@ -1,6 +1,6 @@
 {
   "name": "@noble/curves",
-  "version": "2.0.0-beta.3",
+  "version": "2.0.0",
   "exports": {
     ".": "./src/index.ts",
     "./abstract/bls.js": "./src/abstract/bls.ts",
@@ -25,7 +25,7 @@
     "./webcrypto.js": "./src/webcrypto.ts"
   },
   "imports": {
-    "@noble/hashes": "jsr:@noble/hashes@^2.0.0-beta.5"
+    "@noble/hashes": "jsr:@noble/hashes@^2.0.0"
   },
   "publish": {
     "include": [
