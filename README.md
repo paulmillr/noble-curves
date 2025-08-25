@@ -868,15 +868,29 @@ Supported node.js versions:
 - v2 (2025-08): v20.19+ (ESM-only)
 - v1 (2023-04): v14.21+ (ESM & CJS)
 
-### curves v1 to curves v2
+### Changelog of curves v1 to curves v2
 
 v2 massively simplifies internals, improves security, reduces bundle size and lays path for the future.
 We tried to keep v2 as much backwards-compatible as possible.
 
-Submodule paths now require `.js` extension e.g. `curves/ed25519` => `curves/ed25519.js`.
-This allows usage in bundler-less environments without source maps
+To simplify upgrading, upgrade first to curves 1.9.x. It would show deprecations in vscode-like text editor.
+Fix them first.
 
-**Logic** changes:
+- The package is now ESM-only. ESM can finally be loaded from common.js on node v20.19+
+- `.js` extension must be used for all modules
+    - Old: `@noble/curves/ed25519`
+    - New: `@noble/curves/ed25519.js`
+    - This simplifies working in browsers natively without transpilers
+
+New features:
+
+- webcrypto: create friendly noble-like wrapper over built-in WebCrypto
+- oprf: implement RFC 9497 OPRFs (oblivious pseudorandom functions)
+    - We support p256, p384, p521, ristretto255 and decaf448
+- weierstrass, edwards: add `isValidSecretKey`, `isValidPublicKey`
+- misc: add Brainpool curves: brainpoolP256r1, brainpoolP384r1, brainpoolP512r1
+
+Changes:
 
 - Most methods now expect Uint8Array, string hex inputs are prohibited
     - The change simplifies reasoning, improves security and reduces malleability
@@ -905,9 +919,9 @@ This allows usage in bundler-less environments without source maps
     - Remove unnecessary Fn argument in `pippenger`
 - modular changes:
     - Field#fromBytes() now validates elements to be in 0..order-1 range
-- Massive type renamings and improvements
+- Massively improve error messages, make them more descriptive
 
-**Renamings:**
+Renamings:
 
 - Module changes
     - `p256`, `p384`, `p521` modules have been moved into `nist`
@@ -930,8 +944,9 @@ This allows usage in bundler-less environments without source maps
     - edwardsToMontgomeryPriv => utils.toMontgomerySecret
 - Rename all curve-specific hash-to-curve methods to `*curve*_hasher`.
   Example: `secp256k1.hashToCurve` => `secp256k1_hasher.hashToCurve()`
+- Massive type renamings and improvements
 
-**Removed features:**
+Removed features:
 
 - Point#multiplyAndAddUnsafe, Point#hasEvenY
 - CURVE property with all kinds of random stuff. Point.CURVE() now replaces it, but only provides
