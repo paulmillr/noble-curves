@@ -1006,9 +1006,6 @@ Upgrading from [@noble/bls12-381](https://github.com/paulmillr/noble-bls12-381):
 - `npm run bench` will run benchmarks
 - `npm run build:release` will build single file
 
-Check out [github.com/paulmillr/guidelines](https://github.com/paulmillr/guidelines)
-for general coding practices and rules.
-
 See [paulmillr.com/noble](https://paulmillr.com/noble/)
 for useful resources, articles, documentation and demos
 related to the library.
