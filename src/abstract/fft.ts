@@ -77,6 +77,7 @@ function findGenerator(field: IField<bigint>) {
 }
 
 export type RootsOfUnity = {
+  info: { G: bigint; oddFactor: bigint; powerOfTwo: number };
   roots: (bits: number) => bigint[];
   brp(bits: number): bigint[];
   inverse(bits: number): bigint[];
@@ -121,6 +122,7 @@ export function rootsOfUnity(field: IField<bigint>, generator?: bigint): RootsOf
   // NOTE: we use bits instead of power, because power = 2**bits,
   // but power is not neccesary isPowerOfTwo(power)!
   return {
+    info: { G, powerOfTwo, oddFactor },
     roots: (bits: number): bigint[] => {
       const b = checkBits(bits);
       return precomputeRoots(b);
