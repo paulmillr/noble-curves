@@ -424,8 +424,12 @@ function createBlsSig<P, S>(
       // Before it was G.negate() in G2, now it's always pubKey.negate
       // e(P, -Q)===e(-P, Q)==e(P, Q)^-1. Negate can be done anywhere (as long it is done once per pair).
       // We just moving sign, but since pairing is multiplicative, we doing X * X^-1 = 1
-      const exp = pairingBatch([pair(P, Hm), pair(G, S)]);
-      return Fp12.eql(exp, Fp12.ONE);
+      try {
+        const exp = pairingBatch([pair(P, Hm), pair(G, S)]);
+        return Fp12.eql(exp, Fp12.ONE);
+      } catch {
+        return false;
+      }
     },
     // https://ethresear.ch/t/fast-verification-of-multiple-bls-signatures/5407
     // e(G, S) = e(G, SUM(n)(Si)) = MUL(n)(e(G, Si))
