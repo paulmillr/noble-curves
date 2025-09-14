@@ -33,6 +33,29 @@
     "test:node20": "cd test; npx tsc; node compiled/test/index.js",
     "test:coverage": "npm install --no-save c8@10.1.2 && npx c8 npm test"
   },
+  "exports": {
+    ".": "./index.js",
+    "./abstract/bls.js": "./abstract/bls.js",
+    "./abstract/curve.js": "./abstract/curve.js",
+    "./abstract/edwards.js": "./abstract/edwards.js",
+    "./abstract/fft.js": "./abstract/fft.js",
+    "./abstract/hash-to-curve.js": "./abstract/hash-to-curve.js",
+    "./abstract/modular.js": "./abstract/modular.js",
+    "./abstract/montgomery.js": "./abstract/montgomery.js",
+    "./abstract/oprf.js": "./abstract/oprf.js",
+    "./abstract/poseidon.js": "./abstract/poseidon.js",
+    "./abstract/tower.js": "./abstract/tower.js",
+    "./abstract/weierstrass.js": "./abstract/weierstrass.js",
+    "./bls12-381.js": "./bls12-381.js",
+    "./bn254.js": "./bn254.js",
+    "./ed448.js": "./ed448.js",
+    "./ed25519.js": "./ed25519.js",
+    "./misc.js": "./misc.js",
+    "./nist.js": "./nist.js",
+    "./secp256k1.js": "./secp256k1.js",
+    "./utils.js": "./utils.js",
+    "./webcrypto.js": "./webcrypto.js"
+  },
   "engines": {
     "node": ">= 20.19.0"
   },
