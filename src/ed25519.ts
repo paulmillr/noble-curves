@@ -186,8 +186,14 @@ const ELL2_C1 = /* @__PURE__ */ (() => (ed25519_CURVE_p + _3n) / _8n)(); // 1. c
 const ELL2_C2 = /* @__PURE__ */ (() => Fp.pow(_2n, ELL2_C1))(); // 2. c2 = 2^c1
 const ELL2_C3 = /* @__PURE__ */ (() => Fp.sqrt(Fp.neg(Fp.ONE)))(); // 3. c3 = sqrt(-1)
 
+/**
+ * RFC 9380 method `map_to_curve_elligator2_curve25519`. Experimental name: may be renamed later.
+ * @private
+ */
 // prettier-ignore
-function map_to_curve_elligator2_curve25519(u: bigint) {
+export function _map_to_curve_elligator2_curve25519(u: bigint): {
+  xMn: bigint, xMd: bigint, yMn: bigint, yMd: bigint
+} {
   const ELL2_C4 = (ed25519_CURVE_p - _5n) / _8n; // 4. c4 = (q - 5) / 8       # Integer arithmetic
   const ELL2_J = BigInt(486662);
 
@@ -234,7 +240,7 @@ function map_to_curve_elligator2_curve25519(u: bigint) {
 
 const ELL2_C1_EDWARDS = /* @__PURE__ */ (() => FpSqrtEven(Fp, Fp.neg(BigInt(486664))))(); // sgn0(c1) MUST equal 0
 function map_to_curve_elligator2_edwards25519(u: bigint) {
-  const { xMn, xMd, yMn, yMd } = map_to_curve_elligator2_curve25519(u); //  1.  (xMn, xMd, yMn, yMd) =
+  const { xMn, xMd, yMn, yMd } = _map_to_curve_elligator2_curve25519(u); //  1.  (xMn, xMd, yMn, yMd) =
   // map_to_curve_elligator2_curve25519(u)
   let xn = Fp.mul(xMn, yMd); //  2.  xn = xMn * yMd
   xn = Fp.mul(xn, ELL2_C1_EDWARDS); //  3.  xn = xn * c1
