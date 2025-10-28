@@ -975,6 +975,14 @@ describe('bls12-381 encoding', () => {
     );
   });
 
+
+  should('Fr toBytes + fromBytes roundtrip', () => {
+    const scalar = 42n;
+    const bytes = bls12_381.fields.Fr.toBytes(scalar);
+    eql(bytes, hexToBytes('000000000000000000000000000000000000000000000000000000000000002a'));
+    eql(bls12_381.fields.Fr.fromBytes(bytes), 42n);
+  });
+
   should('G1 toBytes + fromBytes roundtrip', () => {
     const priv = G1Point.BASE.multiply(42n);
     const publicKey = priv.toBytes(true);
