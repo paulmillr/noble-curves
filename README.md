@@ -352,7 +352,7 @@ const blss = bls12_381.shortSignatures;
 const publicKey2 = blss.getPublicKey(secretKey);
 const msgp2 = blss.hash(msg, 'BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_');
 const signature2 = blss.sign(msgp2, secretKey);
-const isValid2 = blss.verify(signature2, msgp2, publicKey);
+const isValid2 = blss.verify(signature2, msgp2, publicKey2);
 console.log({ publicKey2, signature2, isValid2 });
 
 // Aggregation
