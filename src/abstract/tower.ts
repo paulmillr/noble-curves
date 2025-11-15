@@ -10,7 +10,7 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { bitGet, bitLen, concatBytes, notImplemented } from '../utils.ts';
+import { bitGet, concatBytes, notImplemented } from '../utils.ts';
 import * as mod from './modular.ts';
 import type { WeierstrassPoint, WeierstrassPointCons } from './weierstrass.ts';
 
@@ -177,12 +177,10 @@ class _Field2 implements mod.IField<Fp2> {
       Fp2mulByB: Tower12Opts['Fp2mulByB'];
     }> = {}
   ) {
-    const ORDER = Fp.ORDER;
-    const FP2_ORDER = ORDER * ORDER;
     this.Fp = Fp;
-    this.ORDER = FP2_ORDER;
-    this.BITS = bitLen(FP2_ORDER);
-    this.BYTES = Math.ceil(bitLen(FP2_ORDER) / 8);
+    this.ORDER = Fp.ORDER * Fp.ORDER; // TODO: unused, but need to verify
+    this.BITS = 2 * Fp.BITS;
+    this.BYTES = 2 * Fp.BYTES;
     this.isLE = Fp.isLE;
     this.ZERO = { c0: Fp.ZERO, c1: Fp.ZERO };
     this.ONE = { c0: Fp.ONE, c1: Fp.ZERO };
@@ -202,10 +200,8 @@ class _Field2 implements mod.IField<Fp2> {
     return num;
   }
   isValid({ c0, c1 }: Fp2) {
-    function isValidC(num: bigint, ORDER: bigint) {
-      return typeof num === 'bigint' && _0n <= num && num < ORDER;
-    }
-    return isValidC(c0, this.ORDER) && isValidC(c1, this.ORDER);
+    const { Fp } = this;
+    return Fp.isValid(c0) && Fp.isValid(c1);
   }
   is0({ c0, c1 }: Fp2) {
     return this.Fp.is0(c0) && this.Fp.is0(c1);
