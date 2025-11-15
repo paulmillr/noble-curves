@@ -9,7 +9,7 @@ import { default as seda } from './vectors/bn254/seda.js';
 const CROSS_PATH_GZ = './vectors/bn254/cross1000.json.gz'; // bundler hint: readFileSync('./test/bn254/cross1000.json.gz')
 
 describe('bn254', () => {
-  const { Fp2, Fp6, Fp12 } = bn254.fields;
+  const { Fp, Fp2, Fp6, Fp12 } = bn254.fields;
   should('Fp2', () => {
     const x = {
       c0: 9175274256610746571769806138441460978067247223835479920885065774008687444157n,
@@ -19,6 +19,11 @@ describe('bn254', () => {
       c0: 18745010300259074081467171901089189864928626882998930881106784720284549917403n,
       c1: 6755404584462298611753346784665337222239198745905936344431516651379215797104n,
     };
+    eql(Fp2.isValid({ c0: 0n, c1: 0n }), true);
+    eql(Fp2.isValid(x), true);
+    eql(Fp2.isValid(y), true);
+    eql(Fp2.isValid({ c0: Fp.ORDER, c1: 0n }), false);
+    eql(Fp2.isValid({ c0: 0n, c1: Fp.ORDER }), false);
     const mul = Fp2.mul(x, y);
     eql(mul, {
       c0: 14915367931151687313527782314310395056617474070176176799315072532155545111131n,
