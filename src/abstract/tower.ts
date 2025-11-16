@@ -178,7 +178,7 @@ class _Field2 implements mod.IField<Fp2> {
     }> = {}
   ) {
     this.Fp = Fp;
-    this.ORDER = Fp.ORDER * Fp.ORDER; // TODO: unused, but need to verify
+    this.ORDER = Fp.ORDER * Fp.ORDER; // TODO: verify if it's unused
     this.BITS = 2 * Fp.BITS;
     this.BYTES = 2 * Fp.BYTES;
     this.isLE = Fp.isLE;
@@ -607,7 +607,7 @@ class _Field12 implements Fp12Bls {
     const { Fp } = Fp2;
     this.Fp6 = Fp6;
 
-    this.ORDER = Fp2.ORDER; // TODO: verify if it's unuesd
+    this.ORDER = Fp2.ORDER; // TODO: verify if it's unused
     this.BITS = 2 * Fp6.BITS;
     this.BYTES = 2 * Fp6.BYTES;
     this.isLE = Fp6.isLE;
