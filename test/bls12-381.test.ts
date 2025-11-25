@@ -975,7 +975,6 @@ describe('bls12-381 encoding', () => {
     );
   });
 
-
   should('Fr toBytes + fromBytes roundtrip', () => {
     const scalar = 42n;
     const bytes = bls12_381.fields.Fr.toBytes(scalar);

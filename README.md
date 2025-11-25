@@ -170,6 +170,23 @@ make sure to disable prehashing.
 > Previously, in noble-curves v1, `prehash: false` was the default.
 > Some other libraries (like libsecp256k1) have no prehashing.
 
+#### Recovering public keys from ECDSA signatures
+
+```js
+import { secp256k1 } from '@noble/curves/secp256k1.js';
+const { secretKey, publicKey } = curve.keygen();
+const msg = new TextEncoder().encode('hello noble');
+const sigRec = secp256k1.sign(msg, secretKey, { format: 'recovered' });
+const publicKey_ = secp256k1.recoverPublicKey(sigRec, msg); // == publicKey
+
+// recovered sig is compact sig with an extra byte
+const sigNoRec = secp256k1.sign(msg, secretKey, { format: 'compact' });
+// sigNoRec == sigRec.slice(1)
+
+// Signature instance
+const sigInstance = secp256k1.Signature.fromBytes(sigRec, 'recovered');
+```
+
 #### Hedged ECDSA with noise
 
 ```js
@@ -724,7 +741,7 @@ test-suite in the actual application that consumes the library.
 For this package, there is 1 dependency; and a few dev dependencies:
 
 - [noble-hashes](https://github.com/paulmillr/noble-hashes) provides cryptographic hashing functionality
-- micro-bmark, micro-should and jsbt are used for benchmarking / testing / build tooling and developed by the same author
+- jsbt is used for benchmarking / testing / build tooling and developed by the same author
 - prettier, fast-check and typescript are used for code quality / test generation / ts compilation. It's hard to audit their source code thoroughly and fully because of their size
 
 ### Randomness
@@ -895,13 +912,15 @@ Changes:
 - Most methods now expect Uint8Array, string hex inputs are prohibited
     - The change simplifies reasoning, improves security and reduces malleability
     - `Point.fromHex` now expects string-only hex inputs, use `Point.fromBytes` for Uint8Array
+- Many methods were renamed, upgrade to curves v1.9 first to highlight deprecated old names
 - Breaking changes of ECDSA (secp256k1, p256, p384...):
+    - To bring back old behavior, pass `{ prehash: false, lowS: false }` to sign / verify
     - sign, verify: Switch to **prehashed messages**. Instead of
       messageHash, the methods now expect unhashed message.
       To bring back old behavior, use option `{prehash: false}`
     - sign, verify: Switch to **lowS signatures** by default.
       This change doesn't affect secp256k1, which has been using lowS since beginning.
-      To bring back old behavior, use option `{lowS: true}`
+      To bring back old behavior, use option `{lowS: false}`
     - sign, verify: Switch to **Uint8Array signatures** (format: 'compact') by default.
     - verify: **der format must be explicitly specified** in `{format: 'der'}`.
       This reduces malleability
@@ -949,13 +968,13 @@ Renamings:
 Removed features:
 
 - Point#multiplyAndAddUnsafe, Point#hasEvenY
-- CURVE property with all kinds of random stuff. Point.CURVE() now replaces it, but only provides
+- `CURVE` property with all kinds of random stuff. Point.CURVE() now replaces it, but only provides
   curve parameters
 - Remove `pasta`, `bn254_weierstrass` (NOT pairing-based bn254) curves
+- utils.normPrivateKeyToScalar - use `Point.Fn.fromBytes`
 - Field.MASK
-- utils.normPrivateKeyToScalar
 
-### noble-secp256k1 v1 to curves v1
+### secp256k1 v1, ed25519 v1, bls12-381 v1 to curves v1
 
 Previously, the library was split into single-feature packages
 [noble-secp256k1](https://github.com/paulmillr/noble-secp256k1),
@@ -964,55 +983,26 @@ Previously, the library was split into single-feature packages
 
 Curves continue their original work. The single-feature packages changed their
 direction towards providing minimal 5kb implementations of cryptography,
-which means they have less features.
+which means they have less features. Separate bls package had been deprecated.
 
-- `getPublicKey`
-  - now produce 33-byte compressed signatures by default
-  - to use old behavior, which produced 65-byte uncompressed keys, set
-    argument `isCompressed` to `false`: `getPublicKey(priv, false)`
-- `sign`
-  - is now sync
-  - now returns `Signature` instance with `{ r, s, recovery }` properties
-  - `canonical` option was renamed to `lowS`
-  - `recovered` option has been removed because recovery bit is always returned now
-  - `der` option has been removed. There are 2 options:
-    1. Use compact encoding: `fromCompact`, `toCompactRawBytes`, `toCompactHex`.
-       Compact encoding is simply a concatenation of 32-byte r and 32-byte s.
-    2. If you must use DER encoding, switch to noble-curves (see above).
-- `verify`
-  - is now sync
-  - `strict` option was renamed to `lowS`
-- `getSharedSecret`
-  - now produce 33-byte compressed signatures by default
-  - to use old behavior, which produced 65-byte uncompressed keys, set
-    argument `isCompressed` to `false`: `getSharedSecret(a, b, false)`
+secp256k1:
+
+- `getPublicKey`: defaults to compressed sigs (use second argument to adjust)
+- `sign`: renamed options `canonical` => `lowS`; `der` => `format: 'der'`
+- `verify`: renamed option `strict` => `lowS`
+- `getSharedSecret`: defaults to compressed sigs (use third argument to adjust)
 - `recoverPublicKey(msg, sig, rec)` was changed to `sig.recoverPublicKey(msg)`
-- `number` type for private keys have been removed: use `bigint` instead
 - `Point` (2d xy) has been changed to `ProjectivePoint` (3d xyz)
-- `utils` were split into `utils` (same api as in noble-curves) and
-  `etc` (`hmacSha256Sync` and others)
 
-### noble-ed25519 v1 to curves v1
+ed25519:
 
-Upgrading from [@noble/ed25519](https://github.com/paulmillr/noble-ed25519):
-
-- Methods are now sync by default
-- `bigint` is no longer allowed in `getPublicKey`, `sign`, `verify`. Reason: ed25519 is LE, can lead to bugs
-- `Point` (2d xy) has been changed to `ExtendedPoint` (xyzt)
-- `Signature` was removed: just use raw bytes or hex now
-- `utils` were split into `utils` (same api as in noble-curves) and
-  `etc` (`sha512Sync` and others)
+- `Signature` was removed in favor of raw bytes
 - `getSharedSecret` was moved to `x25519` module
-- `toX25519` has been moved to `edwardsToMontgomeryPub` and `edwardsToMontgomeryPriv` methods
 
-### noble-bls12-381 to curves v1
+bls12-381:
 
-Upgrading from [@noble/bls12-381](https://github.com/paulmillr/noble-bls12-381):
-
-- Methods and classes were renamed:
-  - PointG1 -> G1.Point, PointG2 -> G2.Point
-  - PointG2.fromSignature -> Signature.decode, PointG2.toSignature -> Signature.encode
-- Fp2 ORDER was corrected
+- Renamed PointG1 -> G1.Point, PointG2 -> G2.Point
+- Renamed PointG2.fromSignature -> Signature.decode, PointG2.toSignature -> Signature.encode
 
 ## Contributing & testing
 
