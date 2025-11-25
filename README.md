@@ -80,6 +80,7 @@ import { FFT, poly } from '@noble/curves/abstract/fft.js';
     - [secp256k1, p256, p384, p521, ed25519, ed448, brainpool](#secp256k1-p256-p384-p521-ed25519-ed448-brainpool)
     - [ristretto255, decaf448](#ristretto255-decaf448)
     - [Prehashed signing](#prehashed-signing)
+    - [Recovering public keys from signatures](#recovering-public-keys-from-signatures)
     - [Hedged ECDSA with noise](#hedged-ecdsa-with-noise)
     - [Consensus-friendliness vs e-voting](#consensus-friendliness-vs-e-voting)
   - [ECDH: Diffie-Hellman shared secrets](#ecdh-diffie-hellman-shared-secrets)
@@ -170,7 +171,7 @@ make sure to disable prehashing.
 > Previously, in noble-curves v1, `prehash: false` was the default.
 > Some other libraries (like libsecp256k1) have no prehashing.
 
-#### Recovering public keys from ECDSA signatures
+#### Recovering public keys from signatures
 
 ```js
 import { secp256k1 } from '@noble/curves/secp256k1.js';
@@ -186,6 +187,9 @@ const sigNoRec = secp256k1.sign(msg, secretKey, { format: 'compact' });
 // Signature instance
 const sigInstance = secp256k1.Signature.fromBytes(sigRec, 'recovered');
 ```
+
+> [!NOTE]
+> Only ECDSA supports public key recovery.
 
 #### Hedged ECDSA with noise
 
