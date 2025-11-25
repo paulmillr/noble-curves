@@ -193,7 +193,9 @@ Public key recovery - only supported with ECDSA.
 > [!NOTE]
 > Key recovery is a simple math operation.
 > There are no guarantees the signing was actually done.
-> It's always possible to forge signatures which would recover into specific public key.
+> It's possible to forge signature and msg hash (r, s, h), which would
+> recover into a random public key, but it's not feasible
+> to find m which would lead to this specific forged h.
 
 #### Hedged ECDSA with noise
 
