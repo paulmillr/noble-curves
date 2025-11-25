@@ -135,6 +135,8 @@ ECDSA signatures use deterministic k, conforming to [RFC 6979](https://www.rfc-e
 EdDSA conforms to [RFC 8032](https://www.rfc-editor.org/rfc/rfc8032).
 Schnorr (secp256k1-only) conforms to [BIP 340](https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki).
 
+Messages are always hashed first.
+
 #### ristretto255, decaf448
 
 ```ts
@@ -160,12 +162,10 @@ const sig = secp256k1.sign(msg, secretKey);
 const sigKeccak = secp256k1.sign(keccak256(msg), secretKey, { prehash: false });
 ```
 
-ECDSA `sign()` allows providing `prehash: false`, which enables using custom hashes.
+Default sign() and verify() behavior (`prehash: true`) applies built-in hash function to message first.
+For secp256k1 that's sha256, for p521 that's sha512.
 
-A ECDSA signature is not just "math over elliptic curve points".
-It's actually math + hashing: p256 is in fact p256 point + sha256 hash.
-By default, we hash messages. To use custom hash methods,
-make sure to disable prehashing.
+Providing `prehash: false` allows user to specify their own hash function (e.g. use secp256k1 + keccak256).
 
 > [!NOTE]
 > Previously, in noble-curves v1, `prehash: false` was the default.
@@ -188,8 +188,12 @@ const sigNoRec = secp256k1.sign(msg, secretKey, { format: 'compact' });
 const sigInstance = secp256k1.Signature.fromBytes(sigRec, 'recovered');
 ```
 
+Public key recovery - only supported with ECDSA.
+
 > [!NOTE]
-> Only ECDSA supports public key recovery.
+> Key recovery is a simple math operation.
+> There are no guarantees the signing was actually done.
+> It's always possible to forge signatures which would recover into specific public key.
 
 #### Hedged ECDSA with noise
 
