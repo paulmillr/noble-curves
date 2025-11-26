@@ -9,7 +9,7 @@ import { default as seda } from './vectors/bn254/seda.js';
 const CROSS_PATH_GZ = './vectors/bn254/cross1000.json.gz'; // bundler hint: readFileSync('./test/bn254/cross1000.json.gz')
 
 describe('bn254', () => {
-  const { Fp2, Fp6, Fp12 } = bn254.fields;
+  const { Fp, Fp2, Fp6, Fp12 } = bn254.fields;
   should('Fp2', () => {
     const x = {
       c0: 9175274256610746571769806138441460978067247223835479920885065774008687444157n,
@@ -19,6 +19,13 @@ describe('bn254', () => {
       c0: 18745010300259074081467171901089189864928626882998930881106784720284549917403n,
       c1: 6755404584462298611753346784665337222239198745905936344431516651379215797104n,
     };
+    eql(Fp2.isValid({ c0: 1n, c1: 1n }), true);
+    eql(Fp2.isValid(x), true);
+    eql(Fp2.isValid(y), true);
+    eql(Fp2.isValid({ c0: Fp.ORDER - 1n, c1: 1n }), true);
+    eql(Fp2.isValid({ c0: 1n, c1: Fp.ORDER - 1n }), true);
+    eql(Fp2.isValid({ c0: Fp.ORDER, c1: 1n }), false);
+    eql(Fp2.isValid({ c0: 1n, c1: Fp.ORDER }), false);
     const mul = Fp2.mul(x, y);
     eql(mul, {
       c0: 14915367931151687313527782314310395056617474070176176799315072532155545111131n,
@@ -132,6 +139,23 @@ describe('bn254', () => {
         c1: 9533292755262567365755835323107174518472361243562718718917822947506880920117n,
       },
     };
+    eql(Fp6.isValid(x), true);
+    eql(Fp6.isValid(y), true);
+    eql(Fp6.isValid({ ...x, c0: { c0: 1n, c1: 1n } }), true);
+    eql(Fp6.isValid({ ...x, c1: { c0: 1n, c1: 1n } }), true);
+    eql(Fp6.isValid({ ...x, c2: { c0: 1n, c1: 1n } }), true);
+    eql(Fp6.isValid({ ...x, c0: { c0: 1n, c1: Fp.ORDER - 1n } }), true);
+    eql(Fp6.isValid({ ...x, c0: { c0: Fp.ORDER - 1n, c1: 1n } }), true);
+    eql(Fp6.isValid({ ...x, c1: { c0: 1n, c1: Fp.ORDER - 1n } }), true);
+    eql(Fp6.isValid({ ...x, c1: { c0: Fp.ORDER - 1n, c1: 1n } }), true);
+    eql(Fp6.isValid({ ...x, c2: { c0: 1n, c1: Fp.ORDER - 1n } }), true);
+    eql(Fp6.isValid({ ...x, c2: { c0: Fp.ORDER - 1n, c1: 1n } }), true);
+    eql(Fp6.isValid({ ...x, c0: { c0: 1n, c1: Fp.ORDER } }), false);
+    eql(Fp6.isValid({ ...x, c0: { c0: Fp.ORDER, c1: 1n } }), false);
+    eql(Fp6.isValid({ ...x, c1: { c0: 1n, c1: Fp.ORDER } }), false);
+    eql(Fp6.isValid({ ...x, c1: { c0: Fp.ORDER, c1: 1n } }), false);
+    eql(Fp6.isValid({ ...x, c2: { c0: 1n, c1: Fp.ORDER } }), false);
+    eql(Fp6.isValid({ ...x, c2: { c0: Fp.ORDER, c1: 1n } }), false);
     const mul = Fp6.mul(x, y);
     eql(
       mul,
@@ -275,6 +299,8 @@ describe('bn254', () => {
         9227965260032410354414324195411397451806478640651098414622140162144550225774n,
         4565231055964369875954050676600907662092934946529352128407430527253758726453n,
       ]);
+      eql(Fp12.isValid(x), true);
+      eql(Fp12.isValid(y), true);
       const mul = Fp12.mul(x, y);
       eql(
         mul,
@@ -479,6 +505,7 @@ describe('bn254', () => {
         0x1f7797b3b1b3bc1b201b49d1e6d32a3114444f43bcd8cac719fbcef72d861449n,
         0x0aaa7b3a32f45da005612e5f1d642f4c3747672cb6e299260fc8ce90cc5a8a87n,
       ]);
+      eql(Fp12.isValid(mul), true);
       eql(
         Fp12.finalExponentiate(mul),
         Fp12.fromBigTwelve([
@@ -578,6 +605,7 @@ describe('bn254', () => {
         14233000115032918798785952246007985270659932100988995610419881744204174857289n,
         4824342970688691964976119141257507032105805643608313922359860622298332170887n,
       ]);
+      eql(Fp12.isValid(f12m), true);
       const f2 = {
         c0: 14915367931151687313527782314310395056617474070176176799315072532155545111131n,
         c1: 21234748560869198098271980834340238051100753263426135951820710752881888827685n,
