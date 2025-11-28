@@ -430,6 +430,16 @@ export function edwards(params: EdwardsOpts, extraOpts: EdwardsExtraOpts = {}): 
       return normalizeZ(Point, [p, f])[0];
     }
 
+    // Constant-time multiplication, two scalars separately
+    multiply2(scalar0: bigint, scalar1: bigint): [Point, Point] {
+      if (!Fn.isValidNot0(scalar0)) throw new Error('invalid scalar: expected 1 <= sc < curve.n');
+      if (!Fn.isValidNot0(scalar1)) throw new Error('invalid scalar: expected 1 <= sc < curve.n');
+      const { p: p0, f: f0 } = wnaf.cached(this, scalar0, (p) => normalizeZ(Point, p));
+      const { p: p1, f: f1 } = wnaf.cached(this, scalar1, (p) => normalizeZ(Point, p));
+      const points = normalizeZ(Point, [p0, f0, p1, f1])
+      return [points[0], points[2]]
+    }
+
     // Non-constant-time multiplication. Uses double-and-add algorithm.
     // It's faster, but should only be used when you don't care about
     // an exposed private key e.g. sig verification.
@@ -670,9 +680,9 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
   ): Uint8Array {
     msg = abytes(msg, undefined, 'message');
     if (prehash) msg = prehash(msg); // for ed25519ph etc.
-    const { prefix, scalar, pointBytes } = getExtendedPublicKey(secretKey);
+    const { prefix, scalar } = getPrivateScalar(secretKey);
     const r = hashDomainToScalar(options.context, prefix, msg); // r = dom2(F, C) || prefix || PH(M)
-    const R = BASE.multiply(r).toBytes(); // R = rG
+    const [pointBytes, R] = BASE.multiply2(scalar, r).map((p) => p.toBytes());
     const k = hashDomainToScalar(options.context, R, pointBytes, msg); // R || A || PH(M)
     const s = Fn.create(r + k * scalar); // S = (r + k * s) mod L
     if (!Fn.isValid(s)) throw new Error('sign failed: invalid s'); // 0 <= s < L
