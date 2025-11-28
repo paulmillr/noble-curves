@@ -304,7 +304,7 @@ export class wNAF<PC extends PC_ANY> {
    * https://github.com/paulmillr/noble-secp256k1/blob/47cb1669b6e506ad66b35fe7d76132ae97465da2/index.ts#L502-L541
    * @returns real and fake (for const-time) points
    */
-  private wNAF(W: number, precomputes: PC_P<PC>[], n: bigint): { p: PC_P<PC>; f: PC_P<PC> } {
+  private wNAF(W: number, precomputes: PC_P<PC>[][], n: bigint): { p: PC_P<PC>; f: PC_P<PC> } {
     // Scalar should be smaller than field order
     if (!this.Fn.isValid(n)) throw new Error('invalid scalar');
     // Accumulators
@@ -323,10 +323,10 @@ export class wNAF<PC extends PC_ANY> {
       if (isZero) {
         // bits are 0: add garbage to fake point
         // Important part for const-time getPublicKey: add random "noise" point to f.
-        f = f.add(negateCt(isNegF, precomputes[offsetF]));
+        f = f.add(precomputes[offsetF][isNegF ? 1 : 0]);
       } else {
         // bits are 1: add to result point
-        p = p.add(negateCt(isNeg, precomputes[offset]));
+        p = p.add(precomputes[offset][isNeg ? 1 : 0]);
       }
     }
     assert0(n);
@@ -343,7 +343,7 @@ export class wNAF<PC extends PC_ANY> {
    */
   private wNAFUnsafe(
     W: number,
-    precomputes: PC_P<PC>[],
+    precomputes: PC_P<PC>[][],
     n: bigint,
     acc: PC_P<PC> = this.ZERO
   ): PC_P<PC> {
@@ -357,15 +357,14 @@ export class wNAF<PC extends PC_ANY> {
         // Move to next window.
         continue;
       } else {
-        const item = precomputes[offset];
-        acc = acc.add(isNeg ? item.negate() : item); // Re-using acc allows to save adds in MSM
+        acc = acc.add(precomputes[offset][isNeg ? 1 : 0]); // Re-using acc allows to save adds in MSM
       }
     }
     assert0(n);
     return acc;
   }
 
-  private getPrecomputes(W: number, point: PC_P<PC>, transform?: Mapper<PC_P<PC>>): PC_P<PC>[] {
+  private getPrecomputes(W: number, point: PC_P<PC>, transform?: Mapper<PC_P<PC>>): PC_P<PC>[][] {
     // Calculate precomputes on a first run, reuse them after
     let comp = pointPrecomputes.get(point);
     if (!comp) {
@@ -373,7 +372,10 @@ export class wNAF<PC extends PC_ANY> {
       if (W !== 1) {
         // Doing transform outside of if brings 15% perf hit
         if (typeof transform === 'function') comp = transform(comp);
+        comp = comp.map((p) => [p, p.negate()]);
         pointPrecomputes.set(point, comp);
+      } else {
+        comp = comp.map((p) => [p, p.negate()]);
       }
     }
     return comp;
