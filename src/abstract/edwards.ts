@@ -747,33 +747,50 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
     }
   }
 
+  /**
+   * Converts ed public key to x public key. Uses formula:
+   * - ed25519:
+   *   - `(u, v) = ((1+y)/(1-y), sqrt(-486664)*u/x)`
+   *   - `(x, y) = (sqrt(-486664)*u/v, (u-1)/(u+1))`
+   * - ed448:
+   *   - `(u, v) = ((y-1)/(y+1), sqrt(156324)*u/x)`
+   *   - `(x, y) = (sqrt(156324)*u/v, (1+u)/(1-u))`
+   */
+  function pointToMontgomery(p: EdwardsPoint): Uint8Array {
+    const { y } = p;
+    const size = lengths.publicKey;
+    const is25519 = size === 32;
+    if (!is25519 && size !== 57) throw new Error('only defined for 25519 and 448');
+    const u = is25519 ? Fp.div(_1n + y, _1n - y) : Fp.div(y - _1n, y + _1n);
+    return Fp.toBytes(u);
+  }
+
+  // Matches getPrivateScalar + getExtendedPublicKey
+  function pointFromMontgomerySecret(secretKey: Uint8Array): EdwardsPoint {
+    abytes(secretKey, lengths.secretKey);
+    const scalar = modN_LE(adjustScalarBytes(copyBytes(secretKey)));
+    return BASE.multiply(scalar);
+  }
+
   const utils = {
     getExtendedPublicKey,
     randomSecretKey,
     isValidSecretKey,
     isValidPublicKey,
-    /**
-     * Converts ed public key to x public key. Uses formula:
-     * - ed25519:
-     *   - `(u, v) = ((1+y)/(1-y), sqrt(-486664)*u/x)`
-     *   - `(x, y) = (sqrt(-486664)*u/v, (u-1)/(u+1))`
-     * - ed448:
-     *   - `(u, v) = ((y-1)/(y+1), sqrt(156324)*u/x)`
-     *   - `(x, y) = (sqrt(156324)*u/v, (1+u)/(1-u))`
-     */
     toMontgomery(publicKey: Uint8Array): Uint8Array {
-      const { y } = Point.fromBytes(publicKey);
-      const size = lengths.publicKey;
-      const is25519 = size === 32;
-      if (!is25519 && size !== 57) throw new Error('only defined for 25519 and 448');
-      const u = is25519 ? Fp.div(_1n + y, _1n - y) : Fp.div(y - _1n, y + _1n);
-      return Fp.toBytes(u);
+      return pointToMontgomery(Point.fromBytes(publicKey));
     },
     toMontgomerySecret(secretKey: Uint8Array): Uint8Array {
       const size = lengths.secretKey;
       abytes(secretKey, size);
       const hashed = cHash(secretKey.subarray(0, size));
       return adjustScalarBytes(hashed).subarray(0, size);
+    },
+    montgomerySecretToEdwardsPublic(secretKey: Uint8Array): Uint8Array {
+      return pointFromMontgomerySecret(secretKey).toBytes();
+    },
+    montgomerySecretToMontgomeryPublic(secretKey: Uint8Array): Uint8Array {
+      return pointToMontgomery(pointFromMontgomerySecret(secretKey));
     },
   };
 
