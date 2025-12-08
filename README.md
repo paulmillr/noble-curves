@@ -240,18 +240,18 @@ const isValidRfc = ed25519.verify(sig, msg, pub, { zip215: false });
 
 In ed25519, there is an ability to choose between consensus-friendliness vs e-voting mode.
 
-- `zip215: true` is default behavior. It has slightly looser verification logic
-  to be [consensus-friendly](https://hdevalence.ca/blog/2020-10-04-its-25519am), following [ZIP215](https://zips.z.cash/zip-0215) rules
-- `zip215: false` switches verification criteria to strict
-  [RFC 8032](https://www.rfc-editor.org/rfc/rfc8032) / [FIPS 186-5](https://csrc.nist.gov/publications/detail/fips/186/5/final)
-  and additionally provides non-repudiation with SBS,
-  which is useful for:
-  - Contract Signing: if A signed an agreement with B using key that allows repudiation, it can later claim that it signed a different contract
-  - E-voting: malicious voters may pick keys that allow repudiation in order to deny results
-  - Blockchains: transaction of amount X might also be valid for a different amount Y
+* `zip215: true` (default) uses the more permissive, [consensus-friendly](https://hdevalence.ca/blog/2020-10-04-its-25519am) verification rules defined in [ZIP215](https://zips.z.cash/zip-0215).
+* `zip215: false` enforces strict [RFC 8032](https://www.rfc-editor.org/rfc/rfc8032) / [FIPS 186-5](https://csrc.nist.gov/publications/detail/fips/186/5/final) verification and adds SBS-based non-repudiation, which is useful for:
+
+* **Contract signing:** prevents a signer from later claiming they signed a different document
+* **E-voting:** stops voters from choosing keys that let them repudiate their vote
+* **Blockchains:** avoids signatures valid for multiple transactions (e.g., amount X also validating amount Y)
 
 Both modes have SUF-CMA (strong unforgeability under chosen message attacks).
 See [Taming the many EdDSAs](https://eprint.iacr.org/2020/1244) for more info.
+
+> [!NOTE]
+> Most other libraries don't have SUF-CMA & SBS.
 
 ### ECDH: Diffie-Hellman shared secrets
 
