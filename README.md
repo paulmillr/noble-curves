@@ -244,13 +244,14 @@ In ed25519, there is an ability to choose between consensus-friendliness vs e-vo
   to be [consensus-friendly](https://hdevalence.ca/blog/2020-10-04-its-25519am), following [ZIP215](https://zips.z.cash/zip-0215) rules
 - `zip215: false` switches verification criteria to strict
   [RFC 8032](https://www.rfc-editor.org/rfc/rfc8032) / [FIPS 186-5](https://csrc.nist.gov/publications/detail/fips/186/5/final)
-  and additionally provides [non-repudiation with SBS](https://eprint.iacr.org/2020/1244),
+  and additionally provides non-repudiation with SBS,
   which is useful for:
   - Contract Signing: if A signed an agreement with B using key that allows repudiation, it can later claim that it signed a different contract
   - E-voting: malicious voters may pick keys that allow repudiation in order to deny results
   - Blockchains: transaction of amount X might also be valid for a different amount Y
 
 Both modes have SUF-CMA (strong unforgeability under chosen message attacks).
+See [Taming the many EdDSAs](https://eprint.iacr.org/2020/1244) for more info.
 
 ### ECDH: Diffie-Hellman shared secrets
 
