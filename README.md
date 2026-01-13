@@ -32,8 +32,8 @@ Take a glance at [GitHub Discussions](https://github.com/paulmillr/noble-curves/
   [post-quantum](https://github.com/paulmillr/noble-post-quantum),
   5kb [secp256k1](https://github.com/paulmillr/noble-secp256k1) /
   [ed25519](https://github.com/paulmillr/noble-ed25519)
-- [Check out homepage](https://paulmillr.com/noble/)
-  for reading resources, documentation and apps built with noble
+- [Check out the homepage](https://paulmillr.com/noble/)
+  for reading resources, documentation, and apps built with noble
 
 ## Usage
 
@@ -738,31 +738,27 @@ test-suite in the actual application that consumes the library.
 
 ### Supply chain security
 
-- **Commits** are signed with PGP keys, to prevent forgery. Make sure to verify commit signatures
-- **Releases** are transparent and built on GitHub CI. Make sure to verify [provenance](https://docs.npmjs.com/generating-provenance-statements) logs
-  - Use GitHub CLI to verify single-file builds:
-    `gh attestation verify --owner paulmillr noble-curves.js`
-- **Rare releasing** is followed to ensure less re-audit need for end-users
-- **Dependencies** are minimized and locked-down: any dependency could get hacked and users will be downloading malware with every install.
-  - We make sure to use as few dependencies as possible
-  - Automatic dep updates are prevented by locking-down version ranges; diffs are checked with `npm-diff`
-- **Dev Dependencies** are disabled for end-users; they are only used to develop / build the source code
+- **Commits** are signed with PGP keys to prevent forgery. Be sure to verify the commit signatures
+- **Releases** are made transparently through token-less GitHub CI and Trusted Publishing. Be sure to verify the [provenance logs](https://docs.npmjs.com/generating-provenance-statements) for authenticity.
+- **Rare releasing** is practiced to minimize the need for re-audits by end-users.
+- **Dependencies** are minimized and strictly pinned to reduce supply-chain risk.
+  - We use as few dependencies as possible.
+  - Version ranges are locked, and changes are checked with npm-diff.
+- **Dev dependencies** are excluded from end-user installs; they’re only used for development and build steps.
 
 For this package, there is 1 dependency; and a few dev dependencies:
 
 - [noble-hashes](https://github.com/paulmillr/noble-hashes) provides cryptographic hashing functionality
 - jsbt is used for benchmarking / testing / build tooling and developed by the same author
-- prettier, fast-check and typescript are used for code quality / test generation / ts compilation. It's hard to audit their source code thoroughly and fully because of their size
+- prettier, fast-check and typescript are used for code quality / test generation / ts compilation
 
 ### Randomness
 
-We're deferring to built-in
-[crypto.getRandomValues](https://developer.mozilla.org/en-US/docs/Web/API/Crypto/getRandomValues)
-which is considered cryptographically secure (CSPRNG).
+We rely on the built-in
+[`crypto.getRandomValues`](https://developer.mozilla.org/en-US/docs/Web/API/Crypto/getRandomValues),
+which is considered a cryptographically secure PRNG.
 
-In the past, browsers had bugs that made it weak: it may happen again.
-Implementing a userspace CSPRNG to get resilient to the weakness
-is even worse: there is no reliable userspace source of quality entropy.
+Browsers have had weaknesses in the past - and could again - but implementing a userspace CSPRNG is even worse, as there’s no reliable userspace source of high-quality entropy.
 
 ### Quantum computers
 
