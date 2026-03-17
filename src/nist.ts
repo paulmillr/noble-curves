@@ -5,6 +5,7 @@
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha256, sha384, sha512 } from '@noble/hashes/sha2.js';
+import { createFROST, type FROST } from './abstract/frost.ts';
 import { createHasher, type H2CHasher } from './abstract/hash-to-curve.ts';
 import { Field } from './abstract/modular.ts';
 import { createORPF, type OPRF } from './abstract/oprf.ts';
@@ -132,6 +133,14 @@ export const p256_oprf: OPRF = /* @__PURE__ */ (() =>
     hash: sha256,
     hashToGroup: p256_hasher.hashToCurve,
     hashToScalar: p256_hasher.hashToScalar,
+  }))();
+/** FROST threshold signatures over p256. RFC 9591. */
+export const p256_FROST: FROST = /* @__PURE__ */ (() =>
+  createFROST({
+    name: 'FROST-P256-SHA256-v1',
+    Point: p256_Point,
+    hashToScalar: p256_hasher.hashToScalar,
+    hash: sha256,
   }))();
 
 // NIST P384

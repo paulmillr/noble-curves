@@ -20,6 +20,7 @@ import {
   type EdwardsPoint,
   type EdwardsPointCons,
 } from './abstract/edwards.ts';
+import { createFROST, type FROST } from './abstract/frost.ts';
 import {
   _DST_scalar,
   createHasher,
@@ -297,6 +298,21 @@ export const ed448_hasher: H2CHasher<EdwardsPointCons> = /* @__PURE__ */ (() =>
     k: 224,
     expand: 'xof',
     hash: shake256,
+  }))();
+/** FROST threshold signatures over ed448. RFC 9591. */
+export const ed448_FROST: FROST = /* @__PURE__ */ (() =>
+  createFROST({
+    name: 'FROST-ED448-SHAKE256-v1',
+    Point: ed448_Point,
+    validatePoint: (p) => {
+      p.assertValidity();
+      if (!p.isTorsionFree()) throw new Error('bad point: not torsion-free');
+    },
+    // Group:  edwards448 [RFC8032], where Ne = 57 and Ns = 57.
+    // Fn is 57 bytes, Fp is 57 bytes too
+    Fn,
+    hash: shake256_114,
+    H2: 'SigEd448\0\0',
   }))();
 
 // 1-d

@@ -9,6 +9,7 @@
 import { sha256 } from '@noble/hashes/sha2.js';
 import { randomBytes } from '@noble/hashes/utils.js';
 import { createKeygen, type CurveLengths } from './abstract/curve.ts';
+import { createFROST, type FROST, type FrostPublic, type FrostSecret } from './abstract/frost.ts';
 import { createHasher, type H2CHasher, isogenyMap } from './abstract/hash-to-curve.ts';
 import { Field, mapHashToField, pow2 } from './abstract/modular.ts';
 import {
@@ -325,3 +326,120 @@ export const secp256k1_hasher: H2CHasher<WeierstrassPointCons<bigint>> = /* @__P
       hash: sha256,
     }
   ))();
+/** FROST threshold signatures over secp256k1. RFC 9591. */
+export const secp256k1_FROST: FROST = /* @__PURE__ */ (() =>
+  createFROST({
+    name: 'FROST-secp256k1-SHA256-v1',
+    Point: Pointk1,
+    hashToScalar: secp256k1_hasher.hashToScalar,
+    hash: sha256,
+  }))();
+
+// Taproot utils
+function tweak(point: PointType<bigint>, merkleRoot?: Uint8Array): bigint {
+  if (merkleRoot === undefined) return _0n;
+  const x = pointToBytes(point);
+  return Pointk1.Fn.create(bytesToNumberBE(taggedHash('TapTweak', x, merkleRoot)));
+}
+function frostPubToEvenY(pub: FrostPublic) {
+  const VK = Pointk1.fromBytes(pub.commitments[0]);
+  if (hasEven(VK.y)) return pub;
+  return {
+    signers: { min: pub.signers.min, max: pub.signers.max },
+    commitments: pub.commitments.map((i) => Pointk1.fromBytes(i).negate().toBytes()),
+    verifyingShares: Object.fromEntries(
+      Object.entries(pub.verifyingShares).map(([k, v]) => [
+        k,
+        Pointk1.fromBytes(v).negate().toBytes(),
+      ])
+    ),
+  };
+}
+function frostSecretToEvenY(s: FrostSecret, pub: FrostPublic) {
+  const VK = Pointk1.fromBytes(pub.commitments[0]);
+  if (hasEven(VK.y)) return s;
+  const Fn = Pointk1.Fn;
+  return {
+    ...s,
+    signingShare: Fn.toBytes(Fn.neg(Fn.fromBytes(s.signingShare))),
+  };
+}
+
+function frostTweakSecret(s: FrostSecret, pub: FrostPublic, merkleRoot?: Uint8Array): FrostSecret {
+  const Fn = Pointk1.Fn;
+  const keyPackage = frostSecretToEvenY(s, pub);
+  const evenPub = frostPubToEvenY(pub);
+  const t = tweak(Pointk1.fromBytes(evenPub.commitments[0]), merkleRoot);
+  const signingShare = Fn.toBytes(Fn.add(Fn.fromBytes(keyPackage.signingShare), t));
+  return {
+    identifier: keyPackage.identifier,
+    signingShare,
+  };
+}
+
+function frostTweakPublic(pub: FrostPublic, merkleRoot?: Uint8Array): FrostPublic {
+  const PKPackage = frostPubToEvenY(pub);
+  const t = tweak(Pointk1.fromBytes(PKPackage.commitments[0]), merkleRoot);
+  const tp = Pointk1.BASE.multiply(t);
+  const commitments = PKPackage.commitments.map((c, i) =>
+    (i === 0 ? Pointk1.fromBytes(c).add(tp) : Pointk1.fromBytes(c)).toBytes()
+  );
+  const verifyingShares: Record<string, Uint8Array> = {};
+  for (const k in PKPackage.verifyingShares) {
+    verifyingShares[k] = Pointk1.fromBytes(PKPackage.verifyingShares[k]).add(tp).toBytes();
+  }
+  return {
+    signers: { min: PKPackage.signers.min, max: PKPackage.signers.max },
+    commitments,
+    verifyingShares,
+  };
+}
+
+/** FROST threshold signatures over secp256k1-schnorr-taproot. RFC 9591. */
+export const schnorr_FROST: FROST = /* @__PURE__ */ (() =>
+  createFROST({
+    name: 'FROST-secp256k1-SHA256-TR-v1',
+    Point: Pointk1,
+    hashToScalar: secp256k1_hasher.hashToScalar,
+    hash: sha256,
+    // Taproot related hacks
+    parsePublicKey(publicKey) {
+      // External Taproot keys are x-only, but local key packages still use compressed points.
+      if (publicKey.length === 32) return lift_x(bytesToNumberBE(publicKey));
+      if (publicKey.length === 33) return Pointk1.fromBytes(publicKey);
+      throw new Error(`expected x-only or compressed public key, got length=${publicKey.length}`);
+    },
+    adjustScalar(n: bigint) {
+      const PK = Pointk1.BASE.multiply(n);
+      return hasEven(PK.y) ? n : Pointk1.Fn.neg(n);
+    },
+    adjustPoint: (p) => (hasEven(p.y) ? p : p.negate()),
+    challenge(R, PK, msg) {
+      return challenge(pointToBytes(R), pointToBytes(PK), msg);
+    },
+    adjustNonces(PK, nonces) {
+      if (hasEven(PK.y)) return nonces;
+      const Fn = Pointk1.Fn;
+      return {
+        binding: Fn.toBytes(Fn.neg(Fn.fromBytes(nonces.binding))),
+        hiding: Fn.toBytes(Fn.neg(Fn.fromBytes(nonces.hiding))),
+      };
+    },
+    adjustGroupCommitmentShare: (GC, GCShare) => (!hasEven(GC.y) ? GCShare.negate() : GCShare),
+    adjustPublic: frostPubToEvenY,
+    adjustSecret: frostSecretToEvenY,
+    adjustTx: {
+      // Compat with official implementation
+      encode: (tx) => tx.subarray(1),
+      decode: (tx) => concatBytes(new Uint8Array([0x02]), tx),
+    },
+    adjustDKG: (k) => {
+      // Compatibility with frost-secp256k1-tr: DKG output is auto-tweaked with the
+      // empty Taproot merkle root, while dealer-generated keys stay untweaked.
+      const merkleRoot = new Uint8Array(0);
+      return {
+        public: frostTweakPublic(k.public, merkleRoot),
+        secret: frostTweakSecret(k.secret, k.public, merkleRoot),
+      };
+    },
+  }))();

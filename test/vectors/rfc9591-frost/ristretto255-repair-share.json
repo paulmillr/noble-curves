@@ -1,0 +1,15 @@
+{
+    "scalar_generation": {
+        "random_scalar_1": "7e835f4c5453aea47a09e3925bfa23876de6fc9f92e6a7f8f1b45fe273fb850e",
+        "random_scalar_2": "d79cbd35ae36865692f2f31f9ab6fa9109757accb18f10b416a6c99828b82707",
+        "random_scalar_3": "73398badf5e53422d721e5acf901be840dbacb7c0c644cb171bd169df360550d",
+        "random_scalar_sum": "eeb1bc75c3a9446d37e4cc1932bf1e74841543e950da045e7a18401890140303"
+    },
+    "sigma_generation": {
+        "sigma_1": "19280c3694fc2881346c73fa9024cf3b710d1bc4651b01ac47e982a0c13ef004",
+        "sigma_2": "bb8e111c18df8ad1af6710bb5845ff510a96cc37ceb99079cabe635ba0d3dd08",
+        "sigma_3": "e37d76cbcbc44c14ef38043bff3b2154467095f0a7c6922444a1f09e4d563f09",
+        "sigma_4": "898ea31783f13def4fb0cd9d97d24a18adb48050ed8c7b2af24d246f45b28e0c",
+        "sigma_sum": "661b4c7bc6cb19a676836648c3847cd06ec8fd3cc928a0744897fb09f51a9c03"
+    }
+}

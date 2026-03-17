@@ -7,7 +7,7 @@ Audited & minimal JS implementation of elliptic curve cryptography.
 - 🏎 Fast: hand-optimized for caveats of JS engines
 - 🔍 Reliable: cross-library / wycheproof tests and fuzzing ensure correctness
 - ➰ Weierstrass, Edwards, Montgomery curves; ECDSA, EdDSA, Schnorr, BLS signatures
-- ✍️ ECDH, hash-to-curve, OPRF, Poseidon ZK-friendly hash
+- ✍️ ECDH, hash-to-curve, OPRF, FROST, Poseidon hash
 - 🔖 Non-repudiation (SUF-CMA, SBS) & consensus-friendliness (ZIP215) in ed25519, ed448
 - 🥈 Optional, friendly wrapper over native WebCrypto
 - 🪶 29KB (gzipped) including bundled hashes, 11KB for single-curve build
@@ -88,6 +88,7 @@ import { FFT, poly } from '@noble/curves/abstract/fft.js';
   - [BLS signatures, bls12-381, bn254 aka alt\_bn128](#bls-signatures-bls12-381-bn254-aka-alt_bn128)
   - [Hashing to curve points](#hash-to-curve-hashing-to-curve-points)
   - [OPRFs](#oprfs)
+  - [FROST threshold signatures](#frost-threshold-signatures)
   - [Poseidon hash](#poseidon-poseidon-hash)
   - [Fast Fourier Transform](#fft-fast-fourier-transform)
   - [utils](#utils-byte-shuffling-conversion)
@@ -477,6 +478,84 @@ OPRF allows to interactively create an `Output = PRF(Input, serverSecretKey)`:
 - Client cannot calculate Output by itself: it doesn't know server secretKey
 - An attacker interception the communication can't restore Input/Output/serverSecretKey and can't
   link Input to some value.
+
+### FROST threshold signatures
+
+FROST implements [RFC 9591](https://www.rfc-editor.org/rfc/rfc9591) threshold Schnorr signing.
+It is similar to multisig from the application point of view: any `min` of `max` participants
+can jointly produce one Schnorr signature under a shared public key.
+Supported ciphersuites are `p256_FROST`, `ed25519_FROST`, `ed448_FROST`, `ristretto255_FROST`,
+`secp256k1_FROST`, and `schnorr_FROST` (Taproot-compatible secp256k1).
+Signing has two rounds: selected signers commit first, then produce signature shares.
+
+> [!WARNING]
+> The FROST code is new and has not been audited yet.
+> It passes the imported `frost-rs` vectors/examples and local regression tests.
+
+```js
+import { p256_FROST } from '@noble/curves/nist.js';
+
+const signers = { min: 2, max: 3 };
+const alice = p256_FROST.Identifier.derive('alice@example.com');
+const bob = p256_FROST.Identifier.derive('bob@example.com');
+const carol = p256_FROST.Identifier.derive('carol@example.com');
+// trusted dealer
+const deal = p256_FROST.trustedDealer(signers, [alice, bob, carol]);
+for (const id of [alice, bob, carol]) p256_FROST.validateSecret(deal.secretShares[id], deal.public);
+
+const msg = new TextEncoder().encode('hello threshold');
+// round 1: selected signers commit
+const aliceRound1 = p256_FROST.commit(deal.secretShares[alice]);
+const bobRound1 = p256_FROST.commit(deal.secretShares[bob]);
+const commitmentList = [aliceRound1.commitments, bobRound1.commitments];
+// round 2: signers produce signature shares
+const sigShares = {
+  [alice]: p256_FROST.signShare(
+    deal.secretShares[alice],
+    deal.public,
+    aliceRound1.nonces,
+    commitmentList,
+    msg
+  ),
+  [bob]: p256_FROST.signShare(
+    deal.secretShares[bob],
+    deal.public,
+    bobRound1.nonces,
+    commitmentList,
+    msg
+  ),
+};
+const sig = p256_FROST.aggregate(deal.public, commitmentList, msg, sigShares);
+const isValid = p256_FROST.verify(sig, msg, deal.public.commitments[0]);
+```
+
+Key generation can be done with a trusted dealer or with DKG.
+DKG has three rounds: participants commit to key generation, exchange private shares, then derive final participant keys.
+
+```js
+import { p256_FROST } from '@noble/curves/nist.js';
+
+const signers = { min: 2, max: 3 };
+const alice = p256_FROST.DKG.round1(p256_FROST.Identifier.fromNumber(1), signers);
+const bob = p256_FROST.DKG.round1(p256_FROST.Identifier.fromNumber(2), signers);
+const carol = p256_FROST.DKG.round1(p256_FROST.Identifier.fromNumber(3), signers);
+
+// round 1: participants commit to key generation
+const aliceRound2 = p256_FROST.DKG.round2(alice.secret, [bob.public, carol.public]);
+const bobRound2 = p256_FROST.DKG.round2(bob.secret, [alice.public, carol.public]);
+const carolRound2 = p256_FROST.DKG.round2(carol.secret, [alice.public, bob.public]);
+
+// round 2: private shares for each recipient
+const aliceKey = p256_FROST.DKG.round3(alice.secret, [bob.public, carol.public], [
+  bobRound2[p256_FROST.Identifier.fromNumber(1)],
+  carolRound2[p256_FROST.Identifier.fromNumber(1)],
+]);
+// round 3: final participant key package
+```
+
+DKG helpers are intended for interoperable testing and practical key generation.
+The library implements the cryptographic steps, not the surrounding application protocol:
+callers still need authenticated communication, coordination, retries, session handling, and policy.
 
 ### poseidon: Poseidon hash
 

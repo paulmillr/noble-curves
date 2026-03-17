@@ -19,6 +19,7 @@ import {
   type EdwardsPoint,
   type EdwardsPointCons,
 } from './abstract/edwards.ts';
+import { createFROST, type FROST } from './abstract/frost.ts';
 import {
   _DST_scalar,
   createHasher,
@@ -154,6 +155,17 @@ export const ed25519: EdDSA = /* @__PURE__ */ ed({});
 export const ed25519ctx: EdDSA = /* @__PURE__ */ ed({ domain: ed25519_domain });
 /** Prehashed version of ed25519. See {@link ed25519} */
 export const ed25519ph: EdDSA = /* @__PURE__ */ ed({ domain: ed25519_domain, prehash: sha512 });
+export const ed25519_FROST: FROST = /* @__PURE__ */ (() =>
+  createFROST({
+    name: 'FROST-ED25519-SHA512-v1',
+    Point: ed25519_Point,
+    validatePoint: (p) => {
+      p.assertValidity();
+      if (!p.isTorsionFree()) throw new Error('bad point: not torsion-free');
+    },
+    hash: sha512,
+    H2: '',
+  }))();
 
 /**
  * ECDH using curve25519 aka x25519.
@@ -513,6 +525,17 @@ export const ristretto255_oprf: OPRF = /* @__PURE__ */ (() =>
     hash: sha512,
     hashToGroup: ristretto255_hasher.hashToCurve,
     hashToScalar: ristretto255_hasher.hashToScalar,
+  }))();
+/** FROST threshold signatures over ristretto255. RFC 9591. */
+export const ristretto255_FROST: FROST = /* @__PURE__ */ (() =>
+  createFROST({
+    name: 'FROST-RISTRETTO255-SHA512-v1',
+    Point: _RistrettoPoint,
+    validatePoint: (p) => {
+      p.assertValidity();
+      if (!p.isTorsionFree()) throw new Error('bad point: not torsion-free');
+    },
+    hash: sha512,
   }))();
 
 /**

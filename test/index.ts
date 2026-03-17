@@ -21,6 +21,7 @@ import './poseidon.test.ts';
 import './rfc9380-hash-to-curve.test.ts';
 import './rfc9496-ristretto-decaf.test.ts';
 import './rfc9497-oprf.test.ts';
+import './rfc9591-frost.test.ts';
 import './secp256k1.test.ts';
 import './unreleased-xeddsa.ts';
 import './utils.test.ts';

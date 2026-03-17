@@ -1,0 +1,51 @@
+{
+    "config": {
+      "MAX_PARTICIPANTS": 3,
+      "MIN_PARTICIPANTS": 2,
+      "name": "FROST(P-256, SHA-256)",
+      "group": "P-256",
+      "hash": "SHA-256"
+    },
+    "inputs": {
+      "verifying_key": "03639d2ad039e39ae2d7f9a28955a55061d76f0e7b518476c5e5ffa33d1bb9fdb3",
+      "1": {
+        "identifier": 1,
+        "signing_key": "32feae119a184fda4be258289dbce37b1811500600d4e8e9497f0fbd136d052e",
+        "coefficient": "416eb3b9040da27d2ad3dd812982f9f6da30da9309ae2fcb859fda9f7dcde0e6",
+        "vss_commitments": ["02a67c8f918d275e9d56108e5eeca8de70b21bdfe4d61d9785b0535d69c52d3f6c", "03e9140b2bcf116755a3397cfc2b3b7bd09a54e3b3544cd81f7e62eb3cc872143a"],
+        "proof_of_knowledge": "03f77e767e8245f49231442f16b3a7198a1140fac2777d38a6a453a9cc3bca82bb4ef8bc7a32d2d80c275862059fe13a29461c4d2abb3f9c4ae5e718eba907372a",
+        "signing_shares": {
+          "2": "a3405e99a61c369a98df1107cd4bd26906e2c55997ad060ca7e7a7744585a03a", 
+          "3": "aea6852c4fe45e87c03a5f2d7b29c7872026cd0e3ca919f324d131564eaf303f"
+        },
+        "verifying_share": "036b59b8128e00afa2a334b19d075695a5c79e59d28dfbaa7945b1520f45edfc52",
+        "signing_share": "c654459194268778cfcfa5df0fb577625c64c25337c19a2fa81df864290c913c"
+      },
+      "2": {
+        "identifier": 2,
+        "signing_key": "ace068a672458c645a313b57f0eb33b160281a9d458df65f6da9a83c078dfb7b",
+        "coefficient": "f65ff5f233d6aa373eadd5afdc609eb763a1a569f936ae322df7c9fb3a5aca10",
+        "vss_commitments": ["037ef641c6fe1f49b9940d06a453bf7b3c230713e5ffe7a2e2a4bb373ddba074ef", "0384662ca5e0da725028206063e9226b28a535645ca4d7024284813b1dc9d91abb"],
+        "proof_of_knowledge": "02c1b8317d76016aeed7300b39c945fd6130f1cef4a3c72ca1fb93a60f54f683a93f6593b42facb608c001d760e84f3bef7066a082f3482386a7ee66d441723ada",
+        "signing_shares": {
+          "1": "b5dc1583a23394d4a18a132af0c2d768cc73052c1431488054bec4fc0f08c6fa", 
+          "3": "7ef45ddf14f100f50e6e198b118743392078ab353cfea5d4698a38ff33d490d8"
+        },
+        "verifying_share": "02f928ad1fd3679fd5e73b39e6233068451411dfbb52d4f465c18a176f6be49ce1",
+        "signing_share": "ce70c7f0911776998785136dabf68bc2dda225c993e46589acb4d9e4c9f7777a"
+      },
+      "3": {
+        "identifier": 3,
+        "signing_key": "de58ac798ad7bc1a7206a4cfe4cc4bd51fd4eee73c538e11e01829ad6989cfa6",
+        "coefficient": "d04dd8b1c50ca26e4e33ba5d965d7bb1bd38d8d4a76d2a663872d26be18885ea",
+        "vss_commitments": ["0363edc1382241228fc6925dc1789737beec5baae430acc6a113581507fac5cf0e", "03156aff5630761ef046d82a52a813b9043653551636774691590bfedab18efef7"],
+        "proof_of_knowledge": "024c4d52fe40b0b9cea36d842f91fb244a9c09a96954aedb1ffce08a55296d1b4e09225ae0807611f173821e7c15e2ed7c7d0fa26e5fda5d283e2c96f832df906a",
+        "signing_shares": {
+          "1": "f74ac93ca6413751cc5df0ac1a45d15fa6a3dfbf1ddf784bda5e9f9b8cd6a7e0", 
+          "2": "90004a800dc98b07163abc67860d0fd854581ad23beb25671c63a5e4c174e9b8"
+        },
+        "verifying_share": "028e818f24bcadbb04f60c352a9cbe25568a737279cc6db3a91857ab7c992a1aad",
+        "signing_share": "d68d4a4f8e0865ba3f3a80fc4837a0235edf893ff00730e3b14bbb656ae25db8"
+      }
+    }
+  }
