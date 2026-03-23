@@ -1,6 +1,7 @@
 {
   "extends": "@paulmillr/jsbt/tsconfig.json",
   "compilerOptions": {
+    "rootDir": "src",
     "outDir": "."
   },
   "include": [

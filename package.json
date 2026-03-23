@@ -14,17 +14,21 @@
     "@noble/hashes": "2.0.1"
   },
   "devDependencies": {
-    "@paulmillr/jsbt": "0.4.5",
-    "@types/node": "24.2.1",
+    "@paulmillr/jsbt": "0.5.0",
+    "@types/node": "25.5.0",
     "fast-check": "4.2.0",
     "prettier": "3.6.2",
-    "typescript": "5.9.2"
+    "typescript": "6.0.1-rc"
   },
   "scripts": {
     "bench": "cd test/benchmark; node secp256k1.ts; node curves.ts; node utils.ts; node bls.ts",
     "bench:install": "cd test/benchmark; npm install; npm install ../.. --install-links",
     "build": "tsc",
     "build:release": "npx --no @paulmillr/jsbt esbuild test/build",
+    "check": "npm run check:readme && npm run check:treeshake && npm run check:jsdoc",
+    "check:readme": "npx --no @paulmillr/jsbt readme package.json",
+    "check:treeshake": "npx --no @paulmillr/jsbt treeshake package.json test/build/out-treeshake",
+    "check:jsdoc": "npx --no @paulmillr/jsbt tsdoc package.json",
     "build:clean": "rm {.,abstract}/*.{js,d.ts,d.ts.map,js.map} 2> /dev/null",
     "format": "prettier --write 'src/**/*.{js,ts}' 'test/*.{js,ts}'",
     "test": "node --experimental-strip-types --disable-warning=ExperimentalWarning test/index.ts",
