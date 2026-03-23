@@ -15,7 +15,7 @@
   },
   "devDependencies": {
     "@paulmillr/jsbt": "0.5.0",
-    "@types/node": "25.5.0",
+    "@types/node": "25.3.0",
     "fast-check": "4.2.0",
     "prettier": "3.6.2",
     "typescript": "6.0.1-rc"
