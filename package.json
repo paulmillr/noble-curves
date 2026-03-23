@@ -18,7 +18,7 @@
     "@types/node": "25.3.0",
     "fast-check": "4.2.0",
     "prettier": "3.6.2",
-    "typescript": "6.0.1-rc"
+    "typescript": "6.0.2"
   },
   "scripts": {
     "bench": "cd test/benchmark; node secp256k1.ts; node curves.ts; node utils.ts; node bls.ts",
