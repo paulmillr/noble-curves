@@ -41,12 +41,12 @@ import { createORPF, type OPRF } from './abstract/oprf.ts';
 import { asciiToBytes, bytesToNumberLE, equalBytes } from './utils.ts';
 
 // prettier-ignore
-const _0n = /* @__PURE__ */ BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = /* @__PURE__ */ BigInt(3);
+const _0n = /* @__PURE__ */ BigInt(0), _1n = /* @__PURE__ */ BigInt(1), _2n = /* @__PURE__ */ BigInt(2), _3n = /* @__PURE__ */ BigInt(3);
 // prettier-ignore
-const _5n = BigInt(5), _8n = BigInt(8);
+const _5n = /* @__PURE__ */ BigInt(5), _8n = /* @__PURE__ */ BigInt(8);
 
 // P = 2n**255n - 19n
-const ed25519_CURVE_p = BigInt(
+const ed25519_CURVE_p = /* @__PURE__ */ BigInt(
   '0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed'
 );
 // N = 2n**252n + 27742317777372353535851937790883648493n
@@ -139,22 +139,59 @@ function ed(opts: EdDSAOpts) {
 /**
  * ed25519 curve with EdDSA signatures.
  * @example
+ * Generate one Ed25519 keypair, sign a message, and verify it.
+ *
  * ```js
  * import { ed25519 } from '@noble/curves/ed25519.js';
  * const { secretKey, publicKey } = ed25519.keygen();
  * // const publicKey = ed25519.getPublicKey(secretKey);
  * const msg = new TextEncoder().encode('hello noble');
  * const sig = ed25519.sign(msg, secretKey);
- * const isValid = ed25519.verify(sig, msg, pub); // ZIP215
+ * const isValid = ed25519.verify(sig, msg, publicKey); // ZIP215
  * // RFC8032 / FIPS 186-5
- * const isValid2 = ed25519.verify(sig, msg, pub, { zip215: false });
+ * const isValid2 = ed25519.verify(sig, msg, publicKey, { zip215: false });
  * ```
  */
 export const ed25519: EdDSA = /* @__PURE__ */ ed({});
-/** Context version of ed25519 (ctx for domain separation). See {@link ed25519} */
+/**
+ * Context version of ed25519 (ctx for domain separation). See {@link ed25519}
+ * @example
+ * Sign and verify with Ed25519ctx under one explicit context.
+ *
+ * ```ts
+ * const context = new TextEncoder().encode('docs');
+ * const { secretKey, publicKey } = ed25519ctx.keygen();
+ * const msg = new TextEncoder().encode('hello noble');
+ * const sig = ed25519ctx.sign(msg, secretKey, { context });
+ * const isValid = ed25519ctx.verify(sig, msg, publicKey, { context });
+ * ```
+ */
 export const ed25519ctx: EdDSA = /* @__PURE__ */ ed({ domain: ed25519_domain });
-/** Prehashed version of ed25519. See {@link ed25519} */
+/**
+ * Prehashed version of ed25519. See {@link ed25519}
+ * @example
+ * Use the prehashed Ed25519 variant for one message.
+ *
+ * ```ts
+ * const { secretKey, publicKey } = ed25519ph.keygen();
+ * const msg = new TextEncoder().encode('hello noble');
+ * const sig = ed25519ph.sign(msg, secretKey);
+ * const isValid = ed25519ph.verify(sig, msg, publicKey);
+ * ```
+ */
 export const ed25519ph: EdDSA = /* @__PURE__ */ ed({ domain: ed25519_domain, prehash: sha512 });
+/**
+ * FROST threshold signatures over ed25519. RFC 9591.
+ * @example
+ * Create one trusted-dealer package for 2-of-3 ed25519 signing.
+ *
+ * ```ts
+ * const alice = ed25519_FROST.Identifier.derive('alice@example.com');
+ * const bob = ed25519_FROST.Identifier.derive('bob@example.com');
+ * const carol = ed25519_FROST.Identifier.derive('carol@example.com');
+ * const deal = ed25519_FROST.trustedDealer({ min: 2, max: 3 }, [alice, bob, carol]);
+ * ```
+ */
 export const ed25519_FROST: FROST = /* @__PURE__ */ (() =>
   createFROST({
     name: 'FROST-ED25519-SHA512-v1',
@@ -170,6 +207,8 @@ export const ed25519_FROST: FROST = /* @__PURE__ */ (() =>
 /**
  * ECDH using curve25519 aka x25519.
  * @example
+ * Derive one shared secret between two X25519 peers.
+ *
  * ```js
  * import { x25519 } from '@noble/curves/ed25519.js';
  * const alice = x25519.keygen();
@@ -269,7 +308,15 @@ function map_to_curve_elligator2_edwards25519(u: bigint) {
   return { x: Fp.mul(xn, xd_inv), y: Fp.mul(yn, yd_inv) }; //  13. return (xn, xd, yn, yd)
 }
 
-/** Hashing to ed25519 points / field. RFC 9380 methods. */
+/**
+ * Hashing to ed25519 points / field. RFC 9380 methods.
+ * @example
+ * Hash one message onto the ed25519 curve.
+ *
+ * ```ts
+ * const point = ed25519_hasher.hashToCurve(new TextEncoder().encode('hello noble'));
+ * ```
+ */
 export const ed25519_hasher: H2CHasher<EdwardsPointCons> = /* @__PURE__ */ (() =>
   createHasher(
     ed25519_Point,
@@ -410,7 +457,7 @@ class _RistrettoPoint extends PrimeEdwardsPoint<_RistrettoPoint> {
   /**
    * Converts ristretto-encoded string to ristretto point.
    * Described in [RFC9496](https://www.rfc-editor.org/rfc/rfc9496#name-decode).
-   * @param hex Ristretto-encoded 32 bytes. Not every 32-byte string is valid ristretto encoding
+   * @param hex - Ristretto-encoded 32 bytes. Not every 32-byte string is valid ristretto encoding
    */
   static fromHex(hex: string): _RistrettoPoint {
     return _RistrettoPoint.fromBytes(hexToBytes(hex));
@@ -468,11 +515,20 @@ class _RistrettoPoint extends PrimeEdwardsPoint<_RistrettoPoint> {
   }
 }
 
+/** Prime-order Ristretto255 group bundle. */
 export const ristretto255: {
   Point: typeof _RistrettoPoint;
 } = { Point: _RistrettoPoint };
 
-/** Hashing to ristretto255 points / field. RFC 9380 methods. */
+/**
+ * Hashing to ristretto255 points / field. RFC 9380 methods.
+ * @example
+ * Hash one message onto ristretto255.
+ *
+ * ```ts
+ * const point = ristretto255_hasher.hashToCurve(new TextEncoder().encode('hello noble'));
+ * ```
+ */
 export const ristretto255_hasher: H2CHasherBase<typeof _RistrettoPoint> = {
   Point: _RistrettoPoint,
   /**
@@ -517,7 +573,19 @@ export const ristretto255_hasher: H2CHasherBase<typeof _RistrettoPoint> = {
   },
 };
 
-/** ristretto255 OPRF, defined in RFC 9497. */
+/**
+ * ristretto255 OPRF, defined in RFC 9497.
+ * @example
+ * Run one blind/evaluate/finalize OPRF round over ristretto255.
+ *
+ * ```ts
+ * const input = new TextEncoder().encode('hello noble');
+ * const keys = ristretto255_oprf.oprf.generateKeyPair();
+ * const blind = ristretto255_oprf.oprf.blind(input);
+ * const evaluated = ristretto255_oprf.oprf.blindEvaluate(keys.secretKey, blind.blinded);
+ * const output = ristretto255_oprf.oprf.finalize(input, blind.blind, evaluated);
+ * ```
+ */
 export const ristretto255_oprf: OPRF = /* @__PURE__ */ (() =>
   createORPF({
     name: 'ristretto255-SHA512',
@@ -526,7 +594,18 @@ export const ristretto255_oprf: OPRF = /* @__PURE__ */ (() =>
     hashToGroup: ristretto255_hasher.hashToCurve,
     hashToScalar: ristretto255_hasher.hashToScalar,
   }))();
-/** FROST threshold signatures over ristretto255. RFC 9591. */
+/**
+ * FROST threshold signatures over ristretto255. RFC 9591.
+ * @example
+ * Create one trusted-dealer package for 2-of-3 ristretto255 signing.
+ *
+ * ```ts
+ * const alice = ristretto255_FROST.Identifier.derive('alice@example.com');
+ * const bob = ristretto255_FROST.Identifier.derive('bob@example.com');
+ * const carol = ristretto255_FROST.Identifier.derive('carol@example.com');
+ * const deal = ristretto255_FROST.trustedDealer({ min: 2, max: 3 }, [alice, bob, carol]);
+ * ```
+ */
 export const ristretto255_FROST: FROST = /* @__PURE__ */ (() =>
   createFROST({
     name: 'FROST-RISTRETTO255-SHA512-v1',
@@ -542,7 +621,14 @@ export const ristretto255_FROST: FROST = /* @__PURE__ */ (() =>
  * Weird / bogus points, useful for debugging.
  * All 8 ed25519 points of 8-torsion subgroup can be generated from the point
  * T = `26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05`.
- * ⟨T⟩ = { O, T, 2T, 3T, 4T, 5T, 6T, 7T }
+ * The subgroup generated by `T` is `{ O, T, 2T, 3T, 4T, 5T, 6T, 7T }`.
+ * @example
+ * Decode one known torsion point for debugging.
+ *
+ * ```ts
+ * import { ED25519_TORSION_SUBGROUP, ed25519 } from '@noble/curves/ed25519.js';
+ * const point = ed25519.Point.fromHex(ED25519_TORSION_SUBGROUP[1]);
+ * ```
  */
 export const ED25519_TORSION_SUBGROUP: string[] = [
   '0100000000000000000000000000000000000000000000000000000000000000',

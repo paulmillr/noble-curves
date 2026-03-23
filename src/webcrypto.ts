@@ -43,6 +43,7 @@ const TYPE_RAW = 'raw';
 const TYPE_JWK = 'jwk';
 const TYPE_SPKI = 'spki';
 const TYPE_PKCS = 'pkcs8';
+/** Key serialization formats supported by the WebCrypto wrappers. */
 export type WebCryptoFormat =
   | typeof TYPE_RAW
   | typeof TYPE_JWK
@@ -50,7 +51,9 @@ export type WebCryptoFormat =
   | typeof TYPE_PKCS;
 /** WebCrypto keys can be in raw, jwk, pkcs8/spki formats. Raw is internal and fragile. */
 export type WebCryptoOpts = {
+  /** Preferred secret-key serialization format. */
   formatSec?: WebCryptoFormat;
+  /** Preferred public-key serialization format. */
   formatPub?: WebCryptoFormat;
 };
 // default formats
@@ -282,8 +285,24 @@ type WebCryptoBaseCurve = {
 };
 
 // Specific per-curve methods - no reason to export them; we can't "add" a new curve
+/** WebCrypto signing interface shared by ECDSA and EdDSA helpers. */
 export type WebCryptoSigner = {
+  /**
+   * Sign one message with a WebCrypto-backed private key.
+   * @param message - Message bytes to sign.
+   * @param secretKey - Secret key in one supported format.
+   * @param opts - Optional key-format overrides. See {@link WebCryptoOpts}.
+   * @returns Signature bytes.
+   */
   sign(message: Uint8Array, secretKey: Key, opts?: WebCryptoOpts): Promise<Uint8Array>;
+  /**
+   * Verify one signature with a WebCrypto-backed public key.
+   * @param signature - Signature bytes.
+   * @param message - Signed message bytes.
+   * @param publicKey - Public key in one supported format.
+   * @param opts - Optional key-format overrides. See {@link WebCryptoOpts}.
+   * @returns `true` when the signature is valid.
+   */
   verify(
     signature: Uint8Array,
     message: Uint8Array,
@@ -291,11 +310,22 @@ export type WebCryptoSigner = {
     opts?: WebCryptoOpts
   ): Promise<boolean>;
 };
+/** WebCrypto ECDH interface for shared-secret derivation. */
 export type WebCryptoECDH = {
+  /**
+   * Derive one shared secret from a local secret key and peer public key.
+   * @param secA - Local secret key in one supported format.
+   * @param pubB - Peer public key in one supported format.
+   * @param opts - Optional key-format overrides. See {@link WebCryptoOpts}.
+   * @returns Shared secret bytes.
+   */
   getSharedSecret(secA: Uint8Array, pubB: Uint8Array, opts?: WebCryptoOpts): Promise<Uint8Array>;
 };
+/** WebCrypto ECDSA interface with keygen, signing, and ECDH helpers. */
 export type WebCryptoECDSA = WebCryptoBaseCurve & WebCryptoSigner & WebCryptoECDH;
+/** WebCrypto EdDSA interface with keygen and signing helpers. */
 export type WebCryptoEdDSA = WebCryptoBaseCurve & WebCryptoSigner;
+/** WebCrypto Montgomery interface with keygen and ECDH helpers. */
 export type WebCryptoMontgomery = WebCryptoBaseCurve & WebCryptoECDH;
 
 function wrapECDSA(
@@ -350,7 +380,20 @@ function wrapMontgomery(
   });
 }
 
-/** Friendly wrapper over built-in WebCrypto NIST P-256 (secp256r1). */
+/**
+ * Friendly wrapper over built-in WebCrypto NIST P-256 (secp256r1).
+ * @example
+ * Check support, then sign and verify once with WebCrypto P-256.
+ *
+ * ```ts
+ * if (await p256.isSupported()) {
+ *   const { secretKey, publicKey } = await p256.keygen();
+ *   const msg = new TextEncoder().encode('hello noble');
+ *   const sig = await p256.sign(msg, secretKey);
+ *   const isValid = await p256.verify(sig, msg, publicKey);
+ * }
+ * ```
+ */
 export const p256: WebCryptoECDSA = /* @__PURE__ */ wrapECDSA(
   'P-256',
   'SHA-256',
@@ -358,7 +401,20 @@ export const p256: WebCryptoECDSA = /* @__PURE__ */ wrapECDSA(
   '3041020100301306072a8648ce3d020106082a8648ce3d030107042730250201010420'
 );
 
-/** Friendly wrapper over built-in WebCrypto NIST P-384 (secp384r1). */
+/**
+ * Friendly wrapper over built-in WebCrypto NIST P-384 (secp384r1).
+ * @example
+ * Check support, then sign and verify once with WebCrypto P-384.
+ *
+ * ```ts
+ * if (await p384.isSupported()) {
+ *   const { secretKey, publicKey } = await p384.keygen();
+ *   const msg = new TextEncoder().encode('hello noble');
+ *   const sig = await p384.sign(msg, secretKey);
+ *   const isValid = await p384.verify(sig, msg, publicKey);
+ * }
+ * ```
+ */
 export const p384: WebCryptoECDSA = /* @__PURE__ */ wrapECDSA(
   'P-384',
   'SHA-384',
@@ -366,7 +422,20 @@ export const p384: WebCryptoECDSA = /* @__PURE__ */ wrapECDSA(
   '304e020100301006072a8648ce3d020106052b81040022043730350201010430'
 );
 
-/** Friendly wrapper over built-in WebCrypto NIST P-521 (secp521r1). */
+/**
+ * Friendly wrapper over built-in WebCrypto NIST P-521 (secp521r1).
+ * @example
+ * Check support, then sign and verify once with WebCrypto P-521.
+ *
+ * ```ts
+ * if (await p521.isSupported()) {
+ *   const { secretKey, publicKey } = await p521.keygen();
+ *   const msg = new TextEncoder().encode('hello noble');
+ *   const sig = await p521.sign(msg, secretKey);
+ *   const isValid = await p521.verify(sig, msg, publicKey);
+ * }
+ * ```
+ */
 export const p521: WebCryptoECDSA = /* @__PURE__ */ wrapECDSA(
   'P-521',
   'SHA-512',
@@ -374,28 +443,78 @@ export const p521: WebCryptoECDSA = /* @__PURE__ */ wrapECDSA(
   '3060020100301006072a8648ce3d020106052b81040023044930470201010442'
 );
 
-/** Friendly wrapper over built-in WebCrypto ed25519. */
+/**
+ * Friendly wrapper over built-in WebCrypto ed25519.
+ * @example
+ * Check support, then sign and verify once with WebCrypto Ed25519.
+ *
+ * ```ts
+ * if (await ed25519.isSupported()) {
+ *   const { secretKey, publicKey } = await ed25519.keygen();
+ *   const msg = new TextEncoder().encode('hello noble');
+ *   const sig = await ed25519.sign(msg, secretKey);
+ *   const isValid = await ed25519.verify(sig, msg, publicKey);
+ * }
+ * ```
+ */
 export const ed25519: WebCryptoEdDSA = /* @__PURE__ */ wrapEdDSA(
   'Ed25519',
   32,
   '302e020100300506032b657004220420'
 );
 
-/** Friendly wrapper over built-in WebCrypto ed448. */
+/**
+ * Friendly wrapper over built-in WebCrypto ed448.
+ * @example
+ * Check support, then sign and verify once with WebCrypto Ed448.
+ *
+ * ```ts
+ * if (await ed448.isSupported()) {
+ *   const { secretKey, publicKey } = await ed448.keygen();
+ *   const msg = new TextEncoder().encode('hello noble');
+ *   const sig = await ed448.sign(msg, secretKey);
+ *   const isValid = await ed448.verify(sig, msg, publicKey);
+ * }
+ * ```
+ */
 export const ed448: WebCryptoEdDSA = /* @__PURE__ */ wrapEdDSA(
   'Ed448',
   57,
   '3047020100300506032b6571043b0439'
 );
 
-/** Friendly wrapper over built-in WebCrypto x25519 (ECDH over Curve25519). */
+/**
+ * Friendly wrapper over built-in WebCrypto x25519 (ECDH over Curve25519).
+ * @example
+ * Check support, then derive one shared secret with WebCrypto X25519.
+ *
+ * ```ts
+ * if (await x25519.isSupported()) {
+ *   const alice = await x25519.keygen();
+ *   const bob = await x25519.keygen();
+ *   const shared = await x25519.getSharedSecret(alice.secretKey, bob.publicKey);
+ * }
+ * ```
+ */
 export const x25519: WebCryptoMontgomery = /* @__PURE__ */ wrapMontgomery(
   'X25519',
   32,
   '302e020100300506032b656e04220420'
 );
 
-/** Friendly wrapper over built-in WebCrypto x448 (ECDH over Curve448). */
+/**
+ * Friendly wrapper over built-in WebCrypto x448 (ECDH over Curve448).
+ * @example
+ * Check support, then derive one shared secret with WebCrypto X448.
+ *
+ * ```ts
+ * if (await x448.isSupported()) {
+ *   const alice = await x448.keygen();
+ *   const bob = await x448.keygen();
+ *   const shared = await x448.getSharedSecret(alice.secretKey, bob.publicKey);
+ * }
+ * ```
+ */
 export const x448: WebCryptoMontgomery = /* @__PURE__ */ wrapMontgomery(
   'X448',
   56,

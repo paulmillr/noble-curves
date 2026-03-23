@@ -61,17 +61,17 @@ import {
   type BlsPostPrecomputePointAddFn,
 } from './abstract/bls.ts';
 import { Field, type IField } from './abstract/modular.ts';
-import type { Fp, Fp12, Fp2, Fp6 } from './abstract/tower.ts';
+import type { Fp, Fp12, Fp2 } from './abstract/tower.ts';
 import { psiFrobenius, tower12 } from './abstract/tower.ts';
 import { weierstrass, type WeierstrassOpts } from './abstract/weierstrass.ts';
 import { bitLen } from './utils.ts';
 // prettier-ignore
-const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3);
-const _6n = BigInt(6);
+const _0n = /* @__PURE__ */ BigInt(0), _1n = /* @__PURE__ */ BigInt(1), _2n = /* @__PURE__ */ BigInt(2), _3n = /* @__PURE__ */ BigInt(3);
+const _6n = /* @__PURE__ */ BigInt(6);
 
-const BN_X = BigInt('4965661367192848881');
-const BN_X_LEN = bitLen(BN_X);
-const SIX_X_SQUARED = _6n * BN_X ** _2n;
+const BN_X = /* @__PURE__ */ BigInt('4965661367192848881');
+const BN_X_LEN = /* @__PURE__ */ (() => bitLen(BN_X))();
+const SIX_X_SQUARED = /* @__PURE__ */ (() => _6n * BN_X ** _2n)();
 
 const bn254_G1_CURVE: WeierstrassOpts<bigint> = {
   p: BigInt('0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47'),
@@ -85,41 +85,52 @@ const bn254_G1_CURVE: WeierstrassOpts<bigint> = {
 
 // r == n
 // Finite field over r. It's for convenience and is not used in the code below.
-export const bn254_Fr: IField<bigint> = Field(bn254_G1_CURVE.n);
+// These factories are side-effect free; mark them pure so single-export bundles can drop the rest.
+/** bn254 scalar field. */
+export const bn254_Fr: IField<bigint> = /* @__PURE__ */ (() => Field(bn254_G1_CURVE.n))();
 
 // Fp2.div(Fp2.mul(Fp2.ONE, _3n), Fp2.NONRESIDUE)
-const Fp2B = {
+const Fp2B = /* @__PURE__ */ (() => ({
   c0: BigInt('19485874751759354771024239261021720505790618469301721065564631296452457478373'),
   c1: BigInt('266929791119991161246907387137283842545076965332900288569378510910307636690'),
-};
+}))();
 
-const { Fp, Fp2, Fp6, Fp12 } = tower12({
-  ORDER: bn254_G1_CURVE.p,
-  X_LEN: BN_X_LEN,
-  FP2_NONRESIDUE: [BigInt(9), _1n],
-  Fp2mulByB: (num) => Fp2.mul(num, Fp2B),
-  Fp12finalExponentiate: (num) => {
-    const powMinusX = (num: Fp12) => Fp12.conjugate(Fp12._cyclotomicExp(num, BN_X));
-    const r0 = Fp12.mul(Fp12.conjugate(num), Fp12.inv(num));
-    const r = Fp12.mul(Fp12.frobeniusMap(r0, 2), r0);
-    const y1 = Fp12._cyclotomicSquare(powMinusX(r));
-    const y2 = Fp12.mul(Fp12._cyclotomicSquare(y1), y1);
-    const y4 = powMinusX(y2);
-    const y6 = powMinusX(Fp12._cyclotomicSquare(y4));
-    const y8 = Fp12.mul(Fp12.mul(Fp12.conjugate(y6), y4), Fp12.conjugate(y2));
-    const y9 = Fp12.mul(y8, y1);
-    return Fp12.mul(
-      Fp12.frobeniusMap(Fp12.mul(Fp12.conjugate(r), y9), 3),
-      Fp12.mul(
-        Fp12.frobeniusMap(y8, 2),
-        Fp12.mul(Fp12.frobeniusMap(y9, 1), Fp12.mul(Fp12.mul(y8, y4), r))
-      )
-    );
-  },
-});
+let Fp12: ReturnType<typeof tower12>['Fp12'];
+const tower = /* @__PURE__ */ (() => {
+  const res = tower12({
+    ORDER: bn254_G1_CURVE.p,
+    X_LEN: BN_X_LEN,
+    FP2_NONRESIDUE: [BigInt(9), _1n],
+    Fp2mulByB: (num) => Fp2.mul(num, Fp2B),
+    Fp12finalExponentiate: (num) => {
+      const powMinusX = (num: Fp12) => Fp12.conjugate(Fp12._cyclotomicExp(num, BN_X));
+      const r0 = Fp12.mul(Fp12.conjugate(num), Fp12.inv(num));
+      const r = Fp12.mul(Fp12.frobeniusMap(r0, 2), r0);
+      const y1 = Fp12._cyclotomicSquare(powMinusX(r));
+      const y2 = Fp12.mul(Fp12._cyclotomicSquare(y1), y1);
+      const y4 = powMinusX(y2);
+      const y6 = powMinusX(Fp12._cyclotomicSquare(y4));
+      const y8 = Fp12.mul(Fp12.mul(Fp12.conjugate(y6), y4), Fp12.conjugate(y2));
+      const y9 = Fp12.mul(y8, y1);
+      return Fp12.mul(
+        Fp12.frobeniusMap(Fp12.mul(Fp12.conjugate(r), y9), 3),
+        Fp12.mul(
+          Fp12.frobeniusMap(y8, 2),
+          Fp12.mul(Fp12.frobeniusMap(y9, 1), Fp12.mul(Fp12.mul(y8, y4), r))
+        )
+      );
+    },
+  });
+  Fp12 = res.Fp12;
+  return res;
+})();
+const Fp = /* @__PURE__ */ (() => tower.Fp)();
+const Fp2 = /* @__PURE__ */ (() => tower.Fp2)();
 
 // END OF CURVE FIELDS
-const { G2psi, psi } = psiFrobenius(Fp, Fp2, Fp2.NONRESIDUE);
+const frob = /* @__PURE__ */ (() => psiFrobenius(Fp, Fp2, Fp2.NONRESIDUE))();
+const psi = /* @__PURE__ */ (() => frob.psi)();
+const G2psi = /* @__PURE__ */ (() => frob.G2psi)();
 
 export const _postPrecompute: BlsPostPrecomputeFn = (
   Rx: Fp2,
@@ -136,7 +147,7 @@ export const _postPrecompute: BlsPostPrecomputeFn = (
 };
 
 // cofactor: (36 * X^4) + (36 * X^3) + (30 * X^2) + 6*X + 1
-const bn254_G2_CURVE: WeierstrassOpts<Fp2> = {
+const bn254_G2_CURVE: WeierstrassOpts<Fp2> = /* @__PURE__ */ (() => ({
   p: Fp2.ORDER,
   n: bn254_G1_CURVE.n,
   h: BigInt('0x30644e72e131a029b85045b68181585e06ceecda572a2489345f2299c0f9fa8d'),
@@ -150,15 +161,15 @@ const bn254_G2_CURVE: WeierstrassOpts<Fp2> = {
     BigInt('8495653923123431417604973247489272438418190587263600148770280649306958101930'),
     BigInt('4082367875863433681332203403145435568316851327593401208105741076214120093531'),
   ]),
-};
+}))();
 
-const fields = { Fp, Fp2, Fp6, Fp12, Fr: bn254_Fr };
-const bn254_G1 = weierstrass(bn254_G1_CURVE, {
+const fields = /* @__PURE__ */ (() => ({ Fp, Fp2, Fp6: tower.Fp6, Fp12, Fr: bn254_Fr }))();
+const bn254_G1 = /* @__PURE__ */ weierstrass(bn254_G1_CURVE, {
   Fp,
   Fn: bn254_Fr,
   allowInfinityPoint: true,
 });
-const bn254_G2 = weierstrass(bn254_G2_CURVE, {
+const bn254_G2 = /* @__PURE__ */ weierstrass(bn254_G2_CURVE, {
   Fp: Fp2,
   Fn: bn254_Fr,
   allowInfinityPoint: true,
@@ -184,13 +195,13 @@ No hashToCurve for now (and signatures):
 // const hasherOpts = {
 //   { ...htfDefaults, m: 1, DST: 'BN254G2_XMD:SHA-256_SVDW_RO_' }
 // };
-const bn254_params = {
+const bn254_params = /* @__PURE__ */ (() => ({
   ateLoopSize: BN_X * _6n + _2n,
   r: bn254_Fr.ORDER,
   xNegative: false,
   twistType: 'divisive' as const,
   postPrecompute: _postPrecompute,
-};
+}))();
 // const bn254_hasher = {
 //   hasherOpts: htfDefaults,
 //   hasherOptsG1: { m: 1, DST: 'BN254G2_XMD:SHA-256_SVDW_RO_' },
@@ -214,6 +225,17 @@ const bn254_params = {
 /**
  * bn254 (a.k.a. alt_bn128) pairing-friendly curve.
  * Contains G1 / G2 operations and pairings.
+ * @example
+ * Compute a pairing from the two generator points.
+ *
+ * ```ts
+ * const gt = bn254.pairing(bn254.G1.Point.BASE, bn254.G2.Point.BASE);
+ * ```
  */
 // bn254_hasher
-export const bn254: BlsCurvePair = blsBasic(fields, bn254_G1, bn254_G2, bn254_params);
+export const bn254: BlsCurvePair = /* @__PURE__ */ blsBasic(
+  fields,
+  bn254_G1,
+  bn254_G2,
+  bn254_params
+);

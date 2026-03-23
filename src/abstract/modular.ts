@@ -24,7 +24,17 @@ const _3n = /* @__PURE__ */ BigInt(3), _4n = /* @__PURE__ */ BigInt(4), _5n = /*
 const _7n = /* @__PURE__ */ BigInt(7), _8n = /* @__PURE__ */ BigInt(8), _9n = /* @__PURE__ */ BigInt(9);
 const _16n = /* @__PURE__ */ BigInt(16);
 
-// Calculates a modulo b
+/**
+ * @param a - Dividend value.
+ * @param b - Positive modulus.
+ * @returns Reduced value in `[0, b)`.
+ * @example
+ * Normalize a bigint into one field residue.
+ *
+ * ```ts
+ * mod(-1n, 5n);
+ * ```
+ */
 export function mod(a: bigint, b: bigint): bigint {
   const result = a % b;
   return result >= _0n ? result : b + result;
@@ -32,14 +42,35 @@ export function mod(a: bigint, b: bigint): bigint {
 /**
  * Efficiently raise num to power and do modular division.
  * Unsafe in some contexts: uses ladder, so can expose bigint bits.
+ * @param num - Base value.
+ * @param power - Exponent value.
+ * @param modulo - Reduction modulus.
+ * @returns Modular exponentiation result.
+ * @throws If the modulus or exponent is invalid. {@link Error}
  * @example
+ * Raise one bigint to a modular power.
+ *
+ * ```ts
  * pow(2n, 6n, 11n) // 64n % 11n == 9n
+ * ```
  */
 export function pow(num: bigint, power: bigint, modulo: bigint): bigint {
   return FpPow(Field(modulo), num, power);
 }
 
-/** Does `x^(2^power)` mod p. `pow2(30, 4)` == `30^(2^4)` */
+/**
+ * Does `x^(2^power)` mod p. `pow2(30, 4)` == `30^(2^4)`.
+ * @param x - Base value.
+ * @param power - Number of squarings.
+ * @param modulo - Reduction modulus.
+ * @returns Repeated-squaring result.
+ * @example
+ * Apply repeated squaring inside one field.
+ *
+ * ```ts
+ * pow2(3n, 2n, 11n);
+ * ```
+ */
 export function pow2(x: bigint, power: bigint, modulo: bigint): bigint {
   let res = x;
   while (power-- > _0n) {
@@ -51,7 +82,17 @@ export function pow2(x: bigint, power: bigint, modulo: bigint): bigint {
 
 /**
  * Inverses number over modulo.
- * Implemented using [Euclidean GCD](https://brilliant.org/wiki/extended-euclidean-algorithm/).
+ * Implemented using the {@link https://brilliant.org/wiki/extended-euclidean-algorithm/ | extended Euclidean algorithm}.
+ * @param number - Value to invert.
+ * @param modulo - Positive modulus.
+ * @returns Multiplicative inverse.
+ * @throws If the modulus is invalid or the inverse does not exist. {@link Error}
+ * @example
+ * Compute one modular inverse with the extended Euclidean algorithm.
+ *
+ * ```ts
+ * invert(3n, 11n);
+ * ```
  */
 export function invert(number: bigint, modulo: bigint): bigint {
   if (number === _0n) throw new Error('invert: expected non-zero number');
@@ -127,10 +168,19 @@ function sqrt9mod16(P: bigint): <T>(Fp: IField<T>, n: T) => T {
 
 /**
  * Tonelli-Shanks square root search algorithm.
- * 1. https://eprint.iacr.org/2012/685.pdf (page 12)
+ * 1. {@link https://eprint.iacr.org/2012/685.pdf | eprint 2012/685}, page 12
  * 2. Square Roots from 1; 24, 51, 10 to Dan Shanks
- * @param P field order
+ * @param P - field order
  * @returns function that takes field Fp (created from P) and number n
+ * @throws If the field is too small, non-prime, or the square root does not exist. {@link Error}
+ * @example
+ * Construct a square-root helper for primes that need Tonelli-Shanks.
+ *
+ * ```ts
+ * import { Field, tonelliShanks } from '@noble/curves/abstract/modular.js';
+ * const Fp = Field(17n);
+ * const sqrt = tonelliShanks(17n)(Fp, 4n);
+ * ```
  */
 export function tonelliShanks(P: bigint): <T>(Fp: IField<T>, n: T) => T {
   // Initialization (precomputation).
@@ -208,6 +258,17 @@ export function tonelliShanks(P: bigint): <T>(Fp: IField<T>, n: T) => T {
  *
  * Different algorithms can give different roots, it is up to user to decide which one they want.
  * For example there is FpSqrtOdd/FpSqrtEven to choice root based on oddness (used for hash-to-curve).
+ * @param P - Field order.
+ * @returns Square-root helper.
+ * @throws If the field is unsupported or the square root does not exist. {@link Error}
+ * @example
+ * Choose the square-root helper appropriate for one field modulus.
+ *
+ * ```ts
+ * import { Field, FpSqrt } from '@noble/curves/abstract/modular.js';
+ * const Fp = Field(17n);
+ * const sqrt = FpSqrt(17n)(Fp, 4n);
+ * ```
  */
 export function FpSqrt(P: bigint): <T>(Fp: IField<T>, n: T) => T {
   // P ≡ 3 (mod 4) => √n = n^((P+1)/4)
@@ -220,50 +281,194 @@ export function FpSqrt(P: bigint): <T>(Fp: IField<T>, n: T) => T {
   return tonelliShanks(P);
 }
 
-// Little-endian check for first LE bit (last BE bit);
+/**
+ * @param num - Value to inspect.
+ * @param modulo - Field modulus.
+ * @returns `true` when the least-significant little-endian bit is set.
+ * @example
+ * Inspect the low bit used by little-endian sign conventions.
+ *
+ * ```ts
+ * isNegativeLE(3n, 11n);
+ * ```
+ */
 export const isNegativeLE = (num: bigint, modulo: bigint): boolean =>
   (mod(num, modulo) & _1n) === _1n;
 
-/** Field is not always over prime: for example, Fp2 has ORDER(q)=p^m. */
+/** Generic field interface used by prime and extension fields alike. */
 export interface IField<T> {
+  /** Field order `q`, which may be prime or a prime power. */
   ORDER: bigint;
+  /** Canonical encoded byte length. */
   BYTES: number;
+  /** Canonical encoded bit length. */
   BITS: number;
+  /** Whether encoded field elements use little-endian bytes. */
   isLE: boolean;
+  /** Additive identity. */
   ZERO: T;
+  /** Multiplicative identity. */
   ONE: T;
   // 1-arg
+  /**
+   * Normalize one value into the field.
+   * @param num - Input value.
+   * @returns Normalized field value.
+   */
   create: (num: T) => T;
+  /**
+   * Check whether one value already belongs to the field.
+   * @param num - Input value.
+   * @returns Whether the value already belongs to the field.
+   */
   isValid: (num: T) => boolean;
+  /**
+   * Check whether one value is zero.
+   * @param num - Input value.
+   * @returns Whether the value is zero.
+   */
   is0: (num: T) => boolean;
+  /**
+   * Check whether one value is non-zero and belongs to the field.
+   * @param num - Input value.
+   * @returns Whether the value is non-zero and valid.
+   */
   isValidNot0: (num: T) => boolean;
+  /**
+   * Negate one value.
+   * @param num - Input value.
+   * @returns Negated value.
+   */
   neg(num: T): T;
+  /**
+   * Invert one value multiplicatively.
+   * @param num - Input value.
+   * @returns Multiplicative inverse.
+   */
   inv(num: T): T;
+  /**
+   * Compute one square root when it exists.
+   * @param num - Input value.
+   * @returns Square root.
+   */
   sqrt(num: T): T;
+  /**
+   * Square one value.
+   * @param num - Input value.
+   * @returns Squared value.
+   */
   sqr(num: T): T;
   // 2-args
+  /**
+   * Compare two field values.
+   * @param lhs - Left value.
+   * @param rhs - Right value.
+   * @returns Whether both values are equal.
+   */
   eql(lhs: T, rhs: T): boolean;
+  /**
+   * Add two normalized field values.
+   * @param lhs - Left value.
+   * @param rhs - Right value.
+   * @returns Sum value.
+   */
   add(lhs: T, rhs: T): T;
+  /**
+   * Subtract two normalized field values.
+   * @param lhs - Left value.
+   * @param rhs - Right value.
+   * @returns Difference value.
+   */
   sub(lhs: T, rhs: T): T;
+  /**
+   * Multiply two field values.
+   * @param lhs - Left value.
+   * @param rhs - Right value or scalar.
+   * @returns Product value.
+   */
   mul(lhs: T, rhs: T | bigint): T;
+  /**
+   * Raise one field value to a power.
+   * @param lhs - Base value.
+   * @param power - Exponent.
+   * @returns Power value.
+   */
   pow(lhs: T, power: bigint): T;
+  /**
+   * Divide one field value by another.
+   * @param lhs - Dividend.
+   * @param rhs - Divisor or scalar.
+   * @returns Quotient value.
+   */
   div(lhs: T, rhs: T | bigint): T;
   // N for NonNormalized (for now)
+  /**
+   * Add two values without re-normalizing the result.
+   * @param lhs - Left value.
+   * @param rhs - Right value.
+   * @returns Non-normalized sum.
+   */
   addN(lhs: T, rhs: T): T;
+  /**
+   * Subtract two values without re-normalizing the result.
+   * @param lhs - Left value.
+   * @param rhs - Right value.
+   * @returns Non-normalized difference.
+   */
   subN(lhs: T, rhs: T): T;
+  /**
+   * Multiply two values without re-normalizing the result.
+   * @param lhs - Left value.
+   * @param rhs - Right value or scalar.
+   * @returns Non-normalized product.
+   */
   mulN(lhs: T, rhs: T | bigint): T;
+  /**
+   * Square one value without re-normalizing the result.
+   * @param num - Input value.
+   * @returns Non-normalized square.
+   */
   sqrN(num: T): T;
 
   // Optional
   // Should be same as sgn0 function in
   // [RFC9380](https://www.rfc-editor.org/rfc/rfc9380#section-4.1).
   // NOTE: sgn0 is 'negative in LE', which is same as odd. And negative in LE is kinda strange definition anyway.
-  isOdd?(num: T): boolean; // Odd instead of even since we have it for Fp2
+  /**
+   * Return the RFC 9380 `sgn0`-style oddness bit when supported.
+   * This uses oddness instead of evenness so extension fields like Fp2 can expose the same hook.
+   * @param num - Input value.
+   * @returns Whether the value is odd under the field encoding.
+   */
+  isOdd?(num: T): boolean;
   // legendre?(num: T): T;
+  /**
+   * Invert many field elements in one batch.
+   * @param lst - Values to invert.
+   * @returns Batch of inverses.
+   */
   invertBatch: (lst: T[]) => T[];
+  /**
+   * Encode one field value into canonical bytes.
+   * @param num - Input value.
+   * @returns Canonical byte encoding.
+   */
   toBytes(num: T): Uint8Array;
+  /**
+   * Decode one field value from canonical bytes.
+   * @param bytes - Canonical byte encoding.
+   * @param skipValidation - Whether to skip range validation.
+   * @returns Decoded field value.
+   */
   fromBytes(bytes: Uint8Array, skipValidation?: boolean): T;
   // If c is False, CMOV returns a, otherwise it returns b.
+  /**
+   * Constant-time conditional move.
+   * @param a - Value used when the condition is false.
+   * @param b - Value used when the condition is true.
+   * @param c - Selection bit.
+   * @returns Selected value.
+   */
   cmov(a: T, b: T, c: boolean): T;
 }
 // prettier-ignore
@@ -272,6 +477,17 @@ const FIELD_FIELDS = [
   'eql', 'add', 'sub', 'mul', 'pow', 'div',
   'addN', 'subN', 'mulN', 'sqrN'
 ] as const;
+/**
+ * @param field - Field implementation.
+ * @returns Validated field.
+ * @example
+ * Check that a field implementation exposes the operations curve code expects.
+ *
+ * ```ts
+ * import { Field, validateField } from '@noble/curves/abstract/modular.js';
+ * const Fp = validateField(Field(17n));
+ * ```
+ */
 export function validateField<T>(field: IField<T>): IField<T> {
   const initial = {
     ORDER: 'bigint',
@@ -294,6 +510,19 @@ export function validateField<T>(field: IField<T>): IField<T> {
 /**
  * Same as `pow` but for Fp: non-constant-time.
  * Unsafe in some contexts: uses ladder, so can expose bigint bits.
+ * @param Fp - Field implementation.
+ * @param num - Base value.
+ * @param power - Exponent value.
+ * @returns Powered field element.
+ * @throws If the exponent is negative. {@link Error}
+ * @example
+ * Raise one field element to a public exponent.
+ *
+ * ```ts
+ * import { Field, FpPow } from '@noble/curves/abstract/modular.js';
+ * const Fp = Field(17n);
+ * const x = FpPow(Fp, 3n, 5n);
+ * ```
  */
 export function FpPow<T>(Fp: IField<T>, num: T, power: bigint): T {
   if (power < _0n) throw new Error('invalid exponent, negatives unsupported');
@@ -312,7 +541,18 @@ export function FpPow<T>(Fp: IField<T>, num: T, power: bigint): T {
 /**
  * Efficiently invert an array of Field elements.
  * Exception-free. Will return `undefined` for 0 elements.
- * @param passZero map 0 to 0 (instead of undefined)
+ * @param Fp - Field implementation.
+ * @param nums - Values to invert.
+ * @param passZero - map 0 to 0 (instead of undefined)
+ * @returns Inverted values.
+ * @example
+ * Invert several field elements with one shared inversion.
+ *
+ * ```ts
+ * import { Field, FpInvertBatch } from '@noble/curves/abstract/modular.js';
+ * const Fp = Field(17n);
+ * const inv = FpInvertBatch(Fp, [1n, 2n, 4n]);
+ * ```
  */
 export function FpInvertBatch<T>(Fp: IField<T>, nums: T[], passZero = false): T[] {
   const inverted = new Array(nums.length).fill(passZero ? Fp.ZERO : undefined);
@@ -333,7 +573,21 @@ export function FpInvertBatch<T>(Fp: IField<T>, nums: T[], passZero = false): T[
   return inverted;
 }
 
-// TODO: remove
+/**
+ * @param Fp - Field implementation.
+ * @param lhs - Dividend value.
+ * @param rhs - Divisor value.
+ * @returns Division result.
+ * @throws If the divisor is non-invertible. {@link Error}
+ * @example
+ * Divide one field element by another.
+ *
+ * ```ts
+ * import { Field, FpDiv } from '@noble/curves/abstract/modular.js';
+ * const Fp = Field(17n);
+ * const x = FpDiv(Fp, 6n, 3n);
+ * ```
+ */
 export function FpDiv<T>(Fp: IField<T>, lhs: T, rhs: T | bigint): T {
   return Fp.mul(lhs, typeof rhs === 'bigint' ? invert(rhs, Fp.ORDER) : Fp.inv(rhs));
 }
@@ -346,6 +600,18 @@ export function FpDiv<T>(Fp: IField<T>, lhs: T, rhs: T | bigint): T {
  * * (a | p) ≡ 1    if a is a square (mod p), quadratic residue
  * * (a | p) ≡ -1   if a is not a square (mod p), quadratic non residue
  * * (a | p) ≡ 0    if a ≡ 0 (mod p)
+ * @param Fp - Field implementation.
+ * @param n - Value to inspect.
+ * @returns Legendre symbol.
+ * @throws If the field returns an invalid Legendre symbol value. {@link Error}
+ * @example
+ * Compute the Legendre symbol of one field element.
+ *
+ * ```ts
+ * import { Field, FpLegendre } from '@noble/curves/abstract/modular.js';
+ * const Fp = Field(17n);
+ * const symbol = FpLegendre(Fp, 4n);
+ * ```
  */
 export function FpLegendre<T>(Fp: IField<T>, n: T): -1 | 0 | 1 {
   // We can use 3rd argument as optional cache of this value
@@ -359,14 +625,43 @@ export function FpLegendre<T>(Fp: IField<T>, n: T): -1 | 0 | 1 {
   return yes ? 1 : zero ? 0 : -1;
 }
 
-// This function returns True whenever the value x is a square in the field F.
+/**
+ * @param Fp - Field implementation.
+ * @param n - Value to inspect.
+ * @returns `true` when the value is a square.
+ * @throws If the field returns an invalid Legendre symbol value. {@link Error}
+ * @example
+ * Check whether one field element is a quadratic residue.
+ *
+ * ```ts
+ * import { Field, FpIsSquare } from '@noble/curves/abstract/modular.js';
+ * const Fp = Field(17n);
+ * const isSquare = FpIsSquare(Fp, 4n);
+ * ```
+ */
 export function FpIsSquare<T>(Fp: IField<T>, n: T): boolean {
   const l = FpLegendre(Fp, n);
   return l === 1;
 }
 
-export type NLength = { nByteLength: number; nBitLength: number };
-// CURVE.n lengths
+/** Byte and bit lengths derived from one scalar order. */
+export type NLength = {
+  /** Canonical byte length. */
+  nByteLength: number;
+  /** Canonical bit length. */
+  nBitLength: number;
+};
+/**
+ * @param n - Curve order.
+ * @param nBitLength - Optional cached bit length.
+ * @returns Byte and bit lengths.
+ * @example
+ * Measure the encoding sizes needed for one modulus.
+ *
+ * ```ts
+ * nLength(255n);
+ * ```
+ */
 export function nLength(n: bigint, nBitLength?: number): NLength {
   // Bit size, byte size of CURVE.n
   if (nBitLength !== undefined) anumber(nBitLength);
@@ -533,10 +828,15 @@ class _Field implements IField<bigint> {
  * * CHARACTERISTIC p = prime number, number of elements in main subgroup.
  * * ORDER q = similar to cofactor in curves, may be composite `q = p^m`.
  *
- * @param ORDER field order, probably prime, or could be composite
- * @param bitLen how many bits the field consumes
- * @param isLE (default: false) if encoding / decoding should be in little-endian
- * @param redef optional faster redefinitions of sqrt and other methods
+ * @param ORDER - field order, probably prime, or could be composite
+ * @param opts - Field options such as bit length or endianness. See {@link FieldOpts}.
+ * @returns Frozen field instance.
+ * @example
+ * Construct one prime field with optional overrides.
+ *
+ * ```ts
+ * Field(11n);
+ * ```
  */
 export function Field(ORDER: bigint, opts: FieldOpts = {}): Readonly<FpField> {
   return new _Field(ORDER, opts);
@@ -556,12 +856,40 @@ export function Field(ORDER: bigint, opts: FieldOpts = {}): Readonly<FpField> {
 //   return reduced;
 // },
 
+/**
+ * @param Fp - Field implementation.
+ * @param elm - Value to square-root.
+ * @returns Odd square root.
+ * @throws If the field lacks oddness checks or the square root does not exist. {@link Error}
+ * @example
+ * Select the odd square root when two roots exist.
+ *
+ * ```ts
+ * import { Field, FpSqrtOdd } from '@noble/curves/abstract/modular.js';
+ * const Fp = Field(17n);
+ * const root = FpSqrtOdd(Fp, 4n);
+ * ```
+ */
 export function FpSqrtOdd<T>(Fp: IField<T>, elm: T): T {
   if (!Fp.isOdd) throw new Error("Field doesn't have isOdd");
   const root = Fp.sqrt(elm);
   return Fp.isOdd(root) ? root : Fp.neg(root);
 }
 
+/**
+ * @param Fp - Field implementation.
+ * @param elm - Value to square-root.
+ * @returns Even square root.
+ * @throws If the field lacks oddness checks or the square root does not exist. {@link Error}
+ * @example
+ * Select the even square root when two roots exist.
+ *
+ * ```ts
+ * import { Field, FpSqrtEven } from '@noble/curves/abstract/modular.js';
+ * const Fp = Field(17n);
+ * const root = FpSqrtEven(Fp, 4n);
+ * ```
+ */
 export function FpSqrtEven<T>(Fp: IField<T>, elm: T): T {
   if (!Fp.isOdd) throw new Error("Field doesn't have isOdd");
   const root = Fp.sqrt(elm);
@@ -571,8 +899,15 @@ export function FpSqrtEven<T>(Fp: IField<T>, elm: T): T {
 /**
  * Returns total number of bytes consumed by the field element.
  * For example, 32 bytes for usual 256-bit weierstrass curve.
- * @param fieldOrder number of field elements, usually CURVE.n
+ * @param fieldOrder - number of field elements, usually CURVE.n
  * @returns byte length of field
+ * @throws If the field order is not a bigint. {@link Error}
+ * @example
+ * Read the fixed-width byte length of one field.
+ *
+ * ```ts
+ * getFieldBytesLength(255n);
+ * ```
  */
 export function getFieldBytesLength(fieldOrder: bigint): number {
   if (typeof fieldOrder !== 'bigint') throw new Error('field order must be bigint');
@@ -584,8 +919,15 @@ export function getFieldBytesLength(fieldOrder: bigint): number {
  * Returns minimal amount of bytes that can be safely reduced
  * by field order.
  * Should be 2^-128 for 128-bit curve such as P256.
- * @param fieldOrder number of field elements, usually CURVE.n
+ * @param fieldOrder - number of field elements, usually CURVE.n
  * @returns byte length of target hash
+ * @throws If the field order is not a bigint. {@link Error}
+ * @example
+ * Compute the minimum hash length needed for field reduction.
+ *
+ * ```ts
+ * getMinHashLength(255n);
+ * ```
  */
 export function getMinHashLength(fieldOrder: bigint): number {
   const length = getFieldBytesLength(fieldOrder);
@@ -597,13 +939,20 @@ export function getMinHashLength(fieldOrder: bigint): number {
  * Can take (n + n/2) or more bytes of uniform input e.g. from CSPRNG or KDF
  * and convert them into private scalar, with the modulo bias being negligible.
  * Needs at least 48 bytes of input for 32-byte private key.
- * https://research.kudelskisecurity.com/2020/07/28/the-definitive-guide-to-modulo-bias-and-how-to-avoid-it/
- * FIPS 186-5, A.2 https://csrc.nist.gov/publications/detail/fips/186/5/final
- * RFC 9380, https://www.rfc-editor.org/rfc/rfc9380#section-5
- * @param hash hash output from SHA3 or a similar function
- * @param groupOrder size of subgroup - (e.g. secp256k1.Point.Fn.ORDER)
- * @param isLE interpret hash bytes as LE num
+ * See {@link https://research.kudelskisecurity.com/2020/07/28/the-definitive-guide-to-modulo-bias-and-how-to-avoid-it/ | Kudelski's modulo-bias guide},
+ * {@link https://csrc.nist.gov/publications/detail/fips/186/5/final | FIPS 186-5 appendix A.2}, and
+ * {@link https://www.rfc-editor.org/rfc/rfc9380#section-5 | RFC 9380 section 5}.
+ * @param key - Uniform input bytes.
+ * @param fieldOrder - Size of subgroup.
+ * @param isLE - interpret hash bytes as LE num
  * @returns valid private scalar
+ * @throws If the hash length or field order is invalid for scalar reduction. {@link Error}
+ * @example
+ * Map hash output into a private scalar range.
+ *
+ * ```ts
+ * mapHashToField(new Uint8Array(48).fill(1), 255n);
+ * ```
  */
 export function mapHashToField(key: Uint8Array, fieldOrder: bigint, isLE = false): Uint8Array {
   abytes(key);

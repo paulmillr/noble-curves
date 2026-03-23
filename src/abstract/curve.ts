@@ -10,8 +10,11 @@ import { Field, FpInvertBatch, validateField, type IField } from './modular.ts';
 const _0n = /* @__PURE__ */ BigInt(0);
 const _1n = /* @__PURE__ */ BigInt(1);
 
+/** Affine point coordinates without projective fields. */
 export type AffinePoint<T> = {
+  /** Affine x coordinate. */
   x: T;
+  /** Affine y coordinate. */
   y: T;
 } & { Z?: never };
 
@@ -23,48 +26,134 @@ export type AffinePoint<T> = {
 // with `any`, because of recursion, `any implements CurvePoint`,
 // but we lose all constrains on methods.
 
-/** Base interface for all elliptic curve Points. */
+/** Base interface for all elliptic-curve point instances. */
 export interface CurvePoint<F, P extends CurvePoint<F, P>> {
   /** Affine x coordinate. Different from projective / extended X coordinate. */
   x: F;
   /** Affine y coordinate. Different from projective / extended Y coordinate. */
   y: F;
+  /** Projective Z coordinate when the point keeps projective state. */
   Z?: F;
+  /**
+   * Double the point.
+   * @returns Doubled point.
+   */
   double(): P;
+  /**
+   * Negate the point.
+   * @returns Negated point.
+   */
   negate(): P;
+  /**
+   * Add another point from the same curve.
+   * @param other - Point to add.
+   * @returns Sum point.
+   */
   add(other: P): P;
+  /**
+   * Subtract another point from the same curve.
+   * @param other - Point to subtract.
+   * @returns Difference point.
+   */
   subtract(other: P): P;
+  /**
+   * Compare two points for equality.
+   * @param other - Point to compare.
+   * @returns Whether the points are equal.
+   */
   equals(other: P): boolean;
+  /**
+   * Multiply the point by a scalar in constant time.
+   * @param scalar - Scalar multiplier.
+   * @returns Product point.
+   */
   multiply(scalar: bigint): P;
+  /** Assert that the point satisfies the curve equation and subgroup checks. */
   assertValidity(): void;
+  /**
+   * Map the point into the prime-order subgroup when the curve requires it.
+   * @returns Prime-order point.
+   */
   clearCofactor(): P;
+  /**
+   * Check whether the point is the point at infinity.
+   * @returns Whether the point is zero.
+   */
   is0(): boolean;
+  /**
+   * Check whether the point belongs to the prime-order subgroup.
+   * @returns Whether the point is torsion-free.
+   */
   isTorsionFree(): boolean;
+  /**
+   * Check whether the point lies in a small torsion subgroup.
+   * @returns Whether the point has small order.
+   */
   isSmallOrder(): boolean;
+  /**
+   * Multiply the point by a scalar without constant-time guarantees.
+   * @param scalar - Scalar multiplier.
+   * @returns Product point.
+   */
   multiplyUnsafe(scalar: bigint): P;
   /**
    * Massively speeds up `p.multiply(n)` by using precompute tables (caching). See {@link wNAF}.
-   * @param isLazy calculate cache now. Default (true) ensures it's deferred to first `multiply()`
+   * @param windowSize - Precompute window size.
+   * @param isLazy - calculate cache now. Default (true) ensures it's deferred to first `multiply()`
+   * @returns Same point instance with precompute tables attached.
    */
   precompute(windowSize?: number, isLazy?: boolean): P;
-  /** Converts point to 2D xy affine coordinates */
+  /**
+   * Converts point to 2D xy affine coordinates.
+   * @param invertedZ - Optional inverted Z coordinate for batch normalization.
+   * @returns Affine x/y coordinates.
+   */
   toAffine(invertedZ?: F): AffinePoint<F>;
+  /**
+   * Encode the point into the curve's canonical byte form.
+   * @returns Encoded point bytes.
+   */
   toBytes(): Uint8Array;
+  /**
+   * Encode the point into the curve's canonical hex form.
+   * @returns Encoded point hex.
+   */
   toHex(): string;
 }
 
-/** Base interface for all elliptic curve Point constructors. */
+/** Base interface for elliptic-curve point constructors. */
 export interface CurvePointCons<P extends CurvePoint<any, P>> {
+  /**
+   * Runtime brand check for points created by this constructor.
+   * @param item - Value to test.
+   * @returns Whether the value is a point from this constructor.
+   */
   [Symbol.hasInstance]: (item: unknown) => boolean;
+  /** Canonical subgroup generator. */
   BASE: P;
+  /** Point at infinity. */
   ZERO: P;
   /** Field for basic curve math */
   Fp: IField<P_F<P>>;
   /** Scalar field, for scalars in multiply and others */
   Fn: IField<bigint>;
-  /** Creates point from x, y. Does NOT validate if the point is valid. Use `.assertValidity()`. */
+  /**
+   * Creates point from x, y. Does NOT validate if the point is valid. Use `.assertValidity()`.
+   * @param p - Affine point coordinates.
+   * @returns Projective point instance.
+   */
   fromAffine(p: AffinePoint<P_F<P>>): P;
+  /**
+   * Decode a point from the canonical byte encoding.
+   * @param bytes - Encoded point bytes.
+   * @returns Point instance.
+   */
   fromBytes(bytes: Uint8Array): P;
+  /**
+   * Decode a point from the canonical hex encoding.
+   * @param hex - Encoded point hex.
+   * @returns Point instance.
+   */
   fromHex(hex: string): P;
 }
 
@@ -79,11 +168,11 @@ export interface CurvePointCons<P extends CurvePoint<any, P>> {
 //   `function test<P extends CurvePoint<any, P>, PC extends CurvePointCons<P>>(`
 //   if we want type safety around P, otherwise PC_P<PC> will be any
 
-/** Returns Fp type from Point (P_F<P> == P.F) */
+/** Returns the affine field type for a point instance (`P_F<P> == P.F`). */
 export type P_F<P extends CurvePoint<any, P>> = P extends CurvePoint<infer F, P> ? F : never;
-/** Returns Fp type from PointCons (PC_F<PC> == PC.P.F) */
+/** Returns the affine field type for a point constructor (`PC_F<PC> == PC.P.F`). */
 export type PC_F<PC extends CurvePointCons<CurvePoint<any, any>>> = PC['Fp']['ZERO'];
-/** Returns Point type from PointCons (PC_P<PC> == PC.P) */
+/** Returns the point instance type for a point constructor (`PC_P<PC> == PC.P`). */
 export type PC_P<PC extends CurvePointCons<CurvePoint<any, any>>> = PC['ZERO'];
 
 // Ugly hack to get proper type inference, because in typescript fails to infer resursively.
@@ -100,6 +189,7 @@ export type PC_P<PC extends CurvePointCons<CurvePoint<any, any>>> = PC['ZERO'];
 //     * But generally, we don't want to parametrize `CurvePointCons` over `F`: it will complicate
 //       types, making them un-inferable
 // prettier-ignore
+/** Wide point-constructor type used when the concrete curve is not important. */
 export type PC_ANY = CurvePointCons<
   CurvePoint<any,
   CurvePoint<any,
@@ -114,17 +204,38 @@ export type PC_ANY = CurvePointCons<
   >>>>>>>>>
 >;
 
+/** Byte lengths used by one curve implementation. */
 export interface CurveLengths {
+  /** Secret-key length in bytes. */
   secretKey?: number;
+  /** Compressed public-key length in bytes. */
   publicKey?: number;
+  /** Uncompressed public-key length in bytes. */
   publicKeyUncompressed?: number;
+  /** Whether public-key encodings include a format prefix byte. */
   publicKeyHasPrefix?: boolean;
+  /** Signature length in bytes. */
   signature?: number;
+  /** Seed length in bytes when the curve exposes deterministic keygen from seed. */
   seed?: number;
 }
 
+/** Reorders or otherwise remaps a batch while preserving its element type. */
 export type Mapper<T> = (i: T[]) => T[];
 
+/**
+ * @param condition - Whether to negate the point.
+ * @param item - Point-like value.
+ * @returns Original or negated value.
+ * @example
+ * Keep the point or return its negation based on one boolean branch.
+ *
+ * ```ts
+ * import { negateCt } from '@noble/curves/abstract/curve.js';
+ * import { p256 } from '@noble/curves/nist.js';
+ * const maybeNegated = negateCt(true, p256.Point.BASE);
+ * ```
+ */
 export function negateCt<T extends { negate: () => T }>(condition: boolean, item: T): T {
   const neg = item.negate();
   return condition ? neg : item;
@@ -135,6 +246,17 @@ export function negateCt<T extends { negate: () => T }>(condition: boolean, item
  * inversion on all of them. Inversion is very slow operation,
  * so this improves performance massively.
  * Optimization: converts a list of projective points to a list of identical points with Z=1.
+ * @param c - Point constructor.
+ * @param points - Projective points.
+ * @returns Normalized affine points.
+ * @example
+ * Batch-normalize projective points with a single shared inversion.
+ *
+ * ```ts
+ * import { normalizeZ } from '@noble/curves/abstract/curve.js';
+ * import { p256 } from '@noble/curves/nist.js';
+ * const points = normalizeZ(p256.Point, [p256.Point.BASE, p256.Point.BASE.double()]);
+ * ```
  */
 export function normalizeZ<P extends CurvePoint<any, P>, PC extends CurvePointCons<P>>(
   c: PC,
@@ -240,8 +362,18 @@ function assert0(n: bigint): void {
  * - +1 window is neccessary for wNAF
  * - wNAF reduces table size: 2x less memory + 2x faster generation, but 10% slower multiplication
  *
- * @todo Research returning 2d JS array of windows, instead of a single window.
- * This would allow windows to be in different memory locations
+ * TODO: research returning a 2d JS array of windows instead of a single window.
+ * This would allow windows to be in different memory locations.
+ * @param Point - Point constructor.
+ * @param bits - Scalar bit length.
+ * @example
+ * Elliptic curve multiplication of Point by scalar.
+ *
+ * ```ts
+ * import { wNAF } from '@noble/curves/abstract/curve.js';
+ * import { p256 } from '@noble/curves/nist.js';
+ * const ladder = new wNAF(p256.Point, p256.Point.Fn.BITS);
+ * ```
  */
 export class wNAF<PC extends PC_ANY> {
   private readonly BASE: PC_P<PC>;
@@ -276,8 +408,8 @@ export class wNAF<PC extends PC_ANY> {
    * - 𝑊 is the window size
    * - 𝑛 is the bitlength of the curve order.
    * For a 256-bit curve and window size 8, the number of precomputed points is 128 * 33 = 4224.
-   * @param point Point instance
-   * @param W window size
+   * @param point - Point instance
+   * @param W - window size
    * @returns precomputed point tables flattened to a single array
    */
   private precomputeWindow(point: PC_P<PC>, W: number): PC_P<PC>[] {
@@ -338,7 +470,7 @@ export class wNAF<PC extends PC_ANY> {
 
   /**
    * Implements ec unsafe (non const-time) multiplication using precomputed tables and w-ary non-adjacent form.
-   * @param acc accumulator point to add result of multiplication
+   * @param acc - accumulator point to add result of multiplication
    * @returns point
    */
   private wNAFUnsafe(
@@ -411,6 +543,19 @@ export class wNAF<PC extends PC_ANY> {
 /**
  * Endomorphism-specific multiplication for Koblitz curves.
  * Cost: 128 dbl, 0-256 adds.
+ * @param Point - Point constructor.
+ * @param point - Input point.
+ * @param k1 - First scalar chunk.
+ * @param k2 - Second scalar chunk.
+ * @returns Partial multiplication results.
+ * @example
+ * Endomorphism-specific multiplication for Koblitz curves.
+ *
+ * ```ts
+ * import { mulEndoUnsafe } from '@noble/curves/abstract/curve.js';
+ * import { secp256k1 } from '@noble/curves/secp256k1.js';
+ * const parts = mulEndoUnsafe(secp256k1.Point, secp256k1.Point.BASE, 3n, 5n);
+ * ```
  */
 export function mulEndoUnsafe<P extends CurvePoint<any, P>, PC extends CurvePointCons<P>>(
   Point: PC,
@@ -436,10 +581,19 @@ export function mulEndoUnsafe<P extends CurvePoint<any, P>, PC extends CurvePoin
  * 30x faster vs naive addition on L=4096, 10x faster than precomputes.
  * For N=254bit, L=1, it does: 1024 ADD + 254 DBL. For L=5: 1536 ADD + 254 DBL.
  * Algorithmically constant-time (for same L), even when 1 point + scalar, or when scalar = 0.
- * @param c Curve Point constructor
- * @param fieldN field over CURVE.N - important that it's not over CURVE.P
- * @param points array of L curve points
- * @param scalars array of L scalars (aka secret keys / bigints)
+ * @param c - Curve Point constructor
+ * @param points - array of L curve points
+ * @param scalars - array of L scalars (aka secret keys / bigints)
+ * @returns MSM result point.
+ * @throws If the point set, scalar set, or MSM sizing is invalid. {@link Error}
+ * @example
+ * Pippenger algorithm for multi-scalar multiplication (MSM, Pa + Qb + Rc + ...).
+ *
+ * ```ts
+ * import { pippenger } from '@noble/curves/abstract/curve.js';
+ * import { p256 } from '@noble/curves/nist.js';
+ * const point = pippenger(p256.Point, [p256.Point.BASE, p256.Point.BASE.double()], [2n, 3n]);
+ * ```
  */
 export function pippenger<P extends CurvePoint<any, P>, PC extends CurvePointCons<P>>(
   c: PC,
@@ -489,10 +643,20 @@ export function pippenger<P extends CurvePoint<any, P>, PC extends CurvePointCon
 }
 /**
  * Precomputed multi-scalar multiplication (MSM, Pa + Qb + Rc + ...).
- * @param c Curve Point constructor
- * @param fieldN field over CURVE.N - important that it's not over CURVE.P
- * @param points array of L curve points
+ * @param c - Curve Point constructor
+ * @param points - array of L curve points
+ * @param windowSize - Precompute window size.
  * @returns function which multiplies points with scaars
+ * @throws If the point set or precompute window is invalid. {@link Error}
+ * @example
+ * Precomputed multi-scalar multiplication (MSM, Pa + Qb + Rc + ...).
+ *
+ * ```ts
+ * import { precomputeMSMUnsafe } from '@noble/curves/abstract/curve.js';
+ * import { p256 } from '@noble/curves/nist.js';
+ * const msm = precomputeMSMUnsafe(p256.Point, [p256.Point.BASE], 4);
+ * const point = msm([3n]);
+ * ```
  */
 export function precomputeMSMUnsafe<P extends CurvePoint<any, P>, PC extends CurvePointCons<P>>(
   c: PC,
@@ -569,14 +733,23 @@ export function precomputeMSMUnsafe<P extends CurvePoint<any, P>, PC extends Cur
   };
 }
 
+/** Minimal curve parameters needed to construct a Weierstrass or Edwards curve. */
 export type ValidCurveParams<T> = {
+  /** Base-field modulus. */
   p: bigint;
+  /** Prime subgroup order. */
   n: bigint;
+  /** Cofactor. */
   h: bigint;
+  /** Curve parameter `a`. */
   a: T;
+  /** Weierstrass curve parameter `b`. */
   b?: T;
+  /** Edwards curve parameter `d`. */
   d?: T;
+  /** Generator x coordinate. */
   Gx: T;
+  /** Generator y coordinate. */
   Gy: T;
 };
 
@@ -589,9 +762,39 @@ function createField<T>(order: bigint, field?: IField<T>, isLE?: boolean): IFiel
     return Field(order, { isLE }) as unknown as IField<T>;
   }
 }
-export type FpFn<T> = { Fp: IField<T>; Fn: IField<bigint> };
+/** Pair of fields used by curve constructors. */
+export type FpFn<T> = {
+  /** Base field used for curve coordinates. */
+  Fp: IField<T>;
+  /** Scalar field used for secret scalars and subgroup arithmetic. */
+  Fn: IField<bigint>;
+};
 
-/** Validates CURVE opts and creates fields */
+/**
+ * Validates CURVE opts and creates fields.
+ * @param type - Curve family.
+ * @param CURVE - Curve parameters.
+ * @param curveOpts - Optional field overrides:
+ *   - `Fp` (optional): Optional base-field override.
+ *   - `Fn` (optional): Optional scalar-field override.
+ * @param FpFnLE - Whether field encoding is little-endian.
+ * @returns Frozen curve parameters and fields.
+ * @throws If the curve parameters or field overrides are invalid. {@link Error}
+ * @example
+ * Build curve fields from raw constants before constructing a curve instance.
+ *
+ * ```ts
+ * const curve = createCurveFields('weierstrass', {
+ *   p: 17n,
+ *   n: 19n,
+ *   h: 1n,
+ *   a: 2n,
+ *   b: 2n,
+ *   Gx: 5n,
+ *   Gy: 1n,
+ * });
+ * ```
+ */
 export function createCurveFields<T>(
   type: 'weierstrass' | 'edwards',
   CURVE: ValidCurveParams<T>,
@@ -622,6 +825,20 @@ type KeygenFn = (
   seed?: Uint8Array,
   isCompressed?: boolean
 ) => { secretKey: Uint8Array; publicKey: Uint8Array };
+/**
+ * @param randomSecretKey - Secret-key generator.
+ * @param getPublicKey - Public-key derivation helper.
+ * @returns Keypair generator.
+ * @example
+ * Build a `keygen()` helper from existing secret-key and public-key primitives.
+ *
+ * ```ts
+ * import { createKeygen } from '@noble/curves/abstract/curve.js';
+ * import { p256 } from '@noble/curves/nist.js';
+ * const keygen = createKeygen(p256.utils.randomSecretKey, p256.getPublicKey);
+ * const pair = keygen();
+ * ```
+ */
 export function createKeygen(
   randomSecretKey: Function,
   getPublicKey: Signer['getPublicKey']

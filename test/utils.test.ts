@@ -3,15 +3,21 @@ import { describe, should } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql, throws } from 'node:assert';
 import { invert, mod } from '../src/abstract/modular.ts';
 import {
+  aInRange,
+  abool,
+  asafenumber,
   abytes,
   asciiToBytes,
   bytesToHex,
   concatBytes,
+  createHmacDrbg,
+  hexToNumber,
   hexToBytes,
   numberToBytesBE,
   numberToBytesLE,
   numberToHexUnpadded,
   numberToVarBytesBE,
+  validateObject,
 } from '../src/utils.ts';
 import { getTypeTests } from './utils.ts';
 describe('utils', () => {
@@ -94,6 +100,7 @@ describe('utils', () => {
     for (const s of strings) {
       eql(asciiToBytes(s), new TextEncoder().encode(s));
     }
+    throws(() => asciiToBytes(1 as any), TypeError);
     const UTF8 = [
       '┌─────',
       'some 🦁 ',
@@ -103,7 +110,7 @@ describe('utils', () => {
       '\uD83D', // A lone high surrogate, which is an invalid UTF-16 sequence.
       '\uDE00', // A lone low surrogate, also invalid.
     ];
-    for (const s of UTF8) throws(() => asciiToBytes(s));
+    for (const s of UTF8) throws(() => asciiToBytes(s), RangeError);
     const bytesOK = [
       new Uint8Array([72, 101, 108, 108, 111]),
       Uint8Array.of(0),
@@ -127,8 +134,13 @@ describe('utils', () => {
     }
     for (const b of bytesFAIL) {
       const s = new TextDecoder().decode(b);
-      throws(() => asciiToBytes(s));
+      throws(() => asciiToBytes(s), RangeError);
     }
+  });
+  should('hexToNumber', () => {
+    eql(hexToNumber(''), 0n);
+    eql(hexToNumber('ff'), 255n);
+    throws(() => hexToNumber(1 as any), TypeError);
   });
   should('numberToHexUnpadded/numberToBytesBE/numberToVarBytesBE', () => {
     const VECTORS = [
@@ -217,6 +229,22 @@ describe('utils', () => {
         // console.log('abytes', e.message);
       }
     }
+  });
+  should('abool/asafenumber/aInRange/validateObject', () => {
+    eql(abool(true), true);
+    throws(() => abool('x' as any), TypeError);
+    eql(asafenumber(1), undefined);
+    throws(() => asafenumber('1' as any), TypeError);
+    throws(() => asafenumber(1.5), RangeError);
+    eql(aInRange('x', 2n, 1n, 3n), undefined);
+    throws(() => aInRange('x', 3n, 1n, 3n), RangeError);
+    eql(validateObject({ flag: true }, { flag: 'boolean' }), undefined);
+    throws(() => validateObject('bad' as any, { flag: 'boolean' }), TypeError);
+    throws(() => validateObject([] as any, { flag: 'boolean' }), TypeError);
+    throws(() => validateObject({ flag: 1 }, { flag: 'boolean' }), TypeError);
+  });
+  should('createHmacDrbg', () => {
+    throws(() => createHmacDrbg(32, 32, 1 as any), TypeError);
   });
 });
 

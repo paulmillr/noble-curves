@@ -34,30 +34,97 @@ type Fp = bigint; // Can be different field?
 // prettier-ignore
 const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3);
 
+/**
+ * Twist convention used by the pairing formulas for a concrete curve family.
+ * BLS12-381 uses a multiplicative twist, while BN254 uses a divisive one.
+ */
 export type BlsTwistType = 'multiplicative' | 'divisive';
 
+/**
+ * Codec exposed as `curve.shortSignatures.Signature`.
+ * Use it to parse or serialize G1 signatures in the short-signature mode, where public keys live in G2.
+ */
 export type BlsShortSignatureCoder<Fp> = {
+  /**
+   * Parse a compressed signature from raw bytes.
+   * @param bytes - Compressed signature bytes.
+   * @returns Parsed signature point.
+   */
   fromBytes(bytes: Uint8Array): WeierstrassPoint<Fp>;
+  /**
+   * Parse a compressed signature from a hex string.
+   * @param hex - Compressed signature hex string.
+   * @returns Parsed signature point.
+   */
   fromHex(hex: string): WeierstrassPoint<Fp>;
+  /**
+   * Encode a signature point into compressed bytes.
+   * @param point - Signature point.
+   * @returns Compressed signature bytes.
+   */
   toBytes(point: WeierstrassPoint<Fp>): Uint8Array;
+  /**
+   * Encode a signature point into a hex string.
+   * @param point - Signature point.
+   * @returns Compressed signature hex.
+   */
   toHex(point: WeierstrassPoint<Fp>): string;
 };
 
+/**
+ * Codec exposed as `curve.longSignatures.Signature`.
+ * Use it to parse or serialize G2 signatures in the long-signature mode, where public keys live in G1.
+ */
 export type BlsLongSignatureCoder<Fp> = {
+  /**
+   * Parse a compressed signature from raw bytes.
+   * @param bytes - Compressed signature bytes.
+   * @returns Parsed signature point.
+   */
   fromBytes(bytes: Uint8Array): WeierstrassPoint<Fp>;
+  /**
+   * Parse a compressed signature from a hex string.
+   * @param hex - Compressed signature hex string.
+   * @returns Parsed signature point.
+   */
   fromHex(hex: string): WeierstrassPoint<Fp>;
+  /**
+   * Encode a signature point into compressed bytes.
+   * @param point - Signature point.
+   * @returns Compressed signature bytes.
+   */
   toBytes(point: WeierstrassPoint<Fp>): Uint8Array;
+  /**
+   * Encode a signature point into a hex string.
+   * @param point - Signature point.
+   * @returns Compressed signature hex.
+   */
   toHex(point: WeierstrassPoint<Fp>): string;
 };
 
+/** Tower fields needed by pairing code, hash-to-curve, and subgroup arithmetic. */
 export type BlsFields = {
+  /** Base field of G1 coordinates. */
   Fp: IField<Fp>;
+  /** Scalar field used for secret scalars and subgroup order arithmetic. */
   Fr: IField<bigint>;
+  /** Quadratic extension field used by G2. */
   Fp2: Fp2Bls;
+  /** Sextic extension field used inside pairing arithmetic. */
   Fp6: Fp6Bls;
+  /** Degree-12 extension field that contains the GT target group. */
   Fp12: Fp12Bls;
 };
 
+/**
+ * Callback used by pairing post-processing hooks to add one more G2 point to the Miller-loop state.
+ * @param Rx - Current projective X coordinate.
+ * @param Ry - Current projective Y coordinate.
+ * @param Rz - Current projective Z coordinate.
+ * @param Qx - G2 affine x coordinate.
+ * @param Qy - G2 affine y coordinate.
+ * @returns Updated projective accumulator coordinates.
+ */
 export type BlsPostPrecomputePointAddFn = (
   Rx: Fp2,
   Ry: Fp2,
@@ -65,6 +132,15 @@ export type BlsPostPrecomputePointAddFn = (
   Qx: Fp2,
   Qy: Fp2
 ) => { Rx: Fp2; Ry: Fp2; Rz: Fp2 };
+/**
+ * Hook for curve-specific pairing cleanup after the Miller loop precomputes are built.
+ * @param Rx - Current projective X coordinate.
+ * @param Ry - Current projective Y coordinate.
+ * @param Rz - Current projective Z coordinate.
+ * @param Qx - G2 affine x coordinate.
+ * @param Qy - G2 affine y coordinate.
+ * @param pointAdd - Callback used to fold one more point into the accumulator.
+ */
 export type BlsPostPrecomputeFn = (
   Rx: Fp2,
   Ry: Fp2,
@@ -73,34 +149,90 @@ export type BlsPostPrecomputeFn = (
   Qy: Fp2,
   pointAdd: BlsPostPrecomputePointAddFn
 ) => void;
+/** Low-level pairing helpers shared by BLS curve bundles. */
 export type BlsPairing = {
+  /** Byte lengths for keys and signatures exposed by this pairing family. */
   lengths: CurveLengths;
+  /** Scalar field used by the pairing and signing helpers. */
   Fr: IField<bigint>;
+  /** Target field used for the GT result of pairings. */
   Fp12: Fp12Bls;
+  /**
+   * Build Miller-loop precomputes for one G2 point.
+   * @param p - G2 point to precompute.
+   * @returns Pairing precompute table.
+   */
   calcPairingPrecomputes: (p: WeierstrassPoint<Fp2>) => Precompute;
+  /**
+   * Evaluate a batch of Miller loops from precomputed line coefficients.
+   * @param pairs - Precomputed Miller-loop inputs.
+   * @returns Accumulated GT value before or after final exponentiation.
+   */
   millerLoopBatch: (pairs: [Precompute, Fp, Fp][]) => Fp12;
+  /**
+   * Pair one G1 point with one G2 point.
+   * @param P - G1 point.
+   * @param Q - G2 point.
+   * @param withFinalExponent - Whether to apply the final exponentiation step.
+   * @returns GT pairing result.
+   */
   pairing: (P: WeierstrassPoint<Fp>, Q: WeierstrassPoint<Fp2>, withFinalExponent?: boolean) => Fp12;
+  /**
+   * Pair many G1/G2 pairs in one batch.
+   * @param pairs - Point pairs to accumulate.
+   * @param withFinalExponent - Whether to apply the final exponentiation step.
+   * @returns GT pairing result.
+   */
   pairingBatch: (
     pairs: { g1: WeierstrassPoint<Fp>; g2: WeierstrassPoint<Fp2> }[],
     withFinalExponent?: boolean
   ) => Fp12;
+  /**
+   * Generate a random secret key for this pairing family.
+   * @param seed - Optional seed material.
+   * @returns Secret key bytes.
+   */
   randomSecretKey: (seed?: Uint8Array) => Uint8Array;
 };
 
+/** Parameters that define the Miller-loop shape and twist handling for a concrete pairing family. */
 export type BlsPairingParams = {
   // MSB is always ignored and used as marker for length, otherwise leading zeros will be lost.
   // Can be different from `X` (seed) param.
+  /** Signed loop parameter used by the Miller loop. */
   ateLoopSize: bigint;
+  /** Whether the signed Miller-loop parameter is negative. */
   xNegative: boolean;
-  twistType: BlsTwistType; // BLS12-381: Multiplicative, BN254: Divisive
+  /** Twist convention used by the pairing formulas: BLS12-381 is multiplicative, BN254 is divisive. */
+  twistType: BlsTwistType;
+  /**
+   * Optional RNG override used by helper constructors.
+   * @param len - Requested byte length.
+   * @returns Random bytes.
+   */
   randomBytes?: (len?: number) => Uint8Array;
-  postPrecompute?: BlsPostPrecomputeFn; // Ugly hack to untwist point in BN254 after miller loop
+  /** Optional hook for curve-specific untwisting after precomputation, used by BN254 after the Miller loop. */
+  postPrecompute?: BlsPostPrecomputeFn;
 };
+/** Hash-to-curve settings shared by the G1 and G2 hashers inside a BLS curve bundle. */
 export type BlsHasherParams = {
+  /**
+   * Optional map-to-curve override for G1.
+   * @param scalar - Field-element tuple produced by hash-to-field.
+   * @returns Affine G1 point.
+   */
   mapToG1?: MapToCurve<Fp>;
+  /**
+   * Optional map-to-curve override for G2.
+   * @param scalar - Field-element tuple produced by hash-to-field.
+   * @returns Affine G2 point.
+   */
   mapToG2?: MapToCurve<Fp2>;
+  /** Shared baseline hash-to-curve options. */
   hasherOpts: H2COpts;
+  /** G1-specific hash-to-curve options merged on top of `hasherOpts`. */
   hasherOptsG1: H2COpts;
+  /** G2-specific hash-to-curve options merged on top of `hasherOpts`. */
   hasherOptsG2: H2COpts;
 };
 type PrecomputeSingle = [Fp2, Fp2, Fp2][];
@@ -112,12 +244,34 @@ type Precompute = PrecomputeSingle[];
  * - G2 is a subgroup of ((x₁, x₂+i), (y₁, y₂+i)) E(Fq²) over y² = x³ + 4(1 + i) where i is √-1
  */
 export interface BlsCurvePair {
+  /** Byte lengths for keys and signatures exposed by this curve family. */
   lengths: CurveLengths;
+  /**
+   * Shared Miller-loop batch evaluator.
+   * @param pairs - Precomputed Miller-loop inputs.
+   * @returns Accumulated GT value.
+   */
   millerLoopBatch: BlsPairing['millerLoopBatch'];
+  /**
+   * Pair one G1 point with one G2 point.
+   * @param P - G1 point.
+   * @param Q - G2 point.
+   * @param withFinalExponent - Whether to apply the final exponentiation step.
+   * @returns GT pairing result.
+   */
   pairing: BlsPairing['pairing'];
+  /**
+   * Pair many G1/G2 pairs in one batch.
+   * @param pairs - Point pairs to accumulate.
+   * @param withFinalExponent - Whether to apply the final exponentiation step.
+   * @returns GT pairing result.
+   */
   pairingBatch: BlsPairing['pairingBatch'];
+  /** G1 point constructor for the base field subgroup. */
   G1: { Point: WeierstrassPointCons<Fp> };
+  /** G2 point constructor for the twist subgroup. */
   G2: { Point: WeierstrassPointCons<Fp2> };
+  /** Tower fields exposed by the pairing implementation. */
   fields: {
     Fp: IField<Fp>;
     Fp2: Fp2Bls;
@@ -125,47 +279,104 @@ export interface BlsCurvePair {
     Fp12: Fp12Bls;
     Fr: IField<bigint>;
   };
+  /** Utility helpers shared by hashers and signers. */
   utils: {
     randomSecretKey: (seed?: Uint8Array) => Uint8Array;
     calcPairingPrecomputes: BlsPairing['calcPairingPrecomputes'];
   };
+  /** Public pairing parameters exposed for introspection. */
   params: {
     ateLoopSize: bigint;
     twistType: BlsTwistType;
   };
 }
 
+/** BLS curve bundle extended with hash-to-curve helpers for G1 and G2. */
 export interface BlsCurvePairWithHashers extends BlsCurvePair {
+  /** G1 hasher bundle with RFC 9380 helpers. */
   G1: H2CHasher<WeierstrassPointCons<Fp>>;
+  /** G2 hasher bundle with RFC 9380 helpers. */
   G2: H2CHasher<WeierstrassPointCons<Fp2>>;
 }
 
+/** BLS curve bundle extended with both hashers and signature helpers. */
 export interface BlsCurvePairWithSignatures extends BlsCurvePairWithHashers {
+  /** Long-signature mode: G1 public keys and G2 signatures. */
   longSignatures: BlsSigs<bigint, Fp2>;
+  /** Short-signature mode: G2 public keys and G1 signatures. */
   shortSignatures: BlsSigs<Fp2, bigint>;
 }
 
 type BLSInput = Uint8Array;
+/** BLS signer helpers for one signature mode. */
 export interface BlsSigs<P, S> {
+  /** Byte lengths for secret keys, public keys, and signatures. */
   lengths: CurveLengths;
+  /**
+   * Generate a secret/public key pair for this signature mode.
+   * @param seed - Optional seed material.
+   * @returns Secret and public key pair.
+   */
   keygen(seed?: Uint8Array): {
     secretKey: Uint8Array;
     publicKey: WeierstrassPoint<P>;
   };
+  /**
+   * Derive the public key from a secret key.
+   * @param secretKey - Secret key bytes.
+   * @returns Public-key point.
+   */
   getPublicKey(secretKey: Uint8Array): WeierstrassPoint<P>;
+  /**
+   * Sign a message already hashed onto the signature subgroup.
+   * @param hashedMessage - Message mapped to the signature subgroup.
+   * @param secretKey - Secret key bytes.
+   * @returns Signature point.
+   */
   sign(hashedMessage: WeierstrassPoint<S>, secretKey: Uint8Array): WeierstrassPoint<S>;
+  /**
+   * Verify one signature against one public key and hashed message.
+   * @param signature - Signature point or encoded signature.
+   * @param message - Hashed message point.
+   * @param publicKey - Public-key point or encoded key.
+   * @returns Whether the signature is valid.
+   */
   verify(
     signature: WeierstrassPoint<S> | BLSInput,
     message: WeierstrassPoint<S>,
     publicKey: WeierstrassPoint<P> | BLSInput
   ): boolean;
+  /**
+   * Verify one aggregated signature against many `(message, publicKey)` pairs.
+   * @param signature - Aggregated signature.
+   * @param items - Message/public-key pairs.
+   * @returns Whether the aggregated signature is valid.
+   */
   verifyBatch: (
     signature: WeierstrassPoint<S> | BLSInput,
     items: { message: WeierstrassPoint<S>; publicKey: WeierstrassPoint<P> | BLSInput }[]
   ) => boolean;
+  /**
+   * Add many public keys into one aggregate point.
+   * @param publicKeys - Public keys to aggregate.
+   * @returns Aggregated public-key point.
+   */
   aggregatePublicKeys(publicKeys: (WeierstrassPoint<P> | BLSInput)[]): WeierstrassPoint<P>;
+  /**
+   * Add many signatures into one aggregate point.
+   * @param signatures - Signatures to aggregate.
+   * @returns Aggregated signature point.
+   */
   aggregateSignatures(signatures: (WeierstrassPoint<S> | BLSInput)[]): WeierstrassPoint<S>;
+  /**
+   * Hash an arbitrary message onto the signature subgroup.
+   * @param message - Message bytes.
+   * @param DST - Optional domain separation tag.
+   * @param hashOpts - Optional hash-to-curve overrides. See {@link H2CHashOpts}.
+   * @returns Curve point on the signature subgroup.
+   */
   hash(message: Uint8Array, DST?: string | Uint8Array, hashOpts?: H2CHashOpts): WeierstrassPoint<S>;
+  /** Signature codec for this mode. */
   Signature: BlsLongSignatureCoder<S>;
 }
 
@@ -502,6 +713,21 @@ type BlsSignatureCoders = Partial<{
 }>;
 
 // NOTE: separate function instead of function override, so we don't depend on hasher in bn254.
+/**
+ * @param fields - Tower field implementations.
+ * @param G1_Point - G1 point constructor.
+ * @param G2_Point - G2 point constructor.
+ * @param params - Pairing parameters. See {@link BlsPairingParams}.
+ * @returns Pairing-only BLS helpers.
+ * @throws If the pairing parameters or underlying curve helpers are inconsistent. {@link Error}
+ * @example
+ * ```ts
+ * import { blsBasic } from '@noble/curves/abstract/bls.js';
+ * import { bn254 } from '@noble/curves/bn254.js';
+ * // Pair a G1 point with a G2 point without the higher-level signer helpers.
+ * const gt = bn254.pairing(bn254.G1.Point.BASE, bn254.G2.Point.BASE);
+ * ```
+ */
 export function blsBasic(
   fields: BlsFields,
   G1_Point: WeierstrassPointCons<Fp>,
@@ -568,6 +794,27 @@ function blsHashers(
 
 // G1_Point: ProjConstructor<bigint>, G2_Point: ProjConstructor<Fp2>,
 // Rename to blsSignatures?
+/**
+ * @param fields - Tower field implementations.
+ * @param G1_Point - G1 point constructor.
+ * @param G2_Point - G2 point constructor.
+ * @param params - Pairing parameters. See {@link BlsPairingParams}.
+ * @param hasherParams - Hash-to-curve configuration. See {@link BlsHasherParams}.
+ * @param signatureCoders - Signature codecs.
+ * @returns BLS helpers with signers.
+ * @throws If the pairing, hashing, or signature helpers are configured inconsistently. {@link Error}
+ * @example
+ * ```ts
+ * import { bls } from '@noble/curves/abstract/bls.js';
+ * import { bls12_381 } from '@noble/curves/bls12-381.js';
+ * const sigs = bls12_381.longSignatures;
+ * // Use the full BLS helper set when you need hashing, keygen, signing, and verification.
+ * const { secretKey, publicKey } = sigs.keygen();
+ * const msg = sigs.hash(new TextEncoder().encode('hello noble'));
+ * const sig = sigs.sign(msg, secretKey);
+ * const isValid = sigs.verify(sig, msg, publicKey);
+ * ```
+ */
 export function bls(
   fields: BlsFields,
   G1_Point: WeierstrassPointCons<Fp>,

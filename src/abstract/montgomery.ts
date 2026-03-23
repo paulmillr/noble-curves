@@ -22,24 +22,74 @@ const _0n = BigInt(0);
 const _1n = BigInt(1);
 const _2n = BigInt(2);
 
+/** Curve-specific hooks required to build one X25519/X448 helper. */
 export type MontgomeryOpts = {
-  P: bigint; // finite field prime
+  /** Prime field modulus. */
+  P: bigint;
+  /** RFC 7748 variant name. */
   type: 'x25519' | 'x448';
+  /**
+   * Clamp or otherwise normalize one scalar byte string before use.
+   * @param bytes - Raw secret scalar bytes.
+   * @returns Adjusted scalar bytes ready for Montgomery multiplication.
+   */
   adjustScalarBytes: (bytes: Uint8Array) => Uint8Array;
+  /**
+   * Invert one field element with exponentiation by `p - 2`.
+   * @param x - Field element to invert.
+   * @returns Multiplicative inverse of `x`.
+   */
   powPminus2: (x: bigint) => bigint;
+  /**
+   * Optional randomness source for `keygen()` and `utils.randomSecretKey()`.
+   * @param bytesLength - Requested byte length.
+   * @returns Fresh random bytes.
+   */
   randomBytes?: (bytesLength?: number) => Uint8Array;
 };
 
+/** Public X25519/X448 ECDH API built on a Montgomery ladder. */
 export type MontgomeryECDH = {
+  /**
+   * Multiply one scalar by one Montgomery `u` coordinate.
+   * @param scalar - Secret scalar bytes.
+   * @param u - Public Montgomery `u` coordinate.
+   * @returns Shared point encoded as bytes.
+   */
   scalarMult: (scalar: Uint8Array, u: Uint8Array) => Uint8Array;
+  /**
+   * Multiply one scalar by the curve base point.
+   * @param scalar - Secret scalar bytes.
+   * @returns Public key bytes.
+   */
   scalarMultBase: (scalar: Uint8Array) => Uint8Array;
+  /**
+   * Derive a shared secret from a local secret key and peer public key.
+   * @param secretKeyA - Local secret key bytes.
+   * @param publicKeyB - Peer public key bytes.
+   * @returns Shared secret bytes.
+   */
   getSharedSecret: (secretKeyA: Uint8Array, publicKeyB: Uint8Array) => Uint8Array;
+  /**
+   * Derive one public key from a secret key.
+   * @param secretKey - Secret key bytes.
+   * @returns Public key bytes.
+   */
   getPublicKey: (secretKey: Uint8Array) => Uint8Array;
+  /** Utility helpers for secret-key generation. */
   utils: {
+    /** Generate one random secret key with the curve's expected byte length. */
     randomSecretKey: () => Uint8Array;
   };
+  /** Encoded Montgomery base point `u`. */
   GuBytes: Uint8Array;
+  /** Public lengths for keys and seeds. */
   lengths: CurveLengths;
+  /**
+   * Generate one random secret/public keypair.
+   * @param seed - Optional seed bytes to use instead of random generation.
+   * @returns Fresh secret/public keypair.
+   */
   keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
 };
 
@@ -51,6 +101,19 @@ function validateOpts(curve: MontgomeryOpts) {
   return Object.freeze({ ...curve } as const);
 }
 
+/**
+ * @param curveDef - Montgomery curve definition.
+ * @returns ECDH helper namespace.
+ * @throws If the curve definition or derived shared point is invalid. {@link Error}
+ * @example
+ * Perform one X25519 key exchange through the generic Montgomery helper.
+ *
+ * ```ts
+ * import { x25519 } from '@noble/curves/ed25519.js';
+ * const alice = x25519.keygen();
+ * const shared = x25519.getSharedSecret(alice.secretKey, alice.publicKey);
+ * ```
+ */
 export function montgomery(curveDef: MontgomeryOpts): MontgomeryECDH {
   const CURVE = validateOpts(curveDef);
   const { P, type, adjustScalarBytes, powPminus2, randomBytes: rand } = CURVE;
@@ -121,8 +184,8 @@ export function montgomery(curveDef: MontgomeryOpts): MontgomeryECDH {
 
   /**
    * Montgomery x-only multiplication ladder.
-   * @param pointU u coordinate (x) on Montgomery Curve 25519
-   * @param scalar by which the point would be multiplied
+   * @param pointU - u coordinate (x) on Montgomery Curve 25519
+   * @param scalar - by which the point would be multiplied
    * @returns new Point on Montgomery curve
    */
   function montgomeryLadder(u: bigint, scalar: bigint): bigint {

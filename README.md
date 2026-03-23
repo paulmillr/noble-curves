@@ -67,7 +67,7 @@ import { ristretto255_oprf } from '@noble/curves/ed25519.js';
 import { decaf448_oprf } from '@noble/curves/ed448.js';
 
 // utils
-import { bytesToHex, hexToBytes, concatBytes } from '@noble/curves/abstract/utils.js';
+import { bytesToHex, hexToBytes, concatBytes } from '@noble/curves/utils.js';
 import { Field } from '@noble/curves/abstract/modular.js';
 import { weierstrass, ecdsa } from '@noble/curves/abstract/weierstrass.js';
 import { edwards, eddsa } from '@noble/curves/abstract/edwards.js';
@@ -154,19 +154,19 @@ Check out separate documentation for [Point](#elliptic-curve-point-math), [hashe
 
 ```js
 import { secp256k1 } from '@noble/curves/secp256k1.js';
-import { keccak256 } from '@noble/hashes/sha3.js';
-const { secretKey } = curve.keygen();
+import { keccak_256 } from '@noble/hashes/sha3.js';
+const { secretKey } = secp256k1.keygen();
 const msg = new TextEncoder().encode('hello noble');
 // prehash: true (default) - hash using secp256k1.hash (sha256)
 const sig = secp256k1.sign(msg, secretKey);
 // prehash: false - hash using custom hash
-const sigKeccak = secp256k1.sign(keccak256(msg), secretKey, { prehash: false });
+const sigKeccak = secp256k1.sign(keccak_256(msg), secretKey, { prehash: false });
 ```
 
 Default sign() and verify() behavior (`prehash: true`) applies built-in hash function to message first.
 For secp256k1 that's sha256, for p521 that's sha512.
 
-Providing `prehash: false` allows user to specify their own hash function (e.g. use secp256k1 + keccak256).
+Providing `prehash: false` allows user to specify their own hash function (e.g. use secp256k1 + keccak_256).
 
 > [!NOTE]
 > Previously, in noble-curves v1, `prehash: false` was the default.
@@ -176,7 +176,7 @@ Providing `prehash: false` allows user to specify their own hash function (e.g. 
 
 ```js
 import { secp256k1 } from '@noble/curves/secp256k1.js';
-const { secretKey, publicKey } = curve.keygen();
+const { secretKey, publicKey } = secp256k1.keygen();
 const msg = new TextEncoder().encode('hello noble');
 const sigRec = secp256k1.sign(msg, secretKey, { format: 'recovered' });
 const publicKey_ = secp256k1.recoverPublicKey(sigRec, msg); // == publicKey
@@ -202,12 +202,12 @@ Public key recovery - only supported with ECDSA.
 
 ```js
 import { secp256k1 } from '@noble/curves/secp256k1.js';
-const { secretKey } = curve.keygen();
+const { secretKey } = secp256k1.keygen();
 const msg = new TextEncoder().encode('hello noble');
 // extraEntropy: false - default, hedging disabled
 const sigNoisy = secp256k1.sign(msg, secretKey);
 // extraEntropy: true - fetch 32 random bytes from CSPRNG
-const sigNoisy = secp256k1.sign(msg, secretKey, { extraEntropy: true });
+const sigNoisyA = secp256k1.sign(msg, secretKey, { extraEntropy: true });
 // extraEntropy: bytes - specific extra entropy
 const ent = Uint8Array.from([0xca, 0xfe, 0x01, 0x23]);
 const sigNoisy2 = secp256k1.sign(msg, secretKey, { extraEntropy: ent });
@@ -234,9 +234,9 @@ const { secretKey, publicKey } = ed25519.keygen();
 const msg = new TextEncoder().encode('hello noble');
 const sig = ed25519.sign(msg, secretKey);
 // zip215: true
-const isValid = ed25519.verify(sig, msg, pub);
+const isValid = ed25519.verify(sig, msg, publicKey);
 // SBS / e-voting / RFC8032 / FIPS 186-5
-const isValidRfc = ed25519.verify(sig, msg, pub, { zip215: false });
+const isValidRfc = ed25519.verify(sig, msg, publicKey, { zip215: false });
 ```
 
 > [!NOTE]
@@ -261,7 +261,7 @@ import { x25519 } from '@noble/curves/ed25519.js';
 import { x448 } from '@noble/curves/ed448.js';
 import { p256, p384, p521 } from '@noble/curves/nist.js';
 
-for (const curve of [secp256k1, schnorr, x25519, x448, p256, p384, p521]) {
+for (const curve of [secp256k1, x25519, x448, p256, p384, p521]) {
   const alice = curve.keygen();
   const bob = curve.keygen();
   const sharedKey = curve.getSharedSecret(alice.secretKey, bob.publicKey);
@@ -293,7 +293,7 @@ In Weierstrass curves, shared secrets:
 ##### webcrypto signatures
 
 ```js
-import { ed25519, ed448, p256, p384, p521 } from './src/webcrypto.ts';
+import { ed25519, ed448, p256, p384, p521 } from '@noble/curves/webcrypto.js';
 
 (async () => {
   for (let [name, curve] of Object.entries({ p256, p384, p521, ed25519, ed448 })) {
@@ -316,7 +316,7 @@ import { ed25519, ed448, p256, p384, p521 } from './src/webcrypto.ts';
 ##### webcrypto ecdh
 
 ```js
-import { p256, p384, p521, x25519, x448 } from './src/webcrypto.ts';
+import { p256, p384, p521, x25519, x448 } from '@noble/curves/webcrypto.js';
 
 (async () => {
   for (let [name, curve] of Object.entries({ p256, p384, p521, x25519, x448 })) {
@@ -337,8 +337,8 @@ import { p256, p384, p521, x25519, x448 } from './src/webcrypto.ts';
 ##### Key conversion from noble to webcrypto and back
 
 ```js
-import { p256 as p256n } from './src/nist.ts';
-import { p256 } from './src/webcrypto.ts';
+import { p256 as p256n } from '@noble/curves/nist.js';
+import { p256 } from '@noble/curves/webcrypto.js';
 (async () => {
   const nobleKeys = p256n.keygen();
   // convert noble keys to webcrypto
@@ -385,8 +385,8 @@ console.log({ publicKey2, signature2, isValid2 });
 
 // Aggregation
 const aggregatedKey = bls12_381.longSignatures.aggregatePublicKeys([
-  bls12_381.utils.randomSecretKey(),
-  bls12_381.utils.randomSecretKey(),
+  blsl.getPublicKey(bls12_381.utils.randomSecretKey()),
+  blsl.getPublicKey(bls12_381.utils.randomSecretKey()),
 ]);
 // const aggregatedSig = bls.aggregateSignatures(sigs)
 
@@ -418,11 +418,11 @@ Points of divergence:
 ### hash-to-curve: hashing to curve points
 
 ```ts
-import { bls12_381 } from './src/bls12-381.ts';
-import { ed25519_hasher, ristretto255_hasher } from './src/ed25519.ts';
-import { decaf448_hasher, ed448_hasher } from './src/ed448.ts';
-import { p256_hasher, p384_hasher, p521_hasher } from './src/nist.ts';
-import { secp256k1_hasher } from './src/secp256k1.ts';
+import { bls12_381 } from '@noble/curves/bls12-381.js';
+import { ed25519_hasher, ristretto255_hasher } from '@noble/curves/ed25519.js';
+import { decaf448_hasher, ed448_hasher } from '@noble/curves/ed448.js';
+import { p256_hasher, p384_hasher, p521_hasher } from '@noble/curves/nist.js';
+import { secp256k1_hasher } from '@noble/curves/secp256k1.js';
 
 const h = {
   secp256k1_hasher,
@@ -466,7 +466,7 @@ The module allows to hash arbitrary strings to elliptic curve points. Implements
 ```js
 import { p256_oprf, p384_oprf, p521_oprf } from '@noble/curves/nist.js';
 import { ristretto255_oprf } from '@noble/curves/ed25519.js';
-import { decaf448_orpf } from '@noble/curves/ed448.js';
+import { decaf448_oprf } from '@noble/curves/ed448.js';
 ```
 
 We provide OPRFs (oblivious pseudorandom functions),
@@ -567,11 +567,13 @@ We don't provide them: you should construct them manually.
 Check out [scure-starknet](https://github.com/paulmillr/scure-starknet) package for a proper example.
 
 ```ts
-import { poseidon, poseidonSponge } from '@noble/curves/abstract/poseidon.js';
+import { bn254 } from '@noble/curves/bn254.js';
+import { grainGenConstants, poseidon, poseidonSponge } from '@noble/curves/abstract/poseidon.js';
 
 const rate = 2;
 const capacity = 1;
-const { mds, roundConstants } = poseidon.grainGenConstants({
+const Fp = bn254.fields.Fr;
+const { mds, roundConstants } = grainGenConstants({
   Fp,
   t: rate + capacity,
   roundsFull: 8,
@@ -587,8 +589,8 @@ const opts = {
   roundsFull: 8,
   roundsPartial: 31,
 };
-const permutation = poseidon.poseidon(opts);
-const sponge = poseidon.poseidonSponge(opts); // use carefully, not specced
+const permutation = poseidon({ ...opts, t: rate + capacity });
+const sponge = poseidonSponge(opts); // use carefully, not specced
 ```
 
 ### fft: Fast Fourier Transform
@@ -607,7 +609,7 @@ API may change at any time. The code has not been audited. Feature requests are 
 ### utils: byte shuffling, conversion
 
 ```ts
-import { bytesToHex, concatBytes, equalBytes, hexToBytes } from '@noble/curves/abstract/utils.js';
+import { bytesToHex, concatBytes, equalBytes, hexToBytes } from '@noble/curves/utils.js';
 
 bytesToHex(Uint8Array.from([0xca, 0xfe, 0x01, 0x23]));
 hexToBytes('cafe0123');
@@ -620,30 +622,32 @@ equalBytes(Uint8Array.of(0xca), Uint8Array.of(0xca));
 #### Elliptic curve Point math
 
 ```js
+import { pippenger } from '@noble/curves/abstract/curve.js';
 import { secp256k1, schnorr } from '@noble/curves/secp256k1.js';
 import { p256, p384, p521 } from '@noble/curves/nist.js';
 import { ed25519, ristretto255 } from '@noble/curves/ed25519.js';
 import { ed448, decaf448 } from '@noble/curves/ed448.js';
-import { bls12_381 } from '@noble/curves/bls12-381.js'
+import { bls12_381 } from '@noble/curves/bls12-381.js';
 import { bn254 } from '@noble/curves/bn254.js';
 import { jubjub, babyjubjub } from '@noble/curves/misc.js';
 
 const curves = [
   secp256k1, schnorr, p256, p384, p521, ed25519, ed448,
   ristretto255, decaf448,
-  bls12_381.G1, bls12_381.G2, bn254.G1, bn254.G2,
+  bls12_381.G1, bls12_381.G2, bn254.G1,
   jubjub, babyjubjub
 ];
 for (const curve of curves) {
   const { Point } = curve;
   const { BASE, ZERO, Fp, Fn } = Point;
+  const info = Point.CURVE?.();
   const p = BASE.multiply(2n);
 
   // Initialization
-  if (info.type === 'weierstrass') {
+  if (info?.type === 'weierstrass') {
     // projective (homogeneous) coordinates: (X, Y, Z) ∋ (x=X/Z, y=Y/Z)
     const p_ = new Point(BASE.X, BASE.Y, BASE.Z);
-  } else if (info.type === 'edwards') {
+  } else if (info?.type === 'edwards') {
     // extended coordinates: (X, Y, Z, T) ∋ (x=X/Z, y=Y/Z)
     const p_ = new Point(BASE.X, BASE.Y, BASE.Z, BASE.T);
   }
@@ -657,11 +661,11 @@ for (const curve of curves) {
 
   // MSM (multi-scalar multiplication)
   const pa = [BASE, BASE.multiply(2n), BASE.multiply(4n), BASE.multiply(8n)];
-  const p6 = Point.msm(pa, [3n, 5n, 7n, 11n]);
+  const p6 = pippenger(Point, pa, [3n, 5n, 7n, 11n]);
   const _true3 = p6.equals(BASE.multiply(129n)); // 129*G
 
   const pcl = p.clearCofactor();
-  console.log(p.isTorsionFree(), p.isSmallOrder());
+  const isTorsionFree = p.isTorsionFree();
 
   const r1 = p.toBytes();
   const r1_ = Point.fromBytes(r1);
@@ -682,7 +686,7 @@ fp.mul(591n, 932n); // multiplication
 fp.pow(481n, 11024858120n); // exponentiation
 fp.div(5n, 17n); // division: 5/17 mod 2^255-19 == 5 * invert(17)
 fp.inv(5n); // modular inverse
-fp.sqrt(21n); // square root
+fp.sqrt(4n); // square root
 
 // Non-Field generic utils are also available
 mod(21n, 10n); // 21 mod 10 == 1n; fixed version of 21 % 10
@@ -740,11 +744,21 @@ cofactor `h` and coordinates `Gx`, `Gy` of generator point.
 #### Custom ECDSA instance
 
 ```js
-import { ecdsa } from '@noble/curves/abstract/weierstrass.js';
-import { sha256 } from '@noble/hashes/sha2.js';
+import { weierstrass, ecdsa } from '@noble/curves/abstract/weierstrass.js';
+import { sha224, sha256 } from '@noble/hashes/sha2.js';
+const p192_CURVE = {
+  p: 0xfffffffffffffffffffffffffffffffeffffffffffffffffn,
+  n: 0xffffffffffffffffffffffff99def836146bc9b1b4d22831n,
+  h: 1n,
+  a: 0xfffffffffffffffffffffffffffffffefffffffffffffffcn,
+  b: 0x64210519e59c80e70fa7e9ab72243049feb8deecc146b9b1n,
+  Gx: 0x188da80eb03090f67cbf20eb43a18800f4ff0afd82ff1012n,
+  Gy: 0x07192b95ffc8da78631011ed6b24cdd573f977a11e794811n,
+};
+const p192_Point = weierstrass(p192_CURVE);
 const p192_sha256 = ecdsa(p192_Point, sha256);
 // or
-const p192_sha224 = ecdsa(p192.Point, sha224);
+const p192_sha224 = ecdsa(p192_Point, sha224);
 
 const keys = p192_sha256.keygen();
 const msg = new TextEncoder().encode('custom curve');

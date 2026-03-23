@@ -94,6 +94,8 @@ const p256_Point = /* @__PURE__ */ weierstrass(p256_CURVE);
  * Hashes inputs with sha256 by default.
  *
  * @example
+ * Generate one P-256 keypair, sign a message, and verify it.
+ *
  * ```js
  * import { p256 } from '@noble/curves/nist.js';
  * const { secretKey, publicKey } = p256.keygen();
@@ -105,7 +107,15 @@ const p256_Point = /* @__PURE__ */ weierstrass(p256_CURVE);
  * ```
  */
 export const p256: ECDSA = /* @__PURE__ */ ecdsa(p256_Point, sha256);
-/** Hashing / encoding to p256 points / field. RFC 9380 methods. */
+/**
+ * Hashing / encoding to p256 points / field. RFC 9380 methods.
+ * @example
+ * Hash one message onto the P-256 curve.
+ *
+ * ```ts
+ * const point = p256_hasher.hashToCurve(new TextEncoder().encode('hello noble'));
+ * ```
+ */
 export const p256_hasher: H2CHasher<WeierstrassPointCons<bigint>> = /* @__PURE__ */ (() => {
   return createHasher(
     p256_Point,
@@ -125,7 +135,19 @@ export const p256_hasher: H2CHasher<WeierstrassPointCons<bigint>> = /* @__PURE__
     }
   );
 })();
-/** p256 OPRF, defined in RFC 9497. */
+/**
+ * p256 OPRF, defined in RFC 9497.
+ * @example
+ * Run one blind/evaluate/finalize OPRF round over P-256.
+ *
+ * ```ts
+ * const input = new TextEncoder().encode('hello noble');
+ * const keys = p256_oprf.oprf.generateKeyPair();
+ * const blind = p256_oprf.oprf.blind(input);
+ * const evaluated = p256_oprf.oprf.blindEvaluate(keys.secretKey, blind.blinded);
+ * const output = p256_oprf.oprf.finalize(input, blind.blind, evaluated);
+ * ```
+ */
 export const p256_oprf: OPRF = /* @__PURE__ */ (() =>
   createORPF({
     name: 'P256-SHA256',
@@ -134,7 +156,18 @@ export const p256_oprf: OPRF = /* @__PURE__ */ (() =>
     hashToGroup: p256_hasher.hashToCurve,
     hashToScalar: p256_hasher.hashToScalar,
   }))();
-/** FROST threshold signatures over p256. RFC 9591. */
+/**
+ * FROST threshold signatures over p256. RFC 9591.
+ * @example
+ * Create one trusted-dealer package for 2-of-3 p256 signing.
+ *
+ * ```ts
+ * const alice = p256_FROST.Identifier.derive('alice@example.com');
+ * const bob = p256_FROST.Identifier.derive('bob@example.com');
+ * const carol = p256_FROST.Identifier.derive('carol@example.com');
+ * const deal = p256_FROST.trustedDealer({ min: 2, max: 3 }, [alice, bob, carol]);
+ * ```
+ */
 export const p256_FROST: FROST = /* @__PURE__ */ (() =>
   createFROST({
     name: 'FROST-P256-SHA256-v1',
@@ -145,9 +178,28 @@ export const p256_FROST: FROST = /* @__PURE__ */ (() =>
 
 // NIST P384
 const p384_Point = /* @__PURE__ */ weierstrass(p384_CURVE);
-/** NIST P384 (aka secp384r1) curve, ECDSA and ECDH methods. Hashes inputs with sha384 by default. */
+/**
+ * NIST P384 (aka secp384r1) curve, ECDSA and ECDH methods. Hashes inputs with sha384 by default.
+ * @example
+ * Generate one P-384 keypair, sign a message, and verify it.
+ *
+ * ```ts
+ * const { secretKey, publicKey } = p384.keygen();
+ * const msg = new TextEncoder().encode('hello noble');
+ * const sig = p384.sign(msg, secretKey);
+ * const isValid = p384.verify(sig, msg, publicKey);
+ * ```
+ */
 export const p384: ECDSA = /* @__PURE__ */ ecdsa(p384_Point, sha384);
-/** Hashing / encoding to p384 points / field. RFC 9380 methods. */
+/**
+ * Hashing / encoding to p384 points / field. RFC 9380 methods.
+ * @example
+ * Hash one message onto the P-384 curve.
+ *
+ * ```ts
+ * const point = p384_hasher.hashToCurve(new TextEncoder().encode('hello noble'));
+ * ```
+ */
 export const p384_hasher: H2CHasher<WeierstrassPointCons<bigint>> = /* @__PURE__ */ (() => {
   return createHasher(
     p384_Point,
@@ -167,7 +219,19 @@ export const p384_hasher: H2CHasher<WeierstrassPointCons<bigint>> = /* @__PURE__
     }
   );
 })();
-/** p384 OPRF, defined in RFC 9497. */
+/**
+ * p384 OPRF, defined in RFC 9497.
+ * @example
+ * Run one blind/evaluate/finalize OPRF round over P-384.
+ *
+ * ```ts
+ * const input = new TextEncoder().encode('hello noble');
+ * const keys = p384_oprf.oprf.generateKeyPair();
+ * const blind = p384_oprf.oprf.blind(input);
+ * const evaluated = p384_oprf.oprf.blindEvaluate(keys.secretKey, blind.blinded);
+ * const output = p384_oprf.oprf.finalize(input, blind.blind, evaluated);
+ * ```
+ */
 export const p384_oprf: OPRF = /* @__PURE__ */ (() =>
   createORPF({
     name: 'P384-SHA384',
@@ -180,9 +244,28 @@ export const p384_oprf: OPRF = /* @__PURE__ */ (() =>
 // NIST P521
 const Fn521 = /* @__PURE__ */ (() => Field(p521_CURVE.n, { allowedLengths: [65, 66] }))();
 const p521_Point = /* @__PURE__ */ weierstrass(p521_CURVE, { Fn: Fn521 });
-/** NIST P521 (aka secp521r1) curve, ECDSA and ECDH methods. Hashes inputs with sha512 by default. */
+/**
+ * NIST P521 (aka secp521r1) curve, ECDSA and ECDH methods. Hashes inputs with sha512 by default.
+ * @example
+ * Generate one P-521 keypair, sign a message, and verify it.
+ *
+ * ```ts
+ * const { secretKey, publicKey } = p521.keygen();
+ * const msg = new TextEncoder().encode('hello noble');
+ * const sig = p521.sign(msg, secretKey);
+ * const isValid = p521.verify(sig, msg, publicKey);
+ * ```
+ */
 export const p521: ECDSA = /* @__PURE__ */ ecdsa(p521_Point, sha512);
-/** Hashing / encoding to p521 points / field. RFC 9380 methods. */
+/**
+ * Hashing / encoding to p521 points / field. RFC 9380 methods.
+ * @example
+ * Hash one message onto the P-521 curve.
+ *
+ * ```ts
+ * const point = p521_hasher.hashToCurve(new TextEncoder().encode('hello noble'));
+ * ```
+ */
 export const p521_hasher: H2CHasher<WeierstrassPointCons<bigint>> = /* @__PURE__ */ (() => {
   return createHasher(
     p521_Point,
@@ -202,7 +285,19 @@ export const p521_hasher: H2CHasher<WeierstrassPointCons<bigint>> = /* @__PURE__
     }
   );
 })();
-/** p521 OPRF, defined in RFC 9497. */
+/**
+ * p521 OPRF, defined in RFC 9497.
+ * @example
+ * Run one blind/evaluate/finalize OPRF round over P-521.
+ *
+ * ```ts
+ * const input = new TextEncoder().encode('hello noble');
+ * const keys = p521_oprf.oprf.generateKeyPair();
+ * const blind = p521_oprf.oprf.blind(input);
+ * const evaluated = p521_oprf.oprf.blindEvaluate(keys.secretKey, blind.blinded);
+ * const output = p521_oprf.oprf.finalize(input, blind.blind, evaluated);
+ * ```
+ */
 export const p521_oprf: OPRF = /* @__PURE__ */ (() =>
   createORPF({
     name: 'P521-SHA512',

@@ -64,28 +64,81 @@ import { _DST_scalar, type H2CDSTOpts } from './hash-to-curve.ts';
 import { getMinHashLength, mapHashToField } from './modular.ts';
 
 // OPRF is designed to be used across network, so we default to serialized values.
+/** Serialized group element passed between OPRF participants. */
 export type PointBytes = Uint8Array;
+/** Serialized scalar used for blinds and server secret keys. */
 export type ScalarBytes = Uint8Array;
+/** Arbitrary byte input or output used by the OPRF protocol. */
 export type Bytes = Uint8Array;
+/** Cryptographically secure byte generator used for blinds and proofs. */
 export type RNG = typeof randomBytes;
 
+/** Curve and hash hooks required to instantiate one OPRF ciphersuite. */
 export type OPRFOpts<P extends CurvePoint<any, P>> = {
+  /** Human-readable suite identifier used for domain separation. */
   name: string;
-  Point: CurvePointCons<P>; // we don't return Point, so we need generic interface only
+  /** Prime-order group used by the OPRF construction, kept generic because the suite returns serialized points. */
+  Point: CurvePointCons<P>;
   // Fn: IField<bigint>;
+  /**
+   * Hash function used for transcripts, proofs, and outputs.
+   * @param msg - Message bytes to hash.
+   * @returns Digest bytes.
+   */
   hash(msg: Bytes): Bytes;
+  /**
+   * Hash arbitrary bytes into one scalar in the suite order.
+   * @param msg - Message bytes to map.
+   * @param options - Hash-to-field domain-separation options. See {@link H2CDSTOpts}.
+   * @returns Scalar in the suite order.
+   */
   hashToScalar(msg: Uint8Array, options: H2CDSTOpts): bigint;
+  /**
+   * Hash arbitrary bytes directly onto one curve point.
+   * @param msg - Message bytes to map.
+   * @param options - Hash-to-curve domain-separation options. See {@link H2CDSTOpts}.
+   * @returns Point on the suite curve.
+   */
   hashToGroup(msg: Uint8Array, options: H2CDSTOpts): P;
 };
 
-export type OPRFKeys = { secretKey: ScalarBytes; publicKey: PointBytes };
-export type OPRFBlind = { blind: Uint8Array; blinded: Uint8Array };
-export type OPRFBlindEval = { evaluated: PointBytes; proof: Bytes };
-export type OPRFBlindEvalBatch = { evaluated: PointBytes[]; proof: Bytes };
-export type OPRFFinalizeItem = {
-  input: Bytes;
-  blind: ScalarBytes;
+/** Server keypair for one OPRF suite. */
+export type OPRFKeys = {
+  /** Secret scalar kept by the server. */
+  secretKey: ScalarBytes;
+  /** Public point distributed to clients in verifiable modes. */
+  publicKey: PointBytes;
+};
+/** Result of the client-side blind step. */
+export type OPRFBlind = {
+  /** Secret blind scalar that the client keeps locally. */
+  blind: Uint8Array;
+  /** Blinded group element sent to the server. */
+  blinded: Uint8Array;
+};
+/** Server response for one verifiable OPRF evaluation. */
+export type OPRFBlindEval = {
+  /** Evaluated group element returned by the server. */
   evaluated: PointBytes;
+  /** DLEQ proof binding the evaluation to the server public key. */
+  proof: Bytes;
+};
+/** Server response for a batch of verifiable OPRF evaluations. */
+export type OPRFBlindEvalBatch = {
+  /** Evaluated group elements returned for each blinded input. */
+  evaluated: PointBytes[];
+  /** Batch proof covering all evaluated elements. */
+  proof: Bytes;
+};
+/** One finalized transcript item used by batch verification helpers. */
+export type OPRFFinalizeItem = {
+  /** Original client input. */
+  input: Bytes;
+  /** Secret blind scalar used for the input. */
+  blind: ScalarBytes;
+  /** Evaluated point returned by the server. */
+  evaluated: PointBytes;
+  /** Blinded point originally sent to the server. */
   blinded: PointBytes;
 };
 
@@ -121,16 +174,16 @@ export type OPRF = {
 
     /**
      * (Server-side) Deterministically derives a private/public key pair from a seed.
-     * @param seed A 32-byte cryptographically secure random seed.
-     * @param keyInfo An optional byte string for domain separation.
+     * @param seed - A 32-byte cryptographically secure random seed.
+     * @param keyInfo - An optional byte string for domain separation.
      * @returns The derived key pair.
      */
     deriveKeyPair(seed: Bytes, keyInfo: Bytes): OPRFKeys;
 
     /**
      * (Client-side) The first step of the protocol. The client blinds its private input.
-     * @param input The client's private input bytes.
-     * @param rng An optional cryptographically secure random number generator.
+     * @param input - The client's private input bytes.
+     * @param rng - An optional cryptographically secure random number generator.
      * @returns An object containing the `blind` scalar (which the client MUST keep secret)
      * and the `blinded` element (which the client sends to the server).
      */
@@ -139,8 +192,8 @@ export type OPRF = {
     /**
      * (Server-side) The second step. The server evaluates the client's blinded element
      * using its secret key.
-     * @param secretKey The server's private key.
-     * @param blinded The blinded group element received from the client.
+     * @param secretKey - The server's private key.
+     * @param blinded - The blinded group element received from the client.
      * @returns The evaluated group element, to be sent back to the client.
      */
     blindEvaluate(secretKey: ScalarBytes, blinded: PointBytes): PointBytes;
@@ -148,9 +201,9 @@ export type OPRF = {
     /**
      * (Client-side) The final step. The client unblinds the server's response to
      * compute the final OPRF output.
-     * @param input The original private input from the `blind` step.
-     * @param blind The secret scalar from the `blind` step.
-     * @param evaluated The evaluated group element received from the server.
+     * @param input - The original private input from the `blind` step.
+     * @param blind - The secret scalar from the `blind` step.
+     * @param evaluated - The evaluated group element received from the server.
      * @returns The final OPRF output, `Hash(len(input)||input||len(unblinded)||unblinded||"Finalize")`.
      */
     finalize(input: Bytes, blind: ScalarBytes, evaluated: PointBytes): Bytes;
@@ -172,10 +225,10 @@ export type OPRF = {
     /**
      * (Server-side) Evaluates the client's blinded element and generates a DLEQ proof
      * of correctness.
-     * @param secretKey The server's private key.
-     * @param publicKey The server's public key, used in proof generation.
-     * @param blinded The blinded group element received from the client.
-     * @param rng An optional cryptographically secure random number generator for the proof.
+     * @param secretKey - The server's private key.
+     * @param publicKey - The server's public key, used in proof generation.
+     * @param blinded - The blinded group element received from the client.
+     * @param rng - An optional cryptographically secure random number generator for the proof.
      * @returns The evaluated element and a proof of correct computation.
      */
     blindEvaluate(
@@ -189,10 +242,10 @@ export type OPRF = {
      * (Server-side) An optimized batch version of `blindEvaluate`. It evaluates multiple
      * blinded elements and produces a single, constant-size proof for the entire batch,
      * amortizing the cost of proof generation.
-     * @param secretKey The server's private key.
-     * @param publicKey The server's public key.
-     * @param blinded An array of blinded group elements from one or more clients.
-     * @param rng An optional cryptographically secure random number generator for the proof.
+     * @param secretKey - The server's private key.
+     * @param publicKey - The server's public key.
+     * @param blinded - An array of blinded group elements from one or more clients.
+     * @param rng - An optional cryptographically secure random number generator for the proof.
      * @returns An array of evaluated elements and a single proof for the batch.
      */
     blindEvaluateBatch(
@@ -205,14 +258,14 @@ export type OPRF = {
     /**
      * (Client-side) The final step. The client verifies the server's proof, and if valid,
      * unblinds the result to compute the final VOPRF output.
-     * @param input The original private input.
-     * @param blind The secret scalar from the `blind` step.
-     * @param evaluated The evaluated element from the server.
-     * @param blinded The blinded element sent to the server (needed for proof verification).
-     * @param publicKey The server's public key against which the proof is verified.
-     * @param proof The DLEQ proof from the server.
+     * @param input - The original private input.
+     * @param blind - The secret scalar from the `blind` step.
+     * @param evaluated - The evaluated element from the server.
+     * @param blinded - The blinded element sent to the server (needed for proof verification).
+     * @param publicKey - The server's public key against which the proof is verified.
+     * @param proof - The DLEQ proof from the server.
      * @returns The final VOPRF output.
-     * @throws If the proof verification fails.
+     * @throws If the proof verification fails. {@link Error}
      */
     finalize(
       input: Bytes,
@@ -226,11 +279,11 @@ export type OPRF = {
     /**
      * (Client-side) The batch-aware version of `finalize`. It verifies a single batch proof
      * against a list of corresponding inputs and outputs.
-     * @param items An array of objects, each containing the parameters for a single finalization.
-     * @param publicKey The server's public key.
-     * @param proof The single DLEQ proof for the entire batch.
+     * @param items - An array of objects, each containing the parameters for a single finalization.
+     * @param publicKey - The server's public key.
+     * @param proof - The single DLEQ proof for the entire batch.
      * @returns An array of final VOPRF outputs, one for each item in the input.
-     * @throws If the proof verification fails.
+     * @throws If the proof verification fails. {@link Error}
      */
     finalizeBatch(items: OPRFFinalizeItem[], publicKey: PointBytes, proof: Bytes): Bytes[];
   };
@@ -240,7 +293,7 @@ export type OPRF = {
    * This mode extends VOPRF to include a public `info` parameter, known to both client and
    * server, which is cryptographically bound to the final output.
    * This is useful for domain separation at the application level.
-   * @param info A public byte string to be mixed into the computation.
+   * @param info - A public byte string to be mixed into the computation.
    * @returns An object with the POPRF protocol functions.
    */
   readonly poprf: (info: Bytes) => {
@@ -252,9 +305,9 @@ export type OPRF = {
     /**
      * (Client-side) Blinds the client's private input and computes the "tweaked key".
      * The tweaked key is a public value derived from the server's public key and the public `info`.
-     * @param input The client's private input.
-     * @param publicKey The server's public key.
-     * @param rng An optional cryptographically secure random number generator.
+     * @param input - The client's private input.
+     * @param publicKey - The server's public key.
+     * @param rng - An optional cryptographically secure random number generator.
      * @returns The `blind`, `blinded` element, and the `tweakedKey` which the client uses for verification.
      */
     blind(input: Bytes, publicKey: PointBytes, rng?: RNG): OPRFBlind & { tweakedKey: PointBytes };
@@ -262,18 +315,18 @@ export type OPRF = {
     /**
      * (Server-side) Evaluates the blinded element using a key derived from its secret key and the public `info`.
      * It generates a DLEQ proof against the tweaked key.
-     * @param secretKey The server's private key.
-     * @param blinded The blinded element from the client.
-     * @param rng An optional RNG for the proof.
+     * @param secretKey - The server's private key.
+     * @param blinded - The blinded element from the client.
+     * @param rng - An optional RNG for the proof.
      * @returns The evaluated element and a proof of correct computation.
      */
     blindEvaluate(secretKey: ScalarBytes, blinded: PointBytes, rng?: RNG): OPRFBlindEval;
 
     /**
      * (Server-side) A batch-aware version of `blindEvaluate` for the POPRF mode.
-     * @param secretKey The server's private key.
-     * @param blinded An array of blinded elements.
-     * @param rng An optional RNG for the proof.
+     * @param secretKey - The server's private key.
+     * @param blinded - An array of blinded elements.
+     * @param rng - An optional RNG for the proof.
      * @returns An array of evaluated elements and a single proof for the batch.
      */
     blindEvaluateBatch(secretKey: ScalarBytes, blinded: PointBytes[], rng: RNG): OPRFBlindEvalBatch;
@@ -281,25 +334,25 @@ export type OPRF = {
     /**
      * (Client-side) A batch-aware version of `finalize` for the POPRF mode.
      * It verifies the proof against the tweaked key.
-     * @param items An array containing the parameters for each finalization.
-     * @param proof The single DLEQ proof for the batch.
-     * @param tweakedKey The tweaked key corresponding to the proof (all items must share the same `info` and `publicKey`).
+     * @param items - An array containing the parameters for each finalization.
+     * @param proof - The single DLEQ proof for the batch.
+     * @param tweakedKey - The tweaked key corresponding to the proof (all items must share the same `info` and `publicKey`).
      * @returns An array of final POPRF outputs.
-     * @throws If proof verification fails.
+     * @throws If proof verification fails. {@link Error}
      */
     finalizeBatch(items: OPRFFinalizeItem[], proof: Bytes, tweakedKey: PointBytes): Bytes[];
 
     /**
      * (Client-side) Finalizes the POPRF protocol. It verifies the server's proof against the
      * `tweakedKey` computed in the `blind` step. The final output is bound to the public `info`.
-     * @param input The original private input.
-     * @param blind The secret scalar.
-     * @param evaluated The evaluated element from the server.
-     * @param blinded The blinded element sent to the server.
-     * @param proof The DLEQ proof from the server.
-     * @param tweakedKey The public tweaked key computed by the client during the `blind` step.
+     * @param input - The original private input.
+     * @param blind - The secret scalar.
+     * @param evaluated - The evaluated element from the server.
+     * @param blinded - The blinded element sent to the server.
+     * @param proof - The DLEQ proof from the server.
+     * @param tweakedKey - The public tweaked key computed by the client during the `blind` step.
      * @returns The final POPRF output.
-     * @throws If proof verification fails.
+     * @throws If proof verification fails. {@link Error}
      */
     finalize(
       input: Bytes,
@@ -314,8 +367,8 @@ export type OPRF = {
      * A non-interactive evaluation function for an entity that knows all inputs.
      * Computes the final POPRF output directly. Useful for testing or specific applications
      * where the server needs to compute the output for a known input.
-     * @param secretKey The server's private key.
-     * @param input The client's private input.
+     * @param secretKey - The server's private key.
+     * @param input - The client's private input.
      * @returns The final POPRF output.
      */
     evaluate(secretKey: ScalarBytes, input: Bytes): Bytes;
@@ -323,6 +376,26 @@ export type OPRF = {
 };
 
 // welcome to generic hell
+/**
+ * @param opts - OPRF ciphersuite options. See {@link OPRFOpts}.
+ * @returns OPRF helper namespace.
+ * @example
+ * Instantiate an OPRF suite from curve-specific hashing hooks.
+ *
+ * ```ts
+ * import { createORPF } from '@noble/curves/abstract/oprf.js';
+ * import { p256, p256_hasher } from '@noble/curves/nist.js';
+ * import { sha256 } from '@noble/hashes/sha2.js';
+ * const oprf = createORPF({
+ *   name: 'P256-SHA256',
+ *   Point: p256.Point,
+ *   hash: sha256,
+ *   hashToGroup: p256_hasher.hashToCurve,
+ *   hashToScalar: p256_hasher.hashToScalar,
+ * });
+ * const keys = oprf.oprf.generateKeyPair();
+ * ```
+ */
 export function createORPF<P extends CurvePoint<any, P>>(opts: OPRFOpts<P>): OPRF {
   validateObject(opts, {
     name: 'string',

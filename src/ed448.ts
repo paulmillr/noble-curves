@@ -40,7 +40,7 @@ import { abytes, asciiToBytes, bytesToNumberLE, equalBytes } from './utils.ts';
 // Finite field 2n**448n - 2n**224n - 1n
 // Subgroup order
 // 2n**446n - 13818066809895115352007386748515426880336692474882178609894547503885n
-const ed448_CURVE_p = BigInt(
+const ed448_CURVE_p = /* @__PURE__ */ BigInt(
   '0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffeffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
 );
 const ed448_CURVE: EdwardsOpts = /* @__PURE__ */ (() => ({
@@ -81,9 +81,9 @@ const shake256_114 = /* @__PURE__ */ wrapConstructor(() => shake256.create({ dkL
 const shake256_64 = /* @__PURE__ */ wrapConstructor(() => shake256.create({ dkLen: 64 }));
 
 // prettier-ignore
-const _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3), _4n = /* @__PURE__ */ BigInt(4), _11n = BigInt(11);
+const _1n = /* @__PURE__ */ BigInt(1), _2n = /* @__PURE__ */ BigInt(2), _3n = /* @__PURE__ */ BigInt(3), _4n = /* @__PURE__ */ BigInt(4), _11n = /* @__PURE__ */ BigInt(11);
 // prettier-ignore
-const _22n = BigInt(22), _44n = BigInt(44), _88n = BigInt(88), _223n = BigInt(223);
+const _22n = /* @__PURE__ */ BigInt(22), _44n = /* @__PURE__ */ BigInt(44), _88n = /* @__PURE__ */ BigInt(88), _223n = /* @__PURE__ */ BigInt(223);
 
 // powPminus3div4 calculates z = x^k mod p, where k = (p-3)/4.
 // Used for efficient square root calculation.
@@ -166,6 +166,8 @@ function ed4(opts: EdDSAOpts) {
 /**
  * ed448 EdDSA curve and methods.
  * @example
+ * Generate one Ed448 keypair, sign a message, and verify it.
+ *
  * ```js
  * import { ed448 } from '@noble/curves/ed448.js';
  * const { secretKey, publicKey } = ed448.keygen();
@@ -178,11 +180,32 @@ function ed4(opts: EdDSAOpts) {
 export const ed448: EdDSA = /* @__PURE__ */ ed4({});
 
 // There is no ed448ctx, since ed448 supports ctx by default
-/** Prehashed version of ed448. See {@link ed448} */
+/**
+ * Prehashed version of ed448. See {@link ed448}
+ * @example
+ * Use the prehashed Ed448 variant for one message.
+ *
+ * ```ts
+ * const { secretKey, publicKey } = ed448ph.keygen();
+ * const msg = new TextEncoder().encode('hello noble');
+ * const sig = ed448ph.sign(msg, secretKey);
+ * const isValid = ed448ph.verify(sig, msg, publicKey);
+ * ```
+ */
 export const ed448ph: EdDSA = /* @__PURE__ */ ed4({ prehash: shake256_64 });
 /**
  * E448 (NIST) != edwards448 used in ed448.
  * E448 is birationally equivalent to edwards448.
+ * @param X - Projective X coordinate.
+ * @param Y - Projective Y coordinate.
+ * @param Z - Projective Z coordinate.
+ * @param T - Projective T coordinate.
+ * @example
+ * Multiply the NIST E448 base point.
+ *
+ * ```ts
+ * const point = E448.BASE.multiply(2n);
+ * ```
  */
 export const E448: EdwardsPointCons = /* @__PURE__ */ edwards(E448_CURVE);
 
@@ -190,6 +213,8 @@ export const E448: EdwardsPointCons = /* @__PURE__ */ edwards(E448_CURVE);
  * ECDH using curve448 aka x448.
  *
  * @example
+ * Derive one shared secret between two X448 peers.
+ *
  * ```js
  * import { x448 } from '@noble/curves/ed448.js';
  * const alice = x448.keygen();
@@ -288,7 +313,15 @@ function map_to_curve_elligator2_edwards448(u: bigint) {
   return { x: Fp.mul(xEn, inv[0]), y: Fp.mul(yEn, inv[1]) }; // 38. return (xEn, xEd, yEn, yEd)
 }
 
-/** Hashing / encoding to ed448 points / field. RFC 9380 methods. */
+/**
+ * Hashing / encoding to ed448 points / field. RFC 9380 methods.
+ * @example
+ * Hash one message onto the ed448 curve.
+ *
+ * ```ts
+ * const point = ed448_hasher.hashToCurve(new TextEncoder().encode('hello noble'));
+ * ```
+ */
 export const ed448_hasher: H2CHasher<EdwardsPointCons> = /* @__PURE__ */ (() =>
   createHasher(ed448_Point, (scalars: bigint[]) => map_to_curve_elligator2_edwards448(scalars[0]), {
     DST: 'edwards448_XOF:SHAKE256_ELL2_RO_',
@@ -299,7 +332,18 @@ export const ed448_hasher: H2CHasher<EdwardsPointCons> = /* @__PURE__ */ (() =>
     expand: 'xof',
     hash: shake256,
   }))();
-/** FROST threshold signatures over ed448. RFC 9591. */
+/**
+ * FROST threshold signatures over ed448. RFC 9591.
+ * @example
+ * Create one trusted-dealer package for 2-of-3 ed448 signing.
+ *
+ * ```ts
+ * const alice = ed448_FROST.Identifier.derive('alice@example.com');
+ * const bob = ed448_FROST.Identifier.derive('bob@example.com');
+ * const carol = ed448_FROST.Identifier.derive('carol@example.com');
+ * const deal = ed448_FROST.trustedDealer({ min: 2, max: 3 }, [alice, bob, carol]);
+ * ```
+ */
 export const ed448_FROST: FROST = /* @__PURE__ */ (() =>
   createFROST({
     name: 'FROST-ED448-SHAKE256-v1',
@@ -433,7 +477,7 @@ class _DecafPoint extends PrimeEdwardsPoint<_DecafPoint> {
   /**
    * Converts decaf-encoded string to decaf point.
    * Described in [RFC9496](https://www.rfc-editor.org/rfc/rfc9496#name-decode-2).
-   * @param hex Decaf-encoded 56 bytes. Not every 56-byte string is valid decaf encoding
+   * @param hex - Decaf-encoded 56 bytes. Not every 56-byte string is valid decaf encoding
    */
   static fromHex(hex: string): _DecafPoint {
     return _DecafPoint.fromBytes(hexToBytes(hex));
@@ -475,11 +519,20 @@ class _DecafPoint extends PrimeEdwardsPoint<_DecafPoint> {
   }
 }
 
+/** Prime-order Decaf448 group bundle. */
 export const decaf448: {
   Point: typeof _DecafPoint;
 } = { Point: _DecafPoint };
 
-/** Hashing to decaf448 points / field. RFC 9380 methods. */
+/**
+ * Hashing to decaf448 points / field. RFC 9380 methods.
+ * @example
+ * Hash one message onto decaf448.
+ *
+ * ```ts
+ * const point = decaf448_hasher.hashToCurve(new TextEncoder().encode('hello noble'));
+ * ```
+ */
 export const decaf448_hasher: H2CHasherBase<typeof _DecafPoint> = {
   Point: _DecafPoint,
   hashToCurve(msg: Uint8Array, options?: H2CDSTOpts): _DecafPoint {
@@ -517,7 +570,19 @@ export const decaf448_hasher: H2CHasherBase<typeof _DecafPoint> = {
   },
 };
 
-/** decaf448 OPRF, defined in RFC 9497. */
+/**
+ * decaf448 OPRF, defined in RFC 9497.
+ * @example
+ * Run one blind/evaluate/finalize OPRF round over decaf448.
+ *
+ * ```ts
+ * const input = new TextEncoder().encode('hello noble');
+ * const keys = decaf448_oprf.oprf.generateKeyPair();
+ * const blind = decaf448_oprf.oprf.blind(input);
+ * const evaluated = decaf448_oprf.oprf.blindEvaluate(keys.secretKey, blind.blinded);
+ * const output = decaf448_oprf.oprf.finalize(input, blind.blind, evaluated);
+ * ```
+ */
 export const decaf448_oprf: OPRF = /* @__PURE__ */ (() =>
   createORPF({
     name: 'decaf448-SHAKE256',
@@ -532,6 +597,13 @@ export const decaf448_oprf: OPRF = /* @__PURE__ */ (() =>
  * Unlike ed25519, there is no ed448 generator point which can produce full T subgroup.
  * Instead, there is a Klein four-group, which spans over 2 independent 2-torsion points:
  * (0, 1), (0, -1), (-1, 0), (1, 0).
+ * @example
+ * Decode one known torsion point for debugging.
+ *
+ * ```ts
+ * import { ED448_TORSION_SUBGROUP, ed448 } from '@noble/curves/ed448.js';
+ * const point = ed448.Point.fromHex(ED448_TORSION_SUBGROUP[1]);
+ * ```
  */
 export const ED448_TORSION_SUBGROUP: string[] = [
   '010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',

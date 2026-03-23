@@ -583,6 +583,16 @@ const bls12_params = {
 /**
  * bls12-381 pairing-friendly curve construction.
  * Provides both longSignatures and shortSignatures.
+ * @example
+ * bls12-381 pairing-friendly curve construction.
+ *
+ * ```ts
+ * const bls = bls12_381.longSignatures;
+ * const { secretKey, publicKey } = bls.keygen();
+ * const msg = bls.hash(new TextEncoder().encode('hello noble'));
+ * const sig = bls.sign(msg, secretKey);
+ * const isValid = bls.verify(sig, msg, publicKey);
+ * ```
  */
 export const bls12_381: BlsCurvePairWithSignatures = bls(
   fields,

@@ -36,9 +36,9 @@ import { type IField } from './modular.ts';
 
 // Be friendly to bad ECMAScript parsers by not using bigint literals
 // prettier-ignore
-const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _8n = BigInt(8);
+const _0n = /* @__PURE__ */ BigInt(0), _1n = /* @__PURE__ */ BigInt(1), _2n = /* @__PURE__ */ BigInt(2), _8n = /* @__PURE__ */ BigInt(8);
 
-/** Instance of Extended Point with coordinates in X, Y, Z, T. */
+/** Extended Edwards point with X/Y/Z/T coordinates. */
 export interface EdwardsPoint extends CurvePoint<bigint, EdwardsPoint> {
   /** extended X coordinate. Different from affine x. */
   readonly X: bigint;
@@ -49,11 +49,28 @@ export interface EdwardsPoint extends CurvePoint<bigint, EdwardsPoint> {
   /** extended T coordinate */
   readonly T: bigint;
 }
-/** Static methods of Extended Point with coordinates in X, Y, Z, T. */
+/** Constructor and decoding helpers for extended Edwards points. */
 export interface EdwardsPointCons extends CurvePointCons<EdwardsPoint> {
+  /** Create a point from extended X/Y/Z/T coordinates without validation. */
   new (X: bigint, Y: bigint, Z: bigint, T: bigint): EdwardsPoint;
+  /**
+   * Return the curve parameters used by this point constructor.
+   * @returns Curve parameters.
+   */
   CURVE(): EdwardsOpts;
+  /**
+   * Decode a point from bytes, optionally using ZIP-215 rules.
+   * @param bytes - Encoded point bytes.
+   * @param zip215 - Whether to accept ZIP-215 encodings.
+   * @returns Decoded Edwards point.
+   */
   fromBytes(bytes: Uint8Array, zip215?: boolean): EdwardsPoint;
+  /**
+   * Decode a point from hex, optionally using ZIP-215 rules.
+   * @param hex - Encoded point hex.
+   * @param zip215 - Whether to accept ZIP-215 encodings.
+   * @returns Decoded Edwards point.
+   */
   fromHex(hex: string, zip215?: boolean): EdwardsPoint;
 }
 
@@ -69,12 +86,19 @@ export interface EdwardsPointCons extends CurvePointCons<EdwardsPoint> {
  * * Gy: y coordinate of generator point
  */
 export type EdwardsOpts = Readonly<{
+  /** Base-field modulus. */
   p: bigint;
+  /** Prime subgroup order. */
   n: bigint;
+  /** Curve cofactor. */
   h: bigint;
+  /** Edwards curve parameter `a`. */
   a: bigint;
+  /** Edwards curve parameter `d`. */
   d: bigint;
+  /** Generator x coordinate. */
   Gx: bigint;
+  /** Generator y coordinate. */
   Gy: bigint;
 }>;
 
@@ -86,9 +110,13 @@ export type EdwardsOpts = Readonly<{
  * * uvRatio: helper function for decompression, calculating √(u/v)
  */
 export type EdwardsExtraOpts = Partial<{
+  /** Optional base-field override. */
   Fp: IField<bigint>;
+  /** Optional scalar-field override. */
   Fn: IField<bigint>;
+  /** Whether field encodings are little-endian. */
   FpFnLE: boolean;
+  /** Square-root ratio helper used during point decompression. */
   uvRatio: (u: bigint, v: bigint) => { isValid: boolean; value: bigint };
 }>;
 
@@ -103,36 +131,73 @@ export type EdwardsExtraOpts = Partial<{
  * * randomBytes: function generating random bytes, used for randomSecretKey
  */
 export type EdDSAOpts = Partial<{
+  /** Clamp or otherwise normalize secret-scalar bytes before reducing mod `n`. */
   adjustScalarBytes: (bytes: Uint8Array) => Uint8Array;
+  /** Domain-separation helper for contexts and prehash mode. */
   domain: (data: Uint8Array, ctx: Uint8Array, phflag: boolean) => Uint8Array;
+  /** Optional hash-to-curve mapper for protocols like Ristretto hash-to-group. */
   mapToCurve: (scalar: bigint[]) => AffinePoint<bigint>;
+  /** Optional prehash function used before signing or verifying messages. */
   prehash: FHash;
+  /** RNG override used by helper constructors. */
   randomBytes: (bytesLength?: number) => Uint8Array;
 }>;
 
 /**
- * EdDSA (Edwards Digital Signature algorithm) interface.
- *
- * Allows to create and verify signatures, create public and secret keys.
+ * EdDSA (Edwards Digital Signature algorithm) helper namespace.
+ * Allows creating and verifying signatures, and deriving public keys.
  */
 export interface EdDSA {
+  /**
+   * Generate a secret/public key pair.
+   * @param seed - Optional seed material.
+   * @returns Secret/public key pair.
+   */
   keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
+  /**
+   * Derive the public key from a secret key.
+   * @param secretKey - Secret key bytes.
+   * @returns Encoded public key.
+   */
   getPublicKey: (secretKey: Uint8Array) => Uint8Array;
+  /**
+   * Sign a message with an EdDSA secret key.
+   * @param message - Message bytes.
+   * @param secretKey - Secret key bytes.
+   * @param options - Optional signature tweaks:
+   *   - `context` (optional): Domain-separation context for Ed25519ctx/Ed448.
+   * @returns Encoded signature bytes.
+   */
   sign: (
     message: Uint8Array,
     secretKey: Uint8Array,
     options?: { context?: Uint8Array }
   ) => Uint8Array;
+  /**
+   * Verify a signature against a message and public key.
+   * @param sig - Encoded signature bytes.
+   * @param message - Message bytes.
+   * @param publicKey - Encoded public key.
+   * @param options - Optional verification tweaks:
+   *   - `context` (optional): Domain-separation context for Ed25519ctx/Ed448.
+   *   - `zip215` (optional): Whether to accept ZIP-215 encodings.
+   * @returns Whether the signature is valid.
+   */
   verify: (
     sig: Uint8Array,
     message: Uint8Array,
     publicKey: Uint8Array,
     options?: { context?: Uint8Array; zip215: boolean }
   ) => boolean;
+  /** Point constructor used by this signature scheme. */
   Point: EdwardsPointCons;
+  /** Helper utilities for key validation and Montgomery conversion. */
   utils: {
+    /** Generate a valid random secret key. */
     randomSecretKey: (seed?: Uint8Array) => Uint8Array;
+    /** Check whether a secret key has the expected encoding. */
     isValidSecretKey: (secretKey: Uint8Array) => boolean;
+    /** Check whether a public key decodes to a valid point. */
     isValidPublicKey: (publicKey: Uint8Array, zip215?: boolean) => boolean;
 
     /**
@@ -144,6 +209,8 @@ export interface EdDSA {
      *   accepts inputs on the quadratic twist, which can't be moved to ed25519
      *
      * @example
+     * Converts ed public key to x public key.
+     *
      * ```js
      * const someonesPub_ed = ed25519.getPublicKey(ed25519.utils.randomSecretKey());
      * const someonesPub = ed25519.utils.toMontgomery(someonesPub);
@@ -155,6 +222,8 @@ export interface EdDSA {
     /**
      * Converts ed secret key to x secret key.
      * @example
+     * Converts ed secret key to x secret key.
+     *
      * ```js
      * const someonesPub = x25519.getPublicKey(x25519.utils.randomSecretKey());
      * const aPriv_ed = ed25519.utils.randomSecretKey();
@@ -163,6 +232,7 @@ export interface EdDSA {
      * ```
      */
     toMontgomerySecret: (secretKey: Uint8Array) => Uint8Array;
+    /** Return the expanded private key components used by RFC8032 signing. */
     getExtendedPublicKey: (key: Uint8Array) => {
       head: Uint8Array;
       prefix: Uint8Array;
@@ -171,6 +241,7 @@ export interface EdDSA {
       pointBytes: Uint8Array;
     };
   };
+  /** Byte lengths for keys and signatures exposed by this scheme. */
   lengths: CurveLengths;
 }
 
@@ -182,6 +253,20 @@ function isEdValidXY(Fp: IField<bigint>, CURVE: EdwardsOpts, x: bigint, y: bigin
   return Fp.eql(left, right);
 }
 
+/**
+ * @param params - Curve parameters. See {@link EdwardsOpts}.
+ * @param extraOpts - Optional helpers and overrides. See {@link EdwardsExtraOpts}.
+ * @returns Edwards point constructor.
+ * @throws If the curve parameters or Edwards overrides are invalid. {@link Error}
+ * @example
+ * ```ts
+ * import { edwards } from '@noble/curves/abstract/edwards.js';
+ * import { jubjub } from '@noble/curves/misc.js';
+ * // Build a point constructor from explicit curve parameters, then use its base point.
+ * const Point = edwards(jubjub.Point.CURVE());
+ * Point.BASE.toHex();
+ * ```
+ */
 export function edwards(params: EdwardsOpts, extraOpts: EdwardsExtraOpts = {}): EdwardsPointCons {
   const validated = createCurveFields('edwards', params, extraOpts, extraOpts.FpFnLE);
   const { Fp, Fn } = validated;
@@ -494,6 +579,14 @@ export function edwards(params: EdwardsOpts, extraOpts: EdwardsExtraOpts = {}): 
  * Base class for prime-order points like Ristretto255 and Decaf448.
  * These points eliminate cofactor issues by representing equivalence classes
  * of Edwards curve points.
+ * @param ep - Backing Edwards point.
+ * @example
+ * Base class for prime-order points like Ristretto255 and Decaf448.
+ *
+ * ```ts
+ * import { ristretto255 } from '@noble/curves/ed25519.js';
+ * const point = ristretto255.Point.BASE.multiply(2n);
+ * ```
  */
 export abstract class PrimeEdwardsPoint<T extends PrimeEdwardsPoint<T>>
   implements CurvePoint<bigint, T>
@@ -597,6 +690,24 @@ export abstract class PrimeEdwardsPoint<T extends PrimeEdwardsPoint<T>>
 
 /**
  * Initializes EdDSA signatures over given Edwards curve.
+ * @param Point - Edwards point constructor.
+ * @param cHash - Hash function.
+ * @param eddsaOpts - Optional signature helpers. See {@link EdDSAOpts}.
+ * @returns EdDSA helper namespace.
+ * @throws If the hash function, options, or derived point operations are invalid. {@link Error}
+ * @example
+ * Initializes EdDSA signatures over given Edwards curve.
+ *
+ * ```ts
+ * import { eddsa } from '@noble/curves/abstract/edwards.js';
+ * import { jubjub } from '@noble/curves/misc.js';
+ * import { sha512 } from '@noble/hashes/sha2.js';
+ * const sigs = eddsa(jubjub.Point, sha512);
+ * const { secretKey, publicKey } = sigs.keygen();
+ * const msg = new TextEncoder().encode('hello noble');
+ * const sig = sigs.sign(msg, secretKey);
+ * const isValid = sigs.verify(sig, msg, publicKey);
+ * ```
  */
 export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpts = {}): EdDSA {
   if (typeof cHash !== 'function') throw new Error('"hash" function param is required');

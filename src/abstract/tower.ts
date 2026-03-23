@@ -16,54 +16,106 @@ import type { WeierstrassPoint, WeierstrassPointCons } from './weierstrass.ts';
 
 // Be friendly to bad ECMAScript parsers by not using bigint literals
 // prettier-ignore
-const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3);
+const _0n = /* @__PURE__ */ BigInt(0), _1n = /* @__PURE__ */ BigInt(1), _2n = /* @__PURE__ */ BigInt(2), _3n = /* @__PURE__ */ BigInt(3);
 
 // Fp₂ over complex plane
+/** Pair of bigints used for quadratic-extension tuples. */
 export type BigintTuple = [bigint, bigint];
+/** Prime-field element. */
 export type Fp = bigint;
 // Finite extension field over irreducible polynominal.
 // Fp(u) / (u² - β) where β = -1
-export type Fp2 = { c0: bigint; c1: bigint };
+/** Quadratic-extension field element `c0 + c1 * u`. */
+export type Fp2 = {
+  /** Real component. */
+  c0: bigint;
+  /** Imaginary component. */
+  c1: bigint;
+};
+/** Six bigints used for sextic-extension tuples. */
 export type BigintSix = [bigint, bigint, bigint, bigint, bigint, bigint];
-export type Fp6 = { c0: Fp2; c1: Fp2; c2: Fp2 };
-export type Fp12 = { c0: Fp6; c1: Fp6 }; // Fp₁₂ = Fp₆² => Fp₂³, Fp₆(w) / (w² - γ) where γ = v
+/** Sextic-extension field element `c0 + c1 * v + c2 * v^2`. */
+export type Fp6 = {
+  /** Constant coefficient. */
+  c0: Fp2;
+  /** Linear coefficient. */
+  c1: Fp2;
+  /** Quadratic coefficient. */
+  c2: Fp2;
+};
+/** Degree-12 extension field element `c0 + c1 * w`. Fp₁₂ = Fp₆² over Fp₂³, with Fp₆(w) / (w² - γ) where γ = v. */
+export type Fp12 = {
+  /** Constant coefficient. */
+  c0: Fp6;
+  /** Linear coefficient. */
+  c1: Fp6;
+};
 // prettier-ignore
+/** Twelve bigints used for degree-12 extension tuples. */
 export type BigintTwelve = [
   bigint, bigint, bigint, bigint, bigint, bigint,
   bigint, bigint, bigint, bigint, bigint, bigint
 ];
 
+/** BLS-friendly helpers on top of the quadratic extension field. */
 export type Fp2Bls = mod.IField<Fp2> & {
+  /** Underlying prime field. */
   Fp: mod.IField<Fp>;
+  /** Apply one Frobenius map. */
   frobeniusMap(num: Fp2, power: number): Fp2;
+  /** Build one field element from a raw bigint tuple. */
   fromBigTuple(num: BigintTuple): Fp2;
+  /** Multiply by the curve `b` constant. */
   mulByB: (num: Fp2) => Fp2;
+  /** Multiply by the quadratic non-residue. */
   mulByNonresidue: (num: Fp2) => Fp2;
+  /** Split one quadratic element into real and imaginary components. */
   reim: (num: Fp2) => { re: Fp; im: Fp };
+  /** Specialized helper used by sextic squaring formulas. */
   Fp4Square: (a: Fp2, b: Fp2) => { first: Fp2; second: Fp2 };
+  /** Quadratic non-residue used by the extension. */
   NONRESIDUE: Fp2;
 };
 
+/** BLS-friendly helpers on top of the sextic extension field. */
 export type Fp6Bls = mod.IField<Fp6> & {
+  /** Underlying quadratic extension field. */
   Fp2: Fp2Bls;
+  /** Apply one Frobenius map. */
   frobeniusMap(num: Fp6, power: number): Fp6;
+  /** Build one field element from a raw six-bigint tuple. */
   fromBigSix: (tuple: BigintSix) => Fp6;
+  /** Multiply by a sparse `(0, b1, 0)` sextic element. */
   mul1(num: Fp6, b1: Fp2): Fp6;
+  /** Multiply by a sparse `(b0, b1, 0)` sextic element. */
   mul01(num: Fp6, b0: Fp2, b1: Fp2): Fp6;
+  /** Multiply by one quadratic-extension element. */
   mulByFp2(lhs: Fp6, rhs: Fp2): Fp6;
+  /** Multiply by the sextic non-residue. */
   mulByNonresidue: (num: Fp6) => Fp6;
 };
 
+/** BLS-friendly helpers on top of the degree-12 extension field. */
 export type Fp12Bls = mod.IField<Fp12> & {
+  /** Underlying sextic extension field. */
   Fp6: Fp6Bls;
+  /** Apply one Frobenius map. */
   frobeniusMap(num: Fp12, power: number): Fp12;
+  /** Build one field element from a raw twelve-bigint tuple. */
   fromBigTwelve: (t: BigintTwelve) => Fp12;
+  /** Multiply by a sparse `(o0, o1, 0, 0, o4, 0)` element. */
   mul014(num: Fp12, o0: Fp2, o1: Fp2, o4: Fp2): Fp12;
+  /** Multiply by a sparse `(o0, 0, 0, o3, o4, 0)` element. */
   mul034(num: Fp12, o0: Fp2, o3: Fp2, o4: Fp2): Fp12;
+  /** Multiply by one quadratic-extension element. */
   mulByFp2(lhs: Fp12, rhs: Fp2): Fp12;
+  /** Conjugate one degree-12 element. */
   conjugate(num: Fp12): Fp12;
+  /** Apply the final exponentiation from pairing arithmetic. */
   finalExponentiate(num: Fp12): Fp12;
+  /** Apply one cyclotomic square. */
   _cyclotomicSquare(num: Fp12): Fp12;
+  /** Apply one cyclotomic exponentiation. */
   _cyclotomicExp(num: Fp12, n: bigint): Fp12;
 };
 
@@ -92,6 +144,24 @@ function calcFrobeniusCoefficients<T>(
 }
 
 // This works same at least for bls12-381, bn254 and bls12-377
+/**
+ * @param Fp - Base field implementation.
+ * @param Fp2 - Quadratic extension field.
+ * @param base - Frobenius base element.
+ * @returns Frobenius endomorphism helpers.
+ * @throws If the derived Frobenius constants are inconsistent for the tower. {@link Error}
+ * @example
+ * Build Frobenius endomorphism helpers for a BLS extension tower.
+ *
+ * ```ts
+ * import { psiFrobenius } from '@noble/curves/abstract/tower.js';
+ * import { bls12_381 } from '@noble/curves/bls12-381.js';
+ * const Fp = bls12_381.fields.Fp;
+ * const Fp2 = bls12_381.fields.Fp2;
+ * const frob = psiFrobenius(Fp, Fp2, Fp2.div(Fp2.ONE, Fp2.NONRESIDUE));
+ * const point = frob.G2psi(bls12_381.G2.Point, bls12_381.G2.Point.BASE);
+ * ```
+ */
 export function psiFrobenius(
   Fp: mod.IField<Fp>,
   Fp2: Fp2Bls,
@@ -137,13 +207,33 @@ export function psiFrobenius(
   return { psi, psi2, G2psi, G2psi2, PSI_X, PSI_Y, PSI2_X, PSI2_Y };
 }
 
+/** Construction options for the BLS-style degree-12 tower. */
 export type Tower12Opts = {
+  /** Prime-field order. */
   ORDER: bigint;
+  /** Bit length of the BLS parameter `x`. */
   X_LEN: number;
+  /** Prime-field non-residue used by the quadratic extension. */
   NONRESIDUE?: Fp;
+  /** Quadratic-extension non-residue used by the sextic tower. */
   FP2_NONRESIDUE: BigintTuple;
+  /**
+   * Optional custom quadratic square-root helper.
+   * @param num - Quadratic-extension element to root.
+   * @returns One square root of `num`.
+   */
   Fp2sqrt?: (num: Fp2) => Fp2;
+  /**
+   * Multiply one quadratic element by the curve `b` constant.
+   * @param num - Quadratic-extension element to scale.
+   * @returns Product by the curve `b` constant.
+   */
   Fp2mulByB: (num: Fp2) => Fp2;
+  /**
+   * Final exponentiation used by pairing arithmetic.
+   * @param num - Degree-12 field element to exponentiate.
+   * @returns Pairing result after final exponentiation.
+   */
   Fp12finalExponentiate: (num: Fp12) => Fp12;
 };
 
@@ -850,6 +940,23 @@ class _Field12 implements Fp12Bls {
   }
 }
 
+/**
+ * @param opts - Tower construction options. See {@link Tower12Opts}.
+ * @returns BLS tower fields.
+ * @example
+ * Construct the Fp2/Fp6/Fp12 tower used by a pairing-friendly curve.
+ *
+ * ```ts
+ * const fields = tower12({
+ *   ORDER: 17n,
+ *   X_LEN: 4,
+ *   FP2_NONRESIDUE: [1n, 1n],
+ *   Fp2mulByB: (num) => num,
+ *   Fp12finalExponentiate: (num) => num,
+ * });
+ * const fp12 = fields.Fp12.ONE;
+ * ```
+ */
 export function tower12(opts: Tower12Opts): {
   Fp: Readonly<mod.IField<bigint> & Required<Pick<mod.IField<bigint>, 'isOdd'>>>;
   Fp2: Fp2Bls;

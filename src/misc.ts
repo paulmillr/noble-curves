@@ -21,7 +21,7 @@ import { asciiToBytes } from './utils.ts';
 // Jubjub curves have 𝔽p over scalar fields of other curves. They are friendly to ZK proofs.
 
 // jubjub p = bls n, verify in bls12-381.ts
-const jubjub_CURVE: EdwardsOpts = {
+const jubjub_CURVE: EdwardsOpts = /* @__PURE__ */ (() => ({
   p: BigInt('0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001'),
   n: BigInt('0xe7db4ea6533afa906673b0101343b00a6682093ccc81082d0970e5ed6f72cb7'),
   h: BigInt(8),
@@ -29,12 +29,23 @@ const jubjub_CURVE: EdwardsOpts = {
   d: BigInt('0x2a9318e74bfa2b48f5fd9207e6bd7fd4292d7f6d37579d2601065fd6d6343eb1'),
   Gx: BigInt('0x11dafe5d23e1218086a365b99fbf3d3be72f6afd7d1f72623e6b071492d1122b'),
   Gy: BigInt('0x1d523cf1ddab1a1793132e78c866c0c33e26ba5cc220fed7cc3f870e59d292aa'),
-};
-/** Curve over scalar field of bls12-381. jubjub Fp = bls n */
-export const jubjub: EdDSA = /* @__PURE__ */ eddsa(edwards(jubjub_CURVE), sha512);
+}))();
+/**
+ * Curve over scalar field of bls12-381. jubjub Fp = bls n
+ * @example
+ * Generate one Jubjub keypair, sign a message, and verify it.
+ *
+ * ```ts
+ * const { secretKey, publicKey } = jubjub.keygen();
+ * const msg = new TextEncoder().encode('hello noble');
+ * const sig = jubjub.sign(msg, secretKey);
+ * const isValid = jubjub.verify(sig, msg, publicKey);
+ * ```
+ */
+export const jubjub: EdDSA = /* @__PURE__ */ (() => eddsa(edwards(jubjub_CURVE), sha512))();
 
 // babyjubjub p = bn254 n, verify in bn254.ts
-const babyjubjub_CURVE: EdwardsOpts = {
+const babyjubjub_CURVE: EdwardsOpts = /* @__PURE__ */ (() => ({
   p: BigInt('0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001'),
   n: BigInt('0x30644e72e131a029b85045b68181585d59f76dc1c90770533b94bee1c9093788'),
   h: BigInt(8),
@@ -42,15 +53,44 @@ const babyjubjub_CURVE: EdwardsOpts = {
   d: BigInt('168696'),
   Gx: BigInt('0x23343e3445b673d38bcba38f25645adb494b1255b1162bb40f41a59f4d4b45e'),
   Gy: BigInt('0xc19139cb84c680a6e14116da06056174a0cfa121e6e5c2450f87d64fc000001'),
-};
-/** Curve over scalar field of bn254. babyjubjub Fp = bn254 n */
-export const babyjubjub: EdDSA = /* @__PURE__ */ eddsa(edwards(babyjubjub_CURVE), blake256);
+}))();
+/**
+ * Curve over scalar field of bn254. babyjubjub Fp = bn254 n
+ * Point-only for now: `keygen()`, `getPublicKey()`, `sign()`, and `verify()` are currently broken
+ * by the `blake256` secret-expansion mismatch in the generic EdDSA helper, so use `Point` APIs only.
+ * @example
+ * Access the BabyJubJub base point and round-trip it through the point codec.
+ *
+ * ```ts
+ * import { babyjubjub } from '@noble/curves/misc.js';
+ * const base = babyjubjub.Point.BASE;
+ * const encoded = base.toBytes();
+ * const decoded = babyjubjub.Point.fromBytes(encoded);
+ * ```
+ */
+export const babyjubjub: EdDSA = /* @__PURE__ */ (() =>
+  eddsa(edwards(babyjubjub_CURVE), blake256))();
 
-const jubjub_gh_first_block = asciiToBytes(
+const jubjub_gh_first_block = /* @__PURE__ */ asciiToBytes(
   '096b36a5804bfacef1691e173c366a47ff5ba84a44f26ddd7e8d9f79d5b42df0'
 );
 
-// Returns point at JubJub curve which is prime order and not zero
+/**
+ * @param tag - Hash input.
+ * @param personalization - BLAKE2 personalization bytes.
+ * @returns Prime-order Jubjub point.
+ * @throws If the derived point has small order. {@link Error}
+ * @example
+ * Hash a tag into a prime-order Jubjub point.
+ *
+ * ```ts
+ * import { jubjub_groupHash } from '@noble/curves/misc.js';
+ * import { asciiToBytes } from '@noble/curves/utils.js';
+ * const tag = Uint8Array.of(2);
+ * const personalization = asciiToBytes('Zcash_G_');
+ * const point = jubjub_groupHash(tag, personalization);
+ * ```
+ */
 export function jubjub_groupHash(tag: Uint8Array, personalization: Uint8Array): EdwardsPoint {
   const h = blake2s.create({ personalization, dkLen: 32 });
   h.update(jubjub_gh_first_block);
@@ -63,9 +103,24 @@ export function jubjub_groupHash(tag: Uint8Array, personalization: Uint8Array): 
   return p;
 }
 
-// No secret data is leaked here at all.
-// It operates over public data:
-// const G_SPEND = jubjub.findGroupHash(Uint8Array.of(), asciiToBytes('Item_G_'));
+/**
+ * No secret data is leaked here at all.
+ * It operates over public data.
+ * @param m - Message prefix.
+ * @param personalization - BLAKE2 personalization bytes.
+ * @returns First non-zero group hash.
+ * @throws If no non-zero Jubjub group hash can be found. {@link Error}
+ * @example
+ * Derive the first non-zero Jubjub group hash for one personalization tag.
+ *
+ * ```ts
+ * import { jubjub_findGroupHash } from '@noble/curves/misc.js';
+ * import { asciiToBytes } from '@noble/curves/utils.js';
+ * const msg = Uint8Array.of();
+ * const personalization = asciiToBytes('Zcash_G_');
+ * const point = jubjub_findGroupHash(msg, personalization);
+ * ```
+ */
 export function jubjub_findGroupHash(m: Uint8Array, personalization: Uint8Array): EdwardsPoint {
   const tag = concatBytes(m, Uint8Array.of(0));
   const hashes = [];
@@ -79,7 +134,7 @@ export function jubjub_findGroupHash(m: Uint8Array, personalization: Uint8Array)
   return hashes[0];
 }
 
-const brainpoolP256r1_CURVE: WeierstrassOpts<bigint> = {
+const brainpoolP256r1_CURVE: WeierstrassOpts<bigint> = /* @__PURE__ */ (() => ({
   p: BigInt('0xa9fb57dba1eea9bc3e660a909d838d726e3bf623d52620282013481d1f6e5377'),
   a: BigInt('0x7d5a0975fc2c3057eef67530417affe7fb8055c126dc5c6ce94a4b44f330b5d9'),
   b: BigInt('0x26dc5c6ce94a4b44f330b5d9bbd77cbf958416295cf7e1ce6bccdc18ff8c07b6'),
@@ -87,11 +142,23 @@ const brainpoolP256r1_CURVE: WeierstrassOpts<bigint> = {
   Gx: BigInt('0x8bd2aeb9cb7e57cb2c4b482ffc81b7afb9de27e1e3bd23c23a4453bd9ace3262'),
   Gy: BigInt('0x547ef835c3dac4fd97f8461a14611dc9c27745132ded8e545c1d54c72f046997'),
   h: BigInt(1),
-};
-/** Brainpool P256r1 with sha256, from RFC 5639. */
-export const brainpoolP256r1: ECDSA = ecdsa(weierstrass(brainpoolP256r1_CURVE), sha256);
+}))();
+/**
+ * Brainpool P256r1 with sha256, from RFC 5639.
+ * @example
+ * Generate one Brainpool P256r1 keypair, sign a message, and verify it.
+ *
+ * ```ts
+ * const { secretKey, publicKey } = brainpoolP256r1.keygen();
+ * const msg = new TextEncoder().encode('hello noble');
+ * const sig = brainpoolP256r1.sign(msg, secretKey);
+ * const isValid = brainpoolP256r1.verify(sig, msg, publicKey);
+ * ```
+ */
+export const brainpoolP256r1: ECDSA = /* @__PURE__ */ (() =>
+  ecdsa(weierstrass(brainpoolP256r1_CURVE), sha256))();
 
-const brainpoolP384r1_CURVE: WeierstrassOpts<bigint> = {
+const brainpoolP384r1_CURVE: WeierstrassOpts<bigint> = /* @__PURE__ */ (() => ({
   p: BigInt(
     '0x8cb91e82a3386d280f5d6f7e50e641df152f7109ed5456b412b1da197fb71123acd3a729901d1a71874700133107ec53'
   ),
@@ -111,11 +178,23 @@ const brainpoolP384r1_CURVE: WeierstrassOpts<bigint> = {
     '0x8abe1d7520f9c2a45cb1eb8e95cfd55262b70b29feec5864e19c054ff99129280e4646217791811142820341263c5315'
   ),
   h: BigInt(1),
-};
-/** Brainpool P384r1 with sha384, from RFC 5639. */
-export const brainpoolP384r1: ECDSA = ecdsa(weierstrass(brainpoolP384r1_CURVE), sha384);
+}))();
+/**
+ * Brainpool P384r1 with sha384, from RFC 5639.
+ * @example
+ * Generate one Brainpool P384r1 keypair, sign a message, and verify it.
+ *
+ * ```ts
+ * const { secretKey, publicKey } = brainpoolP384r1.keygen();
+ * const msg = new TextEncoder().encode('hello noble');
+ * const sig = brainpoolP384r1.sign(msg, secretKey);
+ * const isValid = brainpoolP384r1.verify(sig, msg, publicKey);
+ * ```
+ */
+export const brainpoolP384r1: ECDSA = /* @__PURE__ */ (() =>
+  ecdsa(weierstrass(brainpoolP384r1_CURVE), sha384))();
 
-const brainpoolP512r1_CURVE: WeierstrassOpts<bigint> = {
+const brainpoolP512r1_CURVE: WeierstrassOpts<bigint> = /* @__PURE__ */ (() => ({
   p: BigInt(
     '0xaadd9db8dbe9c48b3fd4e6ae33c9fc07cb308db3b3c9d20ed6639cca703308717d4d9b009bc66842aecda12ae6a380e62881ff2f2d82c68528aa6056583a48f3'
   ),
@@ -135,6 +214,18 @@ const brainpoolP512r1_CURVE: WeierstrassOpts<bigint> = {
     '0x7dde385d566332ecc0eabfa9cf7822fdf209f70024a57b1aa000c55b881f8111b2dcde494a5f485e5bca4bd88a2763aed1ca2b2fa8f0540678cd1e0f3ad80892'
   ),
   h: BigInt(1),
-};
-/** Brainpool P521r1 with sha512, from RFC 5639. */
-export const brainpoolP512r1: ECDSA = ecdsa(weierstrass(brainpoolP512r1_CURVE), sha512);
+}))();
+/**
+ * Brainpool P521r1 with sha512, from RFC 5639.
+ * @example
+ * Generate one Brainpool P512r1 keypair, sign a message, and verify it.
+ *
+ * ```ts
+ * const { secretKey, publicKey } = brainpoolP512r1.keygen();
+ * const msg = new TextEncoder().encode('hello noble');
+ * const sig = brainpoolP512r1.sign(msg, secretKey);
+ * const isValid = brainpoolP512r1.verify(sig, msg, publicKey);
+ * ```
+ */
+export const brainpoolP512r1: ECDSA = /* @__PURE__ */ (() =>
+  ecdsa(weierstrass(brainpoolP512r1_CURVE), sha512))();
