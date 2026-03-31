@@ -1213,8 +1213,7 @@ export function SWUFpSqrtRatio<T>(
   for (let o = q - _1n; o % _2n === _0n; o /= _2n) l += _1n;
   const c1 = l; // 1. c1, the largest integer such that 2^c1 divides q - 1.
   // We need 2n ** c1 and 2n ** (c1-1). We can't use **; but we can use <<.
-  // 2n ** c1 == 2n << (c1-1)
-  const _2n_pow_c1_1 = _2n << (c1 - _1n - _1n);
+  const _2n_pow_c1_1 = _1n << (c1 - _1n);
   const _2n_pow_c1 = _2n_pow_c1_1 * _2n;
   const c2 = (q - _1n) / _2n_pow_c1; // 2. c2 = (q - 1) / (2^c1)  # Integer arithmetic
   const c3 = (c2 - _1n) / _2n; // 3. c3 = (c2 - 1) / 2            # Integer arithmetic
@@ -1242,7 +1241,7 @@ export function SWUFpSqrtRatio<T>(
     // 17. for i in (c1, c1 - 1, ..., 2):
     for (let i = c1; i > _1n; i--) {
       let tv5 = i - _2n; // 18.    tv5 = i - 2
-      tv5 = _2n << (tv5 - _1n); // 19.    tv5 = 2^tv5
+      tv5 = _1n << tv5; // 19.    tv5 = 2^tv5
       let tvv5 = Fp.pow(tv4, tv5); // 20.    tv5 = tv4^tv5
       const e1 = Fp.eql(tvv5, Fp.ONE); // 21.    e1 = tv5 == 1
       tv2 = Fp.mul(tv3, tv1); // 22.    tv2 = tv3 * tv1

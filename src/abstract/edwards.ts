@@ -278,7 +278,7 @@ export function edwards(params: EdwardsOpts, extraOpts: EdwardsExtraOpts = {}): 
   // There are some places where Fp.BYTES is used instead of nByteLength.
   // So far, everything has been tested with curves of Fp.BYTES == nByteLength.
   // TODO: test and find curves which behave otherwise.
-  const MASK = _2n << (BigInt(Fn.BYTES * 8) - _1n);
+  const MASK = _1n << BigInt(Fn.BYTES * 8);
   const modP = (n: bigint) => Fp.create(n); // Function overrides
 
   // sqrt(u/v)
