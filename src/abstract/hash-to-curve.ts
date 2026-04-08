@@ -181,7 +181,7 @@ export function expand_message_xmd(
   const b = new Array<Uint8Array>(ell);
   const b_0 = H(concatBytes(Z_pad, msg, l_i_b_str, i2osp(0, 1), DST_prime));
   b[0] = H(concatBytes(b_0, i2osp(1, 1), DST_prime));
-  for (let i = 1; i <= ell; i++) {
+  for (let i = 1; i < ell; i++) {
     const args = [strxor(b_0, b[i - 1]), i2osp(i + 1, 1), DST_prime];
     b[i] = H(concatBytes(...args));
   }
