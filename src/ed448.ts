@@ -31,7 +31,7 @@ import {
 } from './abstract/hash-to-curve.ts';
 import { Field, FpInvertBatch, isNegativeLE, mod, pow2, type IField } from './abstract/modular.ts';
 import { montgomery, type MontgomeryECDH } from './abstract/montgomery.ts';
-import { createORPF, type OPRF } from './abstract/oprf.ts';
+import { createOPRF, type OPRF } from './abstract/oprf.ts';
 import { abytes, asciiToBytes, bytesToNumberLE, equalBytes } from './utils.ts';
 
 // edwards448 curve
@@ -584,7 +584,7 @@ export const decaf448_hasher: H2CHasherBase<typeof _DecafPoint> = {
  * ```
  */
 export const decaf448_oprf: OPRF = /* @__PURE__ */ (() =>
-  createORPF({
+  createOPRF({
     name: 'decaf448-SHAKE256',
     Point: _DecafPoint,
     hash: (msg: Uint8Array) => shake256(msg, { dkLen: 64 }),

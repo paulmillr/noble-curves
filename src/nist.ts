@@ -8,7 +8,7 @@ import { sha256, sha384, sha512 } from '@noble/hashes/sha2.js';
 import { createFROST, type FROST } from './abstract/frost.ts';
 import { createHasher, type H2CHasher } from './abstract/hash-to-curve.ts';
 import { Field } from './abstract/modular.ts';
-import { createORPF, type OPRF } from './abstract/oprf.ts';
+import { createOPRF, type OPRF } from './abstract/oprf.ts';
 import {
   ecdsa,
   mapToCurveSimpleSWU,
@@ -149,7 +149,7 @@ export const p256_hasher: H2CHasher<WeierstrassPointCons<bigint>> = /* @__PURE__
  * ```
  */
 export const p256_oprf: OPRF = /* @__PURE__ */ (() =>
-  createORPF({
+  createOPRF({
     name: 'P256-SHA256',
     Point: p256_Point,
     hash: sha256,
@@ -233,7 +233,7 @@ export const p384_hasher: H2CHasher<WeierstrassPointCons<bigint>> = /* @__PURE__
  * ```
  */
 export const p384_oprf: OPRF = /* @__PURE__ */ (() =>
-  createORPF({
+  createOPRF({
     name: 'P384-SHA384',
     Point: p384_Point,
     hash: sha384,
@@ -299,7 +299,7 @@ export const p521_hasher: H2CHasher<WeierstrassPointCons<bigint>> = /* @__PURE__
  * ```
  */
 export const p521_oprf: OPRF = /* @__PURE__ */ (() =>
-  createORPF({
+  createOPRF({
     name: 'P521-SHA512',
     Point: p521_Point,
     hash: sha512,
