@@ -143,7 +143,7 @@ export function montgomery(curveDef: TArg<MontgomeryOpts>): TRet<MontgomeryECDH>
   // RFC 7748 #5:
   // The constant a24 is (486662 - 2) / 4 = 121665 for curve25519/X25519 and
   // (156326 - 2) / 4 = 39081 for curve448/X448
-  // const a = is25519 ? 156326n : 486662n;
+  // const a = is25519 ? 486662n : 156326n;
   const a24 = is25519 ? BigInt(121665) : BigInt(39081);
   // RFC: x25519 "the resulting integer is of the form 2^254 plus
   // eight times a value between 0 and 2^251 - 1 (inclusive)"
