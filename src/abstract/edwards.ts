@@ -331,43 +331,6 @@ export function edwards(
   function aedpoint(other: unknown) {
     if (!(other instanceof Point)) throw new Error('EdwardsPoint expected');
   }
-  // Converts Extended point to default (x, y) coordinates.
-  // Can accept precomputed Z^-1 - for example, from invertBatch.
-  const toAffine = (p: TArg<Point>, iz?: bigint): AffinePoint<bigint> => {
-    const { X, Y, Z } = p;
-    const is0 = p.is0();
-    if (iz == null) iz = is0 ? _8n : (Fp.inv(Z) as bigint); // 8 was chosen arbitrarily
-    const x = modP(X * iz);
-    const y = modP(Y * iz);
-    const zz = Fp.mul(Z, iz);
-    if (is0) return { x: _0n, y: _1n };
-    if (zz !== _1n) throw new Error('invZ was invalid');
-    return { x, y };
-  };
-  const assertValid = (p: TArg<Point>) => {
-    const { a, d } = CURVE;
-    // Keep generic Edwards validation fail-closed on the neutral point.
-    // Even though ZERO is algebraically valid and can roundtrip through encodings, higher-level
-    // callers often reach it only through broken hash/scalar plumbing; rejecting it here avoids
-    // silently treating that degenerate state as an ordinary public point.
-    if (p.is0()) throw new Error('bad point: ZERO'); // TODO: optimize, with vars below?
-    // Equation in affine coordinates: ax² + y² = 1 + dx²y²
-    // Equation in projective coordinates (X/Z, Y/Z, Z):  (aX² + Y²)Z² = Z⁴ + dX²Y²
-    const { X, Y, Z, T } = p;
-    const X2 = modP(X * X); // X²
-    const Y2 = modP(Y * Y); // Y²
-    const Z2 = modP(Z * Z); // Z²
-    const Z4 = modP(Z2 * Z2); // Z⁴
-    const aX2 = modP(X2 * a); // aX²
-    const left = modP(Z2 * modP(aX2 + Y2)); // (aX² + Y²)Z²
-    const right = modP(Z4 + modP(d * modP(X2 * Y2))); // Z⁴ + dX²Y²
-    if (left !== right) throw new Error('bad point: equation left != right (1)');
-    // In Extended coordinates we also have T, which is x*y=T/Z: check X*Y == Z*T
-    const XY = modP(X * Y);
-    const ZT = modP(Z * T);
-    if (XY !== ZT) throw new Error('bad point: equation left != right (2)');
-    return true;
-  };
 
   // Extended Point works in extended coordinates: (X, Y, Z, T) ∋ (x=X/Z, y=Y/Z, T=xy).
   // https://en.wikipedia.org/wiki/Twisted_Edwards_curve#Extended_coordinates
@@ -464,7 +427,28 @@ export function edwards(
 
     // Useful in fromAffine() - not for fromBytes(), which always created valid points.
     assertValidity(): void {
-      assertValid(this);
+      const p = this;
+      const { a, d } = CURVE;
+      // Keep generic Edwards validation fail-closed on the neutral point.
+      // Even though ZERO is algebraically valid and can roundtrip through encodings, higher-level
+      // callers often reach it only through broken hash/scalar plumbing; rejecting it here avoids
+      // silently treating that degenerate state as an ordinary public point.
+      if (p.is0()) throw new Error('bad point: ZERO'); // TODO: optimize, with vars below?
+      // Equation in affine coordinates: ax² + y² = 1 + dx²y²
+      // Equation in projective coordinates (X/Z, Y/Z, Z):  (aX² + Y²)Z² = Z⁴ + dX²Y²
+      const { X, Y, Z, T } = p;
+      const X2 = modP(X * X); // X²
+      const Y2 = modP(Y * Y); // Y²
+      const Z2 = modP(Z * Z); // Z²
+      const Z4 = modP(Z2 * Z2); // Z⁴
+      const aX2 = modP(X2 * a); // aX²
+      const left = modP(Z2 * modP(aX2 + Y2)); // (aX² + Y²)Z²
+      const right = modP(Z4 + modP(d * modP(X2 * Y2))); // Z⁴ + dX²Y²
+      if (left !== right) throw new Error('bad point: equation left != right (1)');
+      // In Extended coordinates we also have T, which is x*y=T/Z: check X*Y == Z*T
+      const XY = modP(X * Y);
+      const ZT = modP(Z * T);
+      if (XY !== ZT) throw new Error('bad point: equation left != right (2)');
     }
 
     // Compare one point to another.
@@ -583,7 +567,17 @@ export function edwards(
     // Converts Extended point to default (x, y) coordinates.
     // Can accept precomputed Z^-1 - for example, from invertBatch.
     toAffine(invertedZ?: bigint): AffinePoint<bigint> {
-      return toAffine(this, invertedZ);
+      const p = this;
+      let iz = invertedZ;
+      const { X, Y, Z } = p;
+      const is0 = p.is0();
+      if (iz == null) iz = is0 ? _8n : (Fp.inv(Z) as bigint); // 8 was chosen arbitrarily
+      const x = modP(X * iz);
+      const y = modP(Y * iz);
+      const zz = Fp.mul(Z, iz);
+      if (is0) return { x: _0n, y: _1n };
+      if (zz !== _1n) throw new Error('invZ was invalid');
+      return { x, y };
     }
 
     clearCofactor(): Point {

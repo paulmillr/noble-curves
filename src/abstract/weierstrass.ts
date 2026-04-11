@@ -42,10 +42,10 @@ import {
   hexToBytes,
   isBytes,
   numberToHexUnpadded,
-  type HmacFn,
   validateObject,
   randomBytes as wcRandomBytes,
   type CHash,
+  type HmacFn,
   type Signer,
   type TArg,
   type TRet,
@@ -63,8 +63,8 @@ import {
   type CurvePointCons,
 } from './curve.ts';
 import {
-  FpIsSquare,
   FpInvertBatch,
+  FpIsSquare,
   getMinHashLength,
   mapHashToField,
   validateField,
@@ -820,41 +820,6 @@ export function weierstrass<T>(
     return _splitEndoScalar(k, endo.basises, Fn.ORDER);
   }
 
-  // Converts Projective point to affine (x, y) coordinates.
-  // Can accept precomputed Z^-1 - for example, from invertBatch.
-  // (X, Y, Z) ∋ (x=X/Z, y=Y/Z)
-  const pointToAffine = (p: Point, iz?: T): AffinePoint<T> => {
-    const { X, Y, Z } = p;
-    // Fast-path for normalized points
-    if (Fp.eql(Z, Fp.ONE)) return { x: X, y: Y };
-    const is0 = p.is0();
-    // If invZ was 0, we return zero point. However we still want to execute
-    // all operations, so we replace invZ with a random number, 1.
-    if (iz == null) iz = is0 ? Fp.ONE : Fp.inv(Z);
-    const x = Fp.mul(X, iz);
-    const y = Fp.mul(Y, iz);
-    const zz = Fp.mul(Z, iz);
-    if (is0) return { x: Fp.ZERO, y: Fp.ZERO };
-    if (!Fp.eql(zz, Fp.ONE)) throw new Error('invZ was invalid');
-    return { x, y };
-  };
-  const assertValid = (p: Point) => {
-    if (p.is0()) {
-      // (0, 1, 0) aka ZERO is invalid in most contexts.
-      // In BLS, ZERO can be serialized, so we allow it.
-      // Keep the accepted infinity encoding canonical: projective-equivalent (X, Y, 0) points
-      // like (1, 1, 0) compare equal to ZERO, but only (0, 1, 0) should pass this guard.
-      if (extraOpts.allowInfinityPoint && Fp.is0(p.X) && Fp.eql(p.Y, Fp.ONE) && Fp.is0(p.Z)) return;
-      throw new Error('bad point: ZERO');
-    }
-    // Some 3rd-party test vectors require different wording between here & `fromCompressedHex`
-    const { x, y } = p.toAffine();
-    if (!Fp.isValid(x) || !Fp.isValid(y)) throw new Error('bad point: x or y not field elements');
-    if (!isValidXY(x, y)) throw new Error('bad point: equation left != right');
-    if (!p.isTorsionFree()) throw new Error('bad point: not in prime-order subgroup');
-    return true;
-  };
-
   function finishEndo(
     endoBeta: EndomorphismOpts['beta'],
     k1p: Point,
@@ -944,7 +909,21 @@ export function weierstrass<T>(
     // TODO: return `this`
     /** A point on curve is valid if it conforms to equation. */
     assertValidity(): void {
-      assertValid(this);
+      const p = this;
+      if (p.is0()) {
+        // (0, 1, 0) aka ZERO is invalid in most contexts.
+        // In BLS, ZERO can be serialized, so we allow it.
+        // Keep the accepted infinity encoding canonical: projective-equivalent (X, Y, 0) points
+        // like (1, 1, 0) compare equal to ZERO, but only (0, 1, 0) should pass this guard.
+        if (extraOpts.allowInfinityPoint && Fp.is0(p.X) && Fp.eql(p.Y, Fp.ONE) && Fp.is0(p.Z))
+          return;
+        throw new Error('bad point: ZERO');
+      }
+      // Some 3rd-party test vectors require different wording between here & `fromCompressedHex`
+      const { x, y } = p.toAffine();
+      if (!Fp.isValid(x) || !Fp.isValid(y)) throw new Error('bad point: x or y not field elements');
+      if (!isValidXY(x, y)) throw new Error('bad point: equation left != right');
+      if (!p.isTorsionFree()) throw new Error('bad point: not in prime-order subgroup');
     }
 
     hasEvenY(): boolean {
@@ -1136,10 +1115,25 @@ export function weierstrass<T>(
 
     /**
      * Converts Projective point to affine (x, y) coordinates.
+     * (X, Y, Z) ∋ (x=X/Z, y=Y/Z).
      * @param invertedZ - Z^-1 (inverted zero) - optional, precomputation is useful for invertBatch
      */
     toAffine(invertedZ?: T): AffinePoint<T> {
-      return pointToAffine(this, invertedZ);
+      const p = this;
+      let iz = invertedZ;
+      const { X, Y, Z } = p;
+      // Fast-path for normalized points
+      if (Fp.eql(Z, Fp.ONE)) return { x: X, y: Y };
+      const is0 = p.is0();
+      // If invZ was 0, we return zero point. However we still want to execute
+      // all operations, so we replace invZ with a random number, 1.
+      if (iz == null) iz = is0 ? Fp.ONE : Fp.inv(Z);
+      const x = Fp.mul(X, iz);
+      const y = Fp.mul(Y, iz);
+      const zz = Fp.mul(Z, iz);
+      if (is0) return { x: Fp.ZERO, y: Fp.ZERO };
+      if (!Fp.eql(zz, Fp.ONE)) throw new Error('invZ was invalid');
+      return { x, y };
     }
 
     /**

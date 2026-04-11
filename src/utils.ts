@@ -13,11 +13,17 @@ import {
   randomBytes as randomBytes_,
 } from '@noble/hashes/utils.js';
 /**
- * Bytes API type helpers.
- * TArg keeps byte inputs broad.
- * TRet marks byte outputs for TS 5.6 and TS 5.9+ compatibility.
- * These are compatibility adapters, not ownership guarantees.
+ * Bytes API type helpers for old + new TypeScript.
+ *
+ * TS 5.6 has `Uint8Array`, while TS 5.9+ made it generic `Uint8Array<ArrayBuffer>`.
+ * We can't use specific return type, because TS 5.6 will error.
+ * We can't use generic return type, because most TS 5.9 software will expect specific type.
+ *
  * Maps typed-array input leaves to broad forms.
+ * These are compatibility adapters, not ownership guarantees.
+ *
+ * - `TArg` keeps byte inputs broad.
+ * - `TRet` marks byte outputs for TS 5.6 and TS 5.9+ compatibility.
  */
 export type TypedArg<T> = T extends BigInt64Array
   ? BigInt64Array
@@ -66,7 +72,7 @@ export type TypedRet<T> = T extends BigInt64Array
                     : T extends Uint8Array
                       ? ReturnType<typeof Uint8Array.of>
                       : never;
-/** Recursively adapts byte-carrying API input types. */
+/** Recursively adapts byte-carrying API input types. See {@link TypedArg}. */
 export type TArg<T> =
   | T
   | ([TypedArg<T>] extends [never]
@@ -88,7 +94,7 @@ export type TArg<T> =
                     ? { [K in keyof T]: TArg<T[K]> }
                     : T
       : TypedArg<T>);
-/** Recursively adapts byte-carrying API output types. */
+/** Recursively adapts byte-carrying API output types. See {@link TypedArg}. */
 export type TRet<T> = T extends unknown
   ? T &
       ([TypedRet<T>] extends [never]
