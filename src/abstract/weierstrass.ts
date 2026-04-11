@@ -140,7 +140,7 @@ export function _splitEndoScalar(k: bigint, basis: EndoBasis, n: bigint): Scalar
   // This should only happen on wrong basises. Also, math inside is too complex and I don't trust it.
   const MAX_NUM = bitMask(Math.ceil(bitLen(n) / 2)) + _1n; // Half bits of N
   if (k1 < _0n || k1 >= MAX_NUM || k2 < _0n || k2 >= MAX_NUM) {
-    throw new Error('splitScalar (endomorphism): failed, k=' + k);
+    throw new Error('splitScalar (endomorphism): failed for k');
   }
   return { k1neg, k1, k2neg, k2 };
 }
