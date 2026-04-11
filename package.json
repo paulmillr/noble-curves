@@ -11,7 +11,7 @@
     "src"
   ],
   "dependencies": {
-    "@noble/hashes": "2.0.1"
+    "@noble/hashes": "2.2.0"
   },
   "devDependencies": {
     "@paulmillr/jsbt": "0.5.0",
@@ -31,7 +31,7 @@
     "check:jsdoc": "npx --no @paulmillr/jsbt tsdoc package.json",
     "build:clean": "rm {.,abstract}/*.{js,d.ts,d.ts.map,js.map} 2> /dev/null",
     "format": "prettier --write 'src/**/*.{js,ts}' 'test/*.{js,ts}'",
-    "test": "node --experimental-strip-types --disable-warning=ExperimentalWarning test/index.ts",
+    "test": "node test/index.ts",
     "test:bun": "bun test/index.ts",
     "test:deno": "deno --allow-env --allow-read test/index.ts",
     "test:node20": "cd test; npx tsc; node compiled/test/index.js",

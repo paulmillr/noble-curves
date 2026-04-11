@@ -768,21 +768,24 @@ const isValid = p192_sha256.verify(sig, msg, keys.publicKey);
 
 ## Security
 
-The library has been independently audited:
+The library has been audited:
 
-- at version 1.6.0, in Sep 2024, by [Cure53](https://cure53.de)
+- at version 2.2.0, in Apr 2026, by ourselves (self-audited)
+  - Scope: everything
+  - [Changes since audit](https://github.com/paulmillr/noble-curves/compare/2.2.0..main)
+- at version 1.6.0, in Sep 2024, independently, by [Cure53](https://cure53.de)
   - PDFs: [website](https://cure53.de/audit-report_noble-crypto-libs.pdf), [in-repo](./audit/2024-09-cure53-audit-nbl4.pdf)
   - [Changes since audit](https://github.com/paulmillr/noble-curves/compare/1.6.0..main)
   - Scope: ed25519, ed448, their add-ons, bls12-381, bn254,
     hash-to-curve, low-level primitives bls, tower, edwards, montgomery.
   - The audit has been funded by [OpenSats](https://opensats.org)
-- at version 1.2.0, in Sep 2023, by [Kudelski Security](https://kudelskisecurity.com)
+- at version 1.2.0, in Sep 2023, independently, by [Kudelski Security](https://kudelskisecurity.com)
   - PDFs: [in-repo](./audit/2023-09-kudelski-audit-starknet.pdf)
   - [Changes since audit](https://github.com/paulmillr/noble-curves/compare/1.2.0..main)
   - Scope: [scure-starknet](https://github.com/paulmillr/scure-starknet) and its related
     abstract modules of noble-curves: `curve`, `modular`, `poseidon`, `weierstrass`
   - The audit has been funded by [Starkware](https://starkware.co)
-- at version 0.7.3, in Feb 2023, by [Trail of Bits](https://www.trailofbits.com)
+- at version 0.7.3, in Feb 2023, independently, by [Trail of Bits](https://www.trailofbits.com)
   - PDFs: [website](https://github.com/trailofbits/publications/blob/master/reviews/2023-01-ryanshea-noblecurveslibrary-securityreview.pdf),
     [in-repo](./audit/2023-01-trailofbits-audit-curves.pdf)
   - [Changes since audit](https://github.com/paulmillr/noble-curves/compare/0.7.3..main)
