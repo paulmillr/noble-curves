@@ -97,7 +97,10 @@ describe('babyjubjub', () => {
 
   should('reject hashes whose declared outputLen cannot expand the secret key', () => {
     const bad = Object.assign((msg: Uint8Array) => msg.subarray(0, 32), { outputLen: 32 });
-    throws(() => eddsa(edwards(babyjubjub.Point.CURVE()), bad), new Error('hash.outputLen must be 64, got 32'));
+    throws(
+      () => eddsa(edwards(babyjubjub.Point.CURVE()), bad),
+      new Error('hash.outputLen must be 64, got 32')
+    );
   });
 
   should('Point.BASE matches the EIP-2494 subgroup base point B of order l', () => {
@@ -107,7 +110,9 @@ describe('babyjubjub', () => {
       y: 16950150798460657717958625567821834550301663161624707787222815936182638968203n,
     });
     eql(
-      babyjubjub.Point.BASE.multiplyUnsafe(l - 1n).add(babyjubjub.Point.BASE).equals(babyjubjub.Point.ZERO),
+      babyjubjub.Point.BASE.multiplyUnsafe(l - 1n)
+        .add(babyjubjub.Point.BASE)
+        .equals(babyjubjub.Point.ZERO),
       true
     );
   });

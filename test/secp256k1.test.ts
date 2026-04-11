@@ -484,10 +484,7 @@ describe('Signature', () => {
         () => secp.Signature.fromBytes(recovered as unknown as globalThis.Uint8Array, 'recovered'),
         /invalid recovery id/
       );
-      throws(
-        () => new secp.Signature(1n, 1n).addRecoveryBit(recovery),
-        /invalid recovery id/
-      );
+      throws(() => new secp.Signature(1n, 1n).addRecoveryBit(recovery), /invalid recovery id/);
     }
   });
 
@@ -733,10 +730,10 @@ describe('secp256k1 regressions', () => {
     });
 
     should('BIP340 lift_x returns the even-Y point for a valid x-coordinate', () => {
-        const { x } = secp.Point.BASE.multiply(3n).toAffine();
-        const p = secp.__TEST.lift_x(x);
-        eql(p.x, x);
-        eql((p.y & 1n) === 0n, true);
+      const { x } = secp.Point.BASE.multiply(3n).toAffine();
+      const p = secp.__TEST.lift_x(x);
+      eql(p.x, x);
+      eql((p.y & 1n) === 0n, true);
     });
 
     should('BIP340 nonce extraction reduces rand modulo n instead of rejecting rand >= n', () => {
@@ -749,162 +746,220 @@ describe('secp256k1 regressions', () => {
   });
 
   describe('typed arrays', () => {
-    should('public-key APIs reject typed-array subclasses that only spoof the Uint8Array constructor name', () => {
-      class Uint8Array extends Uint16Array {}
-      const secretKey = globalThis.Uint8Array.of(...Array(31).fill(0), 1);
-      const real = secp.getPublicKey(secretKey);
-      const fake = new Uint8Array(real.length);
-      for (let i = 0; i < real.length; i++) fake[i] = real[i];
-      throws(() => secp.Point.fromBytes(fake as unknown as globalThis.Uint8Array), /expected Uint8Array/);
-      eql(secp.utils.isValidPublicKey(fake as unknown as globalThis.Uint8Array), false);
-      eql(secp.utils.isValidPublicKey(fake as unknown as globalThis.Uint8Array, true), false);
-    });
+    should(
+      'public-key APIs reject typed-array subclasses that only spoof the Uint8Array constructor name',
+      () => {
+        class Uint8Array extends Uint16Array {}
+        const secretKey = globalThis.Uint8Array.of(...Array(31).fill(0), 1);
+        const real = secp.getPublicKey(secretKey);
+        const fake = new Uint8Array(real.length);
+        for (let i = 0; i < real.length; i++) fake[i] = real[i];
+        throws(
+          () => secp.Point.fromBytes(fake as unknown as globalThis.Uint8Array),
+          /expected Uint8Array/
+        );
+        eql(secp.utils.isValidPublicKey(fake as unknown as globalThis.Uint8Array), false);
+        eql(secp.utils.isValidPublicKey(fake as unknown as globalThis.Uint8Array, true), false);
+      }
+    );
 
-    should('secret-key APIs reject typed-array subclasses that only spoof the Uint8Array constructor name', () => {
-      class Uint8Array extends Uint16Array {}
-      const fake = new Uint8Array(32);
-      fake[31] = 1;
-      eql(secp.utils.isValidSecretKey(fake as unknown as globalThis.Uint8Array), false);
-      throws(
-        () => secp.getPublicKey(fake as unknown as globalThis.Uint8Array),
-        /expected Uint8Array|"secret key".*type=object/
-      );
-    });
+    should(
+      'secret-key APIs reject typed-array subclasses that only spoof the Uint8Array constructor name',
+      () => {
+        class Uint8Array extends Uint16Array {}
+        const fake = new Uint8Array(32);
+        fake[31] = 1;
+        eql(secp.utils.isValidSecretKey(fake as unknown as globalThis.Uint8Array), false);
+        throws(
+          () => secp.getPublicKey(fake as unknown as globalThis.Uint8Array),
+          /expected Uint8Array|"secret key".*type=object/
+        );
+      }
+    );
 
-    should('signature APIs reject typed-array subclasses that only spoof the Uint8Array constructor name', async () => {
-      class Uint8Array extends Uint16Array {}
-      const secretKey = globalThis.Uint8Array.of(...Array(31).fill(0), 1);
-      const message = globalThis.Uint8Array.of(1, 2, 3);
-      const signature = secp.sign(message, secretKey);
-      const publicKey = secp.getPublicKey(secretKey);
-      const fake = new Uint8Array(signature.length);
-      const verifyRejects = async (fn: () => boolean | Promise<boolean>) => {
-        try {
-          eql(await fn(), false);
-        } catch (error) {
-          eql(error instanceof Error && /Uint8Array/.test(error.message), true);
-        }
-      };
-      for (let i = 0; i < signature.length; i++) fake[i] = signature[i];
-      throws(() => secp.Signature.fromBytes(fake as unknown as globalThis.Uint8Array), /expected Uint8Array/);
-      await verifyRejects(() => secp.verify(fake as unknown as globalThis.Uint8Array, message, publicKey));
-      await verifyRejects(() => secp.verifyAsync(fake as unknown as globalThis.Uint8Array, message, publicKey));
-    });
+    should(
+      'signature APIs reject typed-array subclasses that only spoof the Uint8Array constructor name',
+      async () => {
+        class Uint8Array extends Uint16Array {}
+        const secretKey = globalThis.Uint8Array.of(...Array(31).fill(0), 1);
+        const message = globalThis.Uint8Array.of(1, 2, 3);
+        const signature = secp.sign(message, secretKey);
+        const publicKey = secp.getPublicKey(secretKey);
+        const fake = new Uint8Array(signature.length);
+        const verifyRejects = async (fn: () => boolean | Promise<boolean>) => {
+          try {
+            eql(await fn(), false);
+          } catch (error) {
+            eql(error instanceof Error && /Uint8Array/.test(error.message), true);
+          }
+        };
+        for (let i = 0; i < signature.length; i++) fake[i] = signature[i];
+        throws(
+          () => secp.Signature.fromBytes(fake as unknown as globalThis.Uint8Array),
+          /expected Uint8Array/
+        );
+        await verifyRejects(() =>
+          secp.verify(fake as unknown as globalThis.Uint8Array, message, publicKey)
+        );
+        await verifyRejects(() =>
+          secp.verifyAsync(fake as unknown as globalThis.Uint8Array, message, publicKey)
+        );
+      }
+    );
 
-    should('recovery APIs reject typed-array subclasses that only spoof the Uint8Array constructor name', async () => {
-      class Uint8Array extends Uint16Array {}
-      const secretKey = globalThis.Uint8Array.of(...Array(31).fill(0), 1);
-      const message = globalThis.Uint8Array.of(1, 2, 3);
-      const signature = secp.sign(message, secretKey, { format: 'recovered' });
-      const fake = new Uint8Array(signature.length);
-      for (let i = 0; i < signature.length; i++) fake[i] = signature[i];
-      throws(() => secp.recoverPublicKey(fake as unknown as globalThis.Uint8Array, message), /expected Uint8Array/);
-      await rejects(
-        () => secp.recoverPublicKeyAsync(fake as unknown as globalThis.Uint8Array, message),
-        /expected Uint8Array/
-      );
-    });
+    should(
+      'recovery APIs reject typed-array subclasses that only spoof the Uint8Array constructor name',
+      async () => {
+        class Uint8Array extends Uint16Array {}
+        const secretKey = globalThis.Uint8Array.of(...Array(31).fill(0), 1);
+        const message = globalThis.Uint8Array.of(1, 2, 3);
+        const signature = secp.sign(message, secretKey, { format: 'recovered' });
+        const fake = new Uint8Array(signature.length);
+        for (let i = 0; i < signature.length; i++) fake[i] = signature[i];
+        throws(
+          () => secp.recoverPublicKey(fake as unknown as globalThis.Uint8Array, message),
+          /expected Uint8Array/
+        );
+        await rejects(
+          () => secp.recoverPublicKeyAsync(fake as unknown as globalThis.Uint8Array, message),
+          /expected Uint8Array/
+        );
+      }
+    );
 
-    should('ECDH APIs reject typed-array subclasses that only spoof the Uint8Array constructor name', () => {
-      class Uint8Array extends Uint16Array {}
-      const alice = globalThis.Uint8Array.of(...Array(31).fill(0), 1);
-      const bob = globalThis.Uint8Array.of(...Array(31).fill(0), 2);
-      const publicKey = secp.getPublicKey(bob);
-      const fakeSecretKey = new Uint8Array(alice.length);
-      const fakePublicKey = new Uint8Array(publicKey.length);
-      for (let i = 0; i < fakeSecretKey.length; i++) fakeSecretKey[i] = alice[i];
-      for (let i = 0; i < fakePublicKey.length; i++) fakePublicKey[i] = publicKey[i];
-      throws(
-        () =>
-          secp.getSharedSecret(
-            fakeSecretKey as unknown as globalThis.Uint8Array,
-            fakePublicKey as unknown as globalThis.Uint8Array
-          ),
-        /expected Uint8Array/
-      );
-    });
+    should(
+      'ECDH APIs reject typed-array subclasses that only spoof the Uint8Array constructor name',
+      () => {
+        class Uint8Array extends Uint16Array {}
+        const alice = globalThis.Uint8Array.of(...Array(31).fill(0), 1);
+        const bob = globalThis.Uint8Array.of(...Array(31).fill(0), 2);
+        const publicKey = secp.getPublicKey(bob);
+        const fakeSecretKey = new Uint8Array(alice.length);
+        const fakePublicKey = new Uint8Array(publicKey.length);
+        for (let i = 0; i < fakeSecretKey.length; i++) fakeSecretKey[i] = alice[i];
+        for (let i = 0; i < fakePublicKey.length; i++) fakePublicKey[i] = publicKey[i];
+        throws(
+          () =>
+            secp.getSharedSecret(
+              fakeSecretKey as unknown as globalThis.Uint8Array,
+              fakePublicKey as unknown as globalThis.Uint8Array
+            ),
+          /expected Uint8Array/
+        );
+      }
+    );
 
-    should('schnorr APIs reject typed-array subclasses that only spoof the Uint8Array constructor name', async () => {
-      class Uint8Array extends Uint16Array {}
-      const secretKey = globalThis.Uint8Array.of(...Array(31).fill(0), 1);
-      const message = globalThis.Uint8Array.of(1, 2, 3);
-      const auxRand = globalThis.Uint8Array.of(...Array(31).fill(0), 7);
-      const signature = secp.schnorr.sign(message, secretKey, auxRand);
-      const publicKey = secp.schnorr.getPublicKey(secretKey);
-      const fakeSecretKey = new Uint8Array(secretKey.length);
-      const fakeSignature = new Uint8Array(signature.length);
-      const fakePublicKey = new Uint8Array(publicKey.length);
-      for (let i = 0; i < fakeSecretKey.length; i++) fakeSecretKey[i] = secretKey[i];
-      for (let i = 0; i < fakeSignature.length; i++) fakeSignature[i] = signature[i];
-      for (let i = 0; i < fakePublicKey.length; i++) fakePublicKey[i] = publicKey[i];
-      throws(
-        () => secp.schnorr.getPublicKey(fakeSecretKey as unknown as globalThis.Uint8Array),
-        /expected Uint8Array|"secret key".*type=object/
-      );
-      throws(
-        () => secp.schnorr.sign(message, fakeSecretKey as unknown as globalThis.Uint8Array, auxRand),
-        /expected Uint8Array|"secret key".*type=object/
-      );
-      await rejects(
-        () => secp.schnorr.signAsync(message, fakeSecretKey as unknown as globalThis.Uint8Array, auxRand),
-        /expected Uint8Array|"secret key".*type=object/
-      );
-      throws(
-        () =>
-          secp.schnorr.verify(
-            fakeSignature as unknown as globalThis.Uint8Array,
-            message,
-            fakePublicKey as unknown as globalThis.Uint8Array
-          ),
-        /"signature".*type=object/
-      );
-      await rejects(
-        () =>
-          secp.schnorr.verifyAsync(
-            fakeSignature as unknown as globalThis.Uint8Array,
-            message,
-            fakePublicKey as unknown as globalThis.Uint8Array
-          ),
-        /"signature".*type=object/
-      );
-    });
+    should(
+      'schnorr APIs reject typed-array subclasses that only spoof the Uint8Array constructor name',
+      async () => {
+        class Uint8Array extends Uint16Array {}
+        const secretKey = globalThis.Uint8Array.of(...Array(31).fill(0), 1);
+        const message = globalThis.Uint8Array.of(1, 2, 3);
+        const auxRand = globalThis.Uint8Array.of(...Array(31).fill(0), 7);
+        const signature = secp.schnorr.sign(message, secretKey, auxRand);
+        const publicKey = secp.schnorr.getPublicKey(secretKey);
+        const fakeSecretKey = new Uint8Array(secretKey.length);
+        const fakeSignature = new Uint8Array(signature.length);
+        const fakePublicKey = new Uint8Array(publicKey.length);
+        for (let i = 0; i < fakeSecretKey.length; i++) fakeSecretKey[i] = secretKey[i];
+        for (let i = 0; i < fakeSignature.length; i++) fakeSignature[i] = signature[i];
+        for (let i = 0; i < fakePublicKey.length; i++) fakePublicKey[i] = publicKey[i];
+        throws(
+          () => secp.schnorr.getPublicKey(fakeSecretKey as unknown as globalThis.Uint8Array),
+          /expected Uint8Array|"secret key".*type=object/
+        );
+        throws(
+          () =>
+            secp.schnorr.sign(message, fakeSecretKey as unknown as globalThis.Uint8Array, auxRand),
+          /expected Uint8Array|"secret key".*type=object/
+        );
+        await rejects(
+          () =>
+            secp.schnorr.signAsync(
+              message,
+              fakeSecretKey as unknown as globalThis.Uint8Array,
+              auxRand
+            ),
+          /expected Uint8Array|"secret key".*type=object/
+        );
+        throws(
+          () =>
+            secp.schnorr.verify(
+              fakeSignature as unknown as globalThis.Uint8Array,
+              message,
+              fakePublicKey as unknown as globalThis.Uint8Array
+            ),
+          /"signature".*type=object/
+        );
+        await rejects(
+          () =>
+            secp.schnorr.verifyAsync(
+              fakeSignature as unknown as globalThis.Uint8Array,
+              message,
+              fakePublicKey as unknown as globalThis.Uint8Array
+            ),
+          /"signature".*type=object/
+        );
+      }
+    );
   });
 
   describe('signatures', () => {
-    should('unsupported DER format rejects in Signature.toBytes(), sign(), and signAsync()', async () => {
-      if (isNobleCurves) return;
-      const secretKey = Uint8Array.from({ length: 32 }, (_, i) => i + 1);
-      const msg = Uint8Array.from({ length: 32 }, (_, i) => 255 - i);
-      throws(() => new secp.Signature(1n, 2n).toBytes('der'), /Signature format "der" is not supported/);
-      throws(() => secp.sign(msg, secretKey, { prehash: false, format: 'der' }), /Signature format "der" is not supported/);
-      await rejects(
-        () => secp.signAsync(msg, secretKey, { prehash: false, format: 'der' }),
-        /Signature format "der" is not supported/
-      );
-    });
+    should(
+      'unsupported DER format rejects in Signature.toBytes(), sign(), and signAsync()',
+      async () => {
+        if (isNobleCurves) return;
+        const secretKey = Uint8Array.from({ length: 32 }, (_, i) => i + 1);
+        const msg = Uint8Array.from({ length: 32 }, (_, i) => 255 - i);
+        throws(
+          () => new secp.Signature(1n, 2n).toBytes('der'),
+          /Signature format "der" is not supported/
+        );
+        throws(
+          () => secp.sign(msg, secretKey, { prehash: false, format: 'der' }),
+          /Signature format "der" is not supported/
+        );
+        await rejects(
+          () => secp.signAsync(msg, secretKey, { prehash: false, format: 'der' }),
+          /Signature format "der" is not supported/
+        );
+      }
+    );
 
-    should('RFC 6979 bits2int discards bits beyond qlen instead of rejecting long prehashed inputs', () => {
-      const secretKey = Uint8Array.from({ length: 32 }, (_, i) => i + 1);
-      const leftmost32 = Uint8Array.from({ length: 32 }, (_, i) => 255 - i);
-      const extended = new Uint8Array(161);
-      extended.set(leftmost32);
-      extended.fill(0xaa, 32);
-      eql(secp.sign(extended, secretKey, { prehash: false }), secp.sign(leftmost32, secretKey, { prehash: false }));
-    });
+    should(
+      'RFC 6979 bits2int discards bits beyond qlen instead of rejecting long prehashed inputs',
+      () => {
+        const secretKey = Uint8Array.from({ length: 32 }, (_, i) => i + 1);
+        const leftmost32 = Uint8Array.from({ length: 32 }, (_, i) => 255 - i);
+        const extended = new Uint8Array(161);
+        extended.set(leftmost32);
+        extended.fill(0xaa, 32);
+        eql(
+          secp.sign(extended, secretKey, { prehash: false }),
+          secp.sign(leftmost32, secretKey, { prehash: false })
+        );
+      }
+    );
   });
 
   describe('recovery', () => {
-    should('recoverPublicKey()/recoverPublicKeyAsync() derive e from the same long prehashed message accepted by sign()/verify()', async () => {
-      const secretKey = Uint8Array.from({ length: 32 }, (_, i) => i + 1);
-      const msg = Uint8Array.from({ length: 64 }, (_, i) => i);
-      const publicKey = secp.getPublicKey(secretKey);
-      const sig = secp.sign(msg, secretKey, { prehash: false, format: 'recovered' });
-      eql(secp.verify(sig, msg, publicKey, { prehash: false, format: 'recovered' }), true);
-      eql(secp.recoverPublicKey(sig, msg, { prehash: false }), publicKey);
-      const sigA = await secp.signAsync(msg, secretKey, { prehash: false, format: 'recovered' });
-      eql(await secp.verifyAsync(sigA, msg, publicKey, { prehash: false, format: 'recovered' }), true);
-      eql(await secp.recoverPublicKeyAsync(sigA, msg, { prehash: false }), publicKey);
-    });
+    should(
+      'recoverPublicKey()/recoverPublicKeyAsync() derive e from the same long prehashed message accepted by sign()/verify()',
+      async () => {
+        const secretKey = Uint8Array.from({ length: 32 }, (_, i) => i + 1);
+        const msg = Uint8Array.from({ length: 64 }, (_, i) => i);
+        const publicKey = secp.getPublicKey(secretKey);
+        const sig = secp.sign(msg, secretKey, { prehash: false, format: 'recovered' });
+        eql(secp.verify(sig, msg, publicKey, { prehash: false, format: 'recovered' }), true);
+        eql(secp.recoverPublicKey(sig, msg, { prehash: false }), publicKey);
+        const sigA = await secp.signAsync(msg, secretKey, { prehash: false, format: 'recovered' });
+        eql(
+          await secp.verifyAsync(sigA, msg, publicKey, { prehash: false, format: 'recovered' }),
+          true
+        );
+        eql(await secp.recoverPublicKeyAsync(sigA, msg, { prehash: false }), publicKey);
+      }
+    );
   });
 });
 

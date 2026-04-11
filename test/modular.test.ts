@@ -628,7 +628,10 @@ describe('guard cases', () => {
         return { name, ok: false };
       }
     });
-    eql(out, cases.map(({ name }) => ({ name, ok: false })));
+    eql(
+      out,
+      cases.map(({ name }) => ({ name, ok: false }))
+    );
   });
 
   should('Field returns a frozen field instance', () => {
@@ -649,8 +652,14 @@ describe('field helpers', () => {
   should('tower12 keeps higher Frobenius tables lazy and cached', () => {
     const proto6 = Object.getPrototypeOf(bn254.fields.Fp6);
     const proto12 = Object.getPrototypeOf(bn254.fields.Fp12);
-    eql(typeof Object.getOwnPropertyDescriptor(proto6, 'FROBENIUS_COEFFICIENTS_1')?.get, 'function');
-    eql(typeof Object.getOwnPropertyDescriptor(proto6, 'FROBENIUS_COEFFICIENTS_2')?.get, 'function');
+    eql(
+      typeof Object.getOwnPropertyDescriptor(proto6, 'FROBENIUS_COEFFICIENTS_1')?.get,
+      'function'
+    );
+    eql(
+      typeof Object.getOwnPropertyDescriptor(proto6, 'FROBENIUS_COEFFICIENTS_2')?.get,
+      'function'
+    );
     eql(typeof Object.getOwnPropertyDescriptor(proto12, 'FROBENIUS_COEFFICIENTS')?.get, 'function');
     eql(Object.isFrozen(bn254.fields.Fp6), true);
     eql(Object.isFrozen(bn254.fields.Fp12), true);
@@ -708,7 +717,12 @@ describe('field helpers', () => {
       ['bn254.Fp6', bn254.fields.Fp6, bn254.fields.Fp6.ONE, bn254.fields.Fp6.ZERO],
       ['bls12_381.Fp6', bls12_381.fields.Fp6, bls12_381.fields.Fp6.ONE, bls12_381.fields.Fp6.ZERO],
       ['bn254.Fp12', bn254.fields.Fp12, bn254.fields.Fp12.ONE, bn254.fields.Fp12.ZERO],
-      ['bls12_381.Fp12', bls12_381.fields.Fp12, bls12_381.fields.Fp12.ONE, bls12_381.fields.Fp12.ZERO],
+      [
+        'bls12_381.Fp12',
+        bls12_381.fields.Fp12,
+        bls12_381.fields.Fp12.ONE,
+        bls12_381.fields.Fp12.ZERO,
+      ],
     ] as const;
     for (const [, F, a, b] of suites) {
       throws(() => F.cmov(a, b, 0 as any));
@@ -740,7 +754,8 @@ describe('field helpers', () => {
           },
         });
       const g = Fp12.finalExponentiate(Fp12.mul(mk(0), mk(20)));
-      for (const n of [0n, 1n, 2n, 5n, 17n, BigInt(Fp12.X_LEN - 1)]) eql(Fp12._cyclotomicExp(g, n), Fp12.pow(g, n));
+      for (const n of [0n, 1n, 2n, 5n, 17n, BigInt(Fp12.X_LEN - 1)])
+        eql(Fp12._cyclotomicExp(g, n), Fp12.pow(g, n));
       throws(() => Fp12._cyclotomicExp(g, -1n));
       throws(() => Fp12._cyclotomicExp(g, 1n << BigInt(Fp12.X_LEN)));
     }
@@ -752,17 +767,40 @@ describe('field helpers', () => {
       ['bls12_381', bls12_381.fields.Fp12],
     ] as const;
     for (const [, Fp12] of suites)
-      throws(() => Fp12.fromBytes({ length: Fp12.BYTES } as any), /expected Uint8Array, got type=object/);
+      throws(
+        () => Fp12.fromBytes({ length: Fp12.BYTES } as any),
+        /expected Uint8Array, got type=object/
+      );
   });
 
   should('tower isValid throws on malformed coordinate types', () => {
     const suites = [
       ['bn254.Fp2', bn254.fields.Fp2, { c0: 1n }, /expected bigint, got undefined/],
       ['bls12_381.Fp2', bls12_381.fields.Fp2, { c1: 1n }, /expected bigint, got undefined/],
-      ['bn254.Fp6', bn254.fields.Fp6, { c0: bn254.fields.Fp2.ONE, c1: bn254.fields.Fp2.ZERO }, /expected object, got undefined/],
-      ['bls12_381.Fp6', bls12_381.fields.Fp6, { c1: bls12_381.fields.Fp2.ONE, c2: bls12_381.fields.Fp2.ZERO }, /expected object, got undefined/],
-      ['bn254.Fp12', bn254.fields.Fp12, { c0: bn254.fields.Fp6.ONE }, /expected object, got undefined/],
-      ['bls12_381.Fp12', bls12_381.fields.Fp12, { c1: bls12_381.fields.Fp6.ONE }, /expected object, got undefined/],
+      [
+        'bn254.Fp6',
+        bn254.fields.Fp6,
+        { c0: bn254.fields.Fp2.ONE, c1: bn254.fields.Fp2.ZERO },
+        /expected object, got undefined/,
+      ],
+      [
+        'bls12_381.Fp6',
+        bls12_381.fields.Fp6,
+        { c1: bls12_381.fields.Fp2.ONE, c2: bls12_381.fields.Fp2.ZERO },
+        /expected object, got undefined/,
+      ],
+      [
+        'bn254.Fp12',
+        bn254.fields.Fp12,
+        { c0: bn254.fields.Fp6.ONE },
+        /expected object, got undefined/,
+      ],
+      [
+        'bls12_381.Fp12',
+        bls12_381.fields.Fp12,
+        { c1: bls12_381.fields.Fp6.ONE },
+        /expected object, got undefined/,
+      ],
     ] as const;
     for (const [, F, value, err] of suites) throws(() => F.isValid(value as any), err);
   });
@@ -771,10 +809,30 @@ describe('field helpers', () => {
     const suites = [
       ['bn254.Fp2', bn254.fields.Fp2, { c0: 1n }, /expected bigint, got undefined/],
       ['bls12_381.Fp2', bls12_381.fields.Fp2, { c1: 1n }, /expected bigint, got undefined/],
-      ['bn254.Fp6', bn254.fields.Fp6, { c0: bn254.fields.Fp2.ONE, c1: bn254.fields.Fp2.ZERO }, /expected object, got undefined/],
-      ['bls12_381.Fp6', bls12_381.fields.Fp6, { c1: bls12_381.fields.Fp2.ONE, c2: bls12_381.fields.Fp2.ZERO }, /expected object, got undefined/],
-      ['bn254.Fp12', bn254.fields.Fp12, { c0: bn254.fields.Fp6.ONE }, /expected object, got undefined/],
-      ['bls12_381.Fp12', bls12_381.fields.Fp12, { c1: bls12_381.fields.Fp6.ONE }, /expected object, got undefined/],
+      [
+        'bn254.Fp6',
+        bn254.fields.Fp6,
+        { c0: bn254.fields.Fp2.ONE, c1: bn254.fields.Fp2.ZERO },
+        /expected object, got undefined/,
+      ],
+      [
+        'bls12_381.Fp6',
+        bls12_381.fields.Fp6,
+        { c1: bls12_381.fields.Fp2.ONE, c2: bls12_381.fields.Fp2.ZERO },
+        /expected object, got undefined/,
+      ],
+      [
+        'bn254.Fp12',
+        bn254.fields.Fp12,
+        { c0: bn254.fields.Fp6.ONE },
+        /expected object, got undefined/,
+      ],
+      [
+        'bls12_381.Fp12',
+        bls12_381.fields.Fp12,
+        { c1: bls12_381.fields.Fp6.ONE },
+        /expected object, got undefined/,
+      ],
     ] as const;
     for (const [, F, value, err] of suites) throws(() => F.isValidNot0(value as any), err);
   });
@@ -798,7 +856,10 @@ describe('field helpers', () => {
       ['bls12_381', bls12_381.fields.Fp2],
     ] as const;
     for (const [, Fp2] of suites)
-      throws(() => Fp2.fromBytes({ length: Fp2.BYTES } as any), /expected Uint8Array, got type=object/);
+      throws(
+        () => Fp2.fromBytes({ length: Fp2.BYTES } as any),
+        /expected Uint8Array, got type=object/
+      );
   });
 
   should('_Field6.cmov selects by boolean condition on valid inputs', () => {
@@ -828,7 +889,10 @@ describe('field helpers', () => {
       ['bls12_381', bls12_381.fields.Fp6],
     ] as const;
     for (const [, Fp6] of suites)
-      throws(() => Fp6.fromBytes({ length: Fp6.BYTES } as any), /expected Uint8Array, got type=object/);
+      throws(
+        () => Fp6.fromBytes({ length: Fp6.BYTES } as any),
+        /expected Uint8Array, got type=object/
+      );
   });
 
   should('Field.addN keeps bigint arithmetic on valid inputs', () => {
@@ -958,7 +1022,12 @@ describe('field helpers', () => {
     });
     eql(out, [
       { n: 255n, bits: 9, ok: true, value: { nBitLength: 9, nByteLength: 2 } },
-      { n: 257n, bits: 1, ok: false, err: 'invalid n length: expected bit length (9) >= n.length (1)' },
+      {
+        n: 257n,
+        bits: 1,
+        ok: false,
+        err: 'invalid n length: expected bit length (9) >= n.length (1)',
+      },
       { n: 257n, bits: 9, ok: true, value: { nBitLength: 9, nByteLength: 2 } },
     ]);
   });

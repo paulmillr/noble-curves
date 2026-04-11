@@ -400,9 +400,8 @@ should('poseidon roundConstants are immutable', () => {
   eql(hash([1n, 2n]), before);
 });
 should('grainGenConstants rejects invalid skipMDS counts', () => {
-  const Fp = mod.Field(
-    52435875175126190479447740508185965837690552500527637822603658699938581184513n
-  );
+  const Fp =
+    mod.Field(52435875175126190479447740508185965837690552500527637822603658699938581184513n);
   throws(() => poseidon.grainGenConstants({ Fp, t: 3, roundsFull: 8, roundsPartial: 31 }, -1));
   throws(() => poseidon.grainGenConstants({ Fp, t: 3, roundsFull: 8, roundsPartial: 31 }, 0.5));
 });
@@ -480,7 +479,10 @@ should('PoseidonSponge rejects zero rate', () => {
   });
   throws(() => new poseidon.PoseidonSponge(Fp, 0, 1, hash));
   throws(() => new poseidon.PoseidonSponge(Fp, 1, -1, hash), /invalid number capacity/);
-  throws(() => new poseidon.PoseidonSponge(Fp, 1, 1, hash), /invalid sponge width: expected 3, got 2/);
+  throws(
+    () => new poseidon.PoseidonSponge(Fp, 1, 1, hash),
+    /invalid sponge width: expected 3, got 2/
+  );
   throws(() =>
     poseidon.poseidonSponge({
       Fp,
@@ -493,24 +495,25 @@ should('PoseidonSponge rejects zero rate', () => {
       roundConstants: [[0n], [0n], [0n]],
     })
   );
-  throws(() =>
-    poseidon.poseidonSponge({
-      Fp,
-      rate: 3,
-      capacity: -1,
-      roundsFull: 2,
-      roundsPartial: 1,
-      sboxPower: 3,
-      mds: [
-        [1n, 0n],
-        [0n, 1n],
-      ],
-      roundConstants: [
-        [0n, 0n],
-        [0n, 0n],
-        [0n, 0n],
-      ],
-    }),
+  throws(
+    () =>
+      poseidon.poseidonSponge({
+        Fp,
+        rate: 3,
+        capacity: -1,
+        roundsFull: 2,
+        roundsPartial: 1,
+        sboxPower: 3,
+        mds: [
+          [1n, 0n],
+          [0n, 1n],
+        ],
+        roundConstants: [
+          [0n, 0n],
+          [0n, 0n],
+          [0n, 0n],
+        ],
+      }),
     /invalid number capacity/
   );
 });
@@ -538,9 +541,8 @@ should('PoseidonSponge rejects invalid squeeze counts', () => {
   throws(() => new poseidon.PoseidonSponge(Fp, 2, 1, hash).squeeze(1.5));
 });
 should('validateOpts reduces bigint MDS entries into the field', () => {
-  const Fp = mod.Field(
-    52435875175126190479447740508185965837690552500527637822603658699938581184513n
-  );
+  const Fp =
+    mod.Field(52435875175126190479447740508185965837690552500527637822603658699938581184513n);
   const t = 3;
   const roundsFull = 8;
   const roundsPartial = 31;

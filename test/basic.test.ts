@@ -87,21 +87,27 @@ describe('createCurve', () => {
     throws(() => Point.BASE.assertValidity(), /ZERO/);
   });
 
-  should('rejects invalid generator and config inputs without breaking valid constructor smoke cases', () => {
-    const montgomeryBase = {
-      adjustScalarBytes: (bytes: Uint8Array) => bytes,
-      powPminus2: (x: bigint) => x,
-    };
+  should(
+    'rejects invalid generator and config inputs without breaking valid constructor smoke cases',
+    () => {
+      const montgomeryBase = {
+        adjustScalarBytes: (bytes: Uint8Array) => bytes,
+        powPminus2: (x: bigint) => x,
+      };
 
-    throws(() => montgomery({ ...montgomeryBase, type: 'x25519' } as any), /param "P" is invalid/);
-    throws(
-      () => montgomery({ ...montgomeryBase, P: 17n, type: 'x25519', randomBytes: 1 } as any),
-      /param "randomBytes" is invalid/
-    );
+      throws(
+        () => montgomery({ ...montgomeryBase, type: 'x25519' } as any),
+        /param "P" is invalid/
+      );
+      throws(
+        () => montgomery({ ...montgomeryBase, P: 17n, type: 'x25519', randomBytes: 1 } as any),
+        /param "randomBytes" is invalid/
+      );
 
-    const Point = weierstrass({ p: 17n, n: 257n, h: 1n, a: 2n, b: 2n, Gx: 5n, Gy: 1n });
-    eql(Point.BASE.toHex(false), '040501');
-  });
+      const Point = weierstrass({ p: 17n, n: 257n, h: 1n, a: 2n, b: 2n, Gx: 5n, Gy: 1n });
+      eql(Point.BASE.toHex(false), '040501');
+    }
+  );
 
   should('allowInfinityPoint still rejects non-canonical projective infinity coordinates', () => {
     const Point = weierstrass(
@@ -211,10 +217,11 @@ describe('extension fields', () => {
     });
     eql(Fp2.ZERO, { c0: 0n, c1: 0n });
 
-    eql(
-      Fp6.create({ c0: { c0: Fp.ORDER, c1: -1n }, c1: Fp2.ZERO, c2: Fp2.ZERO }),
-      { c0: { c0: 0n, c1: Fp.ORDER - 1n }, c1: Fp2.ZERO, c2: Fp2.ZERO }
-    );
+    eql(Fp6.create({ c0: { c0: Fp.ORDER, c1: -1n }, c1: Fp2.ZERO, c2: Fp2.ZERO }), {
+      c0: { c0: 0n, c1: Fp.ORDER - 1n },
+      c1: Fp2.ZERO,
+      c2: Fp2.ZERO,
+    });
     eql(Fp6.isValid({ c0: { c0: Fp.ORDER, c1: 0n }, c1: Fp2.ZERO, c2: Fp2.ZERO }), false);
     throws(() => {
       Fp6.ZERO.c0.c0 = 1n;
@@ -226,11 +233,17 @@ describe('extension fields', () => {
     });
 
     eql(
-      Fp12.create({ c0: { c0: { c0: Fp.ORDER, c1: -1n }, c1: Fp2.ZERO, c2: Fp2.ZERO }, c1: Fp6.ZERO }),
+      Fp12.create({
+        c0: { c0: { c0: Fp.ORDER, c1: -1n }, c1: Fp2.ZERO, c2: Fp2.ZERO },
+        c1: Fp6.ZERO,
+      }),
       { c0: { c0: { c0: 0n, c1: Fp.ORDER - 1n }, c1: Fp2.ZERO, c2: Fp2.ZERO }, c1: Fp6.ZERO }
     );
     eql(
-      Fp12.isValid({ c0: { c0: { c0: Fp.ORDER, c1: 0n }, c1: Fp2.ZERO, c2: Fp2.ZERO }, c1: Fp6.ZERO }),
+      Fp12.isValid({
+        c0: { c0: { c0: Fp.ORDER, c1: 0n }, c1: Fp2.ZERO, c2: Fp2.ZERO },
+        c1: Fp6.ZERO,
+      }),
       false
     );
     const x = Fp12.fromBigTwelve([1n, 2n, 3n, 4n, 5n, 6n, 7n, 8n, 9n, 10n, 11n, 12n]);

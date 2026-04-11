@@ -184,19 +184,22 @@ describe('RFC-9497 (OPRF)', () => {
       }
     });
 
-    should('ristretto255 and decaf448 reject identity elements in blinded and evaluated inputs', () => {
-      const suites = [
-        { oprf: ristretto255_oprf, zero: ristretto255.Point.ZERO.toBytes() },
-        { oprf: decaf448_oprf, zero: decaf448.Point.ZERO.toBytes() },
-      ];
-      const input = asciiToBytes('input');
-      for (const { oprf, zero } of suites) {
-        const keys = oprf.oprf.generateKeyPair();
-        throws(() => oprf.oprf.blindEvaluate(keys.secretKey, zero));
-        const { blind } = oprf.oprf.blind(input);
-        throws(() => oprf.oprf.finalize(input, blind, zero));
+    should(
+      'ristretto255 and decaf448 reject identity elements in blinded and evaluated inputs',
+      () => {
+        const suites = [
+          { oprf: ristretto255_oprf, zero: ristretto255.Point.ZERO.toBytes() },
+          { oprf: decaf448_oprf, zero: decaf448.Point.ZERO.toBytes() },
+        ];
+        const input = asciiToBytes('input');
+        for (const { oprf, zero } of suites) {
+          const keys = oprf.oprf.generateKeyPair();
+          throws(() => oprf.oprf.blindEvaluate(keys.secretKey, zero));
+          const { blind } = oprf.oprf.blind(input);
+          throws(() => oprf.oprf.finalize(input, blind, zero));
+        }
       }
-    });
+    );
 
     should('private and public inputs allow 65535 bytes but reject true 16-bit overflow', () => {
       const input = new Uint8Array(65535);
@@ -210,17 +213,24 @@ describe('RFC-9497 (OPRF)', () => {
       }
     });
 
-    should('POPRF hashInput callers reject oversized input with the public input-length error', () => {
-      const keys = p256_oprf.oprf.generateKeyPair(new Uint8Array(32).fill(7));
-      const rng = () => new Uint8Array(48).fill(1);
-      const p = p256_oprf.poprf(new Uint8Array([9]));
-      const blind = p.blind(new Uint8Array([1]), keys.publicKey, rng);
-      const ev = p.blindEvaluate(keys.secretKey, blind.blinded, rng);
-      const input = new Uint8Array(65536);
-      const err = /"input" expected Uint8Array of length <= 65535, got length=65536/;
-      throws(() => p.evaluate(keys.secretKey, input), err);
-      throws(() => p.finalize(input, blind.blind, ev.evaluated, blind.blinded, ev.proof, blind.tweakedKey), err);
-    });
+    should(
+      'POPRF hashInput callers reject oversized input with the public input-length error',
+      () => {
+        const keys = p256_oprf.oprf.generateKeyPair(new Uint8Array(32).fill(7));
+        const rng = () => new Uint8Array(48).fill(1);
+        const p = p256_oprf.poprf(new Uint8Array([9]));
+        const blind = p.blind(new Uint8Array([1]), keys.publicKey, rng);
+        const ev = p.blindEvaluate(keys.secretKey, blind.blinded, rng);
+        const input = new Uint8Array(65536);
+        const err = /"input" expected Uint8Array of length <= 65535, got length=65536/;
+        throws(() => p.evaluate(keys.secretKey, input), err);
+        throws(
+          () =>
+            p.finalize(input, blind.blind, ev.evaluated, blind.blinded, ev.proof, blind.tweakedKey),
+          err
+        );
+      }
+    );
   });
 
   for (const { suite, modes } of VECTORS) {

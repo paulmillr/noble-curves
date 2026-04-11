@@ -1,4 +1,7 @@
-import { pippenger as _pippenger, precomputeMSMUnsafe as _precomputeMSMUnsafe } from '../src/abstract/curve.ts';
+import {
+  pippenger as _pippenger,
+  precomputeMSMUnsafe as _precomputeMSMUnsafe,
+} from '../src/abstract/curve.ts';
 import { bls12_381 } from '../src/bls12-381.ts';
 import { ed25519, ed25519ctx, ed25519ph, ristretto255 } from '../src/ed25519.ts';
 import { decaf448, ed448, ed448ph } from '../src/ed448.ts';
@@ -6,12 +9,7 @@ import { brainpoolP256r1, brainpoolP384r1, brainpoolP512r1, jubjub } from '../sr
 import { p256 as secp256r1, p384 as secp384r1, p521 as secp521r1 } from '../src/nist.ts';
 import { secp256k1 } from '../src/secp256k1.ts';
 import { miscCurves, secp192r1, secp224r1 } from './_more-curves.helpers.ts';
-import {
-  bytesToHex as hex,
-  hexToBytes,
-  invert,
-  mod,
-} from './utils.helpers.ts';
+import { bytesToHex as hex, hexToBytes, invert, mod } from './utils.helpers.ts';
 
 // prettier-ignore
 export const CURVES = {

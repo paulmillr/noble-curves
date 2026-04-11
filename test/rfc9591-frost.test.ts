@@ -160,14 +160,18 @@ should('signShare rejects nonce reuse across signing sessions across suites', ()
     const bobRound1 = suite.commit(bob);
     const commitmentList = [aliceRound1.commitments, bobRound1.commitments];
     suite.signShare(alice, deal.public, aliceRound1.nonces, commitmentList, new Uint8Array([1]));
-    throws(() => suite.signShare(alice, deal.public, aliceRound1.nonces, commitmentList, new Uint8Array([2])));
+    throws(() =>
+      suite.signShare(alice, deal.public, aliceRound1.nonces, commitmentList, new Uint8Array([2]))
+    );
   };
   check(ed448_FROST);
   check(p256_FROST);
 });
 
 should('createFROST rejects opts without a usable Point constructor', () => {
-  throws(() => createFROST({ name: 'FROST-TEST-SHA512-v1', hash: sha512, Fn: ed25519.Point.Fn } as any));
+  throws(() =>
+    createFROST({ name: 'FROST-TEST-SHA512-v1', hash: sha512, Fn: ed25519.Point.Fn } as any)
+  );
 });
 
 describe('createFROST', () => {
@@ -180,10 +184,13 @@ describe('createFROST', () => {
     return { frost, msg, sig, publicKey };
   };
 
-  should('createFROST.parsePoint still accepts canonical ed25519 public keys on the verify path', () => {
-    const { frost, msg, sig, publicKey } = create();
-    eql(frost.verify(sig, msg, publicKey), true);
-  });
+  should(
+    'createFROST.parsePoint still accepts canonical ed25519 public keys on the verify path',
+    () => {
+      const { frost, msg, sig, publicKey } = create();
+      eql(frost.verify(sig, msg, publicKey), true);
+    }
+  );
 });
 
 const Identifiers: Record<string, Record<string, string>> = {

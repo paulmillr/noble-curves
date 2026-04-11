@@ -219,43 +219,46 @@ describe('FFT', () => {
     eql(fftF.inverse([5n]), [5n]);
     throws(() => fftF.inverse([]), /FFT: Polynomial size should be power of two/);
   });
-should('FFTCore rejects mismatched root tables', () => {
-  const F = Field(17n);
-  const roots = fft.rootsOfUnity(F, 3n).roots(2);
-  throws(() => fft.FFTCore(F, { N: 8, roots, dit: true }), /wrong roots length: expected 8, got 4/);
-});
-should('poly.eval rejects mismatched basis vector lengths', () => {
-  const F = Field(17n);
-  const P = fft.poly(F, fft.rootsOfUnity(F, 3n));
-  throws(() => P.eval([1n, 2n, 3n], [1n, 2n]), /poly: mismatched lengths 3 vs 2/);
-  throws(() => P.eval([1n, 2n, 3n], [1n, 2n, 3n, 4n]), /poly: mismatched lengths 3 vs 4/);
-});
-should('poly.lagrange handles the size-1 identity case and explicit weights', () => {
-  const F = Field(17n);
-  const P = fft.poly(F, fft.rootsOfUnity(F, 3n));
-  const coeffs = [42n];
-  const before = [...coeffs];
-  eql(P.lagrange.basis(1n, 1, true), [1n]);
-  eql(P.lagrange.eval(coeffs, 1n, true), 42n);
-  eql(coeffs, before);
-  const weights = [1n, 3n, 9n, 10n];
-  const weights0 = [...weights];
-  const x = 5n;
-  const n = 4;
-  const got = P.lagrange.basis(x, n, false, weights as never);
-  const expected = (() => {
-    const out = Array(n).fill(0n);
-    const c = F.mul(F.sub(F.pow(x, BigInt(n)), F.ONE), F.inv(BigInt(n)));
-    const denom = Array(n).fill(0n);
-    for (let i = 0; i < n; i++) denom[i] = F.sub(x, weights[i]);
-    const inv = F.invertBatch(denom);
-    for (let i = 0; i < n; i++) out[i] = F.mul(c, F.mul(weights[i], inv[i]));
-    return out;
-  })();
-  eql(got, expected);
-  eql(weights, weights0);
-});
-for (const [name, curve] of Object.entries({ bls12_381, bn254 })) {
+  should('FFTCore rejects mismatched root tables', () => {
+    const F = Field(17n);
+    const roots = fft.rootsOfUnity(F, 3n).roots(2);
+    throws(
+      () => fft.FFTCore(F, { N: 8, roots, dit: true }),
+      /wrong roots length: expected 8, got 4/
+    );
+  });
+  should('poly.eval rejects mismatched basis vector lengths', () => {
+    const F = Field(17n);
+    const P = fft.poly(F, fft.rootsOfUnity(F, 3n));
+    throws(() => P.eval([1n, 2n, 3n], [1n, 2n]), /poly: mismatched lengths 3 vs 2/);
+    throws(() => P.eval([1n, 2n, 3n], [1n, 2n, 3n, 4n]), /poly: mismatched lengths 3 vs 4/);
+  });
+  should('poly.lagrange handles the size-1 identity case and explicit weights', () => {
+    const F = Field(17n);
+    const P = fft.poly(F, fft.rootsOfUnity(F, 3n));
+    const coeffs = [42n];
+    const before = [...coeffs];
+    eql(P.lagrange.basis(1n, 1, true), [1n]);
+    eql(P.lagrange.eval(coeffs, 1n, true), 42n);
+    eql(coeffs, before);
+    const weights = [1n, 3n, 9n, 10n];
+    const weights0 = [...weights];
+    const x = 5n;
+    const n = 4;
+    const got = P.lagrange.basis(x, n, false, weights as never);
+    const expected = (() => {
+      const out = Array(n).fill(0n);
+      const c = F.mul(F.sub(F.pow(x, BigInt(n)), F.ONE), F.inv(BigInt(n)));
+      const denom = Array(n).fill(0n);
+      for (let i = 0; i < n; i++) denom[i] = F.sub(x, weights[i]);
+      const inv = F.invertBatch(denom);
+      for (let i = 0; i < n; i++) out[i] = F.mul(c, F.mul(weights[i], inv[i]));
+      return out;
+    })();
+    eql(got, expected);
+    eql(weights, weights0);
+  });
+  for (const [name, curve] of Object.entries({ bls12_381, bn254 })) {
     const Fr = curve.fields.Fr;
     const G1 = curve.G1.Point;
     const FR_BIGINT = fc.bigInt(1n, Fr.ORDER - 1n);

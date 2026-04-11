@@ -1344,7 +1344,10 @@ describe('bls12-381 deterministic', () => {
     });
     should('encodeToCurve G1 defaults match the exported DST', () => {
       const msg = new TextEncoder().encode('abc');
-      eql(bls12_381.G1.encodeToCurve(msg).toHex(), bls12_381.G1.encodeToCurve(msg, { DST: bls12_381.G1.defaults.DST }).toHex());
+      eql(
+        bls12_381.G1.encodeToCurve(msg).toHex(),
+        bls12_381.G1.encodeToCurve(msg, { DST: bls12_381.G1.defaults.DST }).toHex()
+      );
     });
     should('hashToCurve G2', () => {
       for (let i = 0; i < BLS_H2C_VEC_HASH_G2.length; i++) {
@@ -1668,7 +1671,8 @@ describe('BLS flag edge cases', () => {
     const { Fp } = bls12_381.fields;
     const p = Fp.ORDER;
     const L = Fp.BYTES;
-    const n2b = (n: bigint, len: number) => Uint8Array.from(Buffer.from(n.toString(16).padStart(len * 2, '0'), 'hex'));
+    const n2b = (n: bigint, len: number) =>
+      Uint8Array.from(Buffer.from(n.toString(16).padStart(len * 2, '0'), 'hex'));
     const g1UncompressedP = new Uint8Array(96);
     const g2UncompressedP = new Uint8Array(192);
     g1UncompressedP.set(n2b(p, L), 0);
@@ -1704,7 +1708,10 @@ describe('BLS flag edge cases', () => {
     short[47] = 1;
     long[0] = 0xc0;
     long[95] = 1;
-    throws(() => bls12_381.shortSignatures.Signature.fromBytes(short), /signature|point|compressed/);
+    throws(
+      () => bls12_381.shortSignatures.Signature.fromBytes(short),
+      /signature|point|compressed/
+    );
     throws(() => bls12_381.longSignatures.Signature.fromBytes(long), /signature|point|compressed/);
   });
 
@@ -1712,7 +1719,8 @@ describe('BLS flag edge cases', () => {
     const { Fp } = bls12_381.fields;
     const p = Fp.ORDER;
     const L = Fp.BYTES;
-    const n2b = (n: bigint, len: number) => Uint8Array.from(Buffer.from(n.toString(16).padStart(len * 2, '0'), 'hex'));
+    const n2b = (n: bigint, len: number) =>
+      Uint8Array.from(Buffer.from(n.toString(16).padStart(len * 2, '0'), 'hex'));
     const g1Compressed = new Uint8Array(L);
     const g2Compressed = new Uint8Array(2 * L);
     const g1Uncompressed = new Uint8Array(2 * L);

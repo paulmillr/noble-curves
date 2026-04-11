@@ -97,25 +97,34 @@ describe('utils', () => {
       throws(() => ed.utils.randomSecretKey(new Uint8Array(31)), RangeError);
     }
   });
-  should('bytesToHex/concatBytes reject typed-array subclasses that spoof the Uint8Array constructor name', () => {
-    class Uint8Array extends Uint16Array {}
-    const spoof = new Uint8Array([0x12, 0x1234]);
-    throws(() => bytesToHex(spoof as any), /expected Uint8Array/);
-    throws(
-      () => concatBytes(globalThis.Uint8Array.of(0xaa), spoof as any, globalThis.Uint8Array.of(0xbb)),
-      /expected Uint8Array/
-    );
-    if (extra.abytes) {
-      throws(() => extra.abytes!(spoof as any, 2, 'spoof'), /expected Uint8Array/);
+  should(
+    'bytesToHex/concatBytes reject typed-array subclasses that spoof the Uint8Array constructor name',
+    () => {
+      class Uint8Array extends Uint16Array {}
+      const spoof = new Uint8Array([0x12, 0x1234]);
+      throws(() => bytesToHex(spoof as any), /expected Uint8Array/);
+      throws(
+        () =>
+          concatBytes(globalThis.Uint8Array.of(0xaa), spoof as any, globalThis.Uint8Array.of(0xbb)),
+        /expected Uint8Array/
+      );
+      if (extra.abytes) {
+        throws(() => extra.abytes!(spoof as any, 2, 'spoof'), /expected Uint8Array/);
+      }
+      class Uint8Array2 extends DataView {}
+      const spoof2 = new Uint8Array2(new ArrayBuffer(4));
+      throws(() => bytesToHex(spoof2 as any), /expected Uint8Array/);
+      throws(
+        () =>
+          concatBytes(
+            globalThis.Uint8Array.of(0xaa),
+            spoof2 as any,
+            globalThis.Uint8Array.of(0xbb)
+          ),
+        /expected Uint8Array/
+      );
     }
-    class Uint8Array2 extends DataView {}
-    const spoof2 = new Uint8Array2(new ArrayBuffer(4));
-    throws(() => bytesToHex(spoof2 as any), /expected Uint8Array/);
-    throws(
-      () => concatBytes(globalThis.Uint8Array.of(0xaa), spoof2 as any, globalThis.Uint8Array.of(0xbb)),
-      /expected Uint8Array/
-    );
-  });
+  );
   if (extra.copyBytes) {
     const copyBytes = extra.copyBytes;
     should('copyBytes', () => {
@@ -125,7 +134,10 @@ describe('utils', () => {
       copy[0] = 9;
       eql(src, Uint8Array.of(1, 2, 3));
       throws(() => copyBytes([1, 2] as any), new TypeError('expected Uint8Array, got type=object'));
-      throws(() => copyBytes(new Uint16Array([1, 2]) as any), new TypeError('expected Uint8Array, got type=object'));
+      throws(
+        () => copyBytes(new Uint16Array([1, 2]) as any),
+        new TypeError('expected Uint8Array, got type=object')
+      );
     });
   }
   if (extra.equalBytes) {
@@ -133,7 +145,10 @@ describe('utils', () => {
     should('equalBytes', () => {
       eql(equalBytes(Uint8Array.of(1, 2), Uint8Array.of(1, 2)), true);
       eql(equalBytes(Uint8Array.of(1, 2), Uint8Array.of(1, 3)), false);
-      throws(() => equalBytes([1, 2] as any, Uint8Array.of(1, 2)), new TypeError('expected Uint8Array, got type=object'));
+      throws(
+        () => equalBytes([1, 2] as any, Uint8Array.of(1, 2)),
+        new TypeError('expected Uint8Array, got type=object')
+      );
       throws(
         () => equalBytes(new Uint16Array([1, 2]) as any, Uint8Array.of(1, 2)),
         new TypeError('expected Uint8Array, got type=object')
@@ -265,8 +280,16 @@ describe('utils', () => {
           throws(() => numberToBytesLE(value, len), `numberToBytesBE: ${error}`);
           throws(() => numberToBytesBE(value, len), `numberToBytesBE: ${error}`);
         } else {
-          eql(numberToBytesLE(value, len), hexToBytes(expectedLE), `numberToBytesLE: ${expectedLE}`);
-          eql(numberToBytesBE(value, len), hexToBytes(expectedBE), `numberToBytesBE: ${expectedBE}`);
+          eql(
+            numberToBytesLE(value, len),
+            hexToBytes(expectedLE),
+            `numberToBytesLE: ${expectedLE}`
+          );
+          eql(
+            numberToBytesBE(value, len),
+            hexToBytes(expectedBE),
+            `numberToBytesBE: ${expectedBE}`
+          );
         }
       }
       throws(() => numberToBytesBE(256n, 1), new RangeError('number too large'));

@@ -243,21 +243,24 @@ describe('ed25519', () => {
       }
     });
 
-    should('passing {} or { zip215: undefined } preserves the exported default ZIP-215 semantics', () => {
-      const vector = zip215.find((v) => v.valid_zip215 && !v.valid_legacy)!;
-      const msg = new TextEncoder().encode('Zcash');
-      const publicKey = bytes(vector.vk_bytes);
-      const signature = bytes(vector.sig_bytes);
-      eql(
-        {
-          omitted: ed.verify(signature, msg, publicKey),
-          empty: ed.verify(signature, msg, publicKey, {}),
-          undef: ed.verify(signature, msg, publicKey, { zip215: undefined }),
-          strict: ed.verify(signature, msg, publicKey, { zip215: false }),
-        },
-        { omitted: true, empty: true, undef: true, strict: false }
-      );
-    });
+    should(
+      'passing {} or { zip215: undefined } preserves the exported default ZIP-215 semantics',
+      () => {
+        const vector = zip215.find((v) => v.valid_zip215 && !v.valid_legacy)!;
+        const msg = new TextEncoder().encode('Zcash');
+        const publicKey = bytes(vector.vk_bytes);
+        const signature = bytes(vector.sig_bytes);
+        eql(
+          {
+            omitted: ed.verify(signature, msg, publicKey),
+            empty: ed.verify(signature, msg, publicKey, {}),
+            undef: ed.verify(signature, msg, publicKey, { zip215: undefined }),
+            strict: ed.verify(signature, msg, publicKey, { zip215: false }),
+          },
+          { omitted: true, empty: true, undef: true, strict: false }
+        );
+      }
+    );
     if (ed.utils.isValidPublicKey) {
       should('utils.isValidPublicKey preserves the exported ZIP-215 default', () => {
         const unreduced = numberToBytesLE(ed.Point.CURVE().p + 1n, 32);
@@ -278,14 +281,17 @@ describe('ed25519', () => {
         eql(ed.utils.isValidSecretKey(seed), true);
       });
     }
-    should('ZIP-215 verification with noncanonical R hashes the original signature bytes in verify()', () => {
-      const publicKey = bytes('17ffad8068dc0de9935d36636f3ad1b5de6de3413b12388e453b05f2a4c1d3db');
-      const msg = bytes('090807');
-      const signature = bytes(
-        'eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fc07b8c4dcad0ae1a8df5426b3b0578753de96488dbbee400082251e372919f04'
-      );
-      eql(ed.verify(signature, msg, publicKey, { zip215: true }), true);
-    });
+    should(
+      'ZIP-215 verification with noncanonical R hashes the original signature bytes in verify()',
+      () => {
+        const publicKey = bytes('17ffad8068dc0de9935d36636f3ad1b5de6de3413b12388e453b05f2a4c1d3db');
+        const msg = bytes('090807');
+        const signature = bytes(
+          'eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fc07b8c4dcad0ae1a8df5426b3b0578753de96488dbbee400082251e372919f04'
+        );
+        eql(ed.verify(signature, msg, publicKey, { zip215: true }), true);
+      }
+    );
   });
 
   describe('Point', () => {
@@ -326,7 +332,10 @@ describe('ed25519', () => {
 
     should('Point.ZERO.multiplyUnsafe rejects negative and >= N scalars', () => {
       throws(() => ed.Point.ZERO.multiplyUnsafe(-1n), /out of range|expected 0 <= sc < curve.n/);
-      throws(() => ed.Point.ZERO.multiplyUnsafe(CURVE_N), /out of range|expected 0 <= sc < curve.n/);
+      throws(
+        () => ed.Point.ZERO.multiplyUnsafe(CURVE_N),
+        /out of range|expected 0 <= sc < curve.n/
+      );
     });
 
     should('Point.CURVE does not expose a live mutable view of internal curve parameters', () => {

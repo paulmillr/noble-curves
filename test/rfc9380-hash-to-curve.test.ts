@@ -5,7 +5,13 @@ import { json } from './utils.ts';
 // Generic tests for all curves in package
 import { sha256, sha512 } from '@noble/hashes/sha2.js';
 import { shake128, shake256 } from '@noble/hashes/sha3.js';
-import { _DST_scalar, createHasher, expand_message_xmd, expand_message_xof, hash_to_field } from '../src/abstract/hash-to-curve.ts';
+import {
+  _DST_scalar,
+  createHasher,
+  expand_message_xmd,
+  expand_message_xof,
+  hash_to_field,
+} from '../src/abstract/hash-to-curve.ts';
 import { Field } from '../src/abstract/modular.ts';
 import { mapToCurveSimpleSWU, SWUFpSqrtRatio } from '../src/abstract/weierstrass.ts';
 import { bls12_381 } from '../src/bls12-381.ts';
@@ -152,43 +158,49 @@ describe('RFC9380 hash-to-curve', () => {
     );
   });
 
-  should('createHasher snapshots and freezes internal defaults without freezing caller input', () => {
-    const msg = Uint8Array.of(7, 8, 9);
-    const dst = Uint8Array.of(1, 2, 3);
-    const defaults = {
-      DST: dst,
-      p: nist.p256.Point.Fp.ORDER,
-      m: 1,
-      k: 128,
-      expand: 'xmd' as const,
-      hash: sha256,
-    };
-    const hasher = createHasher(nist.p256.Point, () => nist.p256.Point.BASE.toAffine(), defaults);
-    const before = hasher.hashToCurve(msg).toHex();
-    dst[0] = 9;
-    const exported = hasher.defaults;
-    exported.DST[0] = 8;
-    eql(Object.isFrozen(defaults), false);
-    eql(Object.isFrozen(exported), true);
-    eql(hasher.defaults.DST, Uint8Array.of(1, 2, 3));
-    eql(hasher.hashToCurve(msg).toHex(), before);
-  });
-  should('exports _DST_scalar as immutable string so default hash-to-scalar helpers cannot be poisoned', () => {
-    const msg = Uint8Array.of(1, 2, 3, 4);
-    const suites = [
-      ['p256_hasher', nist.p256_hasher],
-      ['ristretto255_hasher', ristretto255_hasher],
-      ['decaf448_hasher', decaf448_hasher],
-    ] as const;
-    eql(typeof _DST_scalar, 'string');
-    const baseline = suites.map(([name, item]) => [name, item.hashToScalar(msg).toString()]);
-    const explicit = suites.map(([name, item]) => [
-      name,
-      item.hashToScalar(msg, { DST: _DST_scalar }).toString(),
-    ]);
-    eql(baseline, explicit);
-    eql(_DST_scalar, 'HashToScalar-');
-  });
+  should(
+    'createHasher snapshots and freezes internal defaults without freezing caller input',
+    () => {
+      const msg = Uint8Array.of(7, 8, 9);
+      const dst = Uint8Array.of(1, 2, 3);
+      const defaults = {
+        DST: dst,
+        p: nist.p256.Point.Fp.ORDER,
+        m: 1,
+        k: 128,
+        expand: 'xmd' as const,
+        hash: sha256,
+      };
+      const hasher = createHasher(nist.p256.Point, () => nist.p256.Point.BASE.toAffine(), defaults);
+      const before = hasher.hashToCurve(msg).toHex();
+      dst[0] = 9;
+      const exported = hasher.defaults;
+      exported.DST[0] = 8;
+      eql(Object.isFrozen(defaults), false);
+      eql(Object.isFrozen(exported), true);
+      eql(hasher.defaults.DST, Uint8Array.of(1, 2, 3));
+      eql(hasher.hashToCurve(msg).toHex(), before);
+    }
+  );
+  should(
+    'exports _DST_scalar as immutable string so default hash-to-scalar helpers cannot be poisoned',
+    () => {
+      const msg = Uint8Array.of(1, 2, 3, 4);
+      const suites = [
+        ['p256_hasher', nist.p256_hasher],
+        ['ristretto255_hasher', ristretto255_hasher],
+        ['decaf448_hasher', decaf448_hasher],
+      ] as const;
+      eql(typeof _DST_scalar, 'string');
+      const baseline = suites.map(([name, item]) => [name, item.hashToScalar(msg).toString()]);
+      const explicit = suites.map(([name, item]) => [
+        name,
+        item.hashToScalar(msg, { DST: _DST_scalar }).toString(),
+      ]);
+      eql(baseline, explicit);
+      eql(_DST_scalar, 'HashToScalar-');
+    }
+  );
 
   describe('expand_message_xmd', () => {
     testExpandXMD(sha256, xmd_sha256_38);

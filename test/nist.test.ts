@@ -487,7 +487,10 @@ should('properly add leading zero to DER', () => {
   throws(() => DER._tlv.encode(256, ''));
   throws(() => DER._tlv.encode(1.5 as any, ''));
   throws(() => DER._tlv.encode(0x02, null as any), /string|type=object/i);
-  throws(() => DER._tlv.decode(0x02, { length: 2, 0: 0x02, 1: 0x00 } as any), /Uint8Array|DER data/i);
+  throws(
+    () => DER._tlv.decode(0x02, { length: 2, 0: 0x02, 1: 0x00 } as any),
+    /Uint8Array|DER data/i
+  );
   throws(() => DER.toSig('3006020101020102' as any), /Uint8Array|signature/i);
   throws(() => DER._int.decode(new Uint8Array([])));
   throws(() => DER.toSig(new Uint8Array([0x30, 0x05, 0x02, 0x00, 0x02, 0x01, 0x01])));

@@ -29,7 +29,13 @@ import {
   ed448_hasher,
   x448,
 } from '../src/ed448.ts';
-import { babyjubjub, brainpoolP256r1, brainpoolP384r1, brainpoolP512r1, jubjub } from '../src/misc.ts';
+import {
+  babyjubjub,
+  brainpoolP256r1,
+  brainpoolP384r1,
+  brainpoolP512r1,
+  jubjub,
+} from '../src/misc.ts';
 import {
   p256 as secp256r1,
   p256_FROST,
@@ -123,8 +129,18 @@ describe('info', () => {
       frozen(`${name}.utils`, curve.utils);
       frozen(`${name}.lengths`, curve.lengths);
       blocked(name, curve as unknown as Record<string, unknown>, 'Point', class FakePoint {});
-      blocked(`${name}.Point`, curve.Point as unknown as Record<string, unknown>, 'fromBytes', () => 'spoof');
-      blocked(`${name}.utils`, curve.utils as unknown as Record<string, unknown>, 'randomSecretKey', () => Uint8Array.of(7));
+      blocked(
+        `${name}.Point`,
+        curve.Point as unknown as Record<string, unknown>,
+        'fromBytes',
+        () => 'spoof'
+      );
+      blocked(
+        `${name}.utils`,
+        curve.utils as unknown as Record<string, unknown>,
+        'randomSecretKey',
+        () => Uint8Array.of(7)
+      );
       blocked(`${name}.lengths`, curve.lengths as unknown as Record<string, unknown>, 'seed', 1);
     }
   });
@@ -136,17 +152,41 @@ describe('info', () => {
     frozen('secp256k1.lengths', secp256k1.lengths);
     frozen('secp256k1.Signature', secp256k1.Signature);
     frozen('secp256k1.Signature.prototype', secp256k1.Signature.prototype);
-    blocked('secp256k1', secp256k1 as unknown as Record<string, unknown>, 'sign', () => Uint8Array.of(7));
-    blocked('secp256k1.Signature', secp256k1.Signature as unknown as Record<string, unknown>, 'fromBytes', () => 'spoof');
-    blocked('secp256k1.Signature.prototype', secp256k1.Signature.prototype as unknown as Record<string, unknown>, 'toBytes', () => Uint8Array.of(7));
-    blocked('secp256k1.lengths', secp256k1.lengths as unknown as Record<string, unknown>, 'seed', 1);
+    blocked('secp256k1', secp256k1 as unknown as Record<string, unknown>, 'sign', () =>
+      Uint8Array.of(7)
+    );
+    blocked(
+      'secp256k1.Signature',
+      secp256k1.Signature as unknown as Record<string, unknown>,
+      'fromBytes',
+      () => 'spoof'
+    );
+    blocked(
+      'secp256k1.Signature.prototype',
+      secp256k1.Signature.prototype as unknown as Record<string, unknown>,
+      'toBytes',
+      () => Uint8Array.of(7)
+    );
+    blocked(
+      'secp256k1.lengths',
+      secp256k1.lengths as unknown as Record<string, unknown>,
+      'seed',
+      1
+    );
 
     frozen('schnorr', schnorr);
     frozen('schnorr.Point', schnorr.Point);
     frozen('schnorr.utils', schnorr.utils);
     frozen('schnorr.lengths', schnorr.lengths);
-    blocked('schnorr', schnorr as unknown as Record<string, unknown>, 'sign', () => Uint8Array.of(7));
-    blocked('schnorr.utils', schnorr.utils as unknown as Record<string, unknown>, 'pointToBytes', () => Uint8Array.of(8));
+    blocked('schnorr', schnorr as unknown as Record<string, unknown>, 'sign', () =>
+      Uint8Array.of(7)
+    );
+    blocked(
+      'schnorr.utils',
+      schnorr.utils as unknown as Record<string, unknown>,
+      'pointToBytes',
+      () => Uint8Array.of(8)
+    );
     blocked('schnorr.lengths', schnorr.lengths as unknown as Record<string, unknown>, 'seed', 1);
   });
 
@@ -159,7 +199,12 @@ describe('info', () => {
       frozen(name, curve);
       frozen(`${name}.utils`, curve.utils);
       frozen(`${name}.lengths`, curve.lengths);
-      blocked(`${name}.utils`, curve.utils as unknown as Record<string, unknown>, 'randomSecretKey', () => Uint8Array.of(7));
+      blocked(
+        `${name}.utils`,
+        curve.utils as unknown as Record<string, unknown>,
+        'randomSecretKey',
+        () => Uint8Array.of(7)
+      );
       blocked(`${name}.lengths`, curve.lengths as unknown as Record<string, unknown>, 'seed', 1);
     }
   });
@@ -173,7 +218,12 @@ describe('info', () => {
       frozen(name, curve);
       frozen(`${name}.Point`, curve.Point);
       blocked(name, curve as unknown as Record<string, unknown>, 'Point', class FakePoint {});
-      blocked(`${name}.Point`, curve.Point as unknown as Record<string, unknown>, 'fromBytes', () => 'spoof');
+      blocked(
+        `${name}.Point`,
+        curve.Point as unknown as Record<string, unknown>,
+        'fromBytes',
+        () => 'spoof'
+      );
     }
   });
 
@@ -192,7 +242,12 @@ describe('info', () => {
     ] as const;
     for (const [name, Point] of points) {
       frozen(`${name}.prototype`, Point.prototype);
-      blocked(`${name}.prototype`, Point.prototype as unknown as Record<string, unknown>, 'toBytes', () => Uint8Array.of(7));
+      blocked(
+        `${name}.prototype`,
+        Point.prototype as unknown as Record<string, unknown>,
+        'toBytes',
+        () => Uint8Array.of(7)
+      );
     }
 
     const singletons = [
@@ -229,8 +284,18 @@ describe('info', () => {
     ] as const;
     for (const [name, hasher] of hashers) {
       frozen(name, hasher);
-      blocked(name, hasher as unknown as Record<string, unknown>, 'hashToCurve', () => hasher.Point.ZERO);
-      blocked(name, hasher as unknown as Record<string, unknown>, 'encodeToCurve', () => hasher.Point.ZERO);
+      blocked(
+        name,
+        hasher as unknown as Record<string, unknown>,
+        'hashToCurve',
+        () => hasher.Point.ZERO
+      );
+      blocked(
+        name,
+        hasher as unknown as Record<string, unknown>,
+        'encodeToCurve',
+        () => hasher.Point.ZERO
+      );
       blocked(name, hasher as unknown as Record<string, unknown>, 'hashToScalar', () => 7n);
     }
     const older = [
@@ -239,8 +304,18 @@ describe('info', () => {
     ] as const;
     for (const [name, hasher] of older) {
       frozen(name, hasher);
-      blocked(name, hasher as unknown as Record<string, unknown>, 'hashToCurve', () => hasher.Point.ZERO);
-      blocked(name, hasher as unknown as Record<string, unknown>, 'deriveToCurve', () => hasher.Point.ZERO);
+      blocked(
+        name,
+        hasher as unknown as Record<string, unknown>,
+        'hashToCurve',
+        () => hasher.Point.ZERO
+      );
+      blocked(
+        name,
+        hasher as unknown as Record<string, unknown>,
+        'deriveToCurve',
+        () => hasher.Point.ZERO
+      );
       blocked(name, hasher as unknown as Record<string, unknown>, 'hashToScalar', () => 0n);
     }
   });
@@ -257,9 +332,22 @@ describe('info', () => {
       frozen(`${name}.Identifier`, frost.Identifier);
       frozen(`${name}.DKG`, frost.DKG);
       frozen(`${name}.utils`, frost.utils);
-      blocked(`${name}.Identifier`, frost.Identifier as unknown as Record<string, unknown>, 'fromNumber', () => 'zz');
-      blocked(`${name}.DKG`, frost.DKG as unknown as Record<string, unknown>, 'round1', () => ({ public: 'bad', secret: 'bad' }));
-      blocked(`${name}.utils`, frost.utils as unknown as Record<string, unknown>, 'randomScalar', () => Uint8Array.of(7));
+      blocked(
+        `${name}.Identifier`,
+        frost.Identifier as unknown as Record<string, unknown>,
+        'fromNumber',
+        () => 'zz'
+      );
+      blocked(`${name}.DKG`, frost.DKG as unknown as Record<string, unknown>, 'round1', () => ({
+        public: 'bad',
+        secret: 'bad',
+      }));
+      blocked(
+        `${name}.utils`,
+        frost.utils as unknown as Record<string, unknown>,
+        'randomScalar',
+        () => Uint8Array.of(7)
+      );
     }
   });
 
@@ -270,11 +358,33 @@ describe('info', () => {
     frozen('bls12_381.params', bls12_381.params);
     frozen('bls12_381.utils', bls12_381.utils);
     frozen('bls12_381.fields', bls12_381.fields);
-    blocked('bls12_381.G1', bls12_381.G1 as unknown as Record<string, unknown>, 'hashToCurve', () => bls12_381.G1.Point.ZERO);
-    blocked('bls12_381.G2', bls12_381.G2 as unknown as Record<string, unknown>, 'hashToCurve', () => bls12_381.G2.Point.ZERO);
-    blocked('bls12_381.params', bls12_381.params as unknown as Record<string, unknown>, 'twistType', 'divisive');
-    blocked('bls12_381.utils', bls12_381.utils as unknown as Record<string, unknown>, 'randomSecretKey', () => Uint8Array.of(7));
-    blocked('bls12_381.fields', bls12_381.fields as unknown as Record<string, unknown>, 'Fr', { ORDER: 1n });
+    blocked(
+      'bls12_381.G1',
+      bls12_381.G1 as unknown as Record<string, unknown>,
+      'hashToCurve',
+      () => bls12_381.G1.Point.ZERO
+    );
+    blocked(
+      'bls12_381.G2',
+      bls12_381.G2 as unknown as Record<string, unknown>,
+      'hashToCurve',
+      () => bls12_381.G2.Point.ZERO
+    );
+    blocked(
+      'bls12_381.params',
+      bls12_381.params as unknown as Record<string, unknown>,
+      'twistType',
+      'divisive'
+    );
+    blocked(
+      'bls12_381.utils',
+      bls12_381.utils as unknown as Record<string, unknown>,
+      'randomSecretKey',
+      () => Uint8Array.of(7)
+    );
+    blocked('bls12_381.fields', bls12_381.fields as unknown as Record<string, unknown>, 'Fr', {
+      ORDER: 1n,
+    });
 
     frozen('bn254', bn254);
     frozen('bn254.G1', bn254.G1);
@@ -282,9 +392,21 @@ describe('info', () => {
     frozen('bn254.params', bn254.params);
     frozen('bn254.utils', bn254.utils);
     frozen('bn254.fields', bn254.fields);
-    blocked('bn254.params', bn254.params as unknown as Record<string, unknown>, 'twistType', 'multiplicative');
-    blocked('bn254.utils', bn254.utils as unknown as Record<string, unknown>, 'randomSecretKey', () => Uint8Array.of(7));
-    blocked('bn254.fields', bn254.fields as unknown as Record<string, unknown>, 'Fp', { ORDER: 2n });
+    blocked(
+      'bn254.params',
+      bn254.params as unknown as Record<string, unknown>,
+      'twistType',
+      'multiplicative'
+    );
+    blocked(
+      'bn254.utils',
+      bn254.utils as unknown as Record<string, unknown>,
+      'randomSecretKey',
+      () => Uint8Array.of(7)
+    );
+    blocked('bn254.fields', bn254.fields as unknown as Record<string, unknown>, 'Fp', {
+      ORDER: 2n,
+    });
   });
 
   should('freezes tower field instances', () => {
@@ -297,11 +419,24 @@ describe('info', () => {
       frozen(`${name}.Fp6`, fields.Fp6);
       frozen(`${name}.Fp12`, fields.Fp12);
       blocked(`${name}.Fp2`, fields.Fp2 as unknown as Record<string, unknown>, 'ORDER', 1n);
-      blocked(`${name}.Fp2`, fields.Fp2 as unknown as Record<string, unknown>, 'mulByB', () => ({ c0: 9n, c1: 9n }));
+      blocked(`${name}.Fp2`, fields.Fp2 as unknown as Record<string, unknown>, 'mulByB', () => ({
+        c0: 9n,
+        c1: 9n,
+      }));
       blocked(`${name}.Fp6`, fields.Fp6 as unknown as Record<string, unknown>, 'ORDER', 1n);
-      blocked(`${name}.Fp6`, fields.Fp6 as unknown as Record<string, unknown>, 'FROBENIUS_COEFFICIENTS_1', []);
+      blocked(
+        `${name}.Fp6`,
+        fields.Fp6 as unknown as Record<string, unknown>,
+        'FROBENIUS_COEFFICIENTS_1',
+        []
+      );
       blocked(`${name}.Fp12`, fields.Fp12 as unknown as Record<string, unknown>, 'ORDER', 1n);
-      blocked(`${name}.Fp12`, fields.Fp12 as unknown as Record<string, unknown>, 'FROBENIUS_COEFFICIENTS', []);
+      blocked(
+        `${name}.Fp12`,
+        fields.Fp12 as unknown as Record<string, unknown>,
+        'FROBENIUS_COEFFICIENTS',
+        []
+      );
     }
   });
 

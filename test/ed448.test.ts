@@ -36,11 +36,20 @@ const addPToEncoding = (Point: typeof ed448.Point, bytes: Uint8Array): Uint8Arra
 const dom4 = (data: Uint8Array, ctx: Uint8Array, phflag: boolean) =>
   concatBytes(asciiToBytes('SigEd448'), new Uint8Array([phflag ? 1 : 0, ctx.length]), ctx, data);
 
-const signForPk = (scheme: typeof ed448 | typeof ed448ph, msg: Uint8Array, secretKey: Uint8Array, pk: Uint8Array) => {
+const signForPk = (
+  scheme: typeof ed448 | typeof ed448ph,
+  msg: Uint8Array,
+  secretKey: Uint8Array,
+  pk: Uint8Array
+) => {
   const prehash = scheme === ed448ph ? shake256(msg, { dkLen: 64 }) : msg;
   const { prefix, scalar } = scheme.utils.getExtendedPublicKey(secretKey);
   const hashScalar = (...parts: Uint8Array[]) =>
-    scheme.Point.Fn.create(bytesToNumberLE(shake256(dom4(concatBytes(...parts), new Uint8Array(), scheme === ed448ph), { dkLen: 114 })));
+    scheme.Point.Fn.create(
+      bytesToNumberLE(
+        shake256(dom4(concatBytes(...parts), new Uint8Array(), scheme === ed448ph), { dkLen: 114 })
+      )
+    );
   const r = hashScalar(prefix, prehash);
   const R = scheme.Point.BASE.multiply(r).toBytes();
   const k = hashScalar(R, pk, prehash);
