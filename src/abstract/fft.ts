@@ -3,6 +3,7 @@
  * API may change at any time. The code has not been audited. Feature requests are welcome.
  * @module
  */
+import type { TArg } from '../utils.ts';
 import type { IField } from './modular.ts';
 
 /** Array-like coefficient storage that can be mutated in place. */
@@ -24,6 +25,13 @@ export interface MutableArrayLike<T> {
    */
   [Symbol.iterator](): Iterator<T>;
 }
+
+/**
+ * Concrete polynomial containers accepted by the high-level `poly(...)` helpers.
+ * Lower-level FFT helpers can work with structural `MutableArrayLike`, but `poly(...)`
+ * intentionally keeps runtime dispatch on plain arrays and typed-array views.
+ */
+export type PolyStorage<T> = T[] | (MutableArrayLike<T> & ArrayBufferView);
 
 function checkU32(n: number) {
   // 0xff_ff_ff_ff
@@ -51,7 +59,7 @@ export function isPowerOfTwo(x: number): boolean {
 
 /**
  * @param n - Input value.
- * @returns Next power of two.
+ * @returns Next power of two within the u32/array-length domain.
  * @throws If `n` is not a valid unsigned 32-bit integer. {@link Error}
  * @example
  * Round an integer up to the FFT size it needs.
@@ -63,6 +71,9 @@ export function isPowerOfTwo(x: number): boolean {
 export function nextPowerOfTwo(n: number): number {
   checkU32(n);
   if (n <= 1) return 1;
+  // FFT sizes here are used as JS array lengths, so `2^32` is not a meaningful result:
+  // keep the fast u32 bit-twiddling path and fail explicitly instead of wrapping to 1.
+  if (n > 0x8000_0000) throw new Error('nextPowerOfTwo overflow: result does not fit u32');
   return (1 << (log2(n - 1) + 1)) >>> 0;
 }
 
@@ -80,15 +91,18 @@ export function nextPowerOfTwo(n: number): number {
  */
 export function reverseBits(n: number, bits: number): number {
   checkU32(n);
+  if (!Number.isSafeInteger(bits) || bits < 0 || bits > 32)
+    throw new Error(`expected integer 0 <= bits <= 32, got ${bits}`);
   let reversed = 0;
   for (let i = 0; i < bits; i++, n >>>= 1) reversed = (reversed << 1) | (n & 1);
-  return reversed;
+  // JS bitwise ops are signed i32; cast back so 32-bit reversals stay in the unsigned u32 domain.
+  return reversed >>> 0;
 }
 
 /**
  * Similar to `bitLen(x)-1` but much faster for small integers, like indices.
  * @param n - Input value.
- * @returns Base-2 logarithm.
+ * @returns Base-2 logarithm. For `n = 0`, the current implementation returns `-1`.
  * @throws If `n` is not a valid unsigned 32-bit integer. {@link Error}
  * @example
  * Compute the radix-2 stage count for one transform size.
@@ -108,7 +122,7 @@ export function log2(n: number): number {
  * which is core of fft
  * @param values - Mutable coefficient array.
  * @returns Mutated input array.
- * @throws If the array length is not a power of two greater than one. {@link Error}
+ * @throws If the array length is not a positive power of two. {@link Error}
  * @example
  * Reorder coefficients into bit-reversed order in place.
  *
@@ -119,8 +133,8 @@ export function log2(n: number): number {
  */
 export function bitReversalInplace<T extends MutableArrayLike<any>>(values: T): T {
   const n = values.length;
-  if (n < 2 || !isPowerOfTwo(n))
-    throw new Error('n must be a power of 2 and greater than 1. Got ' + n);
+  // Size-1 FFT is the identity, so bit-reversal must stay a no-op there instead of rejecting it.
+  if (!isPowerOfTwo(n)) throw new Error('expected positive power-of-two length, got ' + n);
   const bits = log2(n);
   for (let i = 0; i < n; i++) {
     const j = reverseBits(i, bits);
@@ -136,7 +150,7 @@ export function bitReversalInplace<T extends MutableArrayLike<any>>(values: T): 
 /**
  * @param values - Input values.
  * @returns Reordered copy.
- * @throws If the array length is not a power of two greater than one. {@link Error}
+ * @throws If the array length is not a positive power of two. {@link Error}
  * @example
  * Return a reordered copy instead of mutating the input in place.
  *
@@ -149,7 +163,7 @@ export function bitReversalPermutation<T>(values: T[]): T[] {
 }
 
 const _1n = /** @__PURE__ */ BigInt(1);
-function findGenerator(field: IField<bigint>) {
+function findGenerator(field: TArg<IField<bigint>>) {
   let G = BigInt(2);
   for (; field.eql(field.pow(G, field.ORDER >> _1n), field.ONE); G++);
   return G;
@@ -204,7 +218,7 @@ export type RootsOfUnity = {
  * const omega = roots.omega(4);
  * ```
  */
-export function rootsOfUnity(field: IField<bigint>, generator?: bigint): RootsOfUnity {
+export function rootsOfUnity(field: TArg<IField<bigint>>, generator?: bigint): RootsOfUnity {
   // Factor field.ORDER-1 as oddFactor * 2^powerOfTwo
   let oddFactor = field.ORDER - _1n;
   let powerOfTwo = 0;
@@ -237,6 +251,7 @@ export function rootsOfUnity(field: IField<bigint>, generator?: bigint): RootsOf
   };
   const brpCache = new Map<number, bigint[]>();
   const inverseCache = new Map<number, bigint[]>();
+  // roots()/brp()/inverse() expose shared cached arrays by reference for speed; callers must treat them as read-only.
 
   // NOTE: we use bits instead of power, because power = 2**bits,
   // but power is not neccesary isPowerOfTwo(power)!
@@ -268,6 +283,7 @@ export function rootsOfUnity(field: IField<bigint>, generator?: bigint): RootsOf
     clear: (): void => {
       rootsCache.splice(0, rootsCache.length);
       brpCache.clear();
+      inverseCache.clear();
     },
   };
 }
@@ -377,6 +393,9 @@ export const FFTCore = <T, R>(F: FFTOpts<T, R>, coreOpts: FFTCoreOpts<R>): FFTCo
   const { N, roots, dit, invertButterflies = false, skipStages = 0, brp = true } = coreOpts;
   const bits = log2(N);
   if (!isPowerOfTwo(N)) throw new Error('FFT: Polynomial size should be power of two');
+  // Wrong-sized root tables can stay in-bounds for some loop shapes and silently compute nonsense.
+  if (roots.length !== N)
+    throw new Error(`FFT: wrong roots length: expected ${N}, got ${roots.length}`);
   const isDit = dit !== invertButterflies;
   isDit;
   return <P extends Polynomial<T>>(values: P): P => {
@@ -480,6 +499,7 @@ export function FFT<T>(roots: RootsOfUnity, opts: FFTOpts<T, bigint>): FFTMethod
     },
     inverse<P extends Polynomial<T>>(values: P, brpInput = false, brpOutput = false): P {
       const N = values.length;
+      if (!isPowerOfTwo(N)) throw new Error('FFT: Polynomial size should be power of two');
       const bits = log2(N);
       const res = getLoop(N, roots.inverse(bits), brpInput, brpOutput)(values.slice());
       const ivm = opts.inv(BigInt(values.length)); // scale
@@ -495,14 +515,17 @@ export function FFT<T>(roots: RootsOfUnity, opts: FFTOpts<T, bigint>): FFTMethod
 
 /**
  * Factory that allocates one polynomial storage container.
+ * Callers must ensure `_create(len)` returns field-zero-filled storage when `elm` is omitted,
+ * because the quadratic `mul()` / `convolve()` paths and the Kronecker-δ shortcut in
+ * `lagrange.basis()` rely on that default instead of always passing `field.ZERO` explicitly.
  * @param len - Requested amount of coefficients.
  * @param elm - Optional fill value.
  * @returns Newly allocated polynomial container.
  */
-export type CreatePolyFn<P extends Polynomial<T>, T> = (len: number, elm?: T) => P;
+export type CreatePolyFn<P extends PolyStorage<T>, T> = (len: number, elm?: T) => P;
 
 /** High-level polynomial helpers layered on top of FFT and field arithmetic. */
-export type PolyFn<P extends Polynomial<T>, T> = {
+export type PolyFn<P extends PolyStorage<T>, T> = {
   /** Roots-of-unity cache used by the helper namespace. */
   roots: RootsOfUnity;
   /** Factory used to allocate new polynomial containers. */
@@ -613,7 +636,8 @@ export type PolyFn<P extends Polynomial<T>, T> = {
  * - **Lattice** is matrix (Polynomial of Polynomials)
  * @param field - Field implementation.
  * @param roots - Roots-of-unity cache.
- * @param create - Optional polynomial factory.
+ * @param create - Optional polynomial factory. Runtime input validation accepts only plain `Array`
+ *   and typed-array polynomial containers; arbitrary structural wrappers are intentionally rejected.
  * @param fft - Optional FFT implementation.
  * @param length - Optional fixed polynomial length.
  * @returns Polynomial helper namespace.
@@ -629,35 +653,43 @@ export type PolyFn<P extends Polynomial<T>, T> = {
  * ```
  */
 export function poly<T>(
-  field: IField<T>,
+  field: TArg<IField<T>>,
   roots: RootsOfUnity,
   create?: undefined,
   fft?: FFTMethods<T>,
   length?: number
 ): PolyFn<T[], T>;
-export function poly<T, P extends Polynomial<T>>(
-  field: IField<T>,
+export function poly<T, P extends PolyStorage<T>>(
+  field: TArg<IField<T>>,
   roots: RootsOfUnity,
   create: CreatePolyFn<P, T>,
   fft?: FFTMethods<T>,
   length?: number
 ): PolyFn<P, T>;
-export function poly<T, P extends Polynomial<T>>(
-  field: IField<T>,
+export function poly<T, P extends PolyStorage<T>>(
+  field: TArg<IField<T>>,
   roots: RootsOfUnity,
   create?: CreatePolyFn<P, T>,
   fft?: FFTMethods<T>,
   length?: number
 ): PolyFn<any, T> {
-  const F = field;
+  const F = field as IField<T>;
   const _create =
     create ||
-    (((len: number, elm?: T): Polynomial<T> => new Array(len).fill(elm ?? F.ZERO)) as CreatePolyFn<
-      P,
-      T
-    >);
+    (((len: number, elm?: T): T[] => new Array(len).fill(elm ?? F.ZERO)) as CreatePolyFn<P, T>);
 
-  const isPoly = (x: any): x is P => Array.isArray(x) || ArrayBuffer.isView(x);
+  // `poly.mul(a, b)` distinguishes polynomial-vs-scalar at runtime, so keep accepted
+  // polynomial containers concrete instead of trying to support arbitrary wrappers.
+  const isPoly = (x: any): x is P => {
+    if (Array.isArray(x)) return true;
+    if (!ArrayBuffer.isView(x)) return false;
+    const v = x as unknown as ArrayLike<unknown> & { slice?: unknown; [Symbol.iterator]?: unknown };
+    return (
+      typeof v.length === 'number' &&
+      typeof v.slice === 'function' &&
+      typeof v[Symbol.iterator] === 'function'
+    );
+  };
   const checkLength = (...lst: P[]): number => {
     if (!lst.length) return 0;
     for (const i of lst) if (!isPoly(i)) throw new Error('poly: not polynomial: ' + i);
@@ -682,7 +714,9 @@ export function poly<T, P extends Polynomial<T>>(
     extend: (a: P, len: number): P => {
       checkLength(a);
       const out = _create(len, F.ZERO);
-      for (let i = 0; i < a.length; i++) out[i] = a[i];
+      // Plain arrays grow when writing past `out.length`, so cap the copy explicitly to keep
+      // `extend()` consistent with typed arrays and with its documented truncate behavior.
+      for (let i = 0; i < Math.min(a.length, len); i++) out[i] = a[i];
       return out;
     },
     degree: (a: P): number => {
@@ -753,7 +787,7 @@ export function poly<T, P extends Polynomial<T>>(
       return out;
     },
     eval: (a: P, basis: P): T => {
-      checkLength(a);
+      checkLength(a, basis);
       let acc = F.ZERO;
       for (let i = 0; i < a.length; i++) acc = F.add(acc, F.mul(a[i], basis[i]));
       return acc;
@@ -779,7 +813,7 @@ export function poly<T, P extends Polynomial<T>>(
     lagrange: {
       basis: (x: T, n: number, brp = false, weights?: P): P => {
         const bits = log2(n);
-        const cache = weights || brp ? roots.brp(bits) : roots.roots(bits); // [ω⁰, ω¹, ..., ωⁿ⁻¹]
+        const cache = weights || (brp ? roots.brp(bits) : roots.roots(bits)); // [ω⁰, ω¹, ..., ωⁿ⁻¹]
         const out = _create(n);
         // Fast Kronecker-δ shortcut
         const idx = findOmegaIndex(x, n, brp);

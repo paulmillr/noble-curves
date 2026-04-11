@@ -4,10 +4,10 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { blake256 } from '@noble/hashes/blake1.js';
+import { blake512 } from '@noble/hashes/blake1.js';
 import { blake2s } from '@noble/hashes/blake2.js';
 import { sha256, sha384, sha512 } from '@noble/hashes/sha2.js';
-import { concatBytes } from '@noble/hashes/utils.js';
+import { abytes, concatBytes } from '@noble/hashes/utils.js';
 import {
   eddsa,
   edwards,
@@ -16,11 +16,13 @@ import {
   type EdwardsPoint,
 } from './abstract/edwards.ts';
 import { ecdsa, weierstrass, type ECDSA, type WeierstrassOpts } from './abstract/weierstrass.ts';
-import { asciiToBytes } from './utils.ts';
+import { asciiToBytes, type TArg } from './utils.ts';
 
 // Jubjub curves have 𝔽p over scalar fields of other curves. They are friendly to ZK proofs.
 
-// jubjub p = bls n, verify in bls12-381.ts
+// Zcash Protocol Specification "Jubjub" parameters:
+// q = BLS12-381 Fr, r, h = 8, a = -1, d = -10240/10241.
+// Gx/Gy keep the canonical Jubjub base point used by Zcash implementations.
 const jubjub_CURVE: EdwardsOpts = /* @__PURE__ */ (() => ({
   p: BigInt('0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001'),
   n: BigInt('0xe7db4ea6533afa906673b0101343b00a6682093ccc81082d0970e5ed6f72cb7'),
@@ -31,7 +33,8 @@ const jubjub_CURVE: EdwardsOpts = /* @__PURE__ */ (() => ({
   Gy: BigInt('0x1d523cf1ddab1a1793132e78c866c0c33e26ba5cc220fed7cc3f870e59d292aa'),
 }))();
 /**
- * Curve over scalar field of bls12-381. jubjub Fp = bls n
+ * Generic EdDSA-over-Jubjub convenience wrapper with `sha512`.
+ * This is not the Zcash RedJubjub / Sapling signature scheme.
  * @example
  * Generate one Jubjub keypair, sign a message, and verify it.
  *
@@ -44,20 +47,32 @@ const jubjub_CURVE: EdwardsOpts = /* @__PURE__ */ (() => ({
  */
 export const jubjub: EdDSA = /* @__PURE__ */ (() => eddsa(edwards(jubjub_CURVE), sha512))();
 
-// babyjubjub p = bn254 n, verify in bn254.ts
+// BabyJubJub over bn254 Fr. EIP-2494 explicitly defines both the full-group generator G and the
+// prime-order subgroup base point B = 8*G.
+// noble's Edwards abstraction expects Point.BASE / curve.n to describe the prime-order subgroup, so
+// use the EIP base point B here.
+// Historical noble incorrectly used the EIP generator G as Point.BASE, which mismatched the
+// abstraction and leaked the wrong order into consumers.
+// Historical noble used G instead:
+//   Gx = 995203441582195749578291179787384436505546430278305826713579947235728471134
+//   Gy = 5472060717959818805561601436314318772137091100104008585924551046643952123905
 const babyjubjub_CURVE: EdwardsOpts = /* @__PURE__ */ (() => ({
   p: BigInt('0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001'),
-  n: BigInt('0x30644e72e131a029b85045b68181585d59f76dc1c90770533b94bee1c9093788'),
+  n: BigInt('0x060c89ce5c263405370a08b6d0302b0bab3eedb83920ee0a677297dc392126f1'),
   h: BigInt(8),
   a: BigInt('168700'),
   d: BigInt('168696'),
-  Gx: BigInt('0x23343e3445b673d38bcba38f25645adb494b1255b1162bb40f41a59f4d4b45e'),
-  Gy: BigInt('0xc19139cb84c680a6e14116da06056174a0cfa121e6e5c2450f87d64fc000001'),
+  Gx: BigInt('0xbb77a6ad63e739b4eacb2e09d6277c12ab8d8010534e0b62893f3f6bb957051'),
+  Gy: BigInt('0x25797203f7a0b24925572e1cd16bf9edfce0051fb9e133774b3c257a872d7d8b'),
 }))();
 /**
  * Curve over scalar field of bn254. babyjubjub Fp = bn254 n
- * Point-only for now: `keygen()`, `getPublicKey()`, `sign()`, and `verify()` are currently broken
- * by the `blake256` secret-expansion mismatch in the generic EdDSA helper, so use `Point` APIs only.
+ * This is a working generic EdDSA-over-BabyJubJub wrapper that uses `blake512` for the 64-byte
+ * secret expansion required by the shared EdDSA helper.
+ * It is not the BabyJubJub stack used by iden3/circomlib, `babyjubjub-rs`, or
+ * `@zk-kit/eddsa-poseidon`: those pair the subgroup base B/B8 with Blake-style secret expansion
+ * plus dedicated Poseidon / MiMC / Pedersen transcript hashing. This wrapper stays generic and is
+ * not meant as an interoperability target for those BabyJubJub signing stacks.
  * @example
  * Access the BabyJubJub base point and round-trip it through the point codec.
  *
@@ -69,8 +84,10 @@ const babyjubjub_CURVE: EdwardsOpts = /* @__PURE__ */ (() => ({
  * ```
  */
 export const babyjubjub: EdDSA = /* @__PURE__ */ (() =>
-  eddsa(edwards(babyjubjub_CURVE), blake256))();
+  eddsa(edwards(babyjubjub_CURVE), blake512))();
 
+// Sapling URS randomness beacon from the Zcash protocol. This stays as the 64-byte ASCII
+// lowercase-hex string used for the first Blake2s block, not 32 raw bytes.
 const jubjub_gh_first_block = /* @__PURE__ */ asciiToBytes(
   '096b36a5804bfacef1691e173c366a47ff5ba84a44f26ddd7e8d9f79d5b42df0'
 );
@@ -79,7 +96,8 @@ const jubjub_gh_first_block = /* @__PURE__ */ asciiToBytes(
  * @param tag - Hash input.
  * @param personalization - BLAKE2 personalization bytes.
  * @returns Prime-order Jubjub point.
- * @throws If the derived point has small order. {@link Error}
+ * @throws If the digest does not decode to a Jubjub point, or if the
+ *   cofactor-cleared point has small order. {@link Error}
  * @example
  * Hash a tag into a prime-order Jubjub point.
  *
@@ -91,7 +109,10 @@ const jubjub_gh_first_block = /* @__PURE__ */ asciiToBytes(
  * const point = jubjub_groupHash(tag, personalization);
  * ```
  */
-export function jubjub_groupHash(tag: Uint8Array, personalization: Uint8Array): EdwardsPoint {
+export function jubjub_groupHash(
+  tag: TArg<Uint8Array>,
+  personalization: TArg<Uint8Array>
+): EdwardsPoint {
   const h = blake2s.create({ personalization, dkLen: 32 });
   h.update(jubjub_gh_first_block);
   h.update(tag);
@@ -107,9 +128,10 @@ export function jubjub_groupHash(tag: Uint8Array, personalization: Uint8Array): 
  * No secret data is leaked here at all.
  * It operates over public data.
  * @param m - Message prefix.
- * @param personalization - BLAKE2 personalization bytes.
+ * @param personalization - 8-byte BLAKE2 personalization bytes.
  * @returns First non-zero group hash.
- * @throws If no non-zero Jubjub group hash can be found. {@link Error}
+ * @throws If the personalization is invalid, or if no non-zero Jubjub group
+ *   hash can be found. {@link Error}
  * @example
  * Derive the first non-zero Jubjub group hash for one personalization tag.
  *
@@ -121,7 +143,13 @@ export function jubjub_groupHash(tag: Uint8Array, personalization: Uint8Array): 
  * const point = jubjub_findGroupHash(msg, personalization);
  * ```
  */
-export function jubjub_findGroupHash(m: Uint8Array, personalization: Uint8Array): EdwardsPoint {
+export function jubjub_findGroupHash(
+  m: TArg<Uint8Array>,
+  personalization: TArg<Uint8Array>
+): EdwardsPoint {
+  // Validate BLAKE2s personalization once up front; otherwise the retry loop swallows the real
+  // input error and turns it into a misleading "tag overflow".
+  abytes(personalization, 8, 'personalization');
   const tag = concatBytes(m, Uint8Array.of(0));
   const hashes = [];
   for (let i = 0; i < 256; i++) {
@@ -216,7 +244,7 @@ const brainpoolP512r1_CURVE: WeierstrassOpts<bigint> = /* @__PURE__ */ (() => ({
   h: BigInt(1),
 }))();
 /**
- * Brainpool P521r1 with sha512, from RFC 5639.
+ * Brainpool P512r1 with sha512, from RFC 5639.
  * @example
  * Generate one Brainpool P512r1 keypair, sign a message, and verify it.
  *

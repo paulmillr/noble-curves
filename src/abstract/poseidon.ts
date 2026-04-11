@@ -7,11 +7,13 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { asafenumber, bitGet, validateObject } from '../utils.ts';
+import { asafenumber, bitGet, validateObject, type TArg, type TRet } from '../utils.ts';
 import { FpInvertBatch, FpPow, type IField, validateField } from './modular.ts';
 
 // Grain LFSR (Linear-Feedback Shift Register): https://eprint.iacr.org/2009/109.pdf
 function grainLFSR(state: number[]): () => boolean {
+  // Advances the caller-provided 80-entry state array in place; only the length
+  // is checked here, so entries are assumed to already be bits.
   let pos = 0;
   if (state.length !== 80) throw new Error('grainLFRS: wrong state length, should be 80 bits');
   const getBit = (): boolean => {
@@ -47,7 +49,7 @@ export type PoseidonBasicOpts = {
   isSboxInverse?: boolean;
 };
 
-function assertValidPosOpts(opts: PoseidonBasicOpts) {
+function assertValidPosOpts(opts: TArg<PoseidonBasicOpts>) {
   const { Fp, roundsFull } = opts;
   validateField(Fp);
   validateObject(
@@ -65,10 +67,11 @@ function assertValidPosOpts(opts: PoseidonBasicOpts) {
     asafenumber(opts[k], k);
     if (opts[k] < 1) throw new Error('invalid number ' + k);
   }
+  // Poseidon splits full rounds as `R_F / 2`, then partial rounds, then `R_F / 2` again.
   if (roundsFull & 1) throw new Error('roundsFull is not even' + roundsFull);
 }
 
-function poseidonGrain(opts: PoseidonBasicOpts) {
+function poseidonGrain(opts: TArg<PoseidonBasicOpts>) {
   assertValidPosOpts(opts);
   const { Fp } = opts;
   const state = Array(80).fill(1);
@@ -78,6 +81,12 @@ function poseidonGrain(opts: PoseidonBasicOpts) {
   };
   const _0n = BigInt(0);
   const _1n = BigInt(1);
+  // The Grain seed layout is fixed-width: `Fp.BITS` and `t` use 12 bits,
+  // `roundsFull` and `roundsPartial` use 10, so larger values are truncated here.
+  // This is intentional for compatibility with snarkVM / arkworks PoseidonGrainLFSR:
+  // they write the same fixed-width seed fields without range checks, then still consume
+  // the LFSR using the caller-provided round count for ARK/MDS generation.
+  // Normalizing or rejecting here would diverge from those implementations.
   writeBits(_1n, 2); // prime field
   writeBits(opts.isSboxInverse ? _1n : _0n, 4); // b2..b5
   writeBits(BigInt(Fp.BITS), 12); // b6..b17
@@ -129,9 +138,17 @@ type PoseidonConstants = { mds: bigint[][]; roundConstants: bigint[][] };
  * const constants = grainGenConstants({ Fp, t: 2, roundsFull: 8, roundsPartial: 8 });
  * ```
  */
-export function grainGenConstants(opts: PoseidonGrainOpts, skipMDS: number = 0): PoseidonConstants {
+export function grainGenConstants(
+  opts: TArg<PoseidonGrainOpts>,
+  skipMDS: number = 0
+): PoseidonConstants {
   const { Fp, t, roundsFull, roundsPartial } = opts;
+  // `skipMDS` counts how many candidate matrices to discard before taking one.
+  asafenumber(skipMDS, 'skipMDS');
+  if (skipMDS < 0) throw new Error('invalid number skipMDS');
   const rounds = roundsFull + roundsPartial;
+  // `sboxPower` is carried in the opts shape for Poseidon compatibility, but
+  // Grain constant generation here only depends on field/size/round counts/inverse flag.
   const sample = poseidonGrain(opts);
   const roundConstants: bigint[][] = [];
   for (let r = 0; r < rounds; r++) roundConstants.push(sample(t, true));
@@ -178,18 +195,22 @@ export type PoseidonOpts = PoseidonBasicOpts &
  * const opts = validateOpts({ ...constants, Fp, t: 2, roundsFull: 8, roundsPartial: 8, sboxPower: 3 });
  * ```
  */
-export function validateOpts(opts: PoseidonOpts): Readonly<{
-  rounds: number;
-  sboxFn: (n: bigint) => bigint;
-  roundConstants: bigint[][];
-  mds: bigint[][];
-  Fp: IField<bigint>;
-  t: number;
-  roundsFull: number;
-  roundsPartial: number;
-  sboxPower?: number;
-  reversePartialPowIdx?: boolean; // Hack for stark
-}> {
+export function validateOpts(opts: TArg<PoseidonOpts>): TRet<
+  Readonly<{
+    rounds: number;
+    sboxFn: (n: bigint) => bigint;
+    roundConstants: bigint[][];
+    mds: bigint[][];
+    Fp: IField<bigint>;
+    t: number;
+    roundsFull: number;
+    roundsPartial: number;
+    sboxPower?: number;
+    reversePartialPowIdx?: boolean; // Hack for stark
+  }>
+> {
+  // This only normalizes shapes and field membership for the provided constants;
+  // it does not prove the stronger MDS/security criteria discussed in the specs.
   assertValidPosOpts(opts);
   const { Fp, mds, reversePartialPowIdx: rev, roundConstants: rc } = opts;
   const { roundsFull, roundsPartial, sboxPower, t } = opts;
@@ -201,6 +222,8 @@ export function validateOpts(opts: PoseidonOpts): Readonly<{
       throw new Error('invalid MDS matrix row: ' + mdsRow);
     return mdsRow.map((i) => {
       if (typeof i !== 'bigint') throw new Error('invalid MDS matrix bigint: ' + i);
+      // Hardcoded Poseidon MDS matrices often use signed entries like `-1`;
+      // accept bigint representatives here and reduce them into the field.
       return Fp.create(i);
     });
   });
@@ -220,6 +243,9 @@ export function validateOpts(opts: PoseidonOpts): Readonly<{
       return Fp.create(i);
     });
   });
+  // Freeze nested constants so exported handles cannot retune a live permutation instance.
+  const freezeRows = (rows: bigint[][]) =>
+    Object.freeze(rows.map((row) => Object.freeze(row))) as unknown as bigint[][];
 
   if (!sboxPower || ![3, 5, 7, 17].includes(sboxPower)) throw new Error('invalid sboxPower');
   const _sboxPower = BigInt(sboxPower);
@@ -228,7 +254,26 @@ export function validateOpts(opts: PoseidonOpts): Readonly<{
   if (sboxPower === 3) sboxFn = (n: bigint) => Fp.mul(Fp.sqrN(n), n);
   else if (sboxPower === 5) sboxFn = (n: bigint) => Fp.mul(Fp.sqrN(Fp.sqrN(n)), n);
 
-  return Object.freeze({ ...opts, rounds, sboxFn, roundConstants, mds: _mds });
+  return Object.freeze({
+    ...opts,
+    rounds,
+    sboxFn,
+    roundConstants: freezeRows(roundConstants),
+    mds: freezeRows(_mds),
+  }) as TRet<
+    Readonly<{
+      rounds: number;
+      sboxFn: (n: bigint) => bigint;
+      roundConstants: bigint[][];
+      mds: bigint[][];
+      Fp: IField<bigint>;
+      t: number;
+      roundsFull: number;
+      roundsPartial: number;
+      sboxPower?: number;
+      reversePartialPowIdx?: boolean;
+    }>
+  >;
 }
 
 /**
@@ -244,12 +289,15 @@ export function validateOpts(opts: PoseidonOpts): Readonly<{
  * ```
  */
 export function splitConstants(rc: bigint[], t: number): bigint[][] {
-  if (typeof t !== 'number') throw new Error('poseidonSplitConstants: invalid t');
+  asafenumber(t, 't');
+  if (t < 1) throw new Error('poseidonSplitConstants: invalid t');
   if (!Array.isArray(rc) || rc.length % t) throw new Error('poseidonSplitConstants: invalid rc');
   const res = [];
   let tmp = [];
   for (let i = 0; i < rc.length; i++) {
-    tmp.push(rc[i]);
+    const c = rc[i];
+    if (typeof c !== 'bigint') throw new Error('invalid bigint=' + c);
+    tmp.push(c);
     if (tmp.length === t) {
       res.push(tmp);
       tmp = [];
@@ -260,7 +308,7 @@ export function splitConstants(rc: bigint[], t: number): bigint[][] {
 
 /**
  * Poseidon permutation callable.
- * @param values - Poseidon state vector.
+ * @param values - Poseidon state vector. Non-canonical bigints are normalized with `Fp.create(...)`.
  * @returns Permuted state vector.
  */
 export type PoseidonFn = {
@@ -285,7 +333,7 @@ export type PoseidonFn = {
  * const state = hash([1n, 2n]);
  * ```
  */
-export function poseidon(opts: PoseidonOpts): PoseidonFn {
+export function poseidon(opts: TArg<PoseidonOpts>): PoseidonFn {
   const _opts = validateOpts(opts);
   const { Fp, mds, roundConstants, rounds: totalRounds, roundsPartial, sboxFn, t } = _opts;
   const halfRoundsFull = _opts.roundsFull / 2;
@@ -302,10 +350,13 @@ export function poseidon(opts: PoseidonOpts): PoseidonFn {
   const poseidonHash = function poseidonHash(values: bigint[]) {
     if (!Array.isArray(values) || values.length !== t)
       throw new Error('invalid values, expected array of bigints with length ' + t);
-    values = values.map((i) => {
+    // `.map()` skips sparse holes, which would leak `undefined` into round math below.
+    values = values.slice();
+    for (let j = 0; j < values.length; j++) {
+      const i = values[j];
       if (typeof i !== 'bigint') throw new Error('invalid bigint=' + i);
-      return Fp.create(i);
-    });
+      values[j] = Fp.create(i);
+    }
     let lastRound = 0;
     // Apply r_f/2 full rounds.
     for (let i = 0; i < halfRoundsFull; i++) values = poseidonRound(values, true, lastRound++);
@@ -316,9 +367,12 @@ export function poseidon(opts: PoseidonOpts): PoseidonFn {
 
     if (lastRound !== totalRounds) throw new Error('invalid number of rounds');
     return values;
-  };
+  } as PoseidonFn;
   // For verification in tests
-  poseidonHash.roundConstants = roundConstants;
+  Object.defineProperty(poseidonHash, 'roundConstants', {
+    value: roundConstants,
+    enumerable: true,
+  });
   return poseidonHash;
 }
 
@@ -351,14 +405,24 @@ export class PoseidonSponge {
   private isAbsorbing = true;
 
   constructor(Fp: IField<bigint>, rate: number, capacity: number, hash: PoseidonFn) {
+    const width = spongeShape(rate, capacity);
+    // The direct constructor accepts an arbitrary permutation hook, but callers still
+    // need to preserve the `PoseidonFn.roundConstants` width metadata. Reject width
+    // mismatches here instead of deferring them until the first `process()` call.
+    if (width !== hash.roundConstants[0]?.length)
+      throw new Error(
+        `invalid sponge width: expected ${hash.roundConstants[0]?.length}, got ${width}`
+      );
     this.Fp = Fp;
     this.hash = hash;
     this.rate = rate;
     this.capacity = capacity;
-    this.state = new Array(rate + capacity);
+    this.state = new Array(width);
     this.clean();
   }
   private process(): void {
+    // The permutation is expected to return an owned state array. If callers inject a custom
+    // hook that reuses external storage, `clean()` will zero that shared buffer too.
     this.state = this.hash(this.state);
   }
   absorb(input: bigint[]): void {
@@ -378,6 +442,10 @@ export class PoseidonSponge {
     }
   }
   squeeze(count: number): bigint[] {
+    // Rust oracles use unsigned counts. In JS we keep `squeeze(0) => []` for
+    // compatibility, but still reject negative/fractional counts explicitly.
+    asafenumber(count, 'count');
+    if (count < 0) throw new Error('invalid number count');
     const res: bigint[] = [];
     while (res.length < count) {
       if (this.isAbsorbing || this.pos === this.rate) {
@@ -398,6 +466,7 @@ export class PoseidonSponge {
   clone(): PoseidonSponge {
     const c = new PoseidonSponge(this.Fp, this.rate, this.capacity, this.hash);
     c.pos = this.pos;
+    c.isAbsorbing = this.isAbsorbing;
     c.state = [...this.state];
     return c;
   }
@@ -409,6 +478,17 @@ export type PoseidonSpongeOpts = Omit<PoseidonOpts, 't'> & {
   rate: number;
   /** Sponge capacity. */
   capacity: number;
+};
+
+const spongeShape = (rate: number, capacity: number) => {
+  asafenumber(rate, 'rate');
+  asafenumber(capacity, 'capacity');
+  // A sponge with zero rate cannot absorb or squeeze any field elements.
+  if (rate < 1) throw new Error('invalid number rate');
+  // Negative capacity can accidentally keep `rate + capacity` coherent while still
+  // producing a nonsensical sponge shape.
+  if (capacity < 0) throw new Error('invalid number capacity');
+  return rate + capacity;
 };
 
 /**
@@ -442,12 +522,12 @@ export type PoseidonSpongeOpts = Omit<PoseidonOpts, 't'> & {
  * const out = sponge.squeeze(1);
  * ```
  */
-export function poseidonSponge(opts: PoseidonSpongeOpts): () => PoseidonSponge {
-  for (const k of ['rate', 'capacity'] as const) asafenumber(opts[k], k);
+export function poseidonSponge(opts: TArg<PoseidonSpongeOpts>): TRet<() => PoseidonSponge> {
   const { rate, capacity } = opts;
-  const t = opts.rate + opts.capacity;
-  // Re-use hash instance between multiple instances
+  const t = spongeShape(rate, capacity);
+  // Re-use one hash instance between sponge instances; isolation depends on
+  // poseidon(...) itself staying immutable and not carrying mutable call state.
   const hash = poseidon({ ...opts, t });
   const { Fp } = opts;
-  return () => new PoseidonSponge(Fp, rate, capacity, hash);
+  return (() => new PoseidonSponge(Fp, rate, capacity, hash)) as TRet<() => PoseidonSponge>;
 }

@@ -28,9 +28,11 @@
 import { hmac as nobleHmac } from '@noble/hashes/hmac.js';
 import { ahash } from '@noble/hashes/utils.js';
 import {
+  abignumber,
   abool,
   abytes,
   aInRange,
+  asafenumber,
   bitLen,
   bitMask,
   bytesToHex,
@@ -39,12 +41,14 @@ import {
   createHmacDrbg,
   hexToBytes,
   isBytes,
-  memoized,
   numberToHexUnpadded,
+  type HmacFn,
   validateObject,
   randomBytes as wcRandomBytes,
   type CHash,
   type Signer,
+  type TArg,
+  type TRet,
 } from '../utils.ts';
 import {
   createCurveFields,
@@ -59,6 +63,7 @@ import {
   type CurvePointCons,
 } from './curve.ts';
 import {
+  FpIsSquare,
   FpInvertBatch,
   getMinHashLength,
   mapHashToField,
@@ -100,12 +105,14 @@ export type EndomorphismOpts = {
   basises?: EndoBasis;
   /**
    * Optional custom scalar-splitting helper.
-   * @param k - Scalar to split.
-   * @returns Two half-sized scalar components.
+   * Receives one scalar and returns two half-sized scalar components.
    */
   splitScalar?: (k: bigint) => { k1neg: boolean; k1: bigint; k2neg: boolean; k2: bigint };
 };
-// We construct basis in such way that den is always positive and equals n, but num sign depends on basis (not on secret value)
+// We construct the basis so `den` is always positive and equals `n`,
+// but the `num` sign depends on the basis, not on the secret value.
+// Exact half-way cases round away from zero, which keeps the split symmetric
+// around the reduced-basis boundaries used by endomorphism decomposition.
 const divNearest = (num: bigint, den: bigint) => (num + (num >= 0 ? den : -den) / _2n) / den;
 
 /** Two half-sized scalar components returned by endomorphism splitting. */
@@ -124,6 +131,10 @@ export type ScalarEndoParts = {
 export function _splitEndoScalar(k: bigint, basis: EndoBasis, n: bigint): ScalarEndoParts {
   // Split scalar into two such that part is ~half bits: `abs(part) < sqrt(N)`
   // Since part can be negative, we need to do this on point.
+  // Callers must provide a reduced GLV basis whose vectors satisfy
+  // `a + b * lambda ≡ 0 (mod n)`; this helper only sees the basis and `n`.
+  // Reject unreduced scalars instead of silently treating them mod n.
+  aInRange('scalar', k, _0n, n);
   // TODO: verifyScalar function which consumes lambda
   const [[a1, b1], [a2, b2]] = basis;
   const c1 = divNearest(b2 * k, n);
@@ -137,7 +148,8 @@ export function _splitEndoScalar(k: bigint, basis: EndoBasis, n: bigint): Scalar
   if (k1neg) k1 = -k1;
   if (k2neg) k2 = -k2;
   // Double check that resulting scalar less than half bits of N: otherwise wNAF will fail.
-  // This should only happen on wrong basises. Also, math inside is too complex and I don't trust it.
+  // This should only happen on wrong bases.
+  // Also, the math inside is complex enough that this guard is worth keeping.
   const MAX_NUM = bitMask(Math.ceil(bitLen(n) / 2)) + _1n; // Half bits of N
   if (k1 < _0n || k1 >= MAX_NUM || k2 < _0n || k2 >= MAX_NUM) {
     throw new Error('splitScalar (endomorphism): failed, k=' + k);
@@ -201,7 +213,8 @@ export type ECDSAVerifyOpts = {
  *   which is default openssl behavior.
  *   Non-malleable signatures can still be successfully verified in openssl.
  * - `format`: (default: 'compact') 'compact' or 'recovered' with recovery byte
- * - `extraEntropy`: (default: false) creates sigs with increased security, see {@link ECDSAExtraEntropy}
+ * - `extraEntropy`: (default: false) creates signatures with increased
+ *   security, see {@link ECDSAExtraEntropy}
  */
 export type ECDSASignOpts = {
   /** Whether to hash the message before signing. */
@@ -223,16 +236,20 @@ function validateSigFormat(format: string): ECDSASignatureFormat {
 function validateSigOpts<T extends ECDSASignOpts, D extends Required<ECDSASignOpts>>(
   opts: T,
   def: D
-): Required<ECDSASignOpts> {
-  const optsn: ECDSASignOpts = {};
-  for (let optName of Object.keys(def)) {
+): D {
+  validateObject(opts);
+  const optsn = {} as D;
+  // Normalize only the declared option subset from `def`; unknown keys are
+  // intentionally ignored so shared / superset option bags stay valid here too.
+  // `extraEntropy` stays an opaque payload until the signing path consumes it.
+  for (let optName of Object.keys(def) as (keyof D)[]) {
     // @ts-ignore
     optsn[optName] = opts[optName] === undefined ? def[optName] : opts[optName];
   }
   abool(optsn.lowS!, 'lowS');
   abool(optsn.prehash!, 'prehash');
   if (optsn.format !== undefined) validateSigFormat(optsn.format);
-  return optsn as Required<ECDSASignOpts>;
+  return optsn;
 }
 
 /** Projective XYZ point used by short Weierstrass curves. */
@@ -252,7 +269,7 @@ export interface WeierstrassPoint<T> extends CurvePoint<T, WeierstrassPoint<T>> 
    * @param isCompressed - Whether to use the compressed form.
    * @returns Encoded point bytes.
    */
-  toBytes(isCompressed?: boolean): Uint8Array;
+  toBytes(isCompressed?: boolean): TRet<Uint8Array>;
   /**
    * Encode the point into compressed or uncompressed SEC1 hex.
    * @param isCompressed - Whether to use the compressed form.
@@ -321,34 +338,38 @@ export type WeierstrassExtraOpts<T> = Partial<{
   /** Optional cofactor-clearing override. */
   clearCofactor: (c: WeierstrassPointCons<T>, point: WeierstrassPoint<T>) => WeierstrassPoint<T>;
   /** Optional custom point decoder. */
-  fromBytes: (bytes: Uint8Array) => AffinePoint<T>;
+  fromBytes: (bytes: TArg<Uint8Array>) => AffinePoint<T>;
   /** Optional custom point encoder. */
   toBytes: (
     c: WeierstrassPointCons<T>,
     point: WeierstrassPoint<T>,
     isCompressed: boolean
-  ) => Uint8Array;
+  ) => TRet<Uint8Array>;
 }>;
 
 /**
  * Options for ECDSA signatures over a Weierstrass curve.
  *
- * * lowS: (default: true) whether produced / verified signatures occupy low half of ecdsaOpts.p. Prevents malleability.
+ * * lowS: (default: true) whether produced or verified signatures occupy the
+ *   low half of `ecdsaOpts.n`. Prevents malleability.
  * * hmac: (default: noble-hashes hmac) function, would be used to init hmac-drbg for k generation.
  * * randomBytes: (default: webcrypto os-level CSPRNG) custom method for fetching secure randomness.
- * * bits2int, bits2int_modN: used in sigs, sometimes overridden by curves
+ * * bits2int, bits2int_modN: used in sigs, sometimes overridden by curves. Custom hooks are
+ *   treated as pure functions over validated bytes and MUST NOT mutate caller-owned buffers or
+ *   closure-captured option bags. `bits2int_modN` must also return a canonical scalar in
+ *   `[0..Point.Fn.ORDER-1]`.
  */
 export type ECDSAOpts = Partial<{
   /** Default low-S policy for this ECDSA instance. */
   lowS: boolean;
   /** HMAC implementation used by RFC6979 DRBG. */
-  hmac: (key: Uint8Array, message: Uint8Array) => Uint8Array;
+  hmac: HmacFn;
   /** RNG override used by helper constructors. */
-  randomBytes: (bytesLength?: number) => Uint8Array;
+  randomBytes: (bytesLength?: number) => TRet<Uint8Array>;
   /** Hash-to-integer conversion override. */
-  bits2int: (bytes: Uint8Array) => bigint;
-  /** Hash-to-integer-mod-n conversion override. */
-  bits2int_modN: (bytes: Uint8Array) => bigint;
+  bits2int: (bytes: TArg<Uint8Array>) => bigint;
+  /** Hash-to-integer-mod-n conversion override. Returns a canonical scalar in `[0..Fn.ORDER-1]`. */
+  bits2int_modN: (bytes: TArg<Uint8Array>) => bigint;
 }>;
 
 /** Elliptic Curve Diffie-Hellman helper namespace. */
@@ -358,14 +379,14 @@ export interface ECDH {
    * @param seed - Optional seed material.
    * @returns Secret/public key pair.
    */
-  keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
+  keygen: (seed?: TArg<Uint8Array>) => { secretKey: TRet<Uint8Array>; publicKey: TRet<Uint8Array> };
   /**
    * Derive the public key from a secret key.
    * @param secretKey - Secret key bytes.
    * @param isCompressed - Whether to emit compressed SEC1 bytes.
    * @returns Encoded public key.
    */
-  getPublicKey: (secretKey: Uint8Array, isCompressed?: boolean) => Uint8Array;
+  getPublicKey: (secretKey: TArg<Uint8Array>, isCompressed?: boolean) => TRet<Uint8Array>;
   /**
    * Compute the shared secret point from a secret key and peer public key.
    * @param secretKeyA - Local secret key bytes.
@@ -374,20 +395,20 @@ export interface ECDH {
    * @returns Encoded shared point.
    */
   getSharedSecret: (
-    secretKeyA: Uint8Array,
-    publicKeyB: Uint8Array,
+    secretKeyA: TArg<Uint8Array>,
+    publicKeyB: TArg<Uint8Array>,
     isCompressed?: boolean
-  ) => Uint8Array;
+  ) => TRet<Uint8Array>;
   /** Point constructor used by this ECDH instance. */
   Point: WeierstrassPointCons<bigint>;
   /** Validation and random-key helpers. */
   utils: {
     /** Check whether a secret key has the expected encoding. */
-    isValidSecretKey: (secretKey: Uint8Array) => boolean;
+    isValidSecretKey: (secretKey: TArg<Uint8Array>) => boolean;
     /** Check whether a public key decodes to a valid point. */
-    isValidPublicKey: (publicKey: Uint8Array, isCompressed?: boolean) => boolean;
+    isValidPublicKey: (publicKey: TArg<Uint8Array>, isCompressed?: boolean) => boolean;
     /** Generate a valid random secret key. */
-    randomSecretKey: (seed?: Uint8Array) => Uint8Array;
+    randomSecretKey: (seed?: TArg<Uint8Array>) => TRet<Uint8Array>;
   };
   /** Byte lengths for keys and signatures exposed by this curve. */
   lengths: CurveLengths;
@@ -405,7 +426,11 @@ export interface ECDSA extends ECDH {
    * @param opts - Optional signing tweaks. See {@link ECDSASignOpts}.
    * @returns Encoded signature bytes.
    */
-  sign: (message: Uint8Array, secretKey: Uint8Array, opts?: ECDSASignOpts) => Uint8Array;
+  sign: (
+    message: TArg<Uint8Array>,
+    secretKey: TArg<Uint8Array>,
+    opts?: TArg<ECDSASignOpts>
+  ) => TRet<Uint8Array>;
   /**
    * Verify a signature against a message and public key.
    * @param signature - Encoded signature bytes.
@@ -415,10 +440,10 @@ export interface ECDSA extends ECDH {
    * @returns Whether the signature is valid.
    */
   verify: (
-    signature: Uint8Array,
-    message: Uint8Array,
-    publicKey: Uint8Array,
-    opts?: ECDSAVerifyOpts
+    signature: TArg<Uint8Array>,
+    message: TArg<Uint8Array>,
+    publicKey: TArg<Uint8Array>,
+    opts?: TArg<ECDSAVerifyOpts>
   ) => boolean;
   /**
    * Recover the public key encoded into a recoverable signature.
@@ -427,7 +452,11 @@ export interface ECDSA extends ECDH {
    * @param opts - Optional recovery tweaks. See {@link ECDSARecoverOpts}.
    * @returns Encoded recovered public key.
    */
-  recoverPublicKey(signature: Uint8Array, message: Uint8Array, opts?: ECDSARecoverOpts): Uint8Array;
+  recoverPublicKey(
+    signature: TArg<Uint8Array>,
+    message: TArg<Uint8Array>,
+    opts?: TArg<ECDSARecoverOpts>
+  ): TRet<Uint8Array>;
   /** Signature constructor and parser helpers. */
   Signature: ECDSASignatureCons;
 }
@@ -471,7 +500,7 @@ export type IDER = {
      * @param data - Remaining DER bytes.
      * @returns Parsed value plus leftover bytes.
      */
-    decode(tag: number, data: Uint8Array): { v: Uint8Array; l: Uint8Array };
+    decode(tag: number, data: TArg<Uint8Array>): TRet<{ v: Uint8Array; l: Uint8Array }>;
   };
   // https://crypto.stackexchange.com/a/57734 Leftmost bit of first byte is 'negative' flag,
   // since we always use positive integers here. It must always be empty:
@@ -490,14 +519,14 @@ export type IDER = {
      * @param data - DER INTEGER bytes.
      * @returns Decoded bigint.
      */
-    decode(data: Uint8Array): bigint;
+    decode(data: TArg<Uint8Array>): bigint;
   };
   /**
    * Parse a DER signature into `{ r, s }`.
-   * @param hex - DER signature bytes or hex.
+   * @param bytes - DER signature bytes.
    * @returns Parsed signature components.
    */
-  toSig(hex: string | Uint8Array): { r: bigint; s: bigint };
+  toSig(bytes: TArg<Uint8Array>): { r: bigint; s: bigint };
   /**
    * Encode `{ r, s }` as a DER signature.
    * @param sig - Signature components.
@@ -526,7 +555,12 @@ export const DER: IDER = {
   _tlv: {
     encode: (tag: number, data: string): string => {
       const { Err: E } = DER;
-      if (tag < 0 || tag > 256) throw new E('tlv.encode: wrong tag');
+      asafenumber(tag, 'tag');
+      if (tag < 0 || tag > 255) throw new E('tlv.encode: wrong tag');
+      if (typeof data !== 'string')
+        throw new TypeError('"data" expected string, got type=' + typeof data);
+      // Internal helper: callers hand this already-validated hex payload, so we only enforce
+      // byte alignment here instead of re-validating every nibble.
       if (data.length & 1) throw new E('tlv.encode: unpadded data');
       const dataLen = data.length / 2;
       const len = numberToHexUnpadded(dataLen);
@@ -537,20 +571,23 @@ export const DER: IDER = {
       return t + lenLen + len + data;
     },
     // v - value, l - left bytes (unparsed)
-    decode(tag: number, data: Uint8Array): { v: Uint8Array; l: Uint8Array } {
+    decode(tag: number, data: TArg<Uint8Array>): TRet<{ v: Uint8Array; l: Uint8Array }> {
       const { Err: E } = DER;
+      data = abytes(data, undefined, 'DER data');
       let pos = 0;
-      if (tag < 0 || tag > 256) throw new E('tlv.encode: wrong tag');
+      if (tag < 0 || tag > 255) throw new E('tlv.encode: wrong tag');
       if (data.length < 2 || data[pos++] !== tag) throw new E('tlv.decode: wrong tlv');
       const first = data[pos++];
-      const isLong = !!(first & 0b1000_0000); // First bit of first length byte is flag for short/long form
+      // First bit of first length byte is the short/long form flag.
+      const isLong = !!(first & 0b1000_0000);
       let length = 0;
       if (!isLong) length = first;
       else {
         // Long form: [longFlag(1bit), lengthLength(7bit), length (BE)]
         const lenLen = first & 0b0111_1111;
         if (!lenLen) throw new E('tlv.decode(long): indefinite length not supported');
-        if (lenLen > 4) throw new E('tlv.decode(long): byte length is too big'); // this will overflow u32 in js
+        // This would overflow u32 in JS.
+        if (lenLen > 4) throw new E('tlv.decode(long): byte length is too big');
         const lengthBytes = data.subarray(pos, pos + lenLen);
         if (lengthBytes.length !== lenLen) throw new E('tlv.decode: length bytes not complete');
         if (lengthBytes[0] === 0) throw new E('tlv.decode(long): zero leftmost byte');
@@ -560,7 +597,7 @@ export const DER: IDER = {
       }
       const v = data.subarray(pos, pos + length);
       if (v.length !== length) throw new E('tlv.decode: wrong value length');
-      return { v, l: data.subarray(pos + length) };
+      return { v, l: data.subarray(pos + length) } as TRet<{ v: Uint8Array; l: Uint8Array }>;
     },
   },
   // https://crypto.stackexchange.com/a/57734 Leftmost bit of first byte is 'negative' flag,
@@ -570,6 +607,7 @@ export const DER: IDER = {
   _int: {
     encode(num: bigint): string {
       const { Err: E } = DER;
+      abignumber(num);
       if (num < _0n) throw new E('integer: negative integers are not allowed');
       let hex = numberToHexUnpadded(num);
       // Pad with zero byte if negative flag is present
@@ -577,15 +615,17 @@ export const DER: IDER = {
       if (hex.length & 1) throw new E('unexpected DER parsing assertion: unpadded hex');
       return hex;
     },
-    decode(data: Uint8Array): bigint {
+    decode(data: TArg<Uint8Array>): bigint {
       const { Err: E } = DER;
+      if (data.length < 1) throw new E('invalid signature integer: empty');
       if (data[0] & 0b1000_0000) throw new E('invalid signature integer: negative');
-      if (data[0] === 0x00 && !(data[1] & 0b1000_0000))
+      // Single-byte zero `00` is the canonical DER INTEGER encoding for zero.
+      if (data.length > 1 && data[0] === 0x00 && !(data[1] & 0b1000_0000))
         throw new E('invalid signature integer: unnecessary leading zero');
       return bytesToNumberBE(data);
     },
   },
-  toSig(bytes: Uint8Array): { r: bigint; s: bigint } {
+  toSig(bytes: TArg<Uint8Array>): { r: bigint; s: bigint } {
     // parse DER signature
     const { Err: E, _int: int, _tlv: tlv } = DER;
     const data = abytes(bytes, undefined, 'signature');
@@ -604,6 +644,9 @@ export const DER: IDER = {
     return tlv.encode(0x30, seq);
   },
 };
+Object.freeze(DER._tlv);
+Object.freeze(DER._int);
+Object.freeze(DER);
 
 // Be friendly to bad ECMAScript parsers by not using bigint literals
 // prettier-ignore
@@ -639,7 +682,8 @@ export function weierstrass<T>(
   extraOpts: WeierstrassExtraOpts<T> = {}
 ): WeierstrassPointCons<T> {
   const validated = createCurveFields('weierstrass', params, extraOpts);
-  const { Fp, Fn } = validated;
+  const Fp = validated.Fp as IField<T>;
+  const Fn = validated.Fn as IField<bigint>;
   let CURVE = validated.CURVE as WeierstrassOpts<T>;
   const { h: cofactor, n: CURVE_ORDER } = CURVE;
   validateObject(
@@ -655,7 +699,9 @@ export function weierstrass<T>(
     }
   );
 
-  const { endo } = extraOpts;
+  // Snapshot constructor-time flags whose later mutation would otherwise change
+  // validity semantics of an already-built point type.
+  const { endo, allowInfinityPoint } = extraOpts;
   if (endo) {
     // validateObject(endo, { beta: 'bigint', splitScalar: 'function' });
     if (!Fp.is0(CURVE.a) || typeof endo.beta !== 'bigint' || !Array.isArray(endo.basises)) {
@@ -663,7 +709,7 @@ export function weierstrass<T>(
     }
   }
 
-  const lengths = getWLengths(Fp, Fn);
+  const lengths = getWLengths(Fp as TArg<IField<T>>, Fn);
 
   function assertCompressionIsSupported() {
     if (!Fp.isOdd) throw new Error('compression is not supported: Field does not have .isOdd()');
@@ -674,24 +720,33 @@ export function weierstrass<T>(
     _c: WeierstrassPointCons<T>,
     point: WeierstrassPoint<T>,
     isCompressed: boolean
-  ): Uint8Array {
+  ): TRet<Uint8Array> {
+    // SEC 1 v2.0 §2.3.3 encodes infinity as the single octet 0x00. Only curves
+    // that opt into infinity as a public point value should expose that byte form.
+    if (allowInfinityPoint && point.is0()) return Uint8Array.of(0) as TRet<Uint8Array>;
     const { x, y } = point.toAffine();
     const bx = Fp.toBytes(x);
     abool(isCompressed, 'isCompressed');
     if (isCompressed) {
       assertCompressionIsSupported();
       const hasEvenY = !Fp.isOdd!(y);
-      return concatBytes(pprefix(hasEvenY), bx);
+      return concatBytes(pprefix(hasEvenY), bx) as TRet<Uint8Array>;
     } else {
-      return concatBytes(Uint8Array.of(0x04), bx, Fp.toBytes(y));
+      return concatBytes(Uint8Array.of(0x04), bx, Fp.toBytes(y)) as TRet<Uint8Array>;
     }
   }
-  function pointFromBytes(bytes: Uint8Array) {
+  function pointFromBytes(bytes: TArg<Uint8Array>) {
     abytes(bytes, undefined, 'Point');
     const { publicKey: comp, publicKeyUncompressed: uncomp } = lengths; // e.g. for 32-byte: 33, 65
     const length = bytes.length;
     const head = bytes[0];
     const tail = bytes.subarray(1);
+    if (allowInfinityPoint && length === 1 && head === 0x00) return { x: Fp.ZERO, y: Fp.ZERO };
+    // SEC 1 v2.0 §2.3.4 decodes 0x00 as infinity, but §3.2.2 public-key validation
+    // rejects infinity. We therefore keep 0x00 rejected by default because callers
+    // reuse this parser as the strict public-key boundary, and only admit it when
+    // the curve explicitly opts into infinity as a public point value. secp256k1
+    // crosstests show OpenSSL raw point codecs accept 0x00 too.
     // No actual validation is done here: use .assertValidity()
     if (length === comp && (head === 0x02 || head === 0x03)) {
       const x = Fp.fromBytes(tail);
@@ -723,8 +778,8 @@ export function weierstrass<T>(
     }
   }
 
-  const encodePoint = extraOpts.toBytes || pointToBytes;
-  const decodePoint = extraOpts.fromBytes || pointFromBytes;
+  const encodePoint = extraOpts.toBytes === undefined ? pointToBytes : extraOpts.toBytes;
+  const decodePoint = extraOpts.fromBytes === undefined ? pointFromBytes : extraOpts.fromBytes;
   function weierstrassEquation(x: T): T {
     const x2 = Fp.sqr(x); // x * x
     const x3 = Fp.mul(x2, x); // x² * x
@@ -739,7 +794,8 @@ export function weierstrass<T>(
     return Fp.eql(left, right);
   }
 
-  // Validate whether the passed curve params are valid.
+  // Keep constructor-time generator validation cheap: callers are responsible for supplying the
+  // correct prime-order base point, while eager subgroup checks here would slow heavy module imports.
   // Test 1: equation y² = x³ + ax + b should work for generator point.
   if (!isValidXY(CURVE.Gx, CURVE.Gy)) throw new Error('bad curve params: generator point');
 
@@ -755,7 +811,7 @@ export function weierstrass<T>(
     return n;
   }
 
-  function aprjpoint(other: unknown) {
+  function aprjpoint(other: unknown): asserts other is Point {
     if (!(other instanceof Point)) throw new Error('Weierstrass Point expected');
   }
 
@@ -764,12 +820,10 @@ export function weierstrass<T>(
     return _splitEndoScalar(k, endo.basises, Fn.ORDER);
   }
 
-  // Memoized toAffine / validity check. They are heavy. Points are immutable.
-
   // Converts Projective point to affine (x, y) coordinates.
   // Can accept precomputed Z^-1 - for example, from invertBatch.
   // (X, Y, Z) ∋ (x=X/Z, y=Y/Z)
-  const toAffineMemo = memoized((p: Point, iz?: T): AffinePoint<T> => {
+  const pointToAffine = (p: Point, iz?: T): AffinePoint<T> => {
     const { X, Y, Z } = p;
     // Fast-path for normalized points
     if (Fp.eql(Z, Fp.ONE)) return { x: X, y: Y };
@@ -783,15 +837,14 @@ export function weierstrass<T>(
     if (is0) return { x: Fp.ZERO, y: Fp.ZERO };
     if (!Fp.eql(zz, Fp.ONE)) throw new Error('invZ was invalid');
     return { x, y };
-  });
-  // NOTE: on exception this will crash 'cached' and no value will be set.
-  // Otherwise true will be return
-  const assertValidMemo = memoized((p: Point) => {
+  };
+  const assertValid = (p: Point) => {
     if (p.is0()) {
       // (0, 1, 0) aka ZERO is invalid in most contexts.
       // In BLS, ZERO can be serialized, so we allow it.
-      // (0, 0, 0) is invalid representation of ZERO.
-      if (extraOpts.allowInfinityPoint && !Fp.is0(p.Y)) return;
+      // Keep the accepted infinity encoding canonical: projective-equivalent (X, Y, 0) points
+      // like (1, 1, 0) compare equal to ZERO, but only (0, 1, 0) should pass this guard.
+      if (extraOpts.allowInfinityPoint && Fp.is0(p.X) && Fp.eql(p.Y, Fp.ONE) && Fp.is0(p.Z)) return;
       throw new Error('bad point: ZERO');
     }
     // Some 3rd-party test vectors require different wording between here & `fromCompressedHex`
@@ -800,7 +853,7 @@ export function weierstrass<T>(
     if (!isValidXY(x, y)) throw new Error('bad point: equation left != right');
     if (!p.isTorsionFree()) throw new Error('bad point: not in prime-order subgroup');
     return true;
-  });
+  };
 
   function finishEndo(
     endoBeta: EndomorphismOpts['beta'],
@@ -837,6 +890,9 @@ export function weierstrass<T>(
     /** Does NOT validate if the point is valid. Use `.assertValidity()`. */
     constructor(X: T, Y: T, Z: T) {
       this.X = acoord('x', X);
+      // This is not just about ZERO / infinity: ambient curves can have real
+      // finite points with y=0. Those points are 2-torsion, so they cannot lie
+      // in the odd prime-order subgroups this point type is meant to represent.
       this.Y = acoord('y', Y, true);
       this.Z = acoord('z', Z);
       Object.freeze(this);
@@ -856,7 +912,7 @@ export function weierstrass<T>(
       return new Point(x, y, Fp.ONE);
     }
 
-    static fromBytes(bytes: Uint8Array): Point {
+    static fromBytes(bytes: TArg<Uint8Array>): Point {
       const P = Point.fromAffine(decodePoint(abytes(bytes, undefined, 'point')));
       P.assertValidity();
       return P;
@@ -888,7 +944,7 @@ export function weierstrass<T>(
     // TODO: return `this`
     /** A point on curve is valid if it conforms to equation. */
     assertValidity(): void {
-      assertValidMemo(this);
+      assertValid(this);
     }
 
     hasEvenY(): boolean {
@@ -898,7 +954,7 @@ export function weierstrass<T>(
     }
 
     /** Compare one point to another. */
-    equals(other: Point): boolean {
+    equals(other: WeierstrassPoint<T>): boolean {
       aprjpoint(other);
       const { X: X1, Y: Y1, Z: Z1 } = this;
       const { X: X2, Y: Y2, Z: Z2 } = other;
@@ -959,7 +1015,7 @@ export function weierstrass<T>(
     // There is 30% faster Jacobian formula, but it is not complete.
     // https://eprint.iacr.org/2015/1060, algorithm 1
     // Cost: 12M + 0S + 3*a + 3*b3 + 23add.
-    add(other: Point): Point {
+    add(other: WeierstrassPoint<T>): Point {
       aprjpoint(other);
       const { X: X1, Y: Y1, Z: Z1 } = this;
       const { X: X2, Y: Y2, Z: Z2 } = other;
@@ -1009,7 +1065,10 @@ export function weierstrass<T>(
       return new Point(X3, Y3, Z3);
     }
 
-    subtract(other: Point) {
+    subtract(other: WeierstrassPoint<T>) {
+      // Validate before calling `negate()` so wrong inputs fail with the point guard
+      // instead of leaking a foreign `negate()` error.
+      aprjpoint(other);
       return this.add(other.negate());
     }
 
@@ -1028,7 +1087,10 @@ export function weierstrass<T>(
      */
     multiply(scalar: bigint): Point {
       const { endo } = extraOpts;
-      if (!Fn.isValidNot0(scalar)) throw new Error('invalid scalar: out of range'); // 0 is invalid
+      // Keep the subgroup-scalar contract strict instead of reducing 0 / n to ZERO.
+      // In key/signature-style callers, those values usually mean broken hash/scalar plumbing,
+      // and failing closed is safer than silently producing the identity point.
+      if (!Fn.isValidNot0(scalar)) throw new RangeError('invalid scalar: out of range'); // 0 is invalid
       let point: Point, fake: Point; // Fake point is used to const-time mult
       const mul = (n: bigint) => wnaf.cached(this, n, (p) => normalizeZ(Point, p));
       /** See docs for {@link EndomorphismOpts} */
@@ -1055,7 +1117,9 @@ export function weierstrass<T>(
     multiplyUnsafe(sc: bigint): Point {
       const { endo } = extraOpts;
       const p = this as Point;
-      if (!Fn.isValid(sc)) throw new Error('invalid scalar: out of range'); // 0 is valid
+      // Public-scalar callers may need 0, but n and larger values stay rejected here too.
+      // Reducing them mod n would turn bad caller input into an accidental identity point.
+      if (!Fn.isValid(sc)) throw new RangeError('invalid scalar: out of range'); // 0 is valid
       if (sc === _0n || p.is0()) return Point.ZERO; // 0
       if (sc === _1n) return p; // 1
       if (wnaf.hasCache(this)) return this.multiply(sc); // precomputes
@@ -1075,7 +1139,7 @@ export function weierstrass<T>(
      * @param invertedZ - Z^-1 (inverted zero) - optional, precomputation is useful for invertBatch
      */
     toAffine(invertedZ?: T): AffinePoint<T> {
-      return toAffineMemo(this, invertedZ);
+      return pointToAffine(this, invertedZ);
     }
 
     /**
@@ -1093,16 +1157,21 @@ export function weierstrass<T>(
       const { clearCofactor } = extraOpts;
       if (cofactor === _1n) return this; // Fast-path
       if (clearCofactor) return clearCofactor(Point, this) as Point;
+      // Default fallback assumes the cofactor fits the usual subgroup-scalar
+      // multiplyUnsafe() contract. Curves with larger / structured cofactors
+      // should define a clearCofactor override anyway (e.g. psi/Frobenius maps).
       return this.multiplyUnsafe(cofactor);
     }
 
     isSmallOrder(): boolean {
-      // can we use this.clearCofactor()?
-      return this.multiplyUnsafe(cofactor).is0();
+      if (cofactor === _1n) return this.is0(); // Fast-path
+      return this.clearCofactor().is0();
     }
 
-    toBytes(isCompressed = true): Uint8Array {
+    toBytes(isCompressed = true): TRet<Uint8Array> {
       abool(isCompressed, 'isCompressed');
+      // Same policy as pointFromBytes(): keep ZERO out of the default byte surface because
+      // callers use these encodings as public keys, where SEC 1 validation rejects infinity.
       this.assertValidity();
       return encodePoint(Point, this, isCompressed);
     }
@@ -1117,7 +1186,11 @@ export function weierstrass<T>(
   }
   const bits = Fn.BITS;
   const wnaf = new wNAF(Point, extraOpts.endo ? Math.ceil(bits / 2) : bits);
-  Point.BASE.precompute(8); // Enable precomputes. Slows down first publicKey computation by 20ms.
+  // Tiny toy curves can have scalar fields narrower than 8 bits. Skip the
+  // eager W=8 cache there instead of rejecting an otherwise valid constructor.
+  if (bits >= 8) Point.BASE.precompute(8); // Enable precomputes. Slows down first publicKey computation by 20ms.
+  Object.freeze(Point.prototype);
+  Object.freeze(Point);
   return Point;
 }
 
@@ -1145,13 +1218,13 @@ export interface ECDSASignature {
    * @param messageHash - Hashed message bytes.
    * @returns Recovered public-key point.
    */
-  recoverPublicKey(messageHash: Uint8Array): WeierstrassPoint<bigint>;
+  recoverPublicKey(messageHash: TArg<Uint8Array>): WeierstrassPoint<bigint>;
   /**
    * Encode the signature into bytes.
    * @param format - Signature encoding to produce.
    * @returns Encoded signature bytes.
    */
-  toBytes(format?: string): Uint8Array;
+  toBytes(format?: string): TRet<Uint8Array>;
   /**
    * Encode the signature into hex.
    * @param format - Signature encoding to produce.
@@ -1169,7 +1242,7 @@ export type ECDSASignatureCons = {
    * @param format - Signature encoding to parse.
    * @returns Parsed signature.
    */
-  fromBytes(bytes: Uint8Array, format?: ECDSASignatureFormat): ECDSASignature;
+  fromBytes(bytes: TArg<Uint8Array>, format?: ECDSASignatureFormat): ECDSASignature;
   /**
    * Decode a signature from hex.
    * @param hex - Encoded signature hex.
@@ -1180,8 +1253,8 @@ export type ECDSASignatureCons = {
 };
 
 // Points start with byte 0x02 when y is even; otherwise 0x03
-function pprefix(hasEvenY: boolean): Uint8Array {
-  return Uint8Array.of(hasEvenY ? 0x02 : 0x03);
+function pprefix(hasEvenY: boolean): TRet<Uint8Array> {
+  return Uint8Array.of(hasEvenY ? 0x02 : 0x03) as TRet<Uint8Array>;
 }
 
 /**
@@ -1189,6 +1262,7 @@ function pprefix(hasEvenY: boolean): Uint8Array {
  * TODO: check if there is a way to merge this with uvRatio in Edwards; move to modular.
  * b = True and y = sqrt(u / v) if (u / v) is square in F, and
  * b = False and y = sqrt(Z * (u / v)) otherwise.
+ * RFC 9380 expects callers to provide `v != 0`; this helper does not enforce it.
  * @param Fp - Field implementation.
  * @param Z - Simplified SWU map parameter.
  * @returns Square-root ratio helper.
@@ -1204,11 +1278,13 @@ function pprefix(hasEvenY: boolean): Uint8Array {
  * ```
  */
 export function SWUFpSqrtRatio<T>(
-  Fp: IField<T>,
+  Fp: TArg<IField<T>>,
   Z: T
 ): (u: T, v: T) => { isValid: boolean; value: T } {
+  // Fail with the usual field-shape error before touching pow/cmov on malformed field shims.
+  const F = validateField(Fp as IField<T>) as IField<T>;
   // Generic implementation
-  const q = Fp.ORDER;
+  const q = F.ORDER;
   let l = _0n;
   for (let o = q - _1n; o % _2n === _0n; o /= _2n) l += _1n;
   const c1 = l; // 1. c1, the largest integer such that 2^c1 divides q - 1.
@@ -1220,54 +1296,60 @@ export function SWUFpSqrtRatio<T>(
   const c3 = (c2 - _1n) / _2n; // 3. c3 = (c2 - 1) / 2            # Integer arithmetic
   const c4 = _2n_pow_c1 - _1n; // 4. c4 = 2^c1 - 1                # Integer arithmetic
   const c5 = _2n_pow_c1_1; // 5. c5 = 2^(c1 - 1)                  # Integer arithmetic
-  const c6 = Fp.pow(Z, c2); // 6. c6 = Z^c2
-  const c7 = Fp.pow(Z, (c2 + _1n) / _2n); // 7. c7 = Z^((c2 + 1) / 2)
+  const c6 = F.pow(Z, c2); // 6. c6 = Z^c2
+  const c7 = F.pow(Z, (c2 + _1n) / _2n); // 7. c7 = Z^((c2 + 1) / 2)
+  // RFC 9380 Appendix F.2.1.1 defines sqrt_ratio(u, v) only for v != 0.
+  // We keep v=0 on the regular result path with isValid=false instead of
+  // throwing so the helper stays closer to the RFC's fixed control flow.
   let sqrtRatio = (u: T, v: T): { isValid: boolean; value: T } => {
     let tv1 = c6; // 1. tv1 = c6
-    let tv2 = Fp.pow(v, c4); // 2. tv2 = v^c4
-    let tv3 = Fp.sqr(tv2); // 3. tv3 = tv2^2
-    tv3 = Fp.mul(tv3, v); // 4. tv3 = tv3 * v
-    let tv5 = Fp.mul(u, tv3); // 5. tv5 = u * tv3
-    tv5 = Fp.pow(tv5, c3); // 6. tv5 = tv5^c3
-    tv5 = Fp.mul(tv5, tv2); // 7. tv5 = tv5 * tv2
-    tv2 = Fp.mul(tv5, v); // 8. tv2 = tv5 * v
-    tv3 = Fp.mul(tv5, u); // 9. tv3 = tv5 * u
-    let tv4 = Fp.mul(tv3, tv2); // 10. tv4 = tv3 * tv2
-    tv5 = Fp.pow(tv4, c5); // 11. tv5 = tv4^c5
-    let isQR = Fp.eql(tv5, Fp.ONE); // 12. isQR = tv5 == 1
-    tv2 = Fp.mul(tv3, c7); // 13. tv2 = tv3 * c7
-    tv5 = Fp.mul(tv4, tv1); // 14. tv5 = tv4 * tv1
-    tv3 = Fp.cmov(tv2, tv3, isQR); // 15. tv3 = CMOV(tv2, tv3, isQR)
-    tv4 = Fp.cmov(tv5, tv4, isQR); // 16. tv4 = CMOV(tv5, tv4, isQR)
+    let tv2 = F.pow(v, c4); // 2. tv2 = v^c4
+    let tv3 = F.sqr(tv2); // 3. tv3 = tv2^2
+    tv3 = F.mul(tv3, v); // 4. tv3 = tv3 * v
+    let tv5 = F.mul(u, tv3); // 5. tv5 = u * tv3
+    tv5 = F.pow(tv5, c3); // 6. tv5 = tv5^c3
+    tv5 = F.mul(tv5, tv2); // 7. tv5 = tv5 * tv2
+    tv2 = F.mul(tv5, v); // 8. tv2 = tv5 * v
+    tv3 = F.mul(tv5, u); // 9. tv3 = tv5 * u
+    let tv4 = F.mul(tv3, tv2); // 10. tv4 = tv3 * tv2
+    tv5 = F.pow(tv4, c5); // 11. tv5 = tv4^c5
+    let isQR = F.eql(tv5, F.ONE); // 12. isQR = tv5 == 1
+    tv2 = F.mul(tv3, c7); // 13. tv2 = tv3 * c7
+    tv5 = F.mul(tv4, tv1); // 14. tv5 = tv4 * tv1
+    tv3 = F.cmov(tv2, tv3, isQR); // 15. tv3 = CMOV(tv2, tv3, isQR)
+    tv4 = F.cmov(tv5, tv4, isQR); // 16. tv4 = CMOV(tv5, tv4, isQR)
     // 17. for i in (c1, c1 - 1, ..., 2):
     for (let i = c1; i > _1n; i--) {
       let tv5 = i - _2n; // 18.    tv5 = i - 2
       tv5 = _2n << (tv5 - _1n); // 19.    tv5 = 2^tv5
-      let tvv5 = Fp.pow(tv4, tv5); // 20.    tv5 = tv4^tv5
-      const e1 = Fp.eql(tvv5, Fp.ONE); // 21.    e1 = tv5 == 1
-      tv2 = Fp.mul(tv3, tv1); // 22.    tv2 = tv3 * tv1
-      tv1 = Fp.mul(tv1, tv1); // 23.    tv1 = tv1 * tv1
-      tvv5 = Fp.mul(tv4, tv1); // 24.    tv5 = tv4 * tv1
-      tv3 = Fp.cmov(tv2, tv3, e1); // 25.    tv3 = CMOV(tv2, tv3, e1)
-      tv4 = Fp.cmov(tvv5, tv4, e1); // 26.    tv4 = CMOV(tv5, tv4, e1)
+      let tvv5 = F.pow(tv4, tv5); // 20.    tv5 = tv4^tv5
+      const e1 = F.eql(tvv5, F.ONE); // 21.    e1 = tv5 == 1
+      tv2 = F.mul(tv3, tv1); // 22.    tv2 = tv3 * tv1
+      tv1 = F.mul(tv1, tv1); // 23.    tv1 = tv1 * tv1
+      tvv5 = F.mul(tv4, tv1); // 24.    tv5 = tv4 * tv1
+      tv3 = F.cmov(tv2, tv3, e1); // 25.    tv3 = CMOV(tv2, tv3, e1)
+      tv4 = F.cmov(tvv5, tv4, e1); // 26.    tv4 = CMOV(tv5, tv4, e1)
     }
-    return { isValid: isQR, value: tv3 };
+    // RFC 9380 Appendix F.2.1.1 defines sqrt_ratio(u, v) for v != 0.
+    // When u = 0 and v != 0, u / v = 0 is square and the computed root is
+    // still 0, so widen only the final flag and keep the full control flow.
+    return { isValid: !F.is0(v) && (isQR || F.is0(u)), value: tv3 };
   };
-  if (Fp.ORDER % _4n === _3n) {
+  if (F.ORDER % _4n === _3n) {
     // sqrt_ratio_3mod4(u, v)
-    const c1 = (Fp.ORDER - _3n) / _4n; // 1. c1 = (q - 3) / 4     # Integer arithmetic
-    const c2 = Fp.sqrt(Fp.neg(Z)); // 2. c2 = sqrt(-Z)
+    const c1 = (F.ORDER - _3n) / _4n; // 1. c1 = (q - 3) / 4     # Integer arithmetic
+    const c2 = F.sqrt(F.neg(Z)); // 2. c2 = sqrt(-Z)
     sqrtRatio = (u: T, v: T) => {
-      let tv1 = Fp.sqr(v); // 1. tv1 = v^2
-      const tv2 = Fp.mul(u, v); // 2. tv2 = u * v
-      tv1 = Fp.mul(tv1, tv2); // 3. tv1 = tv1 * tv2
-      let y1 = Fp.pow(tv1, c1); // 4. y1 = tv1^c1
-      y1 = Fp.mul(y1, tv2); // 5. y1 = y1 * tv2
-      const y2 = Fp.mul(y1, c2); // 6. y2 = y1 * c2
-      const tv3 = Fp.mul(Fp.sqr(y1), v); // 7. tv3 = y1^2; 8. tv3 = tv3 * v
-      const isQR = Fp.eql(tv3, u); // 9. isQR = tv3 == u
-      let y = Fp.cmov(y2, y1, isQR); // 10. y = CMOV(y2, y1, isQR)
-      return { isValid: isQR, value: y }; // 11. return (isQR, y) isQR ? y : y*c2
+      let tv1 = F.sqr(v); // 1. tv1 = v^2
+      const tv2 = F.mul(u, v); // 2. tv2 = u * v
+      tv1 = F.mul(tv1, tv2); // 3. tv1 = tv1 * tv2
+      let y1 = F.pow(tv1, c1); // 4. y1 = tv1^c1
+      y1 = F.mul(y1, tv2); // 5. y1 = y1 * tv2
+      const y2 = F.mul(y1, c2); // 6. y2 = y1 * c2
+      const tv3 = F.mul(F.sqr(y1), v); // 7. tv3 = y1^2; 8. tv3 = tv3 * v
+      const isQR = F.eql(tv3, u); // 9. isQR = tv3 == u
+      let y = F.cmov(y2, y1, isQR); // 10. y = CMOV(y2, y1, isQR)
+      return { isValid: !F.is0(v) && isQR, value: y }; // 11. return (isQR, y) isQR ? y : y*c2
     };
   }
   // No curves uses that
@@ -1296,60 +1378,79 @@ export function SWUFpSqrtRatio<T>(
  * ```
  */
 export function mapToCurveSimpleSWU<T>(
-  Fp: IField<T>,
+  Fp: TArg<IField<T>>,
   opts: {
     A: T;
     B: T;
     Z: T;
   }
 ): (u: T) => { x: T; y: T } {
-  validateField(Fp);
+  const F = validateField(Fp as IField<T>) as IField<T>;
   const { A, B, Z } = opts;
-  if (!Fp.isValid(A) || !Fp.isValid(B) || !Fp.isValid(Z))
+  if (!F.isValidNot0(A) || !F.isValidNot0(B) || !F.isValid(Z))
     throw new Error('mapToCurveSimpleSWU: invalid opts');
-  const sqrtRatio = SWUFpSqrtRatio(Fp, Z);
-  if (!Fp.isOdd) throw new Error('Field does not have .isOdd()');
+  // RFC 9380 §6.6.2 and Appendix H.2 require:
+  // 1. Z is non-square in F
+  // 2. Z != -1 in F
+  // 3. g(x) - Z is irreducible over F
+  // 4. g(B / (Z * A)) is square in F
+  // We can enforce 1, 2, and 4 with the current field API.
+  // Criterion 3 is not checked here because generic `IField<T>` does not expose
+  // polynomial-ring / irreducibility operations, and this helper is used for
+  // both prime and extension fields.
+  if (F.eql(Z, F.neg(F.ONE)) || FpIsSquare(F, Z))
+    throw new Error('mapToCurveSimpleSWU: invalid opts');
+  // RFC 9380 Appendix H.2 criterion 4: g(B / (Z * A)) is square in F.
+  // x = B / (Z * A)
+  const x = F.mul(B, F.inv(F.mul(Z, A)));
+  // g(x) = x^3 + A*x + B
+  const gx = F.add(F.add(F.mul(F.sqr(x), x), F.mul(A, x)), B);
+  if (!FpIsSquare(F, gx)) throw new Error('mapToCurveSimpleSWU: invalid opts');
+  const sqrtRatio = SWUFpSqrtRatio(F, Z);
+  if (!F.isOdd) throw new Error('Field does not have .isOdd()');
   // Input: u, an element of F.
   // Output: (x, y), a point on E.
   return (u: T): { x: T; y: T } => {
     // prettier-ignore
     let tv1, tv2, tv3, tv4, tv5, tv6, x, y;
-    tv1 = Fp.sqr(u); // 1.  tv1 = u^2
-    tv1 = Fp.mul(tv1, Z); // 2.  tv1 = Z * tv1
-    tv2 = Fp.sqr(tv1); // 3.  tv2 = tv1^2
-    tv2 = Fp.add(tv2, tv1); // 4.  tv2 = tv2 + tv1
-    tv3 = Fp.add(tv2, Fp.ONE); // 5.  tv3 = tv2 + 1
-    tv3 = Fp.mul(tv3, B); // 6.  tv3 = B * tv3
-    tv4 = Fp.cmov(Z, Fp.neg(tv2), !Fp.eql(tv2, Fp.ZERO)); // 7.  tv4 = CMOV(Z, -tv2, tv2 != 0)
-    tv4 = Fp.mul(tv4, A); // 8.  tv4 = A * tv4
-    tv2 = Fp.sqr(tv3); // 9.  tv2 = tv3^2
-    tv6 = Fp.sqr(tv4); // 10. tv6 = tv4^2
-    tv5 = Fp.mul(tv6, A); // 11. tv5 = A * tv6
-    tv2 = Fp.add(tv2, tv5); // 12. tv2 = tv2 + tv5
-    tv2 = Fp.mul(tv2, tv3); // 13. tv2 = tv2 * tv3
-    tv6 = Fp.mul(tv6, tv4); // 14. tv6 = tv6 * tv4
-    tv5 = Fp.mul(tv6, B); // 15. tv5 = B * tv6
-    tv2 = Fp.add(tv2, tv5); // 16. tv2 = tv2 + tv5
-    x = Fp.mul(tv1, tv3); // 17.   x = tv1 * tv3
+    tv1 = F.sqr(u); // 1.  tv1 = u^2
+    tv1 = F.mul(tv1, Z); // 2.  tv1 = Z * tv1
+    tv2 = F.sqr(tv1); // 3.  tv2 = tv1^2
+    tv2 = F.add(tv2, tv1); // 4.  tv2 = tv2 + tv1
+    tv3 = F.add(tv2, F.ONE); // 5.  tv3 = tv2 + 1
+    tv3 = F.mul(tv3, B); // 6.  tv3 = B * tv3
+    tv4 = F.cmov(Z, F.neg(tv2), !F.eql(tv2, F.ZERO)); // 7.  tv4 = CMOV(Z, -tv2, tv2 != 0)
+    tv4 = F.mul(tv4, A); // 8.  tv4 = A * tv4
+    tv2 = F.sqr(tv3); // 9.  tv2 = tv3^2
+    tv6 = F.sqr(tv4); // 10. tv6 = tv4^2
+    tv5 = F.mul(tv6, A); // 11. tv5 = A * tv6
+    tv2 = F.add(tv2, tv5); // 12. tv2 = tv2 + tv5
+    tv2 = F.mul(tv2, tv3); // 13. tv2 = tv2 * tv3
+    tv6 = F.mul(tv6, tv4); // 14. tv6 = tv6 * tv4
+    tv5 = F.mul(tv6, B); // 15. tv5 = B * tv6
+    tv2 = F.add(tv2, tv5); // 16. tv2 = tv2 + tv5
+    x = F.mul(tv1, tv3); // 17.   x = tv1 * tv3
     const { isValid, value } = sqrtRatio(tv2, tv6); // 18. (is_gx1_square, y1) = sqrt_ratio(tv2, tv6)
-    y = Fp.mul(tv1, u); // 19.   y = tv1 * u  -> Z * u^3 * y1
-    y = Fp.mul(y, value); // 20.   y = y * y1
-    x = Fp.cmov(x, tv3, isValid); // 21.   x = CMOV(x, tv3, is_gx1_square)
-    y = Fp.cmov(y, value, isValid); // 22.   y = CMOV(y, y1, is_gx1_square)
-    const e1 = Fp.isOdd!(u) === Fp.isOdd!(y); // 23.  e1 = sgn0(u) == sgn0(y)
-    y = Fp.cmov(Fp.neg(y), y, e1); // 24.   y = CMOV(-y, y, e1)
-    const tv4_inv = FpInvertBatch(Fp, [tv4], true)[0];
-    x = Fp.mul(x, tv4_inv); // 25.   x = x / tv4
+    y = F.mul(tv1, u); // 19.   y = tv1 * u  -> Z * u^3 * y1
+    y = F.mul(y, value); // 20.   y = y * y1
+    x = F.cmov(x, tv3, isValid); // 21.   x = CMOV(x, tv3, is_gx1_square)
+    y = F.cmov(y, value, isValid); // 22.   y = CMOV(y, y1, is_gx1_square)
+    const e1 = F.isOdd!(u) === F.isOdd!(y); // 23.  e1 = sgn0(u) == sgn0(y)
+    y = F.cmov(F.neg(y), y, e1); // 24.   y = CMOV(-y, y, e1)
+    const tv4_inv = FpInvertBatch(F, [tv4], true)[0];
+    x = F.mul(x, tv4_inv); // 25.   x = x / tv4
     return { x, y };
   };
 }
 
-function getWLengths<T>(Fp: IField<T>, Fn: IField<bigint>) {
+function getWLengths<T>(Fp: TArg<IField<T>>, Fn: TArg<IField<bigint>>) {
   return {
     secretKey: Fn.BYTES,
     publicKey: 1 + Fp.BYTES,
     publicKeyUncompressed: 1 + 2 * Fp.BYTES,
     publicKeyHasPrefix: true,
+    // Raw compact `(r || s)` signature width; DER and recovered signatures use
+    // different lengths outside this helper.
     signature: 2 * Fn.BYTES,
   };
 }
@@ -1374,13 +1475,17 @@ function getWLengths<T>(Fp: IField<T>, Fn: IField<bigint>) {
  */
 export function ecdh(
   Point: WeierstrassPointCons<bigint>,
-  ecdhOpts: { randomBytes?: (bytesLength?: number) => Uint8Array } = {}
+  ecdhOpts: TArg<{ randomBytes?: (bytesLength?: number) => TRet<Uint8Array> }> = {}
 ): ECDH {
   const { Fn } = Point;
-  const randomBytes_ = ecdhOpts.randomBytes || wcRandomBytes;
-  const lengths = Object.assign(getWLengths(Point.Fp, Fn), { seed: getMinHashLength(Fn.ORDER) });
+  const randomBytes_ = ecdhOpts.randomBytes === undefined ? wcRandomBytes : ecdhOpts.randomBytes;
+  // Keep the advertised seed length aligned with mapHashToField(), which keeps a hard 16-byte
+  // minimum even on toy curves.
+  const lengths = Object.assign(getWLengths(Point.Fp, Fn), {
+    seed: Math.max(getMinHashLength(Fn.ORDER), 16),
+  });
 
-  function isValidSecretKey(secretKey: Uint8Array) {
+  function isValidSecretKey(secretKey: TArg<Uint8Array>) {
     try {
       const num = Fn.fromBytes(secretKey);
       return Fn.isValidNot0(num);
@@ -1389,7 +1494,7 @@ export function ecdh(
     }
   }
 
-  function isValidPublicKey(publicKey: Uint8Array, isCompressed?: boolean): boolean {
+  function isValidPublicKey(publicKey: TArg<Uint8Array>, isCompressed?: boolean): boolean {
     const { publicKey: comp, publicKeyUncompressed } = lengths;
     try {
       const l = publicKey.length;
@@ -1405,8 +1510,9 @@ export function ecdh(
    * Produces cryptographically secure secret key from random of size
    * (groupLen + ceil(groupLen / 2)) with modulo bias being negligible.
    */
-  function randomSecretKey(seed = randomBytes_(lengths.seed)): Uint8Array {
-    return mapHashToField(abytes(seed, lengths.seed, 'seed'), Fn.ORDER);
+  function randomSecretKey(seed?: TArg<Uint8Array>): TRet<Uint8Array> {
+    seed = seed === undefined ? randomBytes_(lengths.seed) : seed;
+    return mapHashToField(abytes(seed, lengths.seed, 'seed'), Fn.ORDER) as TRet<Uint8Array>;
   }
 
   /**
@@ -1414,34 +1520,42 @@ export function ecdh(
    * @param isCompressed - whether to return compact (default), or full key
    * @returns Public key, full when isCompressed=false; short when isCompressed=true
    */
-  function getPublicKey(secretKey: Uint8Array, isCompressed = true): Uint8Array {
+  function getPublicKey(secretKey: TArg<Uint8Array>, isCompressed = true): TRet<Uint8Array> {
     return Point.BASE.multiply(Fn.fromBytes(secretKey)).toBytes(isCompressed);
   }
 
   /**
    * Quick and dirty check for item being public key. Does not validate hex, or being on-curve.
    */
-  function isProbPub(item: Uint8Array): boolean | undefined {
+  function isProbPub(item: TArg<Uint8Array>): boolean | undefined {
     const { secretKey, publicKey, publicKeyUncompressed } = lengths;
+    const allowedLengths = (Fn as { _lengths?: readonly number[] })._lengths;
     if (!isBytes(item)) return undefined;
-    if (('_lengths' in Fn && Fn._lengths) || secretKey === publicKey) return undefined;
     const l = abytes(item, undefined, 'key').length;
-    return l === publicKey || l === publicKeyUncompressed;
+    const isPub = l === publicKey || l === publicKeyUncompressed;
+    const isSec = l === secretKey || !!allowedLengths?.includes(l);
+    // P-521 accepts both 65- and 66-byte secret keys, so overlapping lengths stay ambiguous.
+    if (isPub && isSec) return undefined;
+    return isPub;
   }
 
   /**
    * ECDH (Elliptic Curve Diffie Hellman).
-   * Computes shared public key from secret key A and public key B.
+   * Computes encoded shared point from secret key A and public key B.
    * Checks: 1) secret key validity 2) shared key is on-curve.
-   * Does NOT hash the result.
+   * Does NOT hash the result or expose the SEC 1 x-coordinate-only `z`.
+   * Returns the encoded shared point on purpose: callers that need `x_P`
+   * can derive it from the encoded point, but `x_P` alone cannot recover the
+   * point/parity back.
+   * This helper only exposes the fully validated public-key path, not cofactor DH.
    * @param isCompressed - whether to return compact (default), or full key
-   * @returns shared public key
+   * @returns shared point encoding
    */
   function getSharedSecret(
-    secretKeyA: Uint8Array,
-    publicKeyB: Uint8Array,
+    secretKeyA: TArg<Uint8Array>,
+    publicKeyB: TArg<Uint8Array>,
     isCompressed = true
-  ): Uint8Array {
+  ): TRet<Uint8Array> {
     if (isProbPub(secretKeyA) === true) throw new Error('first arg must be private key');
     if (isProbPub(publicKeyB) === false) throw new Error('second arg must be public key');
     const s = Fn.fromBytes(secretKeyA);
@@ -1455,6 +1569,8 @@ export function ecdh(
     randomSecretKey,
   };
   const keygen = createKeygen(randomSecretKey, getPublicKey);
+  Object.freeze(utils);
+  Object.freeze(lengths);
 
   return Object.freeze({ getPublicKey, getSharedSecret, keygen, Point, utils, lengths });
 }
@@ -1488,10 +1604,12 @@ export function ecdh(
  */
 export function ecdsa(
   Point: WeierstrassPointCons<bigint>,
-  hash: CHash,
-  ecdsaOpts: ECDSAOpts = {}
+  hash: TArg<CHash>,
+  ecdsaOpts: TArg<ECDSAOpts> = {}
 ): ECDSA {
-  ahash(hash);
+  // Custom hash / bits2int hooks are treated as pure functions over validated caller-owned bytes.
+  const hash_ = hash as CHash;
+  ahash(hash_);
   validateObject(
     ecdsaOpts,
     {},
@@ -1504,8 +1622,11 @@ export function ecdsa(
     }
   );
   ecdsaOpts = Object.assign({}, ecdsaOpts);
-  const randomBytes = ecdsaOpts.randomBytes || wcRandomBytes;
-  const hmac = ecdsaOpts.hmac || ((key, msg) => nobleHmac(hash, key, msg));
+  const randomBytes = ecdsaOpts.randomBytes === undefined ? wcRandomBytes : ecdsaOpts.randomBytes;
+  const hmac =
+    ecdsaOpts.hmac === undefined
+      ? (key: TArg<Uint8Array>, msg: TArg<Uint8Array>) => nobleHmac(hash_, key, msg)
+      : (ecdsaOpts.hmac as HmacFn);
 
   const { Fp, Fn } = Point;
   const { ORDER: CURVE_ORDER, BITS: fnBits } = Fn;
@@ -1516,7 +1637,11 @@ export function ecdsa(
     format: 'compact' as ECDSASignatureFormat,
     extraEntropy: false,
   };
-  const hasLargeCofactor = CURVE_ORDER * _2n < Fp.ORDER; // Won't CURVE().h > 2n be more effective?
+  // SEC 1 4.1.6 public-key recovery tries x = r + jn for j = 0..h. Our recovered-signature
+  // format only stores one overflow bit, so it can only distinguish q.x = r from q.x = r + n.
+  // A third lift would have the form q.x = r + 2n. Since valid ECDSA r is in 1..n-1, the
+  // smallest such lift is 1 + 2n, not 2n.
+  const hasLargeRecoveryLifts = CURVE_ORDER * _2n + _1n < Fp.ORDER;
 
   function isBiggerThanHalfOrder(number: bigint) {
     const HALF = CURVE_ORDER >> _1n;
@@ -1527,19 +1652,18 @@ export function ecdsa(
       throw new Error(`invalid signature ${title}: out of range 1..Point.Fn.ORDER`);
     return num;
   }
-  function assertSmallCofactor(): void {
-    // ECDSA recovery is hard for cofactor > 1 curves.
-    // In sign, `r = q.x mod n`, and here we recover q.x from r.
-    // While recovering q.x >= n, we need to add r+n for cofactor=1 curves.
-    // However, for cofactor>1, r+n may not get q.x:
-    // r+n*i would need to be done instead where i is unknown.
+  function assertRecoverableCurve(): void {
+    // ECDSA recovery only supports curves where the current recovery id can distinguish
+    // q.x = r and q.x = r + n; larger lifts may need additional `r + n*i` branches.
+    // SEC 1 4.1.6 recovers candidates via x = r + jn, but this format only encodes j = 0 or 1.
+    // The next possible candidate is q.x = r + 2n, and its smallest valid value is 1 + 2n.
     // To easily get i, we either need to:
     // a. increase amount of valid recid values (4, 5...); OR
-    // b. prohibit non-prime-order signatures (recid > 1).
-    if (hasLargeCofactor)
+    // b. prohibit recovered signatures for those curves.
+    if (hasLargeRecoveryLifts)
       throw new Error('"recovered" sig type is not supported for cofactor >2 curves');
   }
-  function validateSigLength(bytes: Uint8Array, format: ECDSASignatureFormat) {
+  function validateSigLength(bytes: TArg<Uint8Array>, format: ECDSASignatureFormat) {
     validateSigFormat(format);
     const size = lengths.signature!;
     const sizer = format === 'compact' ? size : format === 'recovered' ? size + 1 : undefined;
@@ -1558,7 +1682,7 @@ export function ecdsa(
       this.r = validateRS('r', r); // r in [1..N-1];
       this.s = validateRS('s', s); // s in [1..N-1];
       if (recovery != null) {
-        assertSmallCofactor();
+        assertRecoverableCurve();
         if (![0, 1, 2, 3].includes(recovery)) throw new Error('invalid recovery id');
         this.recovery = recovery;
       }
@@ -1566,7 +1690,7 @@ export function ecdsa(
     }
 
     static fromBytes(
-      bytes: Uint8Array,
+      bytes: TArg<Uint8Array>,
       format: ECDSASignatureFormat = defaultSigOpts.format
     ): Signature {
       validateSigLength(bytes, format);
@@ -1600,7 +1724,9 @@ export function ecdsa(
       return new Signature(this.r, this.s, recovery) as RecoveredSignature;
     }
 
-    recoverPublicKey(messageHash: Uint8Array): WeierstrassPoint<bigint> {
+    // Unlike the top-level helper below, this method expects a digest that has
+    // already been hashed to the curve's message representative.
+    recoverPublicKey(messageHash: TArg<Uint8Array>): WeierstrassPoint<bigint> {
       const { r, s } = this;
       const recovery = this.assertRecovery();
       const radj = recovery === 2 || recovery === 3 ? r + CURVE_ORDER : r;
@@ -1623,17 +1749,17 @@ export function ecdsa(
       return isBiggerThanHalfOrder(this.s);
     }
 
-    toBytes(format: ECDSASignatureFormat = defaultSigOpts.format) {
+    toBytes(format: ECDSASignatureFormat = defaultSigOpts.format): TRet<Uint8Array> {
       validateSigFormat(format);
-      if (format === 'der') return hexToBytes(DER.hexFromSig(this));
+      if (format === 'der') return hexToBytes(DER.hexFromSig(this)) as TRet<Uint8Array>;
       const { r, s } = this;
       const rb = Fn.toBytes(r);
       const sb = Fn.toBytes(s);
       if (format === 'recovered') {
-        assertSmallCofactor();
-        return concatBytes(Uint8Array.of(this.assertRecovery()), rb, sb);
+        assertRecoverableCurve();
+        return concatBytes(Uint8Array.of(this.assertRecovery()), rb, sb) as TRet<Uint8Array>;
       }
-      return concatBytes(rb, sb);
+      return concatBytes(rb, sb) as TRet<Uint8Array>;
     }
 
     toHex(format?: ECDSASignatureFormat) {
@@ -1641,39 +1767,44 @@ export function ecdsa(
     }
   }
   type RecoveredSignature = Signature & { recovery: number };
+  Object.freeze(Signature.prototype);
+  Object.freeze(Signature);
 
   // RFC6979: ensure ECDSA msg is X bytes and < N. RFC suggests optional truncating via bits2octets.
   // FIPS 186-4 4.6 suggests the leftmost min(nBitLen, outLen) bits, which matches bits2int.
   // bits2int can produce res>N, we can do mod(res, N) since the bitLen is the same.
   // int2octets can't be used; pads small msgs with 0: unacceptatble for trunc as per RFC vectors
-  const bits2int =
-    ecdsaOpts.bits2int ||
-    function bits2int_def(bytes: Uint8Array): bigint {
-      // Our custom check "just in case", for protection against DoS
-      if (bytes.length > 8192) throw new Error('input is too large');
-      // For curves with nBitLength % 8 !== 0: bits2octets(bits2octets(m)) !== bits2octets(m)
-      // for some cases, since bytes.length * 8 is not actual bitLength.
-      const num = bytesToNumberBE(bytes); // check for == u8 done here
-      const delta = bytes.length * 8 - fnBits; // truncate to nBitLength leftmost bits
-      return delta > 0 ? num >> BigInt(delta) : num;
-    };
-  const bits2int_modN =
-    ecdsaOpts.bits2int_modN ||
-    function bits2int_modN_def(bytes: Uint8Array): bigint {
-      return Fn.create(bits2int(bytes)); // can't use bytesToNumberBE here
-    };
-  // Pads output with zero as per spec
+  const bits2int: (bytes: TArg<Uint8Array>) => bigint =
+    ecdsaOpts.bits2int === undefined
+      ? function bits2int_def(bytes: TArg<Uint8Array>): bigint {
+          // Our custom check "just in case", for protection against DoS
+          if (bytes.length > 8192) throw new Error('input is too large');
+          // For curves with nBitLength % 8 !== 0: bits2octets(bits2octets(m)) !== bits2octets(m)
+          // for some cases, since bytes.length * 8 is not actual bitLength.
+          const num = bytesToNumberBE(bytes); // check for == u8 done here
+          const delta = bytes.length * 8 - fnBits; // truncate to nBitLength leftmost bits
+          return delta > 0 ? num >> BigInt(delta) : num;
+        }
+      : (ecdsaOpts.bits2int as (bytes: TArg<Uint8Array>) => bigint);
+  const bits2int_modN: (bytes: TArg<Uint8Array>) => bigint =
+    ecdsaOpts.bits2int_modN === undefined
+      ? function bits2int_modN_def(bytes: TArg<Uint8Array>): bigint {
+          return Fn.create(bits2int(bytes)); // can't use bytesToNumberBE here
+        }
+      : (ecdsaOpts.bits2int_modN as (bytes: TArg<Uint8Array>) => bigint);
   const ORDER_MASK = bitMask(fnBits);
+  // Pads output with zero as per spec.
   /** Converts to bytes. Checks if num in `[0..ORDER_MASK-1]` e.g.: `[0..2^256-1]`. */
-  function int2octets(num: bigint): Uint8Array {
-    // IMPORTANT: the check ensures working for case `Fn.BYTES != Fn.BITS * 8`
+  function int2octets(num: bigint): TRet<Uint8Array> {
     aInRange('num < 2^' + fnBits, num, _0n, ORDER_MASK);
-    return Fn.toBytes(num);
+    return Fn.toBytes(num) as TRet<Uint8Array>;
   }
 
-  function validateMsgAndHash(message: Uint8Array, prehash: boolean) {
+  function validateMsgAndHash(message: TArg<Uint8Array>, prehash: boolean): TRet<Uint8Array> {
     abytes(message, undefined, 'message');
-    return prehash ? abytes(hash(message), undefined, 'prehashed message') : message;
+    return (
+      prehash ? abytes(hash_(message), undefined, 'prehashed message') : message
+    ) as TRet<Uint8Array>;
   }
 
   /**
@@ -1684,7 +1815,11 @@ export function ecdsa(
    * Warning: we cannot assume here that message has same amount of bytes as curve order,
    * this will be invalid at least for P521. Also it can be bigger for P224 + SHA256.
    */
-  function prepSig(message: Uint8Array, secretKey: Uint8Array, opts: ECDSASignOpts) {
+  function prepSig(
+    message: TArg<Uint8Array>,
+    secretKey: TArg<Uint8Array>,
+    opts: TArg<ECDSASignOpts>
+  ) {
     const { lowS, prehash, extraEntropy } = validateSigOpts(opts, defaultSigOpts);
     message = validateMsgAndHash(message, prehash); // RFC6979 3.2 A: h1 = H(m)
     // We can't later call bits2octets, since nested bits2int is broken for curves
@@ -1693,7 +1828,7 @@ export function ecdsa(
     const h1int = bits2int_modN(message);
     const d = Fn.fromBytes(secretKey); // validate secret key, convert to bigint
     if (!Fn.isValidNot0(d)) throw new Error('invalid private key');
-    const seedArgs = [int2octets(d), int2octets(h1int)];
+    const seedArgs: TArg<Uint8Array>[] = [int2octets(d), int2octets(h1int)];
     // extraEntropy. RFC6979 3.6: additional k' (optional).
     if (extraEntropy != null && extraEntropy !== false) {
       // K = HMAC_K(V || 0x00 || int2octets(x) || bits2octets(h1) || k')
@@ -1701,7 +1836,7 @@ export function ecdsa(
       const e = extraEntropy === true ? randomBytes(lengths.secretKey) : extraEntropy;
       seedArgs.push(abytes(e, undefined, 'extraEntropy')); // check for being bytes
     }
-    const seed = concatBytes(...seedArgs); // Step D of RFC6979 3.2
+    const seed = concatBytes(...seedArgs) as TRet<Uint8Array>; // Step D of RFC6979 3.2
     const m = h1int; // no need to call bits2int second time here, it is inside truncateHash!
     // Converts signature params into point w r/s, checks result for validity.
     // To transform k => Signature:
@@ -1711,7 +1846,7 @@ export function ecdsa(
     // Can use scalar blinding b^-1(bm + bdr) where b ∈ [1,q−1] according to
     // https://tches.iacr.org/index.php/TCHES/article/view/7337/6509. We've decided against it:
     // a) dependency on CSPRNG b) 15% slowdown c) doesn't really help since bigints are not CT
-    function k2sig(kBytes: Uint8Array): Signature | undefined {
+    function k2sig(kBytes: TArg<Uint8Array>): Signature | undefined {
       // RFC 6979 Section 3.2, step 3: k = bits2int(T)
       // Important: all mod() calls here must be done over N
       const k = bits2int(kBytes); // Cannot use fields methods, since it is group element
@@ -1728,13 +1863,15 @@ export function ecdsa(
         normS = Fn.neg(s); // if lowS was passed, ensure s is always in the bottom half of N
         recovery ^= 1;
       }
-      return new Signature(r, normS, hasLargeCofactor ? undefined : recovery);
+      return new Signature(r, normS, hasLargeRecoveryLifts ? undefined : recovery);
     }
     return { seed, k2sig };
   }
 
   /**
-   * Signs message hash with a secret key.
+   * Signs a message or message hash with a secret key.
+   * With the default `prehash: true`, raw message bytes are hashed internally;
+   * only `{ prehash: false }` expects a caller-supplied digest.
    *
    * ```
    * sign(m, d) where
@@ -1744,9 +1881,13 @@ export function ecdsa(
    *   s = (m + dr) / k mod n
    * ```
    */
-  function sign(message: Uint8Array, secretKey: Uint8Array, opts: ECDSASignOpts = {}): Uint8Array {
+  function sign(
+    message: TArg<Uint8Array>,
+    secretKey: TArg<Uint8Array>,
+    opts: TArg<ECDSASignOpts> = {}
+  ): TRet<Uint8Array> {
     const { seed, k2sig } = prepSig(message, secretKey, opts); // Steps A, D of RFC6979 3.2.
-    const drbg = createHmacDrbg<Signature>(hash.outputLen, Fn.BYTES, hmac);
+    const drbg = createHmacDrbg<Signature>(hash_.outputLen, Fn.BYTES, hmac);
     const sig = drbg(seed, k2sig); // Steps B, C, D, E, F, G
     return sig.toBytes(opts.format);
   }
@@ -1765,10 +1906,10 @@ export function ecdsa(
    * ```
    */
   function verify(
-    signature: Uint8Array,
-    message: Uint8Array,
-    publicKey: Uint8Array,
-    opts: ECDSAVerifyOpts = {}
+    signature: TArg<Uint8Array>,
+    message: TArg<Uint8Array>,
+    publicKey: TArg<Uint8Array>,
+    opts: TArg<ECDSAVerifyOpts> = {}
   ): boolean {
     const { lowS, prehash, format } = validateSigOpts(opts, defaultSigOpts);
     publicKey = abytes(publicKey, undefined, 'publicKey');
@@ -1797,10 +1938,12 @@ export function ecdsa(
   }
 
   function recoverPublicKey(
-    signature: Uint8Array,
-    message: Uint8Array,
-    opts: ECDSARecoverOpts = {}
-  ): Uint8Array {
+    signature: TArg<Uint8Array>,
+    message: TArg<Uint8Array>,
+    opts: TArg<ECDSARecoverOpts> = {}
+  ): TRet<Uint8Array> {
+    // Top-level recovery mirrors `sign()` / `verify()`: it hashes raw message
+    // bytes first unless the caller passes `{ prehash: false }`.
     const { prehash } = validateSigOpts(opts, defaultSigOpts);
     message = validateMsgAndHash(message, prehash);
     return Signature.fromBytes(signature, 'recovered').recoverPublicKey(message).toBytes();
@@ -1817,6 +1960,6 @@ export function ecdsa(
     verify,
     recoverPublicKey,
     Signature,
-    hash,
+    hash: hash_,
   }) satisfies Signer;
 }

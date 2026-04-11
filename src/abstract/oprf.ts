@@ -34,10 +34,12 @@ OPRF allows to interactively create an `Output = PRF(Input, serverSecretKey)`:
 ## Modes
 
 - OPRF: simple mode, client doesn't need to know server public key
-- VOPRF: verifable mode, allows client to verify that server used secret key corresponding to known public key
+- VOPRF: verifiable mode. It lets the client verify that the server used the
+  secret key corresponding to a known public key
 - POPRF: partially oblivious mode, VOPRF + domain separation
 
-There is also non-interactive mode (Evaluate) that supports creating Output in non-interactive mode with knowledge of secret key.
+There is also non-interactive mode (Evaluate), which creates Output
+non-interactively with knowledge of the secret key.
 
 Flow:
 - (once) Server generates secret and public keys, distributes public keys to clients
@@ -58,8 +60,10 @@ import {
   numberToBytesBE,
   randomBytes,
   validateObject,
+  type TArg,
+  type TRet,
 } from '../utils.ts';
-import { pippenger, type CurvePoint, type CurvePointCons } from './curve.ts';
+import { pippenger, validatePointCons, type CurvePoint, type CurvePointCons } from './curve.ts';
 import { _DST_scalar, type H2CDSTOpts } from './hash-to-curve.ts';
 import { getMinHashLength, mapHashToField } from './modular.ts';
 
@@ -70,6 +74,7 @@ export type PointBytes = Uint8Array;
 export type ScalarBytes = Uint8Array;
 /** Arbitrary byte input or output used by the OPRF protocol. */
 export type Bytes = Uint8Array;
+const _DST_scalarBytes = /* @__PURE__ */ asciiToBytes(_DST_scalar);
 /** Cryptographically secure byte generator used for blinds and proofs. */
 export type RNG = typeof randomBytes;
 
@@ -77,7 +82,10 @@ export type RNG = typeof randomBytes;
 export type OPRFOpts<P extends CurvePoint<any, P>> = {
   /** Human-readable suite identifier used for domain separation. */
   name: string;
-  /** Prime-order group used by the OPRF construction, kept generic because the suite returns serialized points. */
+  /**
+   * Prime-order group used by the OPRF construction.
+   * Kept generic because the suite returns serialized points.
+   */
   Point: CurvePointCons<P>;
   // Fn: IField<bigint>;
   /**
@@ -85,50 +93,52 @@ export type OPRFOpts<P extends CurvePoint<any, P>> = {
    * @param msg - Message bytes to hash.
    * @returns Digest bytes.
    */
-  hash(msg: Bytes): Bytes;
+  hash(msg: TArg<Bytes>): TRet<Bytes>;
   /**
    * Hash arbitrary bytes into one scalar in the suite order.
    * @param msg - Message bytes to map.
    * @param options - Hash-to-field domain-separation options. See {@link H2CDSTOpts}.
+   * Implementations MUST treat `msg` and `options` as read-only.
    * @returns Scalar in the suite order.
    */
-  hashToScalar(msg: Uint8Array, options: H2CDSTOpts): bigint;
+  hashToScalar(msg: TArg<Uint8Array>, options: TArg<H2CDSTOpts>): bigint;
   /**
    * Hash arbitrary bytes directly onto one curve point.
    * @param msg - Message bytes to map.
    * @param options - Hash-to-curve domain-separation options. See {@link H2CDSTOpts}.
+   * Implementations MUST treat `msg` and `options` as read-only.
    * @returns Point on the suite curve.
    */
-  hashToGroup(msg: Uint8Array, options: H2CDSTOpts): P;
+  hashToGroup(msg: TArg<Uint8Array>, options: TArg<H2CDSTOpts>): P;
 };
 
 /** Server keypair for one OPRF suite. */
 export type OPRFKeys = {
   /** Secret scalar kept by the server. */
-  secretKey: ScalarBytes;
+  secretKey: TRet<ScalarBytes>;
   /** Public point distributed to clients in verifiable modes. */
-  publicKey: PointBytes;
+  publicKey: TRet<PointBytes>;
 };
 /** Result of the client-side blind step. */
 export type OPRFBlind = {
   /** Secret blind scalar that the client keeps locally. */
-  blind: Uint8Array;
+  blind: TRet<ScalarBytes>;
   /** Blinded group element sent to the server. */
-  blinded: Uint8Array;
+  blinded: TRet<PointBytes>;
 };
 /** Server response for one verifiable OPRF evaluation. */
 export type OPRFBlindEval = {
   /** Evaluated group element returned by the server. */
-  evaluated: PointBytes;
+  evaluated: TRet<PointBytes>;
   /** DLEQ proof binding the evaluation to the server public key. */
-  proof: Bytes;
+  proof: TRet<Bytes>;
 };
 /** Server response for a batch of verifiable OPRF evaluations. */
 export type OPRFBlindEvalBatch = {
   /** Evaluated group elements returned for each blinded input. */
-  evaluated: PointBytes[];
+  evaluated: TRet<PointBytes[]>;
   /** Batch proof covering all evaluated elements. */
-  proof: Bytes;
+  proof: TRet<Bytes>;
 };
 /** One finalized transcript item used by batch verification helpers. */
 export type OPRFFinalizeItem = {
@@ -141,6 +151,8 @@ export type OPRFFinalizeItem = {
   /** Blinded point originally sent to the server. */
   blinded: PointBytes;
 };
+/** Result of the POPRF client-side blind step with the tweaked server public key. */
+export type OPRFBlindTweaked = OPRFBlind & { tweakedKey: TRet<PointBytes> };
 
 /**
  * Represents a full OPRF ciphersuite implementation according to RFC 9497.
@@ -170,7 +182,7 @@ export type OPRF = {
      * (Server-side) Generates a new random private/public key pair for the server.
      * @returns A new key pair.
      */
-    generateKeyPair(): OPRFKeys;
+    generateKeyPair(): TRet<OPRFKeys>;
 
     /**
      * (Server-side) Deterministically derives a private/public key pair from a seed.
@@ -178,7 +190,7 @@ export type OPRF = {
      * @param keyInfo - An optional byte string for domain separation.
      * @returns The derived key pair.
      */
-    deriveKeyPair(seed: Bytes, keyInfo: Bytes): OPRFKeys;
+    deriveKeyPair(seed: TArg<Bytes>, keyInfo: TArg<Bytes>): TRet<OPRFKeys>;
 
     /**
      * (Client-side) The first step of the protocol. The client blinds its private input.
@@ -187,7 +199,7 @@ export type OPRF = {
      * @returns An object containing the `blind` scalar (which the client MUST keep secret)
      * and the `blinded` element (which the client sends to the server).
      */
-    blind(input: Bytes, rng?: RNG): OPRFBlind;
+    blind(input: TArg<Bytes>, rng?: RNG): TRet<OPRFBlind>;
 
     /**
      * (Server-side) The second step. The server evaluates the client's blinded element
@@ -196,7 +208,7 @@ export type OPRF = {
      * @param blinded - The blinded group element received from the client.
      * @returns The evaluated group element, to be sent back to the client.
      */
-    blindEvaluate(secretKey: ScalarBytes, blinded: PointBytes): PointBytes;
+    blindEvaluate(secretKey: TArg<ScalarBytes>, blinded: TArg<PointBytes>): TRet<PointBytes>;
 
     /**
      * (Client-side) The final step. The client unblinds the server's response to
@@ -206,7 +218,11 @@ export type OPRF = {
      * @param evaluated - The evaluated group element received from the server.
      * @returns The final OPRF output, `Hash(len(input)||input||len(unblinded)||unblinded||"Finalize")`.
      */
-    finalize(input: Bytes, blind: ScalarBytes, evaluated: PointBytes): Bytes;
+    finalize(
+      input: TArg<Bytes>,
+      blind: TArg<ScalarBytes>,
+      evaluated: TArg<PointBytes>
+    ): TRet<Bytes>;
   };
 
   /**
@@ -216,11 +232,11 @@ export type OPRF = {
    */
   readonly voprf: {
     /** (Server-side) Generates a key pair for the VOPRF mode. */
-    generateKeyPair(): OPRFKeys;
+    generateKeyPair(): TRet<OPRFKeys>;
     /** (Server-side) Deterministically derives a key pair for the VOPRF mode. */
-    deriveKeyPair(seed: Bytes, keyInfo: Bytes): OPRFKeys;
+    deriveKeyPair(seed: TArg<Bytes>, keyInfo: TArg<Bytes>): TRet<OPRFKeys>;
     /** (Client-side) Blinds the client's private input for the VOPRF protocol. */
-    blind(input: Bytes, rng?: RNG): OPRFBlind;
+    blind(input: TArg<Bytes>, rng?: RNG): TRet<OPRFBlind>;
 
     /**
      * (Server-side) Evaluates the client's blinded element and generates a DLEQ proof
@@ -232,11 +248,11 @@ export type OPRF = {
      * @returns The evaluated element and a proof of correct computation.
      */
     blindEvaluate(
-      secretKey: ScalarBytes,
-      publicKey: PointBytes,
-      blinded: PointBytes,
+      secretKey: TArg<ScalarBytes>,
+      publicKey: TArg<PointBytes>,
+      blinded: TArg<PointBytes>,
       rng?: RNG
-    ): OPRFBlindEval;
+    ): TRet<OPRFBlindEval>;
 
     /**
      * (Server-side) An optimized batch version of `blindEvaluate`. It evaluates multiple
@@ -249,11 +265,11 @@ export type OPRF = {
      * @returns An array of evaluated elements and a single proof for the batch.
      */
     blindEvaluateBatch(
-      secretKey: ScalarBytes,
-      publicKey: PointBytes,
-      blinded: PointBytes[],
+      secretKey: TArg<ScalarBytes>,
+      publicKey: TArg<PointBytes>,
+      blinded: TArg<PointBytes[]>,
       rng?: RNG
-    ): OPRFBlindEvalBatch;
+    ): TRet<OPRFBlindEvalBatch>;
 
     /**
      * (Client-side) The final step. The client verifies the server's proof, and if valid,
@@ -268,13 +284,13 @@ export type OPRF = {
      * @throws If the proof verification fails. {@link Error}
      */
     finalize(
-      input: Bytes,
-      blind: ScalarBytes,
-      evaluated: PointBytes,
-      blinded: PointBytes,
-      publicKey: PointBytes,
-      proof: Bytes
-    ): Bytes;
+      input: TArg<Bytes>,
+      blind: TArg<ScalarBytes>,
+      evaluated: TArg<PointBytes>,
+      blinded: TArg<PointBytes>,
+      publicKey: TArg<PointBytes>,
+      proof: TArg<Bytes>
+    ): TRet<Bytes>;
 
     /**
      * (Client-side) The batch-aware version of `finalize`. It verifies a single batch proof
@@ -285,7 +301,11 @@ export type OPRF = {
      * @returns An array of final VOPRF outputs, one for each item in the input.
      * @throws If the proof verification fails. {@link Error}
      */
-    finalizeBatch(items: OPRFFinalizeItem[], publicKey: PointBytes, proof: Bytes): Bytes[];
+    finalizeBatch(
+      items: TArg<OPRFFinalizeItem[]>,
+      publicKey: TArg<PointBytes>,
+      proof: TArg<Bytes>
+    ): TRet<Bytes[]>;
   };
 
   /**
@@ -296,11 +316,11 @@ export type OPRF = {
    * @param info - A public byte string to be mixed into the computation.
    * @returns An object with the POPRF protocol functions.
    */
-  readonly poprf: (info: Bytes) => {
+  readonly poprf: (info: TArg<Bytes>) => {
     /** (Server-side) Generates a key pair for the POPRF mode. */
-    generateKeyPair(): OPRFKeys;
+    generateKeyPair(): TRet<OPRFKeys>;
     /** (Server-side) Deterministically derives a key pair for the POPRF mode. */
-    deriveKeyPair(seed: Bytes, keyInfo: Bytes): OPRFKeys;
+    deriveKeyPair(seed: TArg<Bytes>, keyInfo: TArg<Bytes>): TRet<OPRFKeys>;
 
     /**
      * (Client-side) Blinds the client's private input and computes the "tweaked key".
@@ -308,19 +328,25 @@ export type OPRF = {
      * @param input - The client's private input.
      * @param publicKey - The server's public key.
      * @param rng - An optional cryptographically secure random number generator.
-     * @returns The `blind`, `blinded` element, and the `tweakedKey` which the client uses for verification.
+     * @returns The `blind`, `blinded` element, and the `tweakedKey`
+     *   the client uses for verification.
      */
-    blind(input: Bytes, publicKey: PointBytes, rng?: RNG): OPRFBlind & { tweakedKey: PointBytes };
+    blind(input: TArg<Bytes>, publicKey: TArg<PointBytes>, rng?: RNG): TRet<OPRFBlindTweaked>;
 
     /**
-     * (Server-side) Evaluates the blinded element using a key derived from its secret key and the public `info`.
+     * (Server-side) Evaluates the blinded element using a key derived from
+     * its secret key and the public `info`.
      * It generates a DLEQ proof against the tweaked key.
      * @param secretKey - The server's private key.
      * @param blinded - The blinded element from the client.
      * @param rng - An optional RNG for the proof.
      * @returns The evaluated element and a proof of correct computation.
      */
-    blindEvaluate(secretKey: ScalarBytes, blinded: PointBytes, rng?: RNG): OPRFBlindEval;
+    blindEvaluate(
+      secretKey: TArg<ScalarBytes>,
+      blinded: TArg<PointBytes>,
+      rng?: RNG
+    ): TRet<OPRFBlindEval>;
 
     /**
      * (Server-side) A batch-aware version of `blindEvaluate` for the POPRF mode.
@@ -329,18 +355,27 @@ export type OPRF = {
      * @param rng - An optional RNG for the proof.
      * @returns An array of evaluated elements and a single proof for the batch.
      */
-    blindEvaluateBatch(secretKey: ScalarBytes, blinded: PointBytes[], rng: RNG): OPRFBlindEvalBatch;
+    blindEvaluateBatch(
+      secretKey: TArg<ScalarBytes>,
+      blinded: TArg<PointBytes[]>,
+      rng: RNG
+    ): TRet<OPRFBlindEvalBatch>;
 
     /**
      * (Client-side) A batch-aware version of `finalize` for the POPRF mode.
      * It verifies the proof against the tweaked key.
      * @param items - An array containing the parameters for each finalization.
      * @param proof - The single DLEQ proof for the batch.
-     * @param tweakedKey - The tweaked key corresponding to the proof (all items must share the same `info` and `publicKey`).
+     * @param tweakedKey - The tweaked key corresponding to the proof.
+     *   All items must share the same `info` and `publicKey`.
      * @returns An array of final POPRF outputs.
      * @throws If proof verification fails. {@link Error}
      */
-    finalizeBatch(items: OPRFFinalizeItem[], proof: Bytes, tweakedKey: PointBytes): Bytes[];
+    finalizeBatch(
+      items: TArg<OPRFFinalizeItem[]>,
+      proof: TArg<Bytes>,
+      tweakedKey: TArg<PointBytes>
+    ): TRet<Bytes[]>;
 
     /**
      * (Client-side) Finalizes the POPRF protocol. It verifies the server's proof against the
@@ -355,13 +390,13 @@ export type OPRF = {
      * @throws If proof verification fails. {@link Error}
      */
     finalize(
-      input: Bytes,
-      blind: ScalarBytes,
-      evaluated: PointBytes,
-      blinded: PointBytes,
-      proof: Bytes,
-      tweakedKey: PointBytes
-    ): Bytes;
+      input: TArg<Bytes>,
+      blind: TArg<ScalarBytes>,
+      evaluated: TArg<PointBytes>,
+      blinded: TArg<PointBytes>,
+      proof: TArg<Bytes>,
+      tweakedKey: TArg<PointBytes>
+    ): TRet<Bytes>;
 
     /**
      * A non-interactive evaluation function for an entity that knows all inputs.
@@ -371,7 +406,7 @@ export type OPRF = {
      * @param input - The client's private input.
      * @returns The final POPRF output.
      */
-    evaluate(secretKey: ScalarBytes, input: Bytes): Bytes;
+    evaluate(secretKey: TArg<ScalarBytes>, input: TArg<Bytes>): TRet<Bytes>;
   };
 };
 
@@ -396,25 +431,28 @@ export type OPRF = {
  * const keys = oprf.oprf.generateKeyPair();
  * ```
  */
-export function createORPF<P extends CurvePoint<any, P>>(opts: OPRFOpts<P>): OPRF {
+export function createORPF<P extends CurvePoint<any, P>>(opts: OPRFOpts<P>): TRet<OPRF> {
   validateObject(opts, {
     name: 'string',
     hash: 'function',
     hashToScalar: 'function',
     hashToGroup: 'function',
   });
-  // TODO
-  // Point: 'point',
+  // Cheap constructor-surface sanity check only: this verifies the generic static hooks/fields that
+  // OPRF consumes, but it does not certify point semantics like BASE/ZERO correctness.
+  validatePointCons(opts.Point);
   const { name, Point, hash } = opts;
   const { Fn } = Point;
 
-  const hashToGroup = (msg: Uint8Array, ctx: Uint8Array) =>
+  const hashToGroup = (msg: TArg<Uint8Array>, ctx: TArg<Uint8Array>) =>
     opts.hashToGroup(msg, {
       DST: concatBytes(asciiToBytes('HashToGroup-'), ctx),
     }) as P;
-  const hashToScalarPrefixed = (msg: Uint8Array, ctx: Uint8Array) =>
-    opts.hashToScalar(msg, { DST: concatBytes(_DST_scalar, ctx) });
+  const hashToScalarPrefixed = (msg: TArg<Uint8Array>, ctx: TArg<Uint8Array>) =>
+    opts.hashToScalar(msg, { DST: concatBytes(_DST_scalarBytes, ctx) });
   const randomScalar = (rng: RNG = randomBytes) => {
+    // RFC 9497 §2.1 defines RandomScalar as nonzero; blind inversion and generated public keys
+    // both rely on keeping this helper in the `1..n-1` range.
     const t = mapHashToField(rng(getMinHashLength(Fn.ORDER)), Fn.ORDER, Fn.isLE);
     // We cannot use Fn.fromBytes here, because field
     // can have different number of bytes (like ed448)
@@ -429,7 +467,7 @@ export function createORPF<P extends CurvePoint<any, P>>(opts: OPRFOpts<P>): OPR
   const ctxVOPRF = getCtx(0x01);
   const ctxPOPRF = getCtx(0x02);
 
-  function encode(...args: (Uint8Array | number | string)[]) {
+  function encode(...args: TArg<(Uint8Array | number | string)[]>): TRet<Bytes> {
     const res = [];
     for (const a of args) {
       if (typeof a === 'number') res.push(numberToBytesBE(a, 2));
@@ -440,11 +478,22 @@ export function createORPF<P extends CurvePoint<any, P>>(opts: OPRFOpts<P>): OPR
       }
     }
     // No wipe here, since will modify actual bytes
-    return concatBytes(...res);
+    return concatBytes(...res) as TRet<Bytes>;
   }
-  const hashInput = (...bytes: Uint8Array[]) => hash(encode(...bytes, 'Finalize'));
+  const inputBytes = (title: string, bytes: TArg<Uint8Array>) => {
+    abytes(bytes, undefined, title);
+    // RFC 9497 §1.2 limits PrivateInput/PublicInput to 2^16 - 1 bytes because these values are
+    // length-prefixed with two bytes before use throughout the protocol.
+    if (bytes.length > 0xffff)
+      throw new Error(
+        `"${title}" expected Uint8Array of length <= 65535, got length=${bytes.length}`
+      );
+    return bytes;
+  };
+  const hashInput = (...bytes: TArg<Uint8Array[]>): TRet<Bytes> =>
+    hash(encode(...bytes, 'Finalize')) as TRet<Bytes>;
 
-  function getTranscripts(B: P, C: P[], D: P[], ctx: Bytes) {
+  function getTranscripts(B: P, C: P[], D: P[], ctx: TArg<Bytes>) {
     const Bm = B.toBytes();
     const seed = hash(encode(Bm, concatBytes(asciiToBytes('Seed-'), ctx)));
     const res: bigint[] = [];
@@ -457,36 +506,44 @@ export function createORPF<P extends CurvePoint<any, P>>(opts: OPRFOpts<P>): OPR
     return res;
   }
 
-  function computeComposites(B: P, C: P[], D: P[], ctx: Bytes) {
+  function computeComposites(B: P, C: P[], D: P[], ctx: TArg<Bytes>) {
     const T = getTranscripts(B, C, D, ctx);
     const M = msm(C, T);
     const Z = msm(D, T);
     return { M, Z };
   }
 
-  function computeCompositesFast(k: bigint, B: P, C: P[], D: P[], ctx: Bytes): { M: P; Z: P } {
+  function computeCompositesFast(
+    k: bigint,
+    B: P,
+    C: P[],
+    D: P[],
+    ctx: TArg<Bytes>
+  ): { M: P; Z: P } {
     const T = getTranscripts(B, C, D, ctx);
     const M = msm(C, T);
+    // RFC 9497 §2.2.1 ComputeCompositesFast derives weights from both C and D in getTranscripts(),
+    // then uses the server shortcut Z = k * M instead of a second MSM over D.
     const Z = M.multiply(k);
     return { M, Z };
   }
 
-  function challengeTranscript(B: P, M: P, Z: P, t2: P, t3: P, ctx: Bytes) {
+  function challengeTranscript(B: P, M: P, Z: P, t2: P, t3: P, ctx: TArg<Bytes>) {
     const [Bm, a0, a1, a2, a3] = [B, M, Z, t2, t3].map((i) => i.toBytes());
     return hashToScalarPrefixed(encode(Bm, a0, a1, a2, a3, 'Challenge'), ctx);
   }
 
-  function generateProof(ctx: Bytes, k: bigint, B: P, C: P[], D: P[], rng: RNG) {
+  function generateProof(ctx: TArg<Bytes>, k: bigint, B: P, C: P[], D: P[], rng: RNG): TRet<Bytes> {
     const { M, Z } = computeCompositesFast(k, B, C, D, ctx);
     const r = randomScalar(rng);
     const t2 = Point.BASE.multiply(r);
     const t3 = M.multiply(r);
     const c = challengeTranscript(B, M, Z, t2, t3, ctx);
     const s = Fn.sub(r, Fn.mul(c, k)); // r - c*k
-    return concatBytes(...[c, s].map((i) => Fn.toBytes(i)));
+    return concatBytes(...[c, s].map((i) => Fn.toBytes(i))) as TRet<Bytes>;
   }
 
-  function verifyProof(ctx: Bytes, B: P, C: P[], D: P[], proof: Bytes) {
+  function verifyProof(ctx: TArg<Bytes>, B: P, C: P[], D: P[], proof: TArg<Bytes>) {
     abytes(proof, 2 * Fn.BYTES);
     const { M, Z } = computeComposites(B, C, D, ctx);
     const [c, s] = [proof.subarray(0, Fn.BYTES), proof.subarray(Fn.BYTES)].map((f) =>
@@ -498,111 +555,155 @@ export function createORPF<P extends CurvePoint<any, P>>(opts: OPRFOpts<P>): OPR
     if (!Fn.eql(c, expectedC)) throw new Error('proof verification failed');
   }
 
-  function generateKeyPair() {
+  function generateKeyPair(): TRet<OPRFKeys> {
     const skS = randomScalar();
     const pkS = Point.BASE.multiply(skS);
-    return { secretKey: Fn.toBytes(skS), publicKey: pkS.toBytes() };
+    return { secretKey: Fn.toBytes(skS), publicKey: pkS.toBytes() } as TRet<OPRFKeys>;
   }
 
-  function deriveKeyPair(ctx: Bytes, seed: Bytes, info: Bytes) {
+  function deriveKeyPair(ctx: TArg<Bytes>, seed: TArg<Bytes>, info: TArg<Bytes>): TRet<OPRFKeys> {
+    // RFC 9497 §3.2.1 defines `seed[32]`; reject other sizes here because this public API already
+    // documents a 32-byte seed instead of generic input keying material.
+    abytes(seed, 32, 'seed');
+    info = inputBytes('keyInfo', info);
     const dst = concatBytes(asciiToBytes('DeriveKeyPair'), ctx);
     const msg = concatBytes(seed, encode(info), Uint8Array.of(0));
     for (let counter = 0; counter <= 255; counter++) {
       msg[msg.length - 1] = counter;
       const skS = opts.hashToScalar(msg, { DST: dst });
       if (Fn.is0(skS)) continue; // should not happen
-      return { secretKey: Fn.toBytes(skS), publicKey: Point.BASE.multiply(skS).toBytes() };
+      return {
+        secretKey: Fn.toBytes(skS),
+        publicKey: Point.BASE.multiply(skS).toBytes(),
+      } as TRet<OPRFKeys>;
     }
     throw new Error('Cannot derive key');
   }
-  function blind(ctx: Bytes, input: Uint8Array, rng: RNG = randomBytes) {
+  const wirePoint = (label: string, bytes: TArg<Uint8Array>) => {
+    const point = Point.fromBytes(bytes);
+    // RFC 9497 §3.3 says applications MUST reject group-identity Elements received over the wire
+    // after deserialization, even if the suite decoder itself accepts the identity encoding.
+    if (point.equals(Point.ZERO)) throw new Error(label + ' point at infinity');
+    return point;
+  };
+  function blind(
+    ctx: TArg<Bytes>,
+    input: TArg<Uint8Array>,
+    rng: RNG = randomBytes
+  ): TRet<OPRFBlind> {
+    input = inputBytes('input', input);
     const blind = randomScalar(rng);
     const inputPoint = hashToGroup(input, ctx);
     if (inputPoint.equals(Point.ZERO)) throw new Error('Input point at infinity');
     const blinded = inputPoint.multiply(blind);
-    return { blind: Fn.toBytes(blind), blinded: blinded.toBytes() };
+    return { blind: Fn.toBytes(blind), blinded: blinded.toBytes() } as TRet<OPRFBlind>;
   }
-  function evaluate(ctx: Bytes, secretKey: ScalarBytes, input: Bytes) {
+  function evaluate(
+    ctx: TArg<Bytes>,
+    secretKey: TArg<ScalarBytes>,
+    input: TArg<Bytes>
+  ): TRet<Bytes> {
+    input = inputBytes('input', input);
     const skS = Fn.fromBytes(secretKey);
     const inputPoint = hashToGroup(input, ctx);
     if (inputPoint.equals(Point.ZERO)) throw new Error('Input point at infinity');
     const unblinded = inputPoint.multiply(skS).toBytes();
     return hashInput(input, unblinded);
   }
-  const oprf = {
+  const oprf = Object.freeze({
     generateKeyPair,
-    deriveKeyPair: (seed: Bytes, keyInfo: Bytes) => deriveKeyPair(ctxOPRF, seed, keyInfo),
-    blind: (input: Bytes, rng: RNG = randomBytes) => blind(ctxOPRF, input, rng),
-    blindEvaluate(secretKey: ScalarBytes, blindedPoint: PointBytes) {
+    deriveKeyPair: (seed: TArg<Bytes>, keyInfo: TArg<Bytes>) =>
+      deriveKeyPair(ctxOPRF, seed, keyInfo),
+    blind: (input: TArg<Bytes>, rng: RNG = randomBytes) => blind(ctxOPRF, input, rng),
+    blindEvaluate(secretKey: TArg<ScalarBytes>, blindedPoint: TArg<PointBytes>): TRet<PointBytes> {
       const skS = Fn.fromBytes(secretKey);
-      const elm = Point.fromBytes(blindedPoint);
-      return elm.multiply(skS).toBytes();
+      const elm = wirePoint('blinded', blindedPoint);
+      return elm.multiply(skS).toBytes() as TRet<PointBytes>;
     },
-    finalize(input: Bytes, blindBytes: ScalarBytes, evaluatedBytes: PointBytes) {
+    finalize(
+      input: TArg<Bytes>,
+      blindBytes: TArg<ScalarBytes>,
+      evaluatedBytes: TArg<PointBytes>
+    ): TRet<Bytes> {
+      input = inputBytes('input', input);
       const blind = Fn.fromBytes(blindBytes);
-      const evalPoint = Point.fromBytes(evaluatedBytes);
+      const evalPoint = wirePoint('evaluated', evaluatedBytes);
       const unblinded = evalPoint.multiply(Fn.inv(blind)).toBytes();
       return hashInput(input, unblinded);
     },
-    evaluate: (secretKey: ScalarBytes, input: Bytes) => evaluate(ctxOPRF, secretKey, input),
-  };
+    evaluate: (secretKey: TArg<ScalarBytes>, input: TArg<Bytes>) =>
+      evaluate(ctxOPRF, secretKey, input),
+  });
 
-  const voprf = {
+  const voprf = Object.freeze({
     generateKeyPair,
-    deriveKeyPair: (seed: Bytes, keyInfo: Bytes) => deriveKeyPair(ctxVOPRF, seed, keyInfo),
-    blind: (input: Bytes, rng: RNG = randomBytes) => blind(ctxVOPRF, input, rng),
+    deriveKeyPair: (seed: TArg<Bytes>, keyInfo: TArg<Bytes>) =>
+      deriveKeyPair(ctxVOPRF, seed, keyInfo),
+    blind: (input: TArg<Bytes>, rng: RNG = randomBytes) => blind(ctxVOPRF, input, rng),
     blindEvaluateBatch(
-      secretKey: ScalarBytes,
-      publicKey: PointBytes,
-      blinded: PointBytes[],
+      secretKey: TArg<ScalarBytes>,
+      publicKey: TArg<PointBytes>,
+      blinded: TArg<PointBytes[]>,
       rng: RNG = randomBytes
-    ) {
+    ): TRet<OPRFBlindEvalBatch> {
       if (!Array.isArray(blinded)) throw new Error('expected array');
       const skS = Fn.fromBytes(secretKey);
-      const pkS = Point.fromBytes(publicKey);
-      const blindedPoints = blinded.map(Point.fromBytes);
+      const pkS = wirePoint('public key', publicKey);
+      const blindedPoints = blinded.map((i) => wirePoint('blinded', i));
       const evaluated = blindedPoints.map((i) => i.multiply(skS));
       const proof = generateProof(ctxVOPRF, skS, pkS, blindedPoints, evaluated, rng);
-      return { evaluated: evaluated.map((i) => i.toBytes()), proof };
+      return { evaluated: evaluated.map((i) => i.toBytes()), proof } as TRet<OPRFBlindEvalBatch>;
     },
     blindEvaluate(
-      secretKey: ScalarBytes,
-      publicKey: PointBytes,
-      blinded: PointBytes,
+      secretKey: TArg<ScalarBytes>,
+      publicKey: TArg<PointBytes>,
+      blinded: TArg<PointBytes>,
       rng: RNG = randomBytes
-    ) {
+    ): TRet<OPRFBlindEval> {
       const res = this.blindEvaluateBatch(secretKey, publicKey, [blinded], rng);
-      return { evaluated: res.evaluated[0], proof: res.proof };
+      return { evaluated: res.evaluated[0], proof: res.proof } as TRet<OPRFBlindEval>;
     },
-    finalizeBatch(items: OPRFFinalizeItem[], publicKey: PointBytes, proof: Bytes) {
+    finalizeBatch(
+      items: TArg<OPRFFinalizeItem[]>,
+      publicKey: TArg<PointBytes>,
+      proof: TArg<Bytes>
+    ): TRet<Bytes[]> {
       if (!Array.isArray(items)) throw new Error('expected array');
-      const pkS = Point.fromBytes(publicKey);
-      const blindedPoints = items.map((i) => i.blinded).map(Point.fromBytes);
-      const evalPoints = items.map((i) => i.evaluated).map(Point.fromBytes);
+      const pkS = wirePoint('public key', publicKey);
+      const blindedPoints = items.map((i) => wirePoint('blinded', i.blinded));
+      const evalPoints = items.map((i) => wirePoint('evaluated', i.evaluated));
       verifyProof(ctxVOPRF, pkS, blindedPoints, evalPoints, proof);
-      return items.map((i) => oprf.finalize(i.input, i.blind, i.evaluated));
+      return items.map((i) => oprf.finalize(i.input, i.blind, i.evaluated)) as TRet<Bytes[]>;
     },
     finalize(
-      input: Bytes,
-      blind: ScalarBytes,
-      evaluated: PointBytes,
-      blinded: PointBytes,
-      publicKey: PointBytes,
-      proof: Bytes
-    ) {
+      input: TArg<Bytes>,
+      blind: TArg<ScalarBytes>,
+      evaluated: TArg<PointBytes>,
+      blinded: TArg<PointBytes>,
+      publicKey: TArg<PointBytes>,
+      proof: TArg<Bytes>
+    ): TRet<Bytes> {
       return this.finalizeBatch([{ input, blind, evaluated, blinded }], publicKey, proof)[0];
     },
-    evaluate: (secretKey: ScalarBytes, input: Bytes) => evaluate(ctxVOPRF, secretKey, input),
-  };
+    evaluate: (secretKey: TArg<ScalarBytes>, input: TArg<Bytes>) =>
+      evaluate(ctxVOPRF, secretKey, input),
+  });
   // NOTE: info is domain separation
-  const poprf = (info: Bytes) => {
+  const poprf = (info: TArg<Bytes>) => {
+    info = inputBytes('info', info);
     const m = hashToScalarPrefixed(encode('Info', info), ctxPOPRF);
     const T = Point.BASE.multiply(m);
-    return {
+    return Object.freeze({
       generateKeyPair,
-      deriveKeyPair: (seed: Bytes, keyInfo: Bytes) => deriveKeyPair(ctxPOPRF, seed, keyInfo),
-      blind(input: Bytes, publicKey: PointBytes, rng: RNG = randomBytes) {
-        const pkS = Point.fromBytes(publicKey);
+      deriveKeyPair: (seed: TArg<Bytes>, keyInfo: TArg<Bytes>) =>
+        deriveKeyPair(ctxPOPRF, seed, keyInfo),
+      blind(
+        input: TArg<Bytes>,
+        publicKey: TArg<PointBytes>,
+        rng: RNG = randomBytes
+      ): TRet<OPRFBlindTweaked> {
+        input = inputBytes('input', input);
+        const pkS = wirePoint('public key', publicKey);
         const tweakedKey = T.add(pkS);
         if (tweakedKey.equals(Point.ZERO)) throw new Error('tweakedKey point at infinity');
         const blind = randomScalar(rng);
@@ -613,52 +714,66 @@ export function createORPF<P extends CurvePoint<any, P>>(opts: OPRFOpts<P>): OPR
           blind: Fn.toBytes(blind),
           blinded: blindedPoint.toBytes(),
           tweakedKey: tweakedKey.toBytes(),
-        };
+        } as TRet<OPRFBlindTweaked>;
       },
-      blindEvaluateBatch(secretKey: ScalarBytes, blinded: PointBytes[], rng: RNG = randomBytes) {
+      blindEvaluateBatch(
+        secretKey: TArg<ScalarBytes>,
+        blinded: TArg<PointBytes[]>,
+        rng: RNG = randomBytes
+      ): TRet<OPRFBlindEvalBatch> {
         if (!Array.isArray(blinded)) throw new Error('expected array');
         const skS = Fn.fromBytes(secretKey);
         const t = Fn.add(skS, m);
-        // "Hence, this error can be a signal for the server to replace its private key". We throw inside,
-        // should be impossible.
+        // "Hence, this error can be a signal for the server to replace its
+        // private key". We throw inside; this should be impossible.
         const invT = Fn.inv(t);
-        const blindedPoints = blinded.map(Point.fromBytes);
+        const blindedPoints = blinded.map((i) => wirePoint('blinded', i));
         const evalPoints = blindedPoints.map((i) => i.multiply(invT));
         const tweakedKey = Point.BASE.multiply(t);
         const proof = generateProof(ctxPOPRF, t, tweakedKey, evalPoints, blindedPoints, rng);
-        return { evaluated: evalPoints.map((i) => i.toBytes()), proof };
+        return { evaluated: evalPoints.map((i) => i.toBytes()), proof } as TRet<OPRFBlindEvalBatch>;
       },
-      blindEvaluate(secretKey: ScalarBytes, blinded: PointBytes, rng: RNG = randomBytes) {
+      blindEvaluate(
+        secretKey: TArg<ScalarBytes>,
+        blinded: TArg<PointBytes>,
+        rng: RNG = randomBytes
+      ): TRet<OPRFBlindEval> {
         const res = this.blindEvaluateBatch(secretKey, [blinded], rng);
-        return { evaluated: res.evaluated[0], proof: res.proof };
+        return { evaluated: res.evaluated[0], proof: res.proof } as TRet<OPRFBlindEval>;
       },
-      finalizeBatch(items: OPRFFinalizeItem[], proof: Bytes, tweakedKey: PointBytes) {
+      finalizeBatch(
+        items: TArg<OPRFFinalizeItem[]>,
+        proof: TArg<Bytes>,
+        tweakedKey: TArg<PointBytes>
+      ): TRet<Bytes[]> {
         if (!Array.isArray(items)) throw new Error('expected array');
-        const evalPoints = items.map((i) => i.evaluated).map(Point.fromBytes);
+        const inputs = items.map((i) => inputBytes('input', i.input));
+        const evalPoints = items.map((i) => wirePoint('evaluated', i.evaluated));
         verifyProof(
           ctxPOPRF,
-          Point.fromBytes(tweakedKey),
+          wirePoint('tweakedKey', tweakedKey),
           evalPoints,
-          items.map((i) => i.blinded).map(Point.fromBytes),
+          items.map((i) => wirePoint('blinded', i.blinded)),
           proof
         );
         return items.map((i, j) => {
           const blind = Fn.fromBytes(i.blind);
           const point = evalPoints[j].multiply(Fn.inv(blind)).toBytes();
-          return hashInput(i.input, info, point);
-        });
+          return hashInput(inputs[j], info, point);
+        }) as TRet<Bytes[]>;
       },
       finalize(
-        input: Bytes,
-        blind: ScalarBytes,
-        evaluated: PointBytes,
-        blinded: PointBytes,
-        proof: Bytes,
-        tweakedKey: PointBytes
-      ) {
+        input: TArg<Bytes>,
+        blind: TArg<ScalarBytes>,
+        evaluated: TArg<PointBytes>,
+        blinded: TArg<PointBytes>,
+        proof: TArg<Bytes>,
+        tweakedKey: TArg<PointBytes>
+      ): TRet<Bytes> {
         return this.finalizeBatch([{ input, blind, evaluated, blinded }], proof, tweakedKey)[0];
       },
-      evaluate(secretKey: ScalarBytes, input: Bytes) {
+      evaluate(secretKey: TArg<ScalarBytes>, input: TArg<Bytes>): TRet<Bytes> {
+        input = inputBytes('input', input);
         const skS = Fn.fromBytes(secretKey);
         const inputPoint = hashToGroup(input, ctxPOPRF);
         if (inputPoint.equals(Point.ZERO)) throw new Error('Input point at infinity');
@@ -667,7 +782,8 @@ export function createORPF<P extends CurvePoint<any, P>>(opts: OPRFOpts<P>): OPR
         const unblinded = inputPoint.multiply(invT).toBytes();
         return hashInput(input, info, unblinded);
       },
-    };
+    });
   };
-  return Object.freeze({ name, oprf, voprf, poprf, __tests: { Fn } });
+  const res = { name, oprf, voprf, poprf, __tests: Object.freeze({ Fn }) };
+  return Object.freeze(res) as TRet<OPRF>;
 }

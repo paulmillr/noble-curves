@@ -13,7 +13,110 @@ import {
   randomBytes as randomBytes_,
 } from '@noble/hashes/utils.js';
 /**
+ * Bytes API type helpers.
+ * TArg keeps byte inputs broad.
+ * TRet marks byte outputs for TS 5.6 and TS 5.9+ compatibility.
+ * These are compatibility adapters, not ownership guarantees.
+ * Maps typed-array input leaves to broad forms.
+ */
+export type TypedArg<T> = T extends BigInt64Array
+  ? BigInt64Array
+  : T extends BigUint64Array
+    ? BigUint64Array
+    : T extends Float32Array
+      ? Float32Array
+      : T extends Float64Array
+        ? Float64Array
+        : T extends Int16Array
+          ? Int16Array
+          : T extends Int32Array
+            ? Int32Array
+            : T extends Int8Array
+              ? Int8Array
+              : T extends Uint16Array
+                ? Uint16Array
+                : T extends Uint32Array
+                  ? Uint32Array
+                  : T extends Uint8ClampedArray
+                    ? Uint8ClampedArray
+                    : T extends Uint8Array
+                      ? Uint8Array
+                      : never;
+/** Maps typed-array output leaves to narrow TS-compatible forms. */
+export type TypedRet<T> = T extends BigInt64Array
+  ? ReturnType<typeof BigInt64Array.of>
+  : T extends BigUint64Array
+    ? ReturnType<typeof BigUint64Array.of>
+    : T extends Float32Array
+      ? ReturnType<typeof Float32Array.of>
+      : T extends Float64Array
+        ? ReturnType<typeof Float64Array.of>
+        : T extends Int16Array
+          ? ReturnType<typeof Int16Array.of>
+          : T extends Int32Array
+            ? ReturnType<typeof Int32Array.of>
+            : T extends Int8Array
+              ? ReturnType<typeof Int8Array.of>
+              : T extends Uint16Array
+                ? ReturnType<typeof Uint16Array.of>
+                : T extends Uint32Array
+                  ? ReturnType<typeof Uint32Array.of>
+                  : T extends Uint8ClampedArray
+                    ? ReturnType<typeof Uint8ClampedArray.of>
+                    : T extends Uint8Array
+                      ? ReturnType<typeof Uint8Array.of>
+                      : never;
+/** Recursively adapts byte-carrying API input types. */
+export type TArg<T> =
+  | T
+  | ([TypedArg<T>] extends [never]
+      ? T extends (...args: infer A) => infer R
+        ? ((...args: { [K in keyof A]: TRet<A[K]> }) => TArg<R>) & {
+            [K in keyof T]: T[K] extends (...args: any) => any ? T[K] : TArg<T[K]>;
+          }
+        : T extends [infer A, ...infer R]
+          ? [TArg<A>, ...{ [K in keyof R]: TArg<R[K]> }]
+          : T extends readonly [infer A, ...infer R]
+            ? readonly [TArg<A>, ...{ [K in keyof R]: TArg<R[K]> }]
+            : T extends (infer A)[]
+              ? TArg<A>[]
+              : T extends readonly (infer A)[]
+                ? readonly TArg<A>[]
+                : T extends Promise<infer A>
+                  ? Promise<TArg<A>>
+                  : T extends object
+                    ? { [K in keyof T]: TArg<T[K]> }
+                    : T
+      : TypedArg<T>);
+/** Recursively adapts byte-carrying API output types. */
+export type TRet<T> = T extends unknown
+  ? T &
+      ([TypedRet<T>] extends [never]
+        ? T extends (...args: infer A) => infer R
+          ? ((...args: { [K in keyof A]: TArg<A[K]> }) => TRet<R>) & {
+              [K in keyof T]: T[K] extends (...args: any) => any ? T[K] : TRet<T[K]>;
+            }
+          : T extends [infer A, ...infer R]
+            ? [TRet<A>, ...{ [K in keyof R]: TRet<R[K]> }]
+            : T extends readonly [infer A, ...infer R]
+              ? readonly [TRet<A>, ...{ [K in keyof R]: TRet<R[K]> }]
+              : T extends (infer A)[]
+                ? TRet<A>[]
+                : T extends readonly (infer A)[]
+                  ? readonly TRet<A>[]
+                  : T extends Promise<infer A>
+                    ? Promise<TRet<A>>
+                    : T extends object
+                      ? { [K in keyof T]: TRet<T[K]> }
+                      : T
+        : TypedRet<T>)
+  : never;
+/**
  * Validates that a value is a byte array.
+ * @param value - Value to validate.
+ * @param length - Optional exact byte length.
+ * @param title - Optional field name.
+ * @returns Original byte array.
  * @example
  * Reject non-byte input before passing data into curve code.
  *
@@ -21,9 +124,12 @@ import {
  * abytes(new Uint8Array(1));
  * ```
  */
-export const abytes: typeof abytes_ = abytes_;
+export const abytes = <T extends TArg<Uint8Array>>(value: T, length?: number, title?: string): T =>
+  abytes_(value, length, title) as T;
 /**
- * Validates that a value is a safe integer.
+ * Validates that a value is a non-negative safe integer.
+ * @param n - Value to validate.
+ * @param title - Optional field name.
  * @example
  * Validate a numeric length before allocating buffers.
  *
@@ -34,6 +140,8 @@ export const abytes: typeof abytes_ = abytes_;
 export const anumber: typeof anumber_ = anumber_;
 /**
  * Encodes bytes as lowercase hex.
+ * @param bytes - Bytes to encode.
+ * @returns Lowercase hex string.
  * @example
  * Serialize bytes as hex for logging or fixtures.
  *
@@ -44,6 +152,8 @@ export const anumber: typeof anumber_ = anumber_;
 export const bytesToHex: typeof bytesToHex_ = bytesToHex_;
 /**
  * Concatenates byte arrays.
+ * @param arrays - Byte arrays to join.
+ * @returns Concatenated bytes.
  * @example
  * Join domain-separated chunks into one buffer.
  *
@@ -51,9 +161,12 @@ export const bytesToHex: typeof bytesToHex_ = bytesToHex_;
  * concatBytes(Uint8Array.of(1), Uint8Array.of(2));
  * ```
  */
-export const concatBytes: typeof concatBytes_ = concatBytes_;
+export const concatBytes = (...arrays: TArg<Uint8Array[]>): TRet<Uint8Array> =>
+  concatBytes_(...arrays) as TRet<Uint8Array>;
 /**
  * Decodes lowercase or uppercase hex into bytes.
+ * @param hex - Hex string to decode.
+ * @returns Decoded bytes.
  * @example
  * Parse fixture hex into bytes before hashing.
  *
@@ -61,9 +174,11 @@ export const concatBytes: typeof concatBytes_ = concatBytes_;
  * hexToBytes('0102');
  * ```
  */
-export const hexToBytes: typeof hexToBytes_ = hexToBytes_;
+export const hexToBytes = (hex: string): TRet<Uint8Array> => hexToBytes_(hex) as TRet<Uint8Array>;
 /**
  * Checks whether a value is a Uint8Array.
+ * @param a - Value to inspect.
+ * @returns `true` when `a` is a Uint8Array.
  * @example
  * Branch on byte input before decoding it.
  *
@@ -74,6 +189,8 @@ export const hexToBytes: typeof hexToBytes_ = hexToBytes_;
 export const isBytes: typeof isBytes_ = isBytes_;
 /**
  * Reads random bytes from the platform CSPRNG.
+ * @param bytesLength - Number of random bytes to read.
+ * @returns Fresh random bytes.
  * @example
  * Generate a random seed for a keypair.
  *
@@ -81,7 +198,8 @@ export const isBytes: typeof isBytes_ = isBytes_;
  * randomBytes(2);
  * ```
  */
-export const randomBytes: typeof randomBytes_ = randomBytes_;
+export const randomBytes = (bytesLength?: number): TRet<Uint8Array> =>
+  randomBytes_(bytesLength) as TRet<Uint8Array>;
 const _0n = /* @__PURE__ */ BigInt(0);
 const _1n = /* @__PURE__ */ BigInt(1);
 
@@ -92,11 +210,13 @@ export type CHash = {
    * @param message - Message bytes to hash.
    * @returns Digest bytes.
    */
-  (message: Uint8Array): Uint8Array;
+  (message: TArg<Uint8Array>): TRet<Uint8Array>;
   /** Hash block length in bytes. */
   blockLen: number;
   /** Default output length in bytes. */
   outputLen: number;
+  /** Whether `.create()` can be used as an XOF stream. */
+  canXOF: boolean;
   /**
    * Create one stateful hash or XOF instance, for example SHAKE with a custom output length.
    * @param opts - Optional extendable-output configuration:
@@ -106,7 +226,9 @@ export type CHash = {
   create(opts?: { dkLen?: number }): any;
 };
 /** Plain callable hash interface. */
-export type FHash = (message: Uint8Array) => Uint8Array;
+export type FHash = (message: TArg<Uint8Array>) => TRet<Uint8Array>;
+/** HMAC callback signature. */
+export type HmacFn = (key: TArg<Uint8Array>, message: TArg<Uint8Array>) => TRet<Uint8Array>;
 /**
  * Validates that a flag is boolean.
  * @param value - Value to validate.
@@ -128,8 +250,19 @@ export function abool(value: boolean, title: string = ''): boolean {
   return value;
 }
 
-// Used in weierstrass, der
-function abignumber(n: number | bigint) {
+/**
+ * Validates that a value is a non-negative bigint or safe integer.
+ * @param n - Value to validate.
+ * @returns The same validated value.
+ * @throws On wrong argument ranges or values. {@link RangeError}
+ * @example
+ * Validate one integer-like value before serializing it.
+ *
+ * ```ts
+ * abignumber(1n);
+ * ```
+ */
+export function abignumber<T extends number | bigint>(n: T): T {
   if (typeof n === 'bigint') {
     if (!isPosBig(n)) throw new RangeError('positive bigint expected, got ' + n);
   } else anumber(n);
@@ -162,6 +295,8 @@ export function asafenumber(value: number, title: string = ''): void {
 
 /**
  * Encodes a bigint into even-length big-endian hex.
+ * The historical "unpadded" name only means "no fixed-width field padding"; odd-length hex still
+ * gets one leading zero nibble so the result always represents whole bytes.
  * @param num - Number to encode.
  * @returns Big-endian hex string.
  * @throws On wrong argument ranges or values. {@link RangeError}
@@ -179,6 +314,8 @@ export function numberToHexUnpadded(num: number | bigint): string {
 
 /**
  * Parses a big-endian hex string into bigint.
+ * Accepts odd-length hex through the native `BigInt('0x' + hex)` parser and currently surfaces the
+ * same native `SyntaxError` for malformed hex instead of wrapping it in a library-specific error.
  * @param hex - Hex string without `0x`.
  * @returns Parsed bigint value.
  * @throws On wrong argument types. {@link TypeError}
@@ -207,7 +344,7 @@ export function hexToNumber(hex: string): bigint {
  * bytesToNumberBE(Uint8Array.of(1, 0));
  * ```
  */
-export function bytesToNumberBE(bytes: Uint8Array): bigint {
+export function bytesToNumberBE(bytes: TArg<Uint8Array>): bigint {
   return hexToNumber(bytesToHex_(bytes));
 }
 /**
@@ -222,14 +359,14 @@ export function bytesToNumberBE(bytes: Uint8Array): bigint {
  * bytesToNumberLE(Uint8Array.of(1, 0));
  * ```
  */
-export function bytesToNumberLE(bytes: Uint8Array): bigint {
+export function bytesToNumberLE(bytes: TArg<Uint8Array>): bigint {
   return hexToNumber(bytesToHex_(copyBytes(abytes_(bytes)).reverse()));
 }
 
 /**
  * Encodes a bigint into fixed-length big-endian bytes.
  * @param n - Number to encode.
- * @param len - Output length in bytes.
+ * @param len - Output length in bytes. Must be greater than zero.
  * @returns Big-endian byte array.
  * @throws On wrong argument ranges or values. {@link RangeError}
  * @example
@@ -239,12 +376,14 @@ export function bytesToNumberLE(bytes: Uint8Array): bigint {
  * numberToBytesBE(255n, 2);
  * ```
  */
-export function numberToBytesBE(n: number | bigint, len: number): Uint8Array {
+export function numberToBytesBE(n: number | bigint, len: number): TRet<Uint8Array> {
   anumber_(len);
+  if (len === 0) throw new RangeError('zero length');
   n = abignumber(n);
-  const res = hexToBytes_(n.toString(16).padStart(len * 2, '0'));
-  if (res.length !== len) throw new RangeError('number too large');
-  return res;
+  const hex = n.toString(16);
+  // Detect overflow before hex parsing so oversized values don't leak the shared odd-hex error.
+  if (hex.length > len * 2) throw new RangeError('number too large');
+  return hexToBytes_(hex.padStart(len * 2, '0')) as TRet<Uint8Array>;
 }
 /**
  * Encodes a bigint into fixed-length little-endian bytes.
@@ -259,8 +398,8 @@ export function numberToBytesBE(n: number | bigint, len: number): Uint8Array {
  * numberToBytesLE(255n, 2);
  * ```
  */
-export function numberToBytesLE(n: number | bigint, len: number): Uint8Array {
-  return numberToBytesBE(n, len).reverse();
+export function numberToBytesLE(n: number | bigint, len: number): TRet<Uint8Array> {
+  return numberToBytesBE(n, len).reverse() as TRet<Uint8Array>;
 }
 // Unpadded, rarely used
 /**
@@ -275,8 +414,8 @@ export function numberToBytesLE(n: number | bigint, len: number): Uint8Array {
  * numberToVarBytesBE(255n);
  * ```
  */
-export function numberToVarBytesBE(n: number | bigint): Uint8Array {
-  return hexToBytes_(numberToHexUnpadded(abignumber(n)));
+export function numberToVarBytesBE(n: number | bigint): TRet<Uint8Array> {
+  return hexToBytes_(numberToHexUnpadded(abignumber(n))) as TRet<Uint8Array>;
 }
 
 // Compares 2 u8a-s in kinda constant time
@@ -292,7 +431,9 @@ export function numberToVarBytesBE(n: number | bigint): Uint8Array {
  * equalBytes(Uint8Array.of(1), Uint8Array.of(1));
  * ```
  */
-export function equalBytes(a: Uint8Array, b: Uint8Array): boolean {
+export function equalBytes(a: TArg<Uint8Array>, b: TArg<Uint8Array>): boolean {
+  a = abytes(a);
+  b = abytes(b);
   if (a.length !== b.length) return false;
   let diff = 0;
   for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
@@ -311,8 +452,10 @@ export function equalBytes(a: Uint8Array, b: Uint8Array): boolean {
  * copyBytes(Uint8Array.of(1, 2, 3));
  * ```
  */
-export function copyBytes(bytes: Uint8Array): Uint8Array {
-  return Uint8Array.from(bytes);
+export function copyBytes(bytes: TArg<Uint8Array>): TRet<Uint8Array> {
+  // `Uint8Array.from(...)` would also accept arrays / other typed arrays. Keep this helper strict
+  // because callers use it at byte-validation boundaries before mutating the detached copy.
+  return Uint8Array.from(abytes(bytes)) as TRet<Uint8Array>;
 }
 
 /**
@@ -329,7 +472,7 @@ export function copyBytes(bytes: Uint8Array): Uint8Array {
  * asciiToBytes('ABC');
  * ```
  */
-export function asciiToBytes(ascii: string): Uint8Array {
+export function asciiToBytes(ascii: string): TRet<Uint8Array> {
   if (typeof ascii !== 'string') throw new TypeError('ascii string expected, got ' + typeof ascii);
   return Uint8Array.from(ascii, (c, i) => {
     const charCode = c.charCodeAt(0);
@@ -339,10 +482,10 @@ export function asciiToBytes(ascii: string): Uint8Array {
       );
     }
     return charCode;
-  });
+  }) as TRet<Uint8Array>;
 }
 
-// Is positive bigint
+// Historical name: this accepts non-negative bigints, including zero.
 const isPosBig = (n: bigint) => typeof n === 'bigint' && _0n <= n;
 
 /**
@@ -368,6 +511,8 @@ export function inRange(n: bigint, min: bigint, max: bigint): boolean {
  * @param n - Candidate value.
  * @param min - Inclusive lower bound.
  * @param max - Exclusive upper bound.
+ * Wrong-type inputs are not separated from out-of-range values here: they still flow through the
+ * shared `RangeError` path because this is only a throwing wrapper around `inRange(...)`.
  * @throws On wrong argument ranges or values. {@link RangeError}
  * @example
  * Assert that a bigint stays within one half-open range.
@@ -394,6 +539,7 @@ export function aInRange(title: string, n: bigint, min: bigint, max: bigint): vo
  * TODO: merge with nLength in modular
  * @param n - Value to inspect.
  * @returns Bit length.
+ * @throws If the value is negative. {@link Error}
  * @example
  * Measure the bit length of a scalar before serialization.
  *
@@ -402,6 +548,9 @@ export function aInRange(title: string, n: bigint, min: bigint, max: bigint): vo
  * ```
  */
 export function bitLen(n: bigint): number {
+  // Size callers in this repo only use non-negative orders / scalars, so negative inputs are a
+  // contract bug and must not silently collapse to zero bits.
+  if (n < _0n) throw new Error('expected non-negative bigint, got ' + n);
   let len;
   for (len = 0; n > _0n; n >>= _1n, len += 1);
   return len;
@@ -412,7 +561,9 @@ export function bitLen(n: bigint): number {
  * NOTE: first bit position is 0 (same as arrays)
  * Same as `!!+Array.from(n.toString(2)).reverse()[pos]`
  * @param n - Source value.
- * @param pos - Bit position.
+ * @param pos - Bit position. Negative positions are passed through to raw
+ *   bigint shift semantics; because the mask is built as `1n << pos`,
+ *   they currently collapse to `0n` and make the helper a no-op.
  * @returns Bit as bigint.
  * @example
  * Gets single bit at position.
@@ -428,7 +579,8 @@ export function bitGet(n: bigint, pos: number): bigint {
 /**
  * Sets single bit at position.
  * @param n - Source value.
- * @param pos - Bit position.
+ * @param pos - Bit position. Negative positions are passed through to raw bigint shift semantics,
+ *   so they currently behave like left shifts.
  * @param value - Whether the bit should be set.
  * @returns Updated bigint.
  * @example
@@ -439,13 +591,16 @@ export function bitGet(n: bigint, pos: number): bigint {
  * ```
  */
 export function bitSet(n: bigint, pos: number, value: boolean): bigint {
-  return n | ((value ? _1n : _0n) << BigInt(pos));
+  const mask = _1n << BigInt(pos);
+  // Clearing needs AND-not here; OR with zero leaves an already-set bit untouched.
+  return value ? n | mask : n & ~mask;
 }
 
 /**
  * Calculate mask for N bits. Not using ** operator with bigints because of old engines.
  * Same as BigInt(`0b${Array(i).fill('1').join('')}`)
- * @param n - Number of bits.
+ * @param n - Number of bits. Negative widths are currently passed through to raw bigint shift
+ *   semantics and therefore produce `-1n`.
  * @returns Bitmask value.
  * @example
  * Calculate mask for N bits.
@@ -458,13 +613,15 @@ export const bitMask = (n: number): bigint => (_1n << BigInt(n)) - _1n;
 
 // DRBG
 
-type Pred<T> = (v: Uint8Array) => T | undefined;
+type Pred<T> = (v: TArg<Uint8Array>) => T | undefined;
 /**
  * Minimal HMAC-DRBG from NIST 800-90 for RFC6979 sigs.
- * @param hashLen - Hash output size in bytes.
- * @param qByteLen - Requested output size in bytes.
+ * @param hashLen - Hash output size in bytes. Callers are expected to pass a positive length; `0`
+ *   is not rejected here and would make the internal generate loop non-progressing.
+ * @param qByteLen - Requested output size in bytes. Callers are expected to pass a positive length.
  * @param hmacFn - HMAC implementation.
- * @returns Function that will call DRBG until the predicate returns something meaningful.
+ * @returns Function that will call DRBG until the predicate returns anything
+ *   other than `undefined`.
  * @throws On wrong argument types. {@link TypeError}
  * @example
  * Build a deterministic nonce generator for RFC6979-style signing.
@@ -481,28 +638,32 @@ type Pred<T> = (v: Uint8Array) => T | undefined;
 export function createHmacDrbg<T>(
   hashLen: number,
   qByteLen: number,
-  hmacFn: (key: Uint8Array, message: Uint8Array) => Uint8Array
-): (seed: Uint8Array, predicate: Pred<T>) => T {
+  hmacFn: TArg<HmacFn>
+): TRet<(seed: Uint8Array, predicate: Pred<T>) => T> {
   anumber_(hashLen, 'hashLen');
   anumber_(qByteLen, 'qByteLen');
   if (typeof hmacFn !== 'function') throw new TypeError('hmacFn must be a function');
-  const u8n = (len: number): Uint8Array => new Uint8Array(len); // creates Uint8Array
+  // creates Uint8Array
+  const u8n = (len: number): TRet<Uint8Array> => new Uint8Array(len) as TRet<Uint8Array>;
   const NULL = Uint8Array.of();
   const byte0 = Uint8Array.of(0x00);
   const byte1 = Uint8Array.of(0x01);
   const _maxDrbgIters = 1000;
 
-  // Step B, Step C: set hashLen to 8*ceil(hlen/8)
-  let v = u8n(hashLen); // Minimal non-full-spec HMAC-DRBG from NIST 800-90 for RFC6979 sigs.
-  let k = u8n(hashLen); // Steps B and C of RFC6979 3.2: set hashLen, in our case always same
+  // Step B, Step C: set hashLen to 8*ceil(hlen/8).
+  // Minimal non-full-spec HMAC-DRBG from NIST 800-90 for RFC6979 signatures.
+  let v: Uint8Array = u8n(hashLen);
+  // Steps B and C of RFC6979 3.2.
+  let k: Uint8Array = u8n(hashLen);
   let i = 0; // Iterations counter, will throw when over 1000
   const reset = () => {
     v.fill(1);
     k.fill(0);
     i = 0;
   };
-  const h = (...msgs: Uint8Array[]) => hmacFn(k, concatBytes_(v, ...msgs)); // hmac(k)(v, ...values)
-  const reseed = (seed: Uint8Array = NULL) => {
+  // hmac(k)(v, ...values)
+  const h = (...msgs: TArg<Uint8Array[]>) => (hmacFn as HmacFn)(k, concatBytes(v, ...msgs));
+  const reseed = (seed: TArg<Uint8Array> = NULL) => {
     // HMAC-DRBG reseed() function. Steps D-G
     k = h(byte0, seed); // k = hmac(k || v || 0x00 || seed)
     v = h(); // v = hmac(k || v)
@@ -521,21 +682,24 @@ export function createHmacDrbg<T>(
       out.push(sl);
       len += v.length;
     }
-    return concatBytes_(...out);
+    return concatBytes(...out);
   };
-  const genUntil = (seed: Uint8Array, pred: Pred<T>): T => {
+  const genUntil = (seed: TArg<Uint8Array>, pred: TArg<Pred<T>>): T => {
     reset();
     reseed(seed); // Steps D-G
-    let res: T | undefined = undefined; // Step H: grind until k is in [1..n-1]
-    while (!(res = pred(gen()))) reseed();
+    let res: T | undefined = undefined; // Step H: grind until the predicate accepts a candidate.
+    // Falsy values like 0 are valid outputs.
+    while ((res = (pred as Pred<T>)(gen())) === undefined) reseed();
     reset();
     return res;
   };
-  return genUntil;
+  return genUntil as TRet<(seed: Uint8Array, predicate: Pred<T>) => T>;
 }
 
 /**
- * Validates a plain object against required and optional field types.
+ * Validates declared required and optional field types on a plain object.
+ * Extra keys are intentionally ignored because many callers validate only the subset they use from
+ * richer option bags or runtime objects.
  * @param object - Object to validate.
  * @param fields - Required field types.
  * @param optFields - Optional field types.
@@ -556,6 +720,10 @@ export function validateObject(
     throw new TypeError('expected valid options object');
   type Item = keyof typeof object;
   function checkField(fieldName: Item, expectedType: string, isOpt: boolean) {
+    // Config/data fields must be explicit own properties, but runtime objects such as Field
+    // instances intentionally satisfy required method slots via their shared prototype.
+    if (!isOpt && expectedType !== 'function' && !Object.hasOwn(object, fieldName))
+      throw new TypeError(`param "${fieldName}" is invalid: expected own property`);
     const val = object[fieldName];
     if (isOpt && val === undefined) return;
     const current = typeof val;
@@ -586,33 +754,6 @@ export function validateObject(
 export const notImplemented = (): never => {
   throw new Error('not implemented');
 };
-
-/**
- * Memoizes (caches) computation result.
- * Uses WeakMap: the value is going auto-cleaned by GC after last reference is removed.
- * @param fn - Function to memoize.
- * @returns Cached wrapper.
- * @example
- * Reuse cached derived data for the same object identity.
- *
- * ```ts
- * const item = {};
- * const get = memoized((value: object) => value);
- * get(item) === get(item);
- * ```
- */
-export function memoized<T extends object, R, O extends any[]>(
-  fn: (arg: T, ...args: O) => R
-): (arg: T, ...args: O) => R {
-  const map = new WeakMap<T, R>();
-  return (arg: T, ...args: O): R => {
-    const val = map.get(arg);
-    if (val !== undefined) return val;
-    const computed = fn(arg, ...args);
-    map.set(arg, computed);
-    return computed;
-  };
-}
 
 /** Generic keygen/getPublicKey interface shared by curve helpers. */
 export interface CryptoKeys {

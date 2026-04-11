@@ -9,7 +9,13 @@
 import { sha256 } from '@noble/hashes/sha2.js';
 import { randomBytes } from '@noble/hashes/utils.js';
 import { createKeygen, type CurveLengths } from './abstract/curve.ts';
-import { createFROST, type FROST, type FrostPublic, type FrostSecret } from './abstract/frost.ts';
+import {
+  createFROST,
+  type FROST,
+  type FrostPublic,
+  type FrostSecret,
+  type Nonces,
+} from './abstract/frost.ts';
 import { createHasher, type H2CHasher, isogenyMap } from './abstract/hash-to-curve.ts';
 import { Field, mapHashToField, pow2 } from './abstract/modular.ts';
 import {
@@ -22,7 +28,14 @@ import {
   type WeierstrassOpts,
   type WeierstrassPointCons,
 } from './abstract/weierstrass.ts';
-import { abytes, asciiToBytes, bytesToNumberBE, concatBytes } from './utils.ts';
+import {
+  abytes,
+  asciiToBytes,
+  bytesToNumberBE,
+  concatBytes,
+  type TArg,
+  type TRet,
+} from './utils.ts';
 
 // Seems like generator was produced from some seed:
 // `Pointk1.BASE.multiply(Pointk1.Fn.inv(2n, N)).toAffine().x`
@@ -107,22 +120,24 @@ export const secp256k1: ECDSA = /* @__PURE__ */ ecdsa(Pointk1, sha256);
 // https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki
 /** An object mapping tags to their tagged hash prefix of [SHA256(tag) | SHA256(tag)] */
 const TAGGED_HASH_PREFIXES: { [tag: string]: Uint8Array } = {};
-function taggedHash(tag: string, ...messages: Uint8Array[]): Uint8Array {
+// BIP-340 phrases tags as UTF-8, but all current standardized names here are 7-bit ASCII.
+function taggedHash(tag: string, ...messages: TArg<Uint8Array[]>): TRet<Uint8Array> {
   let tagP = TAGGED_HASH_PREFIXES[tag];
   if (tagP === undefined) {
     const tagH = sha256(asciiToBytes(tag));
     tagP = concatBytes(tagH, tagH);
     TAGGED_HASH_PREFIXES[tag] = tagP;
   }
-  return sha256(concatBytes(tagP, ...messages));
+  return sha256(concatBytes(tagP, ...messages)) as TRet<Uint8Array>;
 }
 
 // ECDSA compact points are 33-byte. Schnorr is 32: we strip first byte 0x02 or 0x03
-const pointToBytes = (point: PointType<bigint>) => point.toBytes(true).slice(1);
+const pointToBytes = (point: TArg<PointType<bigint>>): TRet<Uint8Array> =>
+  point.toBytes(true).slice(1) as TRet<Uint8Array>;
 const hasEven = (y: bigint) => y % _2n === _0n;
 
 // Calculate point, scalar and bytes
-function schnorrGetExtPubKey(priv: Uint8Array) {
+function schnorrGetExtPubKey(priv: TArg<Uint8Array>) {
   const { Fn, BASE } = Pointk1;
   const d_ = Fn.fromBytes(priv);
   const p = BASE.multiply(d_); // P = d'⋅G; 0 < d' < n check is done inside
@@ -146,48 +161,64 @@ function lift_x(x: bigint): PointType<bigint> {
   p.assertValidity();
   return p;
 }
+// BIP-340 callers still need to supply canonical 32-byte inputs where required; this alias only
+// parses big-endian bytes and does not enforce the fixed-width contract itself.
 const num = bytesToNumberBE;
 /** Create tagged hash, convert it to bigint, reduce modulo-n. */
-function challenge(...args: Uint8Array[]): bigint {
+function challenge(...args: TArg<Uint8Array[]>): bigint {
   return Pointk1.Fn.create(num(taggedHash('BIP0340/challenge', ...args)));
 }
 
 /** Schnorr public key is just `x` coordinate of Point as per BIP340. */
-function schnorrGetPublicKey(secretKey: Uint8Array): Uint8Array {
+function schnorrGetPublicKey(secretKey: TArg<Uint8Array>): TRet<Uint8Array> {
   return schnorrGetExtPubKey(secretKey).bytes; // d'=int(sk). Fail if d'=0 or d'≥n. Ret bytes(d'⋅G)
 }
 
 /**
  * Creates Schnorr signature as per BIP340. Verifies itself before returning anything.
- * auxRand is optional and is not the sole source of k generation: bad CSPRNG won't be dangerous.
+ * `auxRand` is optional and is not the sole source of `k` generation: bad CSPRNG output will not
+ * be catastrophic, but BIP-340 still recommends fresh auxiliary randomness when available to harden
+ * deterministic signing against side-channel and fault-injection attacks.
  */
 function schnorrSign(
-  message: Uint8Array,
-  secretKey: Uint8Array,
-  auxRand: Uint8Array = randomBytes(32)
-): Uint8Array {
-  const { Fn } = Pointk1;
+  message: TArg<Uint8Array>,
+  secretKey: TArg<Uint8Array>,
+  auxRand: TArg<Uint8Array> = randomBytes(32)
+): TRet<Uint8Array> {
+  const { Fn, BASE } = Pointk1;
   const m = abytes(message, undefined, 'message');
   const { bytes: px, scalar: d } = schnorrGetExtPubKey(secretKey); // checks for isWithinCurveOrder
   const a = abytes(auxRand, 32, 'auxRand'); // Auxiliary random data a: a 32-byte array
-  const t = Fn.toBytes(d ^ num(taggedHash('BIP0340/aux', a))); // Let t be the byte-wise xor of bytes(d) and hash/aux(a)
+  // Let t be the byte-wise xor of bytes(d) and hash/aux(a).
+  const t = Fn.toBytes(d ^ num(taggedHash('BIP0340/aux', a)));
   const rand = taggedHash('BIP0340/nonce', t, px, m); // Let rand = hash/nonce(t || bytes(P) || m)
-  // Let k' = int(rand) mod n. Fail if k' = 0. Let R = k'⋅G
-  const { bytes: rx, scalar: k } = schnorrGetExtPubKey(rand);
+  // BIP340 defines k' = int(rand) mod n. We can't reuse schnorrGetExtPubKey(rand)
+  // here: that helper parses canonical secret keys and rejects rand >= n instead
+  // of reducing the nonce hash modulo the group order.
+  const k_ = Fn.create(num(rand));
+  // BIP-340: "Let k' = int(rand) mod n. Fail if k' = 0. Let R = k'⋅G."
+  if (k_ === 0n) throw new Error('sign failed: k is zero');
+  const p = BASE.multiply(k_); // Rejects zero; only the raw nonce hash needs reduction.
+  const k = hasEven(p.y) ? k_ : Fn.neg(k_);
+  const rx = pointToBytes(p);
   const e = challenge(rx, px, m); // Let e = int(hash/challenge(bytes(R) || bytes(P) || m)) mod n.
   const sig = new Uint8Array(64); // Let sig = bytes(R) || bytes((k + ed) mod n).
   sig.set(rx, 0);
   sig.set(Fn.toBytes(Fn.create(k + e * d)), 32);
   // If Verify(bytes(P), m, sig) (see below) returns failure, abort
   if (!schnorrVerify(sig, m, px)) throw new Error('sign: Invalid signature produced');
-  return sig;
+  return sig as TRet<Uint8Array>;
 }
 
 /**
  * Verifies Schnorr signature.
  * Will swallow errors & return false except for initial type validation of arguments.
  */
-function schnorrVerify(signature: Uint8Array, message: Uint8Array, publicKey: Uint8Array): boolean {
+function schnorrVerify(
+  signature: TArg<Uint8Array>,
+  message: TArg<Uint8Array>,
+  publicKey: TArg<Uint8Array>
+): boolean {
   const { Fp, Fn, BASE } = Pointk1;
   const sig = abytes(signature, 64, 'signature');
   const m = abytes(message, undefined, 'message');
@@ -197,9 +228,13 @@ function schnorrVerify(signature: Uint8Array, message: Uint8Array, publicKey: Ui
     const r = num(sig.subarray(0, 32)); // Let r = int(sig[0:32]); fail if r ≥ p.
     if (!Fp.isValidNot0(r)) return false;
     const s = num(sig.subarray(32, 64)); // Let s = int(sig[32:64]); fail if s ≥ n.
+    // Stricter than BIP-340/libsecp256k1, which only reject s >= n. Honest signing reaches
+    // s = 0 only with negligible probability (k + e*d ≡ 0 mod n), so treat zero-s inputs as
+    // crafted edge cases and fail closed instead of carrying that extra verification surface.
     if (!Fn.isValidNot0(s)) return false;
 
-    const e = challenge(Fn.toBytes(r), pointToBytes(P), m); // int(challenge(bytes(r)||bytes(P)||m))%n
+    // int(challenge(bytes(r) || bytes(P) || m)) % n
+    const e = challenge(Fn.toBytes(r), pointToBytes(P), m);
     // R = s⋅G - e⋅P, where -eP == (n-e)P
     const R = BASE.multiplyUnsafe(s).add(P.multiplyUnsafe(Fn.neg(e)));
     const { x, y } = R.toAffine();
@@ -211,6 +246,8 @@ function schnorrVerify(signature: Uint8Array, message: Uint8Array, publicKey: Ui
   }
 }
 
+export const __TEST: { lift_x: typeof lift_x } = /* @__PURE__ */ Object.freeze({ lift_x });
+
 /** Schnorr-specific secp256k1 API from BIP340. */
 export type SecpSchnorr = {
   /**
@@ -218,7 +255,7 @@ export type SecpSchnorr = {
    * @param seed - Optional seed for deterministic testing or custom randomness.
    * @returns Fresh secret/public keypair.
    */
-  keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
+  keygen: (seed?: TArg<Uint8Array>) => { secretKey: TRet<Uint8Array>; publicKey: TRet<Uint8Array> };
   /**
    * Derive the x-only public key from a secret key.
    * @param secretKey - Secret key bytes.
@@ -246,9 +283,9 @@ export type SecpSchnorr = {
   /** Helper utilities for Schnorr-specific key handling and tagged hashing. */
   utils: {
     /** Generate one Schnorr secret key. */
-    randomSecretKey: (seed?: Uint8Array) => Uint8Array;
+    randomSecretKey: (seed?: TArg<Uint8Array>) => TRet<Uint8Array>;
     /** Convert one point into its x-only BIP340 byte encoding. */
-    pointToBytes: (point: PointType<bigint>) => Uint8Array;
+    pointToBytes: (point: TArg<PointType<bigint>>) => TRet<Uint8Array>;
     /** Lift one x coordinate into the unique even-Y point. */
     lift_x: typeof lift_x;
     /** Compute a BIP340 tagged hash. */
@@ -275,31 +312,34 @@ export type SecpSchnorr = {
 export const schnorr: SecpSchnorr = /* @__PURE__ */ (() => {
   const size = 32;
   const seedLength = 48;
-  const randomSecretKey = (seed = randomBytes(seedLength)): Uint8Array => {
+  const randomSecretKey = (seed?: TArg<Uint8Array>): TRet<Uint8Array> => {
+    seed = seed === undefined ? randomBytes(seedLength) : seed;
     return mapHashToField(seed, secp256k1_CURVE.n);
   };
-  return {
+  return Object.freeze({
     keygen: createKeygen(randomSecretKey, schnorrGetPublicKey),
     getPublicKey: schnorrGetPublicKey,
     sign: schnorrSign,
     verify: schnorrVerify,
     Point: Pointk1,
-    utils: {
+    utils: Object.freeze({
       randomSecretKey,
       taggedHash,
       lift_x,
       pointToBytes,
-    },
-    lengths: {
+    }),
+    lengths: Object.freeze({
       secretKey: size,
       publicKey: size,
       publicKeyHasPrefix: false,
       signature: size * 2,
       seed: seedLength,
-    },
-  };
+    }),
+  });
 })();
 
+// RFC 9380 Appendix E.1 3-isogeny coefficients for secp256k1, stored in ascending degree order.
+// The final `1` in each denominator array is the explicit monic leading term.
 const isoMap = /* @__PURE__ */ (() =>
   isogenyMap(
     Fpk1,
@@ -333,12 +373,17 @@ const isoMap = /* @__PURE__ */ (() =>
       ],
     ].map((i) => i.map((j) => BigInt(j))) as [bigint[], bigint[], bigint[], bigint[]]
   ))();
-const mapSWU = /* @__PURE__ */ (() =>
-  mapToCurveSimpleSWU(Fpk1, {
+// RFC 9380 §8.7 secp256k1 E' parameters for the SWU-to-isogeny pipeline below.
+let mapSWU: ((u: bigint) => { x: bigint; y: bigint }) | undefined;
+const getMapSWU = () =>
+  mapSWU ||
+  (mapSWU = mapToCurveSimpleSWU(Fpk1, {
+    // Building the SWU sqrt-ratio helper eagerly adds noticeable `secp256k1.js` import cost, so
+    // defer it to first use; after that the cached mapper is reused directly.
     A: BigInt('0x3f8731abdd661adca08a5558f0f5d272e953d363cb6f0e5d405447c01a444533'),
     B: BigInt('1771'),
     Z: Fpk1.create(BigInt('-11')),
-  }))();
+  }));
 
 /**
  * Hashing / encoding to secp256k1 points / field. RFC 9380 methods.
@@ -353,7 +398,7 @@ export const secp256k1_hasher: H2CHasher<WeierstrassPointCons<bigint>> = /* @__P
   createHasher(
     Pointk1,
     (scalars: bigint[]) => {
-      const { x, y } = mapSWU(Fpk1.create(scalars[0]));
+      const { x, y } = getMapSWU()(Fpk1.create(scalars[0]));
       return isoMap(x, y);
     },
     {
@@ -378,7 +423,7 @@ export const secp256k1_hasher: H2CHasher<WeierstrassPointCons<bigint>> = /* @__P
  * const deal = secp256k1_FROST.trustedDealer({ min: 2, max: 3 }, [alice, bob, carol]);
  * ```
  */
-export const secp256k1_FROST: FROST = /* @__PURE__ */ (() =>
+export const secp256k1_FROST: TRet<FROST> = /* @__PURE__ */ (() =>
   createFROST({
     name: 'FROST-secp256k1-SHA256-v1',
     Point: Pointk1,
@@ -387,14 +432,21 @@ export const secp256k1_FROST: FROST = /* @__PURE__ */ (() =>
   }))();
 
 // Taproot utils
-function tweak(point: PointType<bigint>, merkleRoot?: Uint8Array): bigint {
+// `undefined` means "disable TapTweak entirely"; callers that want the BIP-341/BIP-386 empty
+// merkle root must pass `new Uint8Array(0)` explicitly.
+function tweak(point: PointType<bigint>, merkleRoot?: TArg<Uint8Array>): bigint {
   if (merkleRoot === undefined) return _0n;
   const x = pointToBytes(point);
-  return Pointk1.Fn.create(bytesToNumberBE(taggedHash('TapTweak', x, merkleRoot)));
+  const t = bytesToNumberBE(taggedHash('TapTweak', x, merkleRoot));
+  // BIP-341 taproot_tweak_pubkey/taproot_tweak_seckey: "if t >= SECP256K1_ORDER:
+  // raise ValueError". TapTweak must reject overflow instead of reducing modulo n.
+  if (!Pointk1.Fn.isValid(t)) throw new Error('invalid TapTweak hash');
+  return t;
 }
-function frostPubToEvenY(pub: FrostPublic) {
+function frostPubToEvenY(pub: TArg<FrostPublic>): TRet<FrostPublic> {
   const VK = Pointk1.fromBytes(pub.commitments[0]);
-  if (hasEven(VK.y)) return pub;
+  // Keep aliasing on the already-even path so wrapper callers can skip unnecessary cloning.
+  if (hasEven(VK.y)) return pub as TRet<FrostPublic>;
   return {
     signers: { min: pub.signers.min, max: pub.signers.max },
     commitments: pub.commitments.map((i) => Pointk1.fromBytes(i).negate().toBytes()),
@@ -404,19 +456,32 @@ function frostPubToEvenY(pub: FrostPublic) {
         Pointk1.fromBytes(v).negate().toBytes(),
       ])
     ),
-  };
+  } as TRet<FrostPublic>;
 }
-function frostSecretToEvenY(s: FrostSecret, pub: FrostPublic) {
+function frostSecretToEvenY(s: TArg<FrostSecret>, pub: TArg<FrostPublic>): TRet<FrostSecret> {
   const VK = Pointk1.fromBytes(pub.commitments[0]);
-  if (hasEven(VK.y)) return s;
+  // Keep aliasing on the already-even path so wrapper callers can preserve package identity.
+  if (hasEven(VK.y)) return s as TRet<FrostSecret>;
   const Fn = Pointk1.Fn;
   return {
     ...s,
     signingShare: Fn.toBytes(Fn.neg(Fn.fromBytes(s.signingShare))),
-  };
+  } as TRet<FrostSecret>;
+}
+function frostNoncesToEvenY(PK: PointType<bigint>, nonces: TArg<Nonces>): TRet<Nonces> {
+  if (hasEven(PK.y)) return nonces as TRet<Nonces>;
+  const Fn = Pointk1.Fn;
+  return {
+    binding: Fn.toBytes(Fn.neg(Fn.fromBytes(nonces.binding))),
+    hiding: Fn.toBytes(Fn.neg(Fn.fromBytes(nonces.hiding))),
+  } as TRet<Nonces>;
 }
 
-function frostTweakSecret(s: FrostSecret, pub: FrostPublic, merkleRoot?: Uint8Array): FrostSecret {
+function frostTweakSecret(
+  s: TArg<FrostSecret>,
+  pub: TArg<FrostPublic>,
+  merkleRoot?: TArg<Uint8Array>
+): TRet<FrostSecret> {
   const Fn = Pointk1.Fn;
   const keyPackage = frostSecretToEvenY(s, pub);
   const evenPub = frostPubToEvenY(pub);
@@ -425,10 +490,13 @@ function frostTweakSecret(s: FrostSecret, pub: FrostPublic, merkleRoot?: Uint8Ar
   return {
     identifier: keyPackage.identifier,
     signingShare,
-  };
+  } as TRet<FrostSecret>;
 }
 
-function frostTweakPublic(pub: FrostPublic, merkleRoot?: Uint8Array): FrostPublic {
+function frostTweakPublic(
+  pub: TArg<FrostPublic>,
+  merkleRoot?: TArg<Uint8Array>
+): TRet<FrostPublic> {
   const PKPackage = frostPubToEvenY(pub);
   const t = tweak(Pointk1.fromBytes(PKPackage.commitments[0]), merkleRoot);
   const tp = Pointk1.BASE.multiply(t);
@@ -443,11 +511,13 @@ function frostTweakPublic(pub: FrostPublic, merkleRoot?: Uint8Array): FrostPubli
     signers: { min: PKPackage.signers.min, max: PKPackage.signers.max },
     commitments,
     verifyingShares,
-  };
+  } as TRet<FrostPublic>;
 }
 
 /**
  * FROST threshold signatures over secp256k1-schnorr-taproot. RFC 9591.
+ * DKG outputs are auto-tweaked with the empty Taproot merkle root for compatibility, while
+ * `trustedDealer()` outputs stay untweaked unless callers apply the Taproot tweak themselves.
  * @example
  * Create one trusted-dealer package for Taproot-compatible FROST signing.
  *
@@ -458,7 +528,7 @@ function frostTweakPublic(pub: FrostPublic, merkleRoot?: Uint8Array): FrostPubli
  * const deal = schnorr_FROST.trustedDealer({ min: 2, max: 3 }, [alice, bob, carol]);
  * ```
  */
-export const schnorr_FROST: FROST = /* @__PURE__ */ (() =>
+export const schnorr_FROST: TRet<FROST> = /* @__PURE__ */ (() =>
   createFROST({
     name: 'FROST-secp256k1-SHA256-TR-v1',
     Point: Pointk1,
@@ -479,21 +549,14 @@ export const schnorr_FROST: FROST = /* @__PURE__ */ (() =>
     challenge(R, PK, msg) {
       return challenge(pointToBytes(R), pointToBytes(PK), msg);
     },
-    adjustNonces(PK, nonces) {
-      if (hasEven(PK.y)) return nonces;
-      const Fn = Pointk1.Fn;
-      return {
-        binding: Fn.toBytes(Fn.neg(Fn.fromBytes(nonces.binding))),
-        hiding: Fn.toBytes(Fn.neg(Fn.fromBytes(nonces.hiding))),
-      };
-    },
+    adjustNonces: frostNoncesToEvenY,
     adjustGroupCommitmentShare: (GC, GCShare) => (!hasEven(GC.y) ? GCShare.negate() : GCShare),
     adjustPublic: frostPubToEvenY,
     adjustSecret: frostSecretToEvenY,
     adjustTx: {
       // Compat with official implementation
-      encode: (tx) => tx.subarray(1),
-      decode: (tx) => concatBytes(new Uint8Array([0x02]), tx),
+      encode: (tx) => tx.subarray(1) as TRet<Uint8Array>,
+      decode: (tx) => concatBytes(Uint8Array.of(0x02), tx) as TRet<Uint8Array>,
     },
     adjustDKG: (k) => {
       // Compatibility with frost-secp256k1-tr: DKG output is auto-tweaked with the

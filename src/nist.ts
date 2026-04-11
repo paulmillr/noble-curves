@@ -7,7 +7,6 @@
 import { sha256, sha384, sha512 } from '@noble/hashes/sha2.js';
 import { createFROST, type FROST } from './abstract/frost.ts';
 import { createHasher, type H2CHasher } from './abstract/hash-to-curve.ts';
-import { Field } from './abstract/modular.ts';
 import { createORPF, type OPRF } from './abstract/oprf.ts';
 import {
   ecdsa,
@@ -17,6 +16,7 @@ import {
   type WeierstrassOpts,
   type WeierstrassPointCons,
 } from './abstract/weierstrass.ts';
+import { type TRet } from './utils.ts';
 
 // p = 2n**224n * (2n**32n-1n) + 2n**192n + 2n**96n - 1n
 // a = Fp256.create(BigInt('-3'));
@@ -83,8 +83,11 @@ type SwuOpts = {
 };
 
 function createSWU(Point: WeierstrassPointCons<bigint>, opts: SwuOpts) {
-  const map = mapToCurveSimpleSWU(Point.Fp, opts);
-  return (scalars: bigint[]) => map(scalars[0]);
+  let map: ((u: bigint) => { x: bigint; y: bigint }) | undefined;
+  // RFC 9380's NIST suites here all use m = 1, so createHasher passes one field element per map.
+  // Building the SWU sqrt-ratio helper eagerly adds noticeable `nist.js` import cost, so defer it
+  // to first use; after that the cached mapper is reused directly.
+  return (scalars: bigint[]) => (map || (map = mapToCurveSimpleSWU(Point.Fp, opts)))(scalars[0]);
 }
 
 // NIST P256
@@ -148,7 +151,7 @@ export const p256_hasher: H2CHasher<WeierstrassPointCons<bigint>> = /* @__PURE__
  * const output = p256_oprf.oprf.finalize(input, blind.blind, evaluated);
  * ```
  */
-export const p256_oprf: OPRF = /* @__PURE__ */ (() =>
+export const p256_oprf: TRet<OPRF> = /* @__PURE__ */ (() =>
   createORPF({
     name: 'P256-SHA256',
     Point: p256_Point,
@@ -168,7 +171,7 @@ export const p256_oprf: OPRF = /* @__PURE__ */ (() =>
  * const deal = p256_FROST.trustedDealer({ min: 2, max: 3 }, [alice, bob, carol]);
  * ```
  */
-export const p256_FROST: FROST = /* @__PURE__ */ (() =>
+export const p256_FROST: TRet<FROST> = /* @__PURE__ */ (() =>
   createFROST({
     name: 'FROST-P256-SHA256-v1',
     Point: p256_Point,
@@ -232,7 +235,7 @@ export const p384_hasher: H2CHasher<WeierstrassPointCons<bigint>> = /* @__PURE__
  * const output = p384_oprf.oprf.finalize(input, blind.blind, evaluated);
  * ```
  */
-export const p384_oprf: OPRF = /* @__PURE__ */ (() =>
+export const p384_oprf: TRet<OPRF> = /* @__PURE__ */ (() =>
   createORPF({
     name: 'P384-SHA384',
     Point: p384_Point,
@@ -242,10 +245,26 @@ export const p384_oprf: OPRF = /* @__PURE__ */ (() =>
   }))();
 
 // NIST P521
-const Fn521 = /* @__PURE__ */ (() => Field(p521_CURVE.n, { allowedLengths: [65, 66] }))();
-const p521_Point = /* @__PURE__ */ weierstrass(p521_CURVE, { Fn: Fn521 });
+// RFC 7518 fixes the canonical JWK/JOSE width at 66 bytes:
+// - Section 3.4 says ECDSA octet strings must not omit leading zero octets
+// - Sections 6.2.1.2/6.2.1.3 say P-521 coordinates "x"/"y" must be 66 octets
+// - Section 6.2.2.1 says private scalar "d" must be ceil(log2(n)/8) octets, i.e. 66 for P-521
+// NIST FIPS 186-5 Appendix A.3.3 also routes deterministic ECDSA private keys through Appendix
+// B.2.3, whose Integer-to-Octet-String output has explicit fixed length L; for P-521 that is the
+// same 66-byte order width.
+// RFC 6979 matches that width too: private key x is an integer, while `int2octets(x)` uses
+// rlen = 8 * ceil(qlen/8); for P-521, qlen = 521 so the canonical octet width is 66 bytes.
+// Wycheproof ECDH stores private values as integers, not fixed-width scalar bytes, so it does not
+// require a dedicated 65-byte parser path; the repo tests now normalize those integer fixtures to
+// the canonical 66-byte width before use. There is no good standards or oracle reason to accept
+// exactly 65 bytes here: the coherent choices are canonical 66 only, or a broader integer-style
+// parser across many widths. Since this field parser is fixed-width, keep it canonical and use the
+// default exact-66-byte scalar field path.
+const p521_Point = /* @__PURE__ */ weierstrass(p521_CURVE);
 /**
  * NIST P521 (aka secp521r1) curve, ECDSA and ECDH methods. Hashes inputs with sha512 by default.
+ * Deterministic `keygen(seed)` expects 99 seed bytes here because the generic scalar-derivation
+ * helper uses `getMinHashLength(n)`, not the 66-byte canonical secret-key width.
  * @example
  * Generate one P-521 keypair, sign a message, and verify it.
  *
@@ -298,7 +317,7 @@ export const p521_hasher: H2CHasher<WeierstrassPointCons<bigint>> = /* @__PURE__
  * const output = p521_oprf.oprf.finalize(input, blind.blind, evaluated);
  * ```
  */
-export const p521_oprf: OPRF = /* @__PURE__ */ (() =>
+export const p521_oprf: TRet<OPRF> = /* @__PURE__ */ (() =>
   createORPF({
     name: 'P521-SHA512',
     Point: p521_Point,

@@ -91,6 +91,8 @@ import {
   hexToBytes,
   numberToBytesBE,
   randomBytes,
+  type TArg,
+  type TRet,
 } from './utils.ts';
 // Types
 import { isogenyMap } from './abstract/hash-to-curve.ts';
@@ -112,7 +114,8 @@ const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _3n = BigInt(3), _4n = 
 // To verify math:
 // https://tools.ietf.org/html/draft-irtf-cfrg-pairing-friendly-curves-11
 
-// The BLS parameter x (seed) for BLS12-381. NOTE: it is negative!
+// The BLS parameter x (seed) for BLS12-381. The stored constant is `|x|`; call
+// sites that need the signed parameter apply the minus sign themselves.
 // x = -2^63 - 2^62 - 2^60 - 2^57 - 2^48 - 2^16
 const BLS_X = BigInt('0xd201000000010000');
 // t = x (called differently in different places)
@@ -127,7 +130,7 @@ const BLS_X_LEN = bitLen(BLS_X);
 // where r is order of prime subgroup and h is cofactor.
 // r = t⁴-t²+1
 // r = (t**4n - t**2n + 1n)
-// cofactor h of G1: (t - 1)²/3
+// cofactor h of G1: (t - 1)²/3, with the signed convention `t = -x`
 // cofactorG1 = (t-1n)**2n/3n
 // x = 3685416753713387016781088315183077757961620795782546409894578378688607592378376318836054947676345821548104185464507
 // y = 1339506544944476473020471379941921221584933875938349620426543736416511423956333506472724655353366534992391756441569
@@ -149,23 +152,28 @@ const bls12_381_CURVE_G1: WeierstrassOpts<bigint> = {
 
 // CURVE FIELDS
 // r = z⁴ − z² + 1; CURVE.n from other curves
-/** bls12-381 Fr (Fn) field. Note: does mod() on fromBytes, due to modFromBytes option. */
-export const bls12_381_Fr: IField<bigint> = Field(bls12_381_CURVE_G1.n, {
+/**
+ * bls12-381 Fr (Fn) field.
+ * `fromBytes()` reduces modulo `q` instead of rejecting non-canonical encodings.
+ */
+export const bls12_381_Fr: TRet<IField<bigint>> = Field(bls12_381_CURVE_G1.n, {
   modFromBytes: true,
-});
+}) as TRet<IField<bigint>>;
 const { Fp, Fp2, Fp6, Fp12 } = tower12({
   ORDER: bls12_381_CURVE_G1.p,
   X_LEN: BLS_X_LEN,
   // Finite extension field over irreducible polynominal.
   // Fp(u) / (u² - β) where β = -1
+  // Public `Fp2.NONRESIDUE` below is the sextic-tower value `(1, 1) = u + 1`;
+  // the quadratic non-residue for the base Fp2 construction is still `-1`.
   FP2_NONRESIDUE: [_1n, _1n],
-  Fp2mulByB: ({ c0, c1 }) => {
+  Fp2mulByB: ({ c0, c1 }: Fp2) => {
     const t0 = Fp.mul(c0, _4n); // 4 * c0
     const t1 = Fp.mul(c1, _4n); // 4 * c1
     // (T0-T1) + (T0+T1)*i
     return { c0: Fp.sub(t0, t1), c1: Fp.add(t0, t1) };
   },
-  Fp12finalExponentiate: (num) => {
+  Fp12finalExponentiate: (num: Fp12) => {
     const x = BLS_X;
     // this^(q⁶) / this
     const t0 = Fp12.div(Fp12.frobeniusMap(num, 6), num);
@@ -186,15 +194,31 @@ const { Fp, Fp2, Fp6, Fp12 } = tower12({
   },
 });
 
-// GLV endomorphism Ψ(P), for fast cofactor clearing
-const { G2psi, G2psi2 } = psiFrobenius(Fp, Fp2, Fp2.div(Fp2.ONE, Fp2.NONRESIDUE)); // 1/(u+1)
+// GLV endomorphism Ψ(P), for fast cofactor clearing. `Fp2.NONRESIDUE` here is
+// the tower value `u + 1`, so the Frobenius base passed to psiFrobenius is
+// `1 / (u + 1)`, and psi2 derives the published `1 / 2^((p - 1) / 3)` constant internally.
+let frob: ReturnType<typeof psiFrobenius> | undefined;
+const getFrob = () => frob || (frob = psiFrobenius(Fp, Fp2, Fp2.div(Fp2.ONE, Fp2.NONRESIDUE)));
+// Eager psiFrobenius setup now dominates `bls12-381.js` import, so defer it to
+// first use. After that these locals are rewritten to the direct helper refs.
+let G2psi: ReturnType<typeof psiFrobenius>['G2psi'] = (c, P) => {
+  const fn = getFrob().G2psi;
+  G2psi = fn;
+  return fn(c, P);
+};
+let G2psi2: ReturnType<typeof psiFrobenius>['G2psi2'] = (c, P) => {
+  const fn = getFrob().G2psi2;
+  G2psi2 = fn;
+  return fn(c, P);
+};
 
 /**
  * Default hash_to_field / hash-to-curve for BLS.
  * m: 1 for G1, 2 for G2
  * k: target security level in bits
  * hash: any function, e.g. BBS+ uses BLAKE2: see [github](https://github.com/hyperledger/aries-framework-go/issues/2247).
- * Parameter values come from [section 8.8.2 of RFC 9380](https://www.rfc-editor.org/rfc/rfc9380#section-8.8.2).
+ * Field/hash parameters come from [section 8.8.2 of RFC 9380](https://www.rfc-editor.org/rfc/rfc9380#section-8.8.2),
+ * but the `DST` / `encodeDST` strings below are the BLS-signature-suite override.
  */
 const hasher_opts = Object.freeze({
   DST: 'BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_NUL_',
@@ -207,7 +231,7 @@ const hasher_opts = Object.freeze({
 });
 
 // a=0, b=4
-// cofactor h of G2
+// cofactor h of G2, derived with the signed convention `t = -x`
 // (t^8 - 4t^7 + 5t^6 - 4t^4 + 6t^3 - 4t^2 - 4t + 13)/9
 // cofactorG2 = (t**8n - 4n*t**7n + 5n*t**6n - 4n*t**4n + 6n*t**3n - 4n*t**2n - 4n*t+13n)/9n
 // x = 3059144344244213709971259814753781636986470325476647558659373206291635324768958432433509563104347017837885763365758*u + 352701069587466618187139116011060144890029952792775240219908644239793785735715026873347600343865175952761926303160
@@ -239,11 +263,102 @@ const bls12_381_CURVE_G2 = {
 };
 
 // Encoding utils
-// Compressed point of infinity
-// Set compressed & point-at-infinity bits
-const COMPZERO = setMask(Fp.toBytes(_0n), { infinity: true, compressed: true });
+const sortBit = (parts: bigint[], p: bigint) => {
+  for (const part of parts) {
+    if (part !== _0n) return Boolean((part * _2n) / p);
+  }
+  return false;
+};
+const fp2 = {
+  // Generic tower bytes use `c0 || c1`, but the BLS12-381 G2 point/signature wire encoding uses
+  // `c1 || c0`, so keep this local wrapper instead of changing generic field serialization.
+  encode({ c0, c1 }: Fp2): TRet<Uint8Array> {
+    const { BYTES: L } = Fp;
+    return concatBytes(numberToBytesBE(c1, L), numberToBytesBE(c0, L)) as TRet<Uint8Array>;
+  },
+  decode(bytes: TArg<Uint8Array>) {
+    const { BYTES: L } = Fp;
+    return Fp2.create({
+      c0: Fp.create(bytesToNumberBE(bytes.subarray(L))),
+      c1: Fp.create(bytesToNumberBE(bytes.subarray(0, L))),
+    });
+  },
+};
+const BaseFp = Fp;
+type Mask = { compressed: boolean; infinity: boolean; sort: boolean };
+// Keep BLS12-381 point/signature codecs on one control-flow skeleton: the G1/G2
+// and point/signature variants differ only in field packing, subgroup bytes, and
+// whether uncompressed form is allowed. Copy-paste decoders were diverging.
+const coder = <T>(
+  name: 'G1' | 'G2',
+  Fp: TArg<IField<T>>,
+  b: T,
+  encode: TArg<(v: T) => TRet<Uint8Array>>,
+  decode: TArg<(bytes: TArg<Uint8Array>) => T>,
+  yparts: (y: T) => bigint[]
+) => {
+  const F = Fp as IField<T>;
+  const enc = encode as (v: T) => TRet<Uint8Array>;
+  const dec = decode as (bytes: TArg<Uint8Array>) => T;
+  const W = F.BYTES;
+  return (allowUncompressed: boolean) => ({
+    encode(point: WeierstrassPoint<T>, compressed = true): TRet<Uint8Array> {
+      if (!compressed && !allowUncompressed)
+        throw new Error('invalid signature: expected compressed encoding');
+      const infinity = point.is0();
+      const { x, y } = point.toAffine();
+      const bytes = compressed ? enc(x) : concatBytes(enc(x), enc(y));
+      let sort;
+      if (compressed && !infinity) sort = sortBit(yparts(y), BaseFp.ORDER);
+      return setMask(bytes, { compressed, infinity, sort }) as TRet<Uint8Array>;
+    },
+    decode(bytes: TArg<Uint8Array>): AffinePoint<T> {
+      const raw = allowUncompressed
+        ? abytes(bytes, undefined, 'point')
+        : abytes(bytes, W, 'signature');
+      const { compressed, infinity, sort, value } = parseMask(raw);
+      if (!allowUncompressed && !compressed)
+        throw new Error('invalid signature: expected compressed encoding');
+      const len = compressed ? W : 2 * W;
+      if (value.length !== len) throw new Error(`invalid ${name} point: expected ${len} bytes`);
+      if (infinity) {
+        // Infinity canonicality has to be checked on raw bytes before decode()
+        // reduces coordinates modulo p and turns non-empty payloads into zero.
+        for (const b of value) {
+          if (b) throw new Error(`invalid ${name} point: non-canonical zero`);
+        }
+        return { x: F.ZERO, y: F.ZERO };
+      }
+      const x = dec(compressed ? value : value.subarray(0, W));
+      let y;
+      if (compressed) {
+        y = F.sqrt(F.add(F.pow(x, _3n), b));
+        if (!y) throw new Error(`invalid ${name} point: compressed`);
+        if (sortBit(yparts(y), BaseFp.ORDER) !== sort) y = F.neg(y);
+      } else {
+        y = dec(value.subarray(W));
+      }
+      // Noble keeps the permissive coordinate reduction path here, but an
+      // omitted infinity flag must not still decode to ZERO afterwards.
+      if (!compressed && F.is0(x) && F.is0(y))
+        throw new Error(`invalid ${name} point: uncompressed`);
+      return { x, y };
+    },
+  });
+};
 
-function parseMask(bytes: Uint8Array) {
+// Internal helper only: it copies before clearing the top flag bits. The
+// pairing-friendly-curves draft C.2 step 1 rejects 0x20 / 0x60 / 0xe0 because
+// S_bit must be zero for infinity and for all uncompressed encodings.
+function validateMask({ compressed, infinity, sort }: Mask) {
+  if (
+    (!compressed && !infinity && sort) || // 0010_0000 = 0x20
+    (!compressed && infinity && sort) || // 0110_0000 = 0x60
+    (compressed && infinity && sort) // 1110_0000 = 0xe0
+  )
+    throw new Error('invalid encoding flag');
+}
+function parseMask(bytes: TArg<Uint8Array>) {
   // Copy, so we can remove mask data.
   // It will be removed also later, when Fp.create will call modulo.
   bytes = copyBytes(bytes);
@@ -251,222 +366,62 @@ function parseMask(bytes: Uint8Array) {
   const compressed = !!((mask >> 7) & 1); // compression bit (0b1000_0000)
   const infinity = !!((mask >> 6) & 1); // point at infinity bit (0b0100_0000)
   const sort = !!((mask >> 5) & 1); // sort bit (0b0010_0000)
+  validateMask({ compressed, infinity, sort });
   bytes[0] &= 0b0001_1111; // clear mask (zero first 3 bits)
   return { compressed, infinity, sort, value: bytes };
 }
 
-function setMask(
-  bytes: Uint8Array,
-  mask: { compressed?: boolean; infinity?: boolean; sort?: boolean }
-) {
+// Internal helper only: mutates a non-empty fresh buffer in place and just
+// sets bits. Keep the same invalid-flag guard as parseMask() so encoders cannot
+// manufacture states that decoders already reject.
+function setMask(bytes: TArg<Uint8Array>, mask: Partial<Mask>) {
   if (bytes[0] & 0b1110_0000) throw new Error('setMask: non-empty mask');
+  validateMask({ compressed: !!mask.compressed, infinity: !!mask.infinity, sort: !!mask.sort });
   if (mask.compressed) bytes[0] |= 0b1000_0000;
   if (mask.infinity) bytes[0] |= 0b0100_0000;
   if (mask.sort) bytes[0] |= 0b0010_0000;
   return bytes;
 }
 
-function pointG1ToBytes(
-  _c: WeierstrassPointCons<Fp>,
-  point: WeierstrassPoint<Fp>,
-  isComp: boolean
-) {
-  const { BYTES: L, ORDER: P } = Fp;
-  const is0 = point.is0();
-  const { x, y } = point.toAffine();
-  if (isComp) {
-    if (is0) return COMPZERO.slice();
-    const sort = Boolean((y * _2n) / P);
-    return setMask(numberToBytesBE(x, L), { compressed: true, sort });
-  } else {
-    if (is0) {
-      return concatBytes(Uint8Array.of(0x40), new Uint8Array(2 * L - 1));
-    } else {
-      return concatBytes(numberToBytesBE(x, L), numberToBytesBE(y, L));
-    }
-  }
-}
-
-function signatureG1ToBytes(point: WeierstrassPoint<Fp>) {
+const g1coder = coder(
+  'G1',
+  Fp,
+  Fp.create(bls12_381_CURVE_G1.b),
+  (x: Fp) => numberToBytesBE(x, Fp.BYTES),
+  (bytes: TArg<Uint8Array>) => Fp.create(bytesToNumberBE(bytes) & bitMask(Fp.BITS)),
+  (y: Fp) => [y]
+);
+const g1 = { point: g1coder(true), sig: g1coder(false) };
+const signatureG1ToBytes = (point: WeierstrassPoint<Fp>): TRet<Uint8Array> => {
   point.assertValidity();
-  const { BYTES: L, ORDER: P } = Fp;
-  const { x, y } = point.toAffine();
-  if (point.is0()) return COMPZERO.slice();
-  const sort = Boolean((y * _2n) / P);
-  return setMask(numberToBytesBE(x, L), { compressed: true, sort });
-}
-
-function pointG1FromBytes(bytes: Uint8Array): AffinePoint<Fp> {
-  const { compressed, infinity, sort, value } = parseMask(bytes);
-  const { BYTES: L, ORDER: P } = Fp;
-  if (value.length === 48 && compressed) {
-    const compressedValue = bytesToNumberBE(value);
-    // Zero
-    const x = Fp.create(compressedValue & bitMask(Fp.BITS));
-    if (infinity) {
-      if (x !== _0n) throw new Error('invalid G1 point: non-empty, at infinity, with compression');
-      return { x: _0n, y: _0n };
-    }
-    const right = Fp.add(Fp.pow(x, _3n), Fp.create(bls12_381_CURVE_G1.b)); // y² = x³ + b
-    let y = Fp.sqrt(right);
-    if (!y) throw new Error('invalid G1 point: compressed point');
-    if ((y * _2n) / P !== BigInt(sort)) y = Fp.neg(y);
-    return { x: Fp.create(x), y: Fp.create(y) };
-  } else if (value.length === 96 && !compressed) {
-    // Check if the infinity flag is set
-    const x = bytesToNumberBE(value.subarray(0, L));
-    const y = bytesToNumberBE(value.subarray(L));
-    if (infinity) {
-      if (x !== _0n || y !== _0n) throw new Error('G1: non-empty point at infinity');
-      return bls12_381.G1.Point.ZERO.toAffine();
-    }
-    return { x: Fp.create(x), y: Fp.create(y) };
-  } else {
-    throw new Error('invalid G1 point: expected 48/96 bytes');
-  }
-}
-
-function signatureG1FromBytes(bytes: Uint8Array): WeierstrassPoint<Fp> {
-  const { infinity, sort, value } = parseMask(abytes(bytes, 48, 'signature'));
-  const P = Fp.ORDER;
+  return g1.sig.encode(point);
+};
+function signatureG1FromBytes(bytes: TArg<Uint8Array>): WeierstrassPoint<Fp> {
   const Point = bls12_381.G1.Point;
-  const compressedValue = bytesToNumberBE(value);
-  // Zero
-  if (infinity) return Point.ZERO;
-  const x = Fp.create(compressedValue & bitMask(Fp.BITS));
-  const right = Fp.add(Fp.pow(x, _3n), Fp.create(bls12_381_CURVE_G1.b)); // y² = x³ + b
-  let y = Fp.sqrt(right);
-  if (!y) throw new Error('invalid G1 point: compressed');
-  const aflag = BigInt(sort);
-  if ((y * _2n) / P !== aflag) y = Fp.neg(y);
-  const point = Point.fromAffine({ x, y });
+  const point = Point.fromAffine(g1.sig.decode(bytes));
   point.assertValidity();
   return point;
 }
 
-function pointG2ToBytes(
-  _c: WeierstrassPointCons<Fp2>,
-  point: WeierstrassPoint<Fp2>,
-  isComp: boolean
-) {
-  const { BYTES: L, ORDER: P } = Fp;
-  const is0 = point.is0();
-  const { x, y } = point.toAffine();
-  if (isComp) {
-    if (is0) return concatBytes(COMPZERO, numberToBytesBE(_0n, L));
-    const flag = Boolean(y.c1 === _0n ? (y.c0 * _2n) / P : (y.c1 * _2n) / P);
-    return concatBytes(
-      setMask(numberToBytesBE(x.c1, L), { compressed: true, sort: flag }),
-      numberToBytesBE(x.c0, L)
-    );
-  } else {
-    if (is0) return concatBytes(Uint8Array.of(0x40), new Uint8Array(4 * L - 1));
-    const { re: x0, im: x1 } = Fp2.reim(x);
-    const { re: y0, im: y1 } = Fp2.reim(y);
-    return concatBytes(
-      numberToBytesBE(x1, L),
-      numberToBytesBE(x0, L),
-      numberToBytesBE(y1, L),
-      numberToBytesBE(y0, L)
-    );
-  }
-}
-
-function signatureG2ToBytes(point: WeierstrassPoint<Fp2>) {
+const g2coder = coder('G2', Fp2, bls12_381_CURVE_G2.b, fp2.encode, fp2.decode, (y: Fp2) => [
+  y.c1,
+  y.c0,
+]);
+const g2 = { point: g2coder(true), sig: g2coder(false) };
+const signatureG2ToBytes = (point: WeierstrassPoint<Fp2>): TRet<Uint8Array> => {
   point.assertValidity();
-  const { BYTES: L } = Fp;
-  if (point.is0()) return concatBytes(COMPZERO, numberToBytesBE(_0n, L));
-  const { x, y } = point.toAffine();
-  const { re: x0, im: x1 } = Fp2.reim(x);
-  const { re: y0, im: y1 } = Fp2.reim(y);
-  const tmp = y1 > _0n ? y1 * _2n : y0 * _2n;
-  const sort = Boolean((tmp / Fp.ORDER) & _1n);
-  const z2 = x0;
-  return concatBytes(
-    setMask(numberToBytesBE(x1, L), { sort, compressed: true }),
-    numberToBytesBE(z2, L)
-  );
-}
-
-function pointG2FromBytes(bytes: Uint8Array): AffinePoint<Fp2> {
-  const { BYTES: L, ORDER: P } = Fp;
-  const { compressed, infinity, sort, value } = parseMask(bytes);
-  if (
-    (!compressed && !infinity && sort) || // 00100000
-    (!compressed && infinity && sort) || // 01100000
-    (sort && infinity && compressed) // 11100000
-  ) {
-    throw new Error('invalid encoding flag: ' + (bytes[0] & 0b1110_0000));
-  }
-  const slc = (b: Uint8Array, from: number, to?: number) => bytesToNumberBE(b.slice(from, to));
-  if (value.length === 96 && compressed) {
-    if (infinity) {
-      // check that all bytes are 0
-      if (value.reduce((p, c) => (p !== 0 ? c + 1 : c), 0) > 0) {
-        throw new Error('invalid G2 point: compressed');
-      }
-      return { x: Fp2.ZERO, y: Fp2.ZERO };
-    }
-    const x_1 = slc(value, 0, L);
-    const x_0 = slc(value, L, 2 * L);
-    const x = Fp2.create({ c0: Fp.create(x_0), c1: Fp.create(x_1) });
-    const right = Fp2.add(Fp2.pow(x, _3n), bls12_381_CURVE_G2.b); // y² = x³ + 4 * (u+1) = x³ + b
-    let y = Fp2.sqrt(right);
-    const Y_bit = y.c1 === _0n ? (y.c0 * _2n) / P : (y.c1 * _2n) / P ? _1n : _0n;
-    y = sort && Y_bit > 0 ? y : Fp2.neg(y);
-    return { x, y };
-  } else if (value.length === 192 && !compressed) {
-    if (infinity) {
-      if (value.reduce((p, c) => (p !== 0 ? c + 1 : c), 0) > 0) {
-        throw new Error('invalid G2 point: uncompressed');
-      }
-      return { x: Fp2.ZERO, y: Fp2.ZERO };
-    }
-    const x1 = slc(value, 0 * L, 1 * L);
-    const x0 = slc(value, 1 * L, 2 * L);
-    const y1 = slc(value, 2 * L, 3 * L);
-    const y0 = slc(value, 3 * L, 4 * L);
-    return { x: Fp2.fromBigTuple([x0, x1]), y: Fp2.fromBigTuple([y0, y1]) };
-  } else {
-    throw new Error('invalid G2 point: expected 96/192 bytes');
-  }
-}
-
-function signatureG2FromBytes(bytes: Uint8Array) {
-  const { ORDER: P } = Fp;
-  // TODO: Optimize, it's very slow because of sqrt.
-  const { infinity, sort, value } = parseMask(abytes(bytes));
+  return g2.sig.encode(point);
+};
+function signatureG2FromBytes(bytes: TArg<Uint8Array>) {
   const Point = bls12_381.G2.Point;
-  const half = value.length / 2;
-  if (half !== 48 && half !== 96)
-    throw new Error('invalid compressed signature length, expected 96/192 bytes');
-  const z1 = bytesToNumberBE(value.slice(0, half));
-  const z2 = bytesToNumberBE(value.slice(half));
-  // Indicates the infinity point
-  if (infinity) return Point.ZERO;
-  const x1 = Fp.create(z1 & bitMask(Fp.BITS));
-  const x2 = Fp.create(z2);
-  const x = Fp2.create({ c0: x2, c1: x1 });
-  const y2 = Fp2.add(Fp2.pow(x, _3n), bls12_381_CURVE_G2.b); // y² = x³ + 4
-  // The slow part
-  let y = Fp2.sqrt(y2);
-  if (!y) throw new Error('Failed to find a square root');
-
-  // Choose the y whose leftmost bit of the imaginary part is equal to the a_flag1
-  // If y1 happens to be zero, then use the bit of y0
-  const { re: y0, im: y1 } = Fp2.reim(y);
-  const aflag1 = BigInt(sort);
-  const isGreater = y1 > _0n && (y1 * _2n) / P !== aflag1;
-  const is0 = y1 === _0n && (y0 * _2n) / P !== aflag1;
-  if (isGreater || is0) y = Fp2.neg(y);
-  const point = Point.fromAffine({ x, y });
+  const point = Point.fromAffine(g2.sig.decode(bytes));
   point.assertValidity();
   return point;
 }
 
 const signatureCoders = {
   ShortSignature: {
-    fromBytes(bytes: Uint8Array) {
+    fromBytes(bytes: TArg<Uint8Array>) {
       return signatureG1FromBytes(abytes(bytes));
     },
     fromHex(hex: string): WeierstrassPoint<Fp> {
@@ -475,6 +430,7 @@ const signatureCoders = {
     toBytes(point: WeierstrassPoint<Fp>) {
       return signatureG1ToBytes(point);
     },
+    // Historical alias: BLS signatures have a single compressed byte format here.
     toRawBytes(point: WeierstrassPoint<Fp>) {
       return signatureG1ToBytes(point);
     },
@@ -483,7 +439,7 @@ const signatureCoders = {
     },
   },
   LongSignature: {
-    fromBytes(bytes: Uint8Array): WeierstrassPoint<Fp2> {
+    fromBytes(bytes: TArg<Uint8Array>): WeierstrassPoint<Fp2> {
       return signatureG2FromBytes(abytes(bytes));
     },
     fromHex(hex: string): WeierstrassPoint<Fp2> {
@@ -492,6 +448,7 @@ const signatureCoders = {
     toBytes(point: WeierstrassPoint<Fp2>) {
       return signatureG2ToBytes(point);
     },
+    // Historical alias: BLS signatures have a single compressed byte format here.
     toRawBytes(point: WeierstrassPoint<Fp2>) {
       return signatureG2ToBytes(point);
     },
@@ -509,10 +466,16 @@ const fields = {
   Fr: bls12_381_Fr,
 };
 const G1_Point = weierstrass(bls12_381_CURVE_G1, {
+  // Public point APIs still accept infinity, even though the Zcash proof
+  // encoding rules cited above only define nonzero point encodings.
   allowInfinityPoint: true,
   Fn: bls12_381_Fr,
-  fromBytes: pointG1FromBytes,
-  toBytes: pointG1ToBytes,
+  fromBytes: g1.point.decode,
+  toBytes: (
+    _c: WeierstrassPointCons<Fp>,
+    point: WeierstrassPoint<Fp>,
+    isComp: boolean
+  ): TRet<Uint8Array> => g1.point.encode(point, isComp) as TRet<Uint8Array>,
   // Checks is the point resides in prime-order subgroup.
   // point.isTorsionFree() should return true for valid points
   // It returns false for shitty points.
@@ -537,10 +500,16 @@ const G1_Point = weierstrass(bls12_381_CURVE_G1, {
 });
 const G2_Point = weierstrass(bls12_381_CURVE_G2, {
   Fp: Fp2,
+  // Public point APIs still accept infinity, even though the Zcash proof
+  // encoding rules cited above only define nonzero point encodings.
   allowInfinityPoint: true,
   Fn: bls12_381_Fr,
-  fromBytes: pointG2FromBytes,
-  toBytes: pointG2ToBytes,
+  fromBytes: g2.point.decode,
+  toBytes: (
+    _c: WeierstrassPointCons<Fp2>,
+    point: WeierstrassPoint<Fp2>,
+    isComp: boolean
+  ): TRet<Uint8Array> => g2.point.encode(point, isComp) as TRet<Uint8Array>,
   // https://eprint.iacr.org/2021/1130.pdf
   // Older version: https://eprint.iacr.org/2019/814.pdf
   isTorsionFree: (c, P): boolean => {
@@ -569,7 +538,15 @@ const bls12_hasher_opts = {
   mapToG1: mapToG1,
   mapToG2: mapToG2,
   hasherOpts: hasher_opts,
-  hasherOptsG1: { ...hasher_opts, m: 1, DST: 'BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_' },
+  // RFC 9380 Appendix J defines distinct G1/G2 RO and NU suite IDs, and
+  // draft-irtf-cfrg-bls-signature-06 §4.2.1 gives separate G1/G2 `_NUL_` DSTs.
+  // Keep G1 encode-to-curve on the G1 domain instead of inheriting G2's `encodeDST`.
+  hasherOptsG1: {
+    ...hasher_opts,
+    m: 1,
+    DST: 'BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_',
+    encodeDST: 'BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_',
+  },
   hasherOptsG2: { ...hasher_opts },
 } as const;
 
@@ -604,6 +581,8 @@ export const bls12_381: BlsCurvePairWithSignatures = bls(
 );
 
 // 3-isogeny map from E' to E https://www.rfc-editor.org/rfc/rfc9380#appendix-E.3
+// Coefficients stay in ascending `k_(?,0)`..`k_(?,d)` order; isogenyMap()
+// reverses them internally for Horner evaluation.
 const isogenyMapG2 = isogenyMap(
   Fp2,
   [
@@ -680,7 +659,8 @@ const isogenyMapG2 = isogenyMap(
     Fp2[],
   ]
 );
-// 11-isogeny map from E' to E
+// 11-isogeny map from E' to E. Coefficients stay in ascending
+// `k_(?,0)`..`k_(?,d)` order; isogenyMap() reverses them for Horner evaluation.
 const isogenyMapG1 = isogenyMap(
   Fp,
   [
@@ -754,32 +734,45 @@ const isogenyMapG1 = isogenyMap(
   ].map((i) => i.map((j) => BigInt(j))) as [Fp[], Fp[], Fp[], Fp[]]
 );
 
-// Optimized SWU Map - Fp to G1
-const G1_SWU = mapToCurveSimpleSWU(Fp, {
-  A: Fp.create(
-    BigInt(
-      '0x144698a3b8e9433d693a02c96d4982b0ea985383ee66a8d8e8981aefd881ac98936f8da0e0f97f5cf428082d584c1d'
-    )
-  ),
-  B: Fp.create(
-    BigInt(
-      '0x12e2908d11688030018b12e8753eee3b2016c1f0f24f4070a0b9c14fcef35ef55a23215a316ceaa5d1cc48e98e172be0'
-    )
-  ),
-  Z: Fp.create(BigInt(11)),
-});
-// SWU Map - Fp2 to G2': y² = x³ + 240i * x + 1012 + 1012i
-const G2_SWU = mapToCurveSimpleSWU(Fp2, {
-  A: Fp2.create({ c0: Fp.create(_0n), c1: Fp.create(BigInt(240)) }), // A' = 240 * I
-  B: Fp2.create({ c0: Fp.create(BigInt(1012)), c1: Fp.create(BigInt(1012)) }), // B' = 1012 * (1 + I)
-  Z: Fp2.create({ c0: Fp.create(BigInt(-2)), c1: Fp.create(BigInt(-1)) }), // Z: -(2 + I)
-});
+let G1_SWU: ((u: bigint) => { x: bigint; y: bigint }) | undefined;
+let G2_SWU: ((u: Fp2) => { x: Fp2; y: Fp2 }) | undefined;
+// SWU setup validates the pre-isogeny curve parameters and builds sqrt-ratio helpers.
+// Doing that eagerly adds about 10ms to `bls12-381.js` import here, so keep it lazy; after the
+// first map call the cached mapper is reused directly.
+const getG1_SWU = () =>
+  G1_SWU ||
+  (G1_SWU = mapToCurveSimpleSWU(Fp, {
+    A: Fp.create(
+      BigInt(
+        '0x144698a3b8e9433d693a02c96d4982b0ea985383ee66a8d8e8981aefd881ac98936f8da0e0f97f5cf428082d584c1d'
+      )
+    ),
+    B: Fp.create(
+      BigInt(
+        '0x12e2908d11688030018b12e8753eee3b2016c1f0f24f4070a0b9c14fcef35ef55a23215a316ceaa5d1cc48e98e172be0'
+      )
+    ),
+    Z: Fp.create(BigInt(11)),
+  }));
+const getG2_SWU = () =>
+  G2_SWU ||
+  (G2_SWU = mapToCurveSimpleSWU(Fp2, {
+    // SWU map for the RFC 9380 §8.8.2 pre-isogeny G2 curve E':
+    // y² = x³ + 240i * x + 1012 + 1012i
+    A: Fp2.create({ c0: Fp.create(_0n), c1: Fp.create(BigInt(240)) }), // A' = 240 * I
+    B: Fp2.create({ c0: Fp.create(BigInt(1012)), c1: Fp.create(BigInt(1012)) }), // B' = 1012 * (1 + I)
+    Z: Fp2.create({ c0: Fp.create(BigInt(-2)), c1: Fp.create(BigInt(-1)) }), // Z: -(2 + I)
+  }));
 
+// Internal hash-to-curve step: G1 uses `m = 1`, so only `scalars[0]` is read,
+// and the result is the isogeny image on E before the subgroup clear.
 function mapToG1(scalars: bigint[]) {
-  const { x, y } = G1_SWU(Fp.create(scalars[0]));
+  const { x, y } = getG1_SWU()(Fp.create(scalars[0]));
   return isogenyMapG1(x, y);
 }
+// Internal hash-to-curve step: G2 expects the RFC `m = 2` pair, and the result
+// is the isogeny image on E before the subgroup clear.
 function mapToG2(scalars: bigint[]) {
-  const { x, y } = G2_SWU(Fp2.fromBigTuple(scalars as BigintTuple));
+  const { x, y } = getG2_SWU()(Fp2.fromBigTuple(scalars as BigintTuple));
   return isogenyMapG2(x, y);
 }

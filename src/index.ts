@@ -9,7 +9,13 @@ import { ed448, ed448ph, x448, decaf448 } from '@noble/curves/ed448.js';
 import { p256, p384, p521 } from '@noble/curves/nist.js';
 import { bls12_381 } from '@noble/curves/bls12-381.js';
 import { bn254 } from '@noble/curves/bn254.js';
-import { jubjub, babyjubjub, brainpoolP256r1, brainpoolP384r1, brainpoolP512r1 } from '@noble/curves/misc.js';
+import {
+  jubjub,
+  babyjubjub,
+  brainpoolP256r1,
+  brainpoolP384r1,
+  brainpoolP512r1,
+} from '@noble/curves/misc.js';
 import * as webcrypto from '@noble/curves/webcrypto.js';
 
 // hash-to-curve

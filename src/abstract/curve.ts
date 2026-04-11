@@ -4,7 +4,7 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { bitLen, bitMask, type Signer } from '../utils.ts';
+import { bitLen, bitMask, validateObject, type Signer, type TArg, type TRet } from '../utils.ts';
 import { Field, FpInvertBatch, validateField, type IField } from './modular.ts';
 
 const _0n = /* @__PURE__ */ BigInt(0);
@@ -64,6 +64,8 @@ export interface CurvePoint<F, P extends CurvePoint<F, P>> {
   equals(other: P): boolean;
   /**
    * Multiply the point by a scalar in constant time.
+   * Implementations keep the subgroup-scalar contract strict and may reject
+   * `0` instead of returning the identity point.
    * @param scalar - Scalar multiplier.
    * @returns Product point.
    */
@@ -92,12 +94,17 @@ export interface CurvePoint<F, P extends CurvePoint<F, P>> {
   isSmallOrder(): boolean;
   /**
    * Multiply the point by a scalar without constant-time guarantees.
+   * Public-scalar callers that need `0` should use this method instead of
+   * relying on `multiply(...)` to return the identity point.
    * @param scalar - Scalar multiplier.
    * @returns Product point.
    */
   multiplyUnsafe(scalar: bigint): P;
   /**
    * Massively speeds up `p.multiply(n)` by using precompute tables (caching). See {@link wNAF}.
+   * Cache state lives in internal WeakMaps keyed by point identity, not on the point object.
+   * Repeating `precompute(...)` for the same point identity replaces the remembered window size
+   * and forces table regeneration for that point.
    * @param windowSize - Precompute window size.
    * @param isLazy - calculate cache now. Default (true) ensures it's deferred to first `multiply()`
    * @returns Same point instance with precompute tables attached.
@@ -138,14 +145,17 @@ export interface CurvePointCons<P extends CurvePoint<any, P>> {
   /** Scalar field, for scalars in multiply and others */
   Fn: IField<bigint>;
   /**
-   * Creates point from x, y. Does NOT validate if the point is valid. Use `.assertValidity()`.
+   * Create one point from affine coordinates.
+   * Does NOT validate curve, subgroup, or wrapper invariants.
+   * Use `.assertValidity()` on adversarial inputs.
    * @param p - Affine point coordinates.
-   * @returns Projective point instance.
+   * @returns Point instance.
    */
   fromAffine(p: AffinePoint<P_F<P>>): P;
   /**
    * Decode a point from the canonical byte encoding.
    * @param bytes - Encoded point bytes.
+   * Implementations MUST treat `bytes` as read-only.
    * @returns Point instance.
    */
   fromBytes(bytes: Uint8Array): P;
@@ -204,6 +214,45 @@ export type PC_ANY = CurvePointCons<
   >>>>>>>>>
 >;
 
+/**
+ * Validates the static surface of a point constructor.
+ * This is only a cheap sanity check for the constructor hooks and fields consumed by generic
+ * factories; it does not certify `BASE`/`ZERO` semantics or prove the curve implementation itself.
+ * @param Point - Runtime point constructor.
+ * @throws On missing constructor hooks or malformed field metadata. {@link TypeError}
+ * @example
+ * Check that one point constructor exposes the static hooks generic helpers need.
+ *
+ * ```ts
+ * import { ed25519 } from '@noble/curves/ed25519.js';
+ * import { validatePointCons } from '@noble/curves/abstract/curve.js';
+ * validatePointCons(ed25519.Point);
+ * ```
+ */
+export function validatePointCons<P extends CurvePoint<any, P>>(Point: CurvePointCons<P>): void {
+  const pc = Point as unknown as CurvePointCons<any>;
+  if (typeof (pc as unknown) !== 'function') throw new TypeError('Point must be a constructor');
+  // validateObject only accepts plain objects, so copy the constructor statics into one bag first.
+  validateObject(
+    {
+      Fp: pc.Fp,
+      Fn: pc.Fn,
+      fromAffine: pc.fromAffine,
+      fromBytes: pc.fromBytes,
+      fromHex: pc.fromHex,
+    },
+    {
+      Fp: 'object',
+      Fn: 'object',
+      fromAffine: 'function',
+      fromBytes: 'function',
+      fromHex: 'function',
+    }
+  );
+  validateField(pc.Fp);
+  validateField(pc.Fn);
+}
+
 /** Byte lengths used by one curve implementation. */
 export interface CurveLengths {
   /** Secret-key length in bytes. */
@@ -224,6 +273,8 @@ export interface CurveLengths {
 export type Mapper<T> = (i: T[]) => T[];
 
 /**
+ * Computes both candidates first, but the final selection still branches on `condition`, so this
+ * is not a strict constant-time CMOV primitive.
  * @param condition - Whether to negate the point.
  * @param item - Point-like value.
  * @returns Original or negated value.
@@ -246,9 +297,10 @@ export function negateCt<T extends { negate: () => T }>(condition: boolean, item
  * inversion on all of them. Inversion is very slow operation,
  * so this improves performance massively.
  * Optimization: converts a list of projective points to a list of identical points with Z=1.
+ * Input points are left unchanged; the normalized points are returned as fresh instances.
  * @param c - Point constructor.
  * @param points - Projective points.
- * @returns Normalized affine points.
+ * @returns Fresh projective points reconstructed from normalized affine coordinates.
  * @example
  * Batch-normalize projective points with a single shared inversion.
  *
@@ -274,7 +326,10 @@ function validateW(W: number, bits: number) {
     throw new Error('invalid window size, expected [1..' + bits + '], got W=' + W);
 }
 
-/** Internal wNAF opts for specific W and scalarBits */
+/** Internal wNAF opts for specific W and scalarBits.
+ * Zero digits are skipped, so tables store only the positive half-window and callers reserve one
+ * extra carry window.
+ */
 type WOpts = {
   windows: number;
   windowSize: number;
@@ -310,11 +365,11 @@ function calcOffsets(n: bigint, window: number, wOpts: WOpts) {
     nextN += _1n; // +256 (carry)
   }
   const offsetStart = window * windowSize;
-  const offset = offsetStart + Math.abs(wbits) - 1; // -1 because we skip zero
+  const offset = offsetStart + Math.abs(wbits) - 1; // -1 because we skip zero; ignore when isZero
   const isZero = wbits === 0; // is current window slice a 0?
   const isNeg = wbits < 0; // is current window slice negative?
-  const isNegF = window % 2 !== 0; // fake random statement for noise
-  const offsetF = offsetStart; // fake offset for noise
+  const isNegF = window % 2 !== 0; // fake branch noise only
+  const offsetF = offsetStart; // fake branch noise only
   return { nextN, offset, isZero, isNeg, isNegF, offsetF };
 }
 
@@ -340,10 +395,13 @@ const pointWindowSizes = new WeakMap<any, number>();
 function getW(P: any): number {
   // To disable precomputes:
   // return 1;
+  // `1` is also the uncached sentinel: use the ladder / non-precomputed path.
   return pointWindowSizes.get(P) || 1;
 }
 
 function assert0(n: bigint): void {
+  // Internal invariant: a non-zero remainder here means the wNAF window decomposition or loop
+  // count is inconsistent, not that the original caller provided a bad scalar.
   if (n !== _0n) throw new Error('invalid wNAF');
 }
 
@@ -462,14 +520,15 @@ export class wNAF<PC extends PC_ANY> {
       }
     }
     assert0(n);
-    // Return both real and fake points: JIT won't eliminate f.
-    // At this point there is a way to F be infinity-point even if p is not,
-    // which makes it less const-time: around 1 bigint multiply.
+    // Return both real and fake points so JIT keeps the noise path alive.
+    // Known caveat: negate/carry interactions can still drive `f` to infinity even when `p` is not,
+    // which weakens the noise path and leaves this only "less const-time" by about one bigint mul.
     return { p, f };
   }
 
   /**
-   * Implements ec unsafe (non const-time) multiplication using precomputed tables and w-ary non-adjacent form.
+   * Implements unsafe EC multiplication using precomputed tables
+   * and w-ary non-adjacent form.
    * @param acc - accumulator point to add result of multiplication
    * @returns point
    */
@@ -498,7 +557,8 @@ export class wNAF<PC extends PC_ANY> {
   }
 
   private getPrecomputes(W: number, point: PC_P<PC>, transform?: Mapper<PC_P<PC>>): PC_P<PC>[] {
-    // Calculate precomputes on a first run, reuse them after
+    // Cache key is only point identity plus the remembered window size; callers must not reuse the
+    // same point with incompatible `transform(...)` layouts and expect a separate cache entry.
     let comp = pointPrecomputes.get(point);
     if (!comp) {
       comp = this.precomputeWindow(point, W) as PC_P<PC>[];
@@ -545,8 +605,8 @@ export class wNAF<PC extends PC_ANY> {
  * Cost: 128 dbl, 0-256 adds.
  * @param Point - Point constructor.
  * @param point - Input point.
- * @param k1 - First scalar chunk.
- * @param k2 - Second scalar chunk.
+ * @param k1 - First non-negative absolute scalar chunk.
+ * @param k2 - Second non-negative absolute scalar chunk.
  * @returns Partial multiplication results.
  * @example
  * Endomorphism-specific multiplication for Koblitz curves.
@@ -584,7 +644,7 @@ export function mulEndoUnsafe<P extends CurvePoint<any, P>, PC extends CurvePoin
  * @param c - Curve Point constructor
  * @param points - array of L curve points
  * @param scalars - array of L scalars (aka secret keys / bigints)
- * @returns MSM result point.
+ * @returns MSM result point. Empty input is accepted and returns the identity.
  * @throws If the point set, scalar set, or MSM sizing is invalid. {@link Error}
  * @example
  * Pippenger algorithm for multi-scalar multiplication (MSM, Pa + Qb + Rc + ...).
@@ -646,7 +706,8 @@ export function pippenger<P extends CurvePoint<any, P>, PC extends CurvePointCon
  * @param c - Curve Point constructor
  * @param points - array of L curve points
  * @param windowSize - Precompute window size.
- * @returns function which multiplies points with scaars
+ * @returns Function which multiplies points with scalars. The closure accepts
+ *   `scalars.length <= points.length`, and omitted trailing scalars are treated as zero.
  * @throws If the point set or precompute window is invalid. {@link Error}
  * @example
  * Precomputed multi-scalar multiplication (MSM, Pa + Qb + Rc + ...).
@@ -753,13 +814,16 @@ export type ValidCurveParams<T> = {
   Gy: T;
 };
 
-function createField<T>(order: bigint, field?: IField<T>, isLE?: boolean): IField<T> {
+function createField<T>(order: bigint, field?: TArg<IField<T>>, isLE?: boolean): TRet<IField<T>> {
   if (field) {
+    // Reuse supplied field overrides as-is; `isLE` only affects freshly constructed fallback
+    // fields, and validateField() below only checks the arithmetic subset, not full byte/cmov
+    // behavior.
     if (field.ORDER !== order) throw new Error('Field.ORDER must match order: Fp == p, Fn == n');
     validateField(field);
-    return field;
+    return field as TRet<IField<T>>;
   } else {
-    return Field(order, { isLE }) as unknown as IField<T>;
+    return Field(order, { isLE }) as unknown as TRet<IField<T>>;
   }
 }
 /** Pair of fields used by curve constructors. */
@@ -771,7 +835,9 @@ export type FpFn<T> = {
 };
 
 /**
- * Validates CURVE opts and creates fields.
+ * Validates basic CURVE shape and field membership, then creates fields.
+ * This does not prove that the generator is on-curve, that subgroup/order data are consistent, or
+ * that the curve equation itself is otherwise sane.
  * @param type - Curve family.
  * @param CURVE - Curve parameters.
  * @param curveOpts - Optional field overrides:
@@ -798,9 +864,9 @@ export type FpFn<T> = {
 export function createCurveFields<T>(
   type: 'weierstrass' | 'edwards',
   CURVE: ValidCurveParams<T>,
-  curveOpts: Partial<FpFn<T>> = {},
+  curveOpts: TArg<Partial<FpFn<T>>> = {},
   FpFnLE?: boolean
-): FpFn<T> & { CURVE: ValidCurveParams<T> } {
+): TRet<FpFn<T> & { CURVE: ValidCurveParams<T> }> {
   if (FpFnLE === undefined) FpFnLE = type === 'edwards';
   if (!CURVE || typeof CURVE !== 'object') throw new Error(`expected valid ${type} CURVE object`);
   for (const p of ['p', 'n', 'h'] as const) {
@@ -818,7 +884,7 @@ export function createCurveFields<T>(
       throw new Error(`CURVE.${p} must be valid field element of CURVE.Fp`);
   }
   CURVE = Object.freeze(Object.assign({}, CURVE));
-  return { CURVE, Fp, Fn };
+  return { CURVE, Fp, Fn } as TRet<FpFn<T> & { CURVE: ValidCurveParams<T> }>;
 }
 
 type KeygenFn = (
@@ -841,10 +907,10 @@ type KeygenFn = (
  */
 export function createKeygen(
   randomSecretKey: Function,
-  getPublicKey: Signer['getPublicKey']
-): KeygenFn {
-  return function keygen(seed?: Uint8Array) {
-    const secretKey = randomSecretKey(seed);
-    return { secretKey, publicKey: getPublicKey(secretKey) };
+  getPublicKey: TArg<Signer['getPublicKey']>
+): TRet<KeygenFn> {
+  return function keygen(seed?: TArg<Uint8Array>) {
+    const secretKey = randomSecretKey(seed) as TRet<Uint8Array>;
+    return { secretKey, publicKey: getPublicKey(secretKey) as TRet<Uint8Array> };
   };
 }

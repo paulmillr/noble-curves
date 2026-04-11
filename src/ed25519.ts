@@ -38,7 +38,7 @@ import {
 } from './abstract/modular.ts';
 import { montgomery, type MontgomeryECDH } from './abstract/montgomery.ts';
 import { createORPF, type OPRF } from './abstract/oprf.ts';
-import { asciiToBytes, bytesToNumberLE, equalBytes } from './utils.ts';
+import { asciiToBytes, bytesToNumberLE, equalBytes, type TArg, type TRet } from './utils.ts';
 
 // prettier-ignore
 const _0n = /* @__PURE__ */ BigInt(0), _1n = /* @__PURE__ */ BigInt(1), _2n = /* @__PURE__ */ BigInt(2), _3n = /* @__PURE__ */ BigInt(3);
@@ -78,11 +78,12 @@ function ed25519_pow_2_252_3(x: bigint) {
   const b240 = (pow2(b160, _80n, P) * b80) % P;
   const b250 = (pow2(b240, _10n, P) * b10) % P;
   const pow_p_5_8 = (pow2(b250, _2n, P) * x) % P;
-  // ^ To pow to (p+3)/8, multiply it by x.
+  // ^ This is x^((p-5)/8); multiply by x once more to get x^((p+3)/8).
   return { pow_p_5_8, b2 };
 }
 
-function adjustScalarBytes(bytes: Uint8Array): Uint8Array {
+// Mutates and returns the provided 32-byte buffer in place.
+function adjustScalarBytes(bytes: TArg<Uint8Array>): TRet<Uint8Array> {
   // Section 5: For X25519, in order to decode 32 random bytes as an integer scalar,
   // set the three least significant bits of the first byte
   bytes[0] &= 248; // 0b1111_1000
@@ -90,7 +91,7 @@ function adjustScalarBytes(bytes: Uint8Array): Uint8Array {
   bytes[31] &= 127; // 0b0111_1111
   // set the second most significant bit of the last byte to 1
   bytes[31] |= 64; // 0b0100_0000
-  return bytes;
+  return bytes as TRet<Uint8Array>;
 }
 
 // √(-1) aka √(a) aka 2^((p-1)/4)
@@ -98,7 +99,8 @@ function adjustScalarBytes(bytes: Uint8Array): Uint8Array {
 const ED25519_SQRT_M1 = /* @__PURE__ */ BigInt(
   '19681161376707505956807079304988542015446066515923890162744021073123829784752'
 );
-// sqrt(u/v)
+// sqrt(u/v). Returns `{ isValid, value }`; on non-squares `value` is still a
+// dummy root-shaped field element so callers can stay constant-time.
 function uvRatio(u: bigint, v: bigint): { isValid: boolean; value: bigint } {
   const P = ed25519_CURVE_p;
   const v3 = mod(v * v * v, P); // v³
@@ -119,25 +121,40 @@ function uvRatio(u: bigint, v: bigint): { isValid: boolean; value: bigint } {
 }
 
 const ed25519_Point = /* @__PURE__ */ edwards(ed25519_CURVE, { uvRatio });
+// Public field alias stays stricter than the RFC 8032 Appendix A sample code:
+// `Fp.inv(0)` throws instead of returning `0`.
 const Fp = /* @__PURE__ */ (() => ed25519_Point.Fp)();
 const Fn = /* @__PURE__ */ (() => ed25519_Point.Fn)();
 
-function ed25519_domain(data: Uint8Array, ctx: Uint8Array, phflag: boolean) {
+// RFC 8032 `dom2` helper for ctx/ph variants only. Plain Ed25519 keeps the
+// empty-domain path in `ed()` and would be wrong if routed through this helper.
+function ed25519_domain(
+  data: TArg<Uint8Array>,
+  ctx: TArg<Uint8Array>,
+  phflag: boolean
+): TRet<Uint8Array> {
   if (ctx.length > 255) throw new Error('Context is too big');
   return concatBytes(
     asciiToBytes('SigEd25519 no Ed25519 collisions'),
     new Uint8Array([phflag ? 1 : 0, ctx.length]),
     ctx,
     data
-  );
+  ) as TRet<Uint8Array>;
 }
 
-function ed(opts: EdDSAOpts) {
-  return eddsa(ed25519_Point, sha512, Object.assign({ adjustScalarBytes }, opts));
+function ed(opts: TArg<EdDSAOpts>) {
+  // Ed25519 keeps ZIP-215 default verification semantics for consensus compatibility.
+  return eddsa(
+    ed25519_Point,
+    sha512,
+    Object.assign({ adjustScalarBytes, zip215: true }, opts as EdDSAOpts)
+  );
 }
 
 /**
  * ed25519 curve with EdDSA signatures.
+ * Seeded `keygen(seed)` / `utils.randomSecretKey(seed)` reuse the provided
+ * 32-byte seed buffer instead of copying it.
  * @example
  * Generate one Ed25519 keypair, sign a message, and verify it.
  *
@@ -155,6 +172,8 @@ function ed(opts: EdDSAOpts) {
 export const ed25519: EdDSA = /* @__PURE__ */ ed({});
 /**
  * Context version of ed25519 (ctx for domain separation). See {@link ed25519}
+ * Seeded `keygen(seed)` / `utils.randomSecretKey(seed)` reuse the provided
+ * 32-byte seed buffer instead of copying it.
  * @example
  * Sign and verify with Ed25519ctx under one explicit context.
  *
@@ -169,6 +188,8 @@ export const ed25519: EdDSA = /* @__PURE__ */ ed({});
 export const ed25519ctx: EdDSA = /* @__PURE__ */ ed({ domain: ed25519_domain });
 /**
  * Prehashed version of ed25519. See {@link ed25519}
+ * Seeded `keygen(seed)` / `utils.randomSecretKey(seed)` reuse the provided
+ * 32-byte seed buffer instead of copying it.
  * @example
  * Use the prehashed Ed25519 variant for one message.
  *
@@ -192,7 +213,7 @@ export const ed25519ph: EdDSA = /* @__PURE__ */ ed({ domain: ed25519_domain, pre
  * const deal = ed25519_FROST.trustedDealer({ min: 2, max: 3 }, [alice, bob, carol]);
  * ```
  */
-export const ed25519_FROST: FROST = /* @__PURE__ */ (() =>
+export const ed25519_FROST: TRet<FROST> = /* @__PURE__ */ (() =>
   createFROST({
     name: 'FROST-ED25519-SHA512-v1',
     Point: ed25519_Point,
@@ -201,11 +222,16 @@ export const ed25519_FROST: FROST = /* @__PURE__ */ (() =>
       if (!p.isTorsionFree()) throw new Error('bad point: not torsion-free');
     },
     hash: sha512,
+    // RFC 9591 keeps H2 undecorated here for RFC 8032 compatibility. In createFROST(),
+    // `H2: ''` becomes an empty DST prefix; the built-in hashToScalar fallback treats
+    // that the same as omitted DST, even though custom hooks can still observe the empty bag.
     H2: '',
   }))();
 
 /**
  * ECDH using curve25519 aka x25519.
+ * `getSharedSecret()` rejects low-order peer inputs by default, and seeded
+ * `keygen(seed)` reuses the provided 32-byte seed buffer instead of copying it.
  * @example
  * Derive one shared secret between two X25519 peers.
  *
@@ -216,7 +242,7 @@ export const ed25519_FROST: FROST = /* @__PURE__ */ (() =>
  * const shared = x25519.getSharedSecret(alice.secretKey, bob.publicKey);
  * ```
  */
-export const x25519: MontgomeryECDH = /* @__PURE__ */ (() => {
+export const x25519: TRet<MontgomeryECDH> = /* @__PURE__ */ (() => {
   const P = ed25519_CURVE_p;
   return montgomery({
     P,
@@ -231,9 +257,10 @@ export const x25519: MontgomeryECDH = /* @__PURE__ */ (() => {
 })();
 
 // Hash To Curve Elligator2 Map (NOTE: different from ristretto255 elligator)
-// NOTE: very important part is usage of FpSqrtEven for ELL2_C1_EDWARDS, since
-// SageMath returns different root first and everything falls apart
-const ELL2_C1 = /* @__PURE__ */ (() => (ed25519_CURVE_p + _3n) / _8n)(); // 1. c1 = (q + 3) / 8       # Integer arithmetic
+// RFC 9380 Appendix G.2.2 / Err4730 requires `sgn0(c1) = 0` for the Edwards
+// map constant below, so use the even root explicitly.
+// 1. c1 = (q + 3) / 8 # Integer arithmetic
+const ELL2_C1 = /* @__PURE__ */ (() => (ed25519_CURVE_p + _3n) / _8n)();
 const ELL2_C2 = /* @__PURE__ */ (() => Fp.pow(_2n, ELL2_C1))(); // 2. c2 = 2^c1
 const ELL2_C3 = /* @__PURE__ */ (() => Fp.sqrt(Fp.neg(Fp.ONE)))(); // 3. c3 = sqrt(-1)
 
@@ -250,7 +277,8 @@ export function _map_to_curve_elligator2_curve25519(u: bigint): {
 
   let tv1 = Fp.sqr(u);          //  1.  tv1 = u^2
   tv1 = Fp.mul(tv1, _2n);       //  2.  tv1 = 2 * tv1
-  let xd = Fp.add(tv1, Fp.ONE); //  3.   xd = tv1 + 1         # Nonzero: -1 is square (mod p), tv1 is not
+  // 3. xd = tv1 + 1 # Nonzero: -1 is square (mod p), tv1 is not
+  let xd = Fp.add(tv1, Fp.ONE);
   let x1n = Fp.neg(ELL2_J);     //  4.  x1n = -J              # x1 = x1n / xd = -J / (1 + 2 * u^2)
   let tv2 = Fp.sqr(xd);         //  5.  tv2 = xd^2
   let gxd = Fp.mul(tv2, xd);    //  6.  gxd = tv2 * xd        # gxd = xd^3
@@ -269,7 +297,8 @@ export function _map_to_curve_elligator2_curve25519(u: bigint): {
   tv2 = Fp.sqr(y11);            //  19. tv2 = y11^2
   tv2 = Fp.mul(tv2, gxd);       //  20. tv2 = tv2 * gxd
   let e1 = Fp.eql(tv2, gx1);    //  21.  e1 = tv2 == gx1
-  let y1 = Fp.cmov(y12, y11, e1); //  22.  y1 = CMOV(y12, y11, e1)  # If g(x1) is square, this is its sqrt
+  // 22. y1 = CMOV(y12, y11, e1) # If g(x1) is square, this is its sqrt
+  let y1 = Fp.cmov(y12, y11, e1);
   let x2n = Fp.mul(x1n, tv1);   //  23. x2n = x1n * tv1       # x2 = x2n / xd = 2 * u^2 * x1n / xd
   let y21 = Fp.mul(y11, u);     //  24. y21 = y11 * u
   y21 = Fp.mul(y21, ELL2_C2);   //  25. y21 = y21 * c2
@@ -278,7 +307,8 @@ export function _map_to_curve_elligator2_curve25519(u: bigint): {
   tv2 = Fp.sqr(y21);            //  28. tv2 = y21^2
   tv2 = Fp.mul(tv2, gxd);       //  29. tv2 = tv2 * gxd
   let e2 = Fp.eql(tv2, gx2);    //  30.  e2 = tv2 == gx2
-  let y2 = Fp.cmov(y22, y21, e2); //  31.  y2 = CMOV(y22, y21, e2)  # If g(x2) is square, this is its sqrt
+  // 31. y2 = CMOV(y22, y21, e2) # If g(x2) is square, this is its sqrt
+  let y2 = Fp.cmov(y22, y21, e2);
   tv2 = Fp.sqr(y1);             //  32. tv2 = y1^2
   tv2 = Fp.mul(tv2, gxd);       //  33. tv2 = tv2 * gxd
   let e3 = Fp.eql(tv2, gx1);    //  34.  e3 = tv2 == gx1
@@ -289,15 +319,18 @@ export function _map_to_curve_elligator2_curve25519(u: bigint): {
   return { xMn: xn, xMd: xd, yMn: y, yMd: _1n }; //  39. return (xn, xd, y, 1)
 }
 
-const ELL2_C1_EDWARDS = /* @__PURE__ */ (() => FpSqrtEven(Fp, Fp.neg(BigInt(486664))))(); // sgn0(c1) MUST equal 0
+// sgn0(c1) MUST equal 0
+const ELL2_C1_EDWARDS = /* @__PURE__ */ (() => FpSqrtEven(Fp, Fp.neg(BigInt(486664))))();
 function map_to_curve_elligator2_edwards25519(u: bigint) {
-  const { xMn, xMd, yMn, yMd } = _map_to_curve_elligator2_curve25519(u); //  1.  (xMn, xMd, yMn, yMd) =
+  // 1. (xMn, xMd, yMn, yMd) = map_to_curve_elligator2_curve25519(u)
+  const { xMn, xMd, yMn, yMd } = _map_to_curve_elligator2_curve25519(u);
   // map_to_curve_elligator2_curve25519(u)
   let xn = Fp.mul(xMn, yMd); //  2.  xn = xMn * yMd
   xn = Fp.mul(xn, ELL2_C1_EDWARDS); //  3.  xn = xn * c1
   let xd = Fp.mul(xMd, yMn); //  4.  xd = xMd * yMn    # xn / xd = c1 * xM / yM
   let yn = Fp.sub(xMn, xMd); //  5.  yn = xMn - xMd
-  let yd = Fp.add(xMn, xMd); //  6.  yd = xMn + xMd    # (n / d - 1) / (n / d + 1) = (n - d) / (n + d)
+  // 6. yd = xMn + xMd # (n / d - 1) / (n / d + 1) = (n - d) / (n + d)
+  let yd = Fp.add(xMn, xMd);
   let tv1 = Fp.mul(xd, yd); //  7. tv1 = xd * yd
   let e = Fp.eql(tv1, Fp.ZERO); //  8.   e = tv1 == 0
   xn = Fp.cmov(xn, Fp.ZERO, e); //  9.  xn = CMOV(xn, 0, e)
@@ -305,11 +338,15 @@ function map_to_curve_elligator2_edwards25519(u: bigint) {
   yn = Fp.cmov(yn, Fp.ONE, e); //  11. yn = CMOV(yn, 1, e)
   yd = Fp.cmov(yd, Fp.ONE, e); //  12. yd = CMOV(yd, 1, e)
   const [xd_inv, yd_inv] = FpInvertBatch(Fp, [xd, yd], true); // batch division
+  // Noble normalizes the RFC rational representation to affine `{ x, y }`
+  // before returning from the internal helper.
   return { x: Fp.mul(xn, xd_inv), y: Fp.mul(yn, yd_inv) }; //  13. return (xn, xd, yn, yd)
 }
 
 /**
  * Hashing to ed25519 points / field. RFC 9380 methods.
+ * Public `mapToCurve()` returns the cofactor-cleared subgroup point; the
+ * internal map callback below consumes one field element bigint, not `[bigint]`.
  * @example
  * Hash one message onto the ed25519 curve.
  *
@@ -350,18 +387,23 @@ const ONE_MINUS_D_SQ = /* @__PURE__ */ BigInt(
 const D_MINUS_ONE_SQ = /* @__PURE__ */ BigInt(
   '40440834346308536858101042469323190826248399146238708352240133220865137265952'
 );
-// Calculates 1/√(number)
+// `SQRT_RATIO_M1(1, number)` specialization. Returns `{ isValid, value }`,
+// where non-squares get the nonnegative `sqrt(SQRT_M1 / number)` branch.
 const invertSqrt = (number: bigint) => uvRatio(_1n, number);
 
 const MAX_255B = /* @__PURE__ */ BigInt(
   '0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
 );
-const bytes255ToNumberLE = (bytes: Uint8Array) => Fp.create(bytesToNumberLE(bytes) & MAX_255B);
+// RFC 9496 §4.3.4 MAP parser: masks bit 255 and reduces modulo p for element
+// derivation. The decode path has the opposite contract and rejects that bit.
+const bytes255ToNumberLE = (bytes: TArg<Uint8Array>) =>
+  Fp.create(bytesToNumberLE(bytes) & MAX_255B);
 
 /**
  * Computes Elligator map for Ristretto255.
- * Described in [RFC9380](https://www.rfc-editor.org/rfc/rfc9380#appendix-B) and on
- * the [website](https://ristretto.group/formulas/elligator.html).
+ * Primary formula source is RFC 9496 §4.3.4 MAP; RFC 9380 Appendix B builds
+ * `hash_to_ristretto255` on top of this helper.
+ * Returns an internal Edwards representative, not a public `_RistrettoPoint`.
  */
 function calcElligatorRistrettoMap(r0: bigint): EdwardsPoint {
   const { d } = ed25519_CURVE;
@@ -414,6 +456,12 @@ class _RistrettoPoint extends PrimeEdwardsPoint<_RistrettoPoint> {
     super(ep);
   }
 
+  /**
+   * Create one Ristretto255 point from affine Edwards coordinates.
+   * This wraps the internal Edwards representative directly and is not a
+   * canonical ristretto255 decoding path.
+   * Use `toBytes()` / `fromBytes()` if canonical ristretto255 bytes matter.
+   */
   static fromAffine(ap: AffinePoint<bigint>): _RistrettoPoint {
     return new _RistrettoPoint(ed25519_Point.fromAffine(ap));
   }
@@ -426,7 +474,7 @@ class _RistrettoPoint extends PrimeEdwardsPoint<_RistrettoPoint> {
     return new _RistrettoPoint(ep);
   }
 
-  static fromBytes(bytes: Uint8Array): _RistrettoPoint {
+  static fromBytes(bytes: TArg<Uint8Array>): _RistrettoPoint {
     abytes(bytes, 32);
     const { a, d } = ed25519_CURVE;
     const P = ed25519_CURVE_p;
@@ -467,7 +515,7 @@ class _RistrettoPoint extends PrimeEdwardsPoint<_RistrettoPoint> {
    * Encodes ristretto point to Uint8Array.
    * Described in [RFC9496](https://www.rfc-editor.org/rfc/rfc9496#name-encode).
    */
-  toBytes(): Uint8Array {
+  toBytes(): TRet<Uint8Array> {
     let { X, Y, Z, T } = this.ep;
     const P = ed25519_CURVE_p;
     const mod = (n: bigint) => Fp.create(n);
@@ -492,7 +540,7 @@ class _RistrettoPoint extends PrimeEdwardsPoint<_RistrettoPoint> {
     if (isNegativeLE(X * zInv, P)) Y = mod(-Y); // 9
     let s = mod((Z - Y) * D); // 10 (check footer's note, no sqrt(-a))
     if (isNegativeLE(s, P)) s = mod(-s);
-    return Fp.toBytes(s); // 11
+    return Fp.toBytes(s) as TRet<Uint8Array>; // 11
   }
 
   /**
@@ -514,14 +562,21 @@ class _RistrettoPoint extends PrimeEdwardsPoint<_RistrettoPoint> {
     return this.equals(_RistrettoPoint.ZERO);
   }
 }
+Object.freeze(_RistrettoPoint.BASE);
+Object.freeze(_RistrettoPoint.ZERO);
+Object.freeze(_RistrettoPoint.prototype);
+Object.freeze(_RistrettoPoint);
 
 /** Prime-order Ristretto255 group bundle. */
 export const ristretto255: {
   Point: typeof _RistrettoPoint;
-} = { Point: _RistrettoPoint };
+} = /* @__PURE__ */ Object.freeze({ Point: _RistrettoPoint });
 
 /**
  * Hashing to ristretto255 points / field. RFC 9380 methods.
+ * `hashToCurve()` is RFC 9380 Appendix B, `deriveToCurve()` is the RFC 9496
+ * §4.3.4 element-derivation building block, and `hashToScalar()` is a
+ * library-specific helper for OPRF-style use.
  * @example
  * Hash one message onto ristretto255.
  *
@@ -529,7 +584,7 @@ export const ristretto255: {
  * const point = ristretto255_hasher.hashToCurve(new TextEncoder().encode('hello noble'));
  * ```
  */
-export const ristretto255_hasher: H2CHasherBase<typeof _RistrettoPoint> = {
+export const ristretto255_hasher: H2CHasherBase<typeof _RistrettoPoint> = Object.freeze({
   Point: _RistrettoPoint,
   /**
   * Spec: https://www.rfc-editor.org/rfc/rfc9380.html#name-hashing-to-ristretto255. Caveats:
@@ -540,18 +595,23 @@ export const ristretto255_hasher: H2CHasherBase<typeof _RistrettoPoint> = {
   * * We cannot re-use 'createHasher', because ristretto255_map is different algorithm/RFC
     (os2ip -> bytes255ToNumberLE)
   * * mapToCurve == calcElligatorRistrettoMap, hashToCurve == ristretto255_map
-  * * hashToScalar is undefined in RFC9380 for ristretto, we are using version from OPRF here, using bytes255ToNumblerLE will create different result if we use bytes255ToNumberLE as os2ip
+  * * hashToScalar is undefined in RFC9380 for ristretto, so we use the OPRF
+    version here. Using `bytes255ToNumblerLE` will create a different result
+    if we use `bytes255ToNumberLE` as os2ip
   * * current version is closest to spec.
   */
-  hashToCurve(msg: Uint8Array, options?: H2CDSTOpts): _RistrettoPoint {
+  hashToCurve(msg: TArg<Uint8Array>, options?: TArg<H2CDSTOpts>): _RistrettoPoint {
     // == 'hash_to_ristretto255'
-    const DST = options?.DST || 'ristretto255_XMD:SHA-512_R255MAP_RO_';
+    // Preserve explicit empty/invalid DST overrides so expand_message_xmd() can reject them.
+    const DST = options?.DST === undefined ? 'ristretto255_XMD:SHA-512_R255MAP_RO_' : options.DST;
     const xmd = expand_message_xmd(msg, DST, 64, sha512);
-    // NOTE: RFC 9380 incorrectly calls this function 'ristretto255_map', in RFC 9496 map was function inside (per point)
-    // That also lead to confustion that ristretto255_map is mapToCurve (it is not! it is old hashToCurve)
+    // NOTE: RFC 9380 incorrectly calls this function `ristretto255_map`.
+    // In RFC 9496, `map` was the per-point function inside the construction.
+    // That also led to confusion that `ristretto255_map` is `mapToCurve`.
+    // It is not: it is the older hash-to-curve construction.
     return ristretto255_hasher.deriveToCurve!(xmd);
   },
-  hashToScalar(msg: Uint8Array, options: H2CDSTOpts = { DST: _DST_scalar }) {
+  hashToScalar(msg: TArg<Uint8Array>, options: TArg<H2CDSTOpts> = { DST: _DST_scalar }) {
     const xmd = expand_message_xmd(msg, options.DST, 64, sha512);
     return Fn.create(bytesToNumberLE(xmd));
   },
@@ -559,10 +619,12 @@ export const ristretto255_hasher: H2CHasherBase<typeof _RistrettoPoint> = {
    * HashToCurve-like construction based on RFC 9496 (Element Derivation).
    * Converts 64 uniform random bytes into a curve point.
    *
-   * WARNING: This represents an older hash-to-curve construction, preceding the finalization of RFC 9380.
-   * It was later reused as a component in the newer `hash_to_ristretto255` function defined in RFC 9380.
+   * WARNING: This represents an older hash-to-curve construction from before
+   * RFC 9380 was finalized.
+   * It was later reused as a component in the newer
+   * `hash_to_ristretto255` function defined in RFC 9380.
    */
-  deriveToCurve(bytes: Uint8Array): _RistrettoPoint {
+  deriveToCurve(bytes: TArg<Uint8Array>): _RistrettoPoint {
     // https://www.rfc-editor.org/rfc/rfc9496.html#name-element-derivation
     abytes(bytes, 64);
     const r1 = bytes255ToNumberLE(bytes.subarray(0, 32));
@@ -571,10 +633,10 @@ export const ristretto255_hasher: H2CHasherBase<typeof _RistrettoPoint> = {
     const R2 = calcElligatorRistrettoMap(r2);
     return new _RistrettoPoint(R1.add(R2));
   },
-};
+});
 
 /**
- * ristretto255 OPRF, defined in RFC 9497.
+ * ristretto255 OPRF/VOPRF/POPRF bundle, defined in RFC 9497.
  * @example
  * Run one blind/evaluate/finalize OPRF round over ristretto255.
  *
@@ -586,7 +648,7 @@ export const ristretto255_hasher: H2CHasherBase<typeof _RistrettoPoint> = {
  * const output = ristretto255_oprf.oprf.finalize(input, blind.blind, evaluated);
  * ```
  */
-export const ristretto255_oprf: OPRF = /* @__PURE__ */ (() =>
+export const ristretto255_oprf: TRet<OPRF> = /* @__PURE__ */ (() =>
   createORPF({
     name: 'ristretto255-SHA512',
     Point: _RistrettoPoint,
@@ -606,13 +668,13 @@ export const ristretto255_oprf: OPRF = /* @__PURE__ */ (() =>
  * const deal = ristretto255_FROST.trustedDealer({ min: 2, max: 3 }, [alice, bob, carol]);
  * ```
  */
-export const ristretto255_FROST: FROST = /* @__PURE__ */ (() =>
+export const ristretto255_FROST: TRet<FROST> = /* @__PURE__ */ (() =>
   createFROST({
     name: 'FROST-RISTRETTO255-SHA512-v1',
     Point: _RistrettoPoint,
     validatePoint: (p) => {
+      // Prime-order wrappers are torsion-free at the abstract-group level.
       p.assertValidity();
-      if (!p.isTorsionFree()) throw new Error('bad point: not torsion-free');
     },
     hash: sha512,
   }))();
@@ -621,7 +683,8 @@ export const ristretto255_FROST: FROST = /* @__PURE__ */ (() =>
  * Weird / bogus points, useful for debugging.
  * All 8 ed25519 points of 8-torsion subgroup can be generated from the point
  * T = `26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05`.
- * The subgroup generated by `T` is `{ O, T, 2T, 3T, 4T, 5T, 6T, 7T }`.
+ * The subgroup generated by `T` is `{ O, T, 2T, 3T, 4T, 5T, 6T, 7T }`; the
+ * array below is that set, not the powers in that exact index order.
  * @example
  * Decode one known torsion point for debugging.
  *
@@ -630,7 +693,7 @@ export const ristretto255_FROST: FROST = /* @__PURE__ */ (() =>
  * const point = ed25519.Point.fromHex(ED25519_TORSION_SUBGROUP[1]);
  * ```
  */
-export const ED25519_TORSION_SUBGROUP: string[] = [
+export const ED25519_TORSION_SUBGROUP: readonly string[] = /* @__PURE__ */ Object.freeze([
   '0100000000000000000000000000000000000000000000000000000000000000',
   'c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a',
   '0000000000000000000000000000000000000000000000000000000000000080',
@@ -639,4 +702,4 @@ export const ED25519_TORSION_SUBGROUP: string[] = [
   '26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc85',
   '0000000000000000000000000000000000000000000000000000000000000000',
   'c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa',
-];
+]);

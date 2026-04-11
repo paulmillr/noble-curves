@@ -14,6 +14,8 @@ import {
   randomBytes,
   validateObject,
   type CryptoKeys,
+  type TArg,
+  type TRet,
 } from '../utils.ts';
 import { createKeygen, type CurveLengths } from './curve.ts';
 import { mod } from './modular.ts';
@@ -33,7 +35,7 @@ export type MontgomeryOpts = {
    * @param bytes - Raw secret scalar bytes.
    * @returns Adjusted scalar bytes ready for Montgomery multiplication.
    */
-  adjustScalarBytes: (bytes: Uint8Array) => Uint8Array;
+  adjustScalarBytes: (bytes: TArg<Uint8Array>) => TRet<Uint8Array>;
   /**
    * Invert one field element with exponentiation by `p - 2`.
    * @param x - Field element to invert.
@@ -42,10 +44,9 @@ export type MontgomeryOpts = {
   powPminus2: (x: bigint) => bigint;
   /**
    * Optional randomness source for `keygen()` and `utils.randomSecretKey()`.
-   * @param bytesLength - Requested byte length.
-   * @returns Fresh random bytes.
+   * Receives the requested byte length and returns fresh random bytes.
    */
-  randomBytes?: (bytesLength?: number) => Uint8Array;
+  randomBytes?: (bytesLength?: number) => TRet<Uint8Array>;
 };
 
 /** Public X25519/X448 ECDH API built on a Montgomery ladder. */
@@ -56,33 +57,34 @@ export type MontgomeryECDH = {
    * @param u - Public Montgomery `u` coordinate.
    * @returns Shared point encoded as bytes.
    */
-  scalarMult: (scalar: Uint8Array, u: Uint8Array) => Uint8Array;
+  scalarMult: (scalar: TArg<Uint8Array>, u: TArg<Uint8Array>) => TRet<Uint8Array>;
   /**
    * Multiply one scalar by the curve base point.
    * @param scalar - Secret scalar bytes.
    * @returns Public key bytes.
    */
-  scalarMultBase: (scalar: Uint8Array) => Uint8Array;
+  scalarMultBase: (scalar: TArg<Uint8Array>) => TRet<Uint8Array>;
   /**
    * Derive a shared secret from a local secret key and peer public key.
    * @param secretKeyA - Local secret key bytes.
    * @param publicKeyB - Peer public key bytes.
+   * Rejects low-order public inputs instead of returning the all-zero shared secret.
    * @returns Shared secret bytes.
    */
-  getSharedSecret: (secretKeyA: Uint8Array, publicKeyB: Uint8Array) => Uint8Array;
+  getSharedSecret: (secretKeyA: TArg<Uint8Array>, publicKeyB: TArg<Uint8Array>) => TRet<Uint8Array>;
   /**
    * Derive one public key from a secret key.
    * @param secretKey - Secret key bytes.
    * @returns Public key bytes.
    */
-  getPublicKey: (secretKey: Uint8Array) => Uint8Array;
+  getPublicKey: (secretKey: TArg<Uint8Array>) => TRet<Uint8Array>;
   /** Utility helpers for secret-key generation. */
   utils: {
     /** Generate one random secret key with the curve's expected byte length. */
-    randomSecretKey: () => Uint8Array;
+    randomSecretKey: () => TRet<Uint8Array>;
   };
   /** Encoded Montgomery base point `u`. */
-  GuBytes: Uint8Array;
+  GuBytes: TRet<Uint8Array>;
   /** Public lengths for keys and seeds. */
   lengths: CurveLengths;
   /**
@@ -90,14 +92,28 @@ export type MontgomeryECDH = {
    * @param seed - Optional seed bytes to use instead of random generation.
    * @returns Fresh secret/public keypair.
    */
-  keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
+  keygen: (seed?: TArg<Uint8Array>) => {
+    secretKey: TRet<Uint8Array>;
+    publicKey: TRet<Uint8Array>;
+  };
 };
 
-function validateOpts(curve: MontgomeryOpts) {
-  validateObject(curve, {
-    adjustScalarBytes: 'function',
-    powPminus2: 'function',
-  });
+function validateOpts(curve: TArg<MontgomeryOpts>) {
+  // Validate constructor config eagerly, but do not call user-provided hooks here:
+  // `randomBytes` may be transcript-backed or otherwise contextual. Runtime type checks are
+  // enough to fail fast on malformed configs without consuming user state.
+  validateObject(
+    curve,
+    {
+      P: 'bigint',
+      type: 'string',
+      adjustScalarBytes: 'function',
+      powPminus2: 'function',
+    },
+    {
+      randomBytes: 'function',
+    }
+  );
   return Object.freeze({ ...curve } as const);
 }
 
@@ -114,12 +130,12 @@ function validateOpts(curve: MontgomeryOpts) {
  * const shared = x25519.getSharedSecret(alice.secretKey, alice.publicKey);
  * ```
  */
-export function montgomery(curveDef: MontgomeryOpts): MontgomeryECDH {
+export function montgomery(curveDef: TArg<MontgomeryOpts>): TRet<MontgomeryECDH> {
   const CURVE = validateOpts(curveDef);
   const { P, type, adjustScalarBytes, powPminus2, randomBytes: rand } = CURVE;
   const is25519 = type === 'x25519';
   if (!is25519 && type !== 'x448') throw new Error('invalid type');
-  const randomBytes_ = rand || randomBytes;
+  const randomBytes_ = rand === undefined ? randomBytes : rand;
 
   const montgomeryBits = is25519 ? 255 : 448;
   const fieldLen = is25519 ? 32 : 56;
@@ -139,10 +155,10 @@ export function montgomery(curveDef: MontgomeryOpts): MontgomeryECDH {
   const maxScalar = minScalar + maxAdded + _1n; // (inclusive)
   const modP = (n: bigint) => mod(n, P);
   const GuBytes = encodeU(Gu);
-  function encodeU(u: bigint): Uint8Array {
+  function encodeU(u: bigint): TRet<Uint8Array> {
     return numberToBytesLE(modP(u), fieldLen);
   }
-  function decodeU(u: Uint8Array): bigint {
+  function decodeU(u: TArg<Uint8Array>): bigint {
     const _u = copyBytes(abytes(u, fieldLen, 'uCoordinate'));
     // RFC: When receiving such an array, implementations of X25519
     // (but not X448) MUST mask the most significant bit in the final byte.
@@ -153,10 +169,10 @@ export function montgomery(curveDef: MontgomeryOpts): MontgomeryECDH {
     // - 1 through 2^448 - 1 for X448.
     return modP(bytesToNumberLE(_u));
   }
-  function decodeScalar(scalar: Uint8Array): bigint {
+  function decodeScalar(scalar: TArg<Uint8Array>): bigint {
     return bytesToNumberLE(adjustScalarBytes(copyBytes(abytes(scalar, fieldLen, 'scalar'))));
   }
-  function scalarMult(scalar: Uint8Array, u: Uint8Array): Uint8Array {
+  function scalarMult(scalar: TArg<Uint8Array>, u: TArg<Uint8Array>): TRet<Uint8Array> {
     const pu = montgomeryLadder(decodeU(u), decodeScalar(scalar));
     // Some public keys are useless, of low-order. Curve author doesn't think
     // it needs to be validated, but we do it nonetheless.
@@ -165,7 +181,7 @@ export function montgomery(curveDef: MontgomeryOpts): MontgomeryECDH {
     return encodeU(pu);
   }
   // Computes public key from private. By doing scalar multiplication of base point.
-  function scalarMultBase(scalar: Uint8Array): Uint8Array {
+  function scalarMultBase(scalar: TArg<Uint8Array>): TRet<Uint8Array> {
     return scalarMult(scalar, GuBytes);
   }
   const getPublicKey = scalarMultBase;
@@ -183,10 +199,10 @@ export function montgomery(curveDef: MontgomeryOpts): MontgomeryECDH {
   }
 
   /**
-   * Montgomery x-only multiplication ladder.
-   * @param pointU - u coordinate (x) on Montgomery Curve 25519
-   * @param scalar - by which the point would be multiplied
-   * @returns new Point on Montgomery curve
+   * Montgomery x-only multiplication ladder for the selected X25519/X448 curve.
+   * @param pointU - decoded Montgomery u coordinate for the selected curve
+   * @param scalar - decoded clamped scalar by which the point is multiplied
+   * @returns resulting Montgomery u coordinate for the selected curve
    */
   function montgomeryLadder(u: bigint, scalar: bigint): bigint {
     aInRange('u', u, _0n, P);
@@ -231,11 +247,16 @@ export function montgomery(curveDef: MontgomeryOpts): MontgomeryECDH {
     publicKey: fieldLen,
     seed: fieldLen,
   };
-  const randomSecretKey = (seed = randomBytes_(fieldLen)) => {
+  const randomSecretKey = (seed?: TArg<Uint8Array>): TRet<Uint8Array> => {
+    seed = seed === undefined ? randomBytes_(fieldLen) : seed;
     abytes(seed, lengths.seed, 'seed');
-    return seed;
+    // Reuse caller-supplied seed bytes verbatim; clamping is deferred until
+    // decodeScalar(...) when the secret key is actually used.
+    return seed as TRet<Uint8Array>;
   };
   const utils = { randomSecretKey };
+  Object.freeze(lengths);
+  Object.freeze(utils);
 
   return Object.freeze({
     keygen: createKeygen(randomSecretKey, getPublicKey),
@@ -244,7 +265,7 @@ export function montgomery(curveDef: MontgomeryOpts): MontgomeryECDH {
     scalarMult,
     scalarMultBase,
     utils,
-    GuBytes: GuBytes.slice(),
+    GuBytes: GuBytes.slice() as TRet<Uint8Array>,
     lengths,
   }) satisfies CryptoKeys;
 }

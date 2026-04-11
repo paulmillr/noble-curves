@@ -9,18 +9,20 @@ import {
   abool,
   abytes,
   aInRange,
+  asafenumber,
   bytesToHex,
   bytesToNumberLE,
   concatBytes,
   copyBytes,
   hexToBytes,
   isBytes,
-  memoized,
   notImplemented,
   validateObject,
   randomBytes as wcRandomBytes,
   type FHash,
   type Signer,
+  type TArg,
+  type TRet,
 } from '../utils.ts';
 import {
   createCurveFields,
@@ -132,15 +134,17 @@ export type EdwardsExtraOpts = Partial<{
  */
 export type EdDSAOpts = Partial<{
   /** Clamp or otherwise normalize secret-scalar bytes before reducing mod `n`. */
-  adjustScalarBytes: (bytes: Uint8Array) => Uint8Array;
+  adjustScalarBytes: (bytes: TArg<Uint8Array>) => TRet<Uint8Array>;
   /** Domain-separation helper for contexts and prehash mode. */
-  domain: (data: Uint8Array, ctx: Uint8Array, phflag: boolean) => Uint8Array;
+  domain: (data: TArg<Uint8Array>, ctx: TArg<Uint8Array>, phflag: boolean) => TRet<Uint8Array>;
   /** Optional hash-to-curve mapper for protocols like Ristretto hash-to-group. */
   mapToCurve: (scalar: bigint[]) => AffinePoint<bigint>;
   /** Optional prehash function used before signing or verifying messages. */
   prehash: FHash;
+  /** Default verification decoding policy. ZIP-215 is more permissive than RFC 8032 / NIST. */
+  zip215: boolean;
   /** RNG override used by helper constructors. */
-  randomBytes: (bytesLength?: number) => Uint8Array;
+  randomBytes: (bytesLength?: number) => TRet<Uint8Array>;
 }>;
 
 /**
@@ -153,13 +157,13 @@ export interface EdDSA {
    * @param seed - Optional seed material.
    * @returns Secret/public key pair.
    */
-  keygen: (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
+  keygen: (seed?: TArg<Uint8Array>) => { secretKey: TRet<Uint8Array>; publicKey: TRet<Uint8Array> };
   /**
    * Derive the public key from a secret key.
    * @param secretKey - Secret key bytes.
    * @returns Encoded public key.
    */
-  getPublicKey: (secretKey: Uint8Array) => Uint8Array;
+  getPublicKey: (secretKey: TArg<Uint8Array>) => TRet<Uint8Array>;
   /**
    * Sign a message with an EdDSA secret key.
    * @param message - Message bytes.
@@ -169,10 +173,10 @@ export interface EdDSA {
    * @returns Encoded signature bytes.
    */
   sign: (
-    message: Uint8Array,
-    secretKey: Uint8Array,
-    options?: { context?: Uint8Array }
-  ) => Uint8Array;
+    message: TArg<Uint8Array>,
+    secretKey: TArg<Uint8Array>,
+    options?: TArg<{ context?: Uint8Array }>
+  ) => TRet<Uint8Array>;
   /**
    * Verify a signature against a message and public key.
    * @param sig - Encoded signature bytes.
@@ -184,21 +188,24 @@ export interface EdDSA {
    * @returns Whether the signature is valid.
    */
   verify: (
-    sig: Uint8Array,
-    message: Uint8Array,
-    publicKey: Uint8Array,
-    options?: { context?: Uint8Array; zip215: boolean }
+    sig: TArg<Uint8Array>,
+    message: TArg<Uint8Array>,
+    publicKey: TArg<Uint8Array>,
+    options?: TArg<{ context?: Uint8Array; zip215?: boolean }>
   ) => boolean;
   /** Point constructor used by this signature scheme. */
   Point: EdwardsPointCons;
   /** Helper utilities for key validation and Montgomery conversion. */
   utils: {
-    /** Generate a valid random secret key. */
-    randomSecretKey: (seed?: Uint8Array) => Uint8Array;
+    /**
+     * Generate a valid random secret key.
+     * Optional seed bytes are only length-checked and returned unchanged.
+     */
+    randomSecretKey: (seed?: TArg<Uint8Array>) => TRet<Uint8Array>;
     /** Check whether a secret key has the expected encoding. */
-    isValidSecretKey: (secretKey: Uint8Array) => boolean;
+    isValidSecretKey: (secretKey: TArg<Uint8Array>) => boolean;
     /** Check whether a public key decodes to a valid point. */
-    isValidPublicKey: (publicKey: Uint8Array, zip215?: boolean) => boolean;
+    isValidPublicKey: (publicKey: TArg<Uint8Array>, zip215?: boolean) => boolean;
 
     /**
      * Converts ed public key to x public key.
@@ -218,7 +225,7 @@ export interface EdDSA {
      * const shared = x25519.getSharedSecret(aPriv, someonesPub)
      * ```
      */
-    toMontgomery: (publicKey: Uint8Array) => Uint8Array;
+    toMontgomery: (publicKey: TArg<Uint8Array>) => TRet<Uint8Array>;
     /**
      * Converts ed secret key to x secret key.
      * @example
@@ -231,21 +238,23 @@ export interface EdDSA {
      * const shared = x25519.getSharedSecret(aPriv, someonesPub)
      * ```
      */
-    toMontgomerySecret: (secretKey: Uint8Array) => Uint8Array;
+    toMontgomerySecret: (secretKey: TArg<Uint8Array>) => TRet<Uint8Array>;
     /** Return the expanded private key components used by RFC8032 signing. */
-    getExtendedPublicKey: (key: Uint8Array) => {
-      head: Uint8Array;
-      prefix: Uint8Array;
+    getExtendedPublicKey: (key: TArg<Uint8Array>) => {
+      head: TRet<Uint8Array>;
+      prefix: TRet<Uint8Array>;
       scalar: bigint;
       point: EdwardsPoint;
-      pointBytes: Uint8Array;
+      pointBytes: TRet<Uint8Array>;
     };
   };
   /** Byte lengths for keys and signatures exposed by this scheme. */
   lengths: CurveLengths;
 }
 
-function isEdValidXY(Fp: IField<bigint>, CURVE: EdwardsOpts, x: bigint, y: bigint): boolean {
+// Affine Edwards-equation check only; this does not prove subgroup membership, canonical
+// encoding, prime-order base-point requirements, or identity exclusion.
+function isEdValidXY(Fp: TArg<IField<bigint>>, CURVE: EdwardsOpts, x: bigint, y: bigint): boolean {
   const x2 = Fp.sqr(x);
   const y2 = Fp.sqr(y);
   const left = Fp.add(Fp.mul(CURVE.a, x2), y2);
@@ -256,7 +265,14 @@ function isEdValidXY(Fp: IField<bigint>, CURVE: EdwardsOpts, x: bigint, y: bigin
 /**
  * @param params - Curve parameters. See {@link EdwardsOpts}.
  * @param extraOpts - Optional helpers and overrides. See {@link EdwardsExtraOpts}.
- * @returns Edwards point constructor.
+ * @returns Edwards point constructor. Generator validation here only checks
+ *   that `(Gx, Gy)` satisfies the affine Edwards equation.
+ *   RFC 8032 base-point constraints like `B != (0,1)` and `[L]B = 0`
+ *   are left to the caller's chosen parameters, since eager subgroup
+ *   validation here adds about 10-15ms to heavyweight imports like ed448.
+ *   The returned constructor also eagerly marks `Point.BASE` for W=8
+ *   precompute caching. Some code paths still assume
+ *   `Fp.BYTES === Fn.BYTES`, so mismatched byte lengths are not fully audited here.
  * @throws If the curve parameters or Edwards overrides are invalid. {@link Error}
  * @example
  * ```ts
@@ -267,12 +283,16 @@ function isEdValidXY(Fp: IField<bigint>, CURVE: EdwardsOpts, x: bigint, y: bigin
  * Point.BASE.toHex();
  * ```
  */
-export function edwards(params: EdwardsOpts, extraOpts: EdwardsExtraOpts = {}): EdwardsPointCons {
-  const validated = createCurveFields('edwards', params, extraOpts, extraOpts.FpFnLE);
+export function edwards(
+  params: TArg<EdwardsOpts>,
+  extraOpts: TArg<EdwardsExtraOpts> = {}
+): EdwardsPointCons {
+  const opts = extraOpts as EdwardsExtraOpts;
+  const validated = createCurveFields('edwards', params as EdwardsOpts, opts, opts.FpFnLE);
   const { Fp, Fn } = validated;
   let CURVE = validated.CURVE as EdwardsOpts;
   const { h: cofactor } = CURVE;
-  validateObject(extraOpts, {}, { uvRatio: 'function' });
+  validateObject(opts, {}, { uvRatio: 'function' });
 
   // Important:
   // There are some places where Fp.BYTES is used instead of nByteLength.
@@ -283,14 +303,15 @@ export function edwards(params: EdwardsOpts, extraOpts: EdwardsExtraOpts = {}): 
 
   // sqrt(u/v)
   const uvRatio =
-    extraOpts.uvRatio ||
-    ((u: bigint, v: bigint) => {
-      try {
-        return { isValid: true, value: Fp.sqrt(Fp.div(u, v)) };
-      } catch (e) {
-        return { isValid: false, value: _0n };
-      }
-    });
+    opts.uvRatio === undefined
+      ? (u: bigint, v: bigint) => {
+          try {
+            return { isValid: true, value: Fp.sqrt(Fp.div(u, v)) };
+          } catch (e) {
+            return { isValid: false, value: _0n };
+          }
+        }
+      : opts.uvRatio;
 
   // Validate whether the passed curve params are valid.
   // equation ax² + y² = 1 + dx²y² should work for generator point.
@@ -312,7 +333,7 @@ export function edwards(params: EdwardsOpts, extraOpts: EdwardsExtraOpts = {}): 
   }
   // Converts Extended point to default (x, y) coordinates.
   // Can accept precomputed Z^-1 - for example, from invertBatch.
-  const toAffineMemo = memoized((p: Point, iz?: bigint): AffinePoint<bigint> => {
+  const toAffine = (p: TArg<Point>, iz?: bigint): AffinePoint<bigint> => {
     const { X, Y, Z } = p;
     const is0 = p.is0();
     if (iz == null) iz = is0 ? _8n : (Fp.inv(Z) as bigint); // 8 was chosen arbitrarily
@@ -322,9 +343,13 @@ export function edwards(params: EdwardsOpts, extraOpts: EdwardsExtraOpts = {}): 
     if (is0) return { x: _0n, y: _1n };
     if (zz !== _1n) throw new Error('invZ was invalid');
     return { x, y };
-  });
-  const assertValidMemo = memoized((p: Point) => {
+  };
+  const assertValid = (p: TArg<Point>) => {
     const { a, d } = CURVE;
+    // Keep generic Edwards validation fail-closed on the neutral point.
+    // Even though ZERO is algebraically valid and can roundtrip through encodings, higher-level
+    // callers often reach it only through broken hash/scalar plumbing; rejecting it here avoids
+    // silently treating that degenerate state as an ordinary public point.
     if (p.is0()) throw new Error('bad point: ZERO'); // TODO: optimize, with vars below?
     // Equation in affine coordinates: ax² + y² = 1 + dx²y²
     // Equation in projective coordinates (X/Z, Y/Z, Z):  (aX² + Y²)Z² = Z⁴ + dX²Y²
@@ -342,7 +367,7 @@ export function edwards(params: EdwardsOpts, extraOpts: EdwardsExtraOpts = {}): 
     const ZT = modP(Z * T);
     if (XY !== ZT) throw new Error('bad point: equation left != right (2)');
     return true;
-  });
+  };
 
   // Extended Point works in extended coordinates: (X, Y, Z, T) ∋ (x=X/Z, y=Y/Z, T=xy).
   // https://en.wikipedia.org/wiki/Twisted_Edwards_curve#Extended_coordinates
@@ -373,6 +398,11 @@ export function edwards(params: EdwardsOpts, extraOpts: EdwardsExtraOpts = {}): 
       return CURVE;
     }
 
+    /**
+     * Create one extended Edwards point from affine coordinates.
+     * Does NOT validate that the point is on-curve or torsion-free.
+     * Use `.assertValidity()` on adversarial inputs.
+     */
     static fromAffine(p: AffinePoint<bigint>): Point {
       if (p instanceof Point) throw new Error('extended point not allowed');
       const { x, y } = p || {};
@@ -434,7 +464,7 @@ export function edwards(params: EdwardsOpts, extraOpts: EdwardsExtraOpts = {}): 
 
     // Useful in fromAffine() - not for fromBytes(), which always created valid points.
     assertValidity(): void {
-      assertValidMemo(this);
+      assertValid(this);
     }
 
     // Compare one point to another.
@@ -504,13 +534,20 @@ export function edwards(params: EdwardsOpts, extraOpts: EdwardsExtraOpts = {}): 
     }
 
     subtract(other: Point): Point {
+      // Validate before calling `negate()` so wrong inputs fail with the point guard
+      // instead of leaking a foreign `negate()` error.
+      aedpoint(other);
       return this.add(other.negate());
     }
 
     // Constant-time multiplication.
     multiply(scalar: bigint): Point {
       // 1 <= scalar < L
-      if (!Fn.isValidNot0(scalar)) throw new Error('invalid scalar: expected 1 <= sc < curve.n');
+      // Keep the subgroup-scalar contract strict instead of reducing 0 / n to ZERO.
+      // In keygen/signing-style callers, those values usually mean broken hash/scalar plumbing,
+      // and failing closed is safer than silently producing the identity point.
+      if (!Fn.isValidNot0(scalar))
+        throw new RangeError('invalid scalar: expected 1 <= sc < curve.n');
       const { p, f } = wnaf.cached(this, scalar, (p) => normalizeZ(Point, p));
       return normalizeZ(Point, [p, f])[0];
     }
@@ -518,11 +555,12 @@ export function edwards(params: EdwardsOpts, extraOpts: EdwardsExtraOpts = {}): 
     // Non-constant-time multiplication. Uses double-and-add algorithm.
     // It's faster, but should only be used when you don't care about
     // an exposed private key e.g. sig verification.
-    // Does NOT allow scalars higher than CURVE.n.
+    // Keeps the same subgroup-scalar contract: 0 is allowed for public-scalar callers, but
+    // n and larger values are rejected instead of being reduced mod n to the identity point.
     // Accepts optional accumulator to merge with multiply (important for sparse scalars)
     multiplyUnsafe(scalar: bigint, acc = Point.ZERO): Point {
       // 0 <= scalar < L
-      if (!Fn.isValid(scalar)) throw new Error('invalid scalar: expected 0 <= sc < curve.n');
+      if (!Fn.isValid(scalar)) throw new RangeError('invalid scalar: expected 0 <= sc < curve.n');
       if (scalar === _0n) return Point.ZERO;
       if (this.is0() || scalar === _1n) return this;
       return wnaf.unsafe(this, scalar, (p) => normalizeZ(Point, p), acc);
@@ -531,9 +569,9 @@ export function edwards(params: EdwardsOpts, extraOpts: EdwardsExtraOpts = {}): 
     // Checks if point is of small order.
     // If you add something to small order point, you will have "dirty"
     // point with torsion component.
-    // Multiplies point by cofactor and checks if the result is 0.
+    // Clears cofactor and checks if the result is 0.
     isSmallOrder(): boolean {
-      return this.multiplyUnsafe(cofactor).is0();
+      return this.clearCofactor().is0();
     }
 
     // Multiplies point by curve order and checks if the result is 0.
@@ -545,7 +583,7 @@ export function edwards(params: EdwardsOpts, extraOpts: EdwardsExtraOpts = {}): 
     // Converts Extended point to default (x, y) coordinates.
     // Can accept precomputed Z^-1 - for example, from invertBatch.
     toAffine(invertedZ?: bigint): AffinePoint<bigint> {
-      return toAffineMemo(this, invertedZ);
+      return toAffine(this, invertedZ);
     }
 
     clearCofactor(): Point {
@@ -571,14 +609,29 @@ export function edwards(params: EdwardsOpts, extraOpts: EdwardsExtraOpts = {}): 
     }
   }
   const wnaf = new wNAF(Point, Fn.BITS);
-  Point.BASE.precompute(8); // Enable precomputes. Slows down first publicKey computation by 20ms.
+  // Keep constructor work cheap: subgroup/generator validation belongs to the caller's curve
+  // parameters, and doing the extra checks here adds about 10-15ms to heavy module imports.
+  // Callers that construct custom curves are responsible for supplying the correct base point.
+  // try {
+  //   Point.BASE.assertValidity();
+  //   if (!Point.BASE.isTorsionFree()) throw new Error('bad point: not in prime-order subgroup');
+  // } catch {
+  //   throw new Error('bad curve params: generator point');
+  // }
+  // Tiny toy curves can have scalar fields narrower than 8 bits. Skip the
+  // eager W=8 cache there instead of rejecting an otherwise valid constructor.
+  if (Fn.BITS >= 8) Point.BASE.precompute(8); // Enable precomputes. Slows down first publicKey computation by 20ms.
+  Object.freeze(Point.prototype);
+  Object.freeze(Point);
   return Point;
 }
 
 /**
  * Base class for prime-order points like Ristretto255 and Decaf448.
  * These points eliminate cofactor issues by representing equivalence classes
- * of Edwards curve points.
+ * of Edwards curve points. Multiple Edwards representatives can describe the
+ * same abstract wrapper element, so wrapper validity is not the same thing as
+ * the hidden representative being torsion-free.
  * @param ep - Backing Edwards point.
  * @example
  * Base class for prime-order points like Ristretto255 and Decaf448.
@@ -598,6 +651,11 @@ export abstract class PrimeEdwardsPoint<T extends PrimeEdwardsPoint<T>>
 
   protected readonly ep: EdwardsPoint;
 
+  /**
+   * Wrap one internal Edwards representative directly.
+   * This is not a canonical encoding boundary: alternate Edwards
+   * representatives may still describe the same abstract wrapper element.
+   */
   constructor(ep: EdwardsPoint) {
     this.ep = ep;
   }
@@ -624,14 +682,24 @@ export abstract class PrimeEdwardsPoint<T extends PrimeEdwardsPoint<T>>
 
   // Common implementations
   clearCofactor(): T {
-    // no-op for prime-order groups
+    // no-op for the abstract prime-order wrapper group; this is about the
+    // wrapper element, not the hidden Edwards representative.
     return this as any;
   }
 
   assertValidity(): void {
+    // Keep wrapper validity at the abstract-group boundary. Canonical decode
+    // may choose Edwards representatives that differ by small torsion, so
+    // checking `this.ep.isTorsionFree()` here would reject valid wrapper points.
     this.ep.assertValidity();
   }
 
+  /**
+   * Return affine coordinates of the current internal Edwards representative.
+   * This is a convenience helper, not a canonical Ristretto/Decaf encoding.
+   * Equal abstract elements may expose different `x` / `y`; use
+   * `toBytes()` / `fromBytes()` for canonical roundtrips.
+   */
   toAffine(invertedZ?: bigint): AffinePoint<bigint> {
     return this.ep.toAffine(invertedZ);
   }
@@ -645,6 +713,8 @@ export abstract class PrimeEdwardsPoint<T extends PrimeEdwardsPoint<T>>
   }
 
   isTorsionFree(): boolean {
+    // Abstract Ristretto/Decaf elements are already prime-order even when the
+    // hidden Edwards representative is not torsion-free.
     return true;
   }
 
@@ -679,7 +749,10 @@ export abstract class PrimeEdwardsPoint<T extends PrimeEdwardsPoint<T>>
   }
 
   precompute(windowSize?: number, isLazy?: boolean): T {
-    return this.init(this.ep.precompute(windowSize, isLazy));
+    this.ep.precompute(windowSize, isLazy);
+    // Keep the wrapper identity stable like the backing Edwards API instead of
+    // allocating a fresh wrapper around the same cached point.
+    return this as unknown as T;
   }
 
   // Helper methods
@@ -709,102 +782,137 @@ export abstract class PrimeEdwardsPoint<T extends PrimeEdwardsPoint<T>>
  * const isValid = sigs.verify(sig, msg, publicKey);
  * ```
  */
-export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpts = {}): EdDSA {
+export function eddsa(
+  Point: EdwardsPointCons,
+  cHash: TArg<FHash>,
+  eddsaOpts: TArg<EdDSAOpts> = {}
+): EdDSA {
   if (typeof cHash !== 'function') throw new Error('"hash" function param is required');
+  const hash = cHash as FHash;
+  const opts = eddsaOpts as EdDSAOpts;
   validateObject(
-    eddsaOpts,
+    opts,
     {},
     {
       adjustScalarBytes: 'function',
       randomBytes: 'function',
       domain: 'function',
       prehash: 'function',
+      zip215: 'boolean',
       mapToCurve: 'function',
     }
   );
 
-  const { prehash } = eddsaOpts;
+  const { prehash } = opts;
   const { BASE, Fp, Fn } = Point;
+  const outputLen = (hash as FHash & { outputLen?: number }).outputLen;
+  const expectedLen = 2 * Fp.BYTES;
+  // When hash metadata is available, reject incompatible EdDSA wrappers at construction time
+  // instead of deferring the mismatch until the first keygen/sign call.
+  if (outputLen !== undefined) {
+    asafenumber(outputLen, 'hash.outputLen');
+    if (outputLen !== expectedLen)
+      throw new Error(`hash.outputLen must be ${expectedLen}, got ${outputLen}`);
+  }
 
-  const randomBytes = eddsaOpts.randomBytes || wcRandomBytes;
-  const adjustScalarBytes = eddsaOpts.adjustScalarBytes || ((bytes: Uint8Array) => bytes);
+  const randomBytes = opts.randomBytes === undefined ? wcRandomBytes : opts.randomBytes;
+  const adjustScalarBytes =
+    opts.adjustScalarBytes === undefined
+      ? (bytes: TArg<Uint8Array>) => bytes as TRet<Uint8Array>
+      : opts.adjustScalarBytes;
   const domain =
-    eddsaOpts.domain ||
-    ((data: Uint8Array, ctx: Uint8Array, phflag: boolean) => {
-      abool(phflag, 'phflag');
-      if (ctx.length || phflag) throw new Error('Contexts/pre-hash are not supported');
-      return data;
-    }); // NOOP
+    opts.domain === undefined
+      ? (data: TArg<Uint8Array>, ctx: TArg<Uint8Array>, phflag: boolean) => {
+          abool(phflag, 'phflag');
+          if (ctx.length || phflag) throw new Error('Contexts/pre-hash are not supported');
+          return data as TRet<Uint8Array>;
+        }
+      : opts.domain; // NOOP
 
-  // Little-endian SHA512 with modulo n
-  function modN_LE(hash: Uint8Array): bigint {
+  // Parse an EdDSA digest as a little-endian integer and reduce it modulo the scalar field order.
+  function modN_LE(hash: TArg<Uint8Array>): bigint {
     return Fn.create(bytesToNumberLE(hash)); // Not Fn.fromBytes: it has length limit
   }
 
   // Get the hashed private scalar per RFC8032 5.1.5
-  function getPrivateScalar(key: Uint8Array) {
+  function getPrivateScalar(key: TArg<Uint8Array>) {
     const len = lengths.secretKey;
     abytes(key, lengths.secretKey, 'secretKey');
     // Hash private key with curve's hash function to produce uniformingly random input
     // Check byte lengths: ensure(64, h(ensure(32, key)))
-    const hashed = abytes(cHash(key), 2 * len, 'hashedSecretKey');
+    const hashed = abytes(hash(key), 2 * len, 'hashedSecretKey');
+    // Slice before clamping so in-place adjustors don't corrupt the prefix half.
     const head = adjustScalarBytes(hashed.slice(0, len)); // clear first half bits, produce FE
-    const prefix = hashed.slice(len, 2 * len); // second half is called key prefix (5.1.6)
+    const prefix = hashed.slice(len, 2 * len) as TRet<Uint8Array>; // second half is called key prefix (5.1.6)
     const scalar = modN_LE(head); // The actual private scalar
     return { head, prefix, scalar };
   }
 
-  /** Convenience method that creates public key from scalar. RFC8032 5.1.5 */
-  function getExtendedPublicKey(secretKey: Uint8Array) {
+  /** Convenience method that creates public key from scalar. RFC8032 5.1.5
+   * Also exposes the derived scalar/prefix tuple and point form reused by sign().
+   */
+  function getExtendedPublicKey(secretKey: TArg<Uint8Array>) {
     const { head, prefix, scalar } = getPrivateScalar(secretKey);
     const point = BASE.multiply(scalar); // Point on Edwards curve aka public key
-    const pointBytes = point.toBytes();
+    const pointBytes = point.toBytes() as TRet<Uint8Array>;
     return { head, prefix, scalar, point, pointBytes };
   }
 
   /** Calculates EdDSA pub key. RFC8032 5.1.5. */
-  function getPublicKey(secretKey: Uint8Array): Uint8Array {
+  function getPublicKey(secretKey: TArg<Uint8Array>): TRet<Uint8Array> {
     return getExtendedPublicKey(secretKey).pointBytes;
   }
 
-  // int('LE', SHA512(dom2(F, C) || msgs)) mod N
-  function hashDomainToScalar(context: Uint8Array = Uint8Array.of(), ...msgs: Uint8Array[]) {
+  // Hash domain-separated chunks into a little-endian scalar modulo the group order.
+  function hashDomainToScalar(
+    context: TArg<Uint8Array> = Uint8Array.of(),
+    ...msgs: TArg<Uint8Array[]>
+  ) {
     const msg = concatBytes(...msgs);
-    return modN_LE(cHash(domain(msg, abytes(context, undefined, 'context'), !!prehash)));
+    return modN_LE(hash(domain(msg, abytes(context, undefined, 'context'), !!prehash)));
   }
 
   /** Signs message with secret key. RFC8032 5.1.6 */
   function sign(
-    msg: Uint8Array,
-    secretKey: Uint8Array,
-    options: { context?: Uint8Array } = {}
-  ): Uint8Array {
+    msg: TArg<Uint8Array>,
+    secretKey: TArg<Uint8Array>,
+    options: TArg<{ context?: Uint8Array }> = {}
+  ): TRet<Uint8Array> {
     msg = abytes(msg, undefined, 'message');
     if (prehash) msg = prehash(msg); // for ed25519ph etc.
     const { prefix, scalar, pointBytes } = getExtendedPublicKey(secretKey);
     const r = hashDomainToScalar(options.context, prefix, msg); // r = dom2(F, C) || prefix || PH(M)
+    // RFC 8032 5.1.6 allows r mod L = 0, and SUPERCOP ref10 accepts the resulting identity-point
+    // signature.
+    // We intentionally keep the safe multiply() rejection here so a miswired all-zero hash provider
+    // fails loudly instead of silently producing a degenerate signature.
     const R = BASE.multiply(r).toBytes(); // R = rG
     const k = hashDomainToScalar(options.context, R, pointBytes, msg); // R || A || PH(M)
     const s = Fn.create(r + k * scalar); // S = (r + k * s) mod L
     if (!Fn.isValid(s)) throw new Error('sign failed: invalid s'); // 0 <= s < L
     const rs = concatBytes(R, Fn.toBytes(s));
-    return abytes(rs, lengths.signature, 'result');
+    return abytes(rs, lengths.signature, 'result') as TRet<Uint8Array>;
   }
 
-  // verification rule is either zip215 or rfc8032 / nist186-5. Consult fromHex:
-  const verifyOpts: { context?: Uint8Array; zip215?: boolean } = { zip215: true };
+  // Keep the shared helper strict by default: RFC 8032 / NIST-style wrappers should reject
+  // non-canonical encodings unless they explicitly opt into ZIP-215's more permissive decode rules.
+  const verifyOpts: TArg<{ context?: Uint8Array; zip215?: boolean }> = {
+    zip215: opts.zip215,
+  };
 
   /**
-   * Verifies EdDSA signature against message and public key. RFC8032 5.1.7.
-   * An extended group equation is checked.
+   * Verifies EdDSA signature against message and public key. RFC 8032 §§5.1.7 and 5.2.7.
+   * A cofactored verification equation is checked.
    */
   function verify(
-    sig: Uint8Array,
-    msg: Uint8Array,
-    publicKey: Uint8Array,
+    sig: TArg<Uint8Array>,
+    msg: TArg<Uint8Array>,
+    publicKey: TArg<Uint8Array>,
     options = verifyOpts
   ): boolean {
-    const { context, zip215 } = options;
+    // Preserve the wrapper-selected default for `{}` / `{ zip215: undefined }`, not just omitted opts.
+    const { context } = options;
+    const zip215 = options.zip215 === undefined ? !!verifyOpts.zip215 : options.zip215;
     const len = lengths.signature;
     sig = abytes(sig, len, 'signature');
     msg = abytes(msg, undefined, 'message');
@@ -817,7 +925,8 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
     const s = bytesToNumberLE(sig.subarray(mid, len));
     let A, R, SB;
     try {
-      // zip215=true is good for consensus-critical apps. =false follows RFC8032 / NIST186-5.
+      // ZIP-215 is more permissive than RFC 8032 / NIST186-5. Use it only for wrappers that
+      // explicitly want consensus-style unreduced encoding acceptance.
       // zip215=true:  0 <= y < MASK (2^256 for ed25519)
       // zip215=false: 0 <= y < P (2^255-19 for ed25519)
       A = Point.fromBytes(publicKey, zip215);
@@ -826,12 +935,19 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
     } catch (error) {
       return false;
     }
-    if (!zip215 && A.isSmallOrder()) return false; // zip215 allows public keys of small order
+    // RFC 8032 §§5.1.7/5.2.7 and FIPS 186-5 §§7.7.2/7.8.2 only decode A' and check the cofactored
+    // verification equation; they do not add a separate low-order-public-key rejection here.
+    // Strict mode still rejects small-order A' intentionally for SBS-style non-repudiation and to
+    // avoid ambiguous verification outcomes where unusual low-order keys can make distinct
+    // key/signature/message combinations verify.
+    if (!zip215 && A.isSmallOrder()) return false;
 
-    const k = hashDomainToScalar(context, R.toBytes(), A.toBytes(), msg);
+    // ZIP-215 accepts noncanonical / unreduced point encodings, so the challenge hash must use the
+    // exact signature/public-key bytes rather than canonicalized re-encodings of the decoded points.
+    const k = hashDomainToScalar(context, r, publicKey, msg);
     const RkA = R.add(A.multiplyUnsafe(k));
-    // Extended group equation
-    // [8][S]B = [8]R + [8][k]A'
+    // Check the cofactored verification equation via the curve cofactor h.
+    // [h][S]B = [h]R + [h][k]A'
     return RkA.subtract(SB).clearCofactor().is0();
   }
 
@@ -842,17 +958,19 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
     signature: 2 * _size,
     seed: _size,
   };
-  function randomSecretKey(seed = randomBytes(lengths.seed)): Uint8Array {
-    return abytes(seed, lengths.seed, 'seed');
+  function randomSecretKey(seed?: TArg<Uint8Array>): TRet<Uint8Array> {
+    seed = seed === undefined ? randomBytes(lengths.seed) : seed;
+    return abytes(seed, lengths.seed, 'seed') as TRet<Uint8Array>;
   }
 
-  function isValidSecretKey(key: Uint8Array): boolean {
-    return isBytes(key) && key.length === Fn.BYTES;
+  function isValidSecretKey(key: TArg<Uint8Array>): boolean {
+    return isBytes(key) && key.length === lengths.secretKey;
   }
 
-  function isValidPublicKey(key: Uint8Array, zip215?: boolean): boolean {
+  function isValidPublicKey(key: TArg<Uint8Array>, zip215?: boolean): boolean {
     try {
-      return !!Point.fromBytes(key, zip215);
+      // Preserve the wrapper-selected default for omitted / `undefined` ZIP-215 flags here too.
+      return !!Point.fromBytes(key, zip215 === undefined ? verifyOpts.zip215 : zip215);
     } catch (error) {
       return false;
     }
@@ -872,21 +990,23 @@ export function eddsa(Point: EdwardsPointCons, cHash: FHash, eddsaOpts: EdDSAOpt
      *   - `(u, v) = ((y-1)/(y+1), sqrt(156324)*u/x)`
      *   - `(x, y) = (sqrt(156324)*u/v, (1+u)/(1-u))`
      */
-    toMontgomery(publicKey: Uint8Array): Uint8Array {
+    toMontgomery(publicKey: TArg<Uint8Array>): TRet<Uint8Array> {
       const { y } = Point.fromBytes(publicKey);
       const size = lengths.publicKey;
       const is25519 = size === 32;
       if (!is25519 && size !== 57) throw new Error('only defined for 25519 and 448');
       const u = is25519 ? Fp.div(_1n + y, _1n - y) : Fp.div(y - _1n, y + _1n);
-      return Fp.toBytes(u);
+      return Fp.toBytes(u) as TRet<Uint8Array>;
     },
-    toMontgomerySecret(secretKey: Uint8Array): Uint8Array {
+    toMontgomerySecret(secretKey: TArg<Uint8Array>): TRet<Uint8Array> {
       const size = lengths.secretKey;
       abytes(secretKey, size);
-      const hashed = cHash(secretKey.subarray(0, size));
-      return adjustScalarBytes(hashed).subarray(0, size);
+      const hashed = hash(secretKey.subarray(0, size));
+      return adjustScalarBytes(hashed).subarray(0, size) as TRet<Uint8Array>;
     },
   };
+  Object.freeze(lengths);
+  Object.freeze(utils);
 
   return Object.freeze({
     keygen: createKeygen(randomSecretKey, getPublicKey),

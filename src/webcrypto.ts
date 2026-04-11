@@ -15,7 +15,9 @@
        then throw a SyntaxError."
 - SPKI (Simple public-key infrastructure) is public-key-only
 - PKCS8 is secret-key-only
-- No way to get public key from secret key, but we convert to jwk and then create it manually, since jwk secret key is priv+pub.
+- No way to get public key from secret key, but we convert to JWK and then
+  create it manually, since a JWK secret key includes both private and public
+  parts.
 - Noble supports generating keys for both sign, verify & getSharedSecret,
   but JWK key includes usage, which forces us to patch it (non-JWK is ok)
 - We have import/export for 'raw', but it doesn't work in Firefox / Safari
@@ -26,7 +28,9 @@
   but this is implementation specific and not much we can do there.
 - `getSharedSecret` differs for p256, p384, p521:
   Noble returns 33-byte output (y-parity + x coordinate),
-  while in WebCrypto returns 32-byte output (x coordinate)
+  while in WebCrypto returns 32-byte output (x coordinate).
+  This is intentional: noble keeps the full encoded shared point, and x-only
+  callers can slice it down themselves.
 - `getSharedSecret` identical for X25519, X448
 
 ## Availability
@@ -37,6 +41,7 @@ There seems no reasonable way to check for availability, other than actually cal
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
+import type { TArg, TRet } from './utils.ts';
 
 /** Raw type */
 const TYPE_RAW = 'raw';
@@ -66,16 +71,28 @@ function getSubtle(): any {
   throw new Error('crypto.subtle must be defined');
 }
 
-function createKeygenA(randomSecretKey: any, getPublicKey: any) {
-  return async function keygenA(_seed?: Uint8Array) {
-    const secretKey = await randomSecretKey();
-    return { secretKey, publicKey: await getPublicKey(secretKey) };
+function createKeygenA(
+  randomSecretKey: any,
+  getPublicKey: any
+): TRet<(seed?: Uint8Array) => Promise<{ secretKey: Uint8Array; publicKey: Uint8Array }>> {
+  // Runtime accepts an accidental `keygen(seed)` argument for parity with other wrappers, but the
+  // seed is intentionally ignored because WebCrypto keygen here always goes through fresh keygen.
+  return async function keygenA(_seed?: TArg<Uint8Array>) {
+    const secretKey = (await randomSecretKey()) as TRet<Uint8Array>;
+    return { secretKey, publicKey: (await getPublicKey(secretKey)) as TRet<Uint8Array> };
   };
 }
 
-function hexToBytesUns(hex: string): Uint8Array {
-  return Uint8Array.from(hex.match(/(\w\w)/g)!, (b) => Number.parseInt(b, 16));
+// Internal helper only: strict hex parser for the local hardcoded PKCS8 header constants.
+function hexToBytesLocal(hex: string): TRet<Uint8Array> {
+  const pairs = hex.match(/[0-9a-f]{2}/gi);
+  if (!pairs || pairs.length * 2 !== hex.length) throw new Error('invalid hex');
+  return Uint8Array.from(pairs, (b) => Number.parseInt(b, 16)) as TRet<Uint8Array>;
 }
+
+export const __TEST: { hexToBytesLocal: typeof hexToBytesLocal } = /* @__PURE__ */ Object.freeze({
+  hexToBytesLocal,
+});
 
 // Trying to do generics here creates hell on conversion and usage
 type JsonWebKey = {
@@ -93,12 +110,18 @@ type Algo = string | { name: string; namedCurve: string };
 type SigAlgo = string | { name: string; hash?: { name: string } };
 
 type KeyUtils = {
-  import(key: Key, format?: WebCryptoFormat): Promise<CryptoKey>;
-  export(key: CryptoKey, format?: WebCryptoFormat): Promise<Key>;
-  convert(key: Key, inFormat?: WebCryptoFormat, outFormat?: WebCryptoFormat): Promise<Key>;
+  import(key: TArg<Key>, format?: WebCryptoFormat): Promise<CryptoKey>;
+  export(key: CryptoKey, format?: WebCryptoFormat): TRet<Promise<Key>>;
+  convert(
+    key: TArg<Key>,
+    inFormat?: WebCryptoFormat,
+    outFormat?: WebCryptoFormat
+  ): TRet<Promise<Key>>;
 };
 
 function assertType(type: 'private' | 'public', key: any) {
+  // Callers are expected to pass a non-null key-like object; `null` / `undefined` still fail first
+  // via property access before reaching the explicit wrapper error.
   if (key.type !== type) throw new Error(`invalid key type, expected ${type}`);
 }
 
@@ -106,25 +129,33 @@ function createKeyUtils(algo: Algo, derive: boolean, keyLen: number, pkcs8header
   const secUsage: KeyUsage[] = derive ? ['deriveBits'] : ['sign'];
   const pubUsage: KeyUsage[] = derive ? [] : ['verify'];
   // Return Uint8Array instead of ArrayBuffer
-  const arrBufToU8 = (res: Key, format: WebCryptoFormat) =>
-    format === TYPE_JWK ? res : new Uint8Array(res as unknown as ArrayBuffer);
+  const arrBufToU8 = (res: TArg<Key>, format: WebCryptoFormat): TRet<Key> =>
+    (format === TYPE_JWK
+      ? (res as JsonWebKey)
+      : new Uint8Array(res as unknown as ArrayBuffer)) as TRet<Key>;
   const pub: KeyUtils = {
-    async import(key: Key, format: WebCryptoFormat): Promise<CryptoKey> {
+    async import(key: TArg<Key>, format: WebCryptoFormat): Promise<CryptoKey> {
+      // For sign/verify wrappers we pass caller-provided JWK metadata through unchanged and let
+      // WebCrypto enforce mismatched `key_ops` / extractability instead of normalizing it here.
       const keyi: CryptoKey = await getSubtle().importKey(format, key, algo, true, pubUsage);
       assertType('public', keyi);
       return keyi;
     },
-    async export(key: CryptoKey, format: WebCryptoFormat): Promise<Key> {
+    async export(key: CryptoKey, format: WebCryptoFormat): Promise<TRet<Key>> {
       assertType('public', key);
       const keyi = await getSubtle().exportKey(format, key);
       return arrBufToU8(keyi, format);
     },
-    async convert(key: Key, inFormat: WebCryptoFormat, outFormat: WebCryptoFormat): Promise<Key> {
+    async convert(
+      key: TArg<Key>,
+      inFormat: WebCryptoFormat,
+      outFormat: WebCryptoFormat
+    ): Promise<TRet<Key>> {
       return pub.export(await pub.import(key, inFormat), outFormat);
     },
   };
   const priv: KeyUtils = {
-    async import(key: Key, format: WebCryptoFormat): Promise<CryptoKey> {
+    async import(key: TArg<Key>, format: WebCryptoFormat): Promise<CryptoKey> {
       const crypto = getSubtle();
       let keyi: CryptoKey;
       if (format === TYPE_RAW) {
@@ -132,21 +163,24 @@ function createKeyUtils(algo: Algo, derive: boolean, keyLen: number, pkcs8header
         // Safari, Firefox: Data provided to an operation does not meet requirements
         // This is the best one can do. JWK can't be used: it contains public key component inside.
         const k = key as Uint8Array;
-        const head = hexToBytesUns(pkcs8header);
+        const head = hexToBytesLocal(pkcs8header);
         const all = new Uint8Array(head.length + k.length);
         all.set(head, 0);
         all.set(k, head.length);
 
         keyi = await crypto.importKey(TYPE_PKCS, all, algo, true, secUsage);
       } else {
-        // Fix import of ECDSA keys into ECDH, other formats are ok
+        // Sign/verify wrappers keep caller JWK metadata as-is and assume the supplied `key_ops`
+        // already match the requested operation. ECDH is different: noble treats the same key
+        // material as usable for both sign and derive, so JWK imported through the derive path
+        // must rewrite `key_ops` or WebCrypto refuses otherwise-correct keys exported by keygen.
         if (derive && format === TYPE_JWK) key = { ...key, key_ops: secUsage };
         keyi = await crypto.importKey(format, key, algo, true, secUsage);
       }
       assertType('private', keyi);
       return keyi;
     },
-    async export(key: CryptoKey, format: WebCryptoFormat): Promise<Key> {
+    async export(key: CryptoKey, format: WebCryptoFormat): Promise<TRet<Key>> {
       const crypto = getSubtle();
       assertType('private', key);
       if (format === TYPE_RAW) {
@@ -161,16 +195,23 @@ function createKeyUtils(algo: Algo, derive: boolean, keyLen: number, pkcs8header
         // Pad key to key len because Bun strips leading zero for P-521 only
         const res = new Uint8Array(keyLen);
         res.set(raw, keyLen - raw.length);
-        return res as Key;
+        return res as TRet<Key>;
       }
       const keyi = await crypto.exportKey(format, key);
       return arrBufToU8(keyi, format);
     },
-    async convert(key: Key, inFormat: WebCryptoFormat, outFormat: WebCryptoFormat): Promise<Key> {
+    async convert(
+      key: TArg<Key>,
+      inFormat: WebCryptoFormat,
+      outFormat: WebCryptoFormat
+    ): Promise<TRet<Key>> {
       return priv.export(await priv.import(key, inFormat), outFormat);
     },
   };
-  async function getPublicKey(secretKey: Key, opts: WebCryptoOpts = {}): Promise<Key> {
+  async function getPublicKey(
+    secretKey: TArg<Key>,
+    opts: TArg<WebCryptoOpts> = {}
+  ): Promise<TRet<Key>> {
     const fsec = opts.formatSec ?? dfsec;
     const fpub = opts.formatPub ?? dfpub;
     // Export to jwk, remove private scalar and then convert to format
@@ -179,10 +220,10 @@ function createKeyUtils(algo: Algo, derive: boolean, keyLen: number, pkcs8header
     ) as JsonWebKey;
     delete jwk.d;
     jwk.key_ops = pubUsage;
-    if (fpub === TYPE_JWK) return jwk;
+    if (fpub === TYPE_JWK) return jwk as TRet<Key>;
     return pub.convert(jwk, TYPE_JWK, fpub);
   }
-  async function randomSecretKey(format: WebCryptoFormat = dfsec): Promise<Key> {
+  async function randomSecretKey(format: WebCryptoFormat = dfsec): Promise<TRet<Key>> {
     const keyPair = await getSubtle().generateKey(algo, true, secUsage);
     return priv.export(keyPair.privateKey, format);
   }
@@ -213,26 +254,41 @@ function createKeyUtils(algo: Algo, derive: boolean, keyLen: number, pkcs8header
     },
     getPublicKey,
     keygen: createKeygenA(randomSecretKey, getPublicKey),
-    utils: {
+    utils: Object.freeze({
       randomSecretKey,
+      // Runtime expects both formats explicitly here; omitted formats just flow into
+      // `subtle.importKey(...)`, and JWK conversion also assumes extractable keys (`ext !== false`).
       convertPublicKey: pub.convert as KeyUtils['convert'],
+      // Runtime expects both formats explicitly here; omitted formats just flow into
+      // `subtle.importKey(...)`, and JWK conversion also assumes extractable keys (`ext !== false`).
       convertSecretKey: priv.convert as KeyUtils['convert'],
-    },
+    }),
   };
 }
 
-function createSigner(keys: ReturnType<typeof createKeyUtils>, algo: SigAlgo): WebCryptoSigner {
+function createSigner(
+  keys: ReturnType<typeof createKeyUtils>,
+  algo: SigAlgo
+): TRet<WebCryptoSigner> {
   return {
-    async sign(msgHash: Uint8Array, secretKey: Key, opts: WebCryptoOpts = {}): Promise<Uint8Array> {
+    // Historical param name: wrappers pass message bytes here, while WebCrypto performs the
+    // algorithm-specific hashing itself for ECDSA. We also return provider signatures verbatim:
+    // this wrapper is intentionally "raw WebCrypto", so it does not parse scalars or normalize
+    // high-S ECDSA outputs into software noble's low-S convention.
+    async sign(
+      msgHash: TArg<Uint8Array>,
+      secretKey: TArg<Key>,
+      opts: TArg<WebCryptoOpts> = {}
+    ): Promise<TRet<Uint8Array>> {
       const key = await keys.priv.import(secretKey, opts.formatSec ?? dfsec);
       const sig = await getSubtle().sign(algo, key, msgHash);
-      return new Uint8Array(sig);
+      return new Uint8Array(sig) as TRet<Uint8Array>;
     },
     async verify(
-      signature: Uint8Array,
-      msgHash: Uint8Array,
-      publicKey: Key,
-      opts: WebCryptoOpts = {}
+      signature: TArg<Uint8Array>,
+      msgHash: TArg<Uint8Array>,
+      publicKey: TArg<Key>,
+      opts: TArg<WebCryptoOpts> = {}
     ): Promise<boolean> {
       const key = await keys.pub.import(publicKey, opts.formatPub ?? dfpub);
       return await getSubtle().verify(algo, key, signature, msgHash);
@@ -244,22 +300,30 @@ function createECDH(
   keys: ReturnType<typeof createKeyUtils>,
   algo: Algo,
   keyLen: number
-): WebCryptoECDH {
+): TRet<WebCryptoECDH> {
   return {
+    // Runtime accepts the alternate key formats supported by `keys.import(...)`; the public type is
+    // still narrower than that accepted surface.
     async getSharedSecret(
-      secretKeyA: Uint8Array,
-      publicKeyB: Uint8Array,
-      opts: WebCryptoOpts = {}
-    ): Promise<Uint8Array> {
+      secretKeyA: TArg<Uint8Array>,
+      publicKeyB: TArg<Uint8Array>,
+      opts: TArg<WebCryptoOpts> = {}
+    ): Promise<TRet<Uint8Array>> {
       // if (_isCompressed !== true) throw new Error('WebCrypto only supports compressed keys');
-      const secKey = await keys.priv.import(secretKeyA, opts.formatSec || dfsec);
-      const pubKey = await keys.pub.import(publicKeyB, opts.formatPub || dfpub);
+      const secKey = await keys.priv.import(
+        secretKeyA,
+        opts.formatSec === undefined ? dfsec : opts.formatSec
+      );
+      const pubKey = await keys.pub.import(
+        publicKeyB,
+        opts.formatPub === undefined ? dfpub : opts.formatPub
+      );
       const shared = await getSubtle().deriveBits(
         { name: typeof algo === 'string' ? algo : algo.name, public: pubKey },
         secKey,
         8 * keyLen
       );
-      return new Uint8Array(shared);
+      return new Uint8Array(shared) as TRet<Uint8Array>;
     },
   };
 }
@@ -267,20 +331,20 @@ function createECDH(
 type WebCryptoBaseCurve = {
   name: string;
   isSupported(): Promise<boolean>;
-  keygen(): Promise<{ secretKey: Uint8Array; publicKey: Uint8Array }>;
-  getPublicKey(secretKey: Key, opts?: WebCryptoOpts): Promise<Key>;
+  keygen(): TRet<Promise<{ secretKey: Uint8Array; publicKey: Uint8Array }>>;
+  getPublicKey(secretKey: TArg<Key>, opts?: TArg<WebCryptoOpts>): TRet<Promise<Key>>;
   utils: {
-    randomSecretKey: (format?: WebCryptoFormat) => Promise<Key>;
+    randomSecretKey: (format?: WebCryptoFormat) => TRet<Promise<Key>>;
     convertSecretKey: (
-      key: Key,
+      key: TArg<Key>,
       inFormat?: WebCryptoFormat,
       outFormat?: WebCryptoFormat
-    ) => Promise<Key>;
+    ) => TRet<Promise<Key>>;
     convertPublicKey: (
-      key: Key,
+      key: TArg<Key>,
       inFormat?: WebCryptoFormat,
       outFormat?: WebCryptoFormat
-    ) => Promise<Key>;
+    ) => TRet<Promise<Key>>;
   };
 };
 
@@ -294,7 +358,11 @@ export type WebCryptoSigner = {
    * @param opts - Optional key-format overrides. See {@link WebCryptoOpts}.
    * @returns Signature bytes.
    */
-  sign(message: Uint8Array, secretKey: Key, opts?: WebCryptoOpts): Promise<Uint8Array>;
+  sign(
+    message: TArg<Uint8Array>,
+    secretKey: TArg<Key>,
+    opts?: TArg<WebCryptoOpts>
+  ): TRet<Promise<Uint8Array>>;
   /**
    * Verify one signature with a WebCrypto-backed public key.
    * @param signature - Signature bytes.
@@ -304,22 +372,29 @@ export type WebCryptoSigner = {
    * @returns `true` when the signature is valid.
    */
   verify(
-    signature: Uint8Array,
-    message: Uint8Array,
-    publicKey: Key,
-    opts?: WebCryptoOpts
+    signature: TArg<Uint8Array>,
+    message: TArg<Uint8Array>,
+    publicKey: TArg<Key>,
+    opts?: TArg<WebCryptoOpts>
   ): Promise<boolean>;
 };
 /** WebCrypto ECDH interface for shared-secret derivation. */
 export type WebCryptoECDH = {
   /**
    * Derive one shared secret from a local secret key and peer public key.
+   * Short-Weierstrass wrappers return the raw x-coordinate here, not noble's parity-prefixed
+   * shared-point encoding. Runtime also accepts alternate key formats through `opts`, even though
+   * this public type is still narrowed to byte arrays.
    * @param secA - Local secret key in one supported format.
    * @param pubB - Peer public key in one supported format.
    * @param opts - Optional key-format overrides. See {@link WebCryptoOpts}.
    * @returns Shared secret bytes.
    */
-  getSharedSecret(secA: Uint8Array, pubB: Uint8Array, opts?: WebCryptoOpts): Promise<Uint8Array>;
+  getSharedSecret(
+    secA: TArg<Uint8Array>,
+    pubB: TArg<Uint8Array>,
+    opts?: TArg<WebCryptoOpts>
+  ): TRet<Promise<Uint8Array>>;
 };
 /** WebCrypto ECDSA interface with keygen, signing, and ECDH helpers. */
 export type WebCryptoECDSA = WebCryptoBaseCurve & WebCryptoSigner & WebCryptoECDH;
@@ -333,18 +408,38 @@ function wrapECDSA(
   hash: string,
   keyLen: number,
   pkcs8header: string
-): WebCryptoECDSA {
+): TRet<WebCryptoECDSA> {
   const ECDH_ALGO = { name: 'ECDH', namedCurve: curve };
   const keys = createKeyUtils({ name: 'ECDSA', namedCurve: curve }, false, keyLen, pkcs8header);
   const keysEcdh = createKeyUtils(ECDH_ALGO, true, keyLen, pkcs8header);
   return Object.freeze({
     name: curve,
+    // Support probing comes from the sign-side wrapper only; ECDH availability is not checked
+    // independently here even though the public wrapper also exposes `getSharedSecret(...)`.
     isSupported: keys.isSupported,
     getPublicKey: keys.getPublicKey,
     keygen: createKeygenA(keys.utils.randomSecretKey, keys.getPublicKey),
     ...createSigner(keys, { name: 'ECDSA', hash: { name: hash } }),
     ...createECDH(keysEcdh, ECDH_ALGO, keyLen),
-    utils: keys.utils,
+    utils: Object.freeze({
+      ...keys.utils,
+      async convertSecretKey(
+        key: TArg<Key>,
+        inFormat?: WebCryptoFormat,
+        outFormat?: WebCryptoFormat
+      ): Promise<TRet<Key>> {
+        const jwk = inFormat === TYPE_JWK ? (key as JsonWebKey) : undefined;
+        // `wrapECDSA(...)` exposes the same key material for both sign and derive, so an ECDH-flavored
+        // JWK secret key from `getSharedSecret(...)` should still round-trip through `utils`.
+        if (
+          Array.isArray(jwk?.key_ops) &&
+          jwk.key_ops.length === 1 &&
+          jwk.key_ops[0] === 'deriveBits'
+        )
+          return keysEcdh.utils.convertSecretKey(key, inFormat, outFormat);
+        return keys.utils.convertSecretKey(key, inFormat, outFormat);
+      },
+    }),
   });
 }
 
@@ -352,11 +447,13 @@ function wrapEdDSA(
   curve: 'Ed25519' | 'Ed448',
   keyLen: number,
   pkcs8header: string
-): WebCryptoEdDSA {
+): TRet<WebCryptoEdDSA> {
   const keys = createKeyUtils(curve, false, keyLen, pkcs8header);
   return Object.freeze({
     name: curve,
     isSupported: keys.isSupported,
+    // This wrapper intentionally re-exports the generic WebCrypto key-conversion/signing behavior
+    // without adding extra JWK-metadata or extractability guardrails of its own.
     getPublicKey: keys.getPublicKey,
     keygen: createKeygenA(keys.utils.randomSecretKey, keys.getPublicKey),
     ...createSigner(keys, { name: curve }),
@@ -368,11 +465,13 @@ function wrapMontgomery(
   curve: 'X25519' | 'X448',
   keyLen: number,
   pkcs8header: string
-): WebCryptoMontgomery {
+): TRet<WebCryptoMontgomery> {
   const keys = createKeyUtils(curve, true, keyLen, pkcs8header);
   return Object.freeze({
     name: curve,
     isSupported: keys.isSupported,
+    // This wrapper intentionally re-exports the generic ECDH key-format behavior without widening
+    // the narrow public `Uint8Array` key types.
     getPublicKey: keys.getPublicKey,
     keygen: createKeygenA(keys.utils.randomSecretKey, keys.getPublicKey),
     ...createECDH(keys, curve, keyLen),
@@ -382,6 +481,9 @@ function wrapMontgomery(
 
 /**
  * Friendly wrapper over built-in WebCrypto NIST P-256 (secp256r1).
+ * Inherits the generic WebCrypto ECDSA caveats: `isSupported()` only probes the sign-side API, and
+ * the conversion/signing helpers keep the shared `createKeyUtils(...)` / `createSigner(...)` quirks,
+ * including raw WebCrypto ECDSA signatures without low-S normalization.
  * @example
  * Check support, then sign and verify once with WebCrypto P-256.
  *
@@ -394,7 +496,7 @@ function wrapMontgomery(
  * }
  * ```
  */
-export const p256: WebCryptoECDSA = /* @__PURE__ */ wrapECDSA(
+export const p256: TRet<WebCryptoECDSA> = /* @__PURE__ */ wrapECDSA(
   'P-256',
   'SHA-256',
   32,
@@ -403,6 +505,7 @@ export const p256: WebCryptoECDSA = /* @__PURE__ */ wrapECDSA(
 
 /**
  * Friendly wrapper over built-in WebCrypto NIST P-384 (secp384r1).
+ * Inherits the generic WebCrypto ECDSA caveats around support probing and key/signing conversion.
  * @example
  * Check support, then sign and verify once with WebCrypto P-384.
  *
@@ -415,7 +518,7 @@ export const p256: WebCryptoECDSA = /* @__PURE__ */ wrapECDSA(
  * }
  * ```
  */
-export const p384: WebCryptoECDSA = /* @__PURE__ */ wrapECDSA(
+export const p384: TRet<WebCryptoECDSA> = /* @__PURE__ */ wrapECDSA(
   'P-384',
   'SHA-384',
   48,
@@ -424,6 +527,7 @@ export const p384: WebCryptoECDSA = /* @__PURE__ */ wrapECDSA(
 
 /**
  * Friendly wrapper over built-in WebCrypto NIST P-521 (secp521r1).
+ * Inherits the generic WebCrypto ECDSA caveats around support probing and key/signing conversion.
  * @example
  * Check support, then sign and verify once with WebCrypto P-521.
  *
@@ -436,7 +540,7 @@ export const p384: WebCryptoECDSA = /* @__PURE__ */ wrapECDSA(
  * }
  * ```
  */
-export const p521: WebCryptoECDSA = /* @__PURE__ */ wrapECDSA(
+export const p521: TRet<WebCryptoECDSA> = /* @__PURE__ */ wrapECDSA(
   'P-521',
   'SHA-512',
   66,
@@ -445,6 +549,7 @@ export const p521: WebCryptoECDSA = /* @__PURE__ */ wrapECDSA(
 
 /**
  * Friendly wrapper over built-in WebCrypto ed25519.
+ * Inherits the generic WebCrypto EdDSA caveats around JWK conversion metadata and extractability.
  * @example
  * Check support, then sign and verify once with WebCrypto Ed25519.
  *
@@ -457,7 +562,7 @@ export const p521: WebCryptoECDSA = /* @__PURE__ */ wrapECDSA(
  * }
  * ```
  */
-export const ed25519: WebCryptoEdDSA = /* @__PURE__ */ wrapEdDSA(
+export const ed25519: TRet<WebCryptoEdDSA> = /* @__PURE__ */ wrapEdDSA(
   'Ed25519',
   32,
   '302e020100300506032b657004220420'
@@ -465,6 +570,7 @@ export const ed25519: WebCryptoEdDSA = /* @__PURE__ */ wrapEdDSA(
 
 /**
  * Friendly wrapper over built-in WebCrypto ed448.
+ * Inherits the generic WebCrypto EdDSA caveats around JWK conversion metadata and extractability.
  * @example
  * Check support, then sign and verify once with WebCrypto Ed448.
  *
@@ -477,7 +583,7 @@ export const ed25519: WebCryptoEdDSA = /* @__PURE__ */ wrapEdDSA(
  * }
  * ```
  */
-export const ed448: WebCryptoEdDSA = /* @__PURE__ */ wrapEdDSA(
+export const ed448: TRet<WebCryptoEdDSA> = /* @__PURE__ */ wrapEdDSA(
   'Ed448',
   57,
   '3047020100300506032b6571043b0439'
@@ -485,6 +591,8 @@ export const ed448: WebCryptoEdDSA = /* @__PURE__ */ wrapEdDSA(
 
 /**
  * Friendly wrapper over built-in WebCrypto x25519 (ECDH over Curve25519).
+ * Inherits the generic WebCrypto Montgomery caveat that runtime accepts more key formats than the
+ * narrow public `Uint8Array` argument types suggest.
  * @example
  * Check support, then derive one shared secret with WebCrypto X25519.
  *
@@ -496,7 +604,7 @@ export const ed448: WebCryptoEdDSA = /* @__PURE__ */ wrapEdDSA(
  * }
  * ```
  */
-export const x25519: WebCryptoMontgomery = /* @__PURE__ */ wrapMontgomery(
+export const x25519: TRet<WebCryptoMontgomery> = /* @__PURE__ */ wrapMontgomery(
   'X25519',
   32,
   '302e020100300506032b656e04220420'
@@ -504,6 +612,8 @@ export const x25519: WebCryptoMontgomery = /* @__PURE__ */ wrapMontgomery(
 
 /**
  * Friendly wrapper over built-in WebCrypto x448 (ECDH over Curve448).
+ * Inherits the generic WebCrypto Montgomery caveat that runtime accepts more key formats than the
+ * narrow public `Uint8Array` argument types suggest.
  * @example
  * Check support, then derive one shared secret with WebCrypto X448.
  *
@@ -515,7 +625,7 @@ export const x25519: WebCryptoMontgomery = /* @__PURE__ */ wrapMontgomery(
  * }
  * ```
  */
-export const x448: WebCryptoMontgomery = /* @__PURE__ */ wrapMontgomery(
+export const x448: TRet<WebCryptoMontgomery> = /* @__PURE__ */ wrapMontgomery(
   'X448',
   56,
   '3046020100300506032b656f043a0438'
