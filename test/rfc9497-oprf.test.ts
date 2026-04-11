@@ -1,8 +1,8 @@
-import { describe, should } from '@paulmillr/jsbt/test.js';
 import { sha256 } from '@noble/hashes/sha2.js';
+import { describe, should } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql, notDeepEqual, throws } from 'node:assert';
 import * as mod from '../src/abstract/modular.ts';
-import { createORPF } from '../src/abstract/oprf.ts';
+import { createOPRF } from '../src/abstract/oprf.ts';
 import { ristretto255, ristretto255_oprf } from '../src/ed25519.ts';
 import { decaf448, decaf448_oprf } from '../src/ed448.ts';
 import { p256_oprf, p384_oprf, p521_oprf } from '../src/nist.ts';
@@ -156,9 +156,9 @@ function testExample(name, oprf) {
 }
 
 describe('RFC-9497 (OPRF)', () => {
-  should('createORPF rejects opts without a usable Point constructor', () => {
+  should('createOPRF rejects opts without a usable Point constructor', () => {
     throws(() =>
-      createORPF({
+      createOPRF({
         name: 'P256-SHA256',
         Point: { Fn: p256_oprf.__tests.Point.Fn } as any,
         hash: sha256,

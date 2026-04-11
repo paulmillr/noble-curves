@@ -37,7 +37,7 @@ import {
   type IField,
 } from './abstract/modular.ts';
 import { montgomery, type MontgomeryECDH } from './abstract/montgomery.ts';
-import { createORPF, type OPRF } from './abstract/oprf.ts';
+import { createOPRF, type OPRF } from './abstract/oprf.ts';
 import { asciiToBytes, bytesToNumberLE, equalBytes, type TArg, type TRet } from './utils.ts';
 
 // prettier-ignore
@@ -649,7 +649,7 @@ export const ristretto255_hasher: H2CHasherBase<typeof _RistrettoPoint> = Object
  * ```
  */
 export const ristretto255_oprf: TRet<OPRF> = /* @__PURE__ */ (() =>
-  createORPF({
+  createOPRF({
     name: 'ristretto255-SHA512',
     Point: _RistrettoPoint,
     hash: sha512,

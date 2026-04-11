@@ -418,10 +418,10 @@ export type OPRF = {
  * Instantiate an OPRF suite from curve-specific hashing hooks.
  *
  * ```ts
- * import { createORPF } from '@noble/curves/abstract/oprf.js';
+ * import { createOPRF } from '@noble/curves/abstract/oprf.js';
  * import { p256, p256_hasher } from '@noble/curves/nist.js';
  * import { sha256 } from '@noble/hashes/sha2.js';
- * const oprf = createORPF({
+ * const oprf = createOPRF({
  *   name: 'P256-SHA256',
  *   Point: p256.Point,
  *   hash: sha256,
@@ -431,7 +431,7 @@ export type OPRF = {
  * const keys = oprf.oprf.generateKeyPair();
  * ```
  */
-export function createORPF<P extends CurvePoint<any, P>>(opts: OPRFOpts<P>): TRet<OPRF> {
+export function createOPRF<P extends CurvePoint<any, P>>(opts: OPRFOpts<P>): TRet<OPRF> {
   validateObject(opts, {
     name: 'string',
     hash: 'function',
