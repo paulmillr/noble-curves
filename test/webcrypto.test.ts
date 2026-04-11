@@ -1,5 +1,5 @@
 import { describe, should } from '@paulmillr/jsbt/test.js';
-import { deepStrictEqual } from 'node:assert';
+import { deepStrictEqual, throws } from 'node:assert';
 import { ed25519, x25519 } from '../src/ed25519.ts';
 import { ed448, x448 } from '../src/ed448.ts';
 import { p256, p384, p521 } from '../src/nist.ts';
@@ -111,6 +111,42 @@ describe('webcrypto', () => {
       }
     });
   }
+
+  should('wrapECDSA utils convert ECDH-flavored JWK secret keys', async () => {
+    const secretKey = Uint8Array.from([
+      1, 2, 3, 4, 5, 6, 7, 8,
+      9, 10, 11, 12, 13, 14, 15, 16,
+      17, 18, 19, 20, 21, 22, 23, 24,
+      25, 26, 27, 28, 29, 30, 31, 32,
+    ]);
+    const peerSecretKey = Uint8Array.from([
+      32, 31, 30, 29, 28, 27, 26, 25,
+      24, 23, 22, 21, 20, 19, 18, 17,
+      16, 15, 14, 13, 12, 11, 10, 9,
+      8, 7, 6, 5, 4, 3, 2, 1,
+    ]);
+    const ecdhJwk = {
+      ...(await webcrypto.p256.utils.convertSecretKey(secretKey, 'raw', 'jwk')),
+      key_ops: ['deriveBits'],
+    };
+    const peerPkcs8 = await webcrypto.p256.utils.convertSecretKey(peerSecretKey, 'raw', 'pkcs8');
+    const peerPublicKey = await webcrypto.p256.getPublicKey(peerPkcs8, {
+      formatSec: 'pkcs8',
+      formatPub: 'jwk',
+    });
+    const shared = await webcrypto.p256.getSharedSecret(ecdhJwk, peerPublicKey, {
+      formatSec: 'jwk',
+      formatPub: 'jwk',
+    });
+    deepStrictEqual(shared.length, 32);
+    deepStrictEqual(await webcrypto.p256.utils.convertSecretKey(ecdhJwk, 'jwk', 'raw'), secretKey);
+  });
+
+  should('hexToBytesLocal rejects invalid hex digits', () => {
+    deepStrictEqual(webcrypto.__TEST.hexToBytesLocal('aBcD'), Uint8Array.from([0xab, 0xcd]));
+    throws(() => webcrypto.__TEST.hexToBytesLocal('gg'));
+    throws(() => webcrypto.__TEST.hexToBytesLocal('0x'));
+  });
 });
 
 should.runWhen(import.meta.url);

@@ -31,7 +31,7 @@ const G2_VECTORS = readFileSync(
         0x28b90deaf189015d3a325908c5e0e4bf00f84f7e639b056ff82d7e70b6eede4dn
       );
     bls.pairing(p1, p2);
-  }, 1);
+  });
   const priv = hexToBytes('28b90deaf189015d3a325908c5e0e4bf00f84f7e639b056ff82d7e70b6eede4c');
   sig = blsl.sign(blsl.hash(Uint8Array.of(0x09)), priv);
   sig_s = blss.sign(blss.hash(Uint8Array.of(0x09)), priv);
@@ -76,7 +76,7 @@ const G2_VECTORS = readFileSync(
   console.log('# misc');
   await bench(`initializing ${amount} G1 points`, () => {
     pointsG1 = scalars1.map((s) => bls.G1.Point.BASE.multiply(s));
-  }, 1);
+  });
   await bench(`MSM pippenger x${amount}`, () => {
     pippenger(bls.G1.Point, pointsG1, scalars2);
   });
@@ -99,7 +99,7 @@ const G2_VECTORS = readFileSync(
 
   await bench('initializing 4096 G2 points', () => {
     pointsG2 = scalars1.slice(0, 4096).map((s) => bls.G2.Point.BASE.multiply(s));
-  }, 1);
+  });
   const pairingBatch = 10;
   await bench(`pairing${pairingBatch}`, () => {
     const res = [];

@@ -1,6 +1,7 @@
 import { describe, should } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql, throws } from 'node:assert';
-import { jubjub, jubjub_findGroupHash } from '../src/misc.ts';
+import { eddsa, edwards } from '../src/abstract/edwards.ts';
+import { babyjubjub, jubjub, jubjub_findGroupHash } from '../src/misc.ts';
 const Point = jubjub.Point;
 
 const G_SPEND = new Point(
@@ -72,6 +73,43 @@ describe('jubjub', () => {
     );
     eql(getXY(spend.toAffine()), getXY(G_SPEND.toAffine()));
     eql(getXY(proof.toAffine()), getXY(G_PROOF.toAffine()));
+  });
+
+  should('find-group-hash validates personalization length', () => {
+    let err = '';
+    try {
+      jubjub_findGroupHash(new Uint8Array([]), Uint8Array.of(1));
+    } catch (e) {
+      err = String(e);
+    }
+    eql(err, 'RangeError: "personalization" expected Uint8Array of length 8, got length=1');
+  });
+});
+
+describe('babyjubjub', () => {
+  should('sign and verify', () => {
+    const seed = new Uint8Array(32).fill(9);
+    const msg = new Uint8Array([1, 2, 3]);
+    const keys = babyjubjub.keygen(seed);
+    const sig = babyjubjub.sign(msg, keys.secretKey);
+    eql(babyjubjub.verify(sig, msg, keys.publicKey), true);
+  });
+
+  should('reject hashes whose declared outputLen cannot expand the secret key', () => {
+    const bad = Object.assign((msg: Uint8Array) => msg.subarray(0, 32), { outputLen: 32 });
+    throws(() => eddsa(edwards(babyjubjub.Point.CURVE()), bad), new Error('hash.outputLen must be 64, got 32'));
+  });
+
+  should('Point.BASE matches the EIP-2494 subgroup base point B of order l', () => {
+    const l = babyjubjub.Point.Fn.ORDER;
+    eql(babyjubjub.Point.BASE.toAffine(), {
+      x: 5299619240641551281634865583518297030282874472190772894086521144482721001553n,
+      y: 16950150798460657717958625567821834550301663161624707787222815936182638968203n,
+    });
+    eql(
+      babyjubjub.Point.BASE.multiplyUnsafe(l - 1n).add(babyjubjub.Point.BASE).equals(babyjubjub.Point.ZERO),
+      true
+    );
   });
 });
 

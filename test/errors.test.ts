@@ -31,6 +31,15 @@ should('Errors', () => {
     .reduce((acc, i) => Math.max(acc, i));
   for (const name in CURVES) {
     const C = CURVES[name];
+    const type =
+      C.info?.type ||
+      (name.startsWith('bls')
+        ? 'bls'
+        : C.Signature
+          ? 'weierstrass'
+          : name === 'ed25519'
+            ? 'edwards'
+            : undefined);
     const CE = (s, fn) => {
       if (!res[s]) res[s] = [];
       res[s].push({ curveName: name, name: s, error: getError(fn) });
@@ -67,17 +76,17 @@ should('Errors', () => {
       if (C.sign && C.verify) {
         let msg = BYTES10;
         // TODO: prehash by default too?
-        if (C.info.type.startsWith('bls')) msg = C.hash(msg);
+        if (type?.startsWith('bls')) msg = C.hash(msg);
         const sig = C.sign(msg, keys.secretKey);
         eql(C.verify(sig, msg, keys.publicKey), true);
 
         CEG('sign: wrong msg=', U8, msg, (s) => C.sign(s, keys.secretKey));
         CEG('sign: wrong secretKey=', U8, keys.secretKey, (s) => C.sign(msg, s));
-        if (C.info.type === 'weierstrass') {
+        if (type === 'weierstrass') {
           CEG('sign: wrong prehash=', B, true, (s) => C.sign(msg, keys.secretKey, { prehash: s }));
           CEG('sign: wrong lowS=', B, true, (s) => C.sign(msg, keys.secretKey, { lowS: s }));
         }
-        if (C.info.type === 'edwards') {
+        if (type === 'edwards') {
           CEG('sign: wrong context=', U8, BYTES10, (s) =>
             C.sign(msg, keys.secretKey, { context: s })
           );
@@ -87,7 +96,7 @@ should('Errors', () => {
         CEG('verify: wrong msg=', U8, msg, (s) => C.verify(sig, s, keys.publicKey));
         CEG('verify: wrong pk=', U8, keys.publicKey, (s) => C.verify(sig, msg, s));
         CEG('verify: wrong sig=', SIG, sig, (s) => C.verify(s, msg, keys.publicKey));
-        if (C.info.type === 'weierstrass') {
+        if (type === 'weierstrass') {
           CEG('verify: wrong prehash=', B, true, (s) =>
             C.verify(sig, msg, keys.publicKey, { prehash: s })
           );
@@ -95,7 +104,7 @@ should('Errors', () => {
             C.verify(sig, msg, keys.publicKey, { lowS: s })
           );
         }
-        if (C.info.type === 'edwards') {
+        if (type === 'edwards') {
           CEG('verify: wrong context=', U8, BYTES10, (s) =>
             C.verify(sig, msg, keys.publicKey, { context: s })
           );

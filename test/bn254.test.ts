@@ -10,6 +10,13 @@ const CROSS_PATH_GZ = './vectors/bn254/cross1000.json.gz'; // bundler hint: read
 
 describe('bn254', () => {
   const { Fp2, Fp6, Fp12 } = bn254.fields;
+  should('Point.ZERO uses SEC1 infinity encoding 0x00', () => {
+    for (const Point of [bn254.G1.Point, bn254.G2.Point]) {
+      eql(Point.ZERO.toBytes(), Uint8Array.of(0));
+      eql(Point.ZERO.toBytes(false), Uint8Array.of(0));
+      eql(Point.fromBytes(Uint8Array.of(0)).is0(), true);
+    }
+  });
   should('Fp2', () => {
     const x = {
       c0: 9175274256610746571769806138441460978067247223835479920885065774008687444157n,

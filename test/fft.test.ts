@@ -2,6 +2,7 @@ import * as fc from 'fast-check';
 import { describe, should } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql, throws } from 'node:assert';
 import * as fft from '../src/abstract/fft.ts';
+import { Field } from '../src/abstract/modular.ts';
 import { bls12_381 } from '../src/bls12-381.ts';
 import { bn254 } from '../src/bn254.ts';
 import { bitLen } from '../src/utils.ts';
@@ -37,6 +38,7 @@ describe('FFT', () => {
       eql(fft.nextPowerOfTwo(2 ** 30), 2 ** 30);
       eql(fft.nextPowerOfTwo(2 ** 30 + 1), 2 ** 31);
       // U32 boundary
+      throws(() => fft.nextPowerOfTwo(0x8000_0001));
       throws(() => fft.nextPowerOfTwo(2 ** 32));
       throws(() => fft.nextPowerOfTwo(-1));
       // nextPowerOfTwo(n) is always a power of two
@@ -57,6 +59,11 @@ describe('FFT', () => {
       eql(fft.reverseBits(0b1111, 4), 0b1111);
       const x = 0b10101;
       eql(fft.reverseBits(fft.reverseBits(x, 5), 5), x);
+      eql(fft.reverseBits(1, 32), 0x8000_0000);
+      eql(fft.reverseBits(0x8000_0000, 32), 1);
+      throws(() => fft.reverseBits(1, 1.5));
+      throws(() => fft.reverseBits(1, -1));
+      throws(() => fft.reverseBits(1, 33));
     });
     should('log2', () => {
       for (let i = 0; i < 32; i++) {
@@ -67,6 +74,7 @@ describe('FFT', () => {
     });
     describe('bitReversalPermutation', () => {
       should('basic', () => {
+        eql(fft.bitReversalPermutation([0]), [0]);
         // identity for two elements
         eql(fft.bitReversalPermutation([0, 1]), [0, 1]);
         // left part is even indices, right part is odd indices
@@ -109,6 +117,13 @@ describe('FFT', () => {
     });
   });
   describe('rootsOfUnity', () => {
+    should('clear drops inverse cache too', () => {
+      const roots = fft.rootsOfUnity(Field(17n));
+      const before = roots.inverse(2);
+      roots.clear();
+      const after = roots.inverse(2);
+      eql(after === before, false);
+    });
     should('bls12_381', () => {
       const roots = fft.rootsOfUnity(bls12_381.fields.Fr, 7n);
       eql(roots.roots(3), [
@@ -156,6 +171,11 @@ describe('FFT', () => {
       ]);
     });
   });
+  should('poly extend truncates shorter target length', () => {
+    const F = Field(17n);
+    const P = fft.poly(F, fft.rootsOfUnity(F));
+    eql(P.extend([1n, 2n, 3n], 2), [1n, 2n]);
+  });
   should('Basic FFT', () => {
     const Fr = bls12_381.fields.Fr;
 
@@ -190,7 +210,52 @@ describe('FFT', () => {
       input
     );
   });
-  for (const [name, curve] of Object.entries({ bls12_381, bn254 })) {
+  should('size-1 FFT is identity', () => {
+    const F = Field(17n);
+    const roots = fft.rootsOfUnity(F, 3n);
+    const fftF = fft.FFT(roots, F);
+    eql(roots.brp(0), [1n]);
+    eql(fftF.direct([5n]), [5n]);
+    eql(fftF.inverse([5n]), [5n]);
+    throws(() => fftF.inverse([]), /FFT: Polynomial size should be power of two/);
+  });
+should('FFTCore rejects mismatched root tables', () => {
+  const F = Field(17n);
+  const roots = fft.rootsOfUnity(F, 3n).roots(2);
+  throws(() => fft.FFTCore(F, { N: 8, roots, dit: true }), /wrong roots length: expected 8, got 4/);
+});
+should('poly.eval rejects mismatched basis vector lengths', () => {
+  const F = Field(17n);
+  const P = fft.poly(F, fft.rootsOfUnity(F, 3n));
+  throws(() => P.eval([1n, 2n, 3n], [1n, 2n]), /poly: mismatched lengths 3 vs 2/);
+  throws(() => P.eval([1n, 2n, 3n], [1n, 2n, 3n, 4n]), /poly: mismatched lengths 3 vs 4/);
+});
+should('poly.lagrange handles the size-1 identity case and explicit weights', () => {
+  const F = Field(17n);
+  const P = fft.poly(F, fft.rootsOfUnity(F, 3n));
+  const coeffs = [42n];
+  const before = [...coeffs];
+  eql(P.lagrange.basis(1n, 1, true), [1n]);
+  eql(P.lagrange.eval(coeffs, 1n, true), 42n);
+  eql(coeffs, before);
+  const weights = [1n, 3n, 9n, 10n];
+  const weights0 = [...weights];
+  const x = 5n;
+  const n = 4;
+  const got = P.lagrange.basis(x, n, false, weights as never);
+  const expected = (() => {
+    const out = Array(n).fill(0n);
+    const c = F.mul(F.sub(F.pow(x, BigInt(n)), F.ONE), F.inv(BigInt(n)));
+    const denom = Array(n).fill(0n);
+    for (let i = 0; i < n; i++) denom[i] = F.sub(x, weights[i]);
+    const inv = F.invertBatch(denom);
+    for (let i = 0; i < n; i++) out[i] = F.mul(c, F.mul(weights[i], inv[i]));
+    return out;
+  })();
+  eql(got, expected);
+  eql(weights, weights0);
+});
+for (const [name, curve] of Object.entries({ bls12_381, bn254 })) {
     const Fr = curve.fields.Fr;
     const G1 = curve.G1.Point;
     const FR_BIGINT = fc.bigInt(1n, Fr.ORDER - 1n);
@@ -240,6 +305,8 @@ describe('FFT', () => {
         const monomialBasis = [1n, x, x ** 2n]; // 1, x, x^2
         const expected = Fr.add(Fr.add(1n, 2n * x), 3n * x * x);
         eql(P.eval(a, monomialBasis), expected);
+        throws(() => P.eval(a, [1n, x]), /poly: mismatched lengths 3 vs 2/);
+        throws(() => P.eval(a, [1n, x, x ** 2n, x ** 3n]), /poly: mismatched lengths 3 vs 4/);
       });
       for (const p of [P, Pf]) {
         should('a * 0 = 0, a * 1 = a', () => {

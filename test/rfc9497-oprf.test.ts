@@ -1,8 +1,10 @@
 import { describe, should } from '@paulmillr/jsbt/test.js';
+import { sha256 } from '@noble/hashes/sha2.js';
 import { deepStrictEqual as eql, notDeepEqual, throws } from 'node:assert';
 import * as mod from '../src/abstract/modular.ts';
-import { ristretto255_oprf } from '../src/ed25519.ts';
-import { decaf448_oprf } from '../src/ed448.ts';
+import { createORPF } from '../src/abstract/oprf.ts';
+import { ristretto255, ristretto255_oprf } from '../src/ed25519.ts';
+import { decaf448, decaf448_oprf } from '../src/ed448.ts';
 import { p256_oprf, p384_oprf, p521_oprf } from '../src/nist.ts';
 import { asciiToBytes, numberToBytesBE, numberToBytesLE } from '../src/utils.ts';
 import { deepHexToBytes, json } from './utils.ts';
@@ -154,10 +156,71 @@ function testExample(name, oprf) {
 }
 
 describe('RFC-9497 (OPRF)', () => {
+  should('createORPF rejects opts without a usable Point constructor', () => {
+    throws(() =>
+      createORPF({
+        name: 'P256-SHA256',
+        Point: { Fn: p256_oprf.__tests.Point.Fn } as any,
+        hash: sha256,
+        hashToGroup: (() => {
+          throw new Error('hashToGroup should not run');
+        }) as any,
+        hashToScalar: () => 1n,
+      })
+    );
+  });
+
   describe('Examples', () => {
     for (const [name, suite] of Object.entries(SUITES)) {
       testExample(name, suite);
     }
+  });
+
+  describe('contracts', () => {
+    should('deriveKeyPair requires a 32-byte seed', () => {
+      for (const suite of Object.values(SUITES)) {
+        throws(() => suite.oprf.deriveKeyPair(new Uint8Array(31), new Uint8Array()));
+        throws(() => suite.oprf.deriveKeyPair(new Uint8Array(33), new Uint8Array()));
+      }
+    });
+
+    should('ristretto255 and decaf448 reject identity elements in blinded and evaluated inputs', () => {
+      const suites = [
+        { oprf: ristretto255_oprf, zero: ristretto255.Point.ZERO.toBytes() },
+        { oprf: decaf448_oprf, zero: decaf448.Point.ZERO.toBytes() },
+      ];
+      const input = asciiToBytes('input');
+      for (const { oprf, zero } of suites) {
+        const keys = oprf.oprf.generateKeyPair();
+        throws(() => oprf.oprf.blindEvaluate(keys.secretKey, zero));
+        const { blind } = oprf.oprf.blind(input);
+        throws(() => oprf.oprf.finalize(input, blind, zero));
+      }
+    });
+
+    should('private and public inputs allow 65535 bytes but reject true 16-bit overflow', () => {
+      const input = new Uint8Array(65535);
+      const info = new Uint8Array(65535);
+      const seed = new Uint8Array(32);
+      for (const suite of Object.values(SUITES)) {
+        eql(suite.oprf.blind(input).blind.length, suite.__tests.Fn.BYTES);
+        eql(suite.oprf.deriveKeyPair(seed, info).secretKey.length, suite.__tests.Fn.BYTES);
+        throws(() => suite.oprf.blind(new Uint8Array(65536)));
+        throws(() => suite.oprf.deriveKeyPair(seed, new Uint8Array(65536)));
+      }
+    });
+
+    should('POPRF hashInput callers reject oversized input with the public input-length error', () => {
+      const keys = p256_oprf.oprf.generateKeyPair(new Uint8Array(32).fill(7));
+      const rng = () => new Uint8Array(48).fill(1);
+      const p = p256_oprf.poprf(new Uint8Array([9]));
+      const blind = p.blind(new Uint8Array([1]), keys.publicKey, rng);
+      const ev = p.blindEvaluate(keys.secretKey, blind.blinded, rng);
+      const input = new Uint8Array(65536);
+      const err = /"input" expected Uint8Array of length <= 65535, got length=65536/;
+      throws(() => p.evaluate(keys.secretKey, input), err);
+      throws(() => p.finalize(input, blind.blind, ev.evaluated, blind.blinded, ev.proof, blind.tweakedKey), err);
+    });
   });
 
   for (const { suite, modes } of VECTORS) {

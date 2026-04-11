@@ -1,7 +1,10 @@
 import { sha256 } from '@noble/hashes/sha2.js';
 import { describe, should } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql, notDeepStrictEqual, throws } from 'node:assert';
+import { edwards } from '../src/abstract/edwards.ts';
+import { montgomery } from '../src/abstract/montgomery.ts';
 import { Field } from '../src/abstract/modular.ts';
+import { __TEST as towerTest, tower12 } from '../src/abstract/tower.ts';
 import { ecdsa, weierstrass } from '../src/abstract/weierstrass.ts';
 import { bls12_381 } from '../src/bls12-381.ts';
 import { bn254 } from '../src/bn254.ts';
@@ -70,6 +73,43 @@ describe('createCurve', () => {
       )
     );
   });
+
+  should('constructs valid tiny curve helpers without forcing W=8 precomputes', () => {
+    const WPoint = weierstrass({ p: 5n, n: 19n, h: 1n, a: 0n, b: 1n, Gx: 0n, Gy: 1n });
+    eql(WPoint.BASE.toHex(false), '040001');
+    const EPoint = edwards({ a: 1n, d: 2n, p: 5n, n: 8n, h: 1n, Gx: 2n, Gy: 2n });
+    eql(EPoint.BASE.toAffine(), { x: 2n, y: 2n });
+  });
+
+  should('keeps edwards generator subgroup validation out of the constructor surface', () => {
+    const Point = edwards({ ...ed25519.Point.CURVE(), Gx: 0n, Gy: 1n });
+    eql(Point.BASE.toAffine(), { x: 0n, y: 1n });
+    throws(() => Point.BASE.assertValidity(), /ZERO/);
+  });
+
+  should('rejects invalid generator and config inputs without breaking valid constructor smoke cases', () => {
+    const montgomeryBase = {
+      adjustScalarBytes: (bytes: Uint8Array) => bytes,
+      powPminus2: (x: bigint) => x,
+    };
+
+    throws(() => montgomery({ ...montgomeryBase, type: 'x25519' } as any), /param "P" is invalid/);
+    throws(
+      () => montgomery({ ...montgomeryBase, P: 17n, type: 'x25519', randomBytes: 1 } as any),
+      /param "randomBytes" is invalid/
+    );
+
+    const Point = weierstrass({ p: 17n, n: 257n, h: 1n, a: 2n, b: 2n, Gx: 5n, Gy: 1n });
+    eql(Point.BASE.toHex(false), '040501');
+  });
+
+  should('allowInfinityPoint still rejects non-canonical projective infinity coordinates', () => {
+    const Point = weierstrass(
+      { p: 5n, n: 257n, h: 1n, a: 0n, b: 1n, Gx: 0n, Gy: 1n },
+      { allowInfinityPoint: true }
+    );
+    throws(() => new Point(1n, 1n, 0n).assertValidity(), /ZERO|infinity|point/i);
+  });
 });
 
 describe('Pairings', () => {
@@ -125,6 +165,135 @@ describe('Pairings', () => {
       });
     });
   }
+});
+
+describe('extension fields', () => {
+  should('ORDER values match the tower degrees', () => {
+    const { Fp: blsFp, Fp6: blsFp6, Fp12: blsFp12 } = bls12_381.fields;
+    const { Fp: bnFp, Fp6: bnFp6, Fp12: bnFp12 } = bn254.fields;
+    const { Fp, Fp2, Fp6, Fp12 } = tower12({
+      ORDER: 19n,
+      X_LEN: 4,
+      FP2_NONRESIDUE: [1n, 1n],
+      Fp2mulByB: (num) => num,
+      Fp12finalExponentiate: (num) => num,
+    });
+    eql(
+      {
+        bls12_381: { Fp6: blsFp6.ORDER, Fp12: blsFp12.ORDER },
+        bn254: { Fp6: bnFp6.ORDER, Fp12: bnFp12.ORDER },
+        tower12: { Fp: Fp.ORDER, Fp2: Fp2.ORDER, Fp6: Fp6.ORDER, Fp12: Fp12.ORDER },
+      },
+      {
+        bls12_381: { Fp6: blsFp.ORDER ** 6n, Fp12: blsFp.ORDER ** 12n },
+        bn254: { Fp6: bnFp.ORDER ** 6n, Fp12: bnFp.ORDER ** 12n },
+        tower12: { Fp: 19n, Fp2: 19n ** 2n, Fp6: 19n ** 6n, Fp12: 19n ** 12n },
+      }
+    );
+  });
+
+  should('calcFrobeniusCoefficients rejects inexact exponent divisions', () => {
+    throws(() => towerTest.calcFrobeniusCoefficients(Field(19n), 3n, 19n, 6, 1, 4));
+  });
+  should('calcFrobeniusCoefficients rejects non-positive or fractional row counts', () => {
+    const Fp = Field(19n);
+    throws(() => towerTest.calcFrobeniusCoefficients(Fp, 3n, 19n, 6, 0, 3));
+    throws(() => towerTest.calcFrobeniusCoefficients(Fp, 3n, 19n, 6, 1.5, 3));
+  });
+
+  should('bn254 tower values stay canonical and immutable', () => {
+    const { Fp, Fp2, Fp6, Fp12 } = bn254.fields;
+    eql(Fp2.create({ c0: Fp.ORDER, c1: -1n }), { c0: 0n, c1: Fp.ORDER - 1n });
+    eql(Fp2.isValid({ c0: Fp.ORDER, c1: 0n }), false);
+    eql(Fp2.isValid({ c0: 0n, c1: Fp.ORDER }), false);
+    throws(() => {
+      Fp2.ZERO.c0 = 1n;
+    });
+    eql(Fp2.ZERO, { c0: 0n, c1: 0n });
+
+    eql(
+      Fp6.create({ c0: { c0: Fp.ORDER, c1: -1n }, c1: Fp2.ZERO, c2: Fp2.ZERO }),
+      { c0: { c0: 0n, c1: Fp.ORDER - 1n }, c1: Fp2.ZERO, c2: Fp2.ZERO }
+    );
+    eql(Fp6.isValid({ c0: { c0: Fp.ORDER, c1: 0n }, c1: Fp2.ZERO, c2: Fp2.ZERO }), false);
+    throws(() => {
+      Fp6.ZERO.c0.c0 = 1n;
+    });
+    eql(Fp6.ZERO, {
+      c0: { c0: 0n, c1: 0n },
+      c1: { c0: 0n, c1: 0n },
+      c2: { c0: 0n, c1: 0n },
+    });
+
+    eql(
+      Fp12.create({ c0: { c0: { c0: Fp.ORDER, c1: -1n }, c1: Fp2.ZERO, c2: Fp2.ZERO }, c1: Fp6.ZERO }),
+      { c0: { c0: { c0: 0n, c1: Fp.ORDER - 1n }, c1: Fp2.ZERO, c2: Fp2.ZERO }, c1: Fp6.ZERO }
+    );
+    eql(
+      Fp12.isValid({ c0: { c0: { c0: Fp.ORDER, c1: 0n }, c1: Fp2.ZERO, c2: Fp2.ZERO }, c1: Fp6.ZERO }),
+      false
+    );
+    const x = Fp12.fromBigTwelve([1n, 2n, 3n, 4n, 5n, 6n, 7n, 8n, 9n, 10n, 11n, 12n]);
+    const y = Fp12.conjugate(x);
+    throws(() => {
+      y.c0.c0.c0 = 999n;
+    });
+    eql(x.c0.c0.c0, 1n);
+    throws(() => {
+      Fp12.ZERO.c0.c0.c0 = 1n;
+    });
+    eql(Fp12.ZERO, {
+      c0: {
+        c0: { c0: 0n, c1: 0n },
+        c1: { c0: 0n, c1: 0n },
+        c2: { c0: 0n, c1: 0n },
+      },
+      c1: {
+        c0: { c0: 0n, c1: 0n },
+        c1: { c0: 0n, c1: 0n },
+        c2: { c0: 0n, c1: 0n },
+      },
+    });
+  });
+
+  should('tower tuple constructors and config reject sparse or invalid inputs eagerly', () => {
+    const bad2 = [1n];
+    bad2.length = 2;
+    throws(() => bn254.fields.Fp2.fromBigTuple(bad2 as bigint[]));
+    const bad6 = [1n];
+    bad6.length = 6;
+    throws(() => bn254.fields.Fp6.fromBigSix(bad6 as bigint[]));
+    const bad12 = [1n];
+    bad12.length = 12;
+    throws(() => bn254.fields.Fp12.fromBigTwelve(bad12 as bigint[]));
+
+    const sparse = [1n, 1n] as [bigint, bigint];
+    delete sparse[1];
+    throws(
+      () =>
+        tower12({
+          ORDER: 19n,
+          X_LEN: 4,
+          FP2_NONRESIDUE: sparse,
+          Fp2mulByB: (num) => num,
+          Fp12finalExponentiate: (num) => num,
+        }),
+      /FP2_NONRESIDUE/
+    );
+    for (const X_LEN of [0, -1, 1.5, Number.NaN]) {
+      throws(
+        () =>
+          tower12({
+            ORDER: 19n,
+            X_LEN,
+            FP2_NONRESIDUE: [1n, 1n],
+            Fp2mulByB: (num) => num,
+            Fp12finalExponentiate: (num) => num,
+          }),
+        /X_LEN/
+      );
+    }
+  });
 });
 
 should.runWhen(import.meta.url);

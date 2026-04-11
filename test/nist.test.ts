@@ -12,6 +12,7 @@ import {
   bytesToNumberBE,
   concatBytes,
   hexToBytes,
+  numberToBytesBE,
 } from '../src/utils.ts';
 import { p192, p224, secp192r1, secp224r1 } from './_more-curves.helpers.ts';
 import { deepHexToBytes, json } from './utils.ts';
@@ -121,8 +122,10 @@ function verifyECDHVector(test, curve) {
     ? pkW.subarray(-curve.lengths.publicKey)
     : concatBytes(new Uint8Array([0x04]), pkW.subarray(-(curve.lengths.publicKeyUncompressed - 1)));
 
-  const sk = new Uint8Array(curve.lengths.secretKey);
-  sk.set(skW.subarray(-curve.lengths.secretKey), Math.max(sk.length - skW.length, 0));
+  // Wycheproof ECDH stores private scalars as integers, not fixed-width scalar byte strings.
+  // Normalize them to the curve scalar width so omitted leading-zero padding stays an integer-format
+  // fixture detail and does not exercise the P-521 65-byte parse-acceptance path.
+  const sk = numberToBytesBE(bytesToNumberBE(skW), curve.Point.Fn.BYTES);
   if (test.result === 'valid' || test.result === 'acceptable') {
     eql(curve.getSharedSecret(sk, pk).slice(1), shared, 'valid');
   } else if (test.result === 'invalid') {
@@ -447,8 +450,9 @@ describe('RFC6979', () => {
       const hasLowS = v.curve === 'secp256k1';
       const curve = NIST[v.curve];
       eql(curve.Point.Fn.ORDER, hexToBigint(v.q));
-      if (v.curve === 'P521') v.private = v.private.padStart(132, '0');
-      const priv = hexToBytes(v.private);
+      // RFC 6979 publishes `x` as an integer. Convert it to the curve's fixed-width scalar bytes so
+      // shortened P-521 integer fixtures stay integer fixtures instead of testing 65-byte parsing.
+      const priv = numberToBytesBE(hexToBigint(v.private), curve.Point.Fn.BYTES);
       const pubKey = curve.getPublicKey(priv);
       const pubPoint = curve.Point.fromBytes(pubKey);
       eql(pubPoint.x, hexToBigint(v.Ux));
@@ -480,6 +484,17 @@ describe('RFC6979', () => {
 });
 
 should('properly add leading zero to DER', () => {
+  throws(() => DER._tlv.encode(256, ''));
+  throws(() => DER._tlv.encode(1.5 as any, ''));
+  throws(() => DER._tlv.encode(0x02, null as any), /string|type=object/i);
+  throws(() => DER._tlv.decode(0x02, { length: 2, 0: 0x02, 1: 0x00 } as any), /Uint8Array|DER data/i);
+  throws(() => DER.toSig('3006020101020102' as any), /Uint8Array|signature/i);
+  throws(() => DER._int.decode(new Uint8Array([])));
+  throws(() => DER.toSig(new Uint8Array([0x30, 0x05, 0x02, 0x00, 0x02, 0x01, 0x01])));
+  eql(DER.toSig(new Uint8Array([0x30, 0x06, 0x02, 0x01, 0x00, 0x02, 0x01, 0x01])), {
+    r: 0n,
+    s: 1n,
+  });
   // Valid DER
   eql(
     DER.toSig(
@@ -508,6 +523,8 @@ should('properly add leading zero to DER', () => {
     }),
     '303d021c70049af31f8348673d56cece2b27e587a402f2a48f0b21a7911a480a021d00d7bf40db0909941d78f9948340c69e14c5417f8c840b7edb35846361'
   );
+  const zero = { r: 0n, s: 0n };
+  eql(DER.toSig(hexToBytes(DER.hexFromSig(zero))), zero);
 });
 
 should('have proper GLV endomorphism logic in secp256k1', () => {
@@ -555,6 +572,14 @@ should('handle edge-case in P521', () => {
 
   const hexp = p521.sign(msg, privKey, { lowS: false, format: 'der' });
   eql(bytesToHex(hexp), sig);
+});
+
+should('uses canonical 66-byte scalar parsing for P521', () => {
+  const Fn = p521.Point.Fn;
+  const canonical = Fn.toBytes(1n);
+  eql(canonical.length, 66);
+  eql(Fn.fromBytes(canonical), 1n);
+  throws(() => Fn.fromBytes(canonical.subarray(1)));
 });
 
 should.runWhen(import.meta.url);

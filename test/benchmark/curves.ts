@@ -4,6 +4,7 @@ import { ed25519, ed25519_hasher, x25519 } from '../../src/ed25519.ts';
 import { ed448, ed448_hasher, x448 } from '../../src/ed448.ts';
 import { p256, p256_hasher, p384, p384_hasher, p521, p521_hasher } from '../../src/nist.ts';
 import { secp256k1, secp256k1_hasher } from '../../src/secp256k1.ts';
+import { bytesToHex } from '../../src/utils.ts';
 import { generateData } from './_shared.ts';
 
 (async () => {
@@ -25,6 +26,7 @@ import { generateData } from './_shared.ts';
     curve.Point.BASE.precompute(8, false);
     const d = generateData(curve);
     const d2 = generateData(curve);
+    const pubHex = bytesToHex(d.pub);
     const rand32 = [randomBytes(32), randomBytes(32)];
     const rand56 = [randomBytes(56), randomBytes(56)];
     const getSharedSecret = name === 'ed25519' ?
@@ -37,7 +39,7 @@ import { generateData } from './_shared.ts';
       sign: () => curve.sign(d.msg, d.priv),
       verify: () => curve.verify(d.sig, d.msg, d.pub),
       getSharedSecret: getSharedSecret,
-      fromHex: () => d.Point.fromHex(d.pub),
+      fromHex: () => d.Point.fromHex(pubHex),
       hashToCurve: () => hashToCurves[name].hashToCurve(d.msg),
       Point_add: () => d.point.add(d.point),
       Point_mul: () => d.point.multiply(scalar),

@@ -13,7 +13,7 @@ import { sha3_224, sha3_256, sha3_384, sha3_512, shake128, shake256 } from '@nob
 import { describe, should } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql, throws } from 'node:assert';
 import { randomBytes } from 'node:crypto';
-import { ecdh, ecdsa } from '../src/abstract/weierstrass.ts';
+import { ecdh, ecdsa, weierstrass } from '../src/abstract/weierstrass.ts';
 import { brainpoolP256r1, brainpoolP384r1, brainpoolP512r1 } from '../src/misc.ts';
 import { p256, p384, p521 } from '../src/nist.ts';
 import { secp256k1 } from '../src/secp256k1.ts';
@@ -146,6 +146,77 @@ describe('ECDSA', () => {
         }
       });
     });
+  }
+});
+
+describe('weierstrass ECDH', () => {
+  should('getSharedSecret keeps argument-order guards when Fn accepts multiple secret-key lengths', () => {
+    const alice = p521.utils.randomSecretKey();
+    const bob = p521.utils.randomSecretKey();
+    const alicePub = p521.getPublicKey(alice);
+    const bobPub = p521.getPublicKey(bob);
+    throws(() => p521.getSharedSecret(alicePub, bobPub), /first arg must be private key/);
+    throws(() => p521.getSharedSecret(alicePub, bob), /first arg must be private key/);
+    throws(() => p521.getSharedSecret(alice, bob), /second arg must be public key/);
+  });
+
+  const makeDh = () =>
+    ecdh(
+      weierstrass({ p: 17n, n: 257n, h: 1n, a: 2n, b: 2n, Gx: 5n, Gy: 1n }),
+      { randomBytes: (len = 0) => new Uint8Array(len).fill(7) }
+    );
+
+  should('weierstrass ecdh.utils.randomSecretKey accepts the advertised lengths.seed input', () => {
+    const dh = makeDh();
+    const seed = new Uint8Array(dh.lengths.seed).fill(7);
+    const secretKey = dh.utils.randomSecretKey(seed);
+    eql(secretKey.length, dh.lengths.secretKey);
+    eql(dh.utils.isValidSecretKey(secretKey), true);
+  });
+
+  should('weierstrass ecdh.utils.randomSecretKey default RNG path accepts the advertised lengths.seed input', () => {
+    const dh = makeDh();
+    const secretKey = dh.utils.randomSecretKey();
+    eql(secretKey.length, dh.lengths.secretKey);
+    eql(dh.utils.isValidSecretKey(secretKey), true);
+  });
+});
+
+should('recovered-signature support is not rejected for a valid h=2 curve just because 2n < p', () => {
+  const curve = ecdsa(
+    weierstrass({
+      p: 7n,
+      a: 1n,
+      b: 3n,
+      n: 3n,
+      h: 2n,
+      Gx: 6n,
+      Gy: 1n,
+    }),
+    sha256
+  );
+  const compact = Array.from(new curve.Signature(1n, 1n).toBytes());
+  const recovered = (() => {
+    try {
+      return Array.from(new curve.Signature(1n, 1n).addRecoveryBit(0).toBytes('recovered'));
+    } catch (error) {
+      return `ERR:${(error as Error).message}`;
+    }
+  })();
+  eql(compact, [1, 1]);
+  eql(recovered, [0, 1, 1]);
+});
+
+should('ECDSA option-bag APIs reject primitive opts values', () => {
+  const msg = Uint8Array.from({ length: 32 }, (_, i) => i);
+  for (const C of Object.values(ECDSA)) {
+    const sk = C.utils.randomSecretKey();
+    const pk = C.getPublicKey(sk);
+    const sig = C.sign(msg, sk);
+    const rec = C.sign(msg, sk, { format: 'recovered' });
+    throws(() => C.sign(msg, sk, 1 as any));
+    throws(() => C.verify(sig, msg, pk, 1 as any));
+    throws(() => C.recoverPublicKey(rec, msg, 1 as any));
   }
 });
 

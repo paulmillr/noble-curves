@@ -1,6 +1,6 @@
 import * as fc from 'fast-check';
 import { describe, should } from '@paulmillr/jsbt/test.js';
-import { deepStrictEqual } from 'node:assert';
+import { deepStrictEqual, throws } from 'node:assert';
 import {
   _splitEndoScalar as splitScalar,
   weierstrass as weierstrassN,
@@ -172,6 +172,17 @@ describe('Endomorphism', () => {
       //endoCurves[name] = createCurve(params, sha256);
     });
   }
+});
+
+should('_splitEndoScalar rejects scalars outside 0..n-1', () => {
+  const n = BigInt('0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141');
+  const basis = [
+    [BigInt('0x3086d221a7d46bcde86c90e49284eb15'), -BigInt('0xe4437ed6010e88286f547fa90abfe4c3')],
+    [BigInt('0x114ca50f7a8e2f3f657c1108d9d44cfd8'), BigInt('0x3086d221a7d46bcde86c90e49284eb15')],
+  ] as const;
+  throws(() => splitScalar(-1n, basis as any, n));
+  throws(() => splitScalar(n, basis as any, n));
+  throws(() => splitScalar(n + 1n, basis as any, n));
 });
 
 should.runWhen(import.meta.url);

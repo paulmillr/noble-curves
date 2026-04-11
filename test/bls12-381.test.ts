@@ -1342,6 +1342,10 @@ describe('bls12-381 deterministic', () => {
         eql(p.toHex(false), t.expected, i.toString());
       }
     });
+    should('encodeToCurve G1 defaults match the exported DST', () => {
+      const msg = new TextEncoder().encode('abc');
+      eql(bls12_381.G1.encodeToCurve(msg).toHex(), bls12_381.G1.encodeToCurve(msg, { DST: bls12_381.G1.defaults.DST }).toHex());
+    });
     should('hashToCurve G2', () => {
       for (let i = 0; i < BLS_H2C_VEC_HASH_G2.length; i++) {
         const t = BLS_H2C_VEC_HASH_G2[i];
@@ -1656,6 +1660,88 @@ describe('bls12-381 deterministic', () => {
       );
       eql(bls12_381.G1.mapToCurve(t).equals(bls12_381.G1.Point.ZERO), true);
     });
+  });
+});
+
+describe('BLS flag edge cases', () => {
+  should('reject uncompressed points that decode to infinity without the infinity flag', () => {
+    const { Fp } = bls12_381.fields;
+    const p = Fp.ORDER;
+    const L = Fp.BYTES;
+    const n2b = (n: bigint, len: number) => Uint8Array.from(Buffer.from(n.toString(16).padStart(len * 2, '0'), 'hex'));
+    const g1UncompressedP = new Uint8Array(96);
+    const g2UncompressedP = new Uint8Array(192);
+    g1UncompressedP.set(n2b(p, L), 0);
+    g2UncompressedP.set(n2b(p, L), 0);
+
+    throws(() => bls12_381.G1.Point.fromBytes(g1UncompressedP));
+    throws(() => bls12_381.G2.Point.fromBytes(g2UncompressedP));
+  });
+
+  should('reject noncanonical sort/infinity flag combinations', () => {
+    const g1CompressedInfinitySort = Uint8Array.from([0xe0, ...new Uint8Array(47)]);
+    const g1UncompressedInfinitySort = Uint8Array.from([0x60, ...new Uint8Array(95)]);
+    const uncompressedBaseSort = Uint8Array.from(bls12_381.G1.Point.BASE.toBytes(false));
+    const shortCompressedInfinitySort = Uint8Array.from([0xe0, ...new Uint8Array(47)]);
+    const shortUncompressedInfinity = Uint8Array.from([0x40, ...new Uint8Array(47)]);
+    const longCompressedInfinitySort = Uint8Array.from([0xe0, ...new Uint8Array(95)]);
+    const longUncompressedInfinity = Uint8Array.from([0x40, ...new Uint8Array(191)]);
+    uncompressedBaseSort[0] |= 0x20;
+
+    throws(() => bls12_381.G1.Point.fromBytes(g1CompressedInfinitySort));
+    throws(() => bls12_381.G1.Point.fromBytes(g1UncompressedInfinitySort));
+    throws(() => bls12_381.G1.Point.fromBytes(uncompressedBaseSort));
+    throws(() => bls12_381.shortSignatures.Signature.fromBytes(shortCompressedInfinitySort));
+    throws(() => bls12_381.shortSignatures.Signature.fromBytes(shortUncompressedInfinity));
+    throws(() => bls12_381.longSignatures.Signature.fromBytes(longCompressedInfinitySort));
+    throws(() => bls12_381.longSignatures.Signature.fromBytes(longUncompressedInfinity));
+  });
+
+  should('reject compressed infinity encodings with non-zero payloads', () => {
+    const short = new Uint8Array(48);
+    const long = new Uint8Array(96);
+    short[0] = 0xc0;
+    short[47] = 1;
+    long[0] = 0xc0;
+    long[95] = 1;
+    throws(() => bls12_381.shortSignatures.Signature.fromBytes(short), /signature|point|compressed/);
+    throws(() => bls12_381.longSignatures.Signature.fromBytes(long), /signature|point|compressed/);
+  });
+
+  should('reject infinity payloads that only become zero after field reduction', () => {
+    const { Fp } = bls12_381.fields;
+    const p = Fp.ORDER;
+    const L = Fp.BYTES;
+    const n2b = (n: bigint, len: number) => Uint8Array.from(Buffer.from(n.toString(16).padStart(len * 2, '0'), 'hex'));
+    const g1Compressed = new Uint8Array(L);
+    const g2Compressed = new Uint8Array(2 * L);
+    const g1Uncompressed = new Uint8Array(2 * L);
+    const g2Uncompressed = new Uint8Array(4 * L);
+    g1Compressed.set(n2b(p, L), 0);
+    g2Compressed.set(n2b(p, L), 0);
+    g1Uncompressed.set(n2b(p, L), 0);
+    g2Uncompressed.set(n2b(p, L), 0);
+    g1Compressed[0] |= 0xc0;
+    g2Compressed[0] |= 0xc0;
+    g1Uncompressed[0] |= 0x40;
+    g2Uncompressed[0] |= 0x40;
+
+    throws(() => bls12_381.G1.Point.fromBytes(g1Compressed), /point|compressed/);
+    throws(() => bls12_381.shortSignatures.Signature.fromBytes(g1Compressed), /point|compressed/);
+    throws(() => bls12_381.G2.Point.fromBytes(g2Compressed), /point|compressed/);
+    throws(() => bls12_381.longSignatures.Signature.fromBytes(g2Compressed), /point|compressed/);
+    throws(() => bls12_381.G1.Point.fromBytes(g1Uncompressed), /point|uncompressed/);
+    throws(() => bls12_381.G2.Point.fromBytes(g2Uncompressed), /point|uncompressed/);
+  });
+
+  should('reject uncompressed all-zero point payloads without infinity flag', () => {
+    throws(() => bls12_381.G1.Point.fromBytes(new Uint8Array(96)), /point/);
+    throws(() => bls12_381.G2.Point.fromBytes(new Uint8Array(192)), /point/);
+  });
+
+  should('G2 BASE is not small-order while ZERO is', () => {
+    eql(bls12_381.G2.Point.BASE.isSmallOrder(), false);
+    eql(bls12_381.G2.Point.ZERO.isSmallOrder(), true);
   });
 });
 

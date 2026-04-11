@@ -1,4 +1,5 @@
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
+import { sha512 } from '@noble/hashes/sha2.js';
 import { describe, should } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql, throws } from 'node:assert';
 import type {
@@ -12,6 +13,7 @@ import type {
   NonceCommitments,
   Nonces,
 } from '../src/abstract/frost.ts';
+import { createFROST } from '../src/abstract/frost.ts';
 import * as mod from '../src/abstract/modular.ts';
 import { ed25519, ed25519_FROST, ristretto255, ristretto255_FROST } from '../src/ed25519.ts';
 import { ed448, ed448_FROST } from '../src/ed448.ts';
@@ -147,6 +149,42 @@ const VECTORS: Record<string, Suite> = {
     bytesToHex(secp256k1.Point.BASE.toBytes(true).subarray(1))
   ),
 };
+
+should('signShare rejects nonce reuse across signing sessions across suites', () => {
+  const check = (suite: typeof ed448_FROST | typeof p256_FROST) => {
+    const deal = suite.trustedDealer({ min: 2, max: 2 });
+    const ids = Object.keys(deal.secretShares);
+    const alice = deal.secretShares[ids[0]];
+    const bob = deal.secretShares[ids[1]];
+    const aliceRound1 = suite.commit(alice);
+    const bobRound1 = suite.commit(bob);
+    const commitmentList = [aliceRound1.commitments, bobRound1.commitments];
+    suite.signShare(alice, deal.public, aliceRound1.nonces, commitmentList, new Uint8Array([1]));
+    throws(() => suite.signShare(alice, deal.public, aliceRound1.nonces, commitmentList, new Uint8Array([2])));
+  };
+  check(ed448_FROST);
+  check(p256_FROST);
+});
+
+should('createFROST rejects opts without a usable Point constructor', () => {
+  throws(() => createFROST({ name: 'FROST-TEST-SHA512-v1', hash: sha512, Fn: ed25519.Point.Fn } as any));
+});
+
+describe('createFROST', () => {
+  const create = () => {
+    const frost = createFROST({ name: 'TRACE', Point: ed25519.Point, hash: sha512, H2: '' });
+    const secretKey = new Uint8Array(32).fill(7);
+    const msg = new Uint8Array([1, 2, 3]);
+    const sig = frost.sign(msg, secretKey);
+    const publicKey = ed25519.Point.BASE.multiply(ed25519.Point.Fn.fromBytes(secretKey)).toBytes();
+    return { frost, msg, sig, publicKey };
+  };
+
+  should('createFROST.parsePoint still accepts canonical ed25519 public keys on the verify path', () => {
+    const { frost, msg, sig, publicKey } = create();
+    eql(frost.verify(sig, msg, publicKey), true);
+  });
+});
 
 const Identifiers: Record<string, Record<string, string>> = {
   ed25519: {
@@ -421,6 +459,10 @@ describe('FROST (RFC 9591)', () => {
       should('normalize unsorted commitment lists', () => {
         const { publicKey, secretShares, ids, msg, secretNonces, commitmentList } =
           createSession(frost);
+        const nonces2 = {
+          hiding: Uint8Array.from(secretNonces[ids[0]].hiding),
+          binding: Uint8Array.from(secretNonces[ids[0]].binding),
+        };
         const sortedShare = frost.signShare(
           secretShares[ids[0]],
           publicKey,
@@ -432,7 +474,7 @@ describe('FROST (RFC 9591)', () => {
         const reversedShare = frost.signShare(
           secretShares[ids[0]],
           publicKey,
-          secretNonces[ids[0]],
+          nonces2,
           reversed,
           msg
         );

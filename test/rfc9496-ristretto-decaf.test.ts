@@ -211,6 +211,18 @@ describe('ristretto255', () => {
       'be2194e53cc014665821003f8ecf49e99b7cd16f5326e53f234ecd21c448ee6c'
     );
   });
+  should('wrapper helpers keep canonical abstract-group behavior', () => {
+    const p = RistrettoPoint.BASE.multiply(5n);
+    const affine = p.toAffine();
+    const want = { ...affine };
+    affine.x = 1n;
+    affine.y = 2n;
+    eql(p.toAffine(), want);
+    eql(RistrettoPoint.BASE.isSmallOrder(), false);
+    eql(RistrettoPoint.BASE.isTorsionFree(), true);
+    eql(RistrettoPoint.BASE.precompute(2), RistrettoPoint.BASE);
+    throws(() => RistrettoPoint.BASE.subtract({ negate: () => RistrettoPoint.ZERO } as any));
+  });
 });
 
 describe('decaf448', () => {
@@ -244,6 +256,11 @@ describe('decaf448', () => {
       eql(bytesToHex(DecafPoint.fromBytes(enc).toBytes()), encoded);
       P = P.add(B);
     }
+  });
+  should('keeps the Decaf base representative aligned with ed448 BASE * 2', () => {
+    const want = DecafPoint.fromAffine(ed448.Point.BASE.toAffine()).multiplyUnsafe(2n);
+    eql(DecafPoint.BASE.toBytes(), want.toBytes());
+    eql(DecafPoint.BASE.toAffine(), want.toAffine());
   });
   should('not convert bad bytes encoding', () => {
     const badEncodings = [
@@ -407,6 +424,18 @@ describe('decaf448', () => {
       ),
       '1287dea7519af966cf537a58f614e8b39b93a7c0b989bcdb4f94af8f2573ab59589accb0d2a2097b5f30c1d721619470f21e78613bbfc4b6'
     );
+  });
+  should('wrapper helpers keep canonical abstract-group behavior', () => {
+    const p = DecafPoint.BASE.multiply(5n);
+    const affine = p.toAffine();
+    const want = { ...affine };
+    affine.x = 1n;
+    affine.y = 2n;
+    eql(p.toAffine(), want);
+    eql(DecafPoint.BASE.isSmallOrder(), false);
+    eql(DecafPoint.BASE.isTorsionFree(), true);
+    eql(DecafPoint.BASE.precompute(2), DecafPoint.BASE);
+    throws(() => DecafPoint.BASE.subtract({ negate: () => DecafPoint.ZERO } as any));
   });
 });
 

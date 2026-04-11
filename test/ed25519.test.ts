@@ -4,8 +4,9 @@ import {
   bytesToHex as hex,
   randomBytes,
 } from '@noble/hashes/utils.js';
-import * as fc from 'fast-check';
+import { sha512 } from '@noble/hashes/sha2.js';
 import { describe, should } from '@paulmillr/jsbt/test.js';
+import * as fc from 'fast-check';
 import { deepStrictEqual as eql, strictEqual, throws } from 'node:assert';
 import { ed25519 as ed, ED25519_TORSION_SUBGROUP, numberToBytesLE } from './ed25519.helpers.ts';
 import { getTypeTestsNonUi8a, json, txt } from './utils.ts';
@@ -22,13 +23,15 @@ const edgeCases = json('./vectors/ed25519/edge-cases.json');
 
 describe('ed25519', () => {
   const Point = ed.Point;
+  const isNobleCurves = !!Point.Fp;
+  const CURVE_N = ed.Point.CURVE().n;
 
   function bytes32(numOrStr) {
     let hex2 = typeof numOrStr === 'string' ? numOrStr : numOrStr.toString(16);
     return bytes(hex2.padStart(64, '0'));
   }
 
-  ed.Point.BASE.precompute(8, false);
+  if (isNobleCurves) Point.BASE.precompute(8, false);
 
   describe('getPublicKey()', () => {
     should('not accept >32byte private keys in Uint8Array format', () => {
@@ -120,7 +123,7 @@ describe('ed25519', () => {
         fc.property(
           hexaString({ minLength: 2, maxLength: 32 }),
           // @ts-ignore
-          fc.bigInt(2n, ed.Point.Fn.ORDER),
+          fc.bigInt(2n, CURVE_N),
           (msgh, privnum) => {
             const priv = bytes32(privnum);
             const pub = ed.getPublicKey(priv);
@@ -141,7 +144,7 @@ describe('ed25519', () => {
           fc.array(fc.integer({ min: 0x00, max: 0xff })),
           // @ts-ignore
           fc.array(fc.integer({ min: 0x00, max: 0xff })),
-          fc.bigInt(1n, ed.Point.Fn.ORDER),
+          fc.bigInt(1n, CURVE_N),
           (bytes, wrongBytes, privateKey) => {
             const privKey = bytes32(privateKey);
             const message = new Uint8Array(bytes);
@@ -198,7 +201,7 @@ describe('ed25519', () => {
       let s_0 = signature.slice(32, 64);
       let s_1 = hex(s_0.slice().reverse());
       let s_2 = BigInt('0x' + s_1);
-      s_2 = s_2 + ed.Point.Fn.ORDER;
+      s_2 = s_2 + CURVE_N;
       let s_3 = numberToBytesLE(s_2, 32);
 
       const sig_invalid = concatBytes(R, s_3);
@@ -215,9 +218,81 @@ describe('ed25519', () => {
         strictEqual(result, false, `zip215: false must not validate: ${v.signature}`);
       }
     });
+
+    should('handle ZERO points properly', async () => {
+      const modN = (a: bigint, b: bigint = N) => {
+        const r = a % b;
+        return r >= 0n ? r : b + r;
+      };
+      const { secretKey, publicKey } = ed.keygen();
+      const extK = ed.utils.getExtendedPublicKey(secretKey);
+      const aaaaa = extK.scalar; // private scalar
+      const identityR = new Uint8Array(32);
+      identityR[0] = 1; // LE encoding of y=1
+      const emptyHash = sha512(new Uint8Array());
+      const N = Point.CURVE().n;
+      const k0 = modN(BigInt('0x' + hex(emptyHash.slice().reverse()))); // modL_LE
+      const S_ = modN(k0 * aaaaa); // Step 5: Compute S = k0 * a mod N
+      const S = bytes(S_.toString(16).padStart(64, '0')).reverse();
+      const forgedSig = concatBytes(identityR, S); // Encode S as 32-byte little-endian
+      const msgs = ['a', 'b', 'c'].map((s) => new TextEncoder().encode(s));
+      msgs.push(Uint8Array.of());
+      for (let msg of msgs) {
+        eql(ed.verify(forgedSig, msg, publicKey), false);
+        eql(ed.verify(forgedSig, msg, publicKey, { zip215: false }), false);
+      }
+    });
+
+    should('passing {} or { zip215: undefined } preserves the exported default ZIP-215 semantics', () => {
+      const vector = zip215.find((v) => v.valid_zip215 && !v.valid_legacy)!;
+      const msg = new TextEncoder().encode('Zcash');
+      const publicKey = bytes(vector.vk_bytes);
+      const signature = bytes(vector.sig_bytes);
+      eql(
+        {
+          omitted: ed.verify(signature, msg, publicKey),
+          empty: ed.verify(signature, msg, publicKey, {}),
+          undef: ed.verify(signature, msg, publicKey, { zip215: undefined }),
+          strict: ed.verify(signature, msg, publicKey, { zip215: false }),
+        },
+        { omitted: true, empty: true, undef: true, strict: false }
+      );
+    });
+    if (ed.utils.isValidPublicKey) {
+      should('utils.isValidPublicKey preserves the exported ZIP-215 default', () => {
+        const unreduced = numberToBytesLE(ed.Point.CURVE().p + 1n, 32);
+        eql(
+          {
+            omitted: ed.utils.isValidPublicKey(unreduced),
+            undef: ed.utils.isValidPublicKey(unreduced, undefined),
+            zip215: ed.utils.isValidPublicKey(unreduced, true),
+            strict: ed.utils.isValidPublicKey(unreduced, false),
+          },
+          { omitted: true, undef: true, zip215: true, strict: false }
+        );
+      });
+    }
+    if (ed.utils.isValidSecretKey) {
+      should('utils.isValidSecretKey accepts the helper secret-key width', () => {
+        const seed = new Uint8Array(ed.Point.Fp.BYTES);
+        eql(ed.utils.isValidSecretKey(seed), true);
+      });
+    }
+    should('ZIP-215 verification with noncanonical R hashes the original signature bytes in verify()', () => {
+      const publicKey = bytes('17ffad8068dc0de9935d36636f3ad1b5de6de3413b12388e453b05f2a4c1d3db');
+      const msg = bytes('090807');
+      const signature = bytes(
+        'eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fc07b8c4dcad0ae1a8df5426b3b0578753de96488dbbee400082251e372919f04'
+      );
+      eql(ed.verify(signature, msg, publicKey, { zip215: true }), true);
+    });
   });
 
   describe('Point', () => {
+    should('subtract rejects non-point objects even if negate() returns a point', () => {
+      throws(() => ed.Point.BASE.subtract({ negate: () => ed.Point.ZERO } as any));
+    });
+
     should('not create point without z, t', () => {
       const t = 81718630521762619991978402609047527194981150691135404693881672112315521837062n;
       const point = Point.fromAffine({ x: t, y: t });
@@ -247,6 +322,28 @@ describe('ed25519', () => {
       const pub = '34fe104df0a1348ef60699b3659b5a31b14a6f8488e14bfa55d2cc310959ae50';
 
       eql(ed.verify(bytes(sig), bytes(msg), bytes(pub)), false);
+    });
+
+    should('Point.ZERO.multiplyUnsafe rejects negative and >= N scalars', () => {
+      throws(() => ed.Point.ZERO.multiplyUnsafe(-1n), /out of range|expected 0 <= sc < curve.n/);
+      throws(() => ed.Point.ZERO.multiplyUnsafe(CURVE_N), /out of range|expected 0 <= sc < curve.n/);
+    });
+
+    should('Point.CURVE does not expose a live mutable view of internal curve parameters', () => {
+      const curve = ed.Point.CURVE() as { p: bigint };
+      const orig = curve.p;
+      let changed = false;
+      let after = orig;
+      try {
+        try {
+          curve.p = 123n;
+        } catch {}
+        after = ed.Point.CURVE().p;
+        changed = after !== orig;
+      } finally {
+        if (changed) curve.p = orig;
+      }
+      eql(after, orig);
     });
 
     describe('#multiply()', () => {

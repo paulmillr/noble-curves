@@ -4,11 +4,12 @@ import {
   bytesToHex as hex,
   randomBytes,
 } from '@noble/hashes/utils.js';
+import { shake256 } from '@noble/hashes/sha3.js';
 import * as fc from 'fast-check';
 import { describe, should } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql, throws } from 'node:assert';
 import { ed448, ed448ph, x448 } from '../src/ed448.ts';
-import { numberToBytesLE } from '../src/utils.ts';
+import { asciiToBytes, bytesToNumberLE, numberToBytesLE } from '../src/utils.ts';
 import { json } from './utils.ts';
 
 const VECTORS_rfc8032_ed448 = json('./vectors/rfc8032-ed448.json');
@@ -16,6 +17,36 @@ const VECTORS_rfc8032_ed448 = json('./vectors/rfc8032-ed448.json');
 const ed448vectorsOld = json('./vectors/ed448/ed448_test_OLD.json');
 const ed448vectors = json('./vectors/wycheproof/ed448_test.json');
 const x448vectors = json('./vectors/wycheproof/x448_test.json');
+
+const addPToEncoding = (Point: typeof ed448.Point, bytes: Uint8Array): Uint8Array => {
+  const out = bytes.slice();
+  const sign = out[out.length - 1] & 0x80;
+  out[out.length - 1] &= 0x7f;
+  let y = 0n;
+  for (let i = out.length - 1; i >= 0; i--) y = (y << 8n) + BigInt(out[i]);
+  y += Point.Fp.ORDER;
+  for (let i = 0; i < out.length; i++) {
+    out[i] = Number(y & 0xffn);
+    y >>= 8n;
+  }
+  out[out.length - 1] |= sign;
+  return out;
+};
+
+const dom4 = (data: Uint8Array, ctx: Uint8Array, phflag: boolean) =>
+  concatBytes(asciiToBytes('SigEd448'), new Uint8Array([phflag ? 1 : 0, ctx.length]), ctx, data);
+
+const signForPk = (scheme: typeof ed448 | typeof ed448ph, msg: Uint8Array, secretKey: Uint8Array, pk: Uint8Array) => {
+  const prehash = scheme === ed448ph ? shake256(msg, { dkLen: 64 }) : msg;
+  const { prefix, scalar } = scheme.utils.getExtendedPublicKey(secretKey);
+  const hashScalar = (...parts: Uint8Array[]) =>
+    scheme.Point.Fn.create(bytesToNumberLE(shake256(dom4(concatBytes(...parts), new Uint8Array(), scheme === ed448ph), { dkLen: 114 })));
+  const r = hashScalar(prefix, prehash);
+  const R = scheme.Point.BASE.multiply(r).toBytes();
+  const k = hashScalar(R, pk, prehash);
+  const s = scheme.Point.Fn.create(r + k * scalar);
+  return concatBytes(R, scheme.Point.Fn.toBytes(s));
+};
 
 describe('ed448', () => {
   const ed = ed448;
@@ -59,6 +90,19 @@ describe('ed448', () => {
     const points = [G1, G2, G3];
     const getXY = (p) => p.toAffine();
     for (const p of points) eql(getXY(Point.fromBytes(p.toBytes())), getXY(p));
+  });
+
+  should('default verify is strict for ed448 and ed448ph, with explicit ZIP-215 override', () => {
+    for (const scheme of [ed448, ed448ph]) {
+      const secretKey = scheme.utils.randomSecretKey(new Uint8Array(57).fill(7));
+      const publicKey = scheme.getPublicKey(secretKey);
+      const badPublicKey = addPToEncoding(scheme.Point, publicKey);
+      const msg = new Uint8Array([1, 2, 3, 4]);
+      const sig = signForPk(scheme, msg, secretKey, badPublicKey);
+      eql(scheme.verify(sig, msg, badPublicKey, { zip215: true }), true);
+      eql(scheme.verify(sig, msg, badPublicKey, { zip215: false }), false);
+      eql(scheme.verify(sig, msg, badPublicKey), false);
+    }
   });
 
   should('RFC8032', () => {
