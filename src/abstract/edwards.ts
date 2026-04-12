@@ -541,7 +541,6 @@ export function edwards(
     // an exposed private key e.g. sig verification.
     // Keeps the same subgroup-scalar contract: 0 is allowed for public-scalar callers, but
     // n and larger values are rejected instead of being reduced mod n to the identity point.
-    // Accepts optional accumulator to merge with multiply (important for sparse scalars)
     multiplyUnsafe(scalar: bigint): Point {
       // 0 <= scalar < L
       if (!Fn.isValid(scalar)) throw new RangeError('invalid scalar: expected 0 <= sc < curve.n');

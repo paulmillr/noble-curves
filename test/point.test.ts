@@ -11,6 +11,7 @@ import {
   mod,
   pippenger,
   precomputeMSMUnsafe,
+  wNAF,
 } from './point.helpers.ts';
 
 const NUM_RUNS = 5;
@@ -84,6 +85,43 @@ describe('basic curve tests', () => {
           equal(G[2].multiply(3n), G[6], '(2*G).multiply(3) = 6*G');
           equal(G[2].multiplyUnsafe(3n), G[6], '(2*G).multiplyUnsafe(3) = 6*G');
         });
+        should('multiplyUnsafe fast paths', () => {
+          equal(G[1].multiplyUnsafe(0n), G[0], '(1*G).multiplyUnsafe(0) = 0');
+          equal(G[1].multiplyUnsafe(1n), G[1], '(1*G).multiplyUnsafe(1) = 1*G');
+          equal(G[0].multiplyUnsafe(5n), G[0], '(0*G).multiplyUnsafe(5) = 0');
+        });
+        if (typeof wNAF === 'function') {
+          should('wNAF helpers accumulator', () => {
+            const point = G[2];
+            const acc = G[7];
+            const scalar = 5n;
+            const want = acc.add(point.multiplyUnsafe(scalar));
+            const w = new wNAF(p, p.Fn.BITS) as any;
+            eql(
+              w._unsafeLadder(point, scalar, acc).equals(want),
+              true,
+              '_unsafeLadder(point, scalar, acc)'
+            );
+            eql(w._unsafeLadder(point, 0n, acc).equals(acc), true, '_unsafeLadder(point, 0, acc)');
+            const precomputes = w.getPrecomputes(2, point);
+            eql(
+              w.wNAFUnsafe(2, precomputes, scalar, acc).equals(want),
+              true,
+              'wNAFUnsafe(point, scalar, acc)'
+            );
+            eql(
+              w.wNAFUnsafe(2, precomputes, 0n, acc).equals(acc),
+              true,
+              'wNAFUnsafe(point, 0, acc)'
+            );
+            eql(
+              w.unsafe(point, scalar, undefined, acc).equals(want),
+              true,
+              'unsafe(point, scalar, acc)'
+            );
+            eql(w.unsafe(point, 0n, undefined, acc).equals(acc), true, 'unsafe(point, 0, acc)');
+          });
+        }
         should('add same-point', () => {
           equal(G[3].add(G[3]), G[6], '3*G + 3*G = 6*G');
         });
