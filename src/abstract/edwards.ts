@@ -542,12 +542,12 @@ export function edwards(
     // Keeps the same subgroup-scalar contract: 0 is allowed for public-scalar callers, but
     // n and larger values are rejected instead of being reduced mod n to the identity point.
     // Accepts optional accumulator to merge with multiply (important for sparse scalars)
-    multiplyUnsafe(scalar: bigint, acc = Point.ZERO): Point {
+    multiplyUnsafe(scalar: bigint): Point {
       // 0 <= scalar < L
       if (!Fn.isValid(scalar)) throw new RangeError('invalid scalar: expected 0 <= sc < curve.n');
       if (scalar === _0n) return Point.ZERO;
       if (this.is0() || scalar === _1n) return this;
-      return wnaf.unsafe(this, scalar, (p) => normalizeZ(Point, p), acc);
+      return wnaf.unsafe(this, scalar, (p) => normalizeZ(Point, p));
     }
 
     // Checks if point is of small order.

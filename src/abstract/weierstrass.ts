@@ -1093,9 +1093,10 @@ export function weierstrass<T>(
      * It's faster, but should only be used when you don't care about
      * an exposed secret key e.g. sig verification, which works over *public* keys.
      */
-    multiplyUnsafe(sc: bigint): Point {
+    multiplyUnsafe(scalar: bigint): Point {
       const { endo } = extraOpts;
       const p = this as Point;
+      const sc = scalar;
       // Public-scalar callers may need 0, but n and larger values stay rejected here too.
       // Reducing them mod n would turn bad caller input into an accidental identity point.
       if (!Fn.isValid(sc)) throw new RangeError('invalid scalar: out of range'); // 0 is valid
