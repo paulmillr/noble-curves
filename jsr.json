@@ -1,12 +1,13 @@
 {
   "name": "@noble/curves",
-  "version": "2.0.1",
+  "version": "2.2.0",
   "exports": {
     ".": "./src/index.ts",
     "./abstract/bls.js": "./src/abstract/bls.ts",
     "./abstract/curve.js": "./src/abstract/curve.ts",
     "./abstract/edwards.js": "./src/abstract/edwards.ts",
     "./abstract/fft.js": "./src/abstract/fft.ts",
+    "./abstract/frost.js": "./src/abstract/frost.ts",
     "./abstract/hash-to-curve.js": "./src/abstract/hash-to-curve.ts",
     "./abstract/modular.js": "./src/abstract/modular.ts",
     "./abstract/montgomery.js": "./src/abstract/montgomery.ts",
