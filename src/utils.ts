@@ -384,12 +384,13 @@ export function bytesToNumberLE(bytes: TArg<Uint8Array>): bigint {
  */
 export function numberToBytesBE(n: number | bigint, len: number): TRet<Uint8Array> {
   anumber_(len);
-  if (len === 0) throw new RangeError('zero length');
+  if (len === 0) throw new Error('zero output length is invalid');
   n = abignumber(n);
+  const expectedLen = len * 2;
   const hex = n.toString(16);
   // Detect overflow before hex parsing so oversized values don't leak the shared odd-hex error.
-  if (hex.length > len * 2) throw new RangeError('number too large');
-  return hexToBytes_(hex.padStart(len * 2, '0')) as TRet<Uint8Array>;
+  if (hex.length > expectedLen) throw new RangeError('number is too large');
+  return hexToBytes_(hex.padStart(expectedLen, '0')) as TRet<Uint8Array>;
 }
 /**
  * Encodes a bigint into fixed-length little-endian bytes.

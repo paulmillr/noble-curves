@@ -292,8 +292,8 @@ describe('utils', () => {
           );
         }
       }
-      throws(() => numberToBytesBE(256n, 1), new RangeError('number too large'));
-      throws(() => numberToBytesLE(256n, 1), new RangeError('number too large'));
+      throws(() => numberToBytesBE(256n, 1), new RangeError('number is too large'));
+      throws(() => numberToBytesLE(256n, 1), new RangeError('number is too large'));
     });
   }
   if (extra.abytes) {
