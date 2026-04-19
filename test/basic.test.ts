@@ -24,7 +24,7 @@ describe('edge cases', () => {
     throws(() => secp256k1.sign(Uint8Array.of(), 123n));
   });
 
-  should('x25519 integer range rejects unclamped scalars above 8*(2^251-1)+2^254', () => {
+  should('x25519 integer range rejects unclamped values above 8*(2^251-1)+2^254', () => {
     // RFC 7748: "the resulting integer is of the form 2^254 plus eight times a value
     // between 0 and 2^251 - 1 (inclusive)."
     // Integers 2^255 - 7 .. 2^255 - 1 must be rejected by the defense-in-depth range
