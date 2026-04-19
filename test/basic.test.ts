@@ -23,6 +23,24 @@ describe('edge cases', () => {
     throws(() => secp256k1.getPublicKey(123n));
     throws(() => secp256k1.sign(Uint8Array.of(), 123n));
   });
+
+  should('x25519 scalar range rejects unclamped scalars above 8*(2^251-1)+2^254', () => {
+    // RFC 7748: valid X25519 scalars are 2^254 + 8*k with k in [0, 2^251 - 1].
+    // So the largest valid scalar is 2^254 + 8*(2^251 - 1) = 2^255 - 8.
+    // Scalars 2^255 - 7 .. 2^255 - 1 must be rejected by the defense-in-depth range
+    // check when a (hypothetical) buggy adjustScalarBytes returns them unclamped.
+    const P = 2n ** 255n - 19n;
+    const passthrough = montgomery({
+      P,
+      type: 'x25519',
+      adjustScalarBytes: (bytes: Uint8Array) => bytes,
+      powPminus2: (x: bigint) => x,
+    });
+    // 2^255 - 1 encoded little-endian as 32 bytes: 31 * 0xff, then 0x7f.
+    const scalar = new Uint8Array(32).fill(0xff);
+    scalar[31] = 0x7f;
+    throws(() => passthrough.getPublicKey(scalar), /scalar/);
+  });
 });
 
 describe('createCurve', () => {

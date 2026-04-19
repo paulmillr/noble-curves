@@ -150,8 +150,8 @@ export function montgomery(curveDef: TArg<MontgomeryOpts>): TRet<MontgomeryECDH>
   // x448: "2^447 plus four times a value between 0 and 2^445 - 1 (inclusive)"
   const minScalar = is25519 ? _2n ** BigInt(254) : _2n ** BigInt(447);
   const maxAdded = is25519
-    ? BigInt(8) * _2n ** BigInt(251) - _1n
-    : BigInt(4) * _2n ** BigInt(445) - _1n;
+    ? BigInt(8) * (_2n ** BigInt(251) - _1n)
+    : BigInt(4) * (_2n ** BigInt(445) - _1n);
   const maxScalar = minScalar + maxAdded + _1n; // (inclusive)
   const modP = (n: bigint) => mod(n, P);
   const GuBytes = encodeU(Gu);
