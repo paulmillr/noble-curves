@@ -240,7 +240,7 @@ export const ed448ph: EdDSA = /* @__PURE__ */ ed4({ prehash: shake256_64 });
  * const point = E448.BASE.multiply(2n);
  * ```
  */
-export const E448: EdwardsPointCons = /* @__PURE__ */ edwards(E448_CURVE);
+export const E448: EdwardsPointCons = /* @__PURE__ */ edwards(E448_CURVE, { Fp, Fn });
 
 /**
  * ECDH using curve448 aka x448.
