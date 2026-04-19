@@ -1260,6 +1260,15 @@ describe('bls12-381 verify', () => {
         )
       );
     });
+    should('throws on non-hashed message (raw bytes)', () => {
+      const [priv, msgBytes] = G2_VECTORS[0];
+      const msg = blsl.hash(msgBytes);
+      const sig = blsl.sign(msg, priv);
+      const pub = getPubKey(priv);
+      // passing raw bytes instead of a hashed SigPoint must throw, not silently return false
+      const items = [{ message: msgBytes as any, publicKey: pub }];
+      throws(() => blsl.verifyBatch(sig, items), /expected valid message hashed/);
+    });
     should('verify multi-signature as simple signature', () => {
       fc.assert(
         // @ts-ignore
