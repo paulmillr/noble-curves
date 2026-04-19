@@ -625,7 +625,6 @@ export const decaf448_hasher: H2CHasherBase<typeof _DecafPoint> = Object.freeze(
    * it must use 84-byte xof (56+56/2), not 64.
    */
   hashToScalar(msg: TArg<Uint8Array>, options?: TArg<H2CDSTOpts>): bigint {
-    // Apply default only when DST is missing, so partial option objects still get it.
     const DST = options?.DST === undefined ? _DST_scalar : options.DST;
     // Can't use `Fn448.fromBytes()`. 64-byte input => 56-byte field element
     const xof = expand_message_xof(msg, DST, 64, 256, shake256);
