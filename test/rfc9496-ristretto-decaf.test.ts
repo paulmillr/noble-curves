@@ -211,6 +211,11 @@ describe('ristretto255', () => {
       'be2194e53cc014665821003f8ecf49e99b7cd16f5326e53f234ecd21c448ee6c'
     );
   });
+  should('ristretto255_hasher.hashToScalar applies default DST for partial options', () => {
+    const msg = new Uint8Array(10).fill(5);
+    const expected = ristretto255_hasher.hashToScalar(msg);
+    eql(ristretto255_hasher.hashToScalar(msg, {}), expected);
+  });
   should('wrapper helpers keep canonical abstract-group behavior', () => {
     const p = RistrettoPoint.BASE.multiply(5n);
     const affine = p.toAffine();

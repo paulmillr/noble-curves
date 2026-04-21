@@ -611,8 +611,9 @@ export const ristretto255_hasher: H2CHasherBase<typeof _RistrettoPoint> = Object
     // It is not: it is the older hash-to-curve construction.
     return ristretto255_hasher.deriveToCurve!(xmd);
   },
-  hashToScalar(msg: TArg<Uint8Array>, options: TArg<H2CDSTOpts> = { DST: _DST_scalar }) {
-    const xmd = expand_message_xmd(msg, options.DST, 64, sha512);
+  hashToScalar(msg: TArg<Uint8Array>, options?: TArg<H2CDSTOpts>) {
+    const DST = options?.DST === undefined ? _DST_scalar : options.DST;
+    const xmd = expand_message_xmd(msg, DST, 64, sha512);
     return Fn.create(bytesToNumberLE(xmd));
   },
   /**

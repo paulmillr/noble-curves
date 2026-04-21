@@ -240,7 +240,7 @@ export const ed448ph: EdDSA = /* @__PURE__ */ ed4({ prehash: shake256_64 });
  * const point = E448.BASE.multiply(2n);
  * ```
  */
-export const E448: EdwardsPointCons = /* @__PURE__ */ edwards(E448_CURVE);
+export const E448: EdwardsPointCons = /* @__PURE__ */ edwards(E448_CURVE, { Fp, Fn });
 
 /**
  * ECDH using curve448 aka x448.
@@ -624,9 +624,10 @@ export const decaf448_hasher: H2CHasherBase<typeof _DecafPoint> = Object.freeze(
    * RFC is invalid. RFC says "use 64-byte xof", while for 2^-112 bias
    * it must use 84-byte xof (56+56/2), not 64.
    */
-  hashToScalar(msg: TArg<Uint8Array>, options: TArg<H2CDSTOpts> = { DST: _DST_scalar }): bigint {
+  hashToScalar(msg: TArg<Uint8Array>, options?: TArg<H2CDSTOpts>): bigint {
+    const DST = options?.DST === undefined ? _DST_scalar : options.DST;
     // Can't use `Fn448.fromBytes()`. 64-byte input => 56-byte field element
-    const xof = expand_message_xof(msg, options.DST, 64, 256, shake256);
+    const xof = expand_message_xof(msg, DST, 64, 256, shake256);
     return Fn448.create(bytesToNumberLE(xof));
   },
   /**

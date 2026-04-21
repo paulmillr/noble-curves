@@ -23,6 +23,24 @@ describe('edge cases', () => {
     throws(() => secp256k1.getPublicKey(123n));
     throws(() => secp256k1.sign(Uint8Array.of(), 123n));
   });
+
+  should('x25519 integer range rejects unclamped values above 8*(2^251-1)+2^254', () => {
+    // RFC 7748: "the resulting integer is of the form 2^254 plus eight times a value
+    // between 0 and 2^251 - 1 (inclusive)."
+    // Integers 2^255 - 7 .. 2^255 - 1 must be rejected by the defense-in-depth range
+    // check when a (hypothetical) buggy adjustScalarBytes returns them unclamped.
+    const P = 2n ** 255n - 19n;
+    const passthrough = montgomery({
+      P,
+      type: 'x25519',
+      adjustScalarBytes: (bytes: Uint8Array) => bytes,
+      powPminus2: (x: bigint) => x,
+    });
+    // 2^255 - 1 encoded little-endian as 32 bytes: 31 * 0xff, then 0x7f.
+    const scalar = new Uint8Array(32).fill(0xff);
+    scalar[31] = 0x7f;
+    throws(() => passthrough.getPublicKey(scalar), /scalar/);
+  });
 });
 
 describe('createCurve', () => {

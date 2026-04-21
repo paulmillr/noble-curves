@@ -8,7 +8,7 @@ import { shake256 } from '@noble/hashes/sha3.js';
 import * as fc from 'fast-check';
 import { describe, should } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql, throws } from 'node:assert';
-import { ed448, ed448ph, x448 } from '../src/ed448.ts';
+import { E448, ed448, ed448ph, x448 } from '../src/ed448.ts';
 import { asciiToBytes, bytesToNumberLE, numberToBytesLE } from '../src/utils.ts';
 import { json } from './utils.ts';
 
@@ -540,6 +540,17 @@ describe('ed448', () => {
       // const u = Fp.create(y * y * invX);
       eql(numberToBytesLE(u, 56), x448.GuBytes);
     });
+  });
+
+  should('E448: encode/decode round-trip for y >= 2^447', () => {
+    // 2*BASE on E448 has y in [2^447, p), where the x-sign bit must live in a
+    // 57-byte container. A 56-byte container would clobber bit 447 of y.
+    const P = E448.BASE.add(E448.BASE).add(E448.BASE);
+    const encoded = P.toBytes();
+    eql(encoded.length, 57);
+    const Q = E448.fromBytes(encoded);
+    eql(Q.x, P.x);
+    eql(Q.y, P.y);
   });
 });
 

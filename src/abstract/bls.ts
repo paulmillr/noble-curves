@@ -670,7 +670,7 @@ function createBlsSig<P, S>(
     ): boolean {
       aNonEmpty(items);
       const sig = normSig(signature);
-      const nMessages = items.map((i) => i.message);
+      const nMessages = items.map((i) => amsg(i.message));
       const nPublicKeys = items.map((i) => normPub(i.publicKey));
       // NOTE: this works only for exact same object
       const messagePubKeyMap = new Map<SigPoint, PubPoint[]>();
