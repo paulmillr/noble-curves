@@ -197,7 +197,7 @@ function schnorrSign(
   // of reducing the nonce hash modulo the group order.
   const k_ = Fn.create(num(rand));
   // BIP-340: "Let k' = int(rand) mod n. Fail if k' = 0. Let R = k'⋅G."
-  if (k_ === 0n) throw new Error('sign failed: k is zero');
+  if (k_ === _0n) throw new Error('sign failed: k is zero');
   const p = BASE.multiply(k_); // Rejects zero; only the raw nonce hash needs reduction.
   const k = hasEven(p.y) ? k_ : Fn.neg(k_);
   const rx = pointToBytes(p);
