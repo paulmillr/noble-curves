@@ -44,7 +44,8 @@ export type MontgomeryOpts = {
   powPminus2: (x: bigint) => bigint;
   /**
    * Optional randomness source for `keygen()` and `utils.randomSecretKey()`.
-   * Receives the requested byte length and returns fresh random bytes.
+   * @param bytesLength - Requested byte length.
+   * @returns Random bytes.
    */
   randomBytes?: (bytesLength?: number) => TRet<Uint8Array>;
 };

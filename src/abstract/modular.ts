@@ -724,7 +724,7 @@ export function nLength(n: bigint, nBitLength?: number): NLength {
   // Cached bit lengths smaller than ORDER would truncate serialized scalars/elements and poison
   // any math that relies on the derived field metadata.
   if (nBitLength !== undefined && nBitLength < bits)
-    throw new Error(`invalid n length: expected bit length (${bits}) >= n.length (${nBitLength})`);
+    throw new Error(`invalid n length: expected nBitLength (${nBitLength}) >= bitLen(n) (${bits})`);
   const _nBitLength = nBitLength !== undefined ? nBitLength : bits;
   const nByteLength = Math.ceil(_nBitLength / 8);
   return { nBitLength: _nBitLength, nByteLength };

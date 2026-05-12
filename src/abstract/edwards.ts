@@ -185,6 +185,7 @@ export interface EdDSA {
    * @param options - Optional verification tweaks:
    *   - `context` (optional): Domain-separation context for Ed25519ctx/Ed448.
    *   - `zip215` (optional): Whether to accept ZIP-215 encodings.
+   * @throws Malformed argument or option types may throw; `false` means well-formed inputs failed verification. {@link Error}
    * @returns Whether the signature is valid.
    */
   verify: (

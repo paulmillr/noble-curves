@@ -1,7 +1,8 @@
 /**
  * FROST: Flexible Round-Optimized Schnorr Threshold Protocol for Two-Round Schnorr Signatures.
  *
- * See [RFC 9591](https://datatracker.ietf.org/doc/rfc9591/) and [frost.zfnd.org](https://frost.zfnd.org).
+ * See {@link https://datatracker.ietf.org/doc/rfc9591/ | RFC 9591} and
+ * {@link https://frost.zfnd.org | frost.zfnd.org}.
  * @module
  */
 import { utf8ToBytes } from '@noble/hashes/utils.js';
@@ -21,123 +22,288 @@ import { poly, type RootsOfUnity } from './fft.ts';
 import { type H2CDSTOpts } from './hash-to-curve.ts';
 import { getMinHashLength, mapHashToField, type IField } from './modular.ts';
 
+/** Cryptographically secure random byte generator. */
 export type RNG = typeof randomBytes;
-export type Identifier = string; // Identifiers are hex to make comparison easier
-export type Commitment = Uint8Array; // serialized point
-export type Coefficient = Uint8Array; // serialized scalar
+/** Serialized participant identifier. Identifiers are hex to make comparison easier. */
+export type Identifier = string;
+/** Serialized point commitment. */
+export type Commitment = Uint8Array;
+/** Serialized scalar coefficient. */
+export type Coefficient = Uint8Array;
+/** Serialized Schnorr signature. */
 export type Signature = Uint8Array;
-export type Signers = { min: number; max: number };
-export type SecretKey = Uint8Array; // Secret key
+/** Threshold participant counts. */
+export type Signers = {
+  /** Minimum number of signers required to produce a signature. */
+  min: number;
+  /** Maximum number of participants in the key set. */
+  max: number;
+};
+/** Serialized secret key bytes. */
+export type SecretKey = Uint8Array;
+/** Byte array alias used by FROST public packages. */
 export type Bytes = Uint8Array;
 type Point = Uint8Array;
 
+/** Public DKG round-1 broadcast plus proof of knowledge. */
 export type DKG_Round1 = {
   // If identifiers were assigned via fromNumber before, it is worth checking
   // that a party doesn't impersonate another one.
   // But we throw on duplicate identifiers.
+  /** Sender identifier. */
   identifier: Identifier;
-  commitment: TRet<Commitment[]>; // sender identifier
+  /** VSS commitment points. */
+  commitment: TRet<Commitment[]>;
+  /** Signature proving knowledge of the sender's secret coefficient. */
   proofOfKnowledge: TRet<Signature>;
 };
+/** Public DKG round-2 encrypted share package. */
 export type DKG_Round2 = {
-  identifier: Identifier; // sender identifier
+  /** Sender identifier. */
+  identifier: Identifier;
+  /** Encrypted signing share for one receiver. */
   signingShare: TRet<Bytes>;
 };
 // This is internal, so we can use bigints
+/** Internal mutable DKG state package. */
 export type DKG_Secret = {
+  /** Local participant identifier as a scalar. */
   identifier: bigint;
+  /** Local secret polynomial coefficients while DKG is in progress. */
   coefficients?: bigint[];
+  /** Local VSS commitment points. */
   commitment: TRet<Point[]>;
+  /** Threshold participant counts. */
   signers: Signers;
   // Keep the local polynomial until round3 succeeds so late DKG failures can be retried.
+  /** Current DKG state-machine step. */
   step?: 1 | 2 | 3;
 };
 
+/** Shared public FROST package for one key set. */
 export type FrostPublic = {
+  /** Threshold participant counts. */
   signers: Signers;
-  commitments: TRet<Bytes[]>; // Point[], where commitments[0] is the group public key
-  verifyingShares: TRet<Record<Identifier, Bytes>>; // id -> Point
+  /** Serialized commitment points; `commitments[0]` is the group public key. */
+  commitments: TRet<Bytes[]>;
+  /** Map from participant identifier to serialized verifying-share point. */
+  verifyingShares: TRet<Record<Identifier, Bytes>>;
 };
+/** Secret FROST share for one participant. */
 export type FrostSecret = {
+  /** Participant identifier. */
   identifier: Identifier;
-  signingShare: TRet<Bytes>; // Scalar
+  /** Serialized scalar signing share. */
+  signingShare: TRet<Bytes>;
 };
-export type Key = { public: FrostPublic; secret: FrostSecret };
-export type DealerShares = {
+/** Combined public and secret FROST packages for one participant. */
+export type Key = {
+  /** Shared public package. */
   public: FrostPublic;
+  /** Participant secret package. */
+  secret: FrostSecret;
+};
+/** Trusted-dealer output containing public data and all participant shares. */
+export type DealerShares = {
+  /** Shared public package. */
+  public: FrostPublic;
+  /** Map from participant identifier to its secret share. */
   secretShares: Record<Identifier, FrostSecret>;
 };
 // Sign stuff
+/** Private nonce scalars used once during signing. */
 export type Nonces = {
-  hiding: TRet<Bytes>; // Scalar
-  binding: TRet<Bytes>; // Scalar
+  /** Serialized hiding nonce scalar. */
+  hiding: TRet<Bytes>;
+  /** Serialized binding nonce scalar. */
+  binding: TRet<Bytes>;
 };
+/** Public nonce commitments broadcast for one signing attempt. */
 export type NonceCommitments = {
+  /** Participant identifier. */
   identifier: Identifier;
-  hiding: TRet<Bytes>; // Point
-  binding: TRet<Bytes>; // Point
+  /** Serialized hiding nonce point. */
+  hiding: TRet<Bytes>;
+  /** Serialized binding nonce point. */
+  binding: TRet<Bytes>;
 };
+/** Generated nonce package containing private nonces and public commitments. */
 export type GenNonce = {
+  /** Private nonce scalars. */
   nonces: Nonces;
+  /** Public nonce commitments. */
   commitments: NonceCommitments;
 };
 
+/** Point interface required by the generic FROST implementation. */
 export interface FROSTPoint<T extends CurvePoint<any, T>> extends CurvePoint<any, T> {
+  /**
+   * Adds another point.
+   * @param rhs - Point to add.
+   * @returns Point sum.
+   */
   add(rhs: T): T;
+  /**
+   * Multiplies by a scalar.
+   * @param rhs - Scalar multiplier.
+   * @returns Scalar multiplication result.
+   */
   multiply(rhs: bigint): T;
+  /**
+   * Compares two points.
+   * @param rhs - Point to compare.
+   * @returns Whether points are equal.
+   */
   equals(rhs: T): boolean;
+  /**
+   * Serializes a point.
+   * @param compressed - Whether to use compressed encoding.
+   * @returns Encoded point bytes.
+   */
   toBytes(compressed?: boolean): Bytes;
+  /**
+   * Clears the point cofactor.
+   * @returns Cofactor-cleared point.
+   */
   clearCofactor(): T;
 }
+/** Point constructor surface required by FROST. */
 export interface FROSTPointConstructor<T extends FROSTPoint<T>> extends CurvePointCons<T> {
+  /**
+   * Parses a point from bytes.
+   * @param a - Encoded point bytes.
+   * @returns Parsed point.
+   */
   fromBytes(a: Bytes): T;
+  /** Scalar field used by the point group. */
   Fn: IField<bigint>;
 }
 
-// Opts
+/** Construction options for a concrete FROST ciphersuite. */
 export type FrostOpts<P extends FROSTPoint<P>> = {
+/** Ciphersuite name. */
   readonly name: string;
+/** Point constructor for the signing group. */
   readonly Point: FROSTPointConstructor<P>;
+/** Optional scalar-field override. */
   readonly Fn?: IField<bigint>;
-  /** Optional suite hook that tightens canonical decoding with subgroup / identity checks. */
+  /**
+* Optional suite hook that tightens canonical decoding with subgroup / identity checks.
+   * @param p - Point to validate.
+*/
   readonly validatePoint?: (p: P) => void;
-  /** Optional public-key parser. Implementations MUST preserve the same subgroup / identity policy
-   * as `validatePoint`, because this bypasses generic canonical decoding in `parsePoint()`. */
+  /**
+* Optional public-key parser. Implementations MUST preserve the same subgroup / identity policy
+   * as `validatePoint`, because this bypasses generic canonical decoding in `parsePoint()`.
+   * @param bytes - Encoded public key.
+   * @returns Parsed public point.
+*/
   readonly parsePublicKey?: (bytes: TArg<Uint8Array>) => P;
+/**
+   * Hash function used by the suite.
+   * @param msg - Message bytes to hash.
+   * @returns Hash output bytes.
+   */
   readonly hash: (msg: TArg<Uint8Array>) => TRet<Uint8Array>;
-  /** Custom scalar hash hook. Implementations MUST treat `msg` and `options` as read-only. */
+  /**
+* Custom scalar hash hook. Implementations MUST treat `msg` and `options` as read-only.
+   * @param msg - Message bytes to hash.
+   * @param options - Hash-to-curve options. See {@link H2CDSTOpts}.
+   * @returns Scalar field element.
+   */
   readonly hashToScalar?: (msg: TArg<Uint8Array>, options?: TArg<H2CDSTOpts>) => bigint;
   // Hacks for taproot support
+/**
+   * Optional scalar adjustment hook.
+   * @param n - Scalar to adjust.
+   * @returns Adjusted scalar.
+   */
   readonly adjustScalar?: (n: bigint) => bigint;
+/**
+   * Optional point adjustment hook.
+   * @param n - Point to adjust.
+   * @returns Adjusted point.
+   */
   readonly adjustPoint?: (n: P) => P;
+/**
+   * Optional challenge override.
+   * @param R - Group commitment point.
+   * @param PK - Group public key point.
+   * @param msg - Message bytes.
+   * @returns Challenge scalar.
+   */
   readonly challenge?: (R: P, PK: P, msg: TArg<Uint8Array>) => bigint;
+/**
+   * Optional nonce-package adjustment hook.
+   * @param PK - Group public key point.
+   * @param nonces - Nonce package.
+   * @returns Adjusted nonce package.
+   */
   readonly adjustNonces?: (PK: P, nonces: TArg<Nonces>) => TRet<Nonces>;
+/**
+   * Optional secret-package adjustment hook.
+   * @param secret - Secret package.
+   * @param pub - Public package.
+   * @returns Adjusted secret package.
+   */
   readonly adjustSecret?: (secret: TArg<FrostSecret>, pub: TArg<FrostPublic>) => TRet<FrostSecret>;
+/**
+   * Optional public-package adjustment hook.
+   * @param pub - Public package.
+   * @returns Adjusted public package.
+   */
   readonly adjustPublic?: (pub: TArg<FrostPublic>) => TRet<FrostPublic>;
+/**
+   * Optional group commitment-share adjustment hook.
+   * @param GC - Group commitment.
+   * @param GCShare - Participant commitment share.
+   * @returns Adjusted group commitment share.
+   */
   readonly adjustGroupCommitmentShare?: (GC: P, GCShare: P) => P;
+/** Optional transaction encoder / decoder adjustment. */
   readonly adjustTx?: {
+/**
+     * Encode transaction bytes before signing.
+     * @param tx - Transaction bytes.
+     * @returns Encoded transaction bytes.
+     */
     readonly encode: (tx: TArg<Uint8Array>) => TRet<Uint8Array>;
+/**
+     * Decode transaction bytes after verification.
+     * @param tx - Encoded transaction bytes.
+     * @returns Decoded transaction bytes.
+     */
     readonly decode: (tx: TArg<Uint8Array>) => TRet<Uint8Array>;
   };
+/**
+   * Optional DKG output adjustment hook.
+   * @param k - DKG key package.
+   * @returns Adjusted DKG key package.
+   */
   readonly adjustDKG?: (k: TArg<Key>) => TRet<Key>;
   // Hash function prefixes
+/** Prefix for RFC 9591 H1. */
   readonly H1?: string;
+/** Prefix for RFC 9591 H2. */
   readonly H2?: string;
+/** Prefix for RFC 9591 H3. */
   readonly H3?: string;
+/** Prefix for RFC 9591 H4. */
   readonly H4?: string;
+/** Prefix for RFC 9591 H5. */
   readonly H5?: string;
+/** Prefix for DKG hashing. */
   readonly HDKG?: string;
+/** Prefix for identifier derivation. */
   readonly HID?: string;
 };
 
 /**
  * FROST: Threshold Protocol for Two‑Round Schnorr Signatures
- * from [RFC 9591](https://datatracker.ietf.org/doc/rfc9591/).
+ * from {@link https://datatracker.ietf.org/doc/rfc9591/ | RFC 9591}.
  */
 export type FROST = {
-  /**
-   * Methods to construct participant identifiers.
-   */
+  /*   * Methods to construct participant identifiers.    */
   Identifier: {
     /**
      * Constructs an identifier from a numeric index.
@@ -320,9 +486,7 @@ export type FROST = {
    * @returns Group secret key as bytes.
    */
   combineSecret(shares: TArg<FrostSecret[]>, signers: Signers): TRet<Uint8Array>;
-  /**
-   * Low-level helper utilities (field arithmetic and polynomial tools).
-   */
+  /*   * Low-level helper utilities (field arithmetic and polynomial tools).    */
   utils: {
     /**
      * Finite field used for scalars.
@@ -382,6 +546,23 @@ class AggErr extends Error {
   }
 }
 
+/**
+ * Builds a FROST ciphersuite API from concrete curve and hash hooks.
+ * @param opts - Ciphersuite construction options. See {@link FrostOpts}.
+ * @returns FROST API bound to the supplied ciphersuite.
+ * @example
+ * Create a suite from a curve-specific option object.
+ * ```ts
+ * import { createFROST } from '@noble/curves/abstract/frost.js';
+ * import { ed25519 } from '@noble/curves/ed25519.js';
+ * import { sha512 } from '@noble/hashes/sha2.js';
+ * const frost = createFROST({
+ *   name: 'FROST-ED25519-SHA512-v1',
+ *   Point: ed25519.Point,
+ *   hash: sha512,
+ * });
+ * ```
+ */
 export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<FROST> {
   validateObject(
     opts,

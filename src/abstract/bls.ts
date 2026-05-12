@@ -160,7 +160,7 @@ export type BlsPairing = {
   Fp12: Fp12Bls;
   /**
    * Build Miller-loop precomputes for one G2 point.
-   * @param p - G2 point to precompute.
+   * @param p - Valid non-ZERO G2 point to precompute.
    * @returns Pairing precompute table.
    */
   calcPairingPrecomputes: (p: WeierstrassPoint<Fp2>) => Precompute;
@@ -215,7 +215,8 @@ export type BlsPairingParams = {
   twistType: BlsTwistType;
   /**
    * Optional RNG override used by helper constructors.
-   * Receives the requested byte length and returns random bytes.
+   * @param len - Requested byte length.
+   * @returns Random bytes.
    */
   randomBytes?: (len?: number) => TRet<Uint8Array>;
   /**
@@ -345,6 +346,8 @@ export interface BlsSigs<P, S> {
   sign(hashedMessage: WeierstrassPoint<S>, secretKey: TArg<Uint8Array>): WeierstrassPoint<S>;
   /**
    * Verify one signature against one public key and hashed message.
+   * Malformed encoded signatures or keys may throw during point decoding; `false` means
+   * well-formed inputs failed the pairing equation.
    * @param signature - Signature point or encoded signature.
    * @param message - Hashed message point.
    * @param publicKey - Public-key point or encoded key.
@@ -368,6 +371,8 @@ export interface BlsSigs<P, S> {
   ) => boolean;
   /**
    * Add many public keys into one aggregate point.
+   * Encoded inputs are decoded through `fromBytes()`; point instances are treated as already
+   * validated caller-owned objects to keep aggregation linear in additions.
    * @param publicKeys - Public keys to aggregate.
    * @returns Aggregated public-key point. This is raw point addition and does not add proof of
    *   possession or rogue-key protection on its own.
@@ -375,6 +380,8 @@ export interface BlsSigs<P, S> {
   aggregatePublicKeys(publicKeys: (WeierstrassPoint<P> | BLSInput)[]): WeierstrassPoint<P>;
   /**
    * Add many signatures into one aggregate point.
+   * Encoded inputs are decoded through `fromBytes()`; point instances are treated as already
+   * validated caller-owned objects to keep aggregation linear in additions.
    * @param signatures - Signatures to aggregate.
    * @returns Aggregated signature point. This is raw point addition and does not change the proof
    *   of possession requirements of the aggregate-verification scheme.
@@ -631,6 +638,7 @@ function createBlsSig<P, S>(
     sign(message: SigPoint, secretKey: TArg<Uint8Array>, unusedArg?: any): SigPoint {
       if (unusedArg != null) throw new Error('sign() expects 2 arguments');
       const sec = PubPoint.Fn.fromBytes(secretKey);
+      // BLS/BN point APIs allow infinity for compatibility; raw message bytes still fail amsg().
       amsg(message).assertValidity();
       return message.multiply(sec);
     },
@@ -719,7 +727,8 @@ function createBlsSig<P, S>(
 
     hash(messageBytes: TArg<Uint8Array>, DST?: TArg<string | Uint8Array>): SigPoint {
       abytes(messageBytes);
-      const opts = DST ? { DST } : undefined;
+      // Only omitted DST uses the default; explicit empty DST must reach normDST validation.
+      const opts = DST === undefined ? undefined : { DST };
       return hashToSigCurve(messageBytes, opts);
     },
     Signature: Object.freeze({ ...SignatureCoder }),

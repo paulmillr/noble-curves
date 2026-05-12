@@ -375,6 +375,7 @@ export function bytesToNumberLE(bytes: TArg<Uint8Array>): bigint {
  * @param len - Output length in bytes. Must be greater than zero.
  * @returns Big-endian byte array.
  * @throws On wrong argument ranges or values. {@link RangeError}
+ * @throws If a documented runtime validation or state check fails. {@link Error}
  * @example
  * Serialize a scalar into a 32-byte field element.
  *
@@ -398,6 +399,7 @@ export function numberToBytesBE(n: number | bigint, len: number): TRet<Uint8Arra
  * @param len - Output length in bytes.
  * @returns Little-endian byte array.
  * @throws On wrong argument ranges or values. {@link RangeError}
+ * @throws If a documented runtime validation or state check fails. {@link Error}
  * @example
  * Serialize a scalar for little-endian protocols.
  *

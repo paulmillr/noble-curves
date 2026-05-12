@@ -301,6 +301,7 @@ export function negateCt<T extends { negate: () => T }>(condition: boolean, item
  * @param c - Point constructor.
  * @param points - Projective points.
  * @returns Fresh projective points reconstructed from normalized affine coordinates.
+ * @throws If a documented runtime validation or state check fails. {@link Error}
  * @example
  * Batch-normalize projective points with a single shared inversion.
  *

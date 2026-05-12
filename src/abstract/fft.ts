@@ -206,7 +206,7 @@ export type RootsOfUnity = {
 /**
  * We limit roots up to 2**31, which is a lot: 2-billion polynomimal should be rare.
  * @param field - Field implementation.
- * @param generator - Optional generator override.
+ * @param generator - Optional trusted non-quadratic-residue override for callers that already know the field.
  * @returns Roots-of-unity cache.
  * @example
  * Cache roots once, then ask for the omega table of one FFT size.
@@ -368,7 +368,7 @@ export type FFTCoreLoop<T> = <P extends Polynomial<T>>(values: P) => P;
  * Cyclic NTT: Rq = Zq[x]/(x^n-1). butterfly_DIT+loop_DIT OR butterfly_DIF+loop_DIT, roots are omega
  * Negacyclic NTT: Rq = Zq[x]/(x^n+1). butterfly_DIT+loop_DIF, at least for mlkem / mldsa
  * @param F - Field operations.
- * @param coreOpts - FFT configuration:
+ * @param coreOpts - FFT configuration. See {@link FFTCoreOpts}:
  *   - `N`: Transform size. Must be a power of two.
  *   - `roots`: Stage roots for the selected transform size.
  *   - `dit`: Whether to run the DIT variant instead of DIF.
