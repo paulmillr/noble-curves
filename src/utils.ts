@@ -494,8 +494,14 @@ export function asciiToBytes(ascii: string): TRet<Uint8Array> {
   }) as TRet<Uint8Array>;
 }
 
-// Historical name: this accepts non-negative bigints, including zero.
-const isPosBig = (n: bigint) => typeof n === 'bigint' && _0n <= n;
+/**
+ * Checks whether n is non-negative bigint. Historical name.
+ * @param n - candidate value
+ * @returns `true` when the value is bigint and 0 or larger
+ */
+export function isPosBig(n: bigint): boolean {
+  return typeof n === 'bigint' && _0n <= n;
+}
 
 /**
  * Checks whether a bigint lies inside a half-open range.

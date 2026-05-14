@@ -81,7 +81,7 @@ type EndoBasis = [[bigint, bigint], [bigint, bigint]];
  * Endomorphism uses 2x less RAM, speeds up precomputation by 2x and ECDH / key recovery by 20%.
  * For precomputed wNAF it trades off 1/2 init time & 1/3 ram for 20% perf hit.
  *
- * Endomorphism consists of beta, lambda and splitScalar:
+ * Endomorphism consists of beta, lambda and basises:
  *
  * 1. GLV endomorphism ψ transforms a point: `P = (x, y) ↦ ψ(P) = (β·x mod p, y)`
  * 2. GLV scalar decomposition transforms a scalar: `k ≡ k₁ + k₂·λ (mod n)`
@@ -92,7 +92,7 @@ type EndoBasis = [[bigint, bigint], [bigint, bigint]];
  * where
  * * beta: β ∈ Fₚ with β³ = 1, β ≠ 1
  * * lambda: λ ∈ Fₙ with λ³ = 1, λ ≠ 1
- * * splitScalar decomposes k ↦ k₁, k₂, by using reduced basis vectors.
+ * * `_splitEndoScalar` decomposes k ↦ k₁, k₂, by using reduced basis vectors.
  *   Gauss lattice reduction calculates them from initial basis vectors `(n, 0), (-λ, 0)`
  *
  * Check out `test/misc/endomorphism.js` and
@@ -103,12 +103,6 @@ export type EndomorphismOpts = {
   beta: bigint;
   /** Reduced lattice basis used for scalar splitting. */
   basises?: EndoBasis;
-  /**
-   * Optional custom scalar-splitting helper.
-   * @param k - Scalar to split.
-   * @returns Two half-sized scalar components.
-   */
-  splitScalar?: (k: bigint) => { k1neg: boolean; k1: bigint; k2neg: boolean; k2: bigint };
 };
 // We construct the basis so `den` is always positive and equals `n`,
 // but the `num` sign depends on the basis, not on the secret value.
@@ -704,7 +698,6 @@ export function weierstrass<T>(
   // validity semantics of an already-built point type.
   const { endo, allowInfinityPoint } = extraOpts;
   if (endo) {
-    // validateObject(endo, { beta: 'bigint', splitScalar: 'function' });
     if (!Fp.is0(CURVE.a) || typeof endo.beta !== 'bigint' || !Array.isArray(endo.basises)) {
       throw new Error('invalid endo: expected "beta": bigint and "basises": array');
     }

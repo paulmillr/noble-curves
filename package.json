@@ -34,7 +34,7 @@
     "test": "node test/index.ts",
     "test:bun": "bun test/index.ts",
     "test:deno": "deno --allow-env --allow-read test/index.ts",
-    "test:node20": "cd test; npx tsc; node compiled/test/index.js",
+    "test:tsc": "cd test; npx tsc; node compiled/test/index.js",
     "test:coverage": "npm install --no-save c8@10.1.2 && npx c8 npm test"
   },
   "exports": {
