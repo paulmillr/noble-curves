@@ -127,22 +127,22 @@ describe('basic curve tests', () => {
             const want = acc.add(point.multiplyUnsafe(scalar));
             const w = new wNAF(p) as any;
             eql(
-              w._unsafeLadder(point, scalar, acc).equals(want),
+              w.ladder_nonCT(point, scalar, acc).equals(want),
               true,
-              '_unsafeLadder(point, scalar, acc)'
+              'ladder_nonCT(point, scalar, acc)'
             );
-            eql(w._unsafeLadder(point, 0n, acc).equals(acc), true, '_unsafeLadder(point, 0, acc)');
-            throws(() => w._unsafeLadder(point, -1n, acc), /invalid scalar/);
+            eql(w.ladder_nonCT(point, 0n, acc).equals(acc), true, 'ladder_nonCT(point, 0, acc)');
+            throws(() => w.ladder_nonCT(point, -1n, acc), /invalid scalar/);
             const precomputes = w.getPrecomputes(2, point);
             eql(
               w.wNAF_nonCT(2, precomputes, scalar, acc).equals(want),
               true,
-              'wNAFUnsafe(point, scalar, acc)'
+              'wNAF_nonCT(point, scalar, acc)'
             );
             eql(
               w.wNAF_nonCT(2, precomputes, 0n, acc).equals(acc),
               true,
-              'wNAFUnsafe(point, 0, acc)'
+              'wNAF_nonCT(point, 0, acc)'
             );
             eql(
               w.unsafe(point, scalar, undefined, acc).equals(want),

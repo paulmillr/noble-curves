@@ -134,6 +134,20 @@ describe('createCurve', () => {
     );
     throws(() => new Point(1n, 1n, 0n).assertValidity(), /ZERO|infinity|point/i);
   });
+  should('isTorsionFree fallback returns a boolean for cached endo base points', () => {
+    const Point = weierstrass(
+      { p: 5n, n: 65535n, h: 2n, a: 0n, b: 1n, Gx: 0n, Gy: 1n },
+      { endo: { beta: 1n, basises: [[1n, 0n, 0n, 1n]] } }
+    );
+    eql(typeof Point.BASE.isTorsionFree(), 'boolean');
+  });
+  should('small endo curves skip eager W=8 precompute when effective wNAF bits are below 8', () => {
+    const Point = weierstrass(
+      { p: 5n, n: 257n, h: 1n, a: 0n, b: 1n, Gx: 0n, Gy: 1n },
+      { endo: { beta: 1n, basises: [[1n, 0n, 0n, 1n]] } }
+    );
+    eql(Point.BASE.toAffine(), { x: 0n, y: 1n });
+  });
 });
 
 describe('Pairings', () => {

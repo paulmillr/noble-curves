@@ -4,7 +4,16 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { bitLen, bitMask, validateObject, type Signer, type TArg, type TRet } from '../utils.ts';
+import {
+  abool,
+  bitLen,
+  bitMask,
+  isPosBig,
+  validateObject,
+  type Signer,
+  type TArg,
+  type TRet,
+} from '../utils.ts';
 import { Field, FpInvertBatch, validateField, type IField } from './modular.ts';
 
 const _0n = /* @__PURE__ */ BigInt(0);
@@ -426,32 +435,41 @@ function assert0(n: bigint): void {
  * TODO: research returning a 2d JS array of windows instead of a single window.
  * This would allow windows to be in different memory locations.
  * @param Point - Point constructor.
- * @param bits - Scalar bit length.
+ * @param hasEndomorphism - Whether scalar splitting via endomorphism is available
  * @example
  * Elliptic curve multiplication of Point by scalar.
  *
  * ```ts
  * import { wNAF } from '@noble/curves/abstract/curve.js';
  * import { p256 } from '@noble/curves/nist.js';
- * const ladder = new wNAF(p256.Point, p256.Point.Fn.BITS);
+ * const ladder = new wNAF(p256.Point);
  * ```
  */
 export class wNAF<PC extends PC_ANY> {
   private readonly BASE: PC_P<PC>;
   private readonly ZERO: PC_P<PC>;
-  private readonly Fn: PC['Fn'];
+  private readonly maxWnafScalar: bigint;
+  private readonly maxScalar: bigint;
   readonly bits: number;
 
   // Parametrized with a given Point class (not individual point)
-  constructor(Point: PC, bits: number) {
+  constructor(Point: PC, hasEndomorphism: boolean = false) {
+    abool(hasEndomorphism);
     this.BASE = Point.BASE;
     this.ZERO = Point.ZERO;
-    this.Fn = Point.Fn;
-    this.bits = bits;
+    const bits = Point.Fn.BITS;
+    this.bits = hasEndomorphism ? Math.ceil(bits / 2) : bits;
+    const maxw = hasEndomorphism ? bitMask(this.bits) + _1n : Point.Fn.ORDER;
+    // `_splitEndoScalar` in `weierstrass.ts` has similar logic:
+    //     const MAX_NUM = bitMask(Math.ceil(bitLen(n) / 2)) + _1n;
+    this.maxWnafScalar = maxw;
+    // Hard cap to mitigate DoS
+    this.maxScalar = maxw ** BigInt(4);
   }
 
-  // non-const time multiplication ladder
-  _unsafeLadder(elm: PC_P<PC>, n: bigint, p: PC_P<PC> = this.ZERO): PC_P<PC> {
+  // Non constant-time multiplication ladder
+  private ladder_nonCT(elm: PC_P<PC>, n: bigint, p: PC_P<PC> = this.ZERO): PC_P<PC> {
+    this.assertScalar(n);
     let d: PC_P<PC> = elm;
     while (n > _0n) {
       if (n & _1n) p = p.add(d);
@@ -493,13 +511,14 @@ export class wNAF<PC extends PC_ANY> {
 
   /**
    * Implements ec multiplication using precomputed tables and w-ary non-adjacent form.
+   * Constant-time.
    * More compact implementation:
    * https://github.com/paulmillr/noble-secp256k1/blob/47cb1669b6e506ad66b35fe7d76132ae97465da2/index.ts#L502-L541
    * @returns real and fake (for const-time) points
    */
-  private wNAF(W: number, precomputes: PC_P<PC>[], n: bigint): { p: PC_P<PC>; f: PC_P<PC> } {
-    // Scalar should be smaller than field order
-    if (!this.Fn.isValid(n)) throw new Error('invalid scalar');
+  private wNAF_CT(W: number, precomputes: PC_P<PC>[], n: bigint): { p: PC_P<PC>; f: PC_P<PC> } {
+    // Scalar should be smaller than field order (1/2 of field order for endomorphism curves)
+    if (!(isPosBig(n) && n < this.maxWnafScalar)) throw new Error('invalid scalar');
     // Accumulators
     let p = this.ZERO;
     let f = this.BASE;
@@ -532,15 +551,17 @@ export class wNAF<PC extends PC_ANY> {
   /**
    * Implements unsafe EC multiplication using precomputed tables
    * and w-ary non-adjacent form.
+   * Not constant-time.
    * @param acc - accumulator point to add result of multiplication
    * @returns point
    */
-  private wNAFUnsafe(
+  private wNAF_nonCT(
     W: number,
     precomputes: PC_P<PC>[],
     n: bigint,
     acc: PC_P<PC> = this.ZERO
   ): PC_P<PC> {
+    this.assertScalar(n);
     const wo = calcWOpts(W, this.bits);
     for (let window = 0; window < wo.windows; window++) {
       if (n === _0n) break; // Early-exit, skip 0 value
@@ -564,6 +585,7 @@ export class wNAF<PC extends PC_ANY> {
     // same point with incompatible `transform(...)` layouts and expect a separate cache entry.
     let comp = pointPrecomputes.get(point);
     if (!comp) {
+      // e.g. creates 4224 points for W=8 on 256-bit curve
       comp = this.precomputeWindow(point, W) as PC_P<PC>[];
       if (W !== 1) {
         // Doing transform outside of if brings 15% perf hit
@@ -580,13 +602,25 @@ export class wNAF<PC extends PC_ANY> {
     transform?: Mapper<PC_P<PC>>
   ): { p: PC_P<PC>; f: PC_P<PC> } {
     const W = getW(point);
-    return this.wNAF(W, this.getPrecomputes(W, point, transform), scalar);
+    const precomputes = this.getPrecomputes(W, point, transform);
+    return this.wNAF_CT(W, precomputes, scalar);
+  }
+
+  private assertScalar(scalar: bigint): void {
+    if (!(isPosBig(scalar) && scalar < this.maxScalar)) throw new Error('invalid scalar');
   }
 
   unsafe(point: PC_P<PC>, scalar: bigint, transform?: Mapper<PC_P<PC>>, prev?: PC_P<PC>): PC_P<PC> {
     const W = getW(point);
-    if (W === 1) return this._unsafeLadder(point, scalar, prev); // For W=1 ladder is ~x2 faster
-    return this.wNAFUnsafe(W, this.getPrecomputes(W, point, transform), scalar, prev);
+    // W === 1 should use ladder, because it's 2x faster there.
+    //
+    // Invalid scalar could happen when:
+    // a) user passes large scalar on their own (rare)
+    // b) `assertValidity()` calls `isTorsionFree()`, which multiplies point by `Fn.ORDER`
+    // When b) happens, max scalar for endomorphism curves would be 1/2 of Fn.ORDER
+    if (W === 1 || scalar >= this.maxWnafScalar) return this.ladder_nonCT(point, scalar, prev);
+    const precomputes = this.getPrecomputes(W, point, transform);
+    return this.wNAF_nonCT(W, precomputes, scalar, prev);
   }
 
   // We calculate precomputes for elliptic curve point multiplication
@@ -843,7 +877,7 @@ export type FpFn<T> = {
  * that the curve equation itself is otherwise sane.
  * @param type - Curve family.
  * @param CURVE - Curve parameters.
- * @param curveOpts - Optional field overrides:
+ * @param curveOpts - Optional field overrides. See {@link FpFn}:
  *   - `Fp` (optional): Optional base-field override.
  *   - `Fn` (optional): Optional scalar-field override.
  * @param FpFnLE - Whether field encoding is little-endian.
@@ -878,8 +912,7 @@ export function createCurveFields<T>(
   validateObject(curveOpts);
   for (const p of ['p', 'n', 'h'] as const) {
     const val = CURVE[p];
-    if (!(typeof val === 'bigint' && val > _0n))
-      throw new Error(`CURVE.${p} must be positive bigint`);
+    if (!(isPosBig(val) && val !== _0n)) throw new Error(`CURVE.${p} must be positive bigint`);
   }
   const Fp = createField(CURVE.p, curveOpts.Fp, FpFnLE);
   const Fn = createField(CURVE.n, curveOpts.Fn, FpFnLE);

@@ -1139,6 +1139,7 @@ export function weierstrass<T>(
       const { isTorsionFree } = extraOpts;
       if (cofactor === _1n) return true;
       if (isTorsionFree) return isTorsionFree(Point, this);
+      // unsafe() will use ladder internally for endomorphism curves
       return wnaf.unsafe(this, CURVE_ORDER).is0();
     }
 
@@ -1173,11 +1174,10 @@ export function weierstrass<T>(
       return `<Point ${this.is0() ? 'ZERO' : this.toHex()}>`;
     }
   }
-  const bits = Fn.BITS;
-  const wnaf = new wNAF(Point, extraOpts.endo ? Math.ceil(bits / 2) : bits);
-  // Tiny toy curves can have scalar fields narrower than 8 bits. Skip the
-  // eager W=8 cache there instead of rejecting an otherwise valid constructor.
-  if (bits >= 8) Point.BASE.precompute(8); // Enable precomputes. Slows down first publicKey computation by 20ms.
+  const wnaf = new wNAF(Point, !!extraOpts.endo);
+  // Enable precomputes. Slows down first publicKey computation by 20ms.
+  // Disable for tiny toy curves, with scalar fields < 8 bits (< 16 bits for endomorphism).
+  if (wnaf.bits >= 8) Point.BASE.precompute(8);
   Object.freeze(Point.prototype);
   Object.freeze(Point);
   return Point;

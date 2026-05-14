@@ -749,7 +749,7 @@ describe('bls12-381 Point', () => {
     );
     for (let p of points) {
       const ours = p.clearCofactor();
-      const shouldBe = w._unsafeLadder(p, hEff);
+      const shouldBe = (w as any).ladder_nonCT(p, hEff);
       eql(ours.equals(shouldBe), true, 'clearLast');
     }
   });

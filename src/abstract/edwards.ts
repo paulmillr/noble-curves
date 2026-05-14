@@ -599,7 +599,6 @@ export function edwards(
       return `<Point ${this.is0() ? 'ZERO' : this.toHex()}>`;
     }
   }
-  const wnaf = new wNAF(Point, Fn.BITS);
   // Keep constructor work cheap: subgroup/generator validation belongs to the caller's curve
   // parameters, and doing the extra checks here adds about 10-15ms to heavy module imports.
   // Callers that construct custom curves are responsible for supplying the correct base point.
@@ -609,9 +608,10 @@ export function edwards(
   // } catch {
   //   throw new Error('bad curve params: generator point');
   // }
-  // Tiny toy curves can have scalar fields narrower than 8 bits. Skip the
-  // eager W=8 cache there instead of rejecting an otherwise valid constructor.
-  if (Fn.BITS >= 8) Point.BASE.precompute(8); // Enable precomputes. Slows down first publicKey computation by 20ms.
+  const wnaf = new wNAF(Point);
+  // Enable precomputes. Slows down first publicKey computation by 20ms.
+  // Disable for tiny toy curves, with scalar fields < 8 bits.
+  if (wnaf.bits >= 8) Point.BASE.precompute(8);
   Object.freeze(Point.prototype);
   Object.freeze(Point);
   return Point;
