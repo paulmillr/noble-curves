@@ -393,11 +393,15 @@ export const FFTCore = <T, R>(F: FFTOpts<T, R>, coreOpts: FFTCoreOpts<R>): FFTCo
   const { N, roots, dit, invertButterflies = false, skipStages = 0, brp = true } = coreOpts;
   const bits = log2(N);
   if (!isPowerOfTwo(N)) throw new Error('FFT: Polynomial size should be power of two');
+  checkU32(skipStages);
+  const maxSkipStages = bits === 0 ? 0 : bits - 1;
+  // Skipping every stage leaves only boundary layout changes, not a valid FFT loop shape.
+  if (skipStages > maxSkipStages)
+    throw new Error(`FFT: wrong skipStages: expected 0 <= skipStages <= ${maxSkipStages}`);
   // Wrong-sized root tables can stay in-bounds for some loop shapes and silently compute nonsense.
   if (roots.length !== N)
     throw new Error(`FFT: wrong roots length: expected ${N}, got ${roots.length}`);
   const isDit = dit !== invertButterflies;
-  isDit;
   return <P extends Polynomial<T>>(values: P): P => {
     if (values.length !== N) throw new Error('FFT: wrong Polynomial length');
     if (dit && brp) bitReversalInplace(values);
@@ -700,9 +704,10 @@ export function poly<T, P extends PolyStorage<T>>(
       throw new Error(`poly: expected fixed length ${length}, got ${L}`);
     return L;
   };
-  function findOmegaIndex(x: T, n: number, brp = false): number {
-    const bits = log2(n);
-    const omega = brp ? roots.brp(bits) : roots.roots(bits);
+  function findOmegaIndex(x: T, n: number, brp = false, weights?: P): number {
+    if (!isPowerOfTwo(n)) throw new Error('poly.lagrange: expected power of two length, got ' + n);
+    // Explicit weights define the interpolation domain, including the Kronecker-δ shortcut.
+    const omega = weights || (brp ? roots.brp(log2(n)) : roots.roots(log2(n)));
     for (let i = 0; i < n; i++) if (F.eql(x, omega[i] as T)) return i;
     return -1;
   }
@@ -773,6 +778,7 @@ export function poly<T, P extends PolyStorage<T>>(
     },
     shift(p: P, factor: bigint): P {
       const out = _create(checkLength(p));
+      if (!p.length) return out;
       out[0] = p[0];
       for (let i = 1, power = F.ONE; i < p.length; i++) {
         power = F.mul(power, factor);
@@ -812,11 +818,13 @@ export function poly<T, P extends PolyStorage<T>>(
     },
     lagrange: {
       basis: (x: T, n: number, brp = false, weights?: P): P => {
+        if (!isPowerOfTwo(n))
+          throw new Error('poly.lagrange: expected power of two length, got ' + n);
         const bits = log2(n);
         const cache = weights || (brp ? roots.brp(bits) : roots.roots(bits)); // [ω⁰, ω¹, ..., ωⁿ⁻¹]
         const out = _create(n);
         // Fast Kronecker-δ shortcut
-        const idx = findOmegaIndex(x, n, brp);
+        const idx = findOmegaIndex(x, n, brp, weights);
         if (idx !== -1) {
           out[idx] = F.ONE;
           return out;

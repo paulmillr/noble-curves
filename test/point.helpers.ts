@@ -1,9 +1,12 @@
 import {
+  createCurveFields as _createCurveFields,
+  normalizeZ as _normalizeZ,
   pippenger as _pippenger,
   precomputeMSMUnsafe as _precomputeMSMUnsafe,
   wNAF as _wNAF,
 } from '../src/abstract/curve.ts';
 import { bls12_381 } from '../src/bls12-381.ts';
+import { edwards as _edwards } from '../src/abstract/edwards.ts';
 import { ed25519, ed25519ctx, ed25519ph, ristretto255 } from '../src/ed25519.ts';
 import { decaf448, ed448, ed448ph } from '../src/ed448.ts';
 import {
@@ -50,7 +53,10 @@ export function getOtherCurve(currCurveName) {
   return currCurveName === 'secp256k1' ? secp256r1 : secp256k1;
 }
 
+export const createCurveFields = _createCurveFields;
+export const edwards = _edwards;
 export const pippenger = _pippenger;
 export const precomputeMSMUnsafe = _precomputeMSMUnsafe;
+export const normalizeZ = _normalizeZ;
 export const wNAF = _wNAF;
 export { hex, hexToBytes, invert, mod };

@@ -227,6 +227,13 @@ describe('FFT', () => {
       /wrong roots length: expected 8, got 4/
     );
   });
+  should('FFTCore validates skipStages', () => {
+    const F = Field(17n);
+    const roots = fft.rootsOfUnity(F, 3n).roots(2);
+    throws(() => fft.FFTCore(F, { N: 4, roots, dit: true, skipStages: -1 }), /wrong u32/);
+    throws(() => fft.FFTCore(F, { N: 4, roots, dit: true, skipStages: 1.5 }), /wrong u32/);
+    throws(() => fft.FFTCore(F, { N: 4, roots, dit: true, skipStages: 2 }), /skipStages/);
+  });
   should('poly.eval rejects mismatched basis vector lengths', () => {
     const F = Field(17n);
     const P = fft.poly(F, fft.rootsOfUnity(F, 3n));
@@ -257,6 +264,25 @@ describe('FFT', () => {
     })();
     eql(got, expected);
     eql(weights, weights0);
+  });
+  should('poly.lagrange uses explicit weights for its fast path', () => {
+    const F = Field(17n);
+    const P = fft.poly(F, fft.rootsOfUnity(F, 3n));
+    const weights = [2n, 3n, 5n, 8n];
+    // x=1 is a standard omega root, but it is not in the explicit weights domain.
+    eql(P.lagrange.basis(1n, 4, false, weights as never), [0n, 0n, 0n, 0n]);
+    eql(P.lagrange.basis(2n, 4, false, weights as never), [1n, 0n, 0n, 0n]);
+  });
+  should('poly.lagrange rejects non-power-of-two lengths', () => {
+    const F = Field(17n);
+    const P = fft.poly(F, fft.rootsOfUnity(F, 3n));
+    throws(() => P.lagrange.basis(5n, 3), /power of two/i);
+    throws(() => P.lagrange.eval([1n, 2n, 3n], 5n), /power of two/i);
+  });
+  should('poly.shift preserves empty polynomial shape', () => {
+    const F = Field(17n);
+    const P = fft.poly(F, fft.rootsOfUnity(F, 3n));
+    eql(P.shift([], 2n), []);
   });
   for (const [name, curve] of Object.entries({ bls12_381, bn254 })) {
     const Fr = curve.fields.Fr;

@@ -295,11 +295,8 @@ export function edwards(
   const { h: cofactor } = CURVE;
   validateObject(opts, {}, { uvRatio: 'function' });
 
-  // Important:
-  // There are some places where Fp.BYTES is used instead of nByteLength.
-  // So far, everything has been tested with curves of Fp.BYTES == nByteLength.
-  // TODO: test and find curves which behave otherwise.
-  const MASK = _2n << (BigInt(Fn.BYTES * 8) - _1n);
+  // Coordinate and ZIP-215 bounds follow the base-field byte container, not scalar bytes.
+  const MASK = _2n << (BigInt(Fp.BYTES * 8) - _1n);
   const modP = (n: bigint) => Fp.create(n); // Function overrides
 
   // sqrt(u/v)
@@ -904,6 +901,8 @@ export function eddsa(
     publicKey: TArg<Uint8Array>,
     options = verifyOpts
   ): boolean {
+    // Validate before destructuring so explicit null follows the standard options error.
+    validateObject(options);
     // Preserve the wrapper-selected default for `{}` / `{ zip215: undefined }`, not just omitted opts.
     const { context } = options;
     const zip215 = options.zip215 === undefined ? !!verifyOpts.zip215 : options.zip215;

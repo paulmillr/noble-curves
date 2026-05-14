@@ -191,6 +191,43 @@ describe('createFROST', () => {
       eql(frost.verify(sig, msg, publicKey), true);
     }
   );
+  should('aggregate passes unadjusted public package to verifyShare attribution', () => {
+    const adjusted = new WeakSet<object>();
+    const frost = createFROST({
+      name: 'TRACE',
+      Point: ed25519.Point,
+      hash: sha512,
+      H2: '',
+      adjustPublic(pub) {
+        if (adjusted.has(pub as object)) throw new Error('adjustPublic received adjusted package');
+        const res = {
+          signers: { min: pub.signers.min, max: pub.signers.max },
+          commitments: pub.commitments.map((i) => i.slice()),
+          verifyingShares: Object.fromEntries(
+            Object.entries(pub.verifyingShares).map(([k, v]) => [k, v.slice()])
+          ),
+        } as FrostPublic;
+        adjusted.add(res);
+        return res;
+      },
+    });
+    const { publicKey, secretShares, ids, msg, commitmentList, secretNonces } =
+      createSession(frost);
+    const sigShares: Record<string, Uint8Array> = {};
+    for (const id of ids)
+      sigShares[id] = frost.signShare(
+        secretShares[id],
+        publicKey,
+        secretNonces[id],
+        commitmentList,
+        msg
+      );
+    sigShares[ids[0]][0] ^= 1;
+    throws(
+      () => frost.aggregate(publicKey, commitmentList, msg, sigShares),
+      (err: any) => err.message === 'aggregation failed' && err.cheaters.includes(ids[0])
+    );
+  });
 });
 
 const Identifiers: Record<string, Record<string, string>> = {
@@ -541,6 +578,10 @@ describe('FROST (RFC 9591)', () => {
           )
         );
       });
+      should('combineSecret rejects more shares than signers.max', () => {
+        const deal = frost.trustedDealer({ min: 2, max: 4 });
+        throws(() => frost.combineSecret(Object.values(deal.secretShares), { min: 2, max: 3 }));
+      });
       should('reject renamed signature shares during aggregation', () => {
         const { publicKey, secretShares, ids, msg, commitmentList, secretNonces } =
           createSession(frost);
@@ -558,6 +599,26 @@ describe('FROST (RFC 9591)', () => {
           [frost.Identifier.fromNumber(11)]: sigShares[ids[1]],
         };
         throws(() => frost.aggregate(publicKey, commitmentList, msg, renamed));
+      });
+      should('reject duplicate commitment identifiers during aggregation', () => {
+        const { publicKey, secretShares, ids, msg, commitmentList, secretNonces } =
+          createSession(frost);
+        const sigShares: Record<string, Uint8Array> = {};
+        for (const id of ids)
+          sigShares[id] = frost.signShare(
+            secretShares[id],
+            publicKey,
+            secretNonces[id],
+            commitmentList,
+            msg
+          );
+        throws(
+          () => frost.aggregate(publicKey, [commitmentList[0], commitmentList[0]], msg, sigShares),
+          (err: any) =>
+            err.message === 'aggregation failed' &&
+            Array.isArray(err.cheaters) &&
+            err.cheaters.length === 0
+        );
       });
       should('DKG round2 rejects caller package in others', () => {
         const signers = { min: 2, max: 3 };

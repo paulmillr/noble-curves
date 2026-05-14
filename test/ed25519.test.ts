@@ -110,6 +110,14 @@ describe('ed25519', () => {
       eql(ed.verify(sig, msg2, pub), false);
     });
 
+    should('rejects null options', () => {
+      const priv = bytes32('a665a45920422f9d417e4867ef');
+      const msg = bytes('874f9960c5d2b7a9b5fad383e1ba44719ebb743a');
+      const pub = ed.getPublicKey(priv);
+      const sig = ed.sign(msg, priv);
+      throws(() => ed.verify(sig, msg, pub, null as never), /expected valid options object/);
+    });
+
     function hexa() {
       const items = '0123456789abcdef';
       return fc.integer({ min: 0, max: 15 }).map((n) => items[n]);

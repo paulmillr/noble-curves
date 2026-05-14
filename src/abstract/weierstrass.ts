@@ -105,7 +105,8 @@ export type EndomorphismOpts = {
   basises?: EndoBasis;
   /**
    * Optional custom scalar-splitting helper.
-   * Receives one scalar and returns two half-sized scalar components.
+   * @param k - Scalar to split.
+   * @returns Two half-sized scalar components.
    */
   splitScalar?: (k: bigint) => { k1neg: boolean; k1: bigint; k2neg: boolean; k2: bigint };
 };

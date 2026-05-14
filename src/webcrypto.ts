@@ -41,7 +41,7 @@ There seems no reasonable way to check for availability, other than actually cal
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import type { TArg, TRet } from './utils.ts';
+import { abytes, type TArg, type TRet } from './utils.ts';
 
 /** Raw type */
 const TYPE_RAW = 'raw';
@@ -162,7 +162,7 @@ function createKeyUtils(algo: Algo, derive: boolean, keyLen: number, pkcs8header
         // Chrome, node, bun, deno: works
         // Safari, Firefox: Data provided to an operation does not meet requirements
         // This is the best one can do. JWK can't be used: it contains public key component inside.
-        const k = key as Uint8Array;
+        const k = abytes(key as Uint8Array, keyLen, 'secretKey');
         const head = hexToBytesLocal(pkcs8header);
         const all = new Uint8Array(head.length + k.length);
         all.set(head, 0);

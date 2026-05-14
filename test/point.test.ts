@@ -1,18 +1,21 @@
-import * as fc from 'fast-check';
 import { describe, should } from '@paulmillr/jsbt/test.js';
+import * as fc from 'fast-check';
 import { deepStrictEqual as eql, throws } from 'node:assert';
-import { getTypeTests } from './utils.ts';
 import {
   CURVES,
+  createCurveFields,
+  edwards,
   getOtherCurve,
   hex,
   hexToBytes,
   invert,
   mod,
+  normalizeZ,
   pippenger,
   precomputeMSMUnsafe,
   wNAF,
 } from './point.helpers.ts';
+import { getTypeTests } from './utils.ts';
 
 const NUM_RUNS = 5;
 function hexa() {
@@ -26,6 +29,7 @@ const FC_HEX = hexaString({ minLength: 64, maxLength: 64 });
 
 // Group tests
 const getXY = (p) => ({ x: p.x, y: p.y });
+const validWeierstrass = { p: 17n, n: 19n, h: 1n, a: 2n, b: 2n, Gx: 5n, Gy: 1n };
 
 function equal(a, b, comment) {
   eql(a.equals(b), true, `eq(${comment})`);
@@ -38,6 +42,31 @@ function equal(a, b, comment) {
 }
 
 describe('basic curve tests', () => {
+  should('createCurveFields validates curveOpts object shape', () => {
+    throws(
+      () => createCurveFields('weierstrass', validWeierstrass, null as never),
+      /expected valid options object/
+    );
+  });
+  should('createCurveFields validates curve family', () => {
+    throws(
+      () => createCurveFields('montgomery' as never, validWeierstrass),
+      /weierstrass.*edwards/
+    );
+  });
+  should('edwards coordinate mask follows Fp byte width', () => {
+    const Point = edwards({
+      p: 257n,
+      n: 251n,
+      h: 1n,
+      a: 1n,
+      d: 2n,
+      Gx: 256n,
+      Gy: 0n,
+    });
+    eql(Point.BASE.X, 256n);
+  });
+
   for (const name in CURVES) {
     const C = CURVES[name];
     const CURVE_ORDER = C.Point.Fn?.ORDER ?? C.Point.CURVE().n;
@@ -96,21 +125,22 @@ describe('basic curve tests', () => {
             const acc = G[7];
             const scalar = 5n;
             const want = acc.add(point.multiplyUnsafe(scalar));
-            const w = new wNAF(p, p.Fn.BITS) as any;
+            const w = new wNAF(p) as any;
             eql(
               w._unsafeLadder(point, scalar, acc).equals(want),
               true,
               '_unsafeLadder(point, scalar, acc)'
             );
             eql(w._unsafeLadder(point, 0n, acc).equals(acc), true, '_unsafeLadder(point, 0, acc)');
+            throws(() => w._unsafeLadder(point, -1n, acc), /invalid scalar/);
             const precomputes = w.getPrecomputes(2, point);
             eql(
-              w.wNAFUnsafe(2, precomputes, scalar, acc).equals(want),
+              w.wNAF_nonCT(2, precomputes, scalar, acc).equals(want),
               true,
               'wNAFUnsafe(point, scalar, acc)'
             );
             eql(
-              w.wNAFUnsafe(2, precomputes, 0n, acc).equals(acc),
+              w.wNAF_nonCT(2, precomputes, 0n, acc).equals(acc),
               true,
               'wNAFUnsafe(point, 0, acc)'
             );
@@ -254,6 +284,9 @@ describe('basic curve tests', () => {
           const points = [p.BASE, p.BASE.multiply(2n), p.BASE.multiply(4n), p.BASE.multiply(8n)];
           // 1*3 + 5*2 + 4*7 + 11*8 = 129
           equal(msm(points, [3n, 5n, 7n, 11n]), p.BASE.multiply(129n), '129 * G');
+        });
+        should('normalizeZ validates point array entries', () => {
+          throws(() => normalizeZ(p, [p.BASE, {} as never]), /invalid point at index 1/);
         });
         should('MSM random', () =>
           fc.assert(

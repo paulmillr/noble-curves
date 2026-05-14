@@ -231,6 +231,16 @@ describe('RFC-9497 (OPRF)', () => {
         );
       }
     );
+
+    should('POPRF captures an owned copy of info for returned closures', () => {
+      const info = Uint8Array.of(1, 2, 3);
+      const expected = p256_oprf.poprf(Uint8Array.of(1, 2, 3));
+      const actual = p256_oprf.poprf(info);
+      const keys = expected.deriveKeyPair(new Uint8Array(32).fill(7), new Uint8Array());
+      info[0] = 9;
+      const input = asciiToBytes('input');
+      eql(actual.evaluate(keys.secretKey, input), expected.evaluate(keys.secretKey, input));
+    });
   });
 
   for (const { suite, modes } of VECTORS) {

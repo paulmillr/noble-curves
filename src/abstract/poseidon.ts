@@ -409,10 +409,11 @@ export class PoseidonSponge {
     // The direct constructor accepts an arbitrary permutation hook, but callers still
     // need to preserve the `PoseidonFn.roundConstants` width metadata. Reject width
     // mismatches here instead of deferring them until the first `process()` call.
-    if (width !== hash.roundConstants[0]?.length)
+    if (width !== hash.roundConstants?.[0]?.length) {
       throw new Error(
-        `invalid sponge width: expected ${hash.roundConstants[0]?.length}, got ${width}`
+        `invalid sponge width: expected ${hash.roundConstants?.[0]?.length}, got ${width}`
       );
+    }
     this.Fp = Fp;
     this.hash = hash;
     this.rate = rate;
@@ -426,6 +427,7 @@ export class PoseidonSponge {
     this.state = this.hash(this.state);
   }
   absorb(input: bigint[]): void {
+    if (!Array.isArray(input)) throw new Error('invalid input: expected array');
     for (const i of input)
       if (typeof i !== 'bigint' || !this.Fp.isValid(i)) throw new Error('invalid input: ' + i);
     for (let i = 0; i < input.length; ) {

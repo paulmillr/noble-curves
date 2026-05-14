@@ -483,6 +483,10 @@ should('PoseidonSponge rejects zero rate', () => {
     () => new poseidon.PoseidonSponge(Fp, 1, 1, hash),
     /invalid sponge width: expected 3, got 2/
   );
+  throws(
+    () => new poseidon.PoseidonSponge(Fp, 1, 1, ((state: bigint[]) => state) as never),
+    /invalid sponge width/
+  );
   throws(() =>
     poseidon.poseidonSponge({
       Fp,
@@ -539,6 +543,12 @@ should('PoseidonSponge rejects invalid squeeze counts', () => {
   eql(new poseidon.PoseidonSponge(Fp, 2, 1, hash).squeeze(0), []);
   throws(() => new poseidon.PoseidonSponge(Fp, 2, 1, hash).squeeze(-1));
   throws(() => new poseidon.PoseidonSponge(Fp, 2, 1, hash).squeeze(1.5));
+});
+should('PoseidonSponge rejects non-array absorb inputs', () => {
+  const Fp = mod.Field(17n);
+  const hash = Object.assign((state: bigint[]) => state.slice(), { roundConstants: [[0n, 0n]] });
+  const sponge = new poseidon.PoseidonSponge(Fp, 1, 1, hash);
+  throws(() => sponge.absorb(new Set([1n]) as never), /expected array/);
 });
 should('validateOpts reduces bigint MDS entries into the field', () => {
   const Fp =

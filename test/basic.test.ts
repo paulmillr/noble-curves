@@ -224,6 +224,21 @@ describe('extension fields', () => {
     throws(() => towerTest.calcFrobeniusCoefficients(Fp, 3n, 19n, 6, 0, 3));
     throws(() => towerTest.calcFrobeniusCoefficients(Fp, 3n, 19n, 6, 1.5, 3));
   });
+  should('calcFrobeniusCoefficients rejects invalid scalar parameters', () => {
+    const Fp = Field(19n);
+    throws(
+      () => towerTest.calcFrobeniusCoefficients(Fp, 3n, 19 as never, 6, 1, 3),
+      /calcFrobeniusCoefficients:.*modulus/
+    );
+    throws(
+      () => towerTest.calcFrobeniusCoefficients(Fp, 3n, 19n, 0, 1, 3),
+      /calcFrobeniusCoefficients:.*degree/
+    );
+    throws(
+      () => towerTest.calcFrobeniusCoefficients(Fp, 3n, 19n, 6, 1, 0),
+      /calcFrobeniusCoefficients:.*divisor/
+    );
+  });
 
   should('bn254 tower values stay canonical and immutable', () => {
     const { Fp, Fp2, Fp6, Fp12 } = bn254.fields;

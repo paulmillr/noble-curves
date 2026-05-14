@@ -1,5 +1,5 @@
 import { describe, should } from '@paulmillr/jsbt/test.js';
-import { deepStrictEqual, throws } from 'node:assert';
+import { deepStrictEqual, rejects, throws } from 'node:assert';
 import { ed25519, x25519 } from '../src/ed25519.ts';
 import { ed448, x448 } from '../src/ed448.ts';
 import { p256, p384, p521 } from '../src/nist.ts';
@@ -136,6 +136,13 @@ describe('webcrypto', () => {
     });
     deepStrictEqual(shared.length, 32);
     deepStrictEqual(await webcrypto.p256.utils.convertSecretKey(ecdhJwk, 'jwk', 'raw'), secretKey);
+  });
+
+  should('raw private-key import validates key length before PKCS8 wrapping', async () => {
+    await rejects(
+      () => webcrypto.p256.utils.convertSecretKey(new Uint8Array(31), 'raw', 'pkcs8'),
+      /"secretKey" expected Uint8Array of length 32, got length=31/
+    );
   });
 
   should('hexToBytesLocal rejects invalid hex digits', () => {

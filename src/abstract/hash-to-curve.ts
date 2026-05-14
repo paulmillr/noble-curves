@@ -190,6 +190,9 @@ export function expand_message_xmd(
 ): TRet<Uint8Array> {
   abytes(msg);
   asafenumber(lenInBytes);
+  if (typeof H !== 'function') throw new Error('expand_message_xmd: expected hash function');
+  asafenumber(H.outputLen, 'hash.outputLen');
+  asafenumber(H.blockLen, 'hash.blockLen');
   DST = normDST(DST);
   // https://www.rfc-editor.org/rfc/rfc9380#section-5.3.3
   if (DST.length > 255) DST = H(concatBytes(asciiToBytes('H2C-OVERSIZE-DST-'), DST));
@@ -251,15 +254,19 @@ export function expand_message_xof(
 ): TRet<Uint8Array> {
   abytes(msg);
   asafenumber(lenInBytes);
+  asafenumber(k, 'k');
+  if (k < 0) throw new Error('expand_message_xof: invalid k');
   DST = normDST(DST);
+  if (lenInBytes < 0 || lenInBytes > 65535)
+    throw new Error('expand_message_xof: invalid lenInBytes');
   // https://www.rfc-editor.org/rfc/rfc9380#section-5.3.3
   // RFC 9380 §5.3.3: DST = H("H2C-OVERSIZE-DST-" || a_very_long_DST, ceil(2 * k / 8)).
   if (DST.length > 255) {
     const dkLen = Math.ceil((2 * k) / 8);
     DST = H.create({ dkLen }).update(asciiToBytes('H2C-OVERSIZE-DST-')).update(DST).digest();
   }
-  if (lenInBytes > 65535 || DST.length > 255)
-    throw new Error('expand_message_xof: invalid lenInBytes');
+  // Oversize DSTs are compressed above; fail closed if a custom XOF still returns one.
+  if (DST.length > 255) throw new Error('expand_message_xof: invalid lenInBytes');
   return (
     H.create({ dkLen: lenInBytes })
       .update(msg)
@@ -310,10 +317,15 @@ export function hash_to_field(
   asafenumber(hash.outputLen, 'valid hash');
   abytes(msg);
   asafenumber(count);
-  // RFC 9380 §5.2 defines hash_to_field over a list of one or more field elements and requires
+  asafenumber(m, 'm');
+  asafenumber(k, 'k');
+  // RFC 9380 §5.2 defines hash_to_field over a list of one or more field elements and an integer
   // extension degree `m >= 1`; rejecting here avoids degenerate `[]` / `[[]]` helper outputs.
+  // The RFC also treats `p` as a finite-field characteristic; invalid values make log2/mod degenerate.
+  if (p <= 1n) throw new Error('hash_to_field: expected valid field characteristic');
   if (count < 1) throw new Error('hash_to_field: expected count >= 1');
   if (m < 1) throw new Error('hash_to_field: expected m >= 1');
+  if (k < 0) throw new Error('hash_to_field: invalid k');
   const log2p = p.toString(2).length;
   const L = Math.ceil((log2p + k) / 8); // section 5.1 of ietf draft link above
   const len_in_bytes = count * m * L;
@@ -360,20 +372,24 @@ type XYRatio<T> = [T[], T[], T[], T[]]; // xn/xd, yn/yd
  */
 export function isogenyMap<T, F extends IField<T>>(field: F, map: XYRatio<T>): XY<T> {
   // Make same order as in spec
-  const coeff = map.map((i) => Array.from(i).reverse());
+  const coeff = map.map((i) => {
+    if (i.length < 1) throw new Error('isogenyMap: expected non-empty coefficients');
+    return Array.from(i).reverse();
+  });
   return (x: T, y: T) => {
     const [xn, xd, yn, yd] = coeff.map((val) =>
       val.reduce((acc, i) => field.add(field.mul(acc, x), i))
     );
-    // RFC 9380 §6.6.3 / Appendix E: denominator-zero exceptional cases must
-    // return the identity on E.
+    const isZero = field.is0(xd) || field.is0(yd);
     // Shipped Weierstrass consumers encode that affine identity as all-zero
     // coordinates, so `passZero=true` intentionally collapses zero
     // denominators to `{ x: 0, y: 0 }`.
     const [xd_inv, yd_inv] = FpInvertBatch(field, [xd, yd], true);
     x = field.mul(xn, xd_inv); // xNum / xDen
     y = field.mul(y, field.mul(yn, yd_inv)); // y * (yNum / yDev)
-    return { x, y };
+    // RFC 9380 §6.6.3: if the denominator of either isogeny rational function is
+    // zero, the exceptional case must return the identity point on E.
+    return isZero ? { x: field.ZERO, y: field.ZERO } : { x, y };
   };
 }
 
@@ -388,8 +404,8 @@ export const _DST_scalar = 'HashToScalar-' as const;
  * Creates hash-to-curve methods from EC Point and mapToCurve function. See {@link H2CHasher}.
  * @param Point - Point constructor.
  * @param mapToCurve - Map-to-curve function.
- * @param defaults - Default hash-to-curve options. This object is frozen in place and reused as
- *   the shared defaults bundle for the returned helpers.
+ * @param defaults - Default hash-to-curve options. A frozen detached snapshot is reused as the
+ *   shared defaults bundle for the returned helpers.
  * @returns Hash-to-curve helper namespace.
  * @throws If the map-to-curve callback or default hash-to-curve options are invalid. {@link Error}
  * @example
@@ -459,7 +475,7 @@ export function createHasher<PC extends PC_ANY>(
       return clear(u0.add(u1) as PC_P<PC>);
     },
     encodeToCurve(msg: TArg<Uint8Array>, options?: TArg<H2CDSTOpts>): PC_P<PC> {
-      const optsDst = safeDefaults.encodeDST ? { DST: safeDefaults.encodeDST } : {};
+      const optsDst = safeDefaults.encodeDST === undefined ? {} : { DST: safeDefaults.encodeDST };
       const opts = Object.assign({}, safeDefaults, optsDst, options);
       const u = hash_to_field(msg, 1, opts);
       const u0 = map(u[0]);
@@ -473,6 +489,9 @@ export function createHasher<PC extends PC_ANY>(
         return clear(map([scalars]));
       }
       if (!Array.isArray(scalars)) throw new Error('expected array of bigints');
+      // RFC 9380 represents one GF(p^m) element as exactly m base-field scalars.
+      if (scalars.length !== safeDefaults.m)
+        throw new Error(`expected array of ${safeDefaults.m} bigints`);
       for (const i of scalars)
         if (typeof i !== 'bigint') throw new Error('expected array of bigints');
       return clear(map(scalars));
@@ -484,7 +503,7 @@ export function createHasher<PC extends PC_ANY>(
     hashToScalar(msg: TArg<Uint8Array>, options?: TArg<H2CDSTOpts>): bigint {
       // @ts-ignore
       const N = Point.Fn.ORDER;
-      const opts = Object.assign({}, safeDefaults, { p: N, m: 1, DST: _DST_scalar }, options);
+      const opts = Object.assign({}, safeDefaults, { DST: _DST_scalar }, options, { p: N, m: 1 });
       return hash_to_field(msg, 1, opts)[0][0];
     },
   });

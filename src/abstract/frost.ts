@@ -181,51 +181,51 @@ export interface FROSTPointConstructor<T extends FROSTPoint<T>> extends CurvePoi
 
 /** Construction options for a concrete FROST ciphersuite. */
 export type FrostOpts<P extends FROSTPoint<P>> = {
-/** Ciphersuite name. */
+  /** Ciphersuite name. */
   readonly name: string;
-/** Point constructor for the signing group. */
+  /** Point constructor for the signing group. */
   readonly Point: FROSTPointConstructor<P>;
-/** Optional scalar-field override. */
+  /** Optional scalar-field override. */
   readonly Fn?: IField<bigint>;
   /**
-* Optional suite hook that tightens canonical decoding with subgroup / identity checks.
+   * Optional suite hook that tightens canonical decoding with subgroup / identity checks.
    * @param p - Point to validate.
-*/
+   */
   readonly validatePoint?: (p: P) => void;
   /**
-* Optional public-key parser. Implementations MUST preserve the same subgroup / identity policy
+   * Optional public-key parser. Implementations MUST preserve the same subgroup / identity policy
    * as `validatePoint`, because this bypasses generic canonical decoding in `parsePoint()`.
    * @param bytes - Encoded public key.
    * @returns Parsed public point.
-*/
+   */
   readonly parsePublicKey?: (bytes: TArg<Uint8Array>) => P;
-/**
+  /**
    * Hash function used by the suite.
    * @param msg - Message bytes to hash.
    * @returns Hash output bytes.
    */
   readonly hash: (msg: TArg<Uint8Array>) => TRet<Uint8Array>;
   /**
-* Custom scalar hash hook. Implementations MUST treat `msg` and `options` as read-only.
+   * Custom scalar hash hook. Implementations MUST treat `msg` and `options` as read-only.
    * @param msg - Message bytes to hash.
    * @param options - Hash-to-curve options. See {@link H2CDSTOpts}.
    * @returns Scalar field element.
    */
   readonly hashToScalar?: (msg: TArg<Uint8Array>, options?: TArg<H2CDSTOpts>) => bigint;
   // Hacks for taproot support
-/**
+  /**
    * Optional scalar adjustment hook.
    * @param n - Scalar to adjust.
    * @returns Adjusted scalar.
    */
   readonly adjustScalar?: (n: bigint) => bigint;
-/**
+  /**
    * Optional point adjustment hook.
    * @param n - Point to adjust.
    * @returns Adjusted point.
    */
   readonly adjustPoint?: (n: P) => P;
-/**
+  /**
    * Optional challenge override.
    * @param R - Group commitment point.
    * @param PK - Group public key point.
@@ -233,68 +233,68 @@ export type FrostOpts<P extends FROSTPoint<P>> = {
    * @returns Challenge scalar.
    */
   readonly challenge?: (R: P, PK: P, msg: TArg<Uint8Array>) => bigint;
-/**
+  /**
    * Optional nonce-package adjustment hook.
    * @param PK - Group public key point.
    * @param nonces - Nonce package.
    * @returns Adjusted nonce package.
    */
   readonly adjustNonces?: (PK: P, nonces: TArg<Nonces>) => TRet<Nonces>;
-/**
+  /**
    * Optional secret-package adjustment hook.
    * @param secret - Secret package.
    * @param pub - Public package.
    * @returns Adjusted secret package.
    */
   readonly adjustSecret?: (secret: TArg<FrostSecret>, pub: TArg<FrostPublic>) => TRet<FrostSecret>;
-/**
+  /**
    * Optional public-package adjustment hook.
    * @param pub - Public package.
    * @returns Adjusted public package.
    */
   readonly adjustPublic?: (pub: TArg<FrostPublic>) => TRet<FrostPublic>;
-/**
+  /**
    * Optional group commitment-share adjustment hook.
    * @param GC - Group commitment.
    * @param GCShare - Participant commitment share.
    * @returns Adjusted group commitment share.
    */
   readonly adjustGroupCommitmentShare?: (GC: P, GCShare: P) => P;
-/** Optional transaction encoder / decoder adjustment. */
+  /** Optional transaction encoder / decoder adjustment. */
   readonly adjustTx?: {
-/**
+    /**
      * Encode transaction bytes before signing.
      * @param tx - Transaction bytes.
      * @returns Encoded transaction bytes.
      */
     readonly encode: (tx: TArg<Uint8Array>) => TRet<Uint8Array>;
-/**
+    /**
      * Decode transaction bytes after verification.
      * @param tx - Encoded transaction bytes.
      * @returns Decoded transaction bytes.
      */
     readonly decode: (tx: TArg<Uint8Array>) => TRet<Uint8Array>;
   };
-/**
+  /**
    * Optional DKG output adjustment hook.
    * @param k - DKG key package.
    * @returns Adjusted DKG key package.
    */
   readonly adjustDKG?: (k: TArg<Key>) => TRet<Key>;
   // Hash function prefixes
-/** Prefix for RFC 9591 H1. */
+  /** Prefix for RFC 9591 H1. */
   readonly H1?: string;
-/** Prefix for RFC 9591 H2. */
+  /** Prefix for RFC 9591 H2. */
   readonly H2?: string;
-/** Prefix for RFC 9591 H3. */
+  /** Prefix for RFC 9591 H3. */
   readonly H3?: string;
-/** Prefix for RFC 9591 H4. */
+  /** Prefix for RFC 9591 H4. */
   readonly H4?: string;
-/** Prefix for RFC 9591 H5. */
+  /** Prefix for RFC 9591 H5. */
   readonly H5?: string;
-/** Prefix for DKG hashing. */
+  /** Prefix for DKG hashing. */
   readonly HDKG?: string;
-/** Prefix for identifier derivation. */
+  /** Prefix for identifier derivation. */
   readonly HID?: string;
 };
 
@@ -303,7 +303,7 @@ export type FrostOpts<P extends FROSTPoint<P>> = {
  * from {@link https://datatracker.ietf.org/doc/rfc9591/ | RFC 9591}.
  */
 export type FROST = {
-  /*   * Methods to construct participant identifiers.    */
+  /** Methods to construct participant identifiers. */
   Identifier: {
     /**
      * Constructs an identifier from a numeric index.
@@ -486,7 +486,7 @@ export type FROST = {
    * @returns Group secret key as bytes.
    */
   combineSecret(shares: TArg<FrostSecret[]>, signers: Signers): TRet<Uint8Array>;
-  /*   * Low-level helper utilities (field arithmetic and polynomial tools).    */
+  /** Low-level helper utilities (field arithmetic and polynomial tools). */
   utils: {
     /**
      * Finite field used for scalars.
@@ -1191,6 +1191,8 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
       msg: TArg<Uint8Array>,
       sigShares: TArg<Record<Identifier, Uint8Array>>
     ): TRet<Uint8Array> {
+      // verifyShare() applies adjustPublic too, so keep the original package for attribution.
+      const rawPub = pub;
       if (opts.adjustPublic) pub = opts.adjustPublic(pub);
       try {
         validateCommitmentsNum(pub.signers, commitmentList.length);
@@ -1198,6 +1200,12 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
         throw new AggErr('aggregation failed', []);
       }
       const ids = commitmentList.map((i) => i.identifier);
+      const seen = new Set<Identifier>();
+      for (const id of ids) {
+        // `sigShares` is identifier-keyed, so duplicate commitments would reuse one share twice.
+        if (seen.has(id)) throw new AggErr('aggregation failed', []);
+        seen.add(id);
+      }
       if (ids.length !== Object.keys(sigShares).length) throw new AggErr('aggregation failed', []);
       for (const id of ids) {
         if (!(id in sigShares) || !(id in pub.verifyingShares))
@@ -1211,7 +1219,7 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
       if (!Basic.verify(msg, groupCommitment, z, GPK)) {
         const cheaters = [];
         for (const id of ids) {
-          if (!this.verifyShare(pub, commitmentList, msg, id, sigShares[id])) cheaters.push(id);
+          if (!this.verifyShare(rawPub, commitmentList, msg, id, sigShares[id])) cheaters.push(id);
         }
         throw new AggErr('aggregation failed', cheaters);
       }
@@ -1233,7 +1241,7 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
     // Combine multiple secret shares to restore secret
     combineSecret(shares: TArg<FrostSecret[]>, signers: Signers): TRet<Uint8Array> {
       validateSigners(signers);
-      if (!Array.isArray(shares) || shares.length < signers.min)
+      if (!Array.isArray(shares) || shares.length < signers.min || shares.length > signers.max)
         throw new Error('wrong secret shares array');
       const points = [];
       const seen: Record<Identifier, boolean> = {};

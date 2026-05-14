@@ -729,11 +729,17 @@ export function validateObject(
     throw new TypeError('expected valid options object');
   type Item = keyof typeof object;
   function checkField(fieldName: Item, expectedType: string, isOpt: boolean) {
-    // Config/data fields must be explicit own properties, but runtime objects such as Field
-    // instances intentionally satisfy required method slots via their shared prototype.
-    if (!isOpt && expectedType !== 'function' && !Object.hasOwn(object, fieldName))
-      throw new TypeError(`param "${fieldName}" is invalid: expected own property`);
+    // Config fields must be explicit own properties. Optional inherited values are rejected too
+    // because callers keep reading the same options object after validation.
     const val = object[fieldName];
+    // Runtime objects such as Field instances intentionally satisfy required method slots via their
+    // shared prototype.
+    if (
+      !Object.hasOwn(object, fieldName) &&
+      (isOpt ? val !== undefined : expectedType !== 'function')
+    ) {
+      throw new TypeError(`param "${fieldName}" is invalid: expected own property`);
+    }
     if (isOpt && val === undefined) return;
     const current = typeof val;
     if (current !== expectedType || val === null)

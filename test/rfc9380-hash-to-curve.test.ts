@@ -11,6 +11,7 @@ import {
   expand_message_xmd,
   expand_message_xof,
   hash_to_field,
+  isogenyMap,
 } from '../src/abstract/hash-to-curve.ts';
 import { Field } from '../src/abstract/modular.ts';
 import { mapToCurveSimpleSWU, SWUFpSqrtRatio } from '../src/abstract/weierstrass.ts';
@@ -182,6 +183,33 @@ describe('RFC9380 hash-to-curve', () => {
       eql(hasher.hashToCurve(msg).toHex(), before);
     }
   );
+  should('createHasher treats only undefined encodeDST as absent', () => {
+    const msg = Uint8Array.of(1, 2, 3);
+    const defaults = {
+      DST: 'DST',
+      encodeDST: '',
+      p: nist.p256.Point.Fp.ORDER,
+      m: 1,
+      k: 128,
+      expand: 'xmd' as const,
+      hash: sha256,
+    };
+    const hasher = createHasher(nist.p256.Point, () => nist.p256.Point.BASE.toAffine(), defaults);
+    throws(() => hasher.encodeToCurve(msg), /DST/);
+  });
+  should('createHasher validates m>1 mapToCurve tuple length', () => {
+    const defaults = {
+      DST: 'DST',
+      p: nist.p256.Point.Fp.ORDER,
+      m: 2,
+      k: 128,
+      expand: 'xmd' as const,
+      hash: sha256,
+    };
+    const hasher = createHasher(nist.p256.Point, () => nist.p256.Point.BASE.toAffine(), defaults);
+    throws(() => hasher.mapToCurve([1n]), /2/);
+    throws(() => hasher.mapToCurve([1n, 2n, 3n]), /2/);
+  });
   should(
     'exports _DST_scalar as immutable string so default hash-to-scalar helpers cannot be poisoned',
     () => {
@@ -201,6 +229,12 @@ describe('RFC9380 hash-to-curve', () => {
       eql(_DST_scalar, 'HashToScalar-');
     }
   );
+  should('hashToScalar keeps scalar field pins after per-call options', () => {
+    const msg = Uint8Array.of(1, 2, 3);
+    const expected = nist.p256_hasher.hashToScalar(msg, { DST: 'DST' });
+    const actual = nist.p256_hasher.hashToScalar(msg, { DST: 'DST', p: 1n, m: 2 } as never);
+    eql(actual, expected);
+  });
 
   describe('expand_message_xmd', () => {
     testExpandXMD(sha256, xmd_sha256_38);
@@ -210,11 +244,47 @@ describe('RFC9380 hash-to-curve', () => {
       const out = expand_message_xmd(new Uint8Array([1, 2, 3]), new Uint8Array([4]), 8160, sha256);
       eql(out.length, 8160);
     });
+    should('rejects hashes without blockLen', () => {
+      const noBlockLen = Object.assign((msg: Uint8Array) => sha256(msg), {
+        outputLen: sha256.outputLen,
+      });
+      throws(
+        () => expand_message_xmd(new Uint8Array([1]), 'DST', 32, noBlockLen as never),
+        /blockLen/
+      );
+    });
   });
   describe('expand_message_xof', () => {
     testExpandXOF(shake128, xof_shake128_36);
     testExpandXOF(shake128, xof_shake128_256);
     testExpandXOF(shake256, xof_shake256_36);
+    should('rejects negative lenInBytes with a local error', () => {
+      throws(() => expand_message_xof(new Uint8Array([1]), 'DST', -1, 128, shake128), /lenInBytes/);
+    });
+    should('validates k before oversize DST hashing', () => {
+      const dst = new Uint8Array(256).fill(1);
+      throws(() => expand_message_xof(new Uint8Array([1]), dst, 32, NaN, shake128), /k/);
+      throws(() => expand_message_xof(new Uint8Array([1]), dst, 32, -1, shake128), /k/);
+      eql(expand_message_xof(new Uint8Array([1]), dst, 0, 0, shake128).length, 0);
+    });
+    should('rejects oversize lenInBytes before oversize DST hashing', () => {
+      const failCreate = Object.assign(() => new Uint8Array(), {
+        create() {
+          throw new Error('xof create reached');
+        },
+      });
+      throws(
+        () =>
+          expand_message_xof(
+            new Uint8Array([1]),
+            new Uint8Array(256).fill(1),
+            65536,
+            128,
+            failCreate as never
+          ),
+        /lenInBytes/
+      );
+    });
   });
   testCurve(nist.p256_hasher, p256_ro, p256_nu);
   testCurve(nist.p384_hasher, p384_ro, p384_nu);
@@ -231,6 +301,29 @@ describe('RFC9380 hash-to-curve', () => {
     throws(() => hash_to_field(msg, 0, opts));
     throws(() => hash_to_field(msg, 1, { ...opts, m: 0 }));
   });
+  should('hash_to_field validates extension degree as safe integer', () => {
+    const msg = new Uint8Array([1, 2, 3]);
+    const opts = { DST: 'DST', p: 17n, m: 1, k: 128, expand: 'xmd' as const, hash: sha256 };
+    throws(() => hash_to_field(msg, 1, { ...opts, m: NaN }), /"m" expected safe integer/);
+    throws(() => hash_to_field(msg, 1, { ...opts, m: 1.5 }), /"m" expected safe integer/);
+    throws(() => hash_to_field(msg, 1, { ...opts, m: Infinity }), /"m" expected safe integer/);
+  });
+  should('hash_to_field validates k as non-negative safe integer', () => {
+    const msg = new Uint8Array([1, 2, 3]);
+    const opts = { DST: 'DST', p: 17n, m: 1, k: 128, expand: 'xmd' as const, hash: sha256 };
+    throws(() => hash_to_field(msg, 1, { ...opts, k: NaN }), /"k" expected safe integer/);
+    throws(() => hash_to_field(msg, 1, { ...opts, k: 1.5 }), /"k" expected safe integer/);
+    throws(() => hash_to_field(msg, 1, { ...opts, k: Infinity }), /"k" expected safe integer/);
+    throws(() => hash_to_field(msg, 1, { ...opts, k: -1 }), /invalid k/);
+    eql(hash_to_field(msg, 1, { ...opts, k: 0 })[0].length, 1);
+  });
+  should('hash_to_field rejects invalid field characteristic', () => {
+    const msg = new Uint8Array([1, 2, 3]);
+    const opts = { DST: 'DST', p: 17n, m: 1, k: 128, expand: 'xmd' as const, hash: sha256 };
+    throws(() => hash_to_field(msg, 1, { ...opts, p: 1n }), /characteristic/);
+    throws(() => hash_to_field(msg, 1, { ...opts, p: 0n }), /characteristic/);
+    throws(() => hash_to_field(msg, 1, { ...opts, p: -17n }), /characteristic/);
+  });
 });
 
 should('simple SWU rejects invalid RFC 9380 parameters', () => {
@@ -243,6 +336,19 @@ should('simple SWU rejects invalid RFC 9380 parameters', () => {
   const Fp5 = Field(5n);
   // RFC 9380 Appendix H.2 criterion 4: g(B / (Z * A)) must be square in F.
   throws(() => mapToCurveSimpleSWU(Fp5, { A: 2n, B: 1n, Z: 2n }), /invalid/i);
+});
+
+should('isogenyMap rejects empty coefficient rows', () => {
+  const Fp = Field(17n);
+  throws(() => isogenyMap(Fp, [[], [1n], [1n], [1n]]), /isogenyMap/);
+});
+
+should('isogenyMap maps either zero denominator to identity', () => {
+  const Fp = Field(17n);
+  const xDenZero = isogenyMap(Fp, [[3n], [0n], [5n], [1n]]);
+  const yDenZero = isogenyMap(Fp, [[3n], [1n], [5n], [0n]]);
+  eql(xDenZero(7n, 11n), { x: 0n, y: 0n });
+  eql(yDenZero(7n, 11n), { x: 0n, y: 0n });
 });
 
 should('sqrt_ratio treats zero numerator as square only for non-zero denominators', () => {

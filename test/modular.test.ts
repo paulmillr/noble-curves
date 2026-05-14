@@ -1026,7 +1026,7 @@ describe('field helpers', () => {
         n: 257n,
         bits: 1,
         ok: false,
-        err: 'invalid n length: expected bit length (9) >= n.length (1)',
+        err: 'invalid n length: expected nBitLength (1) >= bitLen(n) (9)',
       },
       { n: 257n, bits: 9, ok: true, value: { nBitLength: 9, nByteLength: 2 } },
     ]);

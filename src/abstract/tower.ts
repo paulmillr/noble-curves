@@ -145,13 +145,22 @@ function calcFrobeniusCoefficients<T>(
   divisor?: number
 ): T[][] {
   asafenumber(num, 'num');
+  asafenumber(degree, 'degree');
+  const divisorN = divisor === undefined ? degree : divisor;
+  asafenumber(divisorN, 'divisor');
   const F = Fp as mod.IField<T>;
-  // Generic callers can hit empty / fractional row counts through `__TEST`; fail closed instead of
-  // silently returning `[]` or deriving extra Frobenius rows from a truncated loop bound.
+  // Generic callers reach this through `__TEST`; validate before bigint operators can throw raw
+  // native RangeError/TypeError diagnostics for malformed tower parameters.
+  if (typeof modulus !== 'bigint' || modulus <= _1n)
+    throw new Error('calcFrobeniusCoefficients: expected valid modulus, got ' + modulus);
+  if (degree <= 0)
+    throw new Error('calcFrobeniusCoefficients: expected positive degree, got ' + degree);
   if (num <= 0)
     throw new Error('calcFrobeniusCoefficients: expected positive row count, got ' + num);
-  const _divisor = BigInt(divisor === undefined ? degree : divisor);
-  const towerModulus: any = modulus ** BigInt(degree);
+  if (divisorN <= 0)
+    throw new Error('calcFrobeniusCoefficients: expected positive divisor, got ' + divisorN);
+  const _divisor = BigInt(divisorN);
+  const towerModulus = modulus ** BigInt(degree);
   const res: T[][] = [];
   // Derive tower-basis multipliers for the `p^k` Frobenius action. The
   // divisions below are expected to be exact for the chosen tower parameters.
@@ -254,7 +263,8 @@ export type Tower12Opts = {
   FP2_NONRESIDUE: BigintTuple;
   /**
    * Optional custom quadratic square-root helper.
-   * Receives one quadratic-extension element and returns one square root.
+   * @param num - Quadratic-extension element.
+   * @returns One square root.
    */
   Fp2sqrt?: (num: Fp2) => Fp2;
   /**

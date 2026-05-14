@@ -57,6 +57,7 @@ import {
   bytesToNumberBE,
   bytesToNumberLE,
   concatBytes,
+  copyBytes,
   numberToBytesBE,
   randomBytes,
   validateObject,
@@ -690,7 +691,7 @@ export function createOPRF<P extends CurvePoint<any, P>>(opts: OPRFOpts<P>): TRe
   });
   // NOTE: info is domain separation
   const poprf = (info: TArg<Bytes>) => {
-    info = inputBytes('info', info);
+    info = copyBytes(inputBytes('info', info));
     const m = hashToScalarPrefixed(encode('Info', info), ctxPOPRF);
     const T = Point.BASE.multiply(m);
     return Object.freeze({

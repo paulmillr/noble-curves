@@ -1,5 +1,5 @@
-import * as fc from 'fast-check';
 import { describe, should } from '@paulmillr/jsbt/test.js';
+import * as fc from 'fast-check';
 import { deepStrictEqual as eql, throws } from 'node:assert';
 import { wNAF } from '../src/abstract/curve.ts';
 import { hash_to_field } from '../src/abstract/hash-to-curve.ts';
@@ -743,7 +743,7 @@ describe('bls12-381 Point', () => {
       }),
     ];
     // Use wNAF allow scalars higher than CURVE.r
-    const w = new wNAF(G2Point, 1);
+    const w = new wNAF(G2Point);
     const hEff = BigInt(
       '0xbc69f08f2ee75b3584c6a0ea91b352888e2a8e9145ad7689986ff031508ffe1329c2f178731db956d82bf015d1212b02ec0ec69d7477c1ae954cbc06689f6a359894c0adebbf6b4e8020005aaa95551'
     );
@@ -1176,6 +1176,11 @@ describe('bls12-381 verify', () => {
 
     const isValid = blss.verify(signature, pubMsg, publicKey);
     eql(isValid, true, 'accepted augmented signature');
+  });
+  should('hash rejects explicitly empty custom DST', () => {
+    const msg = asciiToBytes('message');
+    throws(() => blsl.hash(msg, ''), /DST must be non-empty/);
+    throws(() => blss.hash(msg, ''), /DST must be non-empty/);
   });
 
   describe('batch', () => {

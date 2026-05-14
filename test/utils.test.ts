@@ -341,6 +341,11 @@ describe('utils', () => {
       eql(validateObject({ flag: true }, { flag: 'boolean' }), undefined);
       eql(validateObject({ flag: true, flga: false } as any, { flag: 'boolean' }), undefined);
       throws(() => validateObject(Object.create({ flag: true }), { flag: 'boolean' }), TypeError);
+      eql(validateObject({ flag: true }, {}, { flag: 'boolean' }), undefined);
+      throws(
+        () => validateObject(Object.create({ flag: true }), {}, { flag: 'boolean' }),
+        TypeError
+      );
       eql(validateObject(Object.create({ fn() {} }), { fn: 'function' }), undefined);
       throws(() => validateObject('bad' as any, { flag: 'boolean' }), TypeError);
       throws(() => validateObject([] as any, { flag: 'boolean' }), TypeError);

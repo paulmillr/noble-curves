@@ -315,6 +315,8 @@ export function normalizeZ<P extends CurvePoint<any, P>, PC extends CurvePointCo
   c: PC,
   points: P[]
 ): P[] {
+  // Match MSM helpers: reject malformed public inputs before reading projective internals.
+  validateMSMPoints(points, c);
   const invertedZs = FpInvertBatch(
     c.Fp,
     points.map((p) => p.Z!)
@@ -868,8 +870,12 @@ export function createCurveFields<T>(
   curveOpts: TArg<Partial<FpFn<T>>> = {},
   FpFnLE?: boolean
 ): TRet<FpFn<T> & { CURVE: ValidCurveParams<T> }> {
+  if (type !== 'weierstrass' && type !== 'edwards')
+    throw new Error('expected curve type "weierstrass" or "edwards"');
   if (FpFnLE === undefined) FpFnLE = type === 'edwards';
   if (!CURVE || typeof CURVE !== 'object') throw new Error(`expected valid ${type} CURVE object`);
+  // Validate before reading Fp/Fn so explicit null fails with an options-object error.
+  validateObject(curveOpts);
   for (const p of ['p', 'n', 'h'] as const) {
     const val = CURVE[p];
     if (!(typeof val === 'bigint' && val > _0n))
