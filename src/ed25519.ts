@@ -239,6 +239,7 @@ export const ed25519_FROST: TRet<FROST> = /* @__PURE__ */ (() =>
  * import { x25519 } from '@noble/curves/ed25519.js';
  * const alice = x25519.keygen();
  * const bob = x25519.keygen();
+ * const alicePublic = x25519.getPublicKey(alice.secretKey);
  * const shared = x25519.getSharedSecret(alice.secretKey, bob.publicKey);
  * ```
  */

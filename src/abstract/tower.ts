@@ -22,6 +22,7 @@ import {
   type TArg,
   type TRet,
 } from '../utils.ts';
+import { validatePointCons } from './curve.ts';
 import * as mod from './modular.ts';
 import type { WeierstrassPoint, WeierstrassPointCons } from './weierstrass.ts';
 
@@ -220,6 +221,25 @@ export function psiFrobenius(
   PSI2_X: Fp2;
   PSI2_Y: Fp2;
 } {
+  mod.validateField(Fp);
+  mod.validateField(Fp2);
+  validateObject(
+    Fp2 as unknown as Record<string, any>,
+    {
+      Fp: 'object',
+      frobeniusMap: 'function',
+      fromBigTuple: 'function',
+      mulByB: 'function',
+      mulByNonresidue: 'function',
+      reim: 'function',
+      Fp4Square: 'function',
+      NONRESIDUE: 'object',
+    },
+    {}
+  );
+  if (!isObj(base) || Array.isArray(base))
+    throw new TypeError('"base" expected Fp2 element, got type=' + typeof base);
+  if (!Fp2.isValid(base as Fp2)) throw new RangeError('"base" expected valid Fp2 element');
   // GLV endomorphism Ψ(P)
   const PSI_X = Fp2.pow(base, (Fp.ORDER - _1n) / _3n); // u^((p-1)/3)
   const PSI_Y = Fp2.pow(base, (Fp.ORDER - _1n) / _2n); // u^((p-1)/2)
@@ -242,6 +262,11 @@ export function psiFrobenius(
   const mapAffine =
     <T>(fn: (x: T, y: T) => [T, T]) =>
     (c: WeierstrassPointCons<T>, P: WeierstrassPoint<T>) => {
+      if (typeof (c as unknown) !== 'function')
+        throw new TypeError('"c" expected point constructor, got type=' + typeof c);
+      validatePointCons(c);
+      if (!(P instanceof c))
+        throw new TypeError('"P" expected Point instance, got type=' + typeof P);
       const affine = P.toAffine();
       const p = fn(affine.x, affine.y);
       return c.fromAffine({ x: p[0], y: p[1] });

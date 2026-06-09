@@ -139,7 +139,7 @@ const hasEven = (y: bigint) => y % _2n === _0n;
 // Calculate point, scalar and bytes
 function schnorrGetExtPubKey(priv: TArg<Uint8Array>) {
   const { Fn, BASE } = Pointk1;
-  const d_ = Fn.fromBytes(priv);
+  const d_ = Fn.fromBytes(abytes(priv, 32, 'secretKey'));
   const p = BASE.multiply(d_); // P = d'⋅G; 0 < d' < n check is done inside
   const scalar = hasEven(p.y) ? d_ : Fn.neg(d_);
   return { scalar, bytes: pointToBytes(p) };
@@ -314,7 +314,7 @@ export const schnorr: SecpSchnorr = /* @__PURE__ */ (() => {
   const seedLength = 48;
   const randomSecretKey = (seed?: TArg<Uint8Array>): TRet<Uint8Array> => {
     seed = seed === undefined ? randomBytes(seedLength) : seed;
-    return mapHashToField(seed, secp256k1_CURVE.n);
+    return mapHashToField(abytes(seed, seedLength, 'seed'), secp256k1_CURVE.n);
   };
   return Object.freeze({
     keygen: createKeygen(randomSecretKey, schnorrGetPublicKey),

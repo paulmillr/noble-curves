@@ -5,6 +5,7 @@
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import {
+  aarray,
   abool,
   bitLen,
   bitMask,
@@ -240,7 +241,8 @@ export type PC_ANY = CurvePointCons<
  */
 export function validatePointCons<P extends CurvePoint<any, P>>(Point: CurvePointCons<P>): void {
   const pc = Point as unknown as CurvePointCons<any>;
-  if (typeof (pc as unknown) !== 'function') throw new TypeError('Point must be a constructor');
+  if (typeof (pc as unknown) !== 'function')
+    throw new TypeError('"Point" expected constructor, got type=' + typeof Point);
   // validateObject only accepts plain objects, so copy the constructor statics into one bag first.
   validateObject(
     {
@@ -297,6 +299,8 @@ export type Mapper<T> = (i: T[]) => T[];
  * ```
  */
 export function negateCt<T extends { negate: () => T }>(condition: boolean, item: T): T {
+  abool(condition, 'condition');
+  validateObject(item as any, { negate: 'function' }, {}, 'item');
   const neg = item.negate();
   return condition ? neg : item;
 }
@@ -325,6 +329,7 @@ export function normalizeZ<P extends CurvePoint<any, P>, PC extends CurvePointCo
   points: P[]
 ): P[] {
   // Match MSM helpers: reject malformed public inputs before reading projective internals.
+  validatePointCons(c);
   validateMSMPoints(points, c);
   const invertedZs = FpInvertBatch(
     c.Fp,
@@ -386,7 +391,7 @@ function calcOffsets(n: bigint, window: number, wOpts: WOpts) {
 }
 
 function validateMSMPoints(points: any[], c: any) {
-  if (!Array.isArray(points)) throw new Error('array expected');
+  aarray(points, 'points');
   points.forEach((p, i) => {
     if (!(p instanceof c)) throw new Error('invalid point at index ' + i);
   });
@@ -446,6 +451,7 @@ function assert0(n: bigint): void {
  * ```
  */
 export class wNAF<PC extends PC_ANY> {
+  private readonly Point: PC;
   private readonly BASE: PC_P<PC>;
   private readonly ZERO: PC_P<PC>;
   private readonly maxWnafScalar: bigint;
@@ -454,7 +460,9 @@ export class wNAF<PC extends PC_ANY> {
 
   // Parametrized with a given Point class (not individual point)
   constructor(Point: PC, hasEndomorphism: boolean = false) {
-    abool(hasEndomorphism);
+    validatePointCons(Point);
+    abool(hasEndomorphism, 'hasEndomorphism');
+    this.Point = Point;
     this.BASE = Point.BASE;
     this.ZERO = Point.ZERO;
     const bits = Point.Fn.BITS;
@@ -601,6 +609,8 @@ export class wNAF<PC extends PC_ANY> {
     scalar: bigint,
     transform?: Mapper<PC_P<PC>>
   ): { p: PC_P<PC>; f: PC_P<PC> } {
+    if (!(point instanceof this.Point))
+      throw new TypeError('"point" expected Point instance, got type=' + typeof point);
     const W = getW(point);
     const precomputes = this.getPrecomputes(W, point, transform);
     return this.wNAF_CT(W, precomputes, scalar);
@@ -611,6 +621,8 @@ export class wNAF<PC extends PC_ANY> {
   }
 
   unsafe(point: PC_P<PC>, scalar: bigint, transform?: Mapper<PC_P<PC>>, prev?: PC_P<PC>): PC_P<PC> {
+    if (!(point instanceof this.Point))
+      throw new TypeError('"point" expected Point instance, got type=' + typeof point);
     const W = getW(point);
     // W === 1 should use ladder, because it's 2x faster there.
     //
@@ -627,6 +639,8 @@ export class wNAF<PC extends PC_ANY> {
   // using windowed method. This specifies window size and
   // stores precomputed values. Usually only base point would be precomputed.
   createCache(P: PC_P<PC>, W: number): void {
+    if (!(P instanceof this.Point))
+      throw new TypeError('"P" expected Point instance, got type=' + typeof P);
     validateW(W, this.bits);
     pointWindowSizes.set(P, W);
     pointPrecomputes.delete(P);
@@ -660,6 +674,9 @@ export function mulEndoUnsafe<P extends CurvePoint<any, P>, PC extends CurvePoin
   k1: bigint,
   k2: bigint
 ): { p1: P; p2: P } {
+  validatePointCons(Point);
+  if (!(point instanceof Point))
+    throw new TypeError('"point" expected Point instance, got type=' + typeof point);
   let acc = point;
   let p1 = Point.ZERO;
   let p2 = Point.ZERO;
@@ -703,6 +720,7 @@ export function pippenger<P extends CurvePoint<any, P>, PC extends CurvePointCon
   // - https://eprint.iacr.org/2024/750.pdf
   // - https://tches.iacr.org/index.php/TCHES/article/view/10287
   // 0 is accepted in scalars
+  validatePointCons(c);
   const fieldN = c.Fn;
   validateMSMPoints(points, c);
   validateMSMScalars(scalars, fieldN);
@@ -796,6 +814,7 @@ export function precomputeMSMUnsafe<P extends CurvePoint<any, P>, PC extends Cur
    *   - Optimal for ~256 scalars
    *   - Less efficient for 4096+ scalars (Pippenger preferred)
    */
+  validatePointCons(c);
   const fieldN = c.Fn;
   validateW(windowSize, fieldN.BITS);
   validateMSMPoints(points, c);

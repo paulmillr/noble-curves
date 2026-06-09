@@ -7,7 +7,7 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { asafenumber, bitGet, validateObject, type TArg, type TRet } from '../utils.ts';
+import { aarray, asafenumber, bitGet, validateObject, type TArg, type TRet } from '../utils.ts';
 import { FpInvertBatch, FpPow, type IField, validateField } from './modular.ts';
 
 // Grain LFSR (Linear-Feedback Shift Register): https://eprint.iacr.org/2009/109.pdf
@@ -50,6 +50,7 @@ export type PoseidonBasicOpts = {
 };
 
 function assertValidPosOpts(opts: TArg<PoseidonBasicOpts>) {
+  validateObject(opts as any, {}, {}, 'opts');
   const { Fp, roundsFull } = opts;
   validateField(Fp);
   validateObject(
@@ -142,6 +143,7 @@ export function grainGenConstants(
   opts: TArg<PoseidonGrainOpts>,
   skipMDS: number = 0
 ): PoseidonConstants {
+  assertValidPosOpts(opts);
   const { Fp, t, roundsFull, roundsPartial } = opts;
   // `skipMDS` counts how many candidate matrices to discard before taking one.
   asafenumber(skipMDS, 'skipMDS');
@@ -216,12 +218,17 @@ export function validateOpts(opts: TArg<PoseidonOpts>): TRet<
   const { roundsFull, roundsPartial, sboxPower, t } = opts;
 
   // MDS is TxT matrix
-  if (!Array.isArray(mds) || mds.length !== t) throw new Error('Poseidon: invalid MDS matrix');
-  const _mds = mds.map((mdsRow) => {
-    if (!Array.isArray(mdsRow) || mdsRow.length !== t)
-      throw new Error('invalid MDS matrix row: ' + mdsRow);
-    return mdsRow.map((i) => {
-      if (typeof i !== 'bigint') throw new Error('invalid MDS matrix bigint: ' + i);
+  aarray(mds, 'opts.mds');
+  if (mds.length !== t) throw new Error('Poseidon: invalid MDS matrix');
+  const _mds = mds.map((mdsRow, row) => {
+    aarray(mdsRow, 'opts.mds[' + row + ']');
+    if (mdsRow.length !== t)
+      throw new Error('"opts.mds[' + row + ']" expected length ' + t + ', got ' + mdsRow.length);
+    return mdsRow.map((i, col) => {
+      if (typeof i !== 'bigint')
+        throw new Error(
+          '"opts.mds[' + row + '][' + col + ']" expected bigint, got type=' + typeof i
+        );
       // Hardcoded Poseidon MDS matrices often use signed entries like `-1`;
       // accept bigint representatives here and reduce them into the field.
       return Fp.create(i);
@@ -405,6 +412,12 @@ export class PoseidonSponge {
   private isAbsorbing = true;
 
   constructor(Fp: IField<bigint>, rate: number, capacity: number, hash: PoseidonFn) {
+    validateField(Fp);
+    asafenumber(rate, 'rate');
+    asafenumber(capacity, 'capacity');
+    if (typeof hash !== 'function')
+      throw new TypeError('"hash" expected function, got type=' + typeof hash);
+    if (hash.roundConstants !== undefined) aarray(hash.roundConstants, 'hash.roundConstants');
     const width = spongeShape(rate, capacity);
     // The direct constructor accepts an arbitrary permutation hook, but callers still
     // need to preserve the `PoseidonFn.roundConstants` width metadata. Reject width
@@ -525,6 +538,7 @@ const spongeShape = (rate: number, capacity: number) => {
  * ```
  */
 export function poseidonSponge(opts: TArg<PoseidonSpongeOpts>): TRet<() => PoseidonSponge> {
+  validateObject(opts as any, {}, {}, 'opts');
   const { rate, capacity } = opts;
   const t = spongeShape(rate, capacity);
   // Re-use one hash instance between sponge instances; isolation depends on

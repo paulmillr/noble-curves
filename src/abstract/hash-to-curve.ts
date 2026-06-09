@@ -7,6 +7,7 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import type { CHash, TArg, TRet } from '../utils.ts';
 import {
+  aarray,
   abytes,
   asafenumber,
   asciiToBytes,
@@ -17,7 +18,7 @@ import {
   validateObject,
 } from '../utils.ts';
 import type { AffinePoint, PC_ANY, PC_F, PC_P } from './curve.ts';
-import { FpInvertBatch, mod, type IField } from './modular.ts';
+import { FpInvertBatch, mod, type IField, validateField } from './modular.ts';
 
 /** ASCII domain-separation tag or raw bytes. */
 export type AsciiOrBytes = string | Uint8Array;
@@ -256,6 +257,8 @@ export function expand_message_xof(
   asafenumber(lenInBytes);
   asafenumber(k, 'k');
   if (k < 0) throw new Error('expand_message_xof: invalid k');
+  if (typeof H !== 'function') throw new Error('expand_message_xof: expected XOF function');
+  if (typeof H.create !== 'function') throw new Error('expand_message_xof: expected XOF create');
   DST = normDST(DST);
   if (lenInBytes < 0 || lenInBytes > 65535)
     throw new Error('expand_message_xof: invalid lenInBytes');
@@ -371,8 +374,11 @@ type XYRatio<T> = [T[], T[], T[], T[]]; // xn/xd, yn/yd
  * ```
  */
 export function isogenyMap<T, F extends IField<T>>(field: F, map: XYRatio<T>): XY<T> {
+  validateField(field);
   // Make same order as in spec
-  const coeff = map.map((i) => {
+  aarray<T[]>(map, 'map');
+  const coeff = map.map((i, row) => {
+    aarray(i, 'map[' + row + ']');
     if (i.length < 1) throw new Error('isogenyMap: expected non-empty coefficients');
     return Array.from(i).reverse();
   });
@@ -433,6 +439,7 @@ export function createHasher<PC extends PC_ANY>(
   defaults: TArg<H2COpts & { encodeDST?: AsciiOrBytes }>
 ): H2CHasher<PC> {
   if (typeof mapToCurve !== 'function') throw new Error('mapToCurve() must be defined');
+  validateObject(defaults);
   // `Point` is intentionally not shape-validated eagerly here: point constructors vary across
   // curve families, so this helper only checks the hooks it can validate cheaply. Misconfigured
   // suites fail later when hashing first touches Point.fromAffine / Point.ZERO / clearCofactor().

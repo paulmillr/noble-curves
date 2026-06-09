@@ -7,6 +7,10 @@
  */
 import { utf8ToBytes } from '@noble/hashes/utils.js';
 import {
+  aarray,
+  abytes,
+  asafenumber,
+  astring,
   bytesToHex,
   bytesToNumberBE,
   bytesToNumberLE,
@@ -522,9 +526,10 @@ export type FROST = {
 // PubKey = commitments, verifyingShares
 // PrivKey = id, signingShare, commitment
 
-const validateSigners = (signers: Signers) => {
-  if (!Number.isSafeInteger(signers.min) || !Number.isSafeInteger(signers.max))
-    throw new Error('Wrong signers info: min=' + signers.min + ' max=' + signers.max);
+const validateSigners = (signers: Signers, title: string = 'signers') => {
+  validateObject(signers as any, { min: 'number', max: 'number' }, {}, title);
+  asafenumber(signers.min, title + '.min');
+  asafenumber(signers.max, title + '.max');
   // Compatibility with frost-rs intentionally narrows RFC 9591's positive-nonzero threshold rule
   // to `min >= 2`, even though the RFC text itself allows `MIN_PARTICIPANTS = 1`.
   // This API is for actual threshold signing across participants; 1-of-n degenerates to ordinary
@@ -617,6 +622,8 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
   const HID = (msg: TArg<Uint8Array>) => hashToScalar(msg, { DST: HIDPrefix });
   // /Hashes
   const randomScalar = (rng: RNG = randomBytes) => {
+    if (typeof rng !== 'function')
+      throw new TypeError('"rng" expected function, got type=' + typeof rng);
     // Intentional divergence from RFC 9591 §4.1 / §5.1: the RFC nonce_generate helper outputs a
     // Scalar in [0, p-1], but round-one commit publishes ScalarBaseMult(nonce) values and §3.1
     // requires SerializeElement / DeserializeElement to reject the identity element. Keep noble's
@@ -651,7 +658,8 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
     return n;
   };
   const serializeIdentifier = (id: bigint) => bytesToHex(Fn.toBytes(validateIdentifier(id)));
-  const parseIdentifier = (id: string) => {
+  const parseIdentifier = (id: string, title: string = 'identifier') => {
+    astring(id, title);
     const n = validateIdentifier(Fn.fromBytes(hexToBytes(id)));
     // Keep string-keyed maps stable by accepting only the canonical serialized form.
     if (serializeIdentifier(n) !== id) throw new Error('expected canonical identifier hex');
@@ -740,6 +748,10 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
     rng: RNG = randomBytes
   ) => {
     validateSigners(signers);
+    if (secret !== undefined) abytes(secret, Fn.BYTES, 'secret');
+    if (coeffs !== undefined) aarray(coeffs, 'coeffs');
+    if (typeof rng !== 'function')
+      throw new TypeError('"rng" expected function, got type=' + typeof rng);
     // Dealer/DKG polynomial sampling reuses the same hardened scalar derivation as round-one
     // nonces: overriding `rng` only swaps the entropy source, not the non-zero `1..n-1` policy.
     const secretScalar = secret === undefined ? randomScalar(rng) : Fn.fromBytes(secret);
@@ -816,7 +828,7 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
     // Not in spec, but in FROST implementation,
     // seems useful and nice, no need to sync identifiers (would require more interactions)
     derive(s: string): Identifier {
-      if (typeof s !== 'string') throw new Error('wrong identifier string: ' + s);
+      astring(s, 's');
       // Derived identifiers may land anywhere in the scalar field; they are not restricted to
       // sequential `1..max_signers` values.
       return serializeIdentifier(HID(utf8ToBytes(s)));
@@ -893,8 +905,8 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
         secret?: TArg<SecretKey>,
         rng: RNG = randomBytes
       ) => {
+        const idNum = parseIdentifier(id, 'id');
         validateSigners(signers);
-        const idNum = parseIdentifier(id);
         const { coefficients, commitment } = generateSecretPolynomial(
           signers,
           secret,
@@ -923,6 +935,14 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
         secret: TArg<DKG_Secret>,
         others: TArg<DKG_Round1[]>
       ): TRet<Record<string, DKG_Round2>> => {
+        validateObject(
+          secret as any,
+          { identifier: 'bigint', commitment: 'object', signers: 'object' },
+          { coefficients: 'object', step: 'number' },
+          'secret'
+        );
+        validateSigners(secret.signers, 'secret.signers');
+        aarray(others, 'others');
         if (others.length !== secret.signers.max - 1)
           throw new Error('wrong number of round1 packages');
         if (!secret.coefficients || secret.step === 3)
@@ -951,6 +971,15 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
         round1: TArg<DKG_Round1[]>,
         round2: TArg<DKG_Round2[]>
       ): TRet<Key> => {
+        validateObject(
+          secret as any,
+          { identifier: 'bigint', commitment: 'object', signers: 'object' },
+          { coefficients: 'object', step: 'number' },
+          'secret'
+        );
+        validateSigners(secret.signers, 'secret.signers');
+        aarray(round1, 'round1');
+        aarray(round2, 'round2');
         // DKG is outside RFC 9591's signing flow; callers are expected to reuse the same
         // remote round1 packages already accepted in round2, like frost-rs documents.
         if (round1.length !== secret.signers.max - 1)
@@ -1027,6 +1056,12 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
         return res;
       },
       clean(secret: TArg<DKG_Secret>) {
+        validateObject(
+          secret as any,
+          { identifier: 'bigint', commitment: 'object', signers: 'object' },
+          { coefficients: 'object', step: 'number' },
+          'secret'
+        );
         // Instead of replacing secret bigint with another (zero?), we subtract it from itself
         // in the hope that JIT will modify it inplace, instead of creating new value.
         // This is unverified and may not work, but it is best we can do in regard of bigints.
@@ -1053,7 +1088,8 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
         identifiers = [];
         for (let i = 1; i <= signers.max; i++) identifiers.push(Identifier.fromNumber(i));
       } else {
-        if (!Array.isArray(identifiers) || identifiers.length !== signers.max)
+        aarray(identifiers, 'identifiers');
+        if (identifiers.length !== signers.max)
           throw new Error('identifiers should be array of ' + signers.max);
       }
       const identifierNums: Record<Identifier, bigint> = {};
@@ -1085,6 +1121,20 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
     },
     // Validate secret (from trusted dealer or DKG)
     validateSecret(secret: TArg<FrostSecret>, pub: TArg<FrostPublic>) {
+      validateObject(secret as any, { identifier: 'string', signingShare: 'object' }, {}, 'secret');
+      abytes(secret.signingShare, Fn.BYTES, 'secret.signingShare');
+      validateObject(
+        pub as any,
+        {
+          signers: 'object',
+          commitments: 'object',
+          verifyingShares: 'object',
+        },
+        {},
+        'pub'
+      );
+      validateSigners(pub.signers, 'pub.signers');
+      aarray(pub.commitments, 'pub.commitments');
       const id = parseIdentifier(secret.identifier);
       const commitment = pub.commitments.map(parsePoint);
       const signingShare = Fn.fromBytes(secret.signingShare);
@@ -1098,6 +1148,10 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
     // round1 for signing.
     // But then each participant needs to remember generated shares
     commit(secret: TArg<FrostSecret>, rng: RNG = randomBytes): TRet<GenNonce> {
+      validateObject(secret as any, { identifier: 'string', signingShare: 'object' }, {}, 'secret');
+      abytes(secret.signingShare, Fn.BYTES, 'secret.signingShare');
+      if (typeof rng !== 'function')
+        throw new TypeError('"rng" expected function, got type=' + typeof rng);
       const secretScalar = Fn.fromBytes(secret.signingShare);
       const hiding = generateNonce(secretScalar, rng);
       const binding = generateNonce(secretScalar, rng);
@@ -1113,6 +1167,25 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
       commitmentList: TArg<NonceCommitments[]>,
       msg: TArg<Uint8Array>
     ): TRet<Uint8Array> {
+      validateObject(secret as any, { identifier: 'string', signingShare: 'object' }, {}, 'secret');
+      abytes(secret.signingShare, Fn.BYTES, 'secret.signingShare');
+      validateObject(
+        pub as any,
+        {
+          signers: 'object',
+          commitments: 'object',
+          verifyingShares: 'object',
+        },
+        {},
+        'pub'
+      );
+      validateSigners(pub.signers, 'pub.signers');
+      aarray(pub.commitments, 'pub.commitments');
+      validateObject(nonces as any, { hiding: 'object', binding: 'object' }, {}, 'nonces');
+      abytes(nonces.hiding, Fn.BYTES, 'nonces.hiding');
+      abytes(nonces.binding, Fn.BYTES, 'nonces.binding');
+      aarray(commitmentList, 'commitmentList');
+      abytes(msg, undefined, 'msg');
       validateCommitmentsNum(pub.signers, commitmentList.length);
       const hidingNonce0 = Fn.fromBytes(nonces.hiding);
       const bindingNonce0 = Fn.fromBytes(nonces.binding);
@@ -1163,6 +1236,22 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
       identifier: Identifier,
       sigShare: TArg<Uint8Array>
     ) {
+      validateObject(
+        pub as any,
+        {
+          signers: 'object',
+          commitments: 'object',
+          verifyingShares: 'object',
+        },
+        {},
+        'pub'
+      );
+      validateSigners(pub.signers, 'pub.signers');
+      aarray(pub.commitments, 'pub.commitments');
+      aarray(commitmentList, 'commitmentList');
+      abytes(msg, undefined, 'msg');
+      parseIdentifier(identifier);
+      abytes(sigShare, Fn.BYTES, 'sigShare');
       if (opts.adjustPublic) pub = opts.adjustPublic(pub);
       const comm = commitmentList.find((i) => i.identifier === identifier);
       if (!comm) throw new Error('cannot find identifier commitment');
@@ -1191,6 +1280,21 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
       msg: TArg<Uint8Array>,
       sigShares: TArg<Record<Identifier, Uint8Array>>
     ): TRet<Uint8Array> {
+      validateObject(
+        pub as any,
+        {
+          signers: 'object',
+          commitments: 'object',
+          verifyingShares: 'object',
+        },
+        {},
+        'pub'
+      );
+      validateSigners(pub.signers, 'pub.signers');
+      aarray(pub.commitments, 'pub.commitments');
+      aarray(commitmentList, 'commitmentList');
+      abytes(msg, undefined, 'msg');
+      validateObject(sigShares as any, {}, {}, 'sigShares');
       // verifyShare() applies adjustPublic too, so keep the original package for attribution.
       const rawPub = pub;
       if (opts.adjustPublic) pub = opts.adjustPublic(pub);
@@ -1240,8 +1344,9 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
     },
     // Combine multiple secret shares to restore secret
     combineSecret(shares: TArg<FrostSecret[]>, signers: Signers): TRet<Uint8Array> {
+      aarray(shares, 'shares');
       validateSigners(signers);
-      if (!Array.isArray(shares) || shares.length < signers.min || shares.length > signers.max)
+      if (shares.length < signers.min || shares.length > signers.max)
         throw new Error('wrong secret shares array');
       const points = [];
       const seen: Record<Identifier, boolean> = {};

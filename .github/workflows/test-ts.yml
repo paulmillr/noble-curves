@@ -4,5 +4,5 @@ on:
   - pull_request
 jobs:
   test-ts:
-    name: jsbt v0.5.1
-    uses: paulmillr/jsbt/.github/workflows/test.yml@d156c5951d47d615d673d039aa03de6b9669449f
+    name: jsbt v0.5.2
+    uses: paulmillr/jsbt/.github/workflows/test.yml@3b6bf563e416e9c6047db19410988922084e1e92

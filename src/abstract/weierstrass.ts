@@ -33,6 +33,7 @@ import {
   abytes,
   aInRange,
   asafenumber,
+  astring,
   bitLen,
   bitMask,
   bytesToHex,
@@ -56,6 +57,7 @@ import {
   mulEndoUnsafe,
   negateCt,
   normalizeZ,
+  validatePointCons,
   wNAF,
   type AffinePoint,
   type CurveLengths,
@@ -552,8 +554,7 @@ export const DER: IDER = {
       const { Err: E } = DER;
       asafenumber(tag, 'tag');
       if (tag < 0 || tag > 255) throw new E('tlv.encode: wrong tag');
-      if (typeof data !== 'string')
-        throw new TypeError('"data" expected string, got type=' + typeof data);
+      astring(data, 'data');
       // Internal helper: callers hand this already-validated hex payload, so we only enforce
       // byte alignment here instead of re-validating every nibble.
       if (data.length & 1) throw new E('tlv.encode: unpadded data');
@@ -633,6 +634,7 @@ export const DER: IDER = {
   },
   hexFromSig(sig: { r: bigint; s: bigint }): string {
     const { _tlv: tlv, _int: int } = DER;
+    validateObject(sig, { r: 'bigint', s: 'bigint' }, {}, 'sig');
     const rs = tlv.encode(0x02, int.encode(sig.r));
     const ss = tlv.encode(0x02, int.encode(sig.s));
     const seq = rs + ss;
@@ -1116,6 +1118,8 @@ export function weierstrass<T>(
     toAffine(invertedZ?: T): AffinePoint<T> {
       const p = this;
       let iz = invertedZ;
+      if (iz != null && !Fp.isValid(iz))
+        throw new RangeError('"invertedZ" expected valid field element');
       const { X, Y, Z } = p;
       // Fast-path for normalized points
       if (Fp.eql(Z, Fp.ONE)) return { x: X, y: Y };
@@ -1375,6 +1379,7 @@ export function mapToCurveSimpleSWU<T>(
   }
 ): (u: T) => { x: T; y: T } {
   const F = validateField(Fp as IField<T>) as IField<T>;
+  validateObject(opts as any, {}, {}, 'opts');
   const { A, B, Z } = opts;
   if (!F.isValidNot0(A) || !F.isValidNot0(B) || !F.isValid(Z))
     throw new Error('mapToCurveSimpleSWU: invalid opts');
@@ -1466,6 +1471,7 @@ export function ecdh(
   Point: WeierstrassPointCons<bigint>,
   ecdhOpts: TArg<{ randomBytes?: (bytesLength?: number) => TRet<Uint8Array> }> = {}
 ): ECDH {
+  validatePointCons(Point);
   const { Fn } = Point;
   const randomBytes_ = ecdhOpts.randomBytes === undefined ? wcRandomBytes : ecdhOpts.randomBytes;
   // Keep the advertised seed length aligned with mapHashToField(), which keeps a hard 16-byte
@@ -1596,6 +1602,7 @@ export function ecdsa(
   hash: TArg<CHash>,
   ecdsaOpts: TArg<ECDSAOpts> = {}
 ): ECDSA {
+  validatePointCons(Point);
   // Custom hash / bits2int hooks are treated as pure functions over validated caller-owned bytes.
   const hash_ = hash as CHash;
   ahash(hash_);

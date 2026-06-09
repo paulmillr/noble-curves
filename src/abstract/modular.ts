@@ -6,6 +6,7 @@
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import {
+  aarray,
   abool,
   abytes,
   anumber,
@@ -569,6 +570,7 @@ export function validateField<T>(field: TArg<IField<T>>): TRet<IField<T>> {
  * ```
  */
 export function FpPow<T>(Fp: TArg<IField<T>>, num: T, power: bigint): T {
+  validateField(Fp);
   const F = Fp as IField<T>;
   if (power < _0n) throw new Error('invalid exponent, negatives unsupported');
   if (power === _0n) return F.ONE;
@@ -600,6 +602,9 @@ export function FpPow<T>(Fp: TArg<IField<T>>, num: T, power: bigint): T {
  * ```
  */
 export function FpInvertBatch<T>(Fp: TArg<IField<T>>, nums: T[], passZero = false): T[] {
+  validateField(Fp);
+  aarray(nums, 'nums');
+  abool(passZero, 'passZero');
   const F = Fp as IField<T>;
   const inverted = new Array(nums.length).fill(passZero ? F.ZERO : undefined) as T[];
   // Walk from first to last, multiply them by each other MOD p
@@ -635,6 +640,7 @@ export function FpInvertBatch<T>(Fp: TArg<IField<T>>, nums: T[], passZero = fals
  * ```
  */
 export function FpDiv<T>(Fp: TArg<IField<T>>, lhs: T, rhs: T | bigint): T {
+  validateField(Fp);
   const F = Fp as IField<T>;
   return F.mul(lhs, typeof rhs === 'bigint' ? invert(rhs, F.ORDER) : F.inv(rhs));
 }
@@ -661,6 +667,7 @@ export function FpDiv<T>(Fp: TArg<IField<T>>, lhs: T, rhs: T | bigint): T {
  * ```
  */
 export function FpLegendre<T>(Fp: TArg<IField<T>>, n: T): -1 | 0 | 1 {
+  validateField(Fp);
   const F = Fp as IField<T>;
   // We can use 3rd argument as optional cache of this value
   // but seems unneeded for now. The operation is very fast.
@@ -954,6 +961,7 @@ export function Field(ORDER: bigint, opts: FieldOpts = {}): TRet<Readonly<FpFiel
  * ```
  */
 export function FpSqrtOdd<T>(Fp: TArg<IField<T>>, elm: T): T {
+  validateField(Fp);
   const F = Fp as IField<T>;
   if (!F.isOdd) throw new Error("Field doesn't have isOdd");
   const root = F.sqrt(elm);
@@ -975,6 +983,7 @@ export function FpSqrtOdd<T>(Fp: TArg<IField<T>>, elm: T): T {
  * ```
  */
 export function FpSqrtEven<T>(Fp: TArg<IField<T>>, elm: T): T {
+  validateField(Fp);
   const F = Fp as IField<T>;
   if (!F.isOdd) throw new Error("Field doesn't have isOdd");
   const root = F.sqrt(elm);

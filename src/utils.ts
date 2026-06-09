@@ -10,7 +10,7 @@ import {
   concatBytes as concatBytes_,
   hexToBytes as hexToBytes_,
   isBytes as isBytes_,
-  randomBytes as randomBytes_,
+  randomBytes as randomBytes_
 } from '@noble/hashes/utils.js';
 /**
  * Bytes API type helpers for old + new TypeScript.
@@ -117,6 +117,18 @@ export type TRet<T> = T extends unknown
                       : T
         : TypedRet<T>)
   : never;
+
+export function aarray<T>(
+  item: unknown,
+  title: string,
+  inner: (elm: T, title: string) => void = () => {}
+): T[] {
+  if (!Array.isArray(item))
+    throw new TypeError(`"${title}" expected array, got type=${typeof item}`);
+  for (let i = 0; i < item.length; i++) inner(item[i], `${title}[${i}]`);
+  return item;
+}
+
 /**
  * Validates that a value is a byte array.
  * @param value - Value to validate.
@@ -144,6 +156,26 @@ export const abytes = <T extends TArg<Uint8Array>>(value: T, length?: number, ti
  * ```
  */
 export const anumber: typeof anumber_ = anumber_;
+/**
+ * Asserts something is a string.
+ * @param value - Value to validate.
+ * @param title - Label included in thrown errors.
+ * @returns The validated string.
+ * @throws On wrong argument types. {@link TypeError}
+ * @example
+ * Validate a label string.
+ *
+ * ```ts
+ * astring('example', 'label');
+ * ```
+ */
+export function astring(value: unknown, title: string = ''): string {
+  if (typeof value !== 'string') {
+    const prefix = title && `"${title}" `;
+    throw new TypeError(prefix + 'expected string, got type=' + typeof value);
+  }
+  return value;
+}
 /**
  * Encodes bytes as lowercase hex.
  * @param bytes - Bytes to encode.
@@ -588,6 +620,8 @@ export function bitLen(n: bigint): number {
  * ```
  */
 export function bitGet(n: bigint, pos: number): bigint {
+  if (typeof n !== 'bigint') throw new TypeError('"n" expected bigint, got type=' + typeof n);
+  asafenumber(pos, 'pos');
   return (n >> BigInt(pos)) & _1n;
 }
 
@@ -606,6 +640,9 @@ export function bitGet(n: bigint, pos: number): bigint {
  * ```
  */
 export function bitSet(n: bigint, pos: number, value: boolean): bigint {
+  if (typeof n !== 'bigint') throw new TypeError('"n" expected bigint, got type=' + typeof n);
+  asafenumber(pos, 'pos');
+  abool(value, 'value');
   const mask = _1n << BigInt(pos);
   // Clearing needs AND-not here; OR with zero leaves an already-set bit untouched.
   return value ? n | mask : n & ~mask;
@@ -624,7 +661,10 @@ export function bitSet(n: bigint, pos: number, value: boolean): bigint {
  * bitMask(4);
  * ```
  */
-export const bitMask = (n: number): bigint => (_1n << BigInt(n)) - _1n;
+export const bitMask = (n: number): bigint => {
+  asafenumber(n, 'n');
+  return (_1n << BigInt(n)) - _1n;
+};
 
 // DRBG
 
@@ -729,35 +769,46 @@ export function createHmacDrbg<T>(
 export function validateObject(
   object: Record<string, any>,
   fields: Record<string, string> = {},
-  optFields: Record<string, string> = {}
+  optFields: Record<string, string> = {},
+  title = 'object'
 ): void {
-  if (Object.prototype.toString.call(object) !== '[object Object]')
-    throw new TypeError('expected valid options object');
+  const checkObject = (value: Record<string, any>, label: string) => {
+    if (value === null || typeof value !== 'object' || Array.isArray(value))
+      throw new TypeError(
+        label === 'object'
+          ? 'expected valid options object'
+          : `"${label}" expected object, got type=${typeof value}`
+      );
+  };
+  checkObject(object, title);
+  checkObject(fields, 'fields');
+  checkObject(optFields, 'optFields');
   type Item = keyof typeof object;
   function checkField(fieldName: Item, expectedType: string, isOpt: boolean) {
+    const label =
+      title === 'object' ? `param "${String(fieldName)}"` : `"${title}.${String(fieldName)}"`;
     // Config fields must be explicit own properties. Optional inherited values are rejected too
     // because callers keep reading the same options object after validation.
     const val = object[fieldName];
-    // Runtime objects such as Field instances intentionally satisfy required method slots via their
-    // shared prototype.
+    // Runtime objects such as Field instances intentionally satisfy required method slots
+    // via their shared prototype.
     if (
       !Object.hasOwn(object, fieldName) &&
       (isOpt ? val !== undefined : expectedType !== 'function')
     ) {
-      throw new TypeError(`param "${fieldName}" is invalid: expected own property`);
+      throw new TypeError(`${label} is invalid: expected own property`);
     }
     if (isOpt && val === undefined) return;
     const current = typeof val;
     if (current !== expectedType || val === null)
-      throw new TypeError(
-        `param "${fieldName}" is invalid: expected ${expectedType}, got ${current}`
-      );
+      throw new TypeError(`${label} is invalid: expected ${expectedType}, got ${current}`);
   }
   const iter = (f: typeof fields, isOpt: boolean) =>
     Object.entries(f).forEach(([k, v]) => checkField(k, v, isOpt));
   iter(fields, false);
   iter(optFields, true);
-}
+};
+
 
 /**
  * Throws not implemented error.

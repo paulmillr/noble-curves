@@ -123,12 +123,37 @@ function validateOpts(curve: TArg<MontgomeryOpts>) {
  * @returns ECDH helper namespace.
  * @throws If the curve definition or derived shared point is invalid. {@link Error}
  * @example
- * Perform one X25519 key exchange through the generic Montgomery helper.
+ * Build an X25519 helper from curve parameters, then derive one public key.
  *
  * ```ts
- * import { x25519 } from '@noble/curves/ed25519.js';
- * const alice = x25519.keygen();
- * const shared = x25519.getSharedSecret(alice.secretKey, alice.publicKey);
+ * import { montgomery } from '@noble/curves/abstract/montgomery.js';
+ * const P = 2n ** 255n - 19n;
+ * const mod = (num: bigint) => {
+ *   const out = num % P;
+ *   return out >= 0n ? out : out + P;
+ * };
+ * const pow = (num: bigint, power: bigint) => {
+ *   let res = 1n;
+ *   for (; power > 0n; power >>= 1n) {
+ *     if (power & 1n) res = mod(res * num);
+ *     num = mod(num * num);
+ *   }
+ *   return res;
+ * };
+ * const x25519 = montgomery({
+ *   P,
+ *   type: 'x25519',
+ *   adjustScalarBytes(bytes) {
+ *     bytes[0] &= 248;
+ *     bytes[31] &= 127;
+ *     bytes[31] |= 64;
+ *     return bytes;
+ *   },
+ *   powPminus2(x) {
+ *     return pow(x, P - 2n);
+ *   },
+ * });
+ * const publicKey = x25519.getPublicKey(new Uint8Array(32).fill(1));
  * ```
  */
 export function montgomery(curveDef: TArg<MontgomeryOpts>): TRet<MontgomeryECDH> {

@@ -452,6 +452,8 @@ export function createOPRF<P extends CurvePoint<any, P>>(opts: OPRFOpts<P>): TRe
   const hashToScalarPrefixed = (msg: TArg<Uint8Array>, ctx: TArg<Uint8Array>) =>
     opts.hashToScalar(msg, { DST: concatBytes(_DST_scalarBytes, ctx) });
   const randomScalar = (rng: RNG = randomBytes) => {
+    if (typeof rng !== 'function')
+      throw new TypeError('"rng" expected function, got type=' + typeof rng);
     // RFC 9497 §2.1 defines RandomScalar as nonzero; blind inversion and generated public keys
     // both rely on keeping this helper in the `1..n-1` range.
     const t = mapHashToField(rng(getMinHashLength(Fn.ORDER)), Fn.ORDER, Fn.isLE);

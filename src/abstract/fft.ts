@@ -3,8 +3,8 @@
  * API may change at any time. The code has not been audited. Feature requests are welcome.
  * @module
  */
-import type { TArg } from '../utils.ts';
-import type { IField } from './modular.ts';
+import { aarray, validateObject, type TArg } from '../utils.ts';
+import { validateField, type IField } from './modular.ts';
 
 /** Array-like coefficient storage that can be mutated in place. */
 export interface MutableArrayLike<T> {
@@ -33,10 +33,12 @@ export interface MutableArrayLike<T> {
  */
 export type PolyStorage<T> = T[] | (MutableArrayLike<T> & ArrayBufferView);
 
-function checkU32(n: number) {
+function checkU32(n: number, title = 'n') {
   // 0xff_ff_ff_ff
+  if (typeof n !== 'number')
+    throw new TypeError(`wrong u32 integer "${title}": expected number, got type=${typeof n}`);
   if (!Number.isSafeInteger(n) || n < 0 || n > 0xffffffff)
-    throw new Error('wrong u32 integer:' + n);
+    throw new RangeError(`wrong u32 integer "${title}": expected 0..4294967295, got ${n}`);
   return n;
 }
 
@@ -53,7 +55,7 @@ function checkU32(n: number) {
  * ```
  */
 export function isPowerOfTwo(x: number): boolean {
-  checkU32(x);
+  checkU32(x, 'x');
   return (x & (x - 1)) === 0 && x !== 0;
 }
 
@@ -91,6 +93,8 @@ export function nextPowerOfTwo(n: number): number {
  */
 export function reverseBits(n: number, bits: number): number {
   checkU32(n);
+  if (typeof bits !== 'number')
+    throw new TypeError('"bits" expected number, got type=' + typeof bits);
   if (!Number.isSafeInteger(bits) || bits < 0 || bits > 32)
     throw new Error(`expected integer 0 <= bits <= 32, got ${bits}`);
   let reversed = 0;
@@ -132,6 +136,12 @@ export function log2(n: number): number {
  * ```
  */
 export function bitReversalInplace<T extends MutableArrayLike<any>>(values: T): T {
+  if (
+    !values ||
+    typeof values !== 'object' ||
+    typeof (values as MutableArrayLike<any>).length !== 'number'
+  )
+    throw new TypeError('"values" expected array-like, got type=' + typeof values);
   const n = values.length;
   // Size-1 FFT is the identity, so bit-reversal must stay a no-op there instead of rejecting it.
   if (!isPowerOfTwo(n)) throw new Error('expected positive power-of-two length, got ' + n);
@@ -159,6 +169,7 @@ export function bitReversalInplace<T extends MutableArrayLike<any>>(values: T): 
  * ```
  */
 export function bitReversalPermutation<T>(values: T[]): T[] {
+  aarray(values, 'values');
   return bitReversalInplace(values.slice()) as T[];
 }
 
@@ -219,6 +230,9 @@ export type RootsOfUnity = {
  * ```
  */
 export function rootsOfUnity(field: TArg<IField<bigint>>, generator?: bigint): RootsOfUnity {
+  validateField(field);
+  if (generator !== undefined && typeof generator !== 'bigint')
+    throw new TypeError('"generator" expected bigint, got type=' + typeof generator);
   // Factor field.ORDER-1 as oddFactor * 2^powerOfTwo
   let oddFactor = field.ORDER - _1n;
   let powerOfTwo = 0;
@@ -233,7 +247,7 @@ export function rootsOfUnity(field: TArg<IField<bigint>>, generator?: bigint): R
   // Compute all roots of unity for powers up to maxPower
   const rootsCache: bigint[][] = [];
   const checkBits = (bits: number) => {
-    checkU32(bits);
+    checkU32(bits, 'bits');
     if (bits > 31 || bits > powerOfTwo)
       throw new Error('rootsOfUnity: wrong bits ' + bits + ' powerOfTwo=' + powerOfTwo);
     return bits;
@@ -390,10 +404,17 @@ export type FFTCoreLoop<T> = <P extends Polynomial<T>>(values: P) => P;
  * ```
  */
 export const FFTCore = <T, R>(F: FFTOpts<T, R>, coreOpts: FFTCoreOpts<R>): FFTCoreLoop<T> => {
+  validateObject(
+    coreOpts as unknown as Record<string, any>,
+    { N: 'number', roots: 'object', dit: 'boolean' },
+    { invertButterflies: 'boolean', skipStages: 'number', brp: 'boolean' },
+    'coreOpts'
+  );
   const { N, roots, dit, invertButterflies = false, skipStages = 0, brp = true } = coreOpts;
+  checkU32(N, 'coreOpts.N');
   const bits = log2(N);
   if (!isPowerOfTwo(N)) throw new Error('FFT: Polynomial size should be power of two');
-  checkU32(skipStages);
+  checkU32(skipStages, 'coreOpts.skipStages');
   const maxSkipStages = bits === 0 ? 0 : bits - 1;
   // Skipping every stage leaves only boundary layout changes, not a valid FFT loop shape.
   if (skipStages > maxSkipStages)
@@ -677,6 +698,7 @@ export function poly<T, P extends PolyStorage<T>>(
   fft?: FFTMethods<T>,
   length?: number
 ): PolyFn<any, T> {
+  validateField(field);
   const F = field as IField<T>;
   const _create =
     create ||
@@ -694,12 +716,17 @@ export function poly<T, P extends PolyStorage<T>>(
       typeof v[Symbol.iterator] === 'function'
     );
   };
-  const checkLength = (...lst: P[]): number => {
-    if (!lst.length) return 0;
-    for (const i of lst) if (!isPoly(i)) throw new Error('poly: not polynomial: ' + i);
-    const L = lst[0].length;
-    for (let i = 1; i < lst.length; i++)
-      if (lst[i].length !== L) throw new Error(`poly: mismatched lengths ${L} vs ${lst[i].length}`);
+  const checkPoly = (title: string, value: P): void => {
+    if (!isPoly(value))
+      throw new TypeError(`"${title}" expected polynomial, got type=${typeof value}`);
+  };
+  const checkLength = (a: P, b?: P): number => {
+    checkPoly('a', a);
+    const L = a.length;
+    if (b !== undefined) {
+      checkPoly('b', b);
+      if (b.length !== L) throw new Error(`poly: mismatched lengths ${L} vs ${b.length}`);
+    }
     if (length !== undefined && L !== length)
       throw new Error(`poly: expected fixed length ${length}, got ${L}`);
     return L;
@@ -773,11 +800,16 @@ export function poly<T, P extends PolyStorage<T>>(
       }
     },
     convolve(a: P, b: P): P {
+      checkPoly('a', a);
+      checkPoly('b', b);
       const len = nextPowerOfTwo(a.length + b.length - 1);
       return this.mul(this.extend(a, len), this.extend(b, len));
     },
     shift(p: P, factor: bigint): P {
-      const out = _create(checkLength(p));
+      checkPoly('p', p);
+      const out = _create(p.length);
+      if (length !== undefined && p.length !== length)
+        throw new Error(`poly: expected fixed length ${length}, got ${p.length}`);
       if (!p.length) return out;
       out[0] = p[0];
       for (let i = 1, power = F.ONE; i < p.length; i++) {
@@ -848,7 +880,9 @@ export function poly<T, P extends PolyStorage<T>>(
       },
     },
     vanishing(roots: P): P {
-      checkLength(roots);
+      checkPoly('roots', roots);
+      if (length !== undefined && roots.length !== length)
+        throw new Error(`poly: expected fixed length ${length}, got ${roots.length}`);
       const out = _create(roots.length + 1, F.ZERO);
       out[0] = F.ONE;
       for (const r of roots) {

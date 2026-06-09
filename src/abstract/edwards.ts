@@ -28,6 +28,7 @@ import {
   createCurveFields,
   createKeygen,
   normalizeZ,
+  validatePointCons,
   wNAF,
   type AffinePoint,
   type CurveLengths,
@@ -288,6 +289,7 @@ export function edwards(
   params: TArg<EdwardsOpts>,
   extraOpts: TArg<EdwardsExtraOpts> = {}
 ): EdwardsPointCons {
+  validateObject(extraOpts as any, {}, {}, 'extraOpts');
   const opts = extraOpts as EdwardsExtraOpts;
   const validated = createCurveFields('edwards', params as EdwardsOpts, opts, opts.FpFnLE);
   const { Fp, Fn } = validated;
@@ -566,6 +568,8 @@ export function edwards(
     toAffine(invertedZ?: bigint): AffinePoint<bigint> {
       const p = this;
       let iz = invertedZ;
+      if (iz != null && typeof iz !== 'bigint')
+        throw new TypeError('"invertedZ" expected bigint, got type=' + typeof iz);
       const { X, Y, Z } = p;
       const is0 = p.is0();
       if (iz == null) iz = is0 ? _8n : (Fp.inv(Z) as bigint); // 8 was chosen arbitrarily
@@ -778,6 +782,7 @@ export function eddsa(
   cHash: TArg<FHash>,
   eddsaOpts: TArg<EdDSAOpts> = {}
 ): EdDSA {
+  validatePointCons(Point);
   if (typeof cHash !== 'function') throw new Error('"hash" function param is required');
   const hash = cHash as FHash;
   const opts = eddsaOpts as EdDSAOpts;
@@ -869,6 +874,7 @@ export function eddsa(
     secretKey: TArg<Uint8Array>,
     options: TArg<{ context?: Uint8Array }> = {}
   ): TRet<Uint8Array> {
+    validateObject(options as any, {}, {}, 'options');
     msg = abytes(msg, undefined, 'message');
     if (prehash) msg = prehash(msg); // for ed25519ph etc.
     const { prefix, scalar, pointBytes } = getExtendedPublicKey(secretKey);

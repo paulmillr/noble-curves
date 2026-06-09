@@ -15,7 +15,15 @@
  * @module
  **/
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { abytes, notImplemented, randomBytes, type TArg, type TRet } from '../utils.ts';
+import {
+  aarray,
+  abytes,
+  notImplemented,
+  randomBytes,
+  validateObject,
+  type TArg,
+  type TRet,
+} from '../utils.ts';
 import { type CurveLengths } from './curve.ts';
 import {
   createHasher,
@@ -427,6 +435,22 @@ function createBlsPairing(
   G2: WeierstrassPointCons<Fp2>,
   params: TArg<BlsPairingParams>
 ): BlsPairing {
+  validateObject(
+    fields as any,
+    { Fp: 'object', Fr: 'object', Fp2: 'object', Fp12: 'object' },
+    { Fp6: 'object' },
+    'fields'
+  );
+  if (typeof G1 !== 'function')
+    throw new TypeError('"G1_Point" expected point constructor, got type=' + typeof G1);
+  if (typeof G2 !== 'function')
+    throw new TypeError('"G2_Point" expected point constructor, got type=' + typeof G2);
+  validateObject(
+    params as any,
+    { ateLoopSize: 'bigint', xNegative: 'boolean', twistType: 'string' },
+    { randomBytes: 'function', postPrecompute: 'function' },
+    'params'
+  );
   const { Fr, Fp2, Fp12 } = fields;
   const { twistType, ateLoopSize, xNegative, postPrecompute } = params;
   type G1 = typeof G1.BASE;
@@ -490,6 +514,8 @@ function createBlsPairing(
   const ATE_NAF = NAfDecomposition(ateLoopSize);
 
   const calcPairingPrecomputes = (point: G2) => {
+    if (!(point instanceof G2))
+      throw new TypeError('"point" expected G2 point, got type=' + typeof point);
     const p = point;
     const { x, y } = p.toAffine();
     // prettier-ignore
@@ -514,6 +540,11 @@ function createBlsPairing(
   // Applies calculated precomputes
   type MillerInput = [Precompute, Fp, Fp][];
   function millerLoopBatch(pairs: MillerInput, withFinalExponent: boolean = false) {
+    aarray<MillerInput[number]>(pairs, 'pairs', (pair, title) => {
+      aarray(pair, title);
+      if (pair.length !== 3) throw new TypeError(`"${title}" expected precompute tuple`);
+      aarray(pair[0], title + '[0]');
+    });
     let f12 = Fp12.ONE;
     if (pairs.length) {
       const ellLen = pairs[0][0].length;
@@ -532,8 +563,16 @@ function createBlsPairing(
   // Calculates product of multiple pairings
   // This up to x2 faster than just `map(({g1, g2})=>pairing({g1,g2}))`
   function pairingBatch(pairs: PairingInput[], withFinalExponent: boolean = true) {
+    aarray<PairingInput>(pairs, 'pairs');
     const res: MillerInput = [];
-    for (const { g1, g2 } of pairs) {
+    for (let i = 0; i < pairs.length; i++) {
+      const pair = pairs[i];
+      validateObject(pair as any, { g1: 'object', g2: 'object' }, {}, 'pairs[' + i + ']');
+      const { g1, g2 } = pair;
+      if (!(g1 instanceof G1))
+        throw new TypeError('"pairs[' + i + '].g1" expected G1 point, got type=' + typeof g1);
+      if (!(g2 instanceof G2))
+        throw new TypeError('"pairs[' + i + '].g2" expected G2 point, got type=' + typeof g2);
       // Mathematically, a zero pairing term contributes GT.ONE. We still reject it here because
       // this API mainly backs BLS verification, where ZERO inputs usually mean broken hash /
       // wiring. Silently skipping them would turn those failures into a neutral pairing product.
@@ -549,6 +588,8 @@ function createBlsPairing(
   }
   // Calculates bilinear pairing
   function pairing(Q: G1, P: G2, withFinalExponent: boolean = true): Fp12 {
+    if (!(Q instanceof G1)) throw new TypeError('"Q" expected G1 point, got type=' + typeof Q);
+    if (!(P instanceof G2)) throw new TypeError('"P" expected G2 point, got type=' + typeof P);
     return pairingBatch([{ g1: Q, g2: P }], withFinalExponent);
   }
   const lengths = {
@@ -756,8 +797,9 @@ type BlsSignatureCoders = Partial<{
  * ```ts
  * import { blsBasic } from '@noble/curves/abstract/bls.js';
  * import { bn254 } from '@noble/curves/bn254.js';
- * // Pair a G1 point with a G2 point without the higher-level signer helpers.
- * const gt = bn254.pairing(bn254.G1.Point.BASE, bn254.G2.Point.BASE);
+ * // Rebuild the pairing-only helper from a concrete curve's public pieces.
+ * const pair = blsBasic(bn254.fields, bn254.G1.Point, bn254.G2.Point, bn254.params);
+ * const gt = pair.pairing(pair.G1.Point.BASE, pair.G2.Point.BASE);
  * ```
  */
 export function blsBasic(
@@ -815,6 +857,12 @@ function blsHashers(
   hasherParams: TArg<BlsHasherParams>
 ): BlsCurvePairWithHashers {
   const base = blsBasic(fields, G1_Point, G2_Point, params);
+  validateObject(
+    hasherParams as any,
+    { hasherOpts: 'object', hasherOptsG1: 'object', hasherOptsG2: 'object' },
+    { mapToG1: 'function', mapToG2: 'function' },
+    'hasherParams'
+  );
   // Missing map hooks intentionally fail closed via notImplemented on first hash use.
   const G1Hasher = createHasher(
     G1_Point,
@@ -852,12 +900,21 @@ function blsHashers(
  * ```ts
  * import { bls } from '@noble/curves/abstract/bls.js';
  * import { bls12_381 } from '@noble/curves/bls12-381.js';
- * const sigs = bls12_381.longSignatures;
- * // Use the full BLS helper set when you need hashing, keygen, signing, and verification.
- * const { secretKey, publicKey } = sigs.keygen();
- * const msg = sigs.hash(new TextEncoder().encode('hello noble'));
- * const sig = sigs.sign(msg, secretKey);
- * const isValid = sigs.verify(sig, msg, publicKey);
+ * // Rebuild a signer namespace from a concrete curve.
+ * // Applications usually import bls12_381 directly.
+ * const rebuilt = bls(
+ *   bls12_381.fields,
+ *   bls12_381.G1.Point,
+ *   bls12_381.G2.Point,
+ *   bls12_381.params,
+ *   {
+ *     hasherOpts: bls12_381.G2.defaults,
+ *     hasherOptsG1: bls12_381.G1.defaults,
+ *     hasherOptsG2: bls12_381.G2.defaults,
+ *   },
+ *   {}
+ * );
+ * const { secretKey, publicKey } = rebuilt.longSignatures.keygen();
  * ```
  */
 export function bls(

@@ -41,7 +41,7 @@ There seems no reasonable way to check for availability, other than actually cal
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { abytes, type TArg, type TRet } from './utils.ts';
+import { abytes, validateObject, type TArg, type TRet } from './utils.ts';
 
 /** Raw type */
 const TYPE_RAW = 'raw';
@@ -212,6 +212,7 @@ function createKeyUtils(algo: Algo, derive: boolean, keyLen: number, pkcs8header
     secretKey: TArg<Key>,
     opts: TArg<WebCryptoOpts> = {}
   ): Promise<TRet<Key>> {
+    validateObject(opts, {}, { formatSec: 'string', formatPub: 'string' }, 'opts');
     const fsec = opts.formatSec ?? dfsec;
     const fpub = opts.formatPub ?? dfpub;
     // Export to jwk, remove private scalar and then convert to format
@@ -280,6 +281,7 @@ function createSigner(
       secretKey: TArg<Key>,
       opts: TArg<WebCryptoOpts> = {}
     ): Promise<TRet<Uint8Array>> {
+      validateObject(opts, {}, { formatSec: 'string', formatPub: 'string' }, 'opts');
       const key = await keys.priv.import(secretKey, opts.formatSec ?? dfsec);
       const sig = await getSubtle().sign(algo, key, msgHash);
       return new Uint8Array(sig) as TRet<Uint8Array>;
@@ -290,6 +292,7 @@ function createSigner(
       publicKey: TArg<Key>,
       opts: TArg<WebCryptoOpts> = {}
     ): Promise<boolean> {
+      validateObject(opts, {}, { formatSec: 'string', formatPub: 'string' }, 'opts');
       const key = await keys.pub.import(publicKey, opts.formatPub ?? dfpub);
       return await getSubtle().verify(algo, key, signature, msgHash);
     },
@@ -309,6 +312,7 @@ function createECDH(
       publicKeyB: TArg<Uint8Array>,
       opts: TArg<WebCryptoOpts> = {}
     ): Promise<TRet<Uint8Array>> {
+      validateObject(opts, {}, { formatSec: 'string', formatPub: 'string' }, 'opts');
       // if (_isCompressed !== true) throw new Error('WebCrypto only supports compressed keys');
       const secKey = await keys.priv.import(
         secretKeyA,

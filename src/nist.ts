@@ -102,9 +102,11 @@ const p256_Point = /* @__PURE__ */ weierstrass(p256_CURVE);
  * ```js
  * import { p256 } from '@noble/curves/nist.js';
  * const { secretKey, publicKey } = p256.keygen();
- * // const publicKey = p256.getPublicKey(secretKey);
+ * const recovered = p256.getPublicKey(secretKey);
+ * const peer = p256.keygen();
+ * const shared = p256.getSharedSecret(secretKey, peer.publicKey);
  * const msg = new TextEncoder().encode('hello noble');
- * const sig = p256.sign(msg, secretKey);
+ * const sig = p256.sign(msg, secretKey, { lowS: true, prehash: true });
  * const isValid = p256.verify(sig, msg, publicKey);
  * // const sigKeccak = p256.sign(keccak256(msg), secretKey, { prehash: false });
  * ```

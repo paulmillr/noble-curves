@@ -234,10 +234,12 @@ export const ed448ph: EdDSA = /* @__PURE__ */ ed4({ prehash: shake256_64 });
  * @param Z - Projective Z coordinate.
  * @param T - Projective T coordinate.
  * @example
- * Multiply the E448 base point.
+ * Reconstruct and validate the E448 base point from its projective coordinates.
  *
  * ```ts
- * const point = E448.BASE.multiply(2n);
+ * import { E448 } from '@noble/curves/ed448.js';
+ * const point = new E448(E448.BASE.X, E448.BASE.Y, E448.BASE.Z, E448.BASE.T);
+ * point.assertValidity();
  * ```
  */
 export const E448: EdwardsPointCons = /* @__PURE__ */ edwards(E448_CURVE, { Fp, Fn });
