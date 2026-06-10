@@ -177,6 +177,46 @@ export function astring(value: unknown, title: string = ''): string {
   return value;
 }
 /**
+ * Asserts something is a plain object-ish value, not null or array.
+ * @param value - Value to validate.
+ * @param title - Label included in thrown errors.
+ * @returns The validated object.
+ * @throws On wrong argument types. {@link TypeError}
+ * @example
+ * Validate an options object before checking fields.
+ *
+ * ```ts
+ * aobject({ flag: true });
+ * ```
+ */
+export function aobject<T extends Record<string, any>>(value: T, title: string = 'object'): T {
+  if (value === null || typeof value !== 'object' || Array.isArray(value))
+    throw new TypeError(
+      title === 'object'
+        ? 'expected valid options object'
+        : `"${title}" expected object, got type=${typeof value}`
+    );
+  return value;
+}
+/**
+ * Asserts something is a function.
+ * @param value - Value to validate.
+ * @param title - Label included in thrown errors.
+ * @returns The validated function.
+ * @throws On wrong argument types. {@link TypeError}
+ * @example
+ * Validate a required method before calling it.
+ *
+ * ```ts
+ * afunction(() => true, 'predicate');
+ * ```
+ */
+export function afunction<T extends (...args: any[]) => any>(value: T, title: string): T {
+  if (typeof value !== 'function')
+    throw new TypeError(`"${title}" is invalid: expected function, got ${typeof value}`);
+  return value;
+}
+/**
  * Encodes bytes as lowercase hex.
  * @param bytes - Bytes to encode.
  * @returns Lowercase hex string.
@@ -755,6 +795,8 @@ export function createHmacDrbg<T>(
  * Validates declared required and optional field types on a plain object.
  * Extra keys are intentionally ignored because many callers validate only the subset they use from
  * richer option bags or runtime objects.
+ * This walks field schemas and formats detailed errors, so avoid it on hot paths; use direct
+ * one-line guards such as `aobject()`, `afunction()`, `abool()`, or `asafenumber()` instead.
  * @param object - Object to validate.
  * @param fields - Required field types.
  * @param optFields - Optional field types.
@@ -772,17 +814,9 @@ export function validateObject(
   optFields: Record<string, string> = {},
   title = 'object'
 ): void {
-  const checkObject = (value: Record<string, any>, label: string) => {
-    if (value === null || typeof value !== 'object' || Array.isArray(value))
-      throw new TypeError(
-        label === 'object'
-          ? 'expected valid options object'
-          : `"${label}" expected object, got type=${typeof value}`
-      );
-  };
-  checkObject(object, title);
-  checkObject(fields, 'fields');
-  checkObject(optFields, 'optFields');
+  aobject(object, title);
+  aobject(fields, 'fields');
+  aobject(optFields, 'optFields');
   type Item = keyof typeof object;
   function checkField(fieldName: Item, expectedType: string, isOpt: boolean) {
     const label =

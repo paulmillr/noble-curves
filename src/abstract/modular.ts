@@ -8,6 +8,8 @@
 import {
   aarray,
   abool,
+  afunction,
+  aobject,
   abytes,
   anumber,
   asafenumber,
@@ -16,7 +18,6 @@ import {
   bytesToNumberLE,
   numberToBytesBE,
   numberToBytesLE,
-  validateObject,
   type TArg,
   type TRet,
 } from '../utils.ts';
@@ -529,20 +530,14 @@ const FIELD_FIELDS = [
  * ```
  */
 export function validateField<T>(field: TArg<IField<T>>): TRet<IField<T>> {
-  const initial = {
-    ORDER: 'bigint',
-    BYTES: 'number',
-    BITS: 'number',
-  } as Record<string, string>;
-  const opts = FIELD_FIELDS.reduce((map, val: string) => {
-    map[val] = 'function';
-    return map;
-  }, initial);
-  validateObject(field, opts);
+  aobject(field as any, 'field');
+  if (typeof field.ORDER !== 'bigint')
+    throw new TypeError('param "ORDER" is invalid: expected bigint, got ' + typeof field.ORDER);
   // Runtime field implementations must expose real integer byte/bit sizes; fractional / NaN /
-  // infinite metadata leaks through validateObject(type='number') but breaks encoders and caches.
+  // infinite metadata breaks encoders and caches.
   asafenumber(field.BYTES, 'BYTES');
   asafenumber(field.BITS, 'BITS');
+  for (const name of FIELD_FIELDS) afunction((field as any)[name], 'field.' + name);
   // Runtime field implementations must expose positive byte/bit sizes; zero leaks through the
   // numeric shape checks above but still breaks encoding helpers and cached-length assumptions.
   if (field.BYTES < 1 || field.BITS < 1) throw new Error('invalid field: expected BYTES/BITS > 0');

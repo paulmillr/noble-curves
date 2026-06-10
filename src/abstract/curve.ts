@@ -7,6 +7,8 @@
 import {
   aarray,
   abool,
+  afunction,
+  aobject,
   bitLen,
   bitMask,
   isPosBig,
@@ -243,23 +245,9 @@ export function validatePointCons<P extends CurvePoint<any, P>>(Point: CurvePoin
   const pc = Point as unknown as CurvePointCons<any>;
   if (typeof (pc as unknown) !== 'function')
     throw new TypeError('"Point" expected constructor, got type=' + typeof Point);
-  // validateObject only accepts plain objects, so copy the constructor statics into one bag first.
-  validateObject(
-    {
-      Fp: pc.Fp,
-      Fn: pc.Fn,
-      fromAffine: pc.fromAffine,
-      fromBytes: pc.fromBytes,
-      fromHex: pc.fromHex,
-    },
-    {
-      Fp: 'object',
-      Fn: 'object',
-      fromAffine: 'function',
-      fromBytes: 'function',
-      fromHex: 'function',
-    }
-  );
+  afunction(pc.fromAffine, 'Point.fromAffine');
+  afunction(pc.fromBytes, 'Point.fromBytes');
+  afunction(pc.fromHex, 'Point.fromHex');
   validateField(pc.Fp);
   validateField(pc.Fn);
 }
@@ -300,7 +288,8 @@ export type Mapper<T> = (i: T[]) => T[];
  */
 export function negateCt<T extends { negate: () => T }>(condition: boolean, item: T): T {
   abool(condition, 'condition');
-  validateObject(item as any, { negate: 'function' }, {}, 'item');
+  aobject(item as any, 'item');
+  afunction(item.negate, 'item.negate');
   const neg = item.negate();
   return condition ? neg : item;
 }

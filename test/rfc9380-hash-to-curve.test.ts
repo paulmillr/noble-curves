@@ -360,10 +360,7 @@ should('sqrt_ratio treats zero numerator as square only for non-zero denominator
   eql(SWUFpSqrtRatio(Fp11, 2n)(0n, 0n), { isValid: false, value: 0n });
 });
 should('SWUFpSqrtRatio validates malformed field objects before using them', () => {
-  throws(
-    () => SWUFpSqrtRatio({ ORDER: 11n } as any, 2n),
-    /param "BYTES" is invalid: expected own property/
-  );
+  throws(() => SWUFpSqrtRatio({ ORDER: 11n } as any, 2n), /"BYTES" expected number/);
 });
 
 should.runWhen(import.meta.url);

@@ -325,14 +325,30 @@ describe('utils', () => {
       }
     });
   }
-  if (extra.abool && extra.asafenumber && extra.aInRange && extra.validateObject) {
+  if (
+    extra.abool &&
+    extra.afunction &&
+    extra.aobject &&
+    extra.asafenumber &&
+    extra.aInRange &&
+    extra.validateObject
+  ) {
     const abool = extra.abool;
+    const afunction = extra.afunction;
+    const aobject = extra.aobject;
     const asafenumber = extra.asafenumber;
     const aInRange = extra.aInRange;
     const validateObject = extra.validateObject;
-    should('abool/asafenumber/aInRange/validateObject', () => {
+    should('abool/afunction/aobject/asafenumber/aInRange/validateObject', () => {
       eql(abool(true), true);
       throws(() => abool('x' as any), TypeError);
+      const fn = () => true;
+      eql(afunction(fn, 'fn'), fn);
+      throws(() => afunction('x' as any, 'fn'), TypeError);
+      const obj = { flag: true };
+      eql(aobject(obj), obj);
+      throws(() => aobject('bad' as any), TypeError);
+      throws(() => aobject([] as any), TypeError);
       eql(asafenumber(1), undefined);
       throws(() => asafenumber('1' as any), TypeError);
       throws(() => asafenumber(1.5), RangeError);
