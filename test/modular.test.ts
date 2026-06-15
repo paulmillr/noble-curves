@@ -122,205 +122,176 @@ for (const c in FIELDS) {
     const noGenericSqrt = noSqrt || [bls12_381.fields.Fp2, bn254.fields.Fp2].includes(Fp);
 
     describe(name, () => {
+      const l = (msg) => `${name} ${msg}`;
+      const checkRoot = (n, root, label = 'root') => {
+        const negRoot = Fp.neg(root);
+        eql(mod.FpPow(Fp, root, 2n), n, l(`${label}: FpPow(root, 2) == n`));
+        eql(mod.FpPow(Fp, negRoot, 2n), n, l(`${label}: FpPow(-root, 2) == n`));
+        // Cross-check with tonelli
+        eql(Fp.mul(root, root), n, l(`${label}: root * root == n`));
+        eql(Fp.mul(negRoot, negRoot), n, l(`${label}: -root * -root == n`));
+        eql(Fp.eql(Fp.sqr(root), n), true, l(`${label}: sqrt(a)^2 == a`));
+        eql(Fp.eql(Fp.sqr(Fp.neg(root)), n), true, l(`${label}: (-sqrt(a))^2 == a`));
+        // Returns odd/even element
+        eql(Fp.isOdd(mod.FpSqrtOdd(Fp, n)), true, l(`${label}: FpSqrtOdd is odd`));
+        eql(Fp.isOdd(mod.FpSqrtEven(Fp, n)), false, l(`${label}: FpSqrtEven is even`));
+        eql(Fp.eql(Fp.sqr(mod.FpSqrtOdd(Fp, n)), n), true, l(`${label}: FpSqrtOdd squared == n`));
+        eql(Fp.eql(Fp.sqr(mod.FpSqrtEven(Fp, n)), n), true, l(`${label}: FpSqrtEven squared == n`));
+      };
+
       should('equality', () => {
         fc.assert(
           fc.property(FC_BIGINT, (num) => {
             const a = create(num);
             const b = create(num);
-            eql(Fp.eql(a, b), true);
-            eql(Fp.eql(b, a), true);
+            eql(Fp.eql(a, b), true, l('eql(a, b) for same input'));
+            eql(Fp.eql(b, a), true, l('eql(b, a) for same input'));
           })
         );
-      });
-      should('non-equality', () => {
         fc.assert(
           fc.property(FC_BIGINT, FC_BIGINT, (num1, num2) => {
             // TODO: num1 === num2 is FALSE for Fp2
             const a = create(num1);
             const b = create(num2);
-            eql(Fp.eql(a, b), num1 === num2);
-            eql(Fp.eql(b, a), num1 === num2);
+            eql(Fp.eql(a, b), num1 === num2, l('eql(a, b) follows source equality'));
+            eql(Fp.eql(b, a), num1 === num2, l('eql(b, a) follows source equality'));
           })
         );
       });
-      should('add/subtract/commutativity', () => {
+
+      should('add/subtract', () => {
         fc.assert(
           fc.property(FC_BIGINT, FC_BIGINT, (num1, num2) => {
             const a = create(num1);
             const b = create(num2);
-            eql(Fp.add(a, b), Fp.add(b, a));
+            eql(Fp.add(a, b), Fp.add(b, a), l('add commutativity'));
           })
         );
-      });
-      should('add/subtract/associativity', () => {
         fc.assert(
           fc.property(FC_BIGINT, FC_BIGINT, FC_BIGINT, (num1, num2, num3) => {
             const a = create(num1);
             const b = create(num2);
             const c = create(num3);
-            eql(Fp.add(a, Fp.add(b, c)), Fp.add(Fp.add(a, b), c));
+            eql(Fp.add(a, Fp.add(b, c)), Fp.add(Fp.add(a, b), c), l('add associativity'));
           })
         );
-      });
-      should('add/subtract/x+0=x', () => {
         fc.assert(
           fc.property(FC_BIGINT, (num) => {
             const a = create(num);
-            eql(Fp.add(a, Fp.ZERO), a);
+            eql(Fp.add(a, Fp.ZERO), a, l('x + 0 == x'));
           })
         );
-      });
-      should('add/subtract/x-0=x', () => {
         fc.assert(
           fc.property(FC_BIGINT, (num) => {
             const a = create(num);
-            eql(Fp.sub(a, Fp.ZERO), a);
-            eql(Fp.sub(a, a), Fp.ZERO);
+            eql(Fp.sub(a, Fp.ZERO), a, l('x - 0 == x'));
+            eql(Fp.sub(a, a), Fp.ZERO, l('x - x == 0'));
           })
         );
-      });
-      should('add/subtract/negate equality', () => {
         fc.assert(
           fc.property(FC_BIGINT, (num1) => {
             const a = create(num1);
             const b = create(num1);
             const minus1 = Fp.neg(Fp.ONE);
-            eql(Fp.sub(Fp.ZERO, a), Fp.neg(a));
-            eql(Fp.sub(a, b), Fp.add(a, Fp.neg(b)));
-            eql(Fp.sub(a, b), Fp.add(a, Fp.mul(b, minus1)));
+            eql(Fp.sub(Fp.ZERO, a), Fp.neg(a), l('0 - x == neg(x)'));
+            eql(Fp.sub(a, b), Fp.add(a, Fp.neg(b)), l('x - y == x + neg(y)'));
+            eql(Fp.sub(a, b), Fp.add(a, Fp.mul(b, minus1)), l('x - y == x + y * -1'));
           })
         );
-      });
-      should('add/subtract/negate', () => {
         fc.assert(
           fc.property(FC_BIGINT, (num) => {
             const a = create(num);
-            eql(Fp.neg(a), Fp.sub(Fp.ZERO, a));
-            eql(Fp.neg(a), Fp.mul(a, Fp.neg(Fp.ONE)));
+            eql(Fp.neg(a), Fp.sub(Fp.ZERO, a), l('neg(x) == 0 - x'));
+            eql(Fp.neg(a), Fp.mul(a, Fp.neg(Fp.ONE)), l('neg(x) == x * -1'));
           })
         );
-      });
-      should('negate(0)', () => {
-        eql(Fp.neg(Fp.ZERO), Fp.ZERO);
+        eql(Fp.neg(Fp.ZERO), Fp.ZERO, l('neg(0) == 0'));
       });
 
-      should('multiply/commutativity', () => {
+      should('multiply/square/pow', () => {
         fc.assert(
           fc.property(FC_BIGINT, FC_BIGINT, (num1, num2) => {
             const a = create(num1);
             const b = create(num2);
-            eql(Fp.mul(a, b), Fp.mul(b, a));
+            eql(Fp.mul(a, b), Fp.mul(b, a), l('multiply commutativity'));
           })
         );
-      });
-      should('multiply/associativity', () => {
         fc.assert(
           fc.property(FC_BIGINT, FC_BIGINT, FC_BIGINT, (num1, num2, num3) => {
             const a = create(num1);
             const b = create(num2);
             const c = create(num3);
-            eql(Fp.mul(a, Fp.mul(b, c)), Fp.mul(Fp.mul(a, b), c));
+            eql(Fp.mul(a, Fp.mul(b, c)), Fp.mul(Fp.mul(a, b), c), l('multiply associativity'));
           })
         );
-      });
-      should('multiply/distributivity', () => {
         fc.assert(
           fc.property(FC_BIGINT, FC_BIGINT, FC_BIGINT, (num1, num2, num3) => {
             const a = create(num1);
             const b = create(num2);
             const c = create(num3);
-            eql(Fp.mul(a, Fp.add(b, c)), Fp.add(Fp.mul(b, a), Fp.mul(c, a)));
+            eql(
+              Fp.mul(a, Fp.add(b, c)),
+              Fp.add(Fp.mul(b, a), Fp.mul(c, a)),
+              l('multiply distributivity over addition')
+            );
           })
         );
-      });
-      should('multiply/add equality', () => {
         fc.assert(
           fc.property(FC_BIGINT, (num) => {
             const a = create(num);
-            eql(Fp.mul(a, 0n), Fp.ZERO);
-            eql(Fp.mul(a, Fp.ZERO), Fp.ZERO);
-            eql(Fp.mul(a, 1n), a);
-            eql(Fp.mul(a, Fp.ONE), a);
-            eql(Fp.mul(a, 2n), Fp.add(a, a));
-            eql(Fp.mul(a, 3n), Fp.add(Fp.add(a, a), a));
-            eql(Fp.mul(a, 4n), Fp.add(Fp.add(Fp.add(a, a), a), a));
+            eql(Fp.mul(a, 0n), Fp.ZERO, l('x * 0n == 0'));
+            eql(Fp.mul(a, Fp.ZERO), Fp.ZERO, l('x * ZERO == 0'));
+            eql(Fp.mul(a, 1n), a, l('x * 1n == x'));
+            eql(Fp.mul(a, Fp.ONE), a, l('x * ONE == x'));
+            eql(Fp.mul(a, 2n), Fp.add(a, a), l('x * 2 == x + x'));
+            eql(Fp.mul(a, 3n), Fp.add(Fp.add(a, a), a), l('x * 3 == x + x + x'));
+            eql(Fp.mul(a, 4n), Fp.add(Fp.add(Fp.add(a, a), a), a), l('x * 4 == x + x + x + x'));
           })
         );
-      });
-      should('multiply/square equality', () => {
         fc.assert(
           fc.property(FC_BIGINT, (num) => {
             const a = create(num);
-            eql(Fp.sqr(a), Fp.mul(a, a));
+            eql(Fp.sqr(a), Fp.mul(a, a), l('sqr(x) == x * x'));
           })
         );
-      });
-      should('multiply/pow equality', () => {
         fc.assert(
           fc.property(FC_BIGINT, (num) => {
             const a = create(num);
-            eql(Fp.pow(a, 0n), Fp.ONE);
-            eql(Fp.pow(a, 1n), a);
-            eql(Fp.pow(a, 2n), Fp.mul(a, a));
-            eql(Fp.pow(a, 3n), Fp.mul(Fp.mul(a, a), a));
+            eql(Fp.pow(a, 0n), Fp.ONE, l('pow(x, 0) == 1'));
+            eql(Fp.pow(a, 1n), a, l('pow(x, 1) == x'));
+            eql(Fp.pow(a, 2n), Fp.mul(a, a), l('pow(x, 2) == x * x'));
+            eql(Fp.pow(a, 3n), Fp.mul(Fp.mul(a, a), a), l('pow(x, 3) == x * x * x'));
           })
         );
-      });
 
-      should('square(0)', () => {
-        eql(Fp.sqr(Fp.ZERO), Fp.ZERO);
-        eql(Fp.mul(Fp.ZERO, Fp.ZERO), Fp.ZERO);
-      });
-
-      should('square(1)', () => {
-        eql(Fp.sqr(Fp.ONE), Fp.ONE);
-        eql(Fp.mul(Fp.ONE, Fp.ONE), Fp.ONE);
-      });
-
-      should('square(-1)', () => {
+        eql(Fp.sqr(Fp.ZERO), Fp.ZERO, l('sqr(0) == 0'));
+        eql(Fp.mul(Fp.ZERO, Fp.ZERO), Fp.ZERO, l('0 * 0 == 0'));
+        eql(Fp.sqr(Fp.ONE), Fp.ONE, l('sqr(1) == 1'));
+        eql(Fp.mul(Fp.ONE, Fp.ONE), Fp.ONE, l('1 * 1 == 1'));
         const minus1 = Fp.neg(Fp.ONE);
-        eql(Fp.sqr(minus1), Fp.ONE);
-        eql(Fp.mul(minus1, minus1), Fp.ONE);
-      });
+        eql(Fp.sqr(minus1), Fp.ONE, l('sqr(-1) == 1'));
+        eql(Fp.mul(minus1, minus1), Fp.ONE, l('-1 * -1 == 1'));
 
-      should('FpInvertBatch0', () => {
         const inv0 = (val) => mod.FpInvertBatch(Fp, [val], true)[0];
-        eql(inv0(Fp.ZERO), Fp.ZERO);
+        eql(inv0(Fp.ZERO), Fp.ZERO, l('FpInvertBatch passZero keeps zero'));
         const i16 = Fp.mul(Fp.ONE, 16n);
         const i4 = Fp.mul(Fp.ONE, 4n);
-        eql(Fp.eql(Fp.mul(i16, inv0(i4)), i4), true); // 16/4 == 4
+        eql(Fp.eql(Fp.mul(i16, inv0(i4)), i4), true, l('16 * inv(4) == 4'));
       });
-
-      const checkRoot = (n, root) => {
-        const negRoot = Fp.neg(root);
-        eql(mod.FpPow(Fp, root, 2n), n);
-        eql(mod.FpPow(Fp, negRoot, 2n), n);
-        // Cross-check with tonneli
-        eql(Fp.mul(root, root), n);
-        eql(Fp.mul(negRoot, negRoot), n);
-        eql(Fp.eql(Fp.sqr(root), n), true, 'sqrt(a)^2 == a');
-        eql(Fp.eql(Fp.sqr(Fp.neg(root)), n), true, '(-sqrt(a))^2 == a');
-        // Returns odd/even element
-        eql(Fp.isOdd(mod.FpSqrtOdd(Fp, n)), true);
-        eql(Fp.isOdd(mod.FpSqrtEven(Fp, n)), false);
-        eql(Fp.eql(Fp.sqr(mod.FpSqrtOdd(Fp, n)), n), true);
-        eql(Fp.eql(Fp.sqr(mod.FpSqrtEven(Fp, n)), n), true);
-      };
 
       // Extension fields can still use `FpLegendre` / `FpIsSquare` when ORDER=q.
       // Only the generic `FpSqrt(P)` / Tonelli-Shanks path is prime-field-specific here.
-      if (!noSqrt) {
-        should('sqrt(sqr)', () => {
+      if (!noGenericSqrt) SQRT_FIELDS.push(Fp);
+      should('sqrt/legendre', () => {
+        if (!noSqrt) {
           fc.assert(
             fc.property(FC_BIGINT, (num) => {
               const x = create(num);
               const sq = Fp.mul(x, x);
               const root = Fp.sqrt(sq);
-              eql(Fp.eql(root, x) || Fp.eql(root, Fp.neg(x)), true);
+              eql(Fp.eql(root, x) || Fp.eql(root, Fp.neg(x)), true, l('sqrt(sqr(x)) is +/-x'));
             })
           );
-        });
-        should('sqrt(field)', () => {
           fc.assert(
             fc.property(FC_BIGINT, (num) => {
               const a = create(num);
@@ -329,49 +300,43 @@ for (const c in FIELDS) {
                 root = Fp.sqrt(a);
               } catch (e) {
                 if (!e.message.includes('Cannot find square root')) throw e;
-                eql(mod.FpIsSquare(Fp, a), false);
+                eql(mod.FpIsSquare(Fp, a), false, l('sqrt failure marks non-square'));
                 return;
               }
-              checkRoot(a, root);
+              checkRoot(a, root, 'sqrt(field)');
             })
           );
-        });
-      }
-      should('sqr returns square', () =>
+        }
         fc.assert(
           fc.property(FC_BIGINT, (num) => {
             const x = create(num);
-            eql(mod.FpIsSquare(Fp, Fp.sqr(x)), true);
+            eql(mod.FpIsSquare(Fp, Fp.sqr(x)), true, l('sqr(x) returns a square'));
           })
-        )
-      );
-      should('legendre correctness', () =>
+        );
         fc.assert(
           fc.property(FC_BIGINT, (num) => {
             const n = create(num);
             const leg = BigInt(mod.FpLegendre(Fp, n));
-            eql(Fp.mul(Fp.ONE, leg), Fp.pow(n, (Fp.ORDER - 1n) / 2n));
+            eql(Fp.mul(Fp.ONE, leg), Fp.pow(n, (Fp.ORDER - 1n) / 2n), l('legendre correctness'));
           })
-        )
-      );
-      should('legendre multiplicativity', () =>
+        );
         fc.assert(
           fc.property(FC_BIGINT, FC_BIGINT, (num1, num2) => {
             const a = create(num1);
             const b = create(num2);
-            eql(mod.FpLegendre(Fp, a) * mod.FpLegendre(Fp, b), mod.FpLegendre(Fp, Fp.mul(a, b)));
+            eql(
+              mod.FpLegendre(Fp, a) * mod.FpLegendre(Fp, b),
+              mod.FpLegendre(Fp, Fp.mul(a, b)),
+              l('legendre multiplicativity')
+            );
           })
-        )
-      );
-      if (!noGenericSqrt) {
-        SQRT_FIELDS.push(Fp);
-        should('sqrt(0)', () => {
-          eql(Fp.sqrt(Fp.ZERO), Fp.ZERO);
+        );
+        if (!noGenericSqrt) {
+          eql(Fp.sqrt(Fp.ZERO), Fp.ZERO, l('sqrt(0) == 0'));
           const sqrt1 = Fp.sqrt(Fp.ONE);
-          eql(Fp.eql(sqrt1, Fp.ONE) || Fp.eql(sqrt1, Fp.neg(Fp.ONE)), true, 'sqrt(1) = 1 or -1');
-          eql(mod.FpLegendre(Fp, Fp.ZERO), 0);
-        });
-        should('FpSqrt + legendre', () =>
+          eql(Fp.eql(sqrt1, Fp.ONE) || Fp.eql(sqrt1, Fp.neg(Fp.ONE)), true, l('sqrt(1) = 1 or -1'));
+          eql(mod.FpLegendre(Fp, Fp.ZERO), 0, l('legendre(0) == 0 with generic sqrt'));
+
           fc.assert(
             fc.property(FC_BIGINT, (num) => {
               const n = create(num);
@@ -379,113 +344,108 @@ for (const c in FIELDS) {
               if (leg === 1) {
                 const root = mod.FpSqrt(Fp.ORDER)(Fp, n);
                 const negRoot = Fp.neg(root);
-                checkRoot(n, root);
+                checkRoot(n, root, 'FpSqrt');
                 const t = mod.tonelliShanks(Fp.ORDER)(Fp, n);
-                eql(Fp.eql(t, root) || Fp.eql(t, negRoot), true);
+                eql(Fp.eql(t, root) || Fp.eql(t, negRoot), true, l('tonelli root is +/- FpSqrt'));
               } else if (leg === 0) {
-                eql(n, Fp.ZERO);
-                eql(mod.FpIsSquare(Fp, n), true);
+                eql(n, Fp.ZERO, l('legendre zero only for zero'));
+                eql(mod.FpIsSquare(Fp, n), true, l('zero is square'));
               } else if (leg === -1) {
                 throws(() => mod.FpSqrt(Fp, n));
-                eql(mod.FpIsSquare(Fp, n), false);
+                eql(mod.FpIsSquare(Fp, n), false, l('non-residue is not square'));
               } else {
                 throw new Error('unexpected legendre output');
               }
             })
-          )
-        );
-      } else {
-        should('sqrt(fail)', () =>
+          );
+        } else {
           fc.assert(
             fc.property(FC_BIGINT, (num) => {
               const a = create(num);
               throws(() => mod.FpSqrt(Fp.ORDER)(Fp, n));
             })
-          )
-        );
-      }
-      should('pow(x*y, e) == pow(x,e)*pow(y,e)', () =>
+          );
+        }
+        eql(mod.FpLegendre(Fp, Fp.ZERO), 0, l('legendre(0) == 0'));
+        eql(mod.FpIsSquare(Fp, Fp.ZERO), true, l('isSquare(0) == true'));
+      });
+
+      should('pow properties', () => {
         fc.assert(
           fc.property(FC_BIGINT, FC_BIGINT, FC_BIGINT, (num1, num2, num3) => {
             const a = create(num1);
             const b = create(num2);
             const c = create(num3);
-            eql(Fp.pow(Fp.mul(a, b), c), Fp.mul(Fp.pow(a, c), Fp.pow(b, c)));
+            eql(
+              Fp.pow(Fp.mul(a, b), c),
+              Fp.mul(Fp.pow(a, c), Fp.pow(b, c)),
+              l('pow(x*y, e) == pow(x,e)*pow(y,e)')
+            );
           })
-        )
-      );
-      should('pow(x, 0) = 1', () => {
+        );
         fc.assert(
           fc.property(FC_BIGINT, (num) => {
             const x = create(num);
             if (Fp.eql(x, Fp.ZERO)) return; // Optional skip or check 0^0 edge case
-            eql(Fp.eql(mod.FpPow(Fp, x, 0n), Fp.ONE), true);
+            eql(Fp.eql(mod.FpPow(Fp, x, 0n), Fp.ONE), true, l('FpPow(x, 0) == 1'));
           })
         );
-      });
-      should('pow(x, 1) = x', () => {
         fc.assert(
           fc.property(FC_BIGINT, (num) => {
             const x = create(num);
-            eql(Fp.eql(mod.FpPow(Fp, x, 1n), x), true);
+            eql(Fp.eql(mod.FpPow(Fp, x, 1n), x), true, l('FpPow(x, 1) == x'));
           })
         );
-      });
-      should('pow(x, q-1) = 1 for x ≠ 0', () => {
         fc.assert(
           fc.property(FC_BIGINT, (num) => {
             const x = create(num);
             if (Fp.eql(x, Fp.ZERO)) return;
-            eql(Fp.eql(mod.FpPow(Fp, x, Fp.ORDER - 1n), Fp.ONE), true);
+            eql(Fp.eql(mod.FpPow(Fp, x, Fp.ORDER - 1n), Fp.ONE), true, l('FpPow(x, q-1) == 1'));
           })
         );
       });
-      should('legendre(0)', () => {
-        eql(mod.FpLegendre(Fp, Fp.ZERO), 0);
-      });
-      should('isSquare(0)', () => {
-        eql(mod.FpIsSquare(Fp, Fp.ZERO), true);
-      });
 
-      should('div/division by one equality', () => {
+      should('division', () => {
         fc.assert(
           fc.property(FC_BIGINT, (num) => {
             const a = create(num);
             if (Fp.eql(a, Fp.ZERO)) return; // No division by zero
-            eql(Fp.div(a, Fp.ONE), a);
-            eql(Fp.div(a, a), Fp.ONE);
+            eql(Fp.div(a, Fp.ONE), a, l('x / 1 == x'));
+            eql(Fp.div(a, a), Fp.ONE, l('x / x == 1'));
             // FpDiv tests
-            eql(mod.FpDiv(Fp, a, Fp.ONE), a);
-            eql(mod.FpDiv(Fp, a, a), Fp.ONE);
+            eql(mod.FpDiv(Fp, a, Fp.ONE), a, l('FpDiv(x, 1) == x'));
+            eql(mod.FpDiv(Fp, a, a), Fp.ONE, l('FpDiv(x, x) == 1'));
           })
         );
-      });
-      should('zero division equality', () => {
         fc.assert(
           fc.property(FC_BIGINT, (num) => {
             const a = create(num);
-            eql(Fp.div(Fp.ZERO, a), Fp.ZERO);
-            eql(mod.FpDiv(Fp, Fp.ZERO, a), Fp.ZERO);
+            eql(Fp.div(Fp.ZERO, a), Fp.ZERO, l('0 / x == 0'));
+            eql(mod.FpDiv(Fp, Fp.ZERO, a), Fp.ZERO, l('FpDiv(0, x) == 0'));
           })
         );
-      });
-      should('div/division distributivity', () => {
         fc.assert(
           fc.property(FC_BIGINT, FC_BIGINT, FC_BIGINT, (num1, num2, num3) => {
             const a = create(num1);
             const b = create(num2);
             const c = create(num3);
-            eql(Fp.div(Fp.add(a, b), c), Fp.add(Fp.div(a, c), Fp.div(b, c)));
-            eql(mod.FpDiv(Fp, Fp.add(a, b), c), Fp.add(mod.FpDiv(Fp, a, c), mod.FpDiv(Fp, b, c)));
+            eql(
+              Fp.div(Fp.add(a, b), c),
+              Fp.add(Fp.div(a, c), Fp.div(b, c)),
+              l('(x + y) / z == x / z + y / z')
+            );
+            eql(
+              mod.FpDiv(Fp, Fp.add(a, b), c),
+              Fp.add(mod.FpDiv(Fp, a, c), mod.FpDiv(Fp, b, c)),
+              l('FpDiv(x + y, z) == FpDiv(x, z) + FpDiv(y, z)')
+            );
           })
         );
-      });
-      should('div/division and multiplication equality', () => {
         fc.assert(
           fc.property(FC_BIGINT, FC_BIGINT, (num1, num2) => {
             const a = create(num1);
             const b = create(num2);
-            eql(Fp.div(a, b), Fp.mul(a, Fp.inv(b)));
+            eql(Fp.div(a, b), Fp.mul(a, Fp.inv(b)), l('x / y == x * inv(y)'));
           })
         );
       });

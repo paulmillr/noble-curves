@@ -28,7 +28,7 @@
     "check": "npx --no @paulmillr/jsbt check package.json",
     "build:clean": "rm {.,abstract}/*.{js,d.ts,d.ts.map,js.map} 2> /dev/null",
     "format": "prettier --write 'src/**/*.{js,ts}' 'test/*.{js,ts}'",
-    "test": "node test/index.ts",
+    "test": "node --no-warnings test/index.ts",
     "test:bun": "bun test/index.ts",
     "test:deno": "deno --allow-env --allow-read test/index.ts",
     "test:tsc": "cd test; npx tsc; node compiled/test/index.js",
