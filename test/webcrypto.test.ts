@@ -5,33 +5,6 @@ import { ed448, x448 } from '../src/ed448.ts';
 import { p256, p384, p521 } from '../src/nist.ts';
 import * as webcrypto from '../src/webcrypto.ts';
 
-// import {  base64urlnopad } from '@scure/base';
-
-// function nobleJWK(curve, noble, key) {
-//   if (curve === 'X25519' || curve === 'Ed25519' || curve === 'Ed448') {
-//     const basic = {
-//       key_ops: curve === 'X25519' ? ['deriveBits'] : ['sign'],
-//       ext: true,
-//       crv: curve,
-//       x: base64urlnopad.encode(noble.getPublicKey(key)),
-//       d: base64urlnopad.encode(key),
-//       kty: 'OKP',
-//     };
-//     return basic;
-//   }
-//   const { x, y } = noble.Point.fromBytes(noble.getPublicKey(key)).toAffine();
-//   const Fp = noble.Point.Fp;
-//   return {
-//     key_ops: ['sign', 'deriveBits'],
-//     ext: true,
-//     kty: 'EC',
-//     crv: curve,
-//     x: base64urlnopad.encode(Fp.toBytes(x)),
-//     y: base64urlnopad.encode(Fp.toBytes(y)),
-//     d: base64urlnopad.encode(key),
-//   };
-// }
-
 const CURVES = {
   p256: { noble: p256, web: webcrypto.p256, canSign: true, canDerive: true },
   p384: { noble: p384, web: webcrypto.p384, canSign: true, canDerive: true },

@@ -17,61 +17,8 @@ import {
 import { p192, p224, secp192r1, secp224r1 } from './_more-curves.helpers.ts';
 import { deepHexToBytes, json } from './utils.ts';
 
-const rfc6979 = json('./vectors/rfc6979.json');
-const endoVectors = json('./vectors/secp256k1/endomorphism.json');
-
 const PREFIX = './vectors/wycheproof/';
 const deepJson = (name) => deepHexToBytes(json(PREFIX + name + '_test.json'));
-const vecdsa = deepJson('ecdsa');
-const vecdh = deepJson('ecdh');
-const ecdh_secp224r1_test = deepJson('ecdh_secp224r1');
-const ecdh_secp256r1_test = deepJson('ecdh_secp256r1');
-const ecdh_secp256k1_test = deepJson('ecdh_secp256k1');
-const ecdh_secp384r1_test = deepJson('ecdh_secp384r1');
-const ecdh_secp521r1_test = deepJson('ecdh_secp521r1');
-// Tests with custom hashes
-const secp224r1_sha224_test = deepJson('ecdsa_secp224r1_sha224');
-const secp224r1_sha256_test = deepJson('ecdsa_secp224r1_sha256');
-const secp224r1_sha3_224_test = deepJson('ecdsa_secp224r1_sha3_224');
-const secp224r1_sha3_256_test = deepJson('ecdsa_secp224r1_sha3_256');
-const secp224r1_sha3_512_test = deepJson('ecdsa_secp224r1_sha3_512');
-const secp224r1_sha512_test = deepJson('ecdsa_secp224r1_sha512');
-const secp224r1_shake128_test = deepJson('ecdsa_secp224r1_shake128');
-
-const secp256k1_sha256_bitcoin_test = deepJson('ecdsa_secp256k1_sha256_bitcoin');
-
-const secp256k1_sha256_test = deepJson('ecdsa_secp256k1_sha256');
-const secp256k1_sha3_256_test = deepJson('ecdsa_secp256k1_sha3_256');
-const secp256k1_sha3_512_test = deepJson('ecdsa_secp256k1_sha3_512');
-const secp256k1_sha512_test = deepJson('ecdsa_secp256k1_sha512');
-const secp256k1_shake128_test = deepJson('ecdsa_secp256k1_shake128');
-const secp256k1_shake256_test = deepJson('ecdsa_secp256k1_shake256');
-
-const secp256r1_sha256_test = deepJson('ecdsa_secp256r1_sha256');
-const secp256r1_sha3_256_test = deepJson('ecdsa_secp256r1_sha3_256');
-const secp256r1_sha3_512_test = deepJson('ecdsa_secp256r1_sha3_512');
-const secp256r1_sha512_test = deepJson('ecdsa_secp256r1_sha512');
-const secp256r1_shake128_test = deepJson('ecdsa_secp256r1_shake128');
-
-const secp384r1_sha384_test = deepJson('ecdsa_secp384r1_sha384');
-const secp384r1_sha3_384_test = deepJson('ecdsa_secp384r1_sha3_384');
-const secp384r1_sha3_512_test = deepJson('ecdsa_secp384r1_sha3_512');
-const secp384r1_sha512_test = deepJson('ecdsa_secp384r1_sha512');
-const secp384r1_shake256_test = deepJson('ecdsa_secp384r1_shake256');
-
-const secp521r1_sha3_512_test = deepJson('ecdsa_secp521r1_sha3_512');
-const secp521r1_sha512_test = deepJson('ecdsa_secp521r1_sha512');
-const secp521r1_shake256_test = deepJson('ecdsa_secp521r1_shake256');
-// brainpool
-const ecdh_brainpoolP256r1_test = deepJson('ecdh_brainpoolP256r1');
-const ecdh_brainpoolP384r1_test = deepJson('ecdh_brainpoolP384r1');
-const ecdh_brainpoolP512r1_test = deepJson('ecdh_brainpoolP512r1');
-const brainpoolP256r1_sha256_test = deepJson('ecdsa_brainpoolP256r1_sha256');
-const brainpoolP256r1_sha3_256_test = deepJson('ecdsa_brainpoolP256r1_sha3_256');
-const brainpoolP384r1_sha384_test = deepJson('ecdsa_brainpoolP384r1_sha384');
-const brainpoolP384r1_sha3_384_test = deepJson('ecdsa_brainpoolP384r1_sha3_384');
-const brainpoolP512r1_sha512_test = deepJson('ecdsa_brainpoolP512r1_sha512');
-const brainpoolP512r1_sha3_512_test = deepJson('ecdsa_brainpoolP512r1_sha3_512');
 
 // TODO: maybe add to noble-hashes?
 const wrapShake = (shake, dkLen) => {
@@ -97,7 +44,6 @@ const NIST = {
   secp256k1,
 };
 
-// describe('NIST curves', () => {});
 should('fields', () => {
   const vectors = {
     secp192r1: 0xfffffffffffffffffffffffffffffffeffffffffffffffffn,
@@ -136,10 +82,12 @@ function verifyECDHVector(test, curve) {
 }
 
 describe('wycheproof ECDH', () => {
-  for (const group of vecdh.testGroups) {
-    const curve = NIST[group.curve];
-    if (!curve) continue;
-    should(group.curve, () => {
+  for (const curveName of ['secp224r1', 'secp256r1', 'secp384r1', 'secp521r1', 'secp256k1']) {
+    should(curveName, () => {
+      const vecdh = deepJson('ecdh');
+      const group = vecdh.testGroups.find((group) => group.curve === curveName);
+      if (!group) throw new Error('missing ECDH vector: ' + curveName);
+      const curve = NIST[group.curve];
       for (const test of group.tests) {
         verifyECDHVector(test, curve);
       }
@@ -150,43 +98,44 @@ describe('wycheproof ECDH', () => {
   const WYCHEPROOF_ECDH = {
     p224: {
       curve: p224,
-      tests: [ecdh_secp224r1_test],
+      tests: ['ecdh_secp224r1'],
     },
     p256: {
       curve: p256,
-      tests: [ecdh_secp256r1_test],
+      tests: ['ecdh_secp256r1'],
     },
     secp256k1: {
       curve: secp256k1,
-      tests: [ecdh_secp256k1_test],
+      tests: ['ecdh_secp256k1'],
     },
     p384: {
       curve: p384,
-      tests: [ecdh_secp384r1_test],
+      tests: ['ecdh_secp384r1'],
     },
     p521: {
       curve: p521,
-      tests: [ecdh_secp521r1_test],
+      tests: ['ecdh_secp521r1'],
     },
 
     // brainpool
-    brainpoolP256r1: { curve: brainpoolP256r1, tests: [ecdh_brainpoolP256r1_test] },
-    brainpoolP384r1: { curve: brainpoolP384r1, tests: [ecdh_brainpoolP384r1_test] },
-    brainpoolP512r1: { curve: brainpoolP512r1, tests: [ecdh_brainpoolP512r1_test] },
+    brainpoolP256r1: { curve: brainpoolP256r1, tests: ['ecdh_brainpoolP256r1'] },
+    brainpoolP384r1: { curve: brainpoolP384r1, tests: ['ecdh_brainpoolP384r1'] },
+    brainpoolP512r1: { curve: brainpoolP512r1, tests: ['ecdh_brainpoolP512r1'] },
   };
 
   for (const name in WYCHEPROOF_ECDH) {
     const { curve, tests } = WYCHEPROOF_ECDH[name];
     for (let i = 0; i < tests.length; i++) {
-      const curveTests = tests[i];
-      for (let j = 0; j < curveTests.testGroups.length; j++) {
-        const group = curveTests.testGroups[j];
-        should(`additional ${name} (${group.tests.length})`, () => {
+      const file = tests[i];
+      should(`additional ${name}`, () => {
+        const curveTests = deepJson(file);
+        for (let j = 0; j < curveTests.testGroups.length; j++) {
+          const group = curveTests.testGroups[j];
           for (const test of group.tests) {
             verifyECDHVector(test, curve);
           }
-        });
-      }
+        }
+      });
     }
   }
 });
@@ -197,31 +146,31 @@ const WYCHEPROOF_ECDSA = {
     hashes: {
       sha224: {
         hash: sha224,
-        tests: [secp224r1_sha224_test],
+        tests: ['ecdsa_secp224r1_sha224'],
       },
       sha256: {
         hash: sha256,
-        tests: [secp224r1_sha256_test],
+        tests: ['ecdsa_secp224r1_sha256'],
       },
       sha3_224: {
         hash: sha3_224,
-        tests: [secp224r1_sha3_224_test],
+        tests: ['ecdsa_secp224r1_sha3_224'],
       },
       sha3_256: {
         hash: sha3_256,
-        tests: [secp224r1_sha3_256_test],
+        tests: ['ecdsa_secp224r1_sha3_256'],
       },
       sha3_512: {
         hash: sha3_512,
-        tests: [secp224r1_sha3_512_test],
+        tests: ['ecdsa_secp224r1_sha3_512'],
       },
       sha512: {
         hash: sha512,
-        tests: [secp224r1_sha512_test],
+        tests: ['ecdsa_secp224r1_sha512'],
       },
       shake128: {
         hash: shake128_224,
-        tests: [secp224r1_shake128_test],
+        tests: ['ecdsa_secp224r1_shake128'],
       },
     },
   },
@@ -230,27 +179,27 @@ const WYCHEPROOF_ECDSA = {
     hashes: {
       sha256: {
         hash: sha256,
-        tests: [secp256k1_sha256_test, secp256k1_sha256_bitcoin_test],
+        tests: ['ecdsa_secp256k1_sha256', 'ecdsa_secp256k1_sha256_bitcoin'],
       },
       sha3_256: {
         hash: sha3_256,
-        tests: [secp256k1_sha3_256_test],
+        tests: ['ecdsa_secp256k1_sha3_256'],
       },
       sha3_512: {
         hash: sha3_512,
-        tests: [secp256k1_sha3_512_test],
+        tests: ['ecdsa_secp256k1_sha3_512'],
       },
       sha512: {
         hash: sha512,
-        tests: [secp256k1_sha512_test],
+        tests: ['ecdsa_secp256k1_sha512'],
       },
       shake128: {
         hash: shake128_256,
-        tests: [secp256k1_shake128_test],
+        tests: ['ecdsa_secp256k1_shake128'],
       },
       shake256: {
         hash: shake256_256,
-        tests: [secp256k1_shake256_test],
+        tests: ['ecdsa_secp256k1_shake256'],
       },
     },
   },
@@ -259,23 +208,23 @@ const WYCHEPROOF_ECDSA = {
     hashes: {
       sha256: {
         hash: sha256,
-        tests: [secp256r1_sha256_test],
+        tests: ['ecdsa_secp256r1_sha256'],
       },
       sha3_256: {
         hash: sha3_256,
-        tests: [secp256r1_sha3_256_test],
+        tests: ['ecdsa_secp256r1_sha3_256'],
       },
       sha3_512: {
         hash: sha3_512,
-        tests: [secp256r1_sha3_512_test],
+        tests: ['ecdsa_secp256r1_sha3_512'],
       },
       sha512: {
         hash: sha512,
-        tests: [secp256r1_sha512_test],
+        tests: ['ecdsa_secp256r1_sha512'],
       },
       shake128: {
         hash: shake128_256,
-        tests: [secp256r1_shake128_test],
+        tests: ['ecdsa_secp256r1_shake128'],
       },
     },
   },
@@ -284,23 +233,23 @@ const WYCHEPROOF_ECDSA = {
     hashes: {
       sha384: {
         hash: sha384,
-        tests: [secp384r1_sha384_test],
+        tests: ['ecdsa_secp384r1_sha384'],
       },
       sha3_384: {
         hash: sha3_384,
-        tests: [secp384r1_sha3_384_test],
+        tests: ['ecdsa_secp384r1_sha3_384'],
       },
       sha3_512: {
         hash: sha3_512,
-        tests: [secp384r1_sha3_512_test],
+        tests: ['ecdsa_secp384r1_sha3_512'],
       },
       sha512: {
         hash: sha512,
-        tests: [secp384r1_sha512_test],
+        tests: ['ecdsa_secp384r1_sha512'],
       },
       shake256: {
         hash: shake256_384,
-        tests: [secp384r1_shake256_test],
+        tests: ['ecdsa_secp384r1_shake256'],
       },
     },
   },
@@ -309,37 +258,37 @@ const WYCHEPROOF_ECDSA = {
     hashes: {
       sha3_512: {
         hash: sha3_512,
-        tests: [secp521r1_sha3_512_test],
+        tests: ['ecdsa_secp521r1_sha3_512'],
       },
       sha512: {
         hash: sha512,
-        tests: [secp521r1_sha512_test],
+        tests: ['ecdsa_secp521r1_sha512'],
       },
       shake256: {
         hash: shake256_512,
-        tests: [secp521r1_shake256_test],
+        tests: ['ecdsa_secp521r1_shake256'],
       },
     },
   },
   brainpoolP256r1: {
     curve: brainpoolP256r1,
     hashes: {
-      sha256: { hash: sha256, tests: [brainpoolP256r1_sha256_test] },
-      sha3_256: { hash: sha3_256, tests: [brainpoolP256r1_sha3_256_test] },
+      sha256: { hash: sha256, tests: ['ecdsa_brainpoolP256r1_sha256'] },
+      sha3_256: { hash: sha3_256, tests: ['ecdsa_brainpoolP256r1_sha3_256'] },
     },
   },
   brainpoolP384r1: {
     curve: brainpoolP384r1,
     hashes: {
-      sha384: { hash: sha384, tests: [brainpoolP384r1_sha384_test] },
-      sha3_384: { hash: sha3_384, tests: [brainpoolP384r1_sha3_384_test] },
+      sha384: { hash: sha384, tests: ['ecdsa_brainpoolP384r1_sha384'] },
+      sha3_384: { hash: sha3_384, tests: ['ecdsa_brainpoolP384r1_sha3_384'] },
     },
   },
   brainpoolP512r1: {
     curve: brainpoolP512r1,
     hashes: {
-      sha512: { hash: sha512, tests: [brainpoolP512r1_sha512_test] },
-      sha3_512: { hash: sha3_512, tests: [brainpoolP512r1_sha3_512_test] },
+      sha512: { hash: sha512, tests: ['ecdsa_brainpoolP512r1_sha512'] },
+      sha3_512: { hash: sha3_512, tests: ['ecdsa_brainpoolP512r1_sha3_512'] },
     },
   },
 };
@@ -381,6 +330,7 @@ function runWycheproof(name, CURVE, group, index) {
 
 describe('wycheproof ECDSA', () => {
   should('generic', () => {
+    const vecdsa = deepJson('ecdsa');
     for (const group of vecdsa.testGroups) {
       // Tested in secp256k1.test.js
       let CURVE = NIST[group.key.curve];
@@ -431,7 +381,7 @@ describe('wycheproof ECDSA', () => {
         const CURVE = ecdsa(curve.Point, hash);
         should(`${name}/${hName}`, () => {
           for (let i = 0; i < tests.length; i++) {
-            const groups = tests[i].testGroups;
+            const groups = deepJson(tests[i]).testGroups;
             for (let j = 0; j < groups.length; j++) {
               const group = groups[j];
               runWycheproof(name, CURVE, group, `${i}/${j}`);
@@ -445,8 +395,11 @@ describe('wycheproof ECDSA', () => {
 
 const hexToBigint = (hex) => BigInt(`0x${hex}`);
 describe('RFC6979', () => {
-  for (const v of rfc6979) {
-    should(v.curve, () => {
+  for (const name of ['P192', 'P224', 'P256', 'P384', 'P521']) {
+    should(name, () => {
+      const rfc6979 = json('./vectors/rfc6979.json');
+      const v = rfc6979.find((v) => v.curve === name);
+      if (!v) throw new Error('missing RFC6979 vector: ' + name);
       const hasLowS = v.curve === 'secp256k1';
       const curve = NIST[v.curve];
       eql(curve.Point.Fn.ORDER, hexToBigint(v.q));
@@ -531,6 +484,7 @@ should('properly add leading zero to DER', () => {
 });
 
 should('have proper GLV endomorphism logic in secp256k1', () => {
+  const endoVectors = json('./vectors/secp256k1/endomorphism.json');
   const Point = secp256k1.Point;
   for (let item of endoVectors) {
     const point = Point.fromAffine({ x: BigInt(item.ax), y: BigInt(item.ay) });
@@ -563,13 +517,6 @@ should('P256/P521 edge cases', () => {
     '154a5907f554f0024200db3703c6d51b8a85c10c21b7643fe751781a7ad5708e' +
     '3a944107f6da086afdc8532765871a9cabc81cec0f5b28ee59f0c72b48b72a39' +
     'ae2d230dfb03afb9968a94';
-
-  // const fault =
-  //   '30818702415efa2e9fb7d988bf19e750bc6235364ecfdbe649f1a3b9a89af077' +
-  //   'eefd7f8dd979f371b28d77b885cf369a100c0d326804fc4b9ab681a39d212b41' +
-  //   'a85b126b00130242008fbcbd46e829ca57a8e25c5deb30b5064366cae2f4bd82' +
-  //   '14e8dafcb8f6a7d59757ec8896981466d6f0eb5ca07dcaa46e6bb86eb20471e4' +
-  //   '5702429ef132e0c96615';
 
   const hexp = p521.sign(msg, privKey, { lowS: false, format: 'der' });
   eql(bytesToHex(hexp), sig, 'P521 DER signature');

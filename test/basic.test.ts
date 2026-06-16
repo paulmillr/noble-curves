@@ -11,7 +11,6 @@ import { bn254 } from '../src/bn254.ts';
 import { ed25519, x25519 } from '../src/ed25519.ts';
 import { secp256k1 } from '../src/secp256k1.ts';
 import { json } from './utils.ts';
-const wyche_curves = json('./vectors/wycheproof/ec_prime_order_curves_test.json');
 
 describe('edge cases', () => {
   should('bigInt private keys', () => {
@@ -45,9 +44,39 @@ describe('edge cases', () => {
 
 describe('createCurve', () => {
   describe('handles wycheproof vectors', () => {
-    const VECTORS = wyche_curves.testGroups[0].tests;
-    for (const v of VECTORS) {
-      should(`${v.name}`, () => {
+    const vectorNames = [
+      'secp224r1',
+      'secp256r1',
+      'secp384r1',
+      'secp521r1',
+      'secp256k1',
+      'secp224k1',
+      'brainpoolP224r1',
+      'brainpoolP256r1',
+      'brainpoolP320r1',
+      'brainpoolP384r1',
+      'brainpoolP512r1',
+      'brainpoolP224t1',
+      'brainpoolP256t1',
+      'brainpoolP320t1',
+      'brainpoolP384t1',
+      'brainpoolP512t1',
+      'FRP256v1',
+      'secp192k1',
+      'secp192r1',
+      'secp160k1',
+      'secp160r1',
+      'secp160r2',
+      'brainpoolP160r1',
+      'brainpoolP160t1',
+      'brainpoolP192r1',
+      'brainpoolP192t1',
+    ];
+    for (const name of vectorNames) {
+      should(name, () => {
+        const wyche_curves = json('./vectors/wycheproof/ec_prime_order_curves_test.json');
+        const v = wyche_curves.testGroups[0].tests.find((v) => v.name === name);
+        if (!v) throw new Error('missing curve vector: ' + name);
         const CURVE = ecdsa(
           weierstrass({
             p: BigInt(`0x${v.p}`),
@@ -61,17 +90,6 @@ describe('createCurve', () => {
           sha256
         );
       });
-      // const CURVE = CURVES[v.name];
-      // if (!CURVE) continue;
-      // should(`${v.name} parms verify`, () => {
-      //   eql(CURVE.CURVE.Fp.ORDER, BigInt(`0x${v.p}`));
-      //   eql(CURVE.CURVE.a, BigInt(`0x${v.a}`));
-      //   eql(CURVE.CURVE.b, BigInt(`0x${v.b}`));
-      //   eql(CURVE.CURVE.n, BigInt(`0x${v.n}`));
-      //   eql(CURVE.CURVE.Gx, BigInt(`0x${v.gx}`));
-      //   eql(CURVE.CURVE.Gy, BigInt(`0x${v.gy}`));
-      //   eql(CURVE.CURVE.h, BigInt(v.h));
-      // });
     }
   });
 

@@ -39,15 +39,14 @@ const G2_VECTORS = readFileSync(
   const sigs = G2_VECTORS.map((v) => hexToBytes(v[2]));
   const pub = blsl.getPublicKey(priv);
   const pub_s = blss.getPublicKey(priv);
-  const pub512 = pubs.slice(0, 512); // .map(bls.PointG1.fromHex)
+  const pub512 = pubs.slice(0, 512);
   const pub32 = pub512.slice(0, 32);
   const pub128 = pub512.slice(0, 128);
   const pub2048 = pub512.concat(pub512, pub512, pub512);
-  const sig512 = sigs.slice(0, 512); // .map(bls.PointG2.fromSignature);
+  const sig512 = sigs.slice(0, 512);
   const sig32 = sig512.slice(0, 32);
   const sig128 = sig512.slice(0, 128);
   const sig2048 = sig512.concat(sig512, sig512, sig512);
-  // await bench('getPublicKey 1-bit', () => blsl.getPublicKey(hexToBytes('2'.padStart(64, '0'))));
   await bench('pairing', () => bls.pairing(p1, p2));
 
   console.log('# longSignatures')

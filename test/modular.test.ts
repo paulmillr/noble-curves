@@ -17,10 +17,6 @@ import {
 import { p256 as secp256r1, p521 as secp521r1 } from '../src/nist.ts';
 import { secp256k1 } from '../src/secp256k1.ts';
 import { secp192r1, secp224r1 } from './_more-curves.helpers.ts';
-import { json } from './utils.ts';
-const wyche_curves = json('./vectors/wycheproof/ec_prime_order_curves_test.json');
-
-// const FC_HEX = fc.stringMatching(/[0-9a-fA-F]+/, { size: 64 });
 
 // Fields tests
 const FIELDS = {

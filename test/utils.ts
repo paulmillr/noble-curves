@@ -58,7 +58,6 @@ export const getTypeTests = () => [
   [Uint8Array.of(), 'ui8a([])'],
   [Uint8Array.of(0), 'ui8a([0])'],
   [Uint8Array.of(1), 'ui8a([1])'],
-  // [new Uint8Array(32).fill(1), 'ui8a(32*[1])'],
   [new Uint8Array(4096).fill(1), 'ui8a(4096*[1])'],
   [new Uint16Array(32).fill(1), 'ui16a(32*[1])'],
   [new Uint32Array(32).fill(1), 'ui32a(32*[1])'],

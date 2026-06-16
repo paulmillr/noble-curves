@@ -90,11 +90,13 @@ type PointCtor<T> = {
 };
 type Suite = {
   frost: FROST;
-  sign: SignVector[];
-  dkg: DkgVector[];
-  sample: SampleVector;
-  repair: RepairVector;
-  element: ElementVector;
+  loadSign: (index: number) => SignVector;
+  signCount: number;
+  loadDkg: (index: number) => DkgVector;
+  dkgCount: number;
+  loadSample: () => SampleVector;
+  loadRepair: () => RepairVector;
+  loadElement: () => ElementVector;
   base: string;
   doubleBase: string;
   proofPrefix: string;
@@ -117,19 +119,25 @@ const getVectorsSingle = <P extends PointLike<P>>(
   frost: FROST,
   Point: PointCtor<P>,
   proofPrefix = bytesToHex(Point.BASE.toBytes())
-): Suite => ({
-  frost,
-  sign: [
-    getJson<SignVector>(`vectors/rfc9591-frost/${name}-vectors.json`),
-    getJson<SignVector>(`vectors/rfc9591-frost/${name}-vectors-big-identifier.json`),
-  ],
-  dkg: [getJson<DkgVector>(`vectors/rfc9591-frost/${name}-vectors_dkg.json`)],
-  sample: getJson<SampleVector>(`vectors/rfc9591-frost/${name}-samples.json`),
-  repair: getJson<RepairVector>(`vectors/rfc9591-frost/${name}-repair-share.json`),
-  element: getJson<ElementVector>(`vectors/rfc9591-frost/${name}-elements.json`),
-  ...getPointBytes(Point),
-  proofPrefix,
-});
+): Suite => {
+  const signPaths = [
+    `vectors/rfc9591-frost/${name}-vectors.json`,
+    `vectors/rfc9591-frost/${name}-vectors-big-identifier.json`,
+  ];
+  const dkgPaths = [`vectors/rfc9591-frost/${name}-vectors_dkg.json`];
+  return {
+    frost,
+    loadSign: (index: number) => getJson<SignVector>(signPaths[index]),
+    signCount: signPaths.length,
+    loadDkg: (index: number) => getJson<DkgVector>(dkgPaths[index]),
+    dkgCount: dkgPaths.length,
+    loadSample: () => getJson<SampleVector>(`vectors/rfc9591-frost/${name}-samples.json`),
+    loadRepair: () => getJson<RepairVector>(`vectors/rfc9591-frost/${name}-repair-share.json`),
+    loadElement: () => getJson<ElementVector>(`vectors/rfc9591-frost/${name}-elements.json`),
+    ...getPointBytes(Point),
+    proofPrefix,
+  };
+};
 const sumHexScalars = (Fn: ScalarField, values: string[]) => {
   let sum = Fn.ZERO;
   for (const value of values) sum = Fn.add(sum, Fn.fromBytes(hexToBytes(value)));
@@ -302,11 +310,25 @@ const createSession = (frost: FROST, identifiers?: string[]) => {
 
 describe('FROST (RFC 9591)', () => {
   for (const name in VECTORS) {
-    const { frost, sign, dkg, sample, repair, element, base, doubleBase, proofPrefix } =
-      VECTORS[name];
+    const {
+      frost,
+      loadSign,
+      signCount,
+      loadDkg,
+      dkgCount,
+      loadSample,
+      loadRepair,
+      loadElement,
+      base,
+      doubleBase,
+      proofPrefix,
+    } = VECTORS[name];
     describe(`${name}`, () => {
       const Fn = frost.utils.Fn;
       should('identifiers, samples, repair fixtures, and invalid elements', () => {
+        const sample = loadSample();
+        const repair = loadRepair();
+        const element = loadElement();
         const t = Identifiers[name];
         eql(frost.Identifier.fromNumber(7), t[7], 'identifier number');
         eql(
@@ -690,8 +712,9 @@ describe('FROST (RFC 9591)', () => {
       });
       let i = 0;
 
-      for (const t of sign) {
+      for (let signIndex = 0; signIndex < signCount; signIndex++) {
         should(`sign ${i++}`, () => {
+          const t = loadSign(signIndex);
           const signers = { min: +t.config.MIN_PARTICIPANTS, max: +t.config.MAX_PARTICIPANTS };
           const msg = hexToBytes(t.inputs.message);
           const secretKey = hexToBytes(t.inputs.group_secret_key);
@@ -779,10 +802,11 @@ describe('FROST (RFC 9591)', () => {
         });
       }
       i = 0;
-      for (const t of dkg) {
+      for (let dkgIndex = 0; dkgIndex < dkgCount; dkgIndex++) {
         // DKG is Distributed Key Generation (not related to Trusted Dealer Key Generation)
         // Awesome naming!
         should(`dkg ${i++}`, () => {
+          const t = loadDkg(dkgIndex);
           const getInput = (id: number): DkgInput => {
             const input = t.inputs[String(id)];
             if (!input || typeof input === 'string') throw new Error('missing DKG input ' + id);

@@ -123,10 +123,6 @@ describe('Endomorphism', () => {
         const p2 = curve.fromAffine({ x: Fp.mul(curve.BASE.x, beta), y: curve.BASE.y }); // p(x*beta, y)
         if (!p.equals(p2)) throw new Error('incorrect lambda-beta pair');
         // splitScalar: k2*lambda + k1== s
-        // console.log('ENDO', {
-        //   beta: hex(beta),
-        //   basis: basis.map((i) => i.map(hex)),
-        // });
         const curveEndo = weierstrassN(params, { endo: { beta, basises: basis } });
         const FC_BIGINT = fc.bigInt(1n, Fn.ORDER - 1n);
         // Test exhaustively, since this is very important!
@@ -169,7 +165,6 @@ describe('Endomorphism', () => {
           );
         }
       }
-      //endoCurves[name] = createCurve(params, sha256);
     }
   });
 });

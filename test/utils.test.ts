@@ -314,9 +314,7 @@ describe('utils', () => {
         throws(() => abytes(b, len, comment), comment);
         try {
           abytes(b, len, comment);
-        } catch (e) {
-          // console.log('abytes', e.message);
-        }
+        } catch (e) {}
       }
     });
   }

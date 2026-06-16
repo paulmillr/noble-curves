@@ -6,8 +6,6 @@ import { ed448 } from '../src/ed448.ts';
 import { numberToBytesLE } from '../src/utils.ts';
 import { deepHexToBytes, json } from './utils.ts';
 
-const x25519vectors = json('./vectors/wycheproof/x25519_test.json');
-
 const VECTORS_RFC8032 = deepHexToBytes([
   {
     fn: ed25519ctx,
@@ -106,8 +104,6 @@ describe('X25519 RFC7748 ECDH', () => {
   const rfc7748Iter = [
     { scalar: '422c8e7a6227d7bca1350b3e2bb7279f7897b87bb6854b783c60e80311ae3079', iters: 1 },
     { scalar: '684cf59ba83309552800ef566f2f4d3c1c3887c49360e3875f2eb94d99532c51', iters: 1000 },
-    // last ran: 2025-04, ~10 min
-    // { scalar: '7c3911e0ab2586fd864497297e575e6f3bc601c0883c30df5f4dd2d24f665424', iters: 1000000 },
   ];
   should('scalarMult iterations', () => {
     for (let i = 0; i < rfc7748Iter.length; i++) {
@@ -198,8 +194,9 @@ describe('X25519 RFC7748 ECDH', () => {
     eql(numberToBytesLE(u, 32), x25519.GuBytes);
   });
 
-  const group = deepHexToBytes(x25519vectors.testGroups[0]);
   should('wycheproof', () => {
+    const x25519vectors = json('./vectors/wycheproof/x25519_test.json');
+    const group = deepHexToBytes(x25519vectors.testGroups[0]);
     group.tests.forEach((v, i) => {
       const comment = `(${i}, ${v.result}) ${v.comment}`;
       if (v.result === 'valid' || v.result === 'acceptable') {

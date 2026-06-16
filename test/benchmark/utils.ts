@@ -44,7 +44,6 @@ const DecafPoint = decaf448.Point;
   title('hashing to fields')
   const N = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n;
   const rand = randomBytes(40);
-  // await mark('hashToPrivateScalar', () => hashToPrivateScalar(rand, N));
   // - p, the characteristic of F
   // - m, the extension degree of F, m >= 1
   // - L = ceil((ceil(log2(p)) + k) / 8), where k is the security of suite (e.g. 128)
@@ -80,4 +79,3 @@ const DecafPoint = decaf448.Point;
     decaf448_hasher.hashToCurve(msg, { DST: 'decaf448_XOF:SHAKE256_D448MAP_RO_' })
   );
 })();
-

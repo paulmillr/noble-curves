@@ -4,9 +4,9 @@ import { deepStrictEqual as eql, throws } from 'node:assert';
 import { bn254 } from '../src/bn254.ts';
 import { bytesToNumberBE } from '../src/utils.ts';
 import { jsonGZ } from './utils.ts';
-import { default as ethDump } from './vectors/bn254/eth-dump.js';
-import { default as seda } from './vectors/bn254/seda.js';
 const CROSS_PATH_GZ = './vectors/bn254/cross1000.json.gz'; // bundler hint: readFileSync('./test/bn254/cross1000.json.gz')
+const loadEthDump = async () => (await import('./vectors/bn254/eth-dump.js')).default;
+const loadSeda = async () => (await import('./vectors/bn254/seda.js')).default;
 
 describe('bn254', () => {
   const { Fp2, Fp6, Fp12 } = bn254.fields;
@@ -59,7 +59,6 @@ describe('bn254', () => {
       c0: 0x20f9cc90b32f1bf9d6b520a01b8a0c8074892df17aab86ba95305c9cf37b4a5bn,
       c1: 0x0171dd5b2d48f4fbe0568cc5f8b00410f67287385c7394a6637a301df8bb6422n,
     });
-    // deepStrictEqual(Fp2.multiplyByB(mul), {});
     eql(Fp2.sqr(mul), {
       c0: 0x06be9f41936b73fee167d253de7f0e5b593907af77de4ee4719c2e867d0d2935n,
       c1: 0x2771aeff417616dd85e1c7ed0f32de184f1ad8824b5cbae7d1f75bebb82c5360n,
@@ -682,7 +681,6 @@ describe('bn254', () => {
     for (const [name, vectors] of Object.entries(crossTests)) {
       if (['ark_bls12-381', 'ark_bls12-377'].includes(name)) continue;
       const { Fp, Fp2, Fp12 } = bn254.fields;
-      // should(`${name}`, () => {
       for (const t of vectors) {
         // TODO: projective stuff is somewhat broken on export?
         const g1 = bn254.G1.Point.fromAffine({
@@ -697,7 +695,6 @@ describe('bn254', () => {
         const p = bn254.pairing(g1, g2, true);
         eql(p, fp12, name);
       }
-      // });
     }
   });
 
@@ -832,7 +829,8 @@ describe('bn254', () => {
       ];
       for (const { input, output } of vectors) ethPairing(input, output);
     });
-    should('sedaprotocol', () => {
+    should('sedaprotocol', async () => {
+      const seda = await loadSeda();
       for (const t of seda.add) {
         const Ax = BigInt(`0x${t.x1}`);
         const Ay = BigInt(`0x${t.y1}`);
@@ -854,7 +852,8 @@ describe('bn254', () => {
         eql(A.multiply(scalar).toAffine(), { x: Cx, y: Cy });
       }
     });
-    should('eth dump EC_ADD, EC_MUL, and EC_PAIRING', () => {
+    should('eth dump EC_ADD, EC_MUL, and EC_PAIRING', async () => {
+      const ethDump = await loadEthDump();
       for (const [input, output] of ethDump.NOBLE_DUMP_EC_ADD) ethAdd(input, output);
       for (const [input, output] of ethDump.NOBLE_DUMP_EC_MUL) ethMul(input, output);
       for (const [input, output] of ethDump.NOBLE_DUMP_EC_PAIRING) ethPairing(input, output);

@@ -206,7 +206,6 @@ describe('basic curve tests', () => {
             () => G[1][op]({ x: 1n, y: 1n, z: 1n, t: 1n }),
             `${op}: { x: 1n, y: 1n, z: 1n, t: 1n }`
           );
-          // if (G[1].toAffine) throws(() => G[1][op](C.Point.BASE), `Point ${op} ${pointName}`);
           throws(() => G[1][op](o.BASE), `${op}: other curve point`);
         }
       });
@@ -223,7 +222,6 @@ describe('basic curve tests', () => {
         eql(G[2].equals(G[2]), true, '2*G == 2*G');
         throws(() => G[1].equals(CURVE_ORDER), 'CURVE_ORDER');
         throws(() => G[1].equals({ x: 1n, y: 1n, z: 1n, t: 1n }), '{ x: 1n, y: 1n, z: 1n, t: 1n }');
-        // if (G[1].toAffine) throws(() => G[1].equals(C.Point.BASE), 'Point.equals(${pointName})');
         throws(() => G[1].equals(o.BASE), 'other curve point');
       });
 
@@ -344,7 +342,6 @@ describe('basic curve tests', () => {
           })
         );
       });
-      // }
     });
 
     describe(name, () => {
@@ -352,10 +349,6 @@ describe('basic curve tests', () => {
       should('.getPublicKey() type check', () => {
         for (let [item, repr_] of getTypeTests()) {
           throws(() => C.getPublicKey(item), repr_);
-        }
-        // NOTE: passes because of disabled hex padding checks for starknet, maybe enable?
-        if (name !== 'starknet') {
-          // throws(() => C.getPublicKey('1'), "'1'");
         }
         throws(() => C.getPublicKey('key'), "'key'");
         throws(() => C.getPublicKey({}));
@@ -387,18 +380,6 @@ describe('basic curve tests', () => {
             `empty: priv=${hex(k.secretKey)},pub=${hex(k.publicKey)},msg=${msg}`
           );
         });
-        // should('.verify() should verify random signatures in hex', () =>
-        //   fc.assert(
-        //     fc.property(FC_HEX, (msg) => {
-        //       const priv = hex(C.utils.randomSecretKey());
-        //       const pub = hex(C.getPublicKey(priv));
-        //       const sig = C.sign(msg, priv);
-        //       let sighex = isBytes(sig) ? hex(sig) : sig.toHex('compact');
-        //       eql(C.verify(sighex, msg, pub), true, `priv=${priv},pub=${pub},msg=${msg}`);
-        //     }),
-        //     { numRuns: NUM_RUNS }
-        //   )
-        // );
         should('.sign() type and edge cases', () => {
           const msg = Uint8Array.of();
           const k = C.keygen();
@@ -496,29 +477,6 @@ describe('basic curve tests', () => {
           );
         });
       }
-
-      // NOTE: fails for ed, because of empty message. Since we convert it to scalar,
-      // need to check what other implementations do. Empty message != Uint8Array.of(0), but what scalar should be in that case?
-      // should('should not verify signature with wrong message', () => {
-      //   fc.assert(
-      //     fc.property(
-      //       fc.array(fc.integer({ min: 0x00, max: 0xff })),
-      //       fc.array(fc.integer({ min: 0x00, max: 0xff })),
-      //       (bytes, wrongBytes) => {
-      //         const privKey = C.utils.randomSecretKey();
-      //         const message = new Uint8Array(bytes);
-      //         const wrongMessage = new Uint8Array(wrongBytes);
-      //         const publicKey = C.getPublicKey(privKey);
-      //         const signature = C.sign(message, privKey);
-      //         deepStrictEqual(
-      //           C.verify(signature, wrongMessage, publicKey),
-      //           bytes.toString() === wrongBytes.toString()
-      //         );
-      //       }
-      //     ),
-      //     { numRuns: NUM_RUNS }
-      //   );
-      // });
 
       if (C.getSharedSecret) {
         should('getSharedSecret() should be commutative', () => {

@@ -9,21 +9,22 @@ import { json, txt } from './utils.ts';
 
 import * as utils from '../src/utils.ts';
 
-const eip2537 = json('./vectors/bls12-381/eip2537.json');
-const zkVectors = json('./vectors/bls12-381/zkcrypto/converted.json');
-const pairingVectors = json('./vectors/bls12-381/go_pairing_vectors/pairing.json');
-const G1_VECTORS = txt('vectors/bls12-381/bls12-381-g1-test-vectors.txt').map((v) => {
-  return [hexToBytes(v[0]), hexToBytes(v[1]), v[2]];
-});
-const G2_VECTORS = txt('vectors/bls12-381/bls12-381-g2-test-vectors.txt').map((v) => {
-  return [hexToBytes(v[0]), hexToBytes(v[1]), v[2]];
-});
+const loadEip2537 = () => json('./vectors/bls12-381/eip2537.json');
+const loadZkVectors = () => json('./vectors/bls12-381/zkcrypto/converted.json');
+const loadPairingVectors = () => json('./vectors/bls12-381/go_pairing_vectors/pairing.json');
+const loadG1Vectors = () =>
+  txt('vectors/bls12-381/bls12-381-g1-test-vectors.txt').map((v) => {
+    return [hexToBytes(v[0]), hexToBytes(v[1]), v[2]];
+  });
+const loadG2Vectors = () =>
+  txt('vectors/bls12-381/bls12-381-g2-test-vectors.txt').map((v) => {
+    return [hexToBytes(v[0]), hexToBytes(v[1]), v[2]];
+  });
 // Vectors come from
 // https://github.com/zkcrypto/bls12-381/blob/e501265cd36849a4981fe55e10dc87c38ee2213d/src/hash_to_curve/map_scalar.rs#L20
-const SCALAR_VECTORS = txt('vectors/bls12-381/bls12-381-scalar-test-vectors.txt');
-const SCALAR_XMD_SHA256_VECTORS = txt(
-  'vectors/bls12-381/bls12-381-scalar-xmd-sha256-test-vectors.txt'
-);
+const loadScalarVectors = () => txt('vectors/bls12-381/bls12-381-scalar-test-vectors.txt');
+const loadScalarXmdSha256Vectors = () =>
+  txt('vectors/bls12-381/bls12-381-scalar-xmd-sha256-test-vectors.txt');
 const H2C_KILLIC_G1 = [
   {
     msg: asciiToBytes(''),
@@ -256,14 +257,6 @@ describe('bls12-381 Fields', () => {
         })
       );
 
-      // expect(Fp2.FROBENIUS_COEFFICIENTS[0].equals(Fp.ONE)).toBe(true);
-      // expect(
-      //   Fp2.FROBENIUS_COEFFICIENTS[1].equals(
-      //     Fp.ONE.negate().pow(
-      //       0x0f81ae6945026025546c75a2a5240311d8ab75fac730cbcacd117de46c663f3fdebb76c445078281bf953ed363fa069bn
-      //     )
-      //   )
-      // ).toBe(true);
       let a = Fp2.fromBigTuple([
         0x00f8d295b2ded9dcccc649c4b9532bf3b966ce3bc2108b138b1a52e0a90f59ed11e59ea221a3b6d22d0078036923ffc7n,
         0x012d1137b8a6a8374e464dea5bcfd41eb3f8afc0ee248cadbe203411c66fb3a5946ae52d684fa7ed977df6efcdaee0dbn,
@@ -494,10 +487,6 @@ describe('bls12-381 Point', () => {
         )
       );
     });
-    // should('be placed on curve vector 1', () => {
-    //   const a = new PointG2(Fp2.fromBigTuple([0n, 0n]), Fp2.fromBigTuple([0n, 0n]));
-    //   a.assertValidity();
-    // });
     describe('assertValidity', () => {
       should('passes for 0x02..., 0x0c...', () => {
         const a = new PointG2(
@@ -1020,6 +1009,7 @@ describe('bls12-381 encoding', () => {
 describe('bls12-381 verify', () => {
   describe('longSignatures', () => {
     should('sign, verify, and negative cases', () => {
+      const G2_VECTORS = loadG2Vectors();
       for (let vector of G2_VECTORS) {
         const [priv, msgs, expected] = vector;
         const msg = blsl.hash(msgs);
@@ -1066,6 +1056,7 @@ describe('bls12-381 verify', () => {
   });
   describe('shortSignatures', () => {
     should('sign, verify, and negative cases', () => {
+      const G1_VECTORS = loadG1Vectors();
       for (let vector of G1_VECTORS) {
         const [priv, msgs, expected] = vector;
         const msg = blss.hash(msgs.slice());
@@ -1221,6 +1212,7 @@ describe('bls12-381 verify', () => {
       );
     });
     should('throws on non-hashed message (raw bytes)', () => {
+      const G2_VECTORS = loadG2Vectors();
       const [priv, msgBytes] = G2_VECTORS[0];
       const msg = blsl.hash(msgBytes);
       const sig = blsl.sign(msg, priv);
@@ -1336,6 +1328,7 @@ describe('bls12-381 deterministic', () => {
         m: 1,
         expand: '_internal_pass',
       };
+      const SCALAR_VECTORS = loadScalarVectors();
       for (let vector of SCALAR_VECTORS) {
         const [okmAscii, expectedHex] = vector;
         const expected = BigInt('0x' + expectedHex);
@@ -1350,6 +1343,7 @@ describe('bls12-381 deterministic', () => {
         expand: 'xmd',
         DST: 'QUUX-V01-CS02-with-BLS12381SCALAR_XMD:SHA-256_SSWU_RO_',
       };
+      const SCALAR_XMD_SHA256_VECTORS = loadScalarXmdSha256Vectors();
       for (let vector of SCALAR_XMD_SHA256_VECTORS) {
         const [okmAscii, expectedHex] = vector;
         const expected = BigInt('0x' + expectedHex);
@@ -1445,6 +1439,7 @@ describe('bls12-381 deterministic', () => {
       );
     });
     should('pairing large', () => {
+      const pairingVectors = loadPairingVectors();
       let p1 = G1Point.BASE;
       let p2 = G2Point.BASE;
       for (let v of pairingVectors) {
@@ -1464,6 +1459,7 @@ describe('bls12-381 deterministic', () => {
 
   describe('zkcrypto', () => {
     should(`G1 compressed`, () => {
+      const zkVectors = loadZkVectors();
       let p1 = G1Point.ZERO;
       for (let i = 0; i < zkVectors.G1_Compressed.length; i++) {
         const t = zkVectors.G1_Compressed[i];
@@ -1480,6 +1476,7 @@ describe('bls12-381 deterministic', () => {
       }
     });
     should(`G1 uncompressed`, () => {
+      const zkVectors = loadZkVectors();
       let p1 = G1Point.ZERO;
       for (let i = 0; i < zkVectors.G1_Uncompressed.length; i++) {
         const t = zkVectors.G1_Uncompressed[i];
@@ -1496,6 +1493,7 @@ describe('bls12-381 deterministic', () => {
       }
     });
     should(`G2 compressed`, () => {
+      const zkVectors = loadZkVectors();
       let p1 = G2Point.ZERO;
       for (let i = 0; i < zkVectors.G2_Compressed.length; i++) {
         const t = zkVectors.G2_Compressed[i];
@@ -1514,6 +1512,7 @@ describe('bls12-381 deterministic', () => {
     });
 
     should(`G2 uncompressed`, () => {
+      const zkVectors = loadZkVectors();
       let p1 = G2Point.ZERO;
       for (let i = 0; i < zkVectors.G2_Uncompressed.length; i++) {
         const t = zkVectors.G2_Uncompressed[i];
@@ -1601,6 +1600,7 @@ describe('bls12-381 deterministic', () => {
   describe('EIP2537', () => {
     const toEthHex = (n) => n.toString(16).padStart(128, '0');
     should('G1/G2 mapToCurve vectors and zero point', () => {
+      const eip2537 = loadEip2537();
       for (const v of eip2537.G1) {
         const { x, y } = bls12_381.G1.mapToCurve(utils.hexToNumber(v.Input)).toAffine();
         const val = toEthHex(x) + toEthHex(y);

@@ -14,11 +14,21 @@ import {
   sigFromDER
 } from './secp256k1.helpers.ts';
 
-const VECTORS_ecdsa = deepHexToBytes(json('./vectors/secp256k1/ecdsa.json'));
-const VECTORS_ecdh = deepHexToBytes(json('./vectors/wycheproof/ecdh_secp256k1_test.json'));
-const VECTORS_privates = deepHexToBytes(json('./vectors/secp256k1/privates.json'));
-const VECTORS_points = deepHexToBytes(json('./vectors/secp256k1/points.json'));
-const VECTORS_wp = deepHexToBytes(json('./vectors/wycheproof/ecdsa_secp256k1_sha256_test.json'));
+const loadEcdsaVectors = () => deepHexToBytes(json('./vectors/secp256k1/ecdsa.json'));
+const loadEcdhVectors = () => deepHexToBytes(json('./vectors/wycheproof/ecdh_secp256k1_test.json'));
+const loadPrivateVectors = () => {
+  const vectors = json('./vectors/secp256k1/privates.json');
+  return deepHexToBytes({
+    valid: {
+      isPrivate: vectors.valid.isPrivate,
+      add: vectors.valid.add,
+      negate: vectors.valid.negate,
+    },
+  });
+};
+const loadPointVectors = () => deepHexToBytes(json('./vectors/secp256k1/points.json'));
+const loadWycheproofVectors = () =>
+  deepHexToBytes(json('./vectors/wycheproof/ecdsa_secp256k1_sha256_test.json'));
 
 export function pfrom(hex) {
   return Point.fromHex(hex);
@@ -56,16 +66,6 @@ function checkPrivatesTxt() {
     const point = Point.fromBytes(secp.getPublicKey(priv));
     eql(toBEHex(point.x), x);
     eql(toBEHex(point.y), y);
-
-    // // bigint, Point.fromPrivateKey
-    // const pointN = Point.fromPrivateKey(privScalar);
-    // eql(toBEHex(pointN.x), x);
-    // eql(toBEHex(pointN.y), y);
-
-    // // hex, fromBytes, getPublicKey
-    // const pointH = Point.fromBytes(secp.getPublicKey(toBEHex(privScalar)));
-    // eql(toBEHex(pointH.x), x);
-    // eql(toBEHex(pointH.y), y);
   }
 }
 
@@ -76,6 +76,7 @@ describe('secp256k1 static vectors', () => {
 
   describe('Point', () => {
     should('static vector operations', () => {
+      const VECTORS_points = loadPointVectors();
       for (const vector of VECTORS_points.valid.isPoint) {
         const { P, expected } = vector;
         if (expected) {
@@ -84,14 +85,6 @@ describe('secp256k1 static vectors', () => {
           throws(() => Point.fromBytes(P));
         }
       }
-
-      // should('.fromPrivateKey()', () => {
-      //   for (const vector of VECTORS_points.valid.pointFromScalar) {
-      //     const { d, expected } = vector;
-      //     const db = hexToBytes(d);
-      //     eql(phex(Point.fromPrivateKey(db)), expected);
-      //   }
-      // });
 
       for (const vector of VECTORS_points.valid.pointCompress) {
         const { P, compress, expected } = vector;
@@ -140,6 +133,7 @@ describe('secp256k1 static vectors', () => {
   });
 
   should('sign() RFC 6979 and DER vectors', async () => {
+    const VECTORS_ecdsa = loadEcdsaVectors();
     for (const vector of VECTORS_ecdsa.valid) {
       const { m, d, signature: vsig } = vector;
       const opts = { prehash: false };
@@ -177,16 +171,13 @@ describe('secp256k1 static vectors', () => {
       for (const [msg, exp] of CASES) {
         const sig = secp.sign(msg, privKey, { prehash: false, format: 'der' });
         eql(sig, exp, 'format: der');
-
-        // const sig2 = sigToDER()
-        // const rs = sigFromDER(sigToDER(sig)).toBytes();
-        // eql(sigToDER(secp.Signature.fromBytes(rs)), exp);
       }
     }
   });
 
   describe('sign() {extraEntropy} creates hedged signatures', () => {
     should('static vectors and accepted lengths', () => {
+      const VECTORS_ecdsa = loadEcdsaVectors();
       const ent1 = '0000000000000000000000000000000000000000000000000000000000000000';
       const ent2 = '0000000000000000000000000000000000000000000000000000000000000001';
       const ent3 = '6e723d3fd94ed5d2b6bdd4f123364b0f3ca52af829988a63f8afe91d29db1c33';
@@ -229,8 +220,8 @@ describe('secp256k1 static vectors', () => {
   });
   // TODO: do we even need that? nist.test.js does same
   should('verify() wycheproof vectors', () => {
+    const VECTORS_wp = loadWycheproofVectors();
     for (let group of VECTORS_wp.testGroups) {
-      // const pubKey = Point.fromBytes().toBytes();
       const pubKey = group.publicKey.uncompressed;
 
       for (let test of group.tests) {
@@ -271,6 +262,7 @@ describe('secp256k1 static vectors', () => {
   });
 
   should('verify() invalid RFC 6979 vectors', () => {
+    const VECTORS_ecdsa = loadEcdsaVectors();
     for (const vector of VECTORS_ecdsa.invalid.verify) {
       const { signature: sig, m, Q } = vector;
       const res = secp.verify(sig, m, Q);
@@ -279,6 +271,9 @@ describe('secp256k1 static vectors', () => {
   });
 
   should('ECDH, secret-key validity, and public-key recovery vectors', () => {
+    const VECTORS_ecdh = loadEcdhVectors();
+    const VECTORS_privates = loadPrivateVectors();
+    const VECTORS_ecdsa = loadEcdsaVectors();
     // TODO: Once der is there, run all tests.
     for (const vector of VECTORS_ecdh.testGroups[0].tests.slice(0, 230)) {
       const priv = vector.private;
@@ -308,7 +303,6 @@ describe('secp256k1 static vectors', () => {
     for (const vector of VECTORS_ecdsa.valid) {
       const { m, d } = vector;
       let sig = secp.sign(m, d, { prehash: false, format: 'recovered' });
-      // let sig = sigToDER(usig);
       const vpub = secp.getPublicKey(d);
       const recovered = secp.recoverPublicKey(sig, m, { prehash: false });
       eql(recovered, vpub);
@@ -353,6 +347,8 @@ describe('secp256k1 static vectors', () => {
     };
 
     should('private and point tweak helpers', () => {
+      const VECTORS_privates = loadPrivateVectors();
+      const VECTORS_points = loadPointVectors();
       for (const vector of VECTORS_privates.valid.add) {
         const { a, b, expected } = vector;
         eql(tweakUtils.privateAdd(a, b), expected, 'privateAdd');
@@ -420,17 +416,6 @@ describe('secp256k1', () => {
   });
 });
 
-// multiply() should equal multiplyUnsafe()
-// should('ProjectivePoint#multiplyUnsafe', () => {
-//   const p0 = new secp.Point(
-//     55066263022277343669578718895168534326250603453777594175500187360389116729240n,
-//     32670510020758816978083085130507043184471273380659243275938904335757337482424n,
-//     1n
-//   );
-//   const z = 106011723082030650010038151861333186846790370053628296836951575624442507889495n;
-//   console.log(p0.multiply(z));
-//   console.log(secp.Point.normalizeZ([p0.multiplyUnsafe(z)])[0])
-// });
 describe('Signature', () => {
   should('serialization roundtrips and recovery id validation', () => {
     fc.assert(
@@ -659,8 +644,8 @@ describe('verify()', () => {
 describe('secp256k1 schnorr.sign()', () => {
   if (!schnorr) return;
   // index,secret key,public key,aux_rand,message,signature,verification result,comment
-  const VECTORS_bip340 = txt('vectors/secp256k1/schnorr.csv', ',').slice(1, -1);
   should('BIP340 vectors', () => {
+    const VECTORS_bip340 = txt('vectors/secp256k1/schnorr.csv', ',').slice(1, -1);
     for (let vec of VECTORS_bip340) {
       const index = vec[0];
       const [sec, pub, rnd, msg, expSig] = vec.slice(1, 6).map((item) => hexToBytes(item));

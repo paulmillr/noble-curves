@@ -4,7 +4,7 @@ import * as mod from '../src/abstract/modular.ts';
 import * as poseidon from '../src/abstract/poseidon.ts';
 import * as stark from './_poseidon.helpers.ts';
 import { json } from './utils.ts';
-const vecp = json('./vectors/poseidon.json');
+const loadPoseidonVectors = () => json('./vectors/poseidon.json');
 
 const parseArrBig = (arr) => arr.map((n) => BigInt(n));
 
@@ -135,6 +135,7 @@ describe('Stark', () => {
 // https://extgit.iaik.tugraz.at/krypto/hadeshash/-/blob/master/code/test_vectors.txt
 
 should('poseidonperm_x5_255_3', () => {
+  const vecp = loadPoseidonVectors();
   const Fp = mod.Field(
     BigInt('0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001')
   );
@@ -226,6 +227,7 @@ should('poseidonperm_x5_255_5', () => {
     ],
   ];
 
+  const vecp = loadPoseidonVectors();
   const roundConstants = poseidon.splitConstants(vecp.st2.map(BigInt), t);
 
   const poseidon_x5_255_5 = poseidon.poseidon({
@@ -278,6 +280,7 @@ should('poseidonperm_x5_254_3', () => {
     ],
   ];
 
+  const vecp = loadPoseidonVectors();
   const roundConstants = poseidon.splitConstants(vecp.st3.map(BigInt), t);
 
   const poseidon_x5_254_3 = poseidon.poseidon({
@@ -346,6 +349,7 @@ should('poseidonperm_x5_254_5', () => {
     ],
   ];
 
+  const vecp = loadPoseidonVectors();
   const roundConstants = poseidon.splitConstants(vecp.st4.map(BigInt), t);
 
   const poseidon_x5_254_5 = poseidon.poseidon({
@@ -546,6 +550,7 @@ describe('PoseidonSponge', () => {
           8280884008678095605415834125731826663585461281789631237939546251146561093166n,
         ],
       ]);
+      const vecp = loadPoseidonVectors();
       eql(roundConstants, vecp.aleo_grain_roundConstants.map(parseArrBig));
     });
     should('rate=2 capacity=1', () => {
@@ -705,6 +710,7 @@ describe('PoseidonSponge', () => {
           13521929589998302886085098386422384259477894224415500174630722069318478944823n,
         ],
       ]);
+      const vecp = loadPoseidonVectors();
       eql(roundConstants, vecp.arkworks_grain_roundConstants.map(parseArrBig));
     });
     should('rate=2 capacity=1', () => {

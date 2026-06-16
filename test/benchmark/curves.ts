@@ -21,8 +21,6 @@ import { generateData } from './_shared.ts';
   const scalar = 2n ** 180n - 15820n;
   for (let kv of Object.entries(curves_)) {
     const [name, curve] = kv;
-    // console.log();
-    // title(name);
     curve.Point.BASE.precompute(8, false);
     const d = generateData(curve);
     const d2 = generateData(curve);

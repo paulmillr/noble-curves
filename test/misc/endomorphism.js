@@ -239,10 +239,6 @@ export function calculateScalarBound(basis) {
   return bound;
 }
 
-// Run demonstration if script is executed directly
-// demonstrateGaussianReductionBigInt();
-// testRandomLargeBases(3);
-
 /**
  * Calculate a reduced basis for the GLV endomorphism on secp256k1.
  *
@@ -251,17 +247,11 @@ export function calculateScalarBound(basis) {
  * @returns {[[BigInt, BigInt], [BigInt, BigInt]]} - Reduced basis vectors
  */
 export function calculateGlvBasis(n, lambda) {
-  // console.log({n, lambda})
   // Initial basis vectors for the lattice L:
   // v1 = (n, 0): This is valid because n ≡ 0 (mod n), so n + 0*lambda ≡ 0 (mod n)
   // v2 = (-lambda, 1): This is valid because -lambda + 1*lambda ≡ 0 (mod n)
-  // const v1 = [n, 0n];
-  // const v2 = [mod(-lambda, n), 1n];
   const v1 = new Vector2D(n, 0n);
   const v2 = new Vector2D(mod(-lambda, n), 1n);
-  // console.log({
-  //   v1, v2
-  // })
   // Apply Gauss lattice reduction to find a reduced basis
   // gauss lattice reduction of initial basis vectors `(n, 0), -(λ, 0)`
   let { v, u } = gaussLatticeReduction(v1, v2).reducedBasis;
@@ -332,4 +322,3 @@ export function calcEndo(p, n) {
   }
   return res;
 }
-

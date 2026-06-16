@@ -10,7 +10,7 @@ import {
   concatBytes as concatBytes_,
   hexToBytes as hexToBytes_,
   isBytes as isBytes_,
-  randomBytes as randomBytes_
+  randomBytes as randomBytes_,
 } from '@noble/hashes/utils.js';
 /**
  * Bytes API type helpers for old + new TypeScript.
@@ -841,8 +841,7 @@ export function validateObject(
     Object.entries(f).forEach(([k, v]) => checkField(k, v, isOpt));
   iter(fields, false);
   iter(optFields, true);
-};
-
+}
 
 /**
  * Throws not implemented error.

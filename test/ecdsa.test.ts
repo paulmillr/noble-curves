@@ -62,17 +62,6 @@ const cleanObj = (o) => {
 };
 
 const testSig = (C, opts = {}) => {
-  /*
-  sign: (msgHash: Uint8Array, secretKey: Uint8Array, opts?: SignOpts) => Uint8Array;
-  verify: (
-    signature: Uint8Array,
-    msgHash: Uint8Array,
-    publicKey: Uint8Array,
-    opts?: VerOpts
-  ) => boolean;
-  recoverPublicKey(signature: Uint8Array, msgHash: Uint8Array): Uint8Array;
-          */
-
   const alice = C.keygen();
   const bob = C.keygen();
   const msg = randomBytes(10);

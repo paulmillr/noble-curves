@@ -12,12 +12,6 @@ import { E448, ed448, ed448ph, x448 } from '../src/ed448.ts';
 import { asciiToBytes, bytesToNumberLE, numberToBytesLE } from '../src/utils.ts';
 import { json } from './utils.ts';
 
-const VECTORS_rfc8032_ed448 = json('./vectors/rfc8032-ed448.json');
-// Old vectors allow to test sign() because they include private key
-const ed448vectorsOld = json('./vectors/ed448/ed448_test_OLD.json');
-const ed448vectors = json('./vectors/wycheproof/ed448_test.json');
-const x448vectors = json('./vectors/wycheproof/x448_test.json');
-
 const addPToEncoding = (Point: typeof ed448.Point, bytes: Uint8Array): Uint8Array => {
   const out = bytes.slice();
   const sign = out[out.length - 1] & 0x80;
@@ -106,6 +100,7 @@ describe('ed448', () => {
       eql(scheme.verify(sig, msg, badPublicKey), false);
     }
 
+    const VECTORS_rfc8032_ed448 = json('./vectors/rfc8032-ed448.json');
     for (let i = 0; i < VECTORS_rfc8032_ed448.length; i++) {
       const v = VECTORS_rfc8032_ed448[i];
       eql(hex(ed.getPublicKey(bytes(v.secretKey))), v.publicKey);
@@ -239,6 +234,8 @@ describe('ed448', () => {
 
   describe('wycheproof (OLD)', () => {
     should('ED448 old vectors', () => {
+      // Old vectors allow to test sign() because they include private key.
+      const ed448vectorsOld = json('./vectors/ed448/ed448_test_OLD.json');
       for (let g = 0; g < ed448vectorsOld.testGroups.length; g++) {
         const group = ed448vectorsOld.testGroups[g];
         const key = group.key;
@@ -265,6 +262,7 @@ describe('ed448', () => {
 
   describe('wycheproof', () => {
     should('ED448 vectors', () => {
+      const ed448vectors = json('./vectors/wycheproof/ed448_test.json');
       for (let g = 0; g < ed448vectors.testGroups.length; g++) {
         const group = ed448vectors.testGroups[g];
         const key = group.publicKey;
@@ -286,28 +284,6 @@ describe('ed448', () => {
       }
     });
   });
-  // should('X448: should convert base point to montgomery using fromPoint', () => {
-  //   deepStrictEqual(
-  //     hex(ed.montgomeryCurve.UfromPoint(Point.BASE)),
-  //     ed.montgomeryCurve.BASE_POINT_U
-  //   );
-  // });
-
-  // should('X448/getSharedSecret() should be commutative', async () => {
-  //   for (let i = 0; i < 512; i++) {
-  //     const asec = ed.utils.randomSecretKey();
-  //     const apub = ed.getPublicKey(asec);
-  //     const bsec = ed.utils.randomSecretKey();
-  //     const bpub = ed.getPublicKey(bsec);
-  //     try {
-  //       deepStrictEqual(ed.getSharedSecret(asec, bpub), ed.getSharedSecret(bsec, apub));
-  //     } catch (error) {
-  //       console.error('not commutative', { asec, apub, bsec, bpub });
-  //       throw error;
-  //     }
-  //   }
-  // });
-
   describe('ed448ctx', () => {
     const VECTORS_RFC8032_CTX = [
       {
@@ -435,7 +411,6 @@ describe('ed448', () => {
           'aa3b4749d55b9daf1e5b00288826c467274ce3ebbdd5c17b975e09d4af6c67cf10d087202db88286e2b79fceea3ec353ef54faa26e219f38',
         iters: 1000,
       },
-      // { scalar: '077f453681caca3693198420bbe515cae0002472519b3e67661a7e89cab94695c8f4bcd66e61b9b9c946da8d524de3d69bd9d9d66b997e37', iters: 1000000 },
     ];
     should('RFC7748, shared-key, wycheproof, and base-point vectors', () => {
       for (let i = 0; i < rfc7748Mul.length; i++) {
@@ -465,6 +440,7 @@ describe('ed448', () => {
       eql(hex(x448.scalarMult(bytes(alicePrivate), bytes(bobPublic))), shared);
       eql(hex(x448.scalarMult(bytes(bobPrivate), bytes(alicePublic))), shared);
 
+      const x448vectors = json('./vectors/wycheproof/x448_test.json');
       const group = x448vectors.testGroups[0];
       group.tests.forEach((v, i) => {
         const index = `(${i}, ${v.result}) ${v.comment}`;
@@ -490,9 +466,7 @@ describe('ed448', () => {
 
       const { x, y } = Point.BASE;
       const { Fp } = ed448.Point;
-      // const invX = Fp.invert(x * x); // x²
       const u = Fp.div(Fp.create(y * y), Fp.create(x * x)); // (y²/x²)
-      // const u = Fp.create(y * y * invX);
       eql(numberToBytesLE(u, 56), x448.GuBytes);
     });
   });

@@ -47,7 +47,6 @@ for (let category of JSON_CATEGORIES) {
     const n = BigInt(c.order);
     const h = BigInt(c.cofactor);
     const p = BigInt(c.field.p);
-    // const Fp = Field(p);
     const norm = {
       p,
       a,
@@ -57,7 +56,6 @@ for (let category of JSON_CATEGORIES) {
       n,
       h,
     };
-    // if (c.name === 'secp521r1') norm.allowedPrivateKeyLengths = [130, 131, 132];
     miscCurves['misc_' + c.name] = ecdsa(weierstrass(norm), sha512);
   }
 }

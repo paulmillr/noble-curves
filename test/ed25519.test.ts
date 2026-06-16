@@ -11,13 +11,6 @@ import { deepStrictEqual as eql, strictEqual, throws } from 'node:assert';
 import { ed25519 as ed, ED25519_TORSION_SUBGROUP, numberToBytesLE } from './ed25519.helpers.ts';
 import { getTypeTestsNonUi8a, json, txt } from './utils.ts';
 
-const VECTORS_rfc8032_ed25519 = json('./vectors/rfc8032-ed25519.json');
-// Old vectors allow to test sign() because they include private key
-const ed25519vectors_OLD = json('./vectors/ed25519/ed25519_test_OLD.json');
-const ed25519vectors = json('./vectors/wycheproof/ed25519_test.json');
-const zip215 = json('./vectors/ed25519/zip215.json');
-const edgeCases = json('./vectors/ed25519/edge-cases.json');
-
 // Any changes to the file will need to be aware of the fact
 // the file is shared between noble-curves and noble-ed25519.
 
@@ -69,12 +62,11 @@ describe('ed25519', () => {
         eql(pub, Point.fromBytes(pub).toBytes());
 
         const signature = hex(ed.sign(bytes(msg), bytes(priv)));
-        // console.log('vector', i);
-        // expect(pub).toBe(expectedPub);
         eql(signature, expectedSignature);
       }
 
       // https://tools.ietf.org/html/rfc8032#section-7
+      const VECTORS_rfc8032_ed25519 = json('./vectors/rfc8032-ed25519.json');
       for (const vec of VECTORS_rfc8032_ed25519) {
         const { priv, msg, pub, sig } = vec;
         const pubG = ed.getPublicKey(bytes(priv));
@@ -194,6 +186,7 @@ describe('ed25519', () => {
       eql(ed.verify(sig_invalid, message3, publicKey3), false, 'sig.s >= CURVE.n');
 
       // https://eprint.iacr.org/2020/1244
+      const edgeCases = json('./vectors/ed25519/edge-cases.json');
       const list = [0, 1, 6, 7, 8, 9, 10, 11].map((i) => edgeCases[i]);
       for (let v of list) {
         const result = ed.verify(bytes(v.signature), bytes(v.message), bytes(v.pub_key), {
@@ -224,6 +217,7 @@ describe('ed25519', () => {
         eql(ed.verify(forgedSig, msg, zeroPublicKey, { zip215: false }), false);
       }
 
+      const zip215 = json('./vectors/ed25519/zip215.json');
       const vector = zip215.find((v) => v.valid_zip215 && !v.valid_legacy)!;
       const zipMsg = new TextEncoder().encode('Zcash');
       const zipPublicKey = bytes(vector.vk_bytes);
@@ -275,10 +269,6 @@ describe('ed25519', () => {
       const t = 81718630521762619991978402609047527194981150691135404693881672112315521837062n;
       const malformedPoint = Point.fromAffine({ x: t, y: t });
       throws(() => malformedPoint.assertValidity());
-      // Otherwise (without assertValidity):
-      // const point2 = point.double();
-      // point2.toAffine(); // crash!
-
       throws(() => new ed.Point(0n, 0n, 0n, 0n));
       throws(() => new ed.Point(1n, 1n, 0n, 1n));
 
@@ -368,6 +358,7 @@ describe('ed25519', () => {
   // Vectors from https://gist.github.com/hdevalence/93ed42d17ecab8e42138b213812c8cc7
   describe('ZIP215', () => {
     should('compliance tests and scalar-boundary rejection', () => {
+      const zip215 = json('./vectors/ed25519/zip215.json');
       const str = new TextEncoder().encode('Zcash');
       for (let v of zip215) {
         let noble = false;
@@ -393,6 +384,8 @@ describe('ed25519', () => {
   });
 
   should('wycheproof/ED25519 (OLD)', () => {
+    // Old vectors allow to test sign() because they include private key.
+    const ed25519vectors_OLD = json('./vectors/ed25519/ed25519_test_OLD.json');
     for (let g = 0; g < ed25519vectors_OLD.testGroups.length; g++) {
       const group = ed25519vectors_OLD.testGroups[g];
       const key = group.key;
@@ -417,6 +410,7 @@ describe('ed25519', () => {
   });
 
   should('wycheproof/ED25519', () => {
+    const ed25519vectors = json('./vectors/wycheproof/ed25519_test.json');
     for (let g = 0; g < ed25519vectors.testGroups.length; g++) {
       const group = ed25519vectors.testGroups[g];
       const key = group.publicKey;

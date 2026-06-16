@@ -8,7 +8,6 @@ import { decaf448, decaf448_oprf } from '../src/ed448.ts';
 import { p256_oprf, p384_oprf, p521_oprf } from '../src/nist.ts';
 import { asciiToBytes, numberToBytesBE, numberToBytesLE } from '../src/utils.ts';
 import { deepHexToBytes, json } from './utils.ts';
-const VECTORS = deepHexToBytes(json('./vectors/rfc9497-oprf.json')); // Generated using rfc9497-oprf-parser.js
 
 const BufferRNG = (lst) => {
   return (len) => {
@@ -250,9 +249,12 @@ describe('RFC-9497 (OPRF)', () => {
     });
   });
 
-  for (const { suite, modes } of VECTORS) {
+  for (const suite of Object.keys(SUITES)) {
     should(suite, () => {
       if (!SUITES[suite]) throw new Error('missing');
+      // Generated using rfc9497-oprf-parser.js.
+      const vectors = deepHexToBytes(json('./vectors/rfc9497-oprf.json'));
+      const { modes } = vectors.find((v) => v.suite === suite);
       const prf = SUITES[suite];
       const Fn = prf.__tests.Fn;
       const mockRng = (lst) => BufferRNG(lst.map((i) => MockScalar(Fn, i)));
@@ -264,7 +266,6 @@ describe('RFC-9497 (OPRF)', () => {
         const keyInfo = mode.common.KeyInfo;
 
         for (const t of mode.tests) {
-          //console.log('T', name, t, mode, t.data);
           const Proof = t.data.Proof ? t.data.Proof : undefined;
           const ProofRandomScalar = t.data.ProofRandomScalar ? t.data.ProofRandomScalar : undefined;
           const items = [];

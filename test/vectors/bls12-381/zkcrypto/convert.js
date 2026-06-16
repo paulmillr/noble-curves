@@ -16,10 +16,5 @@
     G2_Compressed: CompresedG2.decode(readFileSync('./g2_compressed_valid_test_vectors.dat')),
     G2_Uncompressed: UncompresedG2.decode(readFileSync('./g2_uncompressed_valid_test_vectors.dat')),
   };
-  // Should be 1000
-  // console.log(
-  //   'T',
-  //   Object.values(out).map((i) => i.length)
-  // );
   console.log(JSON.stringify(out));
 })();
