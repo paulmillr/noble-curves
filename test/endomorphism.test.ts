@@ -102,8 +102,8 @@ function hex(n) {
 }
 
 describe('Endomorphism', () => {
-  for (let [name, e] of Object.entries(curvesEndo)) {
-    should(name, () => {
+  should('known curves', () => {
+    for (let [name, e] of Object.entries(curvesEndo)) {
       const p = BigInt(e.p);
       const n = BigInt(e.n);
       const params = {
@@ -170,8 +170,8 @@ describe('Endomorphism', () => {
         }
       }
       //endoCurves[name] = createCurve(params, sha256);
-    });
-  }
+    }
+  });
 });
 
 should('_splitEndoScalar rejects scalars outside 0..n-1', () => {

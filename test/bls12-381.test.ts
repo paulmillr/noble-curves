@@ -220,7 +220,7 @@ describe('bls12-381 Fields', () => {
     const FC_BIGINT = fc.bigInt(1n, Fp.ORDER - 1n);
     const FC_BIGINT_2 = fc.array(FC_BIGINT, { minLength: 2, maxLength: 2 });
 
-    should('non-equality', () => {
+    should('non-equality, sqrt, division, and frobenius', () => {
       fc.assert(
         // @ts-ignore
         fc.property(FC_BIGINT_2, FC_BIGINT_2, (num1, num2) => {
@@ -230,8 +230,7 @@ describe('bls12-381 Fields', () => {
           eql(Fp2.eql(b, a), num1[0] === num2[0] && num1[1] === num2[1]);
         })
       );
-    });
-    should('sqrt: correct root', () => {
+
       const sqr = Fp2.fromBigTuple([
         3341065098200961989598748404381324054605449840948293400785922068969583005812936621662354076014412578129291257715488n,
         2133050398774337206222816300118221327418763981033055222570091459262312519047975404484651902003138703421962555090222n,
@@ -247,9 +246,7 @@ describe('bls12-381 Fields', () => {
       eql(Fp2.sqr(sqrt0), sqr, 'sqrt0');
       eql(Fp2.sqr(sqrt1), sqr, 'sqrt1');
       eql(Fp2.sqrt(sqr), sqrt0);
-    });
 
-    should('div/x/1=x', () => {
       fc.assert(
         fc.property(FC_BIGINT_2, (num) => {
           const a = Fp2.fromBigTuple([num[0], num[1]]);
@@ -258,9 +255,7 @@ describe('bls12-381 Fields', () => {
           eql(Fp2.div(a, a), Fp2.ONE);
         })
       );
-    });
 
-    should('frobenius', () => {
       // expect(Fp2.FROBENIUS_COEFFICIENTS[0].equals(Fp.ONE)).toBe(true);
       // expect(
       //   Fp2.FROBENIUS_COEFFICIENTS[1].equals(
@@ -646,46 +641,18 @@ describe('bls12-381 Point', () => {
     0x6_3eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000000n,
   ];
   describe('multiply(k) == multiplyUnsafe(k)', () => {
-    should('(G1, W=1)', () => {
-      let G = PointG1.BASE.negate().negate(); // create new point
-      G.precompute(1);
-      for (let k of wNAF_VECTORS) {
-        eql(G.multiply(k).equals(G.multiplyUnsafe(k)), true);
-      }
-    });
-    should('(G1, W=4)', () => {
-      let G = PointG1.BASE.negate().negate();
-      G.precompute(4);
-      for (let k of wNAF_VECTORS) {
-        eql(G.multiply(k).equals(G.multiplyUnsafe(k)), true);
-      }
-    });
-    should('(G1, W=5)', () => {
-      let G = PointG1.BASE.negate().negate();
-      G.precompute(5);
-      for (let k of wNAF_VECTORS) {
-        eql(G.multiply(k).equals(G.multiplyUnsafe(k)), true);
-      }
-    });
-    should('(G2, W=1)', () => {
-      let G = PointG2.BASE.negate().negate();
-      G.precompute(1);
-      for (let k of wNAF_VECTORS) {
-        eql(G.multiply(k).equals(G.multiplyUnsafe(k)), true);
-      }
-    });
-    should('(G2, W=4)', () => {
-      let G = PointG2.BASE.negate().negate();
-      G.precompute(4);
-      for (let k of wNAF_VECTORS) {
-        eql(G.multiply(k).equals(G.multiplyUnsafe(k)), true);
-      }
-    });
-    should('(G2, W=5)', () => {
-      let G = PointG2.BASE.negate().negate();
-      G.precompute(5);
-      for (let k of wNAF_VECTORS) {
-        eql(G.multiply(k).equals(G.multiplyUnsafe(k)), true);
+    should('G1/G2 window variants', () => {
+      for (const [label, Point] of [
+        ['G1', PointG1],
+        ['G2', PointG2],
+      ] as const) {
+        for (const W of [1, 4, 5]) {
+          let G = Point.BASE.negate().negate(); // create new point
+          G.precompute(W);
+          for (let k of wNAF_VECTORS) {
+            eql(G.multiply(k).equals(G.multiplyUnsafe(k)), true, `${label}, W=${W}, k=${k}`);
+          }
+        }
       }
     });
   });
@@ -1052,7 +1019,7 @@ describe('bls12-381 encoding', () => {
 
 describe('bls12-381 verify', () => {
   describe('longSignatures', () => {
-    should('sign + verify', () => {
+    should('sign, verify, and negative cases', () => {
       for (let vector of G2_VECTORS) {
         const [priv, msgs, expected] = vector;
         const msg = blsl.hash(msgs);
@@ -1063,9 +1030,7 @@ describe('bls12-381 verify', () => {
         eql(blsl.Signature.toBytes(blsl.Signature.fromBytes(sigb)), sigb, 'b round');
         eql(blsl.Signature.toHex(blsl.Signature.fromBytes(sigb)), bytesToHex(sigb), 'h round');
       }
-    });
 
-    should('works', () => {
       for (let i = 0; i < NUM_RUNS; i++) {
         const [priv, msgs] = G2_VECTORS[i];
         const msg = blsl.hash(msgs);
@@ -1076,8 +1041,6 @@ describe('bls12-381 verify', () => {
         const resHex = blsl.verify(sig, msg, pub);
         eql(resHex, true, `${priv}-${msg}-hex`);
       }
-    });
-    should('false for wrong message', () => {
       for (let i = 0; i < NUM_RUNS; i++) {
         const [priv, msgs] = G2_VECTORS[i];
         const invMsgs = G2_VECTORS[i + 1][1];
@@ -1088,8 +1051,6 @@ describe('bls12-381 verify', () => {
         const res = blsl.verify(sig, invMsg, pub);
         eql(res, false);
       }
-    });
-    should('false for wrong key', () => {
       for (let i = 0; i < NUM_RUNS; i++) {
         const [priv, msgs] = G2_VECTORS[i];
         const msg = blsl.hash(msgs);
@@ -1104,7 +1065,7 @@ describe('bls12-381 verify', () => {
     });
   });
   describe('shortSignatures', () => {
-    should(`sign + verify`, () => {
+    should('sign, verify, and negative cases', () => {
       for (let vector of G1_VECTORS) {
         const [priv, msgs, expected] = vector;
         const msg = blss.hash(msgs.slice());
@@ -1114,8 +1075,6 @@ describe('bls12-381 verify', () => {
         eql(blss.Signature.toBytes(blss.Signature.fromBytes(sigb)), sigb);
         eql(blss.Signature.toHex(blss.Signature.fromBytes(sigb)), bytesToHex(sigb));
       }
-    });
-    should('works', () => {
       for (let i = 0; i < NUM_RUNS; i++) {
         const [priv, msg] = G1_VECTORS[i];
         const hmsg = blss.hash(msg);
@@ -1126,8 +1085,6 @@ describe('bls12-381 verify', () => {
         const resHex = blss.verify(sig, hmsg, pub);
         eql(resHex, true, `${priv}-${msg}`);
       }
-    });
-    should('false for wrong msg', () => {
       for (let i = 0; i < NUM_RUNS; i++) {
         const [priv, msgs] = G1_VECTORS[i];
         const invMsgs = G1_VECTORS[i + 1][1];
@@ -1140,8 +1097,6 @@ describe('bls12-381 verify', () => {
         const resHex = blss.verify(sig, invMsg, pub);
         eql(resHex, false);
       }
-    });
-    should('false for wrong key', () => {
       for (let i = 0; i < NUM_RUNS; i++) {
         const [priv, msgs] = G1_VECTORS[i];
         const msg = blss.hash(msgs);
@@ -1337,7 +1292,7 @@ describe('bls12-381 deterministic', () => {
 
   // hashToCurve
   describe('hash-to-curve killic', () => {
-    should('hashToCurve G1', () => {
+    should('G1/G2 hash, encode, defaults, and scalar field vectors', () => {
       for (let i = 0; i < H2C_KILLIC_G1.length; i++) {
         const t = H2C_KILLIC_G1[i];
         const p = bls.G1.hashToCurve(t.msg, {
@@ -1345,9 +1300,7 @@ describe('bls12-381 deterministic', () => {
         });
         eql(p.toHex(false), t.expected, i.toString());
       }
-    });
 
-    should('encodeToCurve G1', () => {
       for (let i = 0; i < BLS_H2C_VEC_ENCODE_G1.length; i++) {
         const t = BLS_H2C_VEC_ENCODE_G1[i];
         const p = bls.G1.encodeToCurve(t.msg, {
@@ -1355,15 +1308,13 @@ describe('bls12-381 deterministic', () => {
         });
         eql(p.toHex(false), t.expected, i.toString());
       }
-    });
-    should('encodeToCurve G1 defaults match the exported DST', () => {
+
       const msg = new TextEncoder().encode('abc');
       eql(
         bls12_381.G1.encodeToCurve(msg).toHex(),
         bls12_381.G1.encodeToCurve(msg, { DST: bls12_381.G1.defaults.DST }).toHex()
       );
-    });
-    should('hashToCurve G2', () => {
+
       for (let i = 0; i < BLS_H2C_VEC_HASH_G2.length; i++) {
         const t = BLS_H2C_VEC_HASH_G2[i];
         const p = bls.G2.hashToCurve(t.msg, {
@@ -1371,9 +1322,7 @@ describe('bls12-381 deterministic', () => {
         });
         eql(p.toHex(false), t.expected, i.toString());
       }
-    });
 
-    should('encodeToCurve G2', () => {
       for (let i = 0; i < BLS_H2C_VEC_ENCODE_G2.length; i++) {
         const t = BLS_H2C_VEC_ENCODE_G2[i];
         const p = bls.G2.encodeToCurve(t.msg, {
@@ -1381,9 +1330,7 @@ describe('bls12-381 deterministic', () => {
         });
         eql(p.toHex(false), t.expected, i.toString());
       }
-    });
 
-    should(`hash_to_field for scalars`, () => {
       const options = {
         p: bls.G1.Point.Fn.ORDER,
         m: 1,
@@ -1396,9 +1343,8 @@ describe('bls12-381 deterministic', () => {
         const scalars = hash_to_field(okm, 1, Object.assign({}, bls.G2.defaults, options));
         eql(scalars[0][0], expected);
       }
-    });
-    should(`hash_to_field for XMD scalars`, () => {
-      const options = {
+
+      const optionsXmd = {
         p: bls.G1.Point.Fn.ORDER,
         m: 1,
         expand: 'xmd',
@@ -1408,7 +1354,7 @@ describe('bls12-381 deterministic', () => {
         const [okmAscii, expectedHex] = vector;
         const expected = BigInt('0x' + expectedHex);
         const okm = asciiToBytes(okmAscii);
-        const scalars = hash_to_field(okm, 1, Object.assign({}, bls.G2.defaults, options));
+        const scalars = hash_to_field(okm, 1, Object.assign({}, bls.G2.defaults, optionsXmd));
         eql(scalars[0][0], expected);
       }
     });
@@ -1654,14 +1600,12 @@ describe('bls12-381 deterministic', () => {
   });
   describe('EIP2537', () => {
     const toEthHex = (n) => n.toString(16).padStart(128, '0');
-    should('G1', () => {
+    should('G1/G2 mapToCurve vectors and zero point', () => {
       for (const v of eip2537.G1) {
         const { x, y } = bls12_381.G1.mapToCurve(utils.hexToNumber(v.Input)).toAffine();
         const val = toEthHex(x) + toEthHex(y);
         eql(val, v.Expected);
       }
-    });
-    should('G2', () => {
       for (const v of eip2537.G2) {
         const input1 = BigInt(`0x${v.Input.slice(0, 128)}`);
         const input2 = BigInt(`0x${v.Input.slice(128, 256)}`);
@@ -1669,8 +1613,6 @@ describe('bls12-381 deterministic', () => {
         const res = toEthHex(x.c0) + toEthHex(x.c1) + toEthHex(y.c0) + toEthHex(y.c1);
         eql(res, v.Expected);
       }
-    });
-    should('zero point', () => {
       // kernel of isogeny
       const t = BigInt(
         '1006044755431560595281793557931171729984964515682961911911398807521437683216171091013202870577238485832047490326971'

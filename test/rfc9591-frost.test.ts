@@ -306,28 +306,38 @@ describe('FROST (RFC 9591)', () => {
       VECTORS[name];
     describe(`${name}`, () => {
       const Fn = frost.utils.Fn;
-      should('Identifiers', () => {
+      should('identifiers, samples, repair fixtures, and invalid elements', () => {
         const t = Identifiers[name];
-        eql(frost.Identifier.fromNumber(7), t[7]);
-        eql(frost.Identifier.derive('alice@example.com'), t['alice@example.com']);
+        eql(frost.Identifier.fromNumber(7), t[7], 'identifier number');
+        eql(
+          frost.Identifier.derive('alice@example.com'),
+          t['alice@example.com'],
+          'identifier derive'
+        );
         throws(() => frost.Identifier.fromNumber(0));
-      });
-      should('samples', () => {
-        eql(frost.Identifier.fromNumber(42), sample.identifier);
-        eql(sample.element1, base);
-        eql(sample.element2, doubleBase);
-        eql(sample.proof_of_knowledge, proofPrefix + sample.scalar1);
-        eql(bytesToHex(Fn.toBytes(Fn.fromBytes(hexToBytes(sample.scalar1)))), sample.scalar1);
-      });
-      should('repair-share fixtures', () => {
+
+        eql(frost.Identifier.fromNumber(42), sample.identifier, 'sample identifier');
+        eql(sample.element1, base, 'sample element1');
+        eql(sample.element2, doubleBase, 'sample element2');
+        eql(sample.proof_of_knowledge, proofPrefix + sample.scalar1, 'proof of knowledge');
+        eql(
+          bytesToHex(Fn.toBytes(Fn.fromBytes(hexToBytes(sample.scalar1)))),
+          sample.scalar1,
+          'sample scalar'
+        );
+
         const { scalar_generation: sg, sigma_generation: gg } = repair;
         eql(
           sumHexScalars(Fn, [sg.random_scalar_1, sg.random_scalar_2, sg.random_scalar_3]),
-          sg.random_scalar_sum
+          sg.random_scalar_sum,
+          'repair scalar sum'
         );
-        eql(sumHexScalars(Fn, [gg.sigma_1, gg.sigma_2, gg.sigma_3, gg.sigma_4]), gg.sigma_sum);
-      });
-      should('invalid elements', () => {
+        eql(
+          sumHexScalars(Fn, [gg.sigma_1, gg.sigma_2, gg.sigma_3, gg.sigma_4]),
+          gg.sigma_sum,
+          'repair sigma sum'
+        );
+
         const deal = frost.trustedDealer({ min: 2, max: 2 });
         const ids = Object.keys(deal.secretShares);
         const { nonces, commitments } = frost.commit(deal.secretShares[ids[0]]);
@@ -448,18 +458,27 @@ describe('FROST (RFC 9591)', () => {
         testSign(keys.public, keys.secretShares);
       });
       if (name === 'secp256k1_tr') {
-        should('Taproot single-key signing normalizes odd-Y secrets', () => {
+        should('Taproot single-key signing and x-only verify behavior', () => {
           const msg = new Uint8Array([9, 8, 7, 6]);
           const secretKey = secp256k1SecretByY(false);
           const sig = schnorr_FROST.sign(msg, secretKey);
-          eql(schnorr_FROST.verify(sig, msg, secp256k1.getPublicKey(secretKey)), true);
-        });
-        should('Taproot verify accepts x-only pubkeys and rejects SEC1 uncompressed', () => {
-          const msg = new Uint8Array([1, 3, 3, 7]);
-          const secretKey = secp256k1SecretByY(true);
-          const sig = schnorr_FROST.sign(msg, secretKey);
-          eql(schnorr_FROST.verify(sig, msg, schnorr.getPublicKey(secretKey)), true);
-          throws(() => schnorr_FROST.verify(sig, msg, secp256k1.getPublicKey(secretKey, false)));
+          eql(
+            schnorr_FROST.verify(sig, msg, secp256k1.getPublicKey(secretKey)),
+            true,
+            'odd-Y secret'
+          );
+
+          const xOnlyMsg = new Uint8Array([1, 3, 3, 7]);
+          const xOnlySecretKey = secp256k1SecretByY(true);
+          const xOnlySig = schnorr_FROST.sign(xOnlyMsg, xOnlySecretKey);
+          eql(
+            schnorr_FROST.verify(xOnlySig, xOnlyMsg, schnorr.getPublicKey(xOnlySecretKey)),
+            true,
+            'x-only public key'
+          );
+          throws(() =>
+            schnorr_FROST.verify(xOnlySig, xOnlyMsg, secp256k1.getPublicKey(xOnlySecretKey, false))
+          );
         });
       }
       should('reject non-canonical identifier hex', () => {

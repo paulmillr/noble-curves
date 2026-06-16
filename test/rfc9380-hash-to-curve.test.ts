@@ -159,32 +159,32 @@ describe('RFC9380 hash-to-curve', () => {
     );
   });
 
-  should(
-    'createHasher snapshots and freezes internal defaults without freezing caller input',
-    () => {
-      const msg = Uint8Array.of(7, 8, 9);
-      const dst = Uint8Array.of(1, 2, 3);
-      const defaults = {
-        DST: dst,
-        p: nist.p256.Point.Fp.ORDER,
-        m: 1,
-        k: 128,
-        expand: 'xmd' as const,
-        hash: sha256,
-      };
-      const hasher = createHasher(nist.p256.Point, () => nist.p256.Point.BASE.toAffine(), defaults);
-      const before = hasher.hashToCurve(msg).toHex();
-      dst[0] = 9;
-      const exported = hasher.defaults;
-      exported.DST[0] = 8;
-      eql(Object.isFrozen(defaults), false);
-      eql(Object.isFrozen(exported), true);
-      eql(hasher.defaults.DST, Uint8Array.of(1, 2, 3));
-      eql(hasher.hashToCurve(msg).toHex(), before);
-    }
-  );
-  should('createHasher treats only undefined encodeDST as absent', () => {
-    const msg = Uint8Array.of(1, 2, 3);
+  should('createHasher default snapshots and option validation', () => {
+    const msg = Uint8Array.of(7, 8, 9);
+    const dst = Uint8Array.of(1, 2, 3);
+    const snapshotDefaults = {
+      DST: dst,
+      p: nist.p256.Point.Fp.ORDER,
+      m: 1,
+      k: 128,
+      expand: 'xmd' as const,
+      hash: sha256,
+    };
+    const snapshotHasher = createHasher(
+      nist.p256.Point,
+      () => nist.p256.Point.BASE.toAffine(),
+      snapshotDefaults
+    );
+    const before = snapshotHasher.hashToCurve(msg).toHex();
+    dst[0] = 9;
+    const exported = snapshotHasher.defaults;
+    exported.DST[0] = 8;
+    eql(Object.isFrozen(snapshotDefaults), false, 'caller defaults stay mutable');
+    eql(Object.isFrozen(exported), true, 'exported defaults freeze');
+    eql(snapshotHasher.defaults.DST, Uint8Array.of(1, 2, 3), 'DST snapshot');
+    eql(snapshotHasher.hashToCurve(msg).toHex(), before, 'snapshot output');
+
+    const encodeMsg = Uint8Array.of(1, 2, 3);
     const defaults = {
       DST: 'DST',
       encodeDST: '',
@@ -195,10 +195,9 @@ describe('RFC9380 hash-to-curve', () => {
       hash: sha256,
     };
     const hasher = createHasher(nist.p256.Point, () => nist.p256.Point.BASE.toAffine(), defaults);
-    throws(() => hasher.encodeToCurve(msg), /DST/);
-  });
-  should('createHasher validates m>1 mapToCurve tuple length', () => {
-    const defaults = {
+    throws(() => hasher.encodeToCurve(encodeMsg), /DST/);
+
+    const tupleDefaults = {
       DST: 'DST',
       p: nist.p256.Point.Fp.ORDER,
       m: 2,
@@ -206,45 +205,43 @@ describe('RFC9380 hash-to-curve', () => {
       expand: 'xmd' as const,
       hash: sha256,
     };
-    const hasher = createHasher(nist.p256.Point, () => nist.p256.Point.BASE.toAffine(), defaults);
-    throws(() => hasher.mapToCurve([1n]), /2/);
-    throws(() => hasher.mapToCurve([1n, 2n, 3n]), /2/);
-  });
-  should(
-    'exports _DST_scalar as immutable string so default hash-to-scalar helpers cannot be poisoned',
-    () => {
-      const msg = Uint8Array.of(1, 2, 3, 4);
-      const suites = [
-        ['p256_hasher', nist.p256_hasher],
-        ['ristretto255_hasher', ristretto255_hasher],
-        ['decaf448_hasher', decaf448_hasher],
-      ] as const;
-      eql(typeof _DST_scalar, 'string');
-      const baseline = suites.map(([name, item]) => [name, item.hashToScalar(msg).toString()]);
-      const explicit = suites.map(([name, item]) => [
-        name,
-        item.hashToScalar(msg, { DST: _DST_scalar }).toString(),
-      ]);
-      eql(baseline, explicit);
-      eql(_DST_scalar, 'HashToScalar-');
-    }
-  );
-  should('hashToScalar keeps scalar field pins after per-call options', () => {
-    const msg = Uint8Array.of(1, 2, 3);
-    const expected = nist.p256_hasher.hashToScalar(msg, { DST: 'DST' });
-    const actual = nist.p256_hasher.hashToScalar(msg, { DST: 'DST', p: 1n, m: 2 } as never);
-    eql(actual, expected);
+    const tupleHasher = createHasher(
+      nist.p256.Point,
+      () => nist.p256.Point.BASE.toAffine(),
+      tupleDefaults
+    );
+    throws(() => tupleHasher.mapToCurve([1n]), /2/);
+    throws(() => tupleHasher.mapToCurve([1n, 2n, 3n]), /2/);
+
+    const scalarMsg = Uint8Array.of(1, 2, 3, 4);
+    const suites = [
+      ['p256_hasher', nist.p256_hasher],
+      ['ristretto255_hasher', ristretto255_hasher],
+      ['decaf448_hasher', decaf448_hasher],
+    ] as const;
+    eql(typeof _DST_scalar, 'string');
+    const baseline = suites.map(([name, item]) => [name, item.hashToScalar(scalarMsg).toString()]);
+    const explicit = suites.map(([name, item]) => [
+      name,
+      item.hashToScalar(scalarMsg, { DST: _DST_scalar }).toString(),
+    ]);
+    eql(baseline, explicit, '_DST_scalar explicit matches default');
+    eql(_DST_scalar, 'HashToScalar-');
+
+    const pinMsg = Uint8Array.of(1, 2, 3);
+    const expected = nist.p256_hasher.hashToScalar(pinMsg, { DST: 'DST' });
+    const actual = nist.p256_hasher.hashToScalar(pinMsg, { DST: 'DST', p: 1n, m: 2 } as never);
+    eql(actual, expected, 'scalar field pins');
   });
 
   describe('expand_message_xmd', () => {
     testExpandXMD(sha256, xmd_sha256_38);
     testExpandXMD(sha256, xmd_sha256_256);
     testExpandXMD(sha512, xmd_sha512_38);
-    should('accepts the RFC 9380 maximum ell=255 case', () => {
+    should('maximum ell and invalid hash guards', () => {
       const out = expand_message_xmd(new Uint8Array([1, 2, 3]), new Uint8Array([4]), 8160, sha256);
-      eql(out.length, 8160);
-    });
-    should('rejects hashes without blockLen', () => {
+      eql(out.length, 8160, 'maximum ell');
+
       const noBlockLen = Object.assign((msg: Uint8Array) => sha256(msg), {
         outputLen: sha256.outputLen,
       });
@@ -258,16 +255,14 @@ describe('RFC9380 hash-to-curve', () => {
     testExpandXOF(shake128, xof_shake128_36);
     testExpandXOF(shake128, xof_shake128_256);
     testExpandXOF(shake256, xof_shake256_36);
-    should('rejects negative lenInBytes with a local error', () => {
+    should('invalid lenInBytes and k guards', () => {
       throws(() => expand_message_xof(new Uint8Array([1]), 'DST', -1, 128, shake128), /lenInBytes/);
-    });
-    should('validates k before oversize DST hashing', () => {
+
       const dst = new Uint8Array(256).fill(1);
       throws(() => expand_message_xof(new Uint8Array([1]), dst, 32, NaN, shake128), /k/);
       throws(() => expand_message_xof(new Uint8Array([1]), dst, 32, -1, shake128), /k/);
       eql(expand_message_xof(new Uint8Array([1]), dst, 0, 0, shake128).length, 0);
-    });
-    should('rejects oversize lenInBytes before oversize DST hashing', () => {
+
       const failCreate = Object.assign(() => new Uint8Array(), {
         create() {
           throw new Error('xof create reached');
@@ -295,38 +290,29 @@ describe('RFC9380 hash-to-curve', () => {
   testCurve(ed25519_hasher, ed25519_ro, ed25519_nu);
   testCurve(ed448_hasher, ed448_ro, ed448_nu);
 
-  should('hash_to_field rejects zero count and zero extension degree', () => {
+  should('hash_to_field validates count, extension degree, k, and characteristic', () => {
     const msg = new Uint8Array([1, 2, 3]);
     const opts = { DST: 'DST', p: 17n, m: 1, k: 128, expand: 'xmd' as const, hash: sha256 };
     throws(() => hash_to_field(msg, 0, opts));
     throws(() => hash_to_field(msg, 1, { ...opts, m: 0 }));
-  });
-  should('hash_to_field validates extension degree as safe integer', () => {
-    const msg = new Uint8Array([1, 2, 3]);
-    const opts = { DST: 'DST', p: 17n, m: 1, k: 128, expand: 'xmd' as const, hash: sha256 };
+
     throws(() => hash_to_field(msg, 1, { ...opts, m: NaN }), /"m" expected safe integer/);
     throws(() => hash_to_field(msg, 1, { ...opts, m: 1.5 }), /"m" expected safe integer/);
     throws(() => hash_to_field(msg, 1, { ...opts, m: Infinity }), /"m" expected safe integer/);
-  });
-  should('hash_to_field validates k as non-negative safe integer', () => {
-    const msg = new Uint8Array([1, 2, 3]);
-    const opts = { DST: 'DST', p: 17n, m: 1, k: 128, expand: 'xmd' as const, hash: sha256 };
+
     throws(() => hash_to_field(msg, 1, { ...opts, k: NaN }), /"k" expected safe integer/);
     throws(() => hash_to_field(msg, 1, { ...opts, k: 1.5 }), /"k" expected safe integer/);
     throws(() => hash_to_field(msg, 1, { ...opts, k: Infinity }), /"k" expected safe integer/);
     throws(() => hash_to_field(msg, 1, { ...opts, k: -1 }), /invalid k/);
     eql(hash_to_field(msg, 1, { ...opts, k: 0 })[0].length, 1);
-  });
-  should('hash_to_field rejects invalid field characteristic', () => {
-    const msg = new Uint8Array([1, 2, 3]);
-    const opts = { DST: 'DST', p: 17n, m: 1, k: 128, expand: 'xmd' as const, hash: sha256 };
+
     throws(() => hash_to_field(msg, 1, { ...opts, p: 1n }), /characteristic/);
     throws(() => hash_to_field(msg, 1, { ...opts, p: 0n }), /characteristic/);
     throws(() => hash_to_field(msg, 1, { ...opts, p: -17n }), /characteristic/);
   });
 });
 
-should('simple SWU rejects invalid RFC 9380 parameters', () => {
+should('SWU, isogenyMap, and sqrt_ratio edge cases', () => {
   const Fp = Field(13n);
   throws(() => mapToCurveSimpleSWU(Fp, { A: 0n, B: 1n, Z: 6n }), /invalid/i);
   throws(() => mapToCurveSimpleSWU(Fp, { A: 1n, B: 0n, Z: 6n }), /invalid/i);
@@ -336,30 +322,22 @@ should('simple SWU rejects invalid RFC 9380 parameters', () => {
   const Fp5 = Field(5n);
   // RFC 9380 Appendix H.2 criterion 4: g(B / (Z * A)) must be square in F.
   throws(() => mapToCurveSimpleSWU(Fp5, { A: 2n, B: 1n, Z: 2n }), /invalid/i);
-});
 
-should('isogenyMap rejects empty coefficient rows', () => {
-  const Fp = Field(17n);
-  throws(() => isogenyMap(Fp, [[], [1n], [1n], [1n]]), /isogenyMap/);
-});
+  const Fp17 = Field(17n);
+  throws(() => isogenyMap(Fp17, [[], [1n], [1n], [1n]]), /isogenyMap/);
 
-should('isogenyMap maps either zero denominator to identity', () => {
-  const Fp = Field(17n);
-  const xDenZero = isogenyMap(Fp, [[3n], [0n], [5n], [1n]]);
-  const yDenZero = isogenyMap(Fp, [[3n], [1n], [5n], [0n]]);
+  const xDenZero = isogenyMap(Fp17, [[3n], [0n], [5n], [1n]]);
+  const yDenZero = isogenyMap(Fp17, [[3n], [1n], [5n], [0n]]);
   eql(xDenZero(7n, 11n), { x: 0n, y: 0n });
   eql(yDenZero(7n, 11n), { x: 0n, y: 0n });
-});
 
-should('sqrt_ratio treats zero numerator as square only for non-zero denominators', () => {
   const Fp13 = Field(13n);
   eql(SWUFpSqrtRatio(Fp13, 2n)(0n, 1n), { isValid: true, value: 0n });
   eql(SWUFpSqrtRatio(Fp13, 2n)(0n, 0n), { isValid: false, value: 0n });
   const Fp11 = Field(11n);
   eql(SWUFpSqrtRatio(Fp11, 2n)(0n, 1n), { isValid: true, value: 0n });
   eql(SWUFpSqrtRatio(Fp11, 2n)(0n, 0n), { isValid: false, value: 0n });
-});
-should('SWUFpSqrtRatio validates malformed field objects before using them', () => {
+
   throws(() => SWUFpSqrtRatio({ ORDER: 11n } as any, 2n), /"BYTES" expected number/);
 });
 

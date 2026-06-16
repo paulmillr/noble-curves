@@ -34,11 +34,9 @@ describe('ed25519', () => {
   if (isNobleCurves) Point.BASE.precompute(8, false);
 
   describe('getPublicKey()', () => {
-    should('not accept >32byte private keys in Uint8Array format', () => {
-      const invalidPriv = new Uint8Array(33).fill(1);
-      throws(() => ed.getPublicKey(invalidPriv));
-    });
     should('reject invalid inputs', () => {
+      const invalidPriv = new Uint8Array(33).fill(1);
+      throws(() => ed.getPublicKey(invalidPriv), '>32byte private key');
       for (const item of getTypeTestsNonUi8a()) {
         // @ts-ignore
         throws(() => ed.getPublicKey(item));
@@ -47,15 +45,13 @@ describe('ed25519', () => {
   });
 
   describe('sign()', () => {
-    should('creates random signature', () => {
+    should('random signature and static vectors', () => {
       const priv = ed.utils.randomSecretKey();
       const pub = ed.getPublicKey(priv);
       const msg = new TextEncoder().encode('hello');
       const sig = ed.sign(msg, priv);
-      eql(ed.verify(sig, msg, pub), true);
-    });
+      eql(ed.verify(sig, msg, pub), true, 'creates random signature');
 
-    should('pass 1024 vectors', () => {
       // https://ed25519.cr.yp.to/python/sign.py
       // https://ed25519.cr.yp.to/python/sign.input
       const vectorsCrYpTo = txt('vectors/ed25519/vectors.txt');
@@ -77,9 +73,7 @@ describe('ed25519', () => {
         // expect(pub).toBe(expectedPub);
         eql(signature, expectedSignature);
       }
-    });
 
-    should('pass rfc8032 vectors', () => {
       // https://tools.ietf.org/html/rfc8032#section-7
       for (const vec of VECTORS_rfc8032_ed25519) {
         const { priv, msg, pub, sig } = vec;
@@ -92,7 +86,7 @@ describe('ed25519', () => {
   });
 
   describe('verify()', () => {
-    should('correct static signatures', () => {
+    should('static, random, mutation, and ZIP-215 cases', async () => {
       const priv = bytes32('a665a45920422f9d417e4867ef');
       const priv2 = bytes32('a675a45920422f9d417e4867ef');
       const msg = bytes('874f9960c5d2b7a9b5fad383e1ba44719ebb743a');
@@ -108,25 +102,17 @@ describe('ed25519', () => {
       eql(ed.verify(sig2, msg, pub2), false);
 
       eql(ed.verify(sig, msg2, pub), false);
-    });
 
-    should('rejects null options', () => {
-      const priv = bytes32('a665a45920422f9d417e4867ef');
-      const msg = bytes('874f9960c5d2b7a9b5fad383e1ba44719ebb743a');
-      const pub = ed.getPublicKey(priv);
-      const sig = ed.sign(msg, priv);
       throws(() => ed.verify(sig, msg, pub, null as never), /expected valid options object/);
-    });
 
-    function hexa() {
-      const items = '0123456789abcdef';
-      return fc.integer({ min: 0, max: 15 }).map((n) => items[n]);
-    }
-    function hexaString(constraints = {}) {
-      return fc.string({ ...constraints, unit: hexa() });
-    }
+      function hexa() {
+        const items = '0123456789abcdef';
+        return fc.integer({ min: 0, max: 15 }).map((n) => items[n]);
+      }
+      function hexaString(constraints = {}) {
+        return fc.string({ ...constraints, unit: hexa() });
+      }
 
-    should('random signature', () => {
       fc.assert(
         fc.property(
           hexaString({ minLength: 2, maxLength: 32 }),
@@ -145,8 +131,6 @@ describe('ed25519', () => {
         ),
         { numRuns: 1000 }
       );
-    });
-    should('fail for wrong message', () => {
       fc.assert(
         fc.property(
           fc.array(fc.integer({ min: 0x00, max: 0xff })),
@@ -167,9 +151,7 @@ describe('ed25519', () => {
         ),
         { numRuns: 50 }
       );
-    });
 
-    should('not mutate inputs 1', () => {
       const privateKey = ed.utils.randomSecretKey();
       const publicKey = ed.getPublicKey(privateKey);
 
@@ -190,33 +172,27 @@ describe('ed25519', () => {
             throw new Error('Copied signature verification failed');
         }
       }
-    });
 
-    should('not mutate inputs 2', () => {
       const message = new Uint8Array([12, 12, 12]);
       const signature = ed.sign(message, bytes32(1n));
-      const publicKey = ed.getPublicKey(bytes32(1n)); // <- was 1n
-      eql(ed.verify(signature, message, publicKey), true);
-    });
+      const publicKey2 = ed.getPublicKey(bytes32(1n)); // <- was 1n
+      eql(ed.verify(signature, message, publicKey2), true, 'not mutate inputs 2');
 
-    should('not verify when sig.s >= CURVE.n', () => {
-      const privateKey = ed.utils.randomSecretKey();
-      const message = Uint8Array.from([0xab, 0xbc, 0xcd, 0xde]);
-      const publicKey = ed.getPublicKey(privateKey);
-      const signature = ed.sign(message, privateKey);
+      const privateKey3 = ed.utils.randomSecretKey();
+      const message3 = Uint8Array.from([0xab, 0xbc, 0xcd, 0xde]);
+      const publicKey3 = ed.getPublicKey(privateKey3);
+      const signature3 = ed.sign(message3, privateKey3);
 
-      const R = signature.slice(0, 32);
-      let s_0 = signature.slice(32, 64);
+      const R = signature3.slice(0, 32);
+      let s_0 = signature3.slice(32, 64);
       let s_1 = hex(s_0.slice().reverse());
       let s_2 = BigInt('0x' + s_1);
       s_2 = s_2 + CURVE_N;
       let s_3 = numberToBytesLE(s_2, 32);
 
       const sig_invalid = concatBytes(R, s_3);
-      eql(ed.verify(sig_invalid, message, publicKey), false);
-    });
+      eql(ed.verify(sig_invalid, message3, publicKey3), false, 'sig.s >= CURVE.n');
 
-    should('have strict SUF-CMA and SBS properties', () => {
       // https://eprint.iacr.org/2020/1244
       const list = [0, 1, 6, 7, 8, 9, 10, 11].map((i) => edgeCases[i]);
       for (let v of list) {
@@ -225,14 +201,12 @@ describe('ed25519', () => {
         });
         strictEqual(result, false, `zip215: false must not validate: ${v.signature}`);
       }
-    });
 
-    should('handle ZERO points properly', async () => {
       const modN = (a: bigint, b: bigint = N) => {
         const r = a % b;
         return r >= 0n ? r : b + r;
       };
-      const { secretKey, publicKey } = ed.keygen();
+      const { secretKey, publicKey: zeroPublicKey } = ed.keygen();
       const extK = ed.utils.getExtendedPublicKey(secretKey);
       const aaaaa = extK.scalar; // private scalar
       const identityR = new Uint8Array(32);
@@ -246,31 +220,26 @@ describe('ed25519', () => {
       const msgs = ['a', 'b', 'c'].map((s) => new TextEncoder().encode(s));
       msgs.push(Uint8Array.of());
       for (let msg of msgs) {
-        eql(ed.verify(forgedSig, msg, publicKey), false);
-        eql(ed.verify(forgedSig, msg, publicKey, { zip215: false }), false);
+        eql(ed.verify(forgedSig, msg, zeroPublicKey), false);
+        eql(ed.verify(forgedSig, msg, zeroPublicKey, { zip215: false }), false);
       }
-    });
 
-    should(
-      'passing {} or { zip215: undefined } preserves the exported default ZIP-215 semantics',
-      () => {
-        const vector = zip215.find((v) => v.valid_zip215 && !v.valid_legacy)!;
-        const msg = new TextEncoder().encode('Zcash');
-        const publicKey = bytes(vector.vk_bytes);
-        const signature = bytes(vector.sig_bytes);
-        eql(
-          {
-            omitted: ed.verify(signature, msg, publicKey),
-            empty: ed.verify(signature, msg, publicKey, {}),
-            undef: ed.verify(signature, msg, publicKey, { zip215: undefined }),
-            strict: ed.verify(signature, msg, publicKey, { zip215: false }),
-          },
-          { omitted: true, empty: true, undef: true, strict: false }
-        );
-      }
-    );
-    if (ed.utils.isValidPublicKey) {
-      should('utils.isValidPublicKey preserves the exported ZIP-215 default', () => {
+      const vector = zip215.find((v) => v.valid_zip215 && !v.valid_legacy)!;
+      const zipMsg = new TextEncoder().encode('Zcash');
+      const zipPublicKey = bytes(vector.vk_bytes);
+      const zipSignature = bytes(vector.sig_bytes);
+      eql(
+        {
+          omitted: ed.verify(zipSignature, zipMsg, zipPublicKey),
+          empty: ed.verify(zipSignature, zipMsg, zipPublicKey, {}),
+          undef: ed.verify(zipSignature, zipMsg, zipPublicKey, { zip215: undefined }),
+          strict: ed.verify(zipSignature, zipMsg, zipPublicKey, { zip215: false }),
+        },
+        { omitted: true, empty: true, undef: true, strict: false },
+        'ZIP-215 default options'
+      );
+
+      if (ed.utils.isValidPublicKey) {
         const unreduced = numberToBytesLE(ed.Point.CURVE().p + 1n, 32);
         eql(
           {
@@ -281,42 +250,35 @@ describe('ed25519', () => {
           },
           { omitted: true, undef: true, zip215: true, strict: false }
         );
-      });
-    }
-    if (ed.utils.isValidSecretKey) {
-      should('utils.isValidSecretKey accepts the helper secret-key width', () => {
-        const seed = new Uint8Array(ed.Point.Fp.BYTES);
-        eql(ed.utils.isValidSecretKey(seed), true);
-      });
-    }
-    should(
-      'ZIP-215 verification with noncanonical R hashes the original signature bytes in verify()',
-      () => {
-        const publicKey = bytes('17ffad8068dc0de9935d36636f3ad1b5de6de3413b12388e453b05f2a4c1d3db');
-        const msg = bytes('090807');
-        const signature = bytes(
-          'eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fc07b8c4dcad0ae1a8df5426b3b0578753de96488dbbee400082251e372919f04'
-        );
-        eql(ed.verify(signature, msg, publicKey, { zip215: true }), true);
       }
-    );
+      if (ed.utils.isValidSecretKey) {
+        const seed = new Uint8Array(ed.Point.Fp.BYTES);
+        eql(ed.utils.isValidSecretKey(seed), true, 'isValidSecretKey helper width');
+      }
+      const publicKey4 = bytes('17ffad8068dc0de9935d36636f3ad1b5de6de3413b12388e453b05f2a4c1d3db');
+      const msg4 = bytes('090807');
+      const signature4 = bytes(
+        'eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fc07b8c4dcad0ae1a8df5426b3b0578753de96488dbbee400082251e372919f04'
+      );
+      eql(
+        ed.verify(signature4, msg4, publicKey4, { zip215: true }),
+        true,
+        'noncanonical R original bytes'
+      );
+    });
   });
 
   describe('Point', () => {
-    should('subtract rejects non-point objects even if negate() returns a point', () => {
+    should('constructor, validation, multiply, torsion, and affine edge cases', () => {
       throws(() => ed.Point.BASE.subtract({ negate: () => ed.Point.ZERO } as any));
-    });
 
-    should('not create point without z, t', () => {
       const t = 81718630521762619991978402609047527194981150691135404693881672112315521837062n;
-      const point = Point.fromAffine({ x: t, y: t });
-      throws(() => point.assertValidity());
+      const malformedPoint = Point.fromAffine({ x: t, y: t });
+      throws(() => malformedPoint.assertValidity());
       // Otherwise (without assertValidity):
       // const point2 = point.double();
       // point2.toAffine(); // crash!
-    });
 
-    should('not accept point with z=0', () => {
       throws(() => new ed.Point(0n, 0n, 0n, 0n));
       throws(() => new ed.Point(1n, 1n, 0n, 1n));
 
@@ -336,17 +298,13 @@ describe('ed25519', () => {
       const pub = '34fe104df0a1348ef60699b3659b5a31b14a6f8488e14bfa55d2cc310959ae50';
 
       eql(ed.verify(bytes(sig), bytes(msg), bytes(pub)), false);
-    });
 
-    should('Point.ZERO.multiplyUnsafe rejects negative and >= N scalars', () => {
       throws(() => ed.Point.ZERO.multiplyUnsafe(-1n), /out of range|expected 0 <= sc < curve.n/);
       throws(
         () => ed.Point.ZERO.multiplyUnsafe(CURVE_N),
         /out of range|expected 0 <= sc < curve.n/
       );
-    });
 
-    should('Point.CURVE does not expose a live mutable view of internal curve parameters', () => {
       const curve = ed.Point.CURVE() as { p: bigint };
       const orig = curve.p;
       let changed = false;
@@ -361,44 +319,35 @@ describe('ed25519', () => {
         if (changed) curve.p = orig;
       }
       eql(after, orig);
-    });
 
-    describe('#multiply()', () => {
-      should('pass against addresstests vectors', () => {
-        // https://xmr.llcoins.net/addresstests.html
-        const xmrVectors = [
-          [
-            '090af56259a4b6bfbc4337980d5d75fbe3c074630368ff3804d33028e5dbfa77',
-            '0f3b913371411b27e646b537e888f685bf929ea7aab93c950ed84433f064480d',
-          ],
-          [
-            '00364e8711a60780382a5d57b061c126f039940f28a9e91fe039d4d3094d8b88',
-            'ad545340b58610f0cd62f17d55af1ab11ecde9c084d5476865ddb4dbda015349',
-          ],
-          [
-            '0b9bf90ff3abec042752cac3a07a62f0c16cfb9d32a3fc2305d676ec2d86e941',
-            'e097c4415fe85724d522b2e449e8fd78dd40d20097bdc9ae36fe8ec6fe12cb8c',
-          ],
-          [
-            '069d896f02d79524c9878e080308180e2859d07f9f54454e0800e8db0847a46e',
-            'f12cb7c43b59971395926f278ce7c2eaded9444fbce62ca717564cb508a0db1d',
-          ],
-        ];
-        for (const [scalarHex, pointHex] of xmrVectors) {
-          const scalar = BigInt('0x' + scalarHex);
-          eql(hex(Point.BASE.multiply(scalar).toBytes()), pointHex);
-        }
-      });
+      // https://xmr.llcoins.net/addresstests.html
+      const xmrVectors = [
+        [
+          '090af56259a4b6bfbc4337980d5d75fbe3c074630368ff3804d33028e5dbfa77',
+          '0f3b913371411b27e646b537e888f685bf929ea7aab93c950ed84433f064480d',
+        ],
+        [
+          '00364e8711a60780382a5d57b061c126f039940f28a9e91fe039d4d3094d8b88',
+          'ad545340b58610f0cd62f17d55af1ab11ecde9c084d5476865ddb4dbda015349',
+        ],
+        [
+          '0b9bf90ff3abec042752cac3a07a62f0c16cfb9d32a3fc2305d676ec2d86e941',
+          'e097c4415fe85724d522b2e449e8fd78dd40d20097bdc9ae36fe8ec6fe12cb8c',
+        ],
+        [
+          '069d896f02d79524c9878e080308180e2859d07f9f54454e0800e8db0847a46e',
+          'f12cb7c43b59971395926f278ce7c2eaded9444fbce62ca717564cb508a0db1d',
+        ],
+      ];
+      for (const [scalarHex, pointHex] of xmrVectors) {
+        const scalar = BigInt('0x' + scalarHex);
+        eql(hex(Point.BASE.multiply(scalar).toBytes()), pointHex);
+      }
+      for (const num of [0n, 0, -1n, -1, 1.1]) {
+        // @ts-ignore
+        throws(() => Point.BASE.multiply(num));
+      }
 
-      should('throw Point#multiply on TEST 5', () => {
-        for (const num of [0n, 0, -1n, -1, 1.1]) {
-          // @ts-ignore
-          throws(() => Point.BASE.multiply(num));
-        }
-      });
-    });
-
-    should('isTorsionFree()', () => {
       const { point } = ed.utils.getExtendedPublicKey(ed.utils.randomSecretKey());
       for (const hex of ED25519_TORSION_SUBGROUP.slice(1)) {
         const dirty = point.add(Point.fromBytes(bytes(hex)));
@@ -407,9 +356,7 @@ describe('ed25519', () => {
         strictEqual(dirty.isTorsionFree(), false, `dirty must not be torsionFree: ${hex}`);
         strictEqual(cleared.isTorsionFree(), true, `cleared must be torsionFree: ${hex}`);
       }
-    });
 
-    should('have roundtrip P.fromAffine(p.toAffine())', () => {
       const xy = { x: 0n, y: 1n };
       const p = Point.fromAffine(xy);
       eql(p, Point.ZERO);
@@ -420,7 +367,7 @@ describe('ed25519', () => {
   // https://zips.z.cash/zip-0215
   // Vectors from https://gist.github.com/hdevalence/93ed42d17ecab8e42138b213812c8cc7
   describe('ZIP215', () => {
-    should('pass all compliance tests', () => {
+    should('compliance tests and scalar-boundary rejection', () => {
       const str = new TextEncoder().encode('Zcash');
       for (let v of zip215) {
         let noble = false;
@@ -431,9 +378,7 @@ describe('ed25519', () => {
         }
         eql(noble, v.valid_zip215, JSON.stringify(v));
       }
-    });
 
-    should('disallow sig.s >= CURVE.n', () => {
       // sig.R = BASE, sig.s = N+1
       const sig = bytes(
         '5866666666666666666666666666666666666666666666666666666666666666eed3f55c1a631258d69cf7a2def9de1400000000000000000000000000000010'

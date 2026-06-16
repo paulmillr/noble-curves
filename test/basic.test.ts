@@ -127,26 +127,24 @@ describe('createCurve', () => {
     }
   );
 
-  should('allowInfinityPoint still rejects non-canonical projective infinity coordinates', () => {
+  should('small constructor edge cases', () => {
     const Point = weierstrass(
       { p: 5n, n: 257n, h: 1n, a: 0n, b: 1n, Gx: 0n, Gy: 1n },
       { allowInfinityPoint: true }
     );
     throws(() => new Point(1n, 1n, 0n).assertValidity(), /ZERO|infinity|point/i);
-  });
-  should('isTorsionFree fallback returns a boolean for cached endo base points', () => {
-    const Point = weierstrass(
+
+    const torsionPoint = weierstrass(
       { p: 5n, n: 65535n, h: 2n, a: 0n, b: 1n, Gx: 0n, Gy: 1n },
       { endo: { beta: 1n, basises: [[1n, 0n, 0n, 1n]] } }
     );
-    eql(typeof Point.BASE.isTorsionFree(), 'boolean');
-  });
-  should('small endo curves skip eager W=8 precompute when effective wNAF bits are below 8', () => {
-    const Point = weierstrass(
+    eql(typeof torsionPoint.BASE.isTorsionFree(), 'boolean', 'torsion fallback');
+
+    const endoPoint = weierstrass(
       { p: 5n, n: 257n, h: 1n, a: 0n, b: 1n, Gx: 0n, Gy: 1n },
       { endo: { beta: 1n, basises: [[1n, 0n, 0n, 1n]] } }
     );
-    eql(Point.BASE.toAffine(), { x: 0n, y: 1n });
+    eql(endoPoint.BASE.toAffine(), { x: 0n, y: 1n }, 'small endo base');
   });
 });
 
@@ -163,43 +161,29 @@ describe('Pairings', () => {
       const G1 = G1Point.BASE;
       const G2 = G2Point.BASE;
 
-      should('creates negative G1 pairing', () => {
+      should('pairing algebra properties', () => {
         const p1 = pairing(G1, G2);
         const p2 = pairing(G1.negate(), G2);
-        eql(Fp12.mul(p1, p2), Fp12.ONE);
-      });
-      should('creates negative G2 pairing', () => {
-        const p2 = pairing(G1.negate(), G2);
+        eql(Fp12.mul(p1, p2), Fp12.ONE, 'negative G1');
+
         const p3 = pairing(G1, G2.negate());
-        eql(p2, p3);
-      });
-      should('creates proper pairing output order', () => {
-        const p1 = pairing(G1, G2);
-        const p2 = Fp12.pow(p1, CURVE_ORDER);
-        eql(p2, Fp12.ONE);
-      });
-      should('G1 billinearity', () => {
-        const p1 = pairing(G1, G2);
-        const p2 = pairing(G1.multiply(2n), G2);
-        eql(Fp12.mul(p1, p1), p2);
-      });
-      should('should not degenerate', () => {
-        const p1 = pairing(G1, G2);
-        const p2 = pairing(G1.multiply(2n), G2);
-        const p3 = pairing(G1, G2.negate());
+        eql(p2, p3, 'negative G2');
+
+        eql(Fp12.pow(p1, CURVE_ORDER), Fp12.ONE, 'output order');
+
+        const g1Double = pairing(G1.multiply(2n), G2);
+        eql(Fp12.mul(p1, p1), g1Double, 'G1 bilinearity');
+
         notDeepStrictEqual(p1, p2);
-        notDeepStrictEqual(p1, p3);
-        notDeepStrictEqual(p2, p3);
-      });
-      should('G2 billinearity', () => {
-        const p1 = pairing(G1, G2);
-        const p2 = pairing(G1, G2.multiply(2n));
-        eql(Fp12.mul(p1, p1), p2);
-      });
-      should('proper pairing composite check', () => {
-        const p1 = pairing(G1.multiply(37n), G2.multiply(27n));
-        const p2 = pairing(G1.multiply(999n), G2);
-        eql(p1, p2);
+        notDeepStrictEqual(p1, p3, 'nondegenerate negative');
+        notDeepStrictEqual(g1Double, p3, 'nondegenerate double');
+
+        const g2Double = pairing(G1, G2.multiply(2n));
+        eql(Fp12.mul(p1, p1), g2Double, 'G2 bilinearity');
+
+        const composite = pairing(G1.multiply(37n), G2.multiply(27n));
+        const scalar = pairing(G1.multiply(999n), G2);
+        eql(composite, scalar, 'composite check');
       });
     });
   }
@@ -230,16 +214,12 @@ describe('extension fields', () => {
     );
   });
 
-  should('calcFrobeniusCoefficients rejects inexact exponent divisions', () => {
+  should('calcFrobeniusCoefficients rejects invalid parameters', () => {
     throws(() => towerTest.calcFrobeniusCoefficients(Field(19n), 3n, 19n, 6, 1, 4));
-  });
-  should('calcFrobeniusCoefficients rejects non-positive or fractional row counts', () => {
+
     const Fp = Field(19n);
     throws(() => towerTest.calcFrobeniusCoefficients(Fp, 3n, 19n, 6, 0, 3));
     throws(() => towerTest.calcFrobeniusCoefficients(Fp, 3n, 19n, 6, 1.5, 3));
-  });
-  should('calcFrobeniusCoefficients rejects invalid scalar parameters', () => {
-    const Fp = Field(19n);
     throws(
       () => towerTest.calcFrobeniusCoefficients(Fp, 3n, 19 as never, 6, 1, 3),
       /calcFrobeniusCoefficients:.*modulus/

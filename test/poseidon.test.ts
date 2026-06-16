@@ -375,7 +375,7 @@ should('poseidonperm_x5_254_5', () => {
     ]
   );
 });
-should('poseidon roundConstants are immutable', () => {
+should('poseidon validation and small sponge edge cases', () => {
   const Fp = mod.Field(17n);
   const hash = poseidon.poseidon({
     Fp,
@@ -397,45 +397,25 @@ should('poseidon roundConstants are immutable', () => {
   throws(() => {
     hash.roundConstants[0][0] = 1n;
   });
-  eql(hash([1n, 2n]), before);
-});
-should('grainGenConstants rejects invalid skipMDS counts', () => {
-  const Fp =
+  eql(hash([1n, 2n]), before, 'roundConstants immutable');
+
+  const FpBls =
     mod.Field(52435875175126190479447740508185965837690552500527637822603658699938581184513n);
-  throws(() => poseidon.grainGenConstants({ Fp, t: 3, roundsFull: 8, roundsPartial: 31 }, -1));
-  throws(() => poseidon.grainGenConstants({ Fp, t: 3, roundsFull: 8, roundsPartial: 31 }, 0.5));
-});
-should('splitConstants rejects invalid width', () => {
+  throws(() =>
+    poseidon.grainGenConstants({ Fp: FpBls, t: 3, roundsFull: 8, roundsPartial: 31 }, -1)
+  );
+  throws(() =>
+    poseidon.grainGenConstants({ Fp: FpBls, t: 3, roundsFull: 8, roundsPartial: 31 }, 0.5)
+  );
+
   throws(() => poseidon.splitConstants([1n, 2n, 3n], 0));
   throws(() => poseidon.splitConstants([1n, 2n, 3n, 4n], -2));
   throws(() => poseidon.splitConstants([1n, 2n, 3n], 1.5));
-});
-should('poseidon rejects sparse state arrays with the bigint guard', () => {
-  const Fp = mod.Field(17n);
-  const hash = poseidon.poseidon({
-    Fp,
-    t: 2,
-    roundsFull: 2,
-    roundsPartial: 1,
-    sboxPower: 3,
-    mds: [
-      [1n, 0n],
-      [0n, 1n],
-    ],
-    roundConstants: [
-      [0n, 0n],
-      [0n, 0n],
-      [0n, 0n],
-    ],
-  });
   throws(() => hash(new Array(2) as any), /invalid bigint=undefined/);
-});
-should('splitConstants rejects non-bigint flattened constants', () => {
+
   throws(() => poseidon.splitConstants([1n, 2n, '3' as any, 4n], 2));
-});
-should('PoseidonSponge clone preserves squeezing mode', () => {
-  const Fp = mod.Field(17n);
-  const hash = poseidon.poseidon({
+
+  const spongeHash = poseidon.poseidon({
     Fp,
     t: 3,
     roundsFull: 2,
@@ -452,35 +432,16 @@ should('PoseidonSponge clone preserves squeezing mode', () => {
       [0n, 0n, 0n],
     ],
   });
-  const sponge = new poseidon.PoseidonSponge(Fp, 2, 1, hash);
+  const sponge = new poseidon.PoseidonSponge(Fp, 2, 1, spongeHash);
   sponge.absorb([3n]);
   eql(sponge.squeeze(1), [14n]);
   const copy = sponge.clone();
-  eql(copy.squeeze(1), sponge.squeeze(1));
-});
-should('PoseidonSponge rejects zero rate', () => {
-  const Fp = mod.Field(17n);
-  const hash = poseidon.poseidon({
-    Fp,
-    t: 3,
-    roundsFull: 2,
-    roundsPartial: 1,
-    sboxPower: 3,
-    mds: [
-      [1n, 0n, 0n],
-      [0n, 1n, 0n],
-      [0n, 0n, 1n],
-    ],
-    roundConstants: [
-      [0n, 0n, 0n],
-      [0n, 0n, 0n],
-      [0n, 0n, 0n],
-    ],
-  });
-  throws(() => new poseidon.PoseidonSponge(Fp, 0, 1, hash));
-  throws(() => new poseidon.PoseidonSponge(Fp, 1, -1, hash), /invalid number capacity/);
+  eql(copy.squeeze(1), sponge.squeeze(1), 'clone squeezing mode');
+
+  throws(() => new poseidon.PoseidonSponge(Fp, 0, 1, spongeHash));
+  throws(() => new poseidon.PoseidonSponge(Fp, 1, -1, spongeHash), /invalid number capacity/);
   throws(
-    () => new poseidon.PoseidonSponge(Fp, 1, 1, hash),
+    () => new poseidon.PoseidonSponge(Fp, 1, 1, spongeHash),
     /invalid sponge width: expected 3, got 2/
   );
   throws(
@@ -520,57 +481,35 @@ should('PoseidonSponge rejects zero rate', () => {
       }),
     /invalid number capacity/
   );
-});
-should('PoseidonSponge rejects invalid squeeze counts', () => {
-  const Fp = mod.Field(17n);
-  const hash = poseidon.poseidon({
-    Fp,
-    t: 3,
-    roundsFull: 2,
-    roundsPartial: 1,
-    sboxPower: 3,
-    mds: [
-      [1n, 0n, 0n],
-      [0n, 1n, 0n],
-      [0n, 0n, 1n],
-    ],
-    roundConstants: [
-      [0n, 0n, 0n],
-      [0n, 0n, 0n],
-      [0n, 0n, 0n],
-    ],
+
+  eql(new poseidon.PoseidonSponge(Fp, 2, 1, spongeHash).squeeze(0), []);
+  throws(() => new poseidon.PoseidonSponge(Fp, 2, 1, spongeHash).squeeze(-1));
+  throws(() => new poseidon.PoseidonSponge(Fp, 2, 1, spongeHash).squeeze(1.5));
+
+  const identityHash = Object.assign((state: bigint[]) => state.slice(), {
+    roundConstants: [[0n, 0n]],
   });
-  eql(new poseidon.PoseidonSponge(Fp, 2, 1, hash).squeeze(0), []);
-  throws(() => new poseidon.PoseidonSponge(Fp, 2, 1, hash).squeeze(-1));
-  throws(() => new poseidon.PoseidonSponge(Fp, 2, 1, hash).squeeze(1.5));
-});
-should('PoseidonSponge rejects non-array absorb inputs', () => {
-  const Fp = mod.Field(17n);
-  const hash = Object.assign((state: bigint[]) => state.slice(), { roundConstants: [[0n, 0n]] });
-  const sponge = new poseidon.PoseidonSponge(Fp, 1, 1, hash);
-  throws(() => sponge.absorb(new Set([1n]) as never), /expected array/);
-});
-should('validateOpts reduces bigint MDS entries into the field', () => {
-  const Fp =
-    mod.Field(52435875175126190479447740508185965837690552500527637822603658699938581184513n);
+  const identitySponge = new poseidon.PoseidonSponge(Fp, 1, 1, identityHash);
+  throws(() => identitySponge.absorb(new Set([1n]) as never), /expected array/);
+
   const t = 3;
   const roundsFull = 8;
   const roundsPartial = 31;
   const roundConstants = Array.from({ length: roundsFull + roundsPartial }, () => [1n, 2n, 3n]);
   const res = poseidon.validateOpts({
-    Fp,
+    Fp: FpBls,
     t,
     roundsFull,
     roundsPartial,
     sboxPower: 17,
     mds: [
-      [Fp.ORDER, -1n, 2n],
+      [FpBls.ORDER, -1n, 2n],
       [3n, 4n, 5n],
       [6n, 7n, 8n],
     ],
     roundConstants,
   });
-  eql(res.mds[0], [0n, Fp.ORDER - 1n, 2n]);
+  eql(res.mds[0], [0n, FpBls.ORDER - 1n, 2n], 'MDS field reduction');
 });
 // Startadperm is unsupported, since it is non prime field
 

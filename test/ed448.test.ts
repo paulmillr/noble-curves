@@ -62,7 +62,7 @@ describe('ed448', () => {
   ed448.Point.BASE.precompute(4, false);
   const Point = ed.Point;
 
-  should(`Basic`, () => {
+  should(`Basic, decompress, strict verify defaults, and RFC8032`, () => {
     const G1 = Point.BASE.toAffine();
     eql(
       G1.x,
@@ -90,18 +90,11 @@ describe('ed448', () => {
       G3.y,
       636046652612779686502873775776967954190574036985351036782021535703553242737829645273154208057988851307101009474686328623630835377952508n
     );
-  });
 
-  should('Basic/decompress', () => {
-    const G1 = Point.BASE;
-    const G2 = Point.BASE.multiply(2n);
-    const G3 = Point.BASE.multiply(3n);
-    const points = [G1, G2, G3];
+    const points = [Point.BASE, Point.BASE.multiply(2n), Point.BASE.multiply(3n)];
     const getXY = (p) => p.toAffine();
     for (const p of points) eql(getXY(Point.fromBytes(p.toBytes())), getXY(p));
-  });
 
-  should('default verify is strict for ed448 and ed448ph, with explicit ZIP-215 override', () => {
     for (const scheme of [ed448, ed448ph]) {
       const secretKey = scheme.utils.randomSecretKey(new Uint8Array(57).fill(7));
       const publicKey = scheme.getPublicKey(secretKey);
@@ -112,19 +105,13 @@ describe('ed448', () => {
       eql(scheme.verify(sig, msg, badPublicKey, { zip215: false }), false);
       eql(scheme.verify(sig, msg, badPublicKey), false);
     }
-  });
 
-  should('RFC8032', () => {
     for (let i = 0; i < VECTORS_rfc8032_ed448.length; i++) {
       const v = VECTORS_rfc8032_ed448[i];
       eql(hex(ed.getPublicKey(bytes(v.secretKey))), v.publicKey);
       eql(hex(ed.sign(bytes(v.message), bytes(v.secretKey))), v.signature);
       eql(ed.verify(bytes(v.signature), bytes(v.message), bytes(v.publicKey)), true);
     }
-  });
-
-  should('not accept >57byte private keys', () => {
-    throws(() => ed.getPublicKey(new Uint8Array(58).fill(2)));
   });
 
   function bytes57(numOrStr) {
@@ -140,7 +127,7 @@ describe('ed448', () => {
     return fc.string({ ...constraints, unit: hexa() });
   }
 
-  should('verify recent signature', () => {
+  should('verify random and wrong-message signatures', () => {
     fc.assert(
       fc.property(
         hexaString({ minLength: 2, maxLength: 57 }),
@@ -155,8 +142,6 @@ describe('ed448', () => {
       ),
       { numRuns: 5 }
     );
-  });
-  should('not verify signature with wrong message', () => {
     fc.assert(
       fc.property(
         fc.array(fc.integer({ min: 0x00, max: 0xff })),
@@ -181,47 +166,25 @@ describe('ed448', () => {
   const msg = bytes('874f9960c5d2b7a9b5fad383e1ba44719ebb743a');
   const wrongMsg = bytes('589d8c7f1da0a24bc07b7381ad48b1cfc211af1c');
   describe('basic methods', () => {
-    should('sign and verify', () => {
+    should('sign/verify and negative cases', () => {
       const publicKey = ed.getPublicKey(privKey);
       const signature = ed.sign(msg, privKey);
-      eql(ed.verify(signature, msg, publicKey), true);
-    });
-    should('not verify signature with wrong public key', () => {
-      const publicKey = ed.getPublicKey(ed.utils.randomSecretKey());
-      const signature = ed.sign(msg, privKey);
-      eql(ed.verify(signature, msg, publicKey), false);
-    });
-    should('not verify signature with wrong hash', () => {
-      const publicKey = ed.getPublicKey(privKey);
-      const signature = ed.sign(msg, privKey);
-      eql(ed.verify(signature, wrongMsg, publicKey), false);
-    });
-  });
-  describe('sync methods', () => {
-    should('sign and verify', () => {
-      const publicKey = ed.getPublicKey(privKey);
-      const signature = ed.sign(msg, privKey);
-      eql(ed.verify(signature, msg, publicKey), true);
-    });
-    should('not verify signature with wrong public key', () => {
-      const publicKey = ed.getPublicKey(ed.utils.randomSecretKey());
-      const signature = ed.sign(msg, privKey);
-      eql(ed.verify(signature, msg, publicKey), false);
-    });
-    should('not verify signature with wrong hash', () => {
-      const publicKey = ed.getPublicKey(privKey);
-      const signature = ed.sign(msg, privKey);
-      eql(ed.verify(signature, wrongMsg, publicKey), false);
+      eql(ed.verify(signature, msg, publicKey), true, 'sign and verify');
+      eql(
+        ed.verify(signature, msg, ed.getPublicKey(ed.utils.randomSecretKey())),
+        false,
+        'wrong public key'
+      );
+      eql(ed.verify(signature, wrongMsg, publicKey), false, 'wrong hash');
     });
   });
 
-  should('BASE_POINT.multiply() throws in Point#multiply on TEST 5', () => {
+  should('input validation, immutability, and scalar-boundary rejection', () => {
+    throws(() => ed.getPublicKey(new Uint8Array(58).fill(2)));
     for (const num of [0n, 0, -1n, -1, 1.1]) {
       throws(() => ed.Point.BASE.multiply(num));
     }
-  });
 
-  should('input immutability: sign/verify are immutable', () => {
     const privateKey = ed.utils.randomSecretKey();
     const publicKey = ed.getPublicKey(privateKey);
 
@@ -242,16 +205,44 @@ describe('ed448', () => {
           throw new Error('Copied signature verification failed');
       }
     }
+
+    function get56bSig() {
+      const privateKey = ed448.utils.randomSecretKey();
+      const message = Uint8Array.from([0xab, 0xbc, 0xcd, 0xde]);
+      const publicKey = ed448.getPublicKey(privateKey);
+      const signature = ed448.sign(message, privateKey);
+
+      const R = signature.slice(0, 56);
+      let s = signature.slice(56, 112);
+
+      s = hex(s.slice().reverse());
+      s = BigInt('0x' + s);
+      s = s + ed448.Point.Fn.ORDER;
+      s = numberToBytesLE(s, 56);
+
+      const sig_invalid = concatBytes(R, s);
+      return { sig_invalid, message, publicKey };
+    }
+    let sig;
+    while (true) {
+      try {
+        sig = get56bSig();
+        break;
+      } catch (error) {
+        // non-56b sig was generated, try again
+      }
+    }
+    throws(() => {
+      ed448.verify(sig.sig_invalid, sig.message, sig.publicKey);
+    });
   });
 
   describe('wycheproof (OLD)', () => {
-    for (let g = 0; g < ed448vectorsOld.testGroups.length; g++) {
-      const group = ed448vectorsOld.testGroups[g];
-      const key = group.key;
-      should(`ED448(${g}, public)`, () => {
+    should('ED448 old vectors', () => {
+      for (let g = 0; g < ed448vectorsOld.testGroups.length; g++) {
+        const group = ed448vectorsOld.testGroups[g];
+        const key = group.key;
         eql(hex(ed.getPublicKey(bytes(key.sk))), key.pk);
-      });
-      should(`ED448`, () => {
         for (let i = 0; i < group.tests.length; i++) {
           const v = group.tests[i];
           const index = `${g}/${i} ${v.comment}`;
@@ -268,15 +259,15 @@ describe('ed448', () => {
             eql(failed, true, index);
           } else throw new Error('unknown test result');
         }
-      });
-    }
+      }
+    });
   });
 
   describe('wycheproof', () => {
-    for (let g = 0; g < ed448vectors.testGroups.length; g++) {
-      const group = ed448vectors.testGroups[g];
-      const key = group.publicKey;
-      should(`ED448`, () => {
+    should('ED448 vectors', () => {
+      for (let g = 0; g < ed448vectors.testGroups.length; g++) {
+        const group = ed448vectors.testGroups[g];
+        const key = group.publicKey;
         for (let i = 0; i < group.tests.length; i++) {
           const v = group.tests[i];
           const index = `${g}/${i} ${v.comment}`;
@@ -292,8 +283,8 @@ describe('ed448', () => {
             eql(failed, true, index);
           } else throw new Error('unknown test result');
         }
-      });
-    }
+      }
+    });
   });
   // should('X448: should convert base point to montgomery using fromPoint', () => {
   //   deepStrictEqual(
@@ -337,22 +328,24 @@ describe('ed448', () => {
           '3c00',
       },
     ];
-    for (let i = 0; i < VECTORS_RFC8032_CTX.length; i++) {
-      const v = VECTORS_RFC8032_CTX[i];
-      should(`${i}`, () => {
+    should('RFC8032 context vectors', () => {
+      for (let i = 0; i < VECTORS_RFC8032_CTX.length; i++) {
+        const v = VECTORS_RFC8032_CTX[i];
         eql(hex(ed.getPublicKey(bytes(v.secretKey))), v.publicKey);
         eql(
           hex(ed.sign(bytes(v.message), bytes(v.secretKey), { context: bytes(v.context) })),
-          v.signature
+          v.signature,
+          `ctx ${i}: signature`
         );
         eql(
           ed.verify(bytes(v.signature), bytes(v.message), bytes(v.publicKey), {
             context: bytes(v.context),
           }),
-          true
+          true,
+          `ctx ${i}: verify`
         );
-      });
-    }
+      }
+    });
   });
 
   describe('ed448ph', () => {
@@ -391,55 +384,25 @@ describe('ed448', () => {
           '2100',
       },
     ];
-    for (let i = 0; i < VECTORS_RFC8032_PH.length; i++) {
-      const v = VECTORS_RFC8032_PH[i];
-      should(`${i}`, () => {
+    should('RFC8032 prehash vectors', () => {
+      for (let i = 0; i < VECTORS_RFC8032_PH.length; i++) {
+        const v = VECTORS_RFC8032_PH[i];
         eql(hex(ed448ph.getPublicKey(bytes(v.secretKey))), v.publicKey);
         eql(
           hex(
             ed448ph.sign(bytes(v.message), bytes(v.secretKey), { context: bytes(v.context || '') })
           ),
-          v.signature
+          v.signature,
+          `ph ${i}: signature`
         );
         eql(
           ed448ph.verify(bytes(v.signature), bytes(v.message), bytes(v.publicKey), {
             context: v.context ? bytes(v.context) : Uint8Array.of(),
           }),
-          true
+          true,
+          `ph ${i}: verify`
         );
-      });
-    }
-  });
-
-  should('not verify when sig.s >= CURVE.n', () => {
-    function get56bSig() {
-      const privateKey = ed448.utils.randomSecretKey();
-      const message = Uint8Array.from([0xab, 0xbc, 0xcd, 0xde]);
-      const publicKey = ed448.getPublicKey(privateKey);
-      const signature = ed448.sign(message, privateKey);
-
-      const R = signature.slice(0, 56);
-      let s = signature.slice(56, 112);
-
-      s = hex(s.slice().reverse());
-      s = BigInt('0x' + s);
-      s = s + ed448.Point.Fn.ORDER;
-      s = numberToBytesLE(s, 56);
-
-      const sig_invalid = concatBytes(R, s);
-      return { sig_invalid, message, publicKey };
-    }
-    let sig;
-    while (true) {
-      try {
-        sig = get56bSig();
-        break;
-      } catch (error) {
-        // non-56b sig was generated, try again
       }
-    }
-    throws(() => {
-      ed448.verify(sig.sig_invalid, sig.message, sig.publicKey);
     });
   });
 
@@ -461,13 +424,6 @@ describe('ed448', () => {
           '884a02576239ff7a2f2f63b2db6a9ff37047ac13568e1e30fe63c4a7ad1b3ee3a5700df34321d62077e63633c575c1c954514e99da7c179d',
       },
     ];
-    for (let i = 0; i < rfc7748Mul.length; i++) {
-      const v = rfc7748Mul[i];
-      should(`scalarMult (${i})`, () => {
-        eql(hex(x448.scalarMult(bytes(v.scalar), bytes(v.u))), v.outputU);
-      });
-    }
-
     const rfc7748Iter = [
       {
         scalar:
@@ -481,16 +437,19 @@ describe('ed448', () => {
       },
       // { scalar: '077f453681caca3693198420bbe515cae0002472519b3e67661a7e89cab94695c8f4bcd66e61b9b9c946da8d524de3d69bd9d9d66b997e37', iters: 1000000 },
     ];
-    for (let i = 0; i < rfc7748Iter.length; i++) {
-      const { scalar, iters } = rfc7748Iter[i];
-      should(`scalarMult iterated ${iters}x`, () => {
+    should('RFC7748, shared-key, wycheproof, and base-point vectors', () => {
+      for (let i = 0; i < rfc7748Mul.length; i++) {
+        const v = rfc7748Mul[i];
+        eql(hex(x448.scalarMult(bytes(v.scalar), bytes(v.u))), v.outputU, `scalarMult (${i})`);
+      }
+
+      for (let i = 0; i < rfc7748Iter.length; i++) {
+        const { scalar, iters } = rfc7748Iter[i];
         let k = x448.GuBytes;
         for (let i = 0, u = k; i < iters; i++) [k, u] = [x448.scalarMult(k, u), k];
-        eql(hex(k), scalar);
-      });
-    }
+        eql(hex(k), scalar, `scalarMult iterated ${iters}x`);
+      }
 
-    should('getSharedKey', () => {
       const alicePrivate =
         '9a8f4925d1519f5775cf46b04b5800d4ee9ee8bae8bc5565d498c28dd9c9baf574a9419744897391006382a6f127ab1d9ac2d8c0a598726b';
       const alicePublic =
@@ -505,9 +464,7 @@ describe('ed448', () => {
       eql(bobPublic, hex(x448.getPublicKey(bytes(bobPrivate))));
       eql(hex(x448.scalarMult(bytes(alicePrivate), bytes(bobPublic))), shared);
       eql(hex(x448.scalarMult(bytes(bobPrivate), bytes(alicePublic))), shared);
-    });
 
-    should('wycheproof', () => {
       const group = x448vectors.testGroups[0];
       group.tests.forEach((v, i) => {
         const index = `(${i}, ${v.result}) ${v.comment}`;
@@ -530,9 +487,7 @@ describe('ed448', () => {
           eql(failed, true, index);
         } else throw new Error('unknown test result');
       });
-    });
 
-    should('have proper base point', () => {
       const { x, y } = Point.BASE;
       const { Fp } = ed448.Point;
       // const invX = Fp.invert(x * x); // x²

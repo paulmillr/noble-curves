@@ -69,23 +69,25 @@ const HASHES = {
 };
 
 describe('ACVP', () => {
-  should('ECDSA-KeyGen', () => {
-    const groups = [...loadACVP('ECDSA-KeyGen-1.0'), ...loadACVP('ECDSA-KeyGen-FIPS186-5')];
-    for (const { info, tests } of groups) {
+  should('ECDSA KeyGen/KeyVer/SigGen/SigVer', () => {
+    for (const { info, tests } of [
+      ...loadACVP('ECDSA-KeyGen-1.0'),
+      ...loadACVP('ECDSA-KeyGen-FIPS186-5'),
+    ]) {
       const curve = CURVES[info.ip.curve];
       if (!curve) continue;
       for (const t of tests) {
         const pub = curve.getPublicKey(t.ip.d);
         const { x, y } = curve.Point.fromBytes(pub).toAffine();
-        eql(curve.Point.Fp.toBytes(x), t.ip.qx);
-        eql(curve.Point.Fp.toBytes(y), t.ip.qy);
+        eql(curve.Point.Fp.toBytes(x), t.ip.qx, 'ECDSA-KeyGen qx');
+        eql(curve.Point.Fp.toBytes(y), t.ip.qy, 'ECDSA-KeyGen qy');
       }
     }
-  });
 
-  should('ECDSA-KeyVer', () => {
-    const groups = [...loadACVP('ECDSA-KeyVer-1.0'), ...loadACVP('ECDSA-KeyVer-FIPS186-5')];
-    for (const { info, tests } of groups) {
+    for (const { info, tests } of [
+      ...loadACVP('ECDSA-KeyVer-1.0'),
+      ...loadACVP('ECDSA-KeyVer-FIPS186-5'),
+    ]) {
       const curve = CURVES[info.ip.curve];
       if (!curve) continue;
       for (const t of tests) {
@@ -99,67 +101,53 @@ describe('ACVP', () => {
         } catch (e) {
           ok = false;
         }
-        if (ok !== t.ip.testPassed) throw new Error('fail');
+        eql(ok, t.ip.testPassed, 'ECDSA-KeyVer');
       }
     }
-  });
-  should('ECDSA-SigGen', () => {
-    const groups = [
-      // These require injecting 'k'
-      //  ...loadACVP('ECDSA-SigGen-1.0'),
-      //  ...loadACVP('ECDSA-SigGen-FIPS186-5'),
-      ...loadACVP('DetECDSA-SigGen-FIPS186-5'),
-    ];
-    /*
-      sign: (msgHash: Hex, privKey: PrivKey, opts?: SignOpts) => RecoveredSignatureType;
-  verify: (signature: Hex | SignatureLike, msgHash: Hex, publicKey: Hex, opts?: VerOpts) => boolean;
-    */
-    for (const { info, tests } of groups) {
+
+    for (const { info, tests } of loadACVP('DetECDSA-SigGen-FIPS186-5')) {
       const curve = CURVES[info.ip.curve];
       if (!curve) continue;
       const hash = HASHES[info.ip.hashAlg];
       const curveWithHash = ecdsa(curve.Point, hash);
       const { d: sk } = info.ip;
-
       for (const t of tests) {
-        if (t.ip.randomValue) continue; // mesage randomization
+        if (t.ip.randomValue) continue; // message randomization
         const { message } = t.ip;
         const x = bytesToNumberBE(info.ip.qx);
         const y = bytesToNumberBE(info.ip.qy);
         const pk = curve.Point.fromAffine({ x, y }).toBytes();
-        eql(pk, curve.getPublicKey(sk));
+        eql(pk, curve.getPublicKey(sk), 'ECDSA-SigGen public key');
         const opts = { lowS: false };
         const sig = curveWithHash.sign(message, sk, opts);
         const { r, s } = curve.Signature.fromBytes(sig);
-        // const r = curve.Point.Fn.toBytes(sig.r);
-        // const s = curve.Point.Fn.toBytes(sig.s);
-        eql(r, bytesToNumberBE(t.ip.r));
-        eql(s, bytesToNumberBE(t.ip.s));
-        const isValid = curveWithHash.verify(sig, message, curve.getPublicKey(sk), opts);
-        eql(isValid, true, 'isValid false');
+        eql(r, bytesToNumberBE(t.ip.r), 'ECDSA-SigGen r');
+        eql(s, bytesToNumberBE(t.ip.s), 'ECDSA-SigGen s');
+        eql(
+          curveWithHash.verify(sig, message, curve.getPublicKey(sk), opts),
+          true,
+          'ECDSA-SigGen verify'
+        );
       }
     }
-  });
-  should('ECDSA-SigVer', () => {
-    const groups = [...loadACVP('ECDSA-SigVer-1.0'), ...loadACVP('ECDSA-SigVer-FIPS186-5')];
-    for (const { info, tests } of groups) {
+
+    for (const { info, tests } of [
+      ...loadACVP('ECDSA-SigVer-1.0'),
+      ...loadACVP('ECDSA-SigVer-FIPS186-5'),
+    ]) {
       const curve = CURVES[info.ip.curve];
       if (!curve) continue;
-      // TODO: remove
       if (info.ip.hashAlg.startsWith('SHAKE-')) continue;
-      // console.log(info.ip.hashAlg);
       const hash = HASHES[info.ip.hashAlg];
       const curveWithHash = ecdsa(curve.Point, hash);
       for (const t of tests) {
-        if (t.ip.randomValue) continue; // mesage randomization
+        if (t.ip.randomValue) continue; // message randomization
         const opts = { lowS: false };
         const msg = t.ip.message;
         const x = bytesToNumberBE(t.ip.qx);
         const y = bytesToNumberBE(t.ip.qy);
         const pk = curve.Point.fromAffine({ x, y }).toBytes();
-        if (info.ip.d) {
-          eql(pk, curve.getPublicKey(info.ip.d));
-        }
+        if (info.ip.d) eql(pk, curve.getPublicKey(info.ip.d), 'ECDSA-SigVer public key');
         const r = bytesToNumberBE(t.ip.r);
         const s = bytesToNumberBE(t.ip.s);
         let passed;
@@ -169,23 +157,19 @@ describe('ACVP', () => {
         } catch (e) {
           passed = false;
         }
-        eql(passed, t.ip.testPassed);
+        eql(passed, t.ip.testPassed, 'ECDSA-SigVer');
       }
     }
   });
-  should('EDDSA-KeyGen', () => {
-    const groups = loadACVP('EDDSA-KeyGen-1.0');
-    for (const { info, tests } of groups) {
+
+  should('EDDSA KeyGen/KeyVer/SigGen/SigVer', () => {
+    for (const { info, tests } of loadACVP('EDDSA-KeyGen-1.0')) {
       const curve = ED_CURVES[info.ip.curve].basic;
       if (!curve) continue;
-      for (const t of tests) {
-        eql(curve.getPublicKey(t.ip.d), t.ip.q);
-      }
+      for (const t of tests) eql(curve.getPublicKey(t.ip.d), t.ip.q, 'EDDSA-KeyGen');
     }
-  });
-  should('EDDSA-KeyVer', () => {
-    const groups = loadACVP('EDDSA-KeyVer-1.0');
-    for (const { info, tests } of groups) {
+
+    for (const { info, tests } of loadACVP('EDDSA-KeyVer-1.0')) {
       const curve = ED_CURVES[info.ip.curve].basic;
       if (!curve) continue;
       for (const t of tests) {
@@ -196,27 +180,22 @@ describe('ACVP', () => {
         } catch {
           passed = false;
         }
-        eql(passed, t.ip.testPassed);
+        eql(passed, t.ip.testPassed, 'EDDSA-KeyVer');
       }
     }
-  });
-  should('EDDSA-SigGen', () => {
-    const groups = loadACVP('EDDSA-SigGen-1.0');
-    for (const { info, tests } of groups) {
+
+    for (const { info, tests } of loadACVP('EDDSA-SigGen-1.0')) {
       let curve = ED_CURVES[info.ip.curve];
       if (!curve) continue;
       curve = info.ip.preHash ? curve.prehash : curve.basic;
       for (const t of tests) {
         const { d: sk, preHash: prehash } = info.ip;
         const { message, context, signature } = t.ip;
-        const sig = curve.sign(message, sk, { prehash, context });
-        eql(sig, signature);
+        eql(curve.sign(message, sk, { prehash, context }), signature, 'EDDSA-SigGen');
       }
     }
-  });
-  should('EDDSA-SigVer', () => {
-    const groups = loadACVP('EDDSA-SigVer-1.0');
-    for (const { info, tests } of groups) {
+
+    for (const { info, tests } of loadACVP('EDDSA-SigVer-1.0')) {
       let curve = ED_CURVES[info.ip.curve];
       if (!curve) continue;
       const { preHash: prehash } = info.ip;
@@ -229,7 +208,7 @@ describe('ACVP', () => {
         } catch {
           passed = false;
         }
-        eql(passed, t.ip.testPassed);
+        eql(passed, t.ip.testPassed, 'EDDSA-SigVer');
       }
     }
   });

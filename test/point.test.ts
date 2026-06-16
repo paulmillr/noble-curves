@@ -42,19 +42,17 @@ function equal(a, b, comment) {
 }
 
 describe('basic curve tests', () => {
-  should('createCurveFields validates curveOpts object shape', () => {
+  should('curve field constructors validate inputs', () => {
     throws(
       () => createCurveFields('weierstrass', validWeierstrass, null as never),
-      /expected valid options object/
+      /expected valid options object/,
+      'curveOpts object shape'
     );
-  });
-  should('createCurveFields validates curve family', () => {
     throws(
       () => createCurveFields('montgomery' as never, validWeierstrass),
-      /weierstrass.*edwards/
+      /weierstrass.*edwards/,
+      'curve family'
     );
-  });
-  should('edwards coordinate mask follows Fp byte width', () => {
     const Point = edwards({
       p: 257n,
       n: 251n,
@@ -64,7 +62,7 @@ describe('basic curve tests', () => {
       Gx: 256n,
       Gy: 0n,
     });
-    eql(Point.BASE.X, 256n);
+    eql(Point.BASE.X, 256n, 'edwards coordinate mask follows Fp byte width');
   });
 
   for (const name in CURVES) {
@@ -81,7 +79,7 @@ describe('basic curve tests', () => {
     describe(title, () => {
       describe('basic group laws', () => {
         // Here we check basic group laws, to verify that points works as group
-        should('zero', () => {
+        should('deterministic and random group laws', () => {
           equal(G[0].double(), G[0], '(0*G).double() = 0');
           equal(G[0].add(G[0]), G[0], '0*G + 0*G = 0');
           equal(G[0].subtract(G[0]), G[0], '0*G - 0*G = 0');
@@ -92,35 +90,23 @@ describe('basic curve tests', () => {
             equal(G[0].multiply(BigInt(i + 1)), G[0], `${i + 1}*0 = 0`);
             equal(G[0].multiplyUnsafe(BigInt(i + 1)), G[0], `${i + 1}*0 = 0`);
           }
-        });
-        should('one', () => {
+
           equal(G[1].double(), G[2], '(1*G).double() = 2*G');
           equal(G[1].subtract(G[1]), G[0], '1*G - 1*G = 0');
           equal(G[1].add(G[1]), G[2], '1*G + 1*G = 2*G');
-        });
-        should('sanity tests', () => {
           equal(G[2].double(), G[4], '(2*G).double() = 4*G');
           equal(G[2].add(G[2]), G[4], '2*G + 2*G = 4*G');
           equal(G[7].add(G[3].negate()), G[4], '7*G - 3*G = 4*G');
-        });
-        should('add commutativity', () => {
           equal(G[4].add(G[3]), G[3].add(G[4]), '4*G + 3*G = 3*G + 4*G');
           equal(G[4].add(G[3]), G[3].add(G[2]).add(G[2]), '4*G + 3*G = 3*G + 2*G + 2*G');
-        });
-        should('double', () => {
           equal(G[3].double(), G[6], '(3*G).double() = 6*G');
-        });
-        should('multiply', () => {
           equal(G[2].multiply(3n), G[6], '(2*G).multiply(3) = 6*G');
           equal(G[2].multiplyUnsafe(3n), G[6], '(2*G).multiplyUnsafe(3) = 6*G');
-        });
-        should('multiplyUnsafe fast paths', () => {
           equal(G[1].multiplyUnsafe(0n), G[0], '(1*G).multiplyUnsafe(0) = 0');
           equal(G[1].multiplyUnsafe(1n), G[1], '(1*G).multiplyUnsafe(1) = 1*G');
           equal(G[0].multiplyUnsafe(5n), G[0], '(0*G).multiplyUnsafe(5) = 0');
-        });
-        if (typeof wNAF === 'function') {
-          should('wNAF helpers accumulator', () => {
+
+          if (typeof wNAF === 'function') {
             const point = G[2];
             const acc = G[7];
             const scalar = 5n;
@@ -150,16 +136,11 @@ describe('basic curve tests', () => {
               'unsafe(point, scalar, acc)'
             );
             eql(w.unsafe(point, 0n, undefined, acc).equals(acc), true, 'unsafe(point, 0, acc)');
-          });
-        }
-        should('add same-point', () => {
+          }
+
           equal(G[3].add(G[3]), G[6], '3*G + 3*G = 6*G');
-        });
-        should('add same-point negative', () => {
           equal(G[3].add(G[3].negate()), G[0], '3*G + (- 3*G) = 0*G');
           equal(G[3].subtract(G[3]), G[0], '3*G - 3*G = 0*G');
-        });
-        should('mul by curve order', () => {
           equal(G[1].multiply(CURVE_ORDER - 1n).add(G[1]), G[0], '(N-1)*G + G = 0');
           equal(G[1].multiply(CURVE_ORDER - 1n).add(G[2]), G[1], '(N-1)*G + 2*G = 1*G');
           equal(G[1].multiply(CURVE_ORDER - 2n).add(G[2]), G[0], '(N-2)*G + 2*G = 0');
@@ -169,16 +150,14 @@ describe('basic curve tests', () => {
           const half = CURVE_ORDER / 2n;
           const carry = CURVE_ORDER % 2n === 1n ? G[1] : G[0];
           equal(G[1].multiply(half).double().add(carry), G[0], '((N/2) * G).double() = 0');
-        });
-        should('inversion', () => {
+
           const a = 1234n;
           const b = 5678n;
           const c = a * b;
           equal(G[1].multiply(a).multiply(b), G[1].multiply(c), 'a*b*G = c*G');
           const inv = invert(b, CURVE_ORDER);
           equal(G[1].multiply(c).multiply(inv), G[1].multiply(a), 'c*G * (1/b)*G = a*G');
-        });
-        should('multiply, rand', () =>
+
           fc.assert(
             fc.property(FC_BIGINT, FC_BIGINT, (a, b) => {
               const c = mod(a + b, CURVE_ORDER);
@@ -193,9 +172,7 @@ describe('basic curve tests', () => {
               equal(pA.add(pB), pC, 'pA + pB = pC');
             }),
             { numRuns: NUM_RUNS }
-          )
-        );
-        should('multiply2, rand', () =>
+          );
           fc.assert(
             fc.property(FC_BIGINT, FC_BIGINT, (a, b) => {
               const c = mod(a * b, CURVE_ORDER);
@@ -207,34 +184,32 @@ describe('basic curve tests', () => {
               equal(pA.multiply(b), G[1].multiply(c), 'b*pA = c*G');
             }),
             { numRuns: NUM_RUNS }
-          )
-        );
+          );
+        });
       });
 
       // special case for add, subtract, equals, multiply. NOT multiplyUnsafe
       // [0n, '0n'],
 
-      for (const op of ['add', 'subtract']) {
-        describe(op, () => {
-          should('type check', () => {
-            for (let [item, repr_] of getTypeTests()) {
-              throws(() => G[1][op](item), repr_);
-            }
-            throws(() => G[1][op](0), '0');
-            throws(() => G[1][op](0n), '0n');
-            G[1][op](G[2]);
-            throws(() => G[1][op](CURVE_ORDER), 'CURVE_ORDER');
-            throws(() => G[1][op]({ x: 1n, y: 1n }), '{ x: 1n, y: 1n }');
-            throws(() => G[1][op]({ x: 1n, y: 1n, z: 1n }), '{ x: 1n, y: 1n, z: 1n }');
-            throws(
-              () => G[1][op]({ x: 1n, y: 1n, z: 1n, t: 1n }),
-              '{ x: 1n, y: 1n, z: 1n, t: 1n }'
-            );
-            // if (G[1].toAffine) throws(() => G[1][op](C.Point.BASE), `Point ${op} ${pointName}`);
-            throws(() => G[1][op](o.BASE), `${op}/other curve point`);
-          });
-        });
-      }
+      should('add/subtract type check', () => {
+        for (const op of ['add', 'subtract']) {
+          for (let [item, repr_] of getTypeTests()) {
+            throws(() => G[1][op](item), `${op}: ${repr_}`);
+          }
+          throws(() => G[1][op](0), `${op}: 0`);
+          throws(() => G[1][op](0n), `${op}: 0n`);
+          G[1][op](G[2]);
+          throws(() => G[1][op](CURVE_ORDER), `${op}: CURVE_ORDER`);
+          throws(() => G[1][op]({ x: 1n, y: 1n }), `${op}: { x: 1n, y: 1n }`);
+          throws(() => G[1][op]({ x: 1n, y: 1n, z: 1n }), `${op}: { x: 1n, y: 1n, z: 1n }`);
+          throws(
+            () => G[1][op]({ x: 1n, y: 1n, z: 1n, t: 1n }),
+            `${op}: { x: 1n, y: 1n, z: 1n, t: 1n }`
+          );
+          // if (G[1].toAffine) throws(() => G[1][op](C.Point.BASE), `Point ${op} ${pointName}`);
+          throws(() => G[1][op](o.BASE), `${op}: other curve point`);
+        }
+      });
 
       should('equals type check', () => {
         const op = 'equals';
@@ -252,30 +227,28 @@ describe('basic curve tests', () => {
         throws(() => G[1].equals(o.BASE), 'other curve point');
       });
 
-      for (const op of ['multiply', 'multiplyUnsafe']) {
-        if (!p.BASE[op]) continue;
-        describe(op, () => {
-          should('type check', () => {
-            for (let [item, repr_] of getTypeTests()) {
-              throws(() => G[1][op](item), repr_);
-            }
-            G[1][op](1n);
-            G[1][op](CURVE_ORDER - 1n);
-            throws(() => G[1][op](G[2]), 'G[2]');
-            throws(() => G[1][op](CURVE_ORDER), 'CURVE_ORDER');
-            throws(() => G[1][op](CURVE_ORDER + 1n), 'CURVE_ORDER+1');
-            throws(() => G[1][op](o.BASE), 'other curve point');
-            if (op !== 'multiplyUnsafe') {
-              throws(() => G[1][op](0), '0');
-              throws(() => G[1][op](0n), '0n');
-            }
-          });
-        });
-      }
+      should('multiply type check', () => {
+        for (const op of ['multiply', 'multiplyUnsafe']) {
+          if (!p.BASE[op]) continue;
+          for (let [item, repr_] of getTypeTests()) {
+            throws(() => G[1][op](item), `${op}: ${repr_}`);
+          }
+          G[1][op](1n);
+          G[1][op](CURVE_ORDER - 1n);
+          throws(() => G[1][op](G[2]), `${op}: G[2]`);
+          throws(() => G[1][op](CURVE_ORDER), `${op}: CURVE_ORDER`);
+          throws(() => G[1][op](CURVE_ORDER + 1n), `${op}: CURVE_ORDER+1`);
+          throws(() => G[1][op](o.BASE), `${op}: other curve point`);
+          if (op !== 'multiplyUnsafe') {
+            throws(() => G[1][op](0), `${op}: 0`);
+            throws(() => G[1][op](0n), `${op}: 0n`);
+          }
+        }
+      });
 
       describe('multiscalar multiplication', () => {
         if (typeof pippenger !== 'function' || typeof precomputeMSMUnsafe !== 'function') return;
-        should('MSM basic', () => {
+        should('basic, random, and precomputed MSM', () => {
           const msm = (points, scalars) => pippenger(p, points, scalars);
           equal(msm([p.BASE], [0n]), p.ZERO, '0*G');
           equal(msm([], []), p.ZERO, 'empty');
@@ -284,11 +257,8 @@ describe('basic curve tests', () => {
           const points = [p.BASE, p.BASE.multiply(2n), p.BASE.multiply(4n), p.BASE.multiply(8n)];
           // 1*3 + 5*2 + 4*7 + 11*8 = 129
           equal(msm(points, [3n, 5n, 7n, 11n]), p.BASE.multiply(129n), '129 * G');
-        });
-        should('normalizeZ validates point array entries', () => {
           throws(() => normalizeZ(p, [p.BASE, {} as never]), /invalid point at index 1/);
-        });
-        should('MSM random', () =>
+
           fc.assert(
             fc.property(fc.array(fc.tuple(FC_BIGINT, FC_BIGINT)), FC_BIGINT, (pairs) => {
               let total = 0n;
@@ -304,21 +274,19 @@ describe('basic curve tests', () => {
               equal(pippenger(p, points, scalars), exp, 'total');
             }),
             { numRuns: NUM_RUNS }
-          )
-        );
-        should('precomputeMSMUnsafe basic', () => {
+          );
+
           const Point = C.Point;
           if (!Point) throw new Error('Unknown point');
 
-          const points = [p.BASE, p.BASE.multiply(2n), p.BASE.multiply(4n), p.BASE.multiply(8n)];
+          const points2 = [p.BASE, p.BASE.multiply(2n), p.BASE.multiply(4n), p.BASE.multiply(8n)];
           const scalars = [3n, 5n, 7n, 11n];
           const res = p.BASE.multiply(129n);
           for (let windowSize = 1; windowSize <= 10; windowSize++) {
-            const mul = precomputeMSMUnsafe(Point, points, windowSize);
+            const mul = precomputeMSMUnsafe(Point, points2, windowSize);
             equal(mul(scalars), res, 'windowSize=' + windowSize);
           }
-        });
-        should('precomputeMSMUnsafe random', () =>
+
           fc.assert(
             fc.property(fc.array(fc.tuple(FC_BIGINT, FC_BIGINT)), FC_BIGINT, (pairs) => {
               const Point = C.Point;
@@ -341,41 +309,38 @@ describe('basic curve tests', () => {
               }
             }),
             { numRuns: NUM_RUNS }
-          )
-        );
+          );
+        });
       });
 
-      should('fromAffine(toAffine()) roundtrip', () => {
+      should('point serialization roundtrips', () => {
         equal(p.ZERO, p.fromAffine(p.ZERO.toAffine()), '0 = 0');
         equal(p.BASE, p.fromAffine(p.BASE.toAffine()), '1 = 1');
         equal(p.BASE.multiply(2n), p.fromAffine(p.BASE.multiply(2n).toAffine()), '1 = 1');
-      });
-      // toHex/fromHex (if available)
-      should('fromBytes(toBytes()) roundtrip', () => {
+
         fc.assert(
           fc.property(FC_BIGINT, (x) => {
             const point = p.BASE.multiply(x);
             let c = false; // compressed
             const bu = point.toBytes(c);
-            eql(p.fromBytes(bu).toBytes(c), bu);
+            eql(p.fromBytes(bu).toBytes(c), bu, `${name}: fromBytes uncompressed`);
 
             c = true;
             const bc = point.toBytes(c);
-            eql(p.fromBytes(bc).toBytes(c), bc);
+            eql(p.fromBytes(bc).toBytes(c), bc, `${name}: fromBytes compressed`);
           })
         );
-      });
-      should('fromHex(toHex()) roundtrip', () => {
+        // toHex/fromHex (if available)
         fc.assert(
           fc.property(FC_BIGINT, (x) => {
             const point = p.BASE.multiply(x);
             let c = false; // compressed
             const hu = point.toHex(c);
-            eql(p.fromHex(hu).toHex(c), hu);
+            eql(p.fromHex(hu).toHex(c), hu, `${name}: fromHex uncompressed`);
 
             c = true;
             const hc = point.toHex(c);
-            eql(p.fromHex(hc).toHex(c), hc);
+            eql(p.fromHex(hc).toHex(c), hc, `${name}: fromHex compressed`);
           })
         );
       });
@@ -399,7 +364,7 @@ describe('basic curve tests', () => {
       });
 
       if (C.verify) {
-        should('.verify() should verify random signatures', () =>
+        should('.verify() accepts valid signatures', () => {
           fc.assert(
             fc.property(FC_HEX, (msgh) => {
               const msg = hexToBytes(msgh);
@@ -412,8 +377,16 @@ describe('basic curve tests', () => {
               );
             }),
             { numRuns: NUM_RUNS }
-          )
-        );
+          );
+          const msg = Uint8Array.of();
+          const k = C.keygen();
+          const sig = C.sign(msg, k.secretKey);
+          eql(
+            C.verify(sig, msg, k.publicKey),
+            true,
+            `empty: priv=${hex(k.secretKey)},pub=${hex(k.publicKey)},msg=${msg}`
+          );
+        });
         // should('.verify() should verify random signatures in hex', () =>
         //   fc.assert(
         //     fc.property(FC_HEX, (msg) => {
@@ -426,18 +399,7 @@ describe('basic curve tests', () => {
         //     { numRuns: NUM_RUNS }
         //   )
         // );
-        should('.verify() should verify empty signatures', () => {
-          const msg = Uint8Array.of();
-          const k = C.keygen();
-          const sig = C.sign(msg, k.secretKey);
-          eql(
-            C.verify(sig, msg, k.publicKey),
-            true,
-            `priv=${hex(k.secretKey)},pub=${hex(k.publicKey)},msg=${msg}`
-          );
-        });
-
-        should('.sign() type tests', () => {
+        should('.sign() type and edge cases', () => {
           const msg = Uint8Array.of();
           const k = C.keygen();
           C.sign(msg, k.secretKey);
@@ -447,36 +409,22 @@ describe('basic curve tests', () => {
               throws(() => C.sign(item, k.secretKey), repr_);
             }
           }
-        });
-        should('.sign() edge cases', () => {
-          throws(() => C.sign());
-          throws(() => C.sign(''));
-          throws(() => C.sign('', ''));
-          throws(() => C.sign(Uint8Array.of(), Uint8Array.of()));
+          throws(() => C.sign(), 'sign missing args');
+          throws(() => C.sign(''), 'sign missing secret');
+          throws(() => C.sign('', ''), 'sign empty strings');
+          throws(() => C.sign(Uint8Array.of(), Uint8Array.of()), 'sign empty bytes');
         });
 
         describe('verify()', () => {
           const msg = hexToBytes('01'.repeat(32));
           const msgWrong = hexToBytes('11'.repeat(32));
-          should('true for proper signatures', () => {
+          should('valid, invalid, and type cases', () => {
             const k = C.keygen();
             const sig = C.sign(msg, k.secretKey);
-            eql(C.verify(sig, msg, k.publicKey), true);
-          });
-          should('false for wrong messages', () => {
-            const k = C.keygen();
-            const sig = C.sign(msg, k.secretKey);
-            eql(C.verify(sig, msgWrong, k.publicKey), false);
-          });
-          should('false for wrong keys', () => {
-            const k = C.keygen();
+            eql(C.verify(sig, msg, k.publicKey), true, 'proper signature');
+            eql(C.verify(sig, msgWrong, k.publicKey), false, 'wrong message');
             const k2 = C.keygen();
-            const sig = C.sign(msg, k.secretKey);
-            eql(C.verify(sig, msg, k2.publicKey), false);
-          });
-          should('type tests', () => {
-            const k = C.keygen();
-            const sig = C.sign(msg, k.secretKey);
+            eql(C.verify(sig, msg, k2.publicKey), false, 'wrong key');
             const pub = k.publicKey;
             C.verify(sig, msg, pub);
             for (let [item, repr_] of getTypeTests()) {
@@ -489,7 +437,7 @@ describe('basic curve tests', () => {
         });
       }
       if (C.Signature) {
-        should('Signature serialization roundtrip', () =>
+        should('Signature serialization and recovery', () => {
           fc.assert(
             fc.property(FC_HEX, (msgh) => {
               const msg = hexToBytes(msgh);
@@ -519,9 +467,7 @@ describe('basic curve tests', () => {
               }
             }),
             { numRuns: NUM_RUNS }
-          )
-        );
-        should('Signature.addRecoveryBit/Signature.recoverPublicKey', () =>
+          );
           fc.assert(
             fc.property(FC_HEX, (msgh) => {
               if (C.Point.CURVE().h > 2) return; // unsupported, see k2sig
@@ -547,8 +493,8 @@ describe('basic curve tests', () => {
               eql(C.recoverPublicKey(sig3.toBytes('recovered'), msg), keys.publicKey);
             }),
             { numRuns: NUM_RUNS }
-          )
-        );
+          );
+        });
       }
 
       // NOTE: fails for ed, because of empty message. Since we convert it to scalar,

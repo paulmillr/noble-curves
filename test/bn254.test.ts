@@ -800,21 +800,19 @@ describe('bn254', () => {
       eql(res, out);
     };
 
-    should('add', () => {
+    should('add, mul, and pairing', () => {
       const input =
         '0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002';
       const output =
         '030644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd315ed738c0e0a7c92e7845f96b2ae9c0a68a6a449e3538fc7ff3ebf7a5a18a2c4';
       ethAdd(input, output);
-    });
-    should('mul', () => {
-      const input =
+
+      const mulInput =
         '000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000042';
-      const output =
+      const mulOutput =
         '12e017e752e718f7d1750138f3fd97d930073164499793d9b5405a9ff30e765a11d73265f2f8035c1eb99695a20bc0e550afbc7d506f9f1a1ffcb9f0ade01454';
-      ethMul(input, output);
-    });
-    should('pairing', () => {
+      ethMul(mulInput, mulOutput);
+
       const vectors = [
         {
           input:
@@ -856,16 +854,10 @@ describe('bn254', () => {
         eql(A.multiply(scalar).toAffine(), { x: Cx, y: Cy });
       }
     });
-    describe('eth dump', () => {
-      should('EC_ADD', () => {
-        for (const [input, output] of ethDump.NOBLE_DUMP_EC_ADD) ethAdd(input, output);
-      });
-      should('EC_MUL', () => {
-        for (const [input, output] of ethDump.NOBLE_DUMP_EC_MUL) ethMul(input, output);
-      });
-      should('EC_PAIRING', () => {
-        for (const [input, output] of ethDump.NOBLE_DUMP_EC_PAIRING) ethPairing(input, output);
-      });
+    should('eth dump EC_ADD, EC_MUL, and EC_PAIRING', () => {
+      for (const [input, output] of ethDump.NOBLE_DUMP_EC_ADD) ethAdd(input, output);
+      for (const [input, output] of ethDump.NOBLE_DUMP_EC_MUL) ethMul(input, output);
+      for (const [input, output] of ethDump.NOBLE_DUMP_EC_PAIRING) ethPairing(input, output);
     });
   });
 });

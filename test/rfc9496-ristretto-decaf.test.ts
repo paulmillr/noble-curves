@@ -202,7 +202,7 @@ describe('ristretto255', () => {
     eql(pub.toBytes(), pub2.toBytes());
   });
 
-  should('ristretto255_hasher', () => {
+  should('ristretto255_hasher and wrapper helpers', () => {
     const res = ristretto255_hasher.hashToCurve(new Uint8Array(10).fill(5), {
       DST: 'ristretto255_XMD:SHA-512_R255MAP_RO_',
     });
@@ -210,13 +210,11 @@ describe('ristretto255', () => {
       bytesToHex(res.toBytes()),
       'be2194e53cc014665821003f8ecf49e99b7cd16f5326e53f234ecd21c448ee6c'
     );
-  });
-  should('ristretto255_hasher.hashToScalar applies default DST for partial options', () => {
+
     const msg = new Uint8Array(10).fill(5);
     const expected = ristretto255_hasher.hashToScalar(msg);
-    eql(ristretto255_hasher.hashToScalar(msg, {}), expected);
-  });
-  should('wrapper helpers keep canonical abstract-group behavior', () => {
+    eql(ristretto255_hasher.hashToScalar(msg, {}), expected, 'hashToScalar default DST');
+
     const p = RistrettoPoint.BASE.multiply(5n);
     const affine = p.toAffine();
     const want = { ...affine };
@@ -418,7 +416,7 @@ describe('decaf448', () => {
     eql(pub.equals(DecafPoint.ZERO), false);
   });
 
-  should('decaf448_hasher', () => {
+  should('decaf448_hasher and wrapper helpers', () => {
     eql(
       bytesToHex(
         decaf448_hasher
@@ -429,8 +427,7 @@ describe('decaf448', () => {
       ),
       '1287dea7519af966cf537a58f614e8b39b93a7c0b989bcdb4f94af8f2573ab59589accb0d2a2097b5f30c1d721619470f21e78613bbfc4b6'
     );
-  });
-  should('wrapper helpers keep canonical abstract-group behavior', () => {
+
     const p = DecafPoint.BASE.multiply(5n);
     const affine = p.toAffine();
     const want = { ...affine };

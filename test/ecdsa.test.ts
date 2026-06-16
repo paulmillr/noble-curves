@@ -98,7 +98,7 @@ describe('ECDSA', () => {
   for (const name in ECDSA) {
     const C = ECDSA[name];
     describe(name, () => {
-      should('opts', () => {
+      should('signing options, ECDH, hashes, and curve opts', () => {
         // pretty slow, but tests if some combination don't work together.
         for (const format of ['compact', 'recovered', 'der', undefined]) {
           for (const prehash of [true, false, undefined]) {
@@ -110,8 +110,7 @@ describe('ECDSA', () => {
             }
           }
         }
-      });
-      should('extraEntropy', () => {
+
         // would be nice to test inside 'opts', but it is too slow :(
         for (const extraEntropy of [true, false, undefined, randomBytes(9), randomBytes(32)]) {
           testSig(C, { extraEntropy });
@@ -119,8 +118,7 @@ describe('ECDSA', () => {
             testSig(C, cleanObj({ extraEntropy }));
           }
         }
-      });
-      should('ECDH', () => {
+
         const alice = C.keygen();
         const bob = C.keygen();
         const aliceShared = C.getSharedSecret(alice.secretKey, bob.publicKey);
@@ -129,17 +127,15 @@ describe('ECDSA', () => {
         const DH = ecdh(C.Point);
         eql(aliceShared, DH.getSharedSecret(alice.secretKey, bob.publicKey));
         eql(bobShared, DH.getSharedSecret(bob.secretKey, alice.publicKey));
-      });
-      // Test re-definition: verify that it  works with various hashes
-      should('Hashes', () => {
+
+        // Test re-definition: verify that it  works with various hashes
         for (const h in HASHES) {
           const hash = HASHES[h];
           const CH = ecdsa(C.Point, hash);
           testSig(CH);
         }
-      });
-      // Re-definition with different opts
-      should('curve opts', () => {
+
+        // Re-definition with different opts
         for (const lowS of [true, false, undefined]) {
           const CO = ecdsa(C.Point, C.hash, { lowS });
           testSig(CO);
@@ -150,41 +146,30 @@ describe('ECDSA', () => {
 });
 
 describe('weierstrass ECDH', () => {
-  should(
-    'getSharedSecret keeps argument-order guards when Fn accepts multiple secret-key lengths',
-    () => {
-      const alice = p521.utils.randomSecretKey();
-      const bob = p521.utils.randomSecretKey();
-      const alicePub = p521.getPublicKey(alice);
-      const bobPub = p521.getPublicKey(bob);
-      throws(() => p521.getSharedSecret(alicePub, bobPub), /first arg must be private key/);
-      throws(() => p521.getSharedSecret(alicePub, bob), /first arg must be private key/);
-      throws(() => p521.getSharedSecret(alice, bob), /second arg must be public key/);
-    }
-  );
-
   const makeDh = () =>
     ecdh(weierstrass({ p: 17n, n: 257n, h: 1n, a: 2n, b: 2n, Gx: 5n, Gy: 1n }), {
       randomBytes: (len = 0) => new Uint8Array(len).fill(7),
     });
 
-  should('weierstrass ecdh.utils.randomSecretKey accepts the advertised lengths.seed input', () => {
+  should('argument-order guards and randomSecretKey lengths', () => {
+    const alice = p521.utils.randomSecretKey();
+    const bob = p521.utils.randomSecretKey();
+    const alicePub = p521.getPublicKey(alice);
+    const bobPub = p521.getPublicKey(bob);
+    throws(() => p521.getSharedSecret(alicePub, bobPub), /first arg must be private key/);
+    throws(() => p521.getSharedSecret(alicePub, bob), /first arg must be private key/);
+    throws(() => p521.getSharedSecret(alice, bob), /second arg must be public key/);
+
     const dh = makeDh();
     const seed = new Uint8Array(dh.lengths.seed).fill(7);
     const secretKey = dh.utils.randomSecretKey(seed);
     eql(secretKey.length, dh.lengths.secretKey);
     eql(dh.utils.isValidSecretKey(secretKey), true);
-  });
 
-  should(
-    'weierstrass ecdh.utils.randomSecretKey default RNG path accepts the advertised lengths.seed input',
-    () => {
-      const dh = makeDh();
-      const secretKey = dh.utils.randomSecretKey();
-      eql(secretKey.length, dh.lengths.secretKey);
-      eql(dh.utils.isValidSecretKey(secretKey), true);
-    }
-  );
+    const randomSecretKey = dh.utils.randomSecretKey();
+    eql(randomSecretKey.length, dh.lengths.secretKey);
+    eql(dh.utils.isValidSecretKey(randomSecretKey), true);
+  });
 });
 
 should(

@@ -51,8 +51,8 @@ describe('webcrypto', () => {
     if (['ed448', 'x448', 'p521'].includes(c) && isDeno) return;
     describe(c, () => {
       const { noble, web, canDerive, canSign } = CURVES[c];
-      for (const keyType of ['raw', 'pkcs8', 'spki', 'jwk']) {
-        should(keyType, async () => {
+      should('raw, pkcs8, spki, and jwk', async () => {
+        for (const keyType of ['raw', 'pkcs8', 'spki', 'jwk']) {
           // Basic
           deepStrictEqual(await web.isSupported(), true);
           // Keygen
@@ -107,8 +107,8 @@ describe('webcrypto', () => {
               webShared
             );
           }
-        });
-      }
+        }
+      });
     });
   }
 
@@ -138,14 +138,12 @@ describe('webcrypto', () => {
     deepStrictEqual(await webcrypto.p256.utils.convertSecretKey(ecdhJwk, 'jwk', 'raw'), secretKey);
   });
 
-  should('raw private-key import validates key length before PKCS8 wrapping', async () => {
+  should('raw private-key and local hex validation', async () => {
     await rejects(
       () => webcrypto.p256.utils.convertSecretKey(new Uint8Array(31), 'raw', 'pkcs8'),
       /"secretKey" expected Uint8Array of length 32, got length=31/
     );
-  });
 
-  should('hexToBytesLocal rejects invalid hex digits', () => {
     deepStrictEqual(webcrypto.__TEST.hexToBytesLocal('aBcD'), Uint8Array.from([0xab, 0xcd]));
     throws(() => webcrypto.__TEST.hexToBytesLocal('gg'));
     throws(() => webcrypto.__TEST.hexToBytesLocal('0x'));

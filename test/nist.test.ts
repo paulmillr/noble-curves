@@ -540,7 +540,7 @@ should('have proper GLV endomorphism logic in secp256k1', () => {
   }
 });
 
-should('handle point with x:0 in P256', () => {
+should('P256/P521 edge cases', () => {
   const a = { x: 0n, y: 0x99b7a386f1d07c29dbcc42a27b5f9449abe3d50de25178e8d7407a95e8b06c0bn };
   const b = { x: 0n, y: 0x66485c780e2f83d72433bd5d84a06bb6541c2af31dae871728bf856a174f93f4n };
   const pa = new p256.Point(a.x, a.y, 1n);
@@ -551,9 +551,7 @@ should('handle point with x:0 in P256', () => {
   isCompressed = false;
   eql(p256.Point.fromBytes(pa.toBytes(isCompressed)), pa);
   eql(p256.Point.fromBytes(pb.toBytes(isCompressed)), pb);
-});
 
-should('handle edge-case in P521', () => {
   // elliptic 6.6.0 edge-case
   const privKey = hexToBytes(
     '01535d22d63de9195efd4c41358ddc89c68b6cc202b558fbf48a09e95dddf953afc1b4cfed6df0f3330f986735085e367fd07030c3ab49dcd3461197b00f09a064fb'
@@ -574,10 +572,8 @@ should('handle edge-case in P521', () => {
   //   '5702429ef132e0c96615';
 
   const hexp = p521.sign(msg, privKey, { lowS: false, format: 'der' });
-  eql(bytesToHex(hexp), sig);
-});
+  eql(bytesToHex(hexp), sig, 'P521 DER signature');
 
-should('uses canonical 66-byte scalar parsing for P521', () => {
   const Fn = p521.Point.Fn;
   const canonical = Fn.toBytes(1n);
   eql(canonical.length, 66);

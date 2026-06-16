@@ -71,15 +71,15 @@ const VECTORS_RFC8032 = deepHexToBytes([
 ]);
 
 describe('RFC8032', () => {
-  for (let i = 0; i < VECTORS_RFC8032.length; i++) {
-    const v = VECTORS_RFC8032[i];
-    should(`${i}`, () => {
+  should('vectors', () => {
+    for (let i = 0; i < VECTORS_RFC8032.length; i++) {
+      const v = VECTORS_RFC8032[i];
       const { context } = v;
-      eql(v.fn.getPublicKey(v.secretKey), v.publicKey);
-      eql(v.fn.sign(v.message, v.secretKey, { context }), v.signature);
-      eql(v.fn.verify(v.signature, v.message, v.publicKey, { context }), true);
-    });
-  }
+      eql(v.fn.getPublicKey(v.secretKey), v.publicKey, `${i}: public key`);
+      eql(v.fn.sign(v.message, v.secretKey, { context }), v.signature, `${i}: sign`);
+      eql(v.fn.verify(v.signature, v.message, v.publicKey, { context }), true, `${i}: verify`);
+    }
+  });
 });
 
 // x25519
@@ -96,12 +96,12 @@ describe('X25519 RFC7748 ECDH', () => {
       outputU: '95cbde9476e8907d7aade45cb4b873f88b595a68799fa152e6f8f7647aac7957',
     },
   ]);
-  for (let i = 0; i < rfc7748Mul.length; i++) {
-    const v = rfc7748Mul[i];
-    should(`scalarMult (${i})`, () => {
-      eql(x25519.scalarMult(v.scalar, v.u), v.outputU);
-    });
-  }
+  should('scalarMult vectors', () => {
+    for (let i = 0; i < rfc7748Mul.length; i++) {
+      const v = rfc7748Mul[i];
+      eql(x25519.scalarMult(v.scalar, v.u), v.outputU, i.toString());
+    }
+  });
 
   const rfc7748Iter = [
     { scalar: '422c8e7a6227d7bca1350b3e2bb7279f7897b87bb6854b783c60e80311ae3079', iters: 1 },
@@ -109,14 +109,14 @@ describe('X25519 RFC7748 ECDH', () => {
     // last ran: 2025-04, ~10 min
     // { scalar: '7c3911e0ab2586fd864497297e575e6f3bc601c0883c30df5f4dd2d24f665424', iters: 1000000 },
   ];
-  for (let i = 0; i < rfc7748Iter.length; i++) {
-    const { scalar, iters } = rfc7748Iter[i];
-    should(`scalarMult iteration x${iters}`, () => {
+  should('scalarMult iterations', () => {
+    for (let i = 0; i < rfc7748Iter.length; i++) {
+      const { scalar, iters } = rfc7748Iter[i];
       let k = x25519.GuBytes;
       for (let i = 0, u = k; i < iters; i++) [k, u] = [x25519.scalarMult(k, u), k];
-      eql(bytesToHex(k), scalar);
-    });
-  }
+      eql(bytesToHex(k), scalar, `x${iters}`);
+    }
+  });
 
   should('getSharedKey', () => {
     const { alicePrivate, alicePublic, bobPrivate, bobPublic, shared } = deepHexToBytes({
@@ -148,7 +148,7 @@ describe('X25519 RFC7748 ECDH', () => {
   });
 
   describe('toMontgomery()', () => {
-    should('edwardsToMontgomery should produce correct output', () => {
+    should('edwardsToMontgomery outputs, keyPair, and ECDH', () => {
       const edSecret = hexToBytes(
         '77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a'
       );
@@ -157,18 +157,13 @@ describe('X25519 RFC7748 ECDH', () => {
       eql(bytesToHex(xPrivate), 'a8cd44eb8e93319c0570bc11005c0e0189d34ff02f6c17773411ad191293c94f');
       const xPublic = ed25519.utils.toMontgomery(edPublic);
       eql(bytesToHex(xPublic), 'ed7749b4d989f6957f3bfde6c56767e988e21c9f8784d91d610011cd553f9b06');
-    });
 
-    should('edwardsToMontgomery should produce correct keyPair', () => {
-      const edSecret = ed25519.utils.randomSecretKey();
-      const edPublic = ed25519.getPublicKey(edSecret);
-      const xSecret = ed25519.utils.toMontgomerySecret(edSecret);
+      const randomEdSecret = ed25519.utils.randomSecretKey();
+      const randomEdPublic = ed25519.getPublicKey(randomEdSecret);
+      const xSecret = ed25519.utils.toMontgomerySecret(randomEdSecret);
       const expectedXPublic = x25519.getPublicKey(xSecret);
-      const xPublic = ed25519.utils.toMontgomery(edPublic);
-      eql(xPublic, expectedXPublic);
-    });
+      eql(ed25519.utils.toMontgomery(randomEdPublic), expectedXPublic);
 
-    should('ECDH through edwardsToMontgomery should be commutative', () => {
       const edSecret1 = ed25519.utils.randomSecretKey();
       const edPublic1 = ed25519.getPublicKey(edSecret1);
       const edSecret2 = ed25519.utils.randomSecretKey();
@@ -183,16 +178,14 @@ describe('X25519 RFC7748 ECDH', () => {
           ed25519.utils.toMontgomery(edPublic1)
         )
       );
-    });
 
-    should('edwardsToMontgomery should produce correct output', () => {
-      const edSecret = hexToBytes(
+      const ed448Secret = hexToBytes(
         '77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab1'
       );
-      const edPublic = ed448.getPublicKey(edSecret);
-      const xPublic = ed448.utils.toMontgomery(edPublic);
+      const ed448Public = ed448.getPublicKey(ed448Secret);
+      const ed448XPublic = ed448.utils.toMontgomery(ed448Public);
       eql(
-        bytesToHex(xPublic),
+        bytesToHex(ed448XPublic),
         'f0301c19656bce1d1cd0a474c952d196041811b63617fc8fdaacee533644e2b2d49273426c8dbb5a76033ea84fb5215b84f9ebf22bde0b0700'
       );
     });

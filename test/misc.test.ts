@@ -62,7 +62,7 @@ describe('jubjub', () => {
     eql(getXY(G_PROOF.double().toAffine()), getXY(P2_exp));
   });
 
-  should('Find generators', () => {
+  should('find generators and validate personalization length', () => {
     const spend = jubjub_findGroupHash(
       Uint8Array.of(),
       Uint8Array.from([90, 99, 97, 115, 104, 95, 71, 95])
@@ -73,9 +73,7 @@ describe('jubjub', () => {
     );
     eql(getXY(spend.toAffine()), getXY(G_SPEND.toAffine()));
     eql(getXY(proof.toAffine()), getXY(G_PROOF.toAffine()));
-  });
 
-  should('find-group-hash validates personalization length', () => {
     let err = '';
     try {
       jubjub_findGroupHash(new Uint8Array([]), Uint8Array.of(1));
@@ -87,23 +85,19 @@ describe('jubjub', () => {
 });
 
 describe('babyjubjub', () => {
-  should('sign and verify', () => {
+  should('signing, hash validation, and base point', () => {
     const seed = new Uint8Array(32).fill(9);
     const msg = new Uint8Array([1, 2, 3]);
     const keys = babyjubjub.keygen(seed);
     const sig = babyjubjub.sign(msg, keys.secretKey);
-    eql(babyjubjub.verify(sig, msg, keys.publicKey), true);
-  });
+    eql(babyjubjub.verify(sig, msg, keys.publicKey), true, 'sign/verify');
 
-  should('reject hashes whose declared outputLen cannot expand the secret key', () => {
     const bad = Object.assign((msg: Uint8Array) => msg.subarray(0, 32), { outputLen: 32 });
     throws(
       () => eddsa(edwards(babyjubjub.Point.CURVE()), bad),
       new Error('hash.outputLen must be 64, got 32')
     );
-  });
 
-  should('Point.BASE matches the EIP-2494 subgroup base point B of order l', () => {
     const l = babyjubjub.Point.Fn.ORDER;
     eql(babyjubjub.Point.BASE.toAffine(), {
       x: 5299619240641551281634865583518297030282874472190772894086521144482721001553n,

@@ -34,48 +34,46 @@ const SUITES = {
 
 function testExample(name, oprf) {
   describe(name, () => {
-    should('OPRF mode (base protocol)', () => {
+    should('OPRF, VOPRF, and POPRF modes', () => {
       // 1. SETUP (Server-side)
       // The server generates a key pair. The client does not need to know anything.
-      const serverKeys = oprf.oprf.generateKeyPair();
+      let serverKeys = oprf.oprf.generateKeyPair();
 
       // 2. BLIND (Client-side)
       // The client takes its private input and "blinds" it.
-      const clientInput = asciiToBytes('my super secret password');
-      const { blind, blinded } = oprf.oprf.blind(clientInput);
+      let clientInput = asciiToBytes('my super secret password');
+      let { blind, blinded } = oprf.oprf.blind(clientInput);
       // The client MUST store the `blind` scalar locally for the final step.
 
       // 3. EVALUATE (Server-side)
       // The client sends the `blinded` element to the server.
       // The server evaluates it with its secret key.
-      const evaluated = oprf.oprf.blindEvaluate(serverKeys.secretKey, blinded);
+      let evaluated = oprf.oprf.blindEvaluate(serverKeys.secretKey, blinded);
 
       // 4. FINALIZE (Client-side)
       // The server sends the `evaluated` element back to the client.
       // The client uses its stored `blind` scalar to "unblind" the result and get the final output.
-      const clientOutput = oprf.oprf.finalize(clientInput, blind, evaluated);
+      let clientOutput = oprf.oprf.finalize(clientInput, blind, evaluated);
 
       // VERIFICATION (For testing)
       // The non-interactive `evaluate` function should produce the same output.
-      const expectedOutput = oprf.oprf.evaluate(serverKeys.secretKey, clientInput);
-      eql(clientOutput, expectedOutput);
-    });
+      let expectedOutput = oprf.oprf.evaluate(serverKeys.secretKey, clientInput);
+      eql(clientOutput, expectedOutput, 'OPRF mode');
 
-    should('VOPRF mode (verifiable)', () => {
       // 1. SETUP
       // Server generates a key pair.
-      const serverKeys = oprf.voprf.generateKeyPair();
+      serverKeys = oprf.voprf.generateKeyPair();
       // For VOPRF, the client must know the server's public key.
       const clientsKnownPublicKey = serverKeys.publicKey;
 
       // 2. BLIND (Client-side)
-      const clientInput = asciiToBytes('another secret input');
-      const { blind, blinded } = oprf.voprf.blind(clientInput);
+      clientInput = asciiToBytes('another secret input');
+      ({ blind, blinded } = oprf.voprf.blind(clientInput));
 
       // 3. EVALUATE (Server-side)
       // The client sends `blinded` to the server.
       // The server evaluates it and also generates a proof of correct key usage.
-      const { evaluated, proof } = oprf.voprf.blindEvaluate(
+      const { evaluated: vEvaluated, proof } = oprf.voprf.blindEvaluate(
         serverKeys.secretKey,
         serverKeys.publicKey,
         blinded
@@ -84,63 +82,75 @@ function testExample(name, oprf) {
       // 4. FINALIZE (Client-side)
       // The server sends `evaluated` and `proof` back to the client.
       // The client's finalize function will internally verify the proof before unblinding.
-      const clientOutput = oprf.voprf.finalize(
+      clientOutput = oprf.voprf.finalize(
         clientInput,
         blind,
-        evaluated,
+        vEvaluated,
         blinded, // Client needs the original blinded element for verification
         clientsKnownPublicKey, // Client uses the known public key for verification
         proof
       );
 
       // VERIFICATION
-      const expectedOutput = oprf.voprf.evaluate(serverKeys.secretKey, clientInput);
-      eql(clientOutput, expectedOutput);
+      expectedOutput = oprf.voprf.evaluate(serverKeys.secretKey, clientInput);
+      eql(clientOutput, expectedOutput, 'VOPRF mode');
 
       // NEGATIVE TEST: Ensure it fails with a bad proof or wrong public key.
       const badProof = new Uint8Array(proof.length).fill(1);
       throws(() =>
-        oprf.voprf.finalize(clientInput, blind, evaluated, blinded, clientsKnownPublicKey, badProof)
+        oprf.voprf.finalize(
+          clientInput,
+          blind,
+          vEvaluated,
+          blinded,
+          clientsKnownPublicKey,
+          badProof
+        )
       );
       const otherKeys = oprf.voprf.generateKeyPair();
       throws(() =>
-        oprf.voprf.finalize(clientInput, blind, evaluated, blinded, otherKeys.publicKey, proof)
+        oprf.voprf.finalize(clientInput, blind, vEvaluated, blinded, otherKeys.publicKey, proof)
       );
-    });
 
-    should('POPRF mode (partially oblivious with domain separation)', () => {
       // The key difference: The protocol is initialized with a public `info` string.
       const info = asciiToBytes('example.com login v2');
       const poprf = oprf.poprf(info); // This returns the API for this specific domain.
 
       // 1. SETUP
-      const serverKeys = poprf.generateKeyPair();
-      const clientsKnownPublicKey = serverKeys.publicKey;
+      serverKeys = poprf.generateKeyPair();
+      const poprfPublicKey = serverKeys.publicKey;
 
       // 2. BLIND (Client-side)
-      const clientInput = asciiToBytes('a password for a specific domain');
+      clientInput = asciiToBytes('a password for a specific domain');
       // The client's blind function also needs the server's public key for POPRF.
-      const { blind, blinded, tweakedKey } = poprf.blind(clientInput, clientsKnownPublicKey);
+      const {
+        blind: pBlind,
+        blinded: pBlinded,
+        tweakedKey,
+      } = poprf.blind(clientInput, poprfPublicKey);
       // The client must store `blind` and `tweakedKey` for the final step.
 
       // 3. EVALUATE (Server-side)
       // The server already knows the `info` string because its `poprf` instance was created with it.
-      const { evaluated, proof } = poprf.blindEvaluate(serverKeys.secretKey, blinded);
+      const { evaluated: pEvaluated, proof: pProof } = poprf.blindEvaluate(
+        serverKeys.secretKey,
+        pBlinded
+      );
 
       // 4. FINALIZE (Client-side)
       // The server sends `evaluated` and `proof` back.
-      const clientOutput = poprf.finalize(
+      clientOutput = poprf.finalize(
         clientInput,
-        blind,
-        evaluated,
-        blinded,
-        proof,
+        pBlind,
+        pEvaluated,
+        pBlinded,
+        pProof,
         tweakedKey // The client uses its stored tweakedKey for verification.
       );
 
       // VERIFICATION
-      const expectedOutput = poprf.evaluate(serverKeys.secretKey, clientInput);
-      eql(clientOutput, expectedOutput);
+      expectedOutput = poprf.evaluate(serverKeys.secretKey, clientInput);
+      eql(clientOutput, expectedOutput, 'POPRF mode');
 
       // NEGATIVE TEST: Show that a different domain (`info`) produces a different output.
       const differentInfo = asciiToBytes('example.com password-reset');
@@ -177,31 +187,24 @@ describe('RFC-9497 (OPRF)', () => {
   });
 
   describe('contracts', () => {
-    should('deriveKeyPair requires a 32-byte seed', () => {
+    should('deriveKeyPair, element, length, and closure edge cases', () => {
       for (const suite of Object.values(SUITES)) {
         throws(() => suite.oprf.deriveKeyPair(new Uint8Array(31), new Uint8Array()));
         throws(() => suite.oprf.deriveKeyPair(new Uint8Array(33), new Uint8Array()));
       }
-    });
 
-    should(
-      'ristretto255 and decaf448 reject identity elements in blinded and evaluated inputs',
-      () => {
-        const suites = [
-          { oprf: ristretto255_oprf, zero: ristretto255.Point.ZERO.toBytes() },
-          { oprf: decaf448_oprf, zero: decaf448.Point.ZERO.toBytes() },
-        ];
-        const input = asciiToBytes('input');
-        for (const { oprf, zero } of suites) {
-          const keys = oprf.oprf.generateKeyPair();
-          throws(() => oprf.oprf.blindEvaluate(keys.secretKey, zero));
-          const { blind } = oprf.oprf.blind(input);
-          throws(() => oprf.oprf.finalize(input, blind, zero));
-        }
+      const identitySuites = [
+        { oprf: ristretto255_oprf, zero: ristretto255.Point.ZERO.toBytes() },
+        { oprf: decaf448_oprf, zero: decaf448.Point.ZERO.toBytes() },
+      ];
+      const identityInput = asciiToBytes('input');
+      for (const { oprf, zero } of identitySuites) {
+        const keys = oprf.oprf.generateKeyPair();
+        throws(() => oprf.oprf.blindEvaluate(keys.secretKey, zero));
+        const { blind } = oprf.oprf.blind(identityInput);
+        throws(() => oprf.oprf.finalize(identityInput, blind, zero));
       }
-    );
 
-    should('private and public inputs allow 65535 bytes but reject true 16-bit overflow', () => {
       const input = new Uint8Array(65535);
       const info = new Uint8Array(65535);
       const seed = new Uint8Array(32);
@@ -211,35 +214,39 @@ describe('RFC-9497 (OPRF)', () => {
         throws(() => suite.oprf.blind(new Uint8Array(65536)));
         throws(() => suite.oprf.deriveKeyPair(seed, new Uint8Array(65536)));
       }
-    });
 
-    should(
-      'POPRF hashInput callers reject oversized input with the public input-length error',
-      () => {
-        const keys = p256_oprf.oprf.generateKeyPair(new Uint8Array(32).fill(7));
-        const rng = () => new Uint8Array(48).fill(1);
-        const p = p256_oprf.poprf(new Uint8Array([9]));
-        const blind = p.blind(new Uint8Array([1]), keys.publicKey, rng);
-        const ev = p.blindEvaluate(keys.secretKey, blind.blinded, rng);
-        const input = new Uint8Array(65536);
-        const err = /"input" expected Uint8Array of length <= 65535, got length=65536/;
-        throws(() => p.evaluate(keys.secretKey, input), err);
-        throws(
-          () =>
-            p.finalize(input, blind.blind, ev.evaluated, blind.blinded, ev.proof, blind.tweakedKey),
-          err
-        );
-      }
-    );
+      const keys = p256_oprf.oprf.generateKeyPair(new Uint8Array(32).fill(7));
+      const rng = () => new Uint8Array(48).fill(1);
+      const p = p256_oprf.poprf(new Uint8Array([9]));
+      const blind = p.blind(new Uint8Array([1]), keys.publicKey, rng);
+      const ev = p.blindEvaluate(keys.secretKey, blind.blinded, rng);
+      const overflowInput = new Uint8Array(65536);
+      const err = /"input" expected Uint8Array of length <= 65535, got length=65536/;
+      throws(() => p.evaluate(keys.secretKey, overflowInput), err);
+      throws(
+        () =>
+          p.finalize(
+            overflowInput,
+            blind.blind,
+            ev.evaluated,
+            blind.blinded,
+            ev.proof,
+            blind.tweakedKey
+          ),
+        err
+      );
 
-    should('POPRF captures an owned copy of info for returned closures', () => {
-      const info = Uint8Array.of(1, 2, 3);
+      const mutableInfo = Uint8Array.of(1, 2, 3);
       const expected = p256_oprf.poprf(Uint8Array.of(1, 2, 3));
-      const actual = p256_oprf.poprf(info);
-      const keys = expected.deriveKeyPair(new Uint8Array(32).fill(7), new Uint8Array());
-      info[0] = 9;
-      const input = asciiToBytes('input');
-      eql(actual.evaluate(keys.secretKey, input), expected.evaluate(keys.secretKey, input));
+      const actual = p256_oprf.poprf(mutableInfo);
+      const closureKeys = expected.deriveKeyPair(new Uint8Array(32).fill(7), new Uint8Array());
+      mutableInfo[0] = 9;
+      const closureInput = asciiToBytes('input');
+      eql(
+        actual.evaluate(closureKeys.secretKey, closureInput),
+        expected.evaluate(closureKeys.secretKey, closureInput),
+        'POPRF info copy'
+      );
     });
   });
 

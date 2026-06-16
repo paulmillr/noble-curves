@@ -78,7 +78,7 @@ export const xeddsa25519 = {
 };
 
 describe('xeddsa25519', () => {
-  should('signatures', () => {
+  should('fixed and random signatures', () => {
     const alicePrivate = new Uint8Array([
       0xc0, 0x97, 0x24, 0x84, 0x12, 0xe5, 0x8b, 0xf0, 0x5d, 0xf4, 0x87, 0x96, 0x82, 0x05, 0x13,
       0x27, 0x94, 0x17, 0x8e, 0x36, 0x76, 0x37, 0xf5, 0x81, 0x8f, 0x81, 0xe0, 0xe6, 0xce, 0x73,
@@ -116,8 +116,7 @@ describe('xeddsa25519', () => {
     ]);
     deepStrictEqual(xeddsa25519.sign(alicePrivate, message, new Uint8Array(64)), zeroSignature);
     deepStrictEqual(xeddsa25519.verify(alicePublic, message, zeroSignature), true);
-  });
-  should('random signatures', () => {
+
     for (let i = 0; i < 50; i++) {
       const msg = randomBytes(64);
       // x25519 can generate invalid U

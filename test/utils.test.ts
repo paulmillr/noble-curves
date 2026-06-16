@@ -28,32 +28,29 @@ describe('utils', () => {
     { bytes: Uint8Array.from([0xca, 0xfe]), hex: 'cafe' },
     { bytes: Uint8Array.from(new Array(1024).fill(0x69)), hex: '69'.repeat(1024) },
   ];
-  should('hexToBytes', () => {
-    for (let v of staticHexVectors) eql(hexToBytes(v.hex), v.bytes);
-    for (let v of staticHexVectors) eql(hexToBytes(v.hex.toUpperCase()), v.bytes);
+  should('hex/bytes conversion', () => {
+    for (let v of staticHexVectors) eql(hexToBytes(v.hex), v.bytes, `hexToBytes ${v.hex.length}`);
+    for (let v of staticHexVectors)
+      eql(hexToBytes(v.hex.toUpperCase()), v.bytes, `hexToBytes uppercase ${v.hex.length}`);
     for (let [v, repr] of getTypeTests()) {
       if (repr === '""') continue;
-      throws(() => hexToBytes(v));
+      throws(() => hexToBytes(v), `hexToBytes rejects ${repr}`);
     }
-  });
-  should('bytesToHex', () => {
-    for (let v of staticHexVectors) eql(bytesToHex(v.bytes), v.hex);
+    for (let v of staticHexVectors) eql(bytesToHex(v.bytes), v.hex, `bytesToHex ${v.hex.length}`);
     for (let [v, repr] of getTypeTests()) {
       if (repr.startsWith('ui8a')) continue;
-      throws(() => bytesToHex(v));
+      throws(() => bytesToHex(v), `bytesToHex rejects ${repr}`);
     }
-  });
-  should('hexToBytes <=> bytesToHex roundtrip', () =>
     fc.assert(
       fc.property(hexaString({ minLength: 2, maxLength: 64 }), (hex) => {
         if (hex.length % 2 !== 0) return;
-        eql(hex, bytesToHex(hexToBytes(hex)));
-        eql(hex, bytesToHex(hexToBytes(hex.toUpperCase())));
+        eql(hex, bytesToHex(hexToBytes(hex)), 'hex roundtrip lowercase');
+        eql(hex, bytesToHex(hexToBytes(hex.toUpperCase())), 'hex roundtrip uppercase');
         if (typeof Buffer !== 'undefined')
-          eql(hexToBytes(hex), Uint8Array.from(Buffer.from(hex, 'hex')));
+          eql(hexToBytes(hex), Uint8Array.from(Buffer.from(hex, 'hex')), 'hex matches Buffer');
       })
-    )
-  );
+    );
+  });
   should('concatBytes', () => {
     const a = 1;
     const b = 2;
@@ -61,24 +58,22 @@ describe('utils', () => {
     const aa = Uint8Array.from([a]);
     const bb = Uint8Array.from([b]);
     const cc = Uint8Array.from([c]);
-    eql(concatBytes(), Uint8Array.of());
-    eql(concatBytes(aa, bb), Uint8Array.from([a, b]));
-    eql(concatBytes(aa, bb, cc), Uint8Array.from([a, b, c]));
+    eql(concatBytes(), Uint8Array.of(), 'empty');
+    eql(concatBytes(aa, bb), Uint8Array.from([a, b]), 'two arrays');
+    eql(concatBytes(aa, bb, cc), Uint8Array.from([a, b, c]), 'three arrays');
     for (let [v, repr] of getTypeTests()) {
       if (repr.startsWith('ui8a')) continue;
       throws(() => {
         concatBytes(v);
-      });
+      }, `rejects ${repr}`);
     }
-  });
-  should('concatBytes random', () =>
     fc.assert(
       fc.property(fc.uint8Array(), fc.uint8Array(), fc.uint8Array(), (a, b, c) => {
         const expected = Uint8Array.from([...a, ...b, ...c]);
-        eql(concatBytes(a.slice(), b.slice(), c.slice()), expected);
+        eql(concatBytes(a.slice(), b.slice(), c.slice()), expected, 'random concat');
       })
-    )
-  );
+    );
+  });
   should('validator constructors', () => {
     if (extra.abytes) {
       throws(() => extra.abytes!('x' as any), TypeError);
@@ -395,35 +390,34 @@ describe('utils', () => {
 });
 
 describe('utils math', () => {
-  should('mod', () => {
-    eql(mod(11n, 10n), 1n);
-    eql(mod(-1n, 10n), 9n);
-    eql(mod(0n, 10n), 0n);
-  });
-  should('invert', () => {
-    eql(invert(512n, 1023n), 2n);
+  should('mod/invert', () => {
+    eql(mod(11n, 10n), 1n, 'mod positive');
+    eql(mod(-1n, 10n), 9n, 'mod negative');
+    eql(mod(0n, 10n), 0n, 'mod zero');
+    eql(invert(512n, 1023n), 2n, 'invert small');
     eql(
       invert(2n ** 255n, 2n ** 255n - 19n),
-      21330121701610878104342023554231983025602365596302209165163239159352418617876n
+      21330121701610878104342023554231983025602365596302209165163239159352418617876n,
+      'invert large'
     );
     throws(() => {
       invert();
-    });
+    }, 'invert rejects missing args');
     throws(() => {
       invert(1n);
     }); // no default modulus
     throws(() => {
       invert(0n, 12n);
-    });
+    }, 'invert rejects zero');
     throws(() => {
       invert(1n, -12n);
-    });
+    }, 'invert rejects negative modulus');
     throws(() => {
       invert(512n, 1023);
-    });
+    }, 'invert rejects number modulus');
     throws(() => {
       invert(512, 1023n);
-    });
+    }, 'invert rejects number input');
   });
 });
 
