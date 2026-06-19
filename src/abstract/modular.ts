@@ -188,9 +188,11 @@ function sqrt9mod16(P: bigint): TRet<<T>(Fp: IField<T>, n: T) => T> {
 }
 
 /**
- * Tonelli-Shanks square root search algorithm.
- * This implementation is variable-time: it searches data-dependently for the first non-residue `Z`
- * and for the smallest `i` in the main loop, unlike RFC 9380 Appendix I.4's constant-time shape.
+ * Tonelli-Shanks square root algorithm.
+ * The non-residue search depends only on the public modulus. For small 2-adicity, including the
+ * built-in CT-backed scalar fields, the returned square-root helper uses a fixed iteration schedule
+ * and field-level `cmov` for input-dependent updates. Very large 2-adicity keeps the classic
+ * variable-time Tonelli loop to preserve the generic long-tail behavior.
  * 1. {@link https://eprint.iacr.org/2012/685.pdf | eprint 2012/685}, page 12
  * 2. Square Roots from 1; 24, 51, 10 to Dan Shanks
  * @param P - field order
@@ -228,10 +230,27 @@ export function tonelliShanks(P: bigint): TRet<<T>(Fp: IField<T>, n: T) => T> {
   // Fast-path; usually done before Z, but we do "primality test".
   if (S === 1) return sqrt3mod4 as TRet<<T>(Fp: IField<T>, n: T) => T>;
 
-  // Slow-path
-  // TODO: test on Fp2 and others
   let cc = _Fp.pow(Z, Q); // c = z^Q
   const Q1div2 = (Q + _1n) / _2n;
+  if (S <= 8)
+    return function tonelliFixed<T>(Fp: TArg<IField<T>>, n: T): T {
+      const F = Fp as IField<T>;
+      let c = F.mul(F.ONE, cc); // c = z^Q, move cc from field _Fp into field Fp
+      let t = F.pow(n, Q); // t = n^Q, first guess at the fudge factor
+      let R = F.pow(n, Q1div2); // R = n^((Q+1)/2), first guess at the square root
+      const minusOne = F.neg(F.ONE);
+      for (let k = 1; k < S; k++) {
+        let t2 = t;
+        for (let i = 0; i < S - k - 1; i++) t2 = F.sqr(t2);
+        const update = F.eql(t2, minusOne);
+        const c2 = F.sqr(c);
+        R = F.cmov(R, F.mul(R, c), update);
+        t = F.cmov(t, F.mul(t, c2), update);
+        c = c2;
+      }
+      assertIsSquare(F, R, n);
+      return R;
+    } as TRet<<T>(Fp: IField<T>, n: T) => T>;
   return function tonelliSlow<T>(Fp: TArg<IField<T>>, n: T): T {
     const F = Fp as IField<T>;
     if (F.is0(n)) return n;
@@ -284,8 +303,7 @@ export function tonelliShanks(P: bigint): TRet<<T>(Fp: IField<T>, n: T) => T> {
  * For example there is FpSqrtOdd/FpSqrtEven to choose a root by oddness
  * (used for hash-to-curve).
  * @param P - Field order.
- * @returns Square-root helper. The generic fallback inherits Tonelli-Shanks' variable-time
- *   behavior and this selector assumes prime-field-style integer moduli.
+ * @returns Square-root helper. This selector assumes prime-field-style integer moduli.
  * @throws If the field is unsupported or the square root does not exist. {@link Error}
  * @example
  * Choose the square-root helper appropriate for one field modulus.

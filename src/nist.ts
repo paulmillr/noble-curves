@@ -5,6 +5,7 @@
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha256, sha384, sha512 } from '@noble/hashes/sha2.js';
+import { FieldCt, FieldCtBigint, type CtField } from './abstract/field-ct.ts';
 import { createFROST, type FROST } from './abstract/frost.ts';
 import { createHasher, type H2CHasher } from './abstract/hash-to-curve.ts';
 import { createOPRF, type OPRF } from './abstract/oprf.ts';
@@ -84,14 +85,42 @@ type SwuOpts = {
 
 function createSWU(Point: WeierstrassPointCons<bigint>, opts: SwuOpts) {
   let map: ((u: bigint) => { x: bigint; y: bigint }) | undefined;
+  const Fp = Point.Fp as unknown as CtField;
+  const toField = Fp.fromBigint
+    ? (n: bigint) => Fp.fromBigint(n) as unknown as bigint
+    : (n: bigint) => n;
   // RFC 9380's NIST suites here all use m = 1, so createHasher passes one field element per map.
   // Building the SWU sqrt-ratio helper eagerly adds noticeable `nist.js` import cost, so defer it
   // to first use; after that the cached mapper is reused directly.
-  return (scalars: bigint[]) => (map || (map = mapToCurveSimpleSWU(Point.Fp, opts)))(scalars[0]);
+  return (scalars: bigint[]) => {
+    map ||
+      (map = mapToCurveSimpleSWU(Point.Fp as any, {
+        A: toField(opts.A),
+        B: toField(opts.B),
+        Z: toField(opts.Z),
+      }) as (u: bigint) => { x: bigint; y: bigint });
+    const { x, y } = map(toField(scalars[0]));
+    return { x, y };
+  };
+}
+
+function ctWeierstrass(CURVE: WeierstrassOpts<bigint>): WeierstrassPointCons<bigint> {
+  const Fp = FieldCt(CURVE.p);
+  const Fn = FieldCtBigint(CURVE.n);
+  return weierstrass(
+    Object.freeze({
+      ...CURVE,
+      a: Fp.fromBigint(CURVE.a),
+      b: Fp.fromBigint(CURVE.b),
+      Gx: Fp.fromBigint(CURVE.Gx),
+      Gy: Fp.fromBigint(CURVE.Gy),
+    }) as any,
+    { Fp: Fp as any, Fn } as any
+  ) as WeierstrassPointCons<bigint>;
 }
 
 // NIST P256
-const p256_Point = /* @__PURE__ */ weierstrass(p256_CURVE);
+const p256_Point = /* @__PURE__ */ ctWeierstrass(p256_CURVE);
 /**
  * NIST P256 (aka secp256r1, prime256v1) curve, ECDSA and ECDH methods.
  * Hashes inputs with sha256 by default.
@@ -127,7 +156,7 @@ export const p256_hasher: H2CHasher<WeierstrassPointCons<bigint>> = /* @__PURE__
     createSWU(p256_Point, {
       A: p256_CURVE.a,
       B: p256_CURVE.b,
-      Z: p256_Point.Fp.create(BigInt('-10')),
+      Z: BigInt('-10'),
     }),
     {
       DST: 'P256_XMD:SHA-256_SSWU_RO_',
@@ -182,7 +211,7 @@ export const p256_FROST: TRet<FROST> = /* @__PURE__ */ (() =>
   }))();
 
 // NIST P384
-const p384_Point = /* @__PURE__ */ weierstrass(p384_CURVE);
+const p384_Point = /* @__PURE__ */ ctWeierstrass(p384_CURVE);
 /**
  * NIST P384 (aka secp384r1) curve, ECDSA and ECDH methods. Hashes inputs with sha384 by default.
  * @example
@@ -211,7 +240,7 @@ export const p384_hasher: H2CHasher<WeierstrassPointCons<bigint>> = /* @__PURE__
     createSWU(p384_Point, {
       A: p384_CURVE.a,
       B: p384_CURVE.b,
-      Z: p384_Point.Fp.create(BigInt('-12')),
+      Z: BigInt('-12'),
     }),
     {
       DST: 'P384_XMD:SHA-384_SSWU_RO_',
@@ -262,7 +291,7 @@ export const p384_oprf: TRet<OPRF> = /* @__PURE__ */ (() =>
 // exactly 65 bytes here: the coherent choices are canonical 66 only, or a broader integer-style
 // parser across many widths. Since this field parser is fixed-width, keep it canonical and use the
 // default exact-66-byte scalar field path.
-const p521_Point = /* @__PURE__ */ weierstrass(p521_CURVE);
+const p521_Point = /* @__PURE__ */ ctWeierstrass(p521_CURVE);
 /**
  * NIST P521 (aka secp521r1) curve, ECDSA and ECDH methods. Hashes inputs with sha512 by default.
  * Deterministic `keygen(seed)` expects 99 seed bytes here because the generic scalar-derivation
@@ -293,7 +322,7 @@ export const p521_hasher: H2CHasher<WeierstrassPointCons<bigint>> = /* @__PURE__
     createSWU(p521_Point, {
       A: p521_CURVE.a,
       B: p521_CURVE.b,
-      Z: p521_Point.Fp.create(BigInt('-4')),
+      Z: BigInt('-4'),
     }),
     {
       DST: 'P521_XMD:SHA-512_SSWU_RO_',

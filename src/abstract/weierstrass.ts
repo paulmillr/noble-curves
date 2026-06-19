@@ -789,6 +789,10 @@ export function weierstrass<T>(
     const right = weierstrassEquation(x); // x³ + ax + b
     return Fp.eql(left, right);
   }
+  const FpToBigint = (Fp as unknown as { toBigint?: (num: T) => bigint }).toBigint;
+  const fieldToPublic = FpToBigint
+    ? (num: T): T => FpToBigint.call(Fp, num) as unknown as T
+    : (num: T): T => num;
 
   // Keep constructor-time generator validation cheap: callers are responsible for supplying the
   // correct prime-order base point, while eager subgroup checks here would slow heavy module imports.
@@ -800,11 +804,14 @@ export function weierstrass<T>(
   const _4a3 = Fp.mul(Fp.pow(CURVE.a, _3n), _4n);
   const _27b2 = Fp.mul(Fp.sqr(CURVE.b), BigInt(27));
   if (Fp.is0(Fp.add(_4a3, _27b2))) throw new Error('bad curve params: a or b');
+  const FpZERO = Fp.ZERO;
+  const aIs0 = Fp.is0(CURVE.a);
+  const b3 = Fp.mul(CURVE.b, _3n);
 
   /** Asserts coordinate is valid: 0 <= n < Fp.ORDER. */
   function acoord(title: string, n: T, banZero = false) {
     if (!Fp.isValid(n) || (banZero && Fp.is0(n))) throw new Error(`bad point coordinate ${title}`);
-    return n;
+    return typeof n === 'bigint' ? (Fp.create(n) as T) : n;
   }
 
   function aprjpoint(other: unknown): asserts other is Point {
@@ -948,8 +955,7 @@ export function weierstrass<T>(
     // https://eprint.iacr.org/2015/1060, algorithm 3
     // Cost: 8M + 3S + 3*a + 2*b3 + 15add.
     double() {
-      const { a, b } = CURVE;
-      const b3 = Fp.mul(b, _3n);
+      const { a } = CURVE;
       const { X: X1, Y: Y1, Z: Z1 } = this;
       let X3 = Fp.ZERO, Y3 = Fp.ZERO, Z3 = Fp.ZERO; // prettier-ignore
       let t0 = Fp.mul(X1, X1); // step 1
@@ -959,7 +965,7 @@ export function weierstrass<T>(
       t3 = Fp.add(t3, t3); // step 5
       Z3 = Fp.mul(X1, Z1);
       Z3 = Fp.add(Z3, Z3);
-      X3 = Fp.mul(a, Z3);
+      X3 = aIs0 ? FpZERO : Fp.mul(a, Z3);
       Y3 = Fp.mul(b3, t2);
       Y3 = Fp.add(X3, Y3); // step 10
       X3 = Fp.sub(t1, Y3);
@@ -967,10 +973,15 @@ export function weierstrass<T>(
       Y3 = Fp.mul(X3, Y3);
       X3 = Fp.mul(t3, X3);
       Z3 = Fp.mul(b3, Z3); // step 15
-      t2 = Fp.mul(a, t2);
-      t3 = Fp.sub(t0, t2);
-      t3 = Fp.mul(a, t3);
-      t3 = Fp.add(t3, Z3);
+      if (aIs0) {
+        t2 = FpZERO;
+        t3 = Z3;
+      } else {
+        t2 = Fp.mul(a, t2);
+        t3 = Fp.sub(t0, t2);
+        t3 = Fp.mul(a, t3);
+        t3 = Fp.add(t3, Z3);
+      }
       Z3 = Fp.add(t0, t0); // step 20
       t0 = Fp.add(Z3, t0);
       t0 = Fp.add(t0, t2);
@@ -996,7 +1007,6 @@ export function weierstrass<T>(
       const { X: X2, Y: Y2, Z: Z2 } = other;
       let X3 = Fp.ZERO, Y3 = Fp.ZERO, Z3 = Fp.ZERO; // prettier-ignore
       const a = CURVE.a;
-      const b3 = Fp.mul(CURVE.b, _3n);
       let t0 = Fp.mul(X1, X2); // step 1
       let t1 = Fp.mul(Y1, Y2);
       let t2 = Fp.mul(Z1, Z2);
@@ -1015,7 +1025,7 @@ export function weierstrass<T>(
       t5 = Fp.mul(t5, X3);
       X3 = Fp.add(t1, t2);
       t5 = Fp.sub(t5, X3);
-      Z3 = Fp.mul(a, t4);
+      Z3 = aIs0 ? FpZERO : Fp.mul(a, t4);
       X3 = Fp.mul(b3, t2); // step 20
       Z3 = Fp.add(X3, Z3);
       X3 = Fp.sub(t1, Z3);
@@ -1023,11 +1033,11 @@ export function weierstrass<T>(
       Y3 = Fp.mul(X3, Z3);
       t1 = Fp.add(t0, t0); // step 25
       t1 = Fp.add(t1, t0);
-      t2 = Fp.mul(a, t2);
+      t2 = aIs0 ? FpZERO : Fp.mul(a, t2);
       t4 = Fp.mul(b3, t4);
       t1 = Fp.add(t1, t2);
       t2 = Fp.sub(t0, t2); // step 30
-      t2 = Fp.mul(a, t2);
+      t2 = aIs0 ? FpZERO : Fp.mul(a, t2);
       t4 = Fp.add(t4, t2);
       t0 = Fp.mul(t1, t4);
       Y3 = Fp.add(Y3, t0);
@@ -1122,7 +1132,7 @@ export function weierstrass<T>(
         throw new RangeError('"invertedZ" expected valid field element');
       const { X, Y, Z } = p;
       // Fast-path for normalized points
-      if (Fp.eql(Z, Fp.ONE)) return { x: X, y: Y };
+      if (Fp.eql(Z, Fp.ONE)) return { x: fieldToPublic(X), y: fieldToPublic(Y) };
       const is0 = p.is0();
       // If invZ was 0, we return zero point. However we still want to execute
       // all operations, so we replace invZ with a random number, 1.
@@ -1130,9 +1140,9 @@ export function weierstrass<T>(
       const x = Fp.mul(X, iz);
       const y = Fp.mul(Y, iz);
       const zz = Fp.mul(Z, iz);
-      if (is0) return { x: Fp.ZERO, y: Fp.ZERO };
+      if (is0) return { x: fieldToPublic(Fp.ZERO), y: fieldToPublic(Fp.ZERO) };
       if (!Fp.eql(zz, Fp.ONE)) throw new Error('invZ was invalid');
-      return { x, y };
+      return { x: fieldToPublic(x), y: fieldToPublic(y) };
     }
 
     /**

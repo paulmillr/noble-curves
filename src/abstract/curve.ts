@@ -322,9 +322,14 @@ export function normalizeZ<P extends CurvePoint<any, P>, PC extends CurvePointCo
   validateMSMPoints(points, c);
   const invertedZs = FpInvertBatch(
     c.Fp,
-    points.map((p) => p.Z!)
+    points.map((p) => (p as any)._Z ?? p.Z!)
   );
-  return points.map((p, i) => c.fromAffine(p.toAffine(invertedZs[i])));
+  return points.map((p, i) => {
+    const rawAffine = (p as any)._toAffineRaw;
+    return c.fromAffine(
+      typeof rawAffine === 'function' ? rawAffine.call(p, invertedZs[i]) : p.toAffine(invertedZs[i])
+    );
+  });
 }
 
 function validateW(W: number, bits: number) {

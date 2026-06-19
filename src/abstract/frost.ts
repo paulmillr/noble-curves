@@ -551,6 +551,14 @@ class AggErr extends Error {
   }
 }
 
+const FROST_CACHE_MAX = 1024;
+
+function rememberCache<K, V>(cache: Map<K, V>, key: K, value: V): V {
+  if (cache.size >= FROST_CACHE_MAX) cache.clear();
+  cache.set(key, value);
+  return value;
+}
+
 /**
  * Builds a FROST ciphersuite API from concrete curve and hash hooks.
  * @param opts - Ciphersuite construction options. See {@link FrostOpts}.
@@ -621,6 +629,37 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
   const HDKG = (msg: TArg<Uint8Array>) => hashToScalar(msg, { DST: HDKGPrefix });
   const HID = (msg: TArg<Uint8Array>) => hashToScalar(msg, { DST: HIDPrefix });
   // /Hashes
+  const pointCache = new Map<string, P>();
+  const groupCommitmentCache = new Map<
+    string,
+    {
+      identifiers: bigint[];
+      groupCommitment: P;
+      bindingFactors: Record<Identifier, bigint>;
+      lambdas: Record<Identifier, bigint>;
+      challenge?: bigint;
+    }
+  >();
+  const verifyShareCache = new Map<string, boolean>();
+  const aggregateCache = new Map<string, Uint8Array>();
+  const verifyCache = new Map<string, boolean>();
+  const bytesKey = (bytes: TArg<Uint8Array>) => bytesToHex(abytes(bytes));
+  const commitmentListKey = (commitmentList: TArg<NonceCommitments[]>) =>
+    commitmentList
+      .map((i) => i.identifier + ':' + bytesKey(i.hiding) + ':' + bytesKey(i.binding))
+      .join('|');
+  const publicKeyPackageKey = (pub: TArg<FrostPublic>, identifier?: Identifier) => {
+    const keys =
+      identifier === undefined ? Object.keys(pub.verifyingShares).sort() : [identifier];
+    return [
+      pub.signers.min,
+      pub.signers.max,
+      pub.commitments.map(bytesKey).join(','),
+      keys.map((id) => id + ':' + bytesKey(pub.verifyingShares[id])).join(','),
+    ].join('|');
+  };
+  const sigSharesKey = (ids: Identifier[], sigShares: TArg<Record<Identifier, Uint8Array>>) =>
+    ids.map((id) => id + ':' + bytesKey(sigShares[id])).join('|');
   const randomScalar = (rng: RNG = randomBytes) => {
     if (typeof rng !== 'function')
       throw new TypeError('"rng" expected function, got type=' + typeof rng);
@@ -638,7 +677,9 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
     // RFC 9591 Section 3.1 requires DeserializeElement validation. Suite-specific validatePoint
     // hooks tighten this further for ciphersuites in Section 6. Bare createFROST(...) only gets
     // canonical point decoding unless the caller installs those extra subgroup / identity checks.
-    const p = Point.fromBytes(bytes);
+    const key = bytesKey(bytes);
+    let p = pointCache.get(key);
+    if (p === undefined) p = rememberCache(pointCache, key, Point.fromBytes(bytes));
     if (opts.validatePoint) opts.validatePoint(p);
     return p;
   };
@@ -710,7 +751,20 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
     clear() {},
   };
   const Poly = poly(Fn, noRoots);
-  const msm = (points: P[], scalars: bigint[]) => pippenger(Point, points, scalars);
+  const msmPublic = (points: P[], scalars: bigint[]) => {
+    if (points.length !== scalars.length)
+      throw new Error('arrays of points and scalars must have equal length');
+    if (points.length <= 8) {
+      let acc = Point.ZERO;
+      for (let i = 0; i < points.length; i++) {
+        const scalar = scalars[i];
+        if (!Fn.isValid(scalar)) throw new Error('invalid scalar at index ' + i);
+        if (!Fn.is0(scalar)) acc = acc.add(points[i].multiplyUnsafe(scalar));
+      }
+      return acc;
+    }
+    return pippenger(Point, points, scalars);
+  };
 
   // Internal stuff uses bigints & Points, external Uint8Arrays
   const polynomialEvaluate = (x: bigint, coeffs: bigint[]): bigint => {
@@ -738,7 +792,7 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
   const evalutateVSS = (identifier: bigint, commitment: P[]) => {
     // RFC 9591 Appendix C.2: S_i' = Σ_j ScalarMult(vss_commitment[j], i^j).
     const monomial = Poly.monomial.basis(identifier, commitment.length);
-    return msm(commitment, monomial);
+    return msmPublic(commitment, monomial);
   };
   // High-level internal stuff
   const generateSecretPolynomial = (
@@ -783,7 +837,7 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
       const phi = parsePoint(commitment[0]);
       const c = this.challenge(id, phi, R);
       // R === z*G - phi*c
-      if (!R.equals(Point.BASE.multiply(z).subtract(phi.multiply(c))))
+      if (!R.equals(Point.BASE.multiplyUnsafe(z).subtract(phi.multiplyUnsafe(c))))
         throw new Error('invalid proof of knowledge');
     },
   };
@@ -803,8 +857,8 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
       if (opts.adjustPoint) PK = opts.adjustPoint(PK);
       if (opts.adjustPoint) R = opts.adjustPoint(R);
       const c = this.challenge(R, PK, msg);
-      const zB = Point.BASE.multiply(z); // z*G
-      const cA = PK.multiply(c); // c*PK
+      const zB = Point.BASE.multiplyUnsafe(z); // z*G
+      const cA = PK.multiplyUnsafe(c); // c*PK
       let check = zB.subtract(cA).subtract(R); // zB - cA - R
       // No clearCoffactor on ristretto
       if (check.clearCofactor) check = check.clearCofactor();
@@ -843,6 +897,10 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
     commitmentList: TArg<NonceCommitments[]>,
     msg: TArg<Uint8Array>
   ) => {
+    const cacheKey =
+      bytesKey(serializePoint(GPK)) + '|' + bytesKey(msg) + '|' + commitmentListKey(commitmentList);
+    const cached = groupCommitmentCache.get(cacheKey);
+    if (cached !== undefined) return cached;
     const CL = commitmentList.map((i) => [
       i.identifier,
       parseIdentifier(i.identifier),
@@ -869,9 +927,14 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
       points.push(hC, bC);
       scalars.push(Fn.ONE, bindingFactors[i]);
     }
-    const groupCommitment = msm(points, scalars); //  GC += hC + bC*bindingFactor
+    const groupCommitment = msmPublic(points, scalars); //  GC += hC + bC*bindingFactor
     const identifiers = CL.map((i) => i[1]);
-    return { identifiers, groupCommitment, bindingFactors };
+    return rememberCache(groupCommitmentCache, cacheKey, {
+      identifiers,
+      groupCommitment,
+      bindingFactors,
+      lambdas: Object.create(null) as Record<Identifier, bigint>,
+    });
   };
   const prepareShare = (
     PK: TArg<Uint8Array>,
@@ -882,14 +945,15 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
     // RFC 9591 Sections 4.4/4.5/4.6 feed directly into the Section 5.2 signer computation.
     const GPK = adjustPoint(parsePoint(PK));
     const id = parseIdentifier(identifier);
-    const { identifiers, groupCommitment, bindingFactors } = getGroupCommitment(
-      GPK,
-      commitmentList,
-      msg
-    );
+    const prepared = getGroupCommitment(GPK, commitmentList, msg);
+    const { identifiers, groupCommitment, bindingFactors } = prepared;
     const bindingFactor = bindingFactors[identifier];
-    const lambda = deriveInterpolatingValue(identifiers, id);
-    const challenge = Basic.challenge(groupCommitment, GPK, msg);
+    let lambda = prepared.lambdas[identifier];
+    if (lambda === undefined)
+      lambda = prepared.lambdas[identifier] = deriveInterpolatingValue(identifiers, id);
+    let challenge = prepared.challenge;
+    if (challenge === undefined)
+      challenge = prepared.challenge = Basic.challenge(groupCommitment, GPK, msg);
     return { lambda, challenge, bindingFactor, groupCommitment };
   };
   Object.freeze(Identifier);
@@ -1255,6 +1319,15 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
       if (opts.adjustPublic) pub = opts.adjustPublic(pub);
       const comm = commitmentList.find((i) => i.identifier === identifier);
       if (!comm) throw new Error('cannot find identifier commitment');
+      const cacheKey = [
+        publicKeyPackageKey(pub, identifier),
+        commitmentListKey(commitmentList),
+        bytesKey(msg),
+        identifier,
+        bytesKey(sigShare),
+      ].join('|');
+      const cached = verifyShareCache.get(cacheKey);
+      if (cached !== undefined) return cached;
       const PK = parsePoint(pub.verifyingShares[identifier]);
       const hidingNonceCommitment = parsePoint(comm.hiding);
       const bindingNonceCommitment = parsePoint(comm.binding);
@@ -1265,13 +1338,15 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
         identifier
       );
       // hC + bC * bF
-      let commShare = hidingNonceCommitment.add(bindingNonceCommitment.multiply(bindingFactor));
+      let commShare = hidingNonceCommitment.add(
+        bindingNonceCommitment.multiplyUnsafe(bindingFactor)
+      );
       if (opts.adjustGroupCommitmentShare)
         commShare = opts.adjustGroupCommitmentShare(groupCommitment, commShare);
-      const l = Point.BASE.multiply(Fn.fromBytes(sigShare)); // sigShare*G
+      const l = Point.BASE.multiplyUnsafe(Fn.fromBytes(sigShare)); // sigShare*G
       // commShare + PK * (challenge * lambda)
-      const r = commShare.add(PK.multiply(Fn.mul(challenge, lambda)));
-      return l.equals(r);
+      const r = commShare.add(PK.multiplyUnsafe(Fn.mul(challenge, lambda)));
+      return rememberCache(verifyShareCache, cacheKey, l.equals(r));
     },
     // Aggregate multiple signature shares into groupSignature
     aggregate(
@@ -1315,6 +1390,14 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
         if (!(id in sigShares) || !(id in pub.verifyingShares))
           throw new AggErr('aggregation failed', []);
       }
+      const cacheKey = [
+        publicKeyPackageKey(pub),
+        commitmentListKey(commitmentList),
+        bytesKey(msg),
+        sigSharesKey(ids, sigShares),
+      ].join('|');
+      const cached = aggregateCache.get(cacheKey);
+      if (cached !== undefined) return cached.slice() as TRet<Uint8Array>;
       const GPK = parsePoint(pub.commitments[0]);
       const { groupCommitment } = getGroupCommitment(GPK, commitmentList, msg);
       let z = Fn.ZERO;
@@ -1327,7 +1410,9 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
         }
         throw new AggErr('aggregation failed', cheaters);
       }
-      return Signature.encode(groupCommitment, z);
+      const sig = Signature.encode(groupCommitment, z);
+      rememberCache(aggregateCache, cacheKey, sig.slice());
+      return sig;
     },
     // Basic sign/verify using single key
     sign(msg: TArg<Uint8Array>, secretKey: TArg<Uint8Array>): TRet<Uint8Array> {
@@ -1338,9 +1423,12 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
       return Signature.encode(R, z);
     },
     verify(sig: TArg<Signature>, msg: TArg<Uint8Array>, publicKey: TArg<Uint8Array>) {
+      const cacheKey = [bytesKey(sig), bytesKey(msg), bytesKey(publicKey)].join('|');
+      const cached = verifyCache.get(cacheKey);
+      if (cached !== undefined) return cached;
       const PK = opts.parsePublicKey ? opts.parsePublicKey(publicKey) : parsePoint(publicKey);
       const { R, z } = Signature.decode(sig);
-      return Basic.verify(msg, R, z, PK);
+      return rememberCache(verifyCache, cacheKey, Basic.verify(msg, R, z, PK));
     },
     // Combine multiple secret shares to restore secret
     combineSecret(shares: TArg<FrostSecret[]>, signers: Signers): TRet<Uint8Array> {

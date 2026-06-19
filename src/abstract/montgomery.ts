@@ -18,6 +18,7 @@ import {
   type TRet,
 } from '../utils.ts';
 import { createKeygen, type CurveLengths } from './curve.ts';
+import { type CtField } from './field-ct.ts';
 import { mod } from './modular.ts';
 
 const _0n = BigInt(0);
@@ -48,6 +49,8 @@ export type MontgomeryOpts = {
    * @returns Random bytes.
    */
   randomBytes?: (bytesLength?: number) => TRet<Uint8Array>;
+  /** Optional CT-backed prime field used for Montgomery ladder field arithmetic. */
+  Fp?: CtField;
 };
 
 /** Public X25519/X448 ECDH API built on a Montgomery ladder. */
@@ -112,6 +115,7 @@ function validateOpts(curve: TArg<MontgomeryOpts>) {
       powPminus2: 'function',
     },
     {
+      Fp: 'object',
       randomBytes: 'function',
     }
   );
@@ -158,7 +162,8 @@ function validateOpts(curve: TArg<MontgomeryOpts>) {
  */
 export function montgomery(curveDef: TArg<MontgomeryOpts>): TRet<MontgomeryECDH> {
   const CURVE = validateOpts(curveDef);
-  const { P, type, adjustScalarBytes, powPminus2, randomBytes: rand } = CURVE;
+  const { P, type, adjustScalarBytes, powPminus2, randomBytes: rand, Fp } = CURVE;
+  const FpCt = Fp as CtField | undefined;
   const is25519 = type === 'x25519';
   if (!is25519 && type !== 'x448') throw new Error('invalid type');
   const randomBytes_ = rand === undefined ? randomBytes : rand;
@@ -199,6 +204,7 @@ export function montgomery(curveDef: TArg<MontgomeryOpts>): TRet<MontgomeryECDH>
     return bytesToNumberLE(adjustScalarBytes(copyBytes(abytes(scalar, fieldLen, 'scalar'))));
   }
   function scalarMult(scalar: TArg<Uint8Array>, u: TArg<Uint8Array>): TRet<Uint8Array> {
+    if (FpCt !== undefined) return scalarMultCt(scalar, u);
     const pu = montgomeryLadder(decodeU(u), decodeScalar(scalar));
     // Some public keys are useless, of low-order. Curve author doesn't think
     // it needs to be validated, but we do it nonetheless.
@@ -222,6 +228,34 @@ export function montgomery(curveDef: TArg<MontgomeryOpts>): TRet<MontgomeryECDH>
     x_2 = modP(x_2 - dummy); // x_2 = x_2 XOR dummy
     x_3 = modP(x_3 + dummy); // x_3 = x_3 XOR dummy
     return { x_2, x_3 };
+  }
+
+  function decodeUCt(u: TArg<Uint8Array>): Uint8Array {
+    const F = FpCt!;
+    const _u = copyBytes(abytes(u, fieldLen, 'uCoordinate'));
+    if (is25519) _u[31] &= 127;
+    return F.fromBytes(_u, true);
+  }
+  function cswapCt(
+    swap: bigint,
+    x_2: Uint8Array,
+    x_3: Uint8Array
+  ): { x_2: Uint8Array; x_3: Uint8Array } {
+    const mask = -Number(swap);
+    const nx_2 = new Uint8Array(fieldLen);
+    const nx_3 = new Uint8Array(fieldLen);
+    for (let i = 0; i < fieldLen; i++) {
+      const diff = (x_2[i] ^ x_3[i]) & mask;
+      nx_2[i] = x_2[i] ^ diff;
+      nx_3[i] = x_3[i] ^ diff;
+    }
+    return { x_2: nx_2, x_3: nx_3 };
+  }
+  function scalarMultCt(scalar: TArg<Uint8Array>, u: TArg<Uint8Array>): TRet<Uint8Array> {
+    const F = FpCt!;
+    const pu = montgomeryLadderCt(decodeUCt(u), decodeScalar(scalar));
+    if (F.is0(pu)) throw new Error('invalid private or public key received');
+    return F.toBytes(pu) as TRet<Uint8Array>;
   }
 
   /**
@@ -267,6 +301,45 @@ export function montgomery(curveDef: TArg<MontgomeryOpts>): TRet<MontgomeryECDH>
     ({ x_2: z_2, x_3: z_3 } = cswap(swap, z_2, z_3));
     const z2 = powPminus2(z_2); // `Fp.pow(x, P - _2n)` is much slower equivalent
     return modP(x_2 * z2); // Return x_2 * (z_2^(p - 2))
+  }
+
+  function montgomeryLadderCt(u: Uint8Array, scalar: bigint): Uint8Array {
+    const F = FpCt!;
+    aInRange('scalar', scalar, minScalar, maxScalar);
+    const x_1 = u;
+    let x_2 = F.ONE;
+    let z_2 = F.ZERO;
+    let x_3 = u;
+    let z_3 = F.ONE;
+    let swap = _0n;
+    const a24ct = F.fromBigint(a24);
+    for (let t = BigInt(montgomeryBits - 1); t >= _0n; t--) {
+      const k_t = (scalar >> t) & _1n;
+      swap ^= k_t;
+      ({ x_2, x_3 } = cswapCt(swap, x_2, x_3));
+      ({ x_2: z_2, x_3: z_3 } = cswapCt(swap, z_2, z_3));
+      swap = k_t;
+
+      const A = F.add(x_2, z_2);
+      const AA = F.sqr(A);
+      const B = F.sub(x_2, z_2);
+      const BB = F.sqr(B);
+      const E = F.sub(AA, BB);
+      const C = F.add(x_3, z_3);
+      const D = F.sub(x_3, z_3);
+      const DA = F.mul(D, A);
+      const CB = F.mul(C, B);
+      x_3 = F.sqr(F.add(DA, CB));
+      z_3 = F.mul(x_1, F.sqr(F.sub(DA, CB)));
+      x_2 = F.mul(AA, BB);
+      z_2 = F.mul(E, F.add(AA, F.mul(a24ct, E)));
+    }
+    ({ x_2, x_3 } = cswapCt(swap, x_2, x_3));
+    ({ x_2: z_2, x_3: z_3 } = cswapCt(swap, z_2, z_3));
+    const zIsZero = F.is0(z_2);
+    const z = F.cmov(z_2, F.ONE, zIsZero);
+    const out = F.mul(x_2, F.inv(z));
+    return F.cmov(out, F.ZERO, zIsZero);
   }
   const lengths = {
     secretKey: fieldLen,

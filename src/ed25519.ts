@@ -19,6 +19,7 @@ import {
   type EdwardsPoint,
   type EdwardsPointCons,
 } from './abstract/edwards.ts';
+import { FieldCtBigint } from './abstract/field-ct.ts';
 import { createFROST, type FROST } from './abstract/frost.ts';
 import {
   _DST_scalar,
@@ -28,14 +29,7 @@ import {
   type H2CHasher,
   type H2CHasherBase,
 } from './abstract/hash-to-curve.ts';
-import {
-  FpInvertBatch,
-  FpSqrtEven,
-  isNegativeLE,
-  mod,
-  pow2,
-  type IField,
-} from './abstract/modular.ts';
+import { FpInvertBatch, FpSqrtEven, type IField } from './abstract/modular.ts';
 import { montgomery, type MontgomeryECDH } from './abstract/montgomery.ts';
 import { createOPRF, type OPRF } from './abstract/oprf.ts';
 import { asciiToBytes, bytesToNumberLE, equalBytes, type TArg, type TRet } from './utils.ts';
@@ -62,22 +56,31 @@ const ed25519_CURVE: EdwardsOpts = /* @__PURE__ */ (() => ({
   Gy: BigInt('0x6666666666666666666666666666666666666666666666666666666666666658'),
 }))();
 
+// Public field alias stays stricter than the RFC 8032 Appendix A sample code:
+// `Fp.inv(0)` throws instead of returning `0`.
+const Fp = /* @__PURE__ */ (() => FieldCtBigint(ed25519_CURVE.p, { isLE: true }))();
+const Fn = /* @__PURE__ */ (() => FieldCtBigint(ed25519_CURVE.n, { isLE: true }))();
+
+function fpPow2(x: bigint, power: bigint) {
+  while (power-- > _0n) x = Fp.sqr(x);
+  return x;
+}
+
 function ed25519_pow_2_252_3(x: bigint) {
   // prettier-ignore
   const _10n = BigInt(10), _20n = BigInt(20), _40n = BigInt(40), _80n = BigInt(80);
-  const P = ed25519_CURVE_p;
-  const x2 = (x * x) % P;
-  const b2 = (x2 * x) % P; // x^3, 11
-  const b4 = (pow2(b2, _2n, P) * b2) % P; // x^15, 1111
-  const b5 = (pow2(b4, _1n, P) * x) % P; // x^31
-  const b10 = (pow2(b5, _5n, P) * b5) % P;
-  const b20 = (pow2(b10, _10n, P) * b10) % P;
-  const b40 = (pow2(b20, _20n, P) * b20) % P;
-  const b80 = (pow2(b40, _40n, P) * b40) % P;
-  const b160 = (pow2(b80, _80n, P) * b80) % P;
-  const b240 = (pow2(b160, _80n, P) * b80) % P;
-  const b250 = (pow2(b240, _10n, P) * b10) % P;
-  const pow_p_5_8 = (pow2(b250, _2n, P) * x) % P;
+  const x2 = Fp.sqr(x);
+  const b2 = Fp.mul(x2, x); // x^3, 11
+  const b4 = Fp.mul(fpPow2(b2, _2n), b2); // x^15, 1111
+  const b5 = Fp.mul(fpPow2(b4, _1n), x); // x^31
+  const b10 = Fp.mul(fpPow2(b5, _5n), b5);
+  const b20 = Fp.mul(fpPow2(b10, _10n), b10);
+  const b40 = Fp.mul(fpPow2(b20, _20n), b20);
+  const b80 = Fp.mul(fpPow2(b40, _40n), b40);
+  const b160 = Fp.mul(fpPow2(b80, _80n), b80);
+  const b240 = Fp.mul(fpPow2(b160, _80n), b80);
+  const b250 = Fp.mul(fpPow2(b240, _10n), b10);
+  const pow_p_5_8 = Fp.mul(fpPow2(b250, _2n), x);
   // ^ This is x^((p-5)/8); multiply by x once more to get x^((p+3)/8).
   return { pow_p_5_8, b2 };
 }
@@ -102,29 +105,24 @@ const ED25519_SQRT_M1 = /* @__PURE__ */ BigInt(
 // sqrt(u/v). Returns `{ isValid, value }`; on non-squares `value` is still a
 // dummy root-shaped field element so callers can stay constant-time.
 function uvRatio(u: bigint, v: bigint): { isValid: boolean; value: bigint } {
-  const P = ed25519_CURVE_p;
-  const v3 = mod(v * v * v, P); // v³
-  const v7 = mod(v3 * v3 * v, P); // v⁷
+  const v3 = Fp.mul(Fp.sqr(v), v); // v³
+  const v7 = Fp.mul(Fp.sqr(v3), v); // v⁷
   // (p+3)/8 and (p-5)/8
-  const pow = ed25519_pow_2_252_3(u * v7).pow_p_5_8;
-  let x = mod(u * v3 * pow, P); // (uv³)(uv⁷)^(p-5)/8
-  const vx2 = mod(v * x * x, P); // vx²
+  const pow = ed25519_pow_2_252_3(Fp.mul(u, v7)).pow_p_5_8;
+  let x = Fp.mul(Fp.mul(u, v3), pow); // (uv³)(uv⁷)^(p-5)/8
+  const vx2 = Fp.mul(v, Fp.sqr(x)); // vx²
   const root1 = x; // First root candidate
-  const root2 = mod(x * ED25519_SQRT_M1, P); // Second root candidate
-  const useRoot1 = vx2 === u; // If vx² = u (mod p), x is a square root
-  const useRoot2 = vx2 === mod(-u, P); // If vx² = -u, set x <-- x * 2^((p-1)/4)
-  const noRoot = vx2 === mod(-u * ED25519_SQRT_M1, P); // There is no valid root, vx² = -u√(-1)
-  if (useRoot1) x = root1;
-  if (useRoot2 || noRoot) x = root2; // We return root2 anyway, for const-time
-  if (isNegativeLE(x, P)) x = mod(-x, P);
+  const root2 = Fp.mul(x, ED25519_SQRT_M1); // Second root candidate
+  const negU = Fp.neg(u);
+  const useRoot1 = Fp.eql(vx2, u); // If vx² = u (mod p), x is a square root
+  const useRoot2 = Fp.eql(vx2, negU); // If vx² = -u, set x <-- x * 2^((p-1)/4)
+  const noRoot = Fp.eql(vx2, Fp.mul(negU, ED25519_SQRT_M1)); // There is no valid root
+  x = Fp.cmov(root1, root2, useRoot2 || noRoot); // We return root2 anyway, for const-time
+  if (Fp.isOdd!(x)) x = Fp.neg(x);
   return { isValid: useRoot1 || useRoot2, value: x };
 }
 
-const ed25519_Point = /* @__PURE__ */ edwards(ed25519_CURVE, { uvRatio });
-// Public field alias stays stricter than the RFC 8032 Appendix A sample code:
-// `Fp.inv(0)` throws instead of returning `0`.
-const Fp = /* @__PURE__ */ (() => ed25519_Point.Fp)();
-const Fn = /* @__PURE__ */ (() => ed25519_Point.Fn)();
+const ed25519_Point = /* @__PURE__ */ edwards(ed25519_CURVE, { Fp, Fn, uvRatio });
 
 // RFC 8032 `dom2` helper for ctx/ph variants only. Plain Ed25519 keeps the
 // empty-domain path in `ed()` and would be wrong if routed through this helper.
@@ -244,14 +242,14 @@ export const ed25519_FROST: TRet<FROST> = /* @__PURE__ */ (() =>
  * ```
  */
 export const x25519: TRet<MontgomeryECDH> = /* @__PURE__ */ (() => {
-  const P = ed25519_CURVE_p;
   return montgomery({
-    P,
+    P: ed25519_CURVE_p,
+    Fp: Fp.ct,
     type: 'x25519',
     powPminus2: (x: bigint): bigint => {
       // x^(p-2) aka x^(2^255-21)
       const { pow_p_5_8, b2 } = ed25519_pow_2_252_3(x);
-      return mod(pow2(pow_p_5_8, _3n, P) * b2, P);
+      return Fp.mul(fpPow2(pow_p_5_8, _3n), b2);
     },
     adjustScalarBytes,
   });
@@ -399,6 +397,15 @@ const MAX_255B = /* @__PURE__ */ BigInt(
 // derivation. The decode path has the opposite contract and rejects that bit.
 const bytes255ToNumberLE = (bytes: TArg<Uint8Array>) =>
   Fp.create(bytesToNumberLE(bytes) & MAX_255B);
+const edwardsCoords = (p: EdwardsPoint) => {
+  const raw = p as unknown as { _X?: bigint; _Y?: bigint; _Z?: bigint; _T?: bigint };
+  return {
+    X: raw._X ?? p.X,
+    Y: raw._Y ?? p.Y,
+    Z: raw._Z ?? p.Z,
+    T: raw._T ?? p.T,
+  };
+};
 
 /**
  * Computes Elligator map for Ristretto255.
@@ -407,25 +414,23 @@ const bytes255ToNumberLE = (bytes: TArg<Uint8Array>) =>
  * Returns an internal Edwards representative, not a public `_RistrettoPoint`.
  */
 function calcElligatorRistrettoMap(r0: bigint): EdwardsPoint {
-  const { d } = ed25519_CURVE;
-  const P = ed25519_CURVE_p;
-  const mod = (n: bigint) => Fp.create(n);
-  const r = mod(SQRT_M1 * r0 * r0); // 1
-  const Ns = mod((r + _1n) * ONE_MINUS_D_SQ); // 2
-  let c = BigInt(-1); // 3
-  const D = mod((c - d * r) * mod(r + d)); // 4
+  const d = Fp.create(ed25519_CURVE.d);
+  const r = Fp.mul(SQRT_M1, Fp.sqr(r0)); // 1
+  const Ns = Fp.mul(Fp.add(r, Fp.ONE), ONE_MINUS_D_SQ); // 2
+  let c = Fp.neg(Fp.ONE); // 3
+  const D = Fp.mul(Fp.sub(c, Fp.mul(d, r)), Fp.add(r, d)); // 4
   let { isValid: Ns_D_is_sq, value: s } = uvRatio(Ns, D); // 5
-  let s_ = mod(s * r0); // 6
-  if (!isNegativeLE(s_, P)) s_ = mod(-s_);
-  if (!Ns_D_is_sq) s = s_; // 7
-  if (!Ns_D_is_sq) c = r; // 8
-  const Nt = mod(c * (r - _1n) * D_MINUS_ONE_SQ - D); // 9
-  const s2 = s * s;
-  const W0 = mod((s + s) * D); // 10
-  const W1 = mod(Nt * SQRT_AD_MINUS_ONE); // 11
-  const W2 = mod(_1n - s2); // 12
-  const W3 = mod(_1n + s2); // 13
-  return new ed25519_Point(mod(W0 * W3), mod(W2 * W1), mod(W1 * W3), mod(W0 * W2));
+  let s_ = Fp.mul(s, r0); // 6
+  if (!Fp.isOdd!(s_)) s_ = Fp.neg(s_);
+  s = Fp.cmov(s, s_, !Ns_D_is_sq); // 7
+  c = Fp.cmov(c, r, !Ns_D_is_sq); // 8
+  const Nt = Fp.sub(Fp.mul(Fp.mul(c, Fp.sub(r, Fp.ONE)), D_MINUS_ONE_SQ), D); // 9
+  const s2 = Fp.sqr(s);
+  const W0 = Fp.mul(Fp.add(s, s), D); // 10
+  const W1 = Fp.mul(Nt, SQRT_AD_MINUS_ONE); // 11
+  const W2 = Fp.sub(Fp.ONE, s2); // 12
+  const W3 = Fp.add(Fp.ONE, s2); // 13
+  return new ed25519_Point(Fp.mul(W0, W3), Fp.mul(W2, W1), Fp.mul(W1, W3), Fp.mul(W0, W2));
 }
 
 /**
@@ -478,27 +483,25 @@ class _RistrettoPoint extends PrimeEdwardsPoint<_RistrettoPoint> {
   static fromBytes(bytes: TArg<Uint8Array>): _RistrettoPoint {
     abytes(bytes, 32);
     const { a, d } = ed25519_CURVE;
-    const P = ed25519_CURVE_p;
-    const mod = (n: bigint) => Fp.create(n);
     const s = bytes255ToNumberLE(bytes);
     // 1. Check that s_bytes is the canonical encoding of a field element, or else abort.
     // 3. Check that s is non-negative, or else abort
-    if (!equalBytes(Fp.toBytes(s), bytes) || isNegativeLE(s, P))
+    if (!equalBytes(Fp.toBytes(s), bytes) || Fp.isOdd!(s))
       throw new Error('invalid ristretto255 encoding 1');
-    const s2 = mod(s * s);
-    const u1 = mod(_1n + a * s2); // 4 (a is -1)
-    const u2 = mod(_1n - a * s2); // 5
-    const u1_2 = mod(u1 * u1);
-    const u2_2 = mod(u2 * u2);
-    const v = mod(a * d * u1_2 - u2_2); // 6
-    const { isValid, value: I } = invertSqrt(mod(v * u2_2)); // 7
-    const Dx = mod(I * u2); // 8
-    const Dy = mod(I * Dx * v); // 9
-    let x = mod((s + s) * Dx); // 10
-    if (isNegativeLE(x, P)) x = mod(-x); // 10
-    const y = mod(u1 * Dy); // 11
-    const t = mod(x * y); // 12
-    if (!isValid || isNegativeLE(t, P) || y === _0n)
+    const s2 = Fp.sqr(s);
+    const u1 = Fp.add(Fp.ONE, Fp.mul(a, s2)); // 4 (a is -1)
+    const u2 = Fp.sub(Fp.ONE, Fp.mul(a, s2)); // 5
+    const u1_2 = Fp.sqr(u1);
+    const u2_2 = Fp.sqr(u2);
+    const v = Fp.sub(Fp.mul(Fp.mul(a, d), u1_2), u2_2); // 6
+    const { isValid, value: I } = invertSqrt(Fp.mul(v, u2_2)); // 7
+    const Dx = Fp.mul(I, u2); // 8
+    const Dy = Fp.mul(Fp.mul(I, Dx), v); // 9
+    let x = Fp.mul(Fp.add(s, s), Dx); // 10
+    if (Fp.isOdd!(x)) x = Fp.neg(x); // 10
+    const y = Fp.mul(u1, Dy); // 11
+    const t = Fp.mul(x, y); // 12
+    if (!isValid || Fp.isOdd!(t) || Fp.is0(y))
       throw new Error('invalid ristretto255 encoding 2');
     return new _RistrettoPoint(new ed25519_Point(x, y, _1n, t));
   }
@@ -517,30 +520,28 @@ class _RistrettoPoint extends PrimeEdwardsPoint<_RistrettoPoint> {
    * Described in [RFC9496](https://www.rfc-editor.org/rfc/rfc9496#name-encode).
    */
   toBytes(): TRet<Uint8Array> {
-    let { X, Y, Z, T } = this.ep;
-    const P = ed25519_CURVE_p;
-    const mod = (n: bigint) => Fp.create(n);
-    const u1 = mod(mod(Z + Y) * mod(Z - Y)); // 1
-    const u2 = mod(X * Y); // 2
+    let { X, Y, Z, T } = edwardsCoords(this.ep);
+    const u1 = Fp.mul(Fp.add(Z, Y), Fp.sub(Z, Y)); // 1
+    const u2 = Fp.mul(X, Y); // 2
     // Square root always exists
-    const u2sq = mod(u2 * u2);
-    const { value: invsqrt } = invertSqrt(mod(u1 * u2sq)); // 3
-    const D1 = mod(invsqrt * u1); // 4
-    const D2 = mod(invsqrt * u2); // 5
-    const zInv = mod(D1 * D2 * T); // 6
+    const u2sq = Fp.sqr(u2);
+    const { value: invsqrt } = invertSqrt(Fp.mul(u1, u2sq)); // 3
+    const D1 = Fp.mul(invsqrt, u1); // 4
+    const D2 = Fp.mul(invsqrt, u2); // 5
+    const zInv = Fp.mul(Fp.mul(D1, D2), T); // 6
     let D: bigint; // 7
-    if (isNegativeLE(T * zInv, P)) {
-      let _x = mod(Y * SQRT_M1);
-      let _y = mod(X * SQRT_M1);
+    if (Fp.isOdd!(Fp.mul(T, zInv))) {
+      let _x = Fp.mul(Y, SQRT_M1);
+      let _y = Fp.mul(X, SQRT_M1);
       X = _x;
       Y = _y;
-      D = mod(D1 * INVSQRT_A_MINUS_D);
+      D = Fp.mul(D1, INVSQRT_A_MINUS_D);
     } else {
       D = D2; // 8
     }
-    if (isNegativeLE(X * zInv, P)) Y = mod(-Y); // 9
-    let s = mod((Z - Y) * D); // 10 (check footer's note, no sqrt(-a))
-    if (isNegativeLE(s, P)) s = mod(-s);
+    if (Fp.isOdd!(Fp.mul(X, zInv))) Y = Fp.neg(Y); // 9
+    let s = Fp.mul(Fp.sub(Z, Y), D); // 10 (check footer's note, no sqrt(-a))
+    if (Fp.isOdd!(s)) s = Fp.neg(s);
     return Fp.toBytes(s) as TRet<Uint8Array>; // 11
   }
 
@@ -550,12 +551,11 @@ class _RistrettoPoint extends PrimeEdwardsPoint<_RistrettoPoint> {
    */
   equals(other: _RistrettoPoint): boolean {
     this.assertSame(other);
-    const { X: X1, Y: Y1 } = this.ep;
-    const { X: X2, Y: Y2 } = other.ep;
-    const mod = (n: bigint) => Fp.create(n);
+    const { X: X1, Y: Y1 } = edwardsCoords(this.ep);
+    const { X: X2, Y: Y2 } = edwardsCoords(other.ep);
     // (x1 * y2 == y1 * x2) | (y1 * y2 == x1 * x2)
-    const one = mod(X1 * Y2) === mod(Y1 * X2);
-    const two = mod(Y1 * Y2) === mod(X1 * X2);
+    const one = Fp.eql(Fp.mul(X1, Y2), Fp.mul(Y1, X2));
+    const two = Fp.eql(Fp.mul(Y1, Y2), Fp.mul(X1, X2));
     return one || two;
   }
 

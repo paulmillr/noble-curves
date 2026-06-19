@@ -29,7 +29,8 @@ import {
   type H2CHasher,
   type H2CHasherBase,
 } from './abstract/hash-to-curve.ts';
-import { Field, FpInvertBatch, isNegativeLE, mod, pow2, type IField } from './abstract/modular.ts';
+import { FieldCtBigint } from './abstract/field-ct.ts';
+import { FpInvertBatch, type IField } from './abstract/modular.ts';
 import { montgomery, type MontgomeryECDH } from './abstract/montgomery.ts';
 import { createOPRF, type OPRF } from './abstract/oprf.ts';
 import {
@@ -93,28 +94,52 @@ const shake256_114 = /* @__PURE__ */ wrapConstructor(() => shake256.create({ dkL
 const shake256_64 = /* @__PURE__ */ wrapConstructor(() => shake256.create({ dkLen: 64 }));
 
 // prettier-ignore
-const _1n = /* @__PURE__ */ BigInt(1), _2n = /* @__PURE__ */ BigInt(2), _3n = /* @__PURE__ */ BigInt(3), _4n = /* @__PURE__ */ BigInt(4), _11n = /* @__PURE__ */ BigInt(11);
+const _0n = /* @__PURE__ */ BigInt(0), _1n = /* @__PURE__ */ BigInt(1), _2n = /* @__PURE__ */ BigInt(2), _3n = /* @__PURE__ */ BigInt(3), _4n = /* @__PURE__ */ BigInt(4), _11n = /* @__PURE__ */ BigInt(11);
 // prettier-ignore
 const _22n = /* @__PURE__ */ BigInt(22), _44n = /* @__PURE__ */ BigInt(44), _88n = /* @__PURE__ */ BigInt(88), _223n = /* @__PURE__ */ BigInt(223);
+
+// Finite field 2n**448n - 2n**224n - 1n
+// RFC 8032 encodes Ed448 field/scalar elements in 57 bytes even though field
+// values fit in 448 bits and scalars in 446 bits. Noble models that with a
+// 456-bit storage width so the final-octet x-sign bit (bit 455) still fits in
+// the shared little-endian container.
+const Fp = /* @__PURE__ */ (() =>
+  FieldCtBigint(ed448_CURVE_p, { BITS: 456, isLE: true }))();
+// Same 57-byte container shape as `Fp`; canonical scalar encodings still have
+// the top ten bits clear per RFC 8032.
+const Fn = /* @__PURE__ */ (() =>
+  FieldCtBigint(ed448_CURVE.n, { BITS: 456, isLE: true }))();
+// Generic 56-byte field shape used by decaf448 and raw X448 u-coordinates.
+// Plain decoding stays canonical here, so callers that want RFC 7748's
+// modulo-p acceptance must reduce externally.
+const Fp448 = /* @__PURE__ */ (() =>
+  FieldCtBigint(ed448_CURVE_p, { BITS: 448, isLE: true }))();
+// Strict 56-byte scalar parser matching RFC 9496's recommended canonical form.
+const Fn448 = /* @__PURE__ */ (() =>
+  FieldCtBigint(ed448_CURVE.n, { BITS: 448, isLE: true }))();
+
+function fpPow2(x: bigint, power: bigint) {
+  while (power-- > _0n) x = Fp.sqr(x);
+  return x;
+}
 
 // powPminus3div4 calculates z = x^k mod p, where k = (p-3)/4.
 // Used for efficient square root calculation.
 // ((P-3)/4).toString(2) would produce bits [223x 1, 0, 222x 1]
 function ed448_pow_Pminus3div4(x: bigint): bigint {
-  const P = ed448_CURVE_p;
-  const b2 = (x * x * x) % P;
-  const b3 = (b2 * b2 * x) % P;
-  const b6 = (pow2(b3, _3n, P) * b3) % P;
-  const b9 = (pow2(b6, _3n, P) * b3) % P;
-  const b11 = (pow2(b9, _2n, P) * b2) % P;
-  const b22 = (pow2(b11, _11n, P) * b11) % P;
-  const b44 = (pow2(b22, _22n, P) * b22) % P;
-  const b88 = (pow2(b44, _44n, P) * b44) % P;
-  const b176 = (pow2(b88, _88n, P) * b88) % P;
-  const b220 = (pow2(b176, _44n, P) * b44) % P;
-  const b222 = (pow2(b220, _2n, P) * b2) % P;
-  const b223 = (pow2(b222, _1n, P) * x) % P;
-  return (pow2(b223, _223n, P) * b222) % P;
+  const b2 = Fp.mul(Fp.sqr(x), x);
+  const b3 = Fp.mul(Fp.sqr(b2), x);
+  const b6 = Fp.mul(fpPow2(b3, _3n), b3);
+  const b9 = Fp.mul(fpPow2(b6, _3n), b3);
+  const b11 = Fp.mul(fpPow2(b9, _2n), b2);
+  const b22 = Fp.mul(fpPow2(b11, _11n), b11);
+  const b44 = Fp.mul(fpPow2(b22, _22n), b22);
+  const b88 = Fp.mul(fpPow2(b44, _44n), b44);
+  const b176 = Fp.mul(fpPow2(b88, _88n), b88);
+  const b220 = Fp.mul(fpPow2(b176, _44n), b44);
+  const b222 = Fp.mul(fpPow2(b220, _2n), b2);
+  const b223 = Fp.mul(fpPow2(b222, _1n), x);
+  return Fp.mul(fpPow2(b223, _223n), b222);
 }
 
 // Mutates and returns the provided buffer in place. The final `bytes[56] = 0`
@@ -133,40 +158,23 @@ function adjustScalarBytes(bytes: TArg<Uint8Array>): TRet<Uint8Array> {
 // `SQRT_RATIO_M1`, the returned `value` only has the documented meaning when
 // `isValid` is true.
 function uvRatio(u: bigint, v: bigint): { isValid: boolean; value: bigint } {
-  const P = ed448_CURVE_p;
   // https://www.rfc-editor.org/rfc/rfc8032#section-5.2.3
   // To compute the square root of (u/v), the first step is to compute the
   //   candidate root x = (u/v)^((p+1)/4).  This can be done using the
   // following trick, to use a single modular powering for both the
   // inversion of v and the square root:
   // x = (u/v)^((p+1)/4)   = u³v(u⁵v³)^((p-3)/4)   (mod p)
-  const u2v = mod(u * u * v, P); // u²v
-  const u3v = mod(u2v * u, P); // u³v
-  const u5v3 = mod(u3v * u2v * v, P); // u⁵v³
+  const u2v = Fp.mul(Fp.sqr(u), v); // u²v
+  const u3v = Fp.mul(u2v, u); // u³v
+  const u5v3 = Fp.mul(Fp.mul(u3v, u2v), v); // u⁵v³
   const root = ed448_pow_Pminus3div4(u5v3);
-  const x = mod(u3v * root, P);
+  const x = Fp.mul(u3v, root);
   // Verify that root is exists
-  const x2 = mod(x * x, P); // x²
+  const x2 = Fp.sqr(x); // x²
   // If vx² = u, the recovered x-coordinate is x.  Otherwise, no
   // square root exists, and the decoding fails.
-  return { isValid: mod(x2 * v, P) === u, value: x };
+  return { isValid: Fp.eql(Fp.mul(x2, v), u), value: x };
 }
-
-// Finite field 2n**448n - 2n**224n - 1n
-// RFC 8032 encodes Ed448 field/scalar elements in 57 bytes even though field
-// values fit in 448 bits and scalars in 446 bits. Noble models that with a
-// 456-bit storage width so the final-octet x-sign bit (bit 455) still fits in
-// the shared little-endian container.
-const Fp = /* @__PURE__ */ (() => Field(ed448_CURVE_p, { BITS: 456, isLE: true }))();
-// Same 57-byte container shape as `Fp`; canonical scalar encodings still have
-// the top ten bits clear per RFC 8032.
-const Fn = /* @__PURE__ */ (() => Field(ed448_CURVE.n, { BITS: 456, isLE: true }))();
-// Generic 56-byte field shape used by decaf448 and raw X448 u-coordinates.
-// Plain `Field` decoding stays canonical here, so callers that want RFC 7748's
-// modulo-p acceptance must reduce externally.
-const Fp448 = /* @__PURE__ */ (() => Field(ed448_CURVE_p, { BITS: 448, isLE: true }))();
-// Strict 56-byte scalar parser matching RFC 9496's recommended canonical form.
-const Fn448 = /* @__PURE__ */ (() => Field(ed448_CURVE.n, { BITS: 448, isLE: true }))();
 
 // SHAKE256(dom4(phflag,context)||x, 114)
 // RFC 8032 `dom4` prefix. Empty contexts are valid; the accepted length range
@@ -260,14 +268,14 @@ export const E448: EdwardsPointCons = /* @__PURE__ */ edwards(E448_CURVE, { Fp, 
  * ```
  */
 export const x448: TRet<MontgomeryECDH> = /* @__PURE__ */ (() => {
-  const P = ed448_CURVE_p;
   return montgomery({
-    P,
+    P: ed448_CURVE_p,
+    Fp: Fp448.ct,
     type: 'x448',
     powPminus2: (x: bigint): bigint => {
       const Pminus3div4 = ed448_pow_Pminus3div4(x);
-      const Pminus3 = pow2(Pminus3div4, _2n, P);
-      return mod(Pminus3 * x, P); // Pminus3 * x = Pminus2
+      const Pminus3 = fpPow2(Pminus3div4, _2n);
+      return Fp.mul(Pminus3, x); // Pminus3 * x = Pminus2
     },
     adjustScalarBytes,
   });
@@ -422,9 +430,8 @@ const INVSQRT_MINUS_D = /* @__PURE__ */ BigInt(
 // canonical representative, while ordinary Ed448 decoding still uses `uvRatio()`
 // plus the public sign bit from RFC 8032.
 const sqrtRatioM1 = (u: bigint, v: bigint) => {
-  const P = ed448_CURVE_p;
   const { isValid, value } = uvRatio(u, v);
-  return { isValid, value: isNegativeLE(value, P) ? Fp448.create(-value) : value };
+  return { isValid, value: Fp448.isOdd!(value) ? Fp448.neg(value) : value };
 };
 const invertSqrt = (number: bigint) => sqrtRatioM1(_1n, number);
 
@@ -435,31 +442,41 @@ const invertSqrt = (number: bigint) => sqrtRatioM1(_1n, number);
  * representation, not a public decaf encoding.
  */
 function calcElligatorDecafMap(r0: bigint): EdwardsPoint {
-  const { d, p: P } = ed448_CURVE;
-  const mod = (n: bigint) => Fp448.create(n);
+  const d = Fp448.create(ed448_CURVE.d);
 
-  const r = mod(-(r0 * r0)); // 1
-  const u0 = mod(d * (r - _1n)); // 2
-  const u1 = mod((u0 + _1n) * (u0 - r)); // 3
+  const r = Fp448.neg(Fp448.sqr(r0)); // 1
+  const u0 = Fp448.mul(d, Fp448.sub(r, Fp448.ONE)); // 2
+  const u1 = Fp448.mul(Fp448.add(u0, Fp448.ONE), Fp448.sub(u0, r)); // 3
 
-  const { isValid: was_square, value: v } = sqrtRatioM1(ONE_MINUS_TWO_D, mod((r + _1n) * u1)); // 4
+  const { isValid: was_square, value: v } = sqrtRatioM1(
+    ONE_MINUS_TWO_D,
+    Fp448.mul(Fp448.add(r, Fp448.ONE), u1)
+  ); // 4
 
   let v_prime = v; // 5
-  if (!was_square) v_prime = mod(r0 * v);
+  if (!was_square) v_prime = Fp448.mul(r0, v);
 
-  let sgn = _1n; // 6
-  if (!was_square) sgn = mod(-_1n);
+  let sgn = Fp448.ONE; // 6
+  if (!was_square) sgn = Fp448.neg(Fp448.ONE);
 
-  const s = mod(v_prime * (r + _1n)); // 7
+  const s = Fp448.mul(v_prime, Fp448.add(r, Fp448.ONE)); // 7
   let s_abs = s;
-  if (isNegativeLE(s, P)) s_abs = mod(-s);
+  if (Fp448.isOdd!(s)) s_abs = Fp448.neg(s);
 
-  const s2 = s * s;
-  const W0 = mod(s_abs * _2n); // 8
-  const W1 = mod(s2 + _1n); // 9
-  const W2 = mod(s2 - _1n); // 10
-  const W3 = mod(v_prime * s * (r - _1n) * ONE_MINUS_TWO_D + sgn); // 11
-  return new ed448_Point(mod(W0 * W3), mod(W2 * W1), mod(W1 * W3), mod(W0 * W2));
+  const s2 = Fp448.sqr(s);
+  const W0 = Fp448.mul(s_abs, _2n); // 8
+  const W1 = Fp448.add(s2, Fp448.ONE); // 9
+  const W2 = Fp448.sub(s2, Fp448.ONE); // 10
+  const W3 = Fp448.add(
+    Fp448.mul(Fp448.mul(Fp448.mul(v_prime, s), Fp448.sub(r, Fp448.ONE)), ONE_MINUS_TWO_D),
+    sgn
+  ); // 11
+  return new ed448_Point(
+    Fp448.mul(W0, W3),
+    Fp448.mul(W2, W1),
+    Fp448.mul(W1, W3),
+    Fp448.mul(W0, W2)
+  );
 }
 
 // Keep the Decaf448 base representative literal here: deriving it with
@@ -521,28 +538,30 @@ class _DecafPoint extends PrimeEdwardsPoint<_DecafPoint> {
 
   static fromBytes(bytes: TArg<Uint8Array>): _DecafPoint {
     abytes(bytes, 56);
-    const { d, p: P } = ed448_CURVE;
-    const mod = (n: bigint) => Fp448.create(n);
+    const d = Fp448.create(ed448_CURVE.d);
     const s = Fp448.fromBytes(bytes);
 
     // 1. Check that s_bytes is the canonical encoding of a field element, or else abort.
     // 2. Check that s is non-negative, or else abort
-    if (!equalBytes(Fn448.toBytes(s), bytes) || isNegativeLE(s, P))
+    if (!equalBytes(Fp448.toBytes(s), bytes) || Fp448.isOdd!(s))
       throw new Error('invalid decaf448 encoding 1');
 
-    const s2 = mod(s * s); // 1
-    const u1 = mod(_1n + s2); // 2
-    const u1sq = mod(u1 * u1);
-    const u2 = mod(u1sq - _4n * d * s2); // 3
+    const s2 = Fp448.sqr(s); // 1
+    const u1 = Fp448.add(Fp448.ONE, s2); // 2
+    const u1sq = Fp448.sqr(u1);
+    const u2 = Fp448.sub(u1sq, Fp448.mul(Fp448.mul(_4n, d), s2)); // 3
 
-    const { isValid, value: invsqrt } = invertSqrt(mod(u2 * u1sq)); // 4
+    const { isValid, value: invsqrt } = invertSqrt(Fp448.mul(u2, u1sq)); // 4
 
-    let u3 = mod((s + s) * invsqrt * u1 * SQRT_MINUS_D); // 5
-    if (isNegativeLE(u3, P)) u3 = mod(-u3);
+    let u3 = Fp448.mul(
+      Fp448.mul(Fp448.mul(Fp448.add(s, s), invsqrt), u1),
+      SQRT_MINUS_D
+    ); // 5
+    if (Fp448.isOdd!(u3)) u3 = Fp448.neg(u3);
 
-    const x = mod(u3 * invsqrt * u2 * INVSQRT_MINUS_D); // 6
-    const y = mod((_1n - s2) * invsqrt * u1); // 7
-    const t = mod(x * y); // 8
+    const x = Fp448.mul(Fp448.mul(Fp448.mul(u3, invsqrt), u2), INVSQRT_MINUS_D); // 6
+    const y = Fp448.mul(Fp448.mul(Fp448.sub(Fp448.ONE, s2), invsqrt), u1); // 7
+    const t = Fp448.mul(x, y); // 8
 
     if (!isValid) throw new Error('invalid decaf448 encoding 2');
     return new _DecafPoint(new ed448_Point(x, y, _1n, t));
@@ -563,17 +582,15 @@ class _DecafPoint extends PrimeEdwardsPoint<_DecafPoint> {
    */
   toBytes(): TRet<Uint8Array> {
     const { X, Z, T } = this.ep;
-    const P = ed448_CURVE.p;
-    const mod = (n: bigint) => Fp448.create(n);
-    const u1 = mod(mod(X + T) * mod(X - T)); // 1
-    const x2 = mod(X * X);
-    const { value: invsqrt } = invertSqrt(mod(u1 * ONE_MINUS_D * x2)); // 2
-    let ratio = mod(invsqrt * u1 * SQRT_MINUS_D); // 3
-    if (isNegativeLE(ratio, P)) ratio = mod(-ratio);
-    const u2 = mod(INVSQRT_MINUS_D * ratio * Z - T); // 4
-    let s = mod(ONE_MINUS_D * invsqrt * X * u2); // 5
-    if (isNegativeLE(s, P)) s = mod(-s);
-    return Fn448.toBytes(s) as TRet<Uint8Array>;
+    const u1 = Fp448.mul(Fp448.add(X, T), Fp448.sub(X, T)); // 1
+    const x2 = Fp448.sqr(X);
+    const { value: invsqrt } = invertSqrt(Fp448.mul(Fp448.mul(u1, ONE_MINUS_D), x2)); // 2
+    let ratio = Fp448.mul(Fp448.mul(invsqrt, u1), SQRT_MINUS_D); // 3
+    if (Fp448.isOdd!(ratio)) ratio = Fp448.neg(ratio);
+    const u2 = Fp448.sub(Fp448.mul(Fp448.mul(INVSQRT_MINUS_D, ratio), Z), T); // 4
+    let s = Fp448.mul(Fp448.mul(Fp448.mul(ONE_MINUS_D, invsqrt), X), u2); // 5
+    if (Fp448.isOdd!(s)) s = Fp448.neg(s);
+    return Fp448.toBytes(s) as TRet<Uint8Array>;
   }
 
   /**
@@ -585,7 +602,7 @@ class _DecafPoint extends PrimeEdwardsPoint<_DecafPoint> {
     const { X: X1, Y: Y1 } = this.ep;
     const { X: X2, Y: Y2 } = other.ep;
     // (x1 * y2 == y1 * x2)
-    return Fp448.create(X1 * Y2) === Fp448.create(Y1 * X2);
+    return Fp448.eql(Fp448.mul(X1, Y2), Fp448.mul(Y1, X2));
   }
 
   is0(): boolean {

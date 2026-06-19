@@ -16,8 +16,9 @@ import {
   type FrostSecret,
   type Nonces,
 } from './abstract/frost.ts';
+import { FieldCt, FieldCtBigint, type CtField } from './abstract/field-ct.ts';
 import { createHasher, type H2CHasher, isogenyMap } from './abstract/hash-to-curve.ts';
-import { Field, mapHashToField, pow2 } from './abstract/modular.ts';
+import { mapHashToField, type IField } from './abstract/modular.ts';
 import {
   type ECDSA,
   ecdsa,
@@ -29,10 +30,12 @@ import {
   type WeierstrassPointCons,
 } from './abstract/weierstrass.ts';
 import {
+  abool,
   abytes,
   asciiToBytes,
   bytesToNumberBE,
   concatBytes,
+  numberToBytesBE,
   type TArg,
   type TRet,
 } from './utils.ts';
@@ -59,41 +62,583 @@ const secp256k1_ENDO: EndomorphismOpts = {
 };
 
 const _0n = /* @__PURE__ */ BigInt(0);
+const _1n = /* @__PURE__ */ BigInt(1);
 const _2n = /* @__PURE__ */ BigInt(2);
 
-/**
- * √n = n^((p+1)/4) for fields p = 3 mod 4. We unwrap the loop and multiply bit-by-bit.
- * (P+1n/4n).toString(2) would produce bits [223x 1, 0, 22x 1, 4x 0, 11, 00]
- */
-function sqrtMod(y: bigint): bigint {
-  const P = secp256k1_CURVE.p;
-  // prettier-ignore
-  const _3n = BigInt(3), _6n = BigInt(6), _11n = BigInt(11), _22n = BigInt(22);
-  // prettier-ignore
-  const _23n = BigInt(23), _44n = BigInt(44), _88n = BigInt(88);
-  const b2 = (y * y * y) % P; // x^3, 11
-  const b3 = (b2 * b2 * y) % P; // x^7
-  const b6 = (pow2(b3, _3n, P) * b3) % P;
-  const b9 = (pow2(b6, _3n, P) * b3) % P;
-  const b11 = (pow2(b9, _2n, P) * b2) % P;
-  const b22 = (pow2(b11, _11n, P) * b11) % P;
-  const b44 = (pow2(b22, _22n, P) * b22) % P;
-  const b88 = (pow2(b44, _44n, P) * b44) % P;
-  const b176 = (pow2(b88, _88n, P) * b88) % P;
-  const b220 = (pow2(b176, _44n, P) * b44) % P;
-  const b223 = (pow2(b220, _3n, P) * b3) % P;
-  const t1 = (pow2(b223, _23n, P) * b22) % P;
-  const t2 = (pow2(t1, _6n, P) * b2) % P;
-  const root = pow2(t2, _2n, P);
-  if (!Fpk1.eql(Fpk1.sqr(root), y)) throw new Error('Cannot find square root');
-  return root;
+const K1_FIELD_BYTES = 32;
+const K1_LIMBS = 11;
+const K1_BASE = 0x1000000;
+const K1_TOP_BASE = 0x10000;
+const K1_FOLD = 977;
+const K1_FOLD_SHIFT = 0x100;
+const K1_P = secp256k1_CURVE.p;
+const K1_P_LIMBS = /* @__PURE__ */ Uint32Array.from([
+  0xfffc2f, 0xfffeff, 0xffffff, 0xffffff, 0xffffff, 0xffffff,
+  0xffffff, 0xffffff, 0xffffff, 0xffffff, 0xffff,
+]);
+function k1Wide(): number[] {
+  return [
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  ];
+}
+function k1Narrow(): number[] {
+  return [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+}
+type K1Elem = Uint32Array;
+type K1Input = K1Elem | bigint;
+type K1Field = Omit<
+  IField<K1Elem>,
+  | 'create'
+  | 'isValid'
+  | 'is0'
+  | 'isValidNot0'
+  | 'neg'
+  | 'inv'
+  | 'sqrt'
+  | 'sqr'
+  | 'eql'
+  | 'add'
+  | 'sub'
+  | 'mul'
+  | 'pow'
+  | 'div'
+  | 'addN'
+  | 'subN'
+  | 'mulN'
+  | 'sqrN'
+  | 'toBytes'
+  | 'isOdd'
+> & {
+  create(num: K1Input): K1Elem;
+  isValid(num: K1Input): boolean;
+  is0(num: K1Input): boolean;
+  isValidNot0(num: K1Input): boolean;
+  isOdd(num: K1Input): boolean;
+  neg(num: K1Input): K1Elem;
+  inv(num: K1Input): K1Elem;
+  sqrt(num: K1Input): K1Elem;
+  sqr(num: K1Input): K1Elem;
+  eql(lhs: K1Input, rhs: K1Input): boolean;
+  add(lhs: K1Input, rhs: K1Input): K1Elem;
+  sub(lhs: K1Input, rhs: K1Input): K1Elem;
+  mul(lhs: K1Input, rhs: K1Input): K1Elem;
+  pow(lhs: K1Input, power: K1Input): K1Elem;
+  div(lhs: K1Input, rhs: K1Input): K1Elem;
+  addN(lhs: K1Input, rhs: K1Input): K1Elem;
+  subN(lhs: K1Input, rhs: K1Input): K1Elem;
+  mulN(lhs: K1Input, rhs: K1Input): K1Elem;
+  sqrN(num: K1Input): K1Elem;
+  toBytes(num: K1Input): Uint8Array;
+  fromBigint(num: bigint): K1Elem;
+  toBigint(num: K1Input): bigint;
+};
+
+function modK1(num: bigint): bigint {
+  const out = num % K1_P;
+  return out >= _0n ? out : out + K1_P;
 }
 
-const Fpk1 = Field(secp256k1_CURVE.p, { sqrt: sqrtMod });
-const Pointk1 = /* @__PURE__ */ weierstrass(secp256k1_CURVE, {
-  Fp: Fpk1,
-  endo: secp256k1_ENDO,
-});
+function FieldSecp256k1(): Readonly<K1Field> {
+  const cache = new Map<bigint, K1Elem>();
+  const powCache = new Map<bigint, number[]>();
+  const ZERO = new Uint32Array(K1_LIMBS);
+  const ONE = packK1(Uint32Array.of(1));
+
+  function copy(bytes: K1Elem): K1Elem {
+    return new Uint32Array(bytes);
+  }
+  function assertElem(limbs: K1Elem): K1Elem {
+    if (!(limbs instanceof Uint32Array) || limbs.length !== K1_LIMBS)
+      throw new Error('invalid field element: expected secp256k1 limbs');
+    return limbs;
+  }
+  function gteP(limbs: ArrayLike<number>): boolean {
+    for (let i = K1_LIMBS - 1; i >= 0; i--) {
+      const a = limbs[i] || 0;
+      const b = K1_P_LIMBS[i];
+      if (a > b) return true;
+      if (a < b) return false;
+    }
+    return true;
+  }
+  function maybeSubP(limbs: Uint32Array): Uint32Array {
+    let d0 = limbs[0] - 0xfffc2f;
+    let borrow = Number(d0 < 0);
+    d0 += borrow * K1_BASE;
+    let d1 = limbs[1] - 0xfffeff - borrow;
+    borrow = Number(d1 < 0);
+    d1 += borrow * K1_BASE;
+    let d2 = limbs[2] - 0xffffff - borrow;
+    borrow = Number(d2 < 0);
+    d2 += borrow * K1_BASE;
+    let d3 = limbs[3] - 0xffffff - borrow;
+    borrow = Number(d3 < 0);
+    d3 += borrow * K1_BASE;
+    let d4 = limbs[4] - 0xffffff - borrow;
+    borrow = Number(d4 < 0);
+    d4 += borrow * K1_BASE;
+    let d5 = limbs[5] - 0xffffff - borrow;
+    borrow = Number(d5 < 0);
+    d5 += borrow * K1_BASE;
+    let d6 = limbs[6] - 0xffffff - borrow;
+    borrow = Number(d6 < 0);
+    d6 += borrow * K1_BASE;
+    let d7 = limbs[7] - 0xffffff - borrow;
+    borrow = Number(d7 < 0);
+    d7 += borrow * K1_BASE;
+    let d8 = limbs[8] - 0xffffff - borrow;
+    borrow = Number(d8 < 0);
+    d8 += borrow * K1_BASE;
+    let d9 = limbs[9] - 0xffffff - borrow;
+    borrow = Number(d9 < 0);
+    d9 += borrow * K1_BASE;
+    let d10 = limbs[10] - 0xffff - borrow;
+    borrow = Number(d10 < 0);
+    d10 += borrow * K1_TOP_BASE;
+    const mask = borrow - 1; // all ones if limbs >= p, zero otherwise
+    limbs[0] = (limbs[0] & ~mask) | (d0 & mask);
+    limbs[1] = (limbs[1] & ~mask) | (d1 & mask);
+    limbs[2] = (limbs[2] & ~mask) | (d2 & mask);
+    limbs[3] = (limbs[3] & ~mask) | (d3 & mask);
+    limbs[4] = (limbs[4] & ~mask) | (d4 & mask);
+    limbs[5] = (limbs[5] & ~mask) | (d5 & mask);
+    limbs[6] = (limbs[6] & ~mask) | (d6 & mask);
+    limbs[7] = (limbs[7] & ~mask) | (d7 & mask);
+    limbs[8] = (limbs[8] & ~mask) | (d8 & mask);
+    limbs[9] = (limbs[9] & ~mask) | (d9 & mask);
+    limbs[10] = (limbs[10] & ~mask) | (d10 & mask);
+    return limbs;
+  }
+  function foldTopOnce(limbs: Uint32Array): void {
+    const high = Math.floor(limbs[10] / K1_TOP_BASE);
+    limbs[10] -= high * K1_TOP_BASE;
+    let v = limbs[0] + high * K1_FOLD;
+    let carry = Math.floor(v / K1_BASE);
+    limbs[0] = v - carry * K1_BASE;
+    v = limbs[1] + high * K1_FOLD_SHIFT + carry;
+    carry = Math.floor(v / K1_BASE);
+    limbs[1] = v - carry * K1_BASE;
+    for (let i = 2; i < K1_LIMBS - 1; i++) {
+      v = limbs[i] + carry;
+      carry = Math.floor(v / K1_BASE);
+      limbs[i] = v - carry * K1_BASE;
+    }
+    limbs[10] += carry;
+  }
+  function packSigned(limbs: number[]): K1Elem {
+    const out = new Uint32Array(K1_LIMBS);
+    let carry = 0;
+    for (let i = 0; i < K1_LIMBS - 1; i++) {
+      const v = limbs[i] + carry;
+      carry = Math.floor(v / K1_BASE);
+      out[i] = v - carry * K1_BASE;
+    }
+    out[10] = limbs[10] + carry;
+    maybeSubP(out);
+    return out;
+  }
+  function carryBase(t: number[]): void {
+    let carry = 0;
+    for (let i = 0; i < t.length; i++) {
+      const v = t[i] + carry;
+      carry = Math.floor(v / K1_BASE);
+      t[i] = v - carry * K1_BASE;
+    }
+  }
+  function foldHigh(t: number[]): void {
+    let prev = Math.floor(t[10] / K1_TOP_BASE);
+    t[10] -= prev * K1_TOP_BASE;
+    for (let pos = 11, k = 0; pos < t.length; pos++, k++) {
+      const limb = t[pos];
+      const low = limb - Math.floor(limb / K1_TOP_BASE) * K1_TOP_BASE;
+      const h = prev + low * K1_FOLD_SHIFT;
+      prev = Math.floor(limb / K1_TOP_BASE);
+      t[pos] = 0;
+      t[k] += h * K1_FOLD;
+      t[k + 1] += h * K1_FOLD_SHIFT;
+    }
+  }
+  function normalize(t: number[]): K1Elem {
+    carryBase(t);
+    foldHigh(t);
+    carryBase(t);
+    foldHigh(t);
+    carryBase(t);
+    const out = new Uint32Array(K1_LIMBS);
+    for (let i = 0; i < K1_LIMBS; i++) out[i] = t[i];
+    maybeSubP(out);
+    maybeSubP(out);
+    return out;
+  }
+  function fromBE(bytes: Uint8Array): Uint32Array {
+    bytes = abytes(bytes, K1_FIELD_BYTES, 'Field.fromBytes');
+    const out = new Uint32Array(K1_LIMBS);
+    for (let i = 0; i < K1_LIMBS - 1; i++) {
+      const pos = 31 - 3 * i;
+      out[i] = bytes[pos] | (bytes[pos - 1] << 8) | (bytes[pos - 2] << 16);
+    }
+    out[10] = bytes[1] | (bytes[0] << 8);
+    return out;
+  }
+  function toBE(bytes: K1Elem): Uint8Array {
+    const limbs = assertElem(bytes);
+    const out = new Uint8Array(K1_FIELD_BYTES);
+    for (let i = 0; i < K1_LIMBS - 1; i++) {
+      const l = limbs[i];
+      const pos = 31 - 3 * i;
+      out[pos] = l & 0xff;
+      out[pos - 1] = (l >>> 8) & 0xff;
+      out[pos - 2] = l >>> 16;
+    }
+    const top = limbs[10];
+    out[1] = top & 0xff;
+    out[0] = top >>> 8;
+    return out;
+  }
+  function elem(num: K1Input): K1Elem {
+    return typeof num === 'bigint' ? fromBigint(num) : assertElem(num);
+  }
+  function fromBigint(num: bigint): K1Elem {
+    const reduced = modK1(num);
+    let hit = cache.get(reduced);
+    if (hit !== undefined) return copy(hit);
+    hit = fromBytes(numberToBytesBE(reduced, K1_FIELD_BYTES), true);
+    if (cache.size > 256) cache.clear();
+    cache.set(reduced, copy(hit));
+    return hit;
+  }
+  function fromBytes(bytes: TArg<Uint8Array>, skipValidation = false): K1Elem {
+    const limbs = fromBE(bytes as Uint8Array);
+    const outside = gteP(limbs);
+    if (!skipValidation && outside) throw new Error('invalid field element: outside of range 0..ORDER');
+    if (outside) maybeSubP(limbs);
+    return limbs;
+  }
+  function add(lhs: K1Input, rhs: K1Input): K1Elem {
+    const a = elem(lhs);
+    const b = elem(rhs);
+    const out = new Uint32Array(K1_LIMBS);
+    let carry = 0;
+    for (let i = 0; i < K1_LIMBS - 1; i++) {
+      const sum = a[i] + b[i] + carry;
+      carry = Math.floor(sum / K1_BASE);
+      out[i] = sum - carry * K1_BASE;
+    }
+    out[10] = a[10] + b[10] + carry;
+    foldTopOnce(out);
+    foldTopOnce(out);
+    maybeSubP(out);
+    maybeSubP(out);
+    return out;
+  }
+  function neg(num: K1Input): K1Elem {
+    const a = elem(num);
+    const out = new Uint32Array(K1_LIMBS);
+    let borrow = 0;
+    for (let i = 0; i < K1_LIMBS; i++) {
+      let d = K1_P_LIMBS[i] - a[i] - borrow;
+      borrow = d < 0 ? 1 : 0;
+      if (borrow) d += i === K1_LIMBS - 1 ? K1_TOP_BASE : K1_BASE;
+      out[i] = d;
+    }
+    maybeSubP(out);
+    return out;
+  }
+  function sub(lhs: K1Input, rhs: K1Input): K1Elem {
+    const a = elem(lhs);
+    const b = elem(rhs);
+    const out = k1Narrow();
+    let borrow = 0;
+    for (let i = 0; i < K1_LIMBS; i++) {
+      const base = i === K1_LIMBS - 1 ? K1_TOP_BASE : K1_BASE;
+      let diff = a[i] - b[i] - borrow;
+      borrow = diff < 0 ? 1 : 0;
+      if (borrow) diff += base;
+      out[i] = diff;
+    }
+    out[0] -= borrow * K1_FOLD;
+    out[1] -= borrow * K1_FOLD_SHIFT;
+    return packSigned(out);
+  }
+  function mul(lhs: K1Input, rhs: K1Input): K1Elem {
+    const a = elem(lhs);
+    const b = elem(rhs);
+    const a0 = a[0], a1 = a[1], a2 = a[2], a3 = a[3], a4 = a[4], a5 = a[5];
+    const a6 = a[6], a7 = a[7], a8 = a[8], a9 = a[9], a10 = a[10];
+    const b0 = b[0], b1 = b[1], b2 = b[2], b3 = b[3], b4 = b[4], b5 = b[5];
+    const b6 = b[6], b7 = b[7], b8 = b[8], b9 = b[9], b10 = b[10];
+    const t = k1Wide();
+    t[0] = a0 * b0;
+    t[1] = a0 * b1 + a1 * b0;
+    t[2] = a0 * b2 + a1 * b1 + a2 * b0;
+    t[3] = a0 * b3 + a1 * b2 + a2 * b1 + a3 * b0;
+    t[4] = a0 * b4 + a1 * b3 + a2 * b2 + a3 * b1 + a4 * b0;
+    t[5] = a0 * b5 + a1 * b4 + a2 * b3 + a3 * b2 + a4 * b1 + a5 * b0;
+    t[6] = a0 * b6 + a1 * b5 + a2 * b4 + a3 * b3 + a4 * b2 + a5 * b1 + a6 * b0;
+    t[7] =
+      a0 * b7 + a1 * b6 + a2 * b5 + a3 * b4 + a4 * b3 + a5 * b2 + a6 * b1 + a7 * b0;
+    t[8] =
+      a0 * b8 + a1 * b7 + a2 * b6 + a3 * b5 + a4 * b4 + a5 * b3 + a6 * b2 + a7 * b1 +
+      a8 * b0;
+    t[9] =
+      a0 * b9 + a1 * b8 + a2 * b7 + a3 * b6 + a4 * b5 + a5 * b4 + a6 * b3 + a7 * b2 +
+      a8 * b1 + a9 * b0;
+    t[10] =
+      a0 * b10 + a1 * b9 + a2 * b8 + a3 * b7 + a4 * b6 + a5 * b5 + a6 * b4 + a7 * b3 +
+      a8 * b2 + a9 * b1 + a10 * b0;
+    t[11] =
+      a1 * b10 + a2 * b9 + a3 * b8 + a4 * b7 + a5 * b6 + a6 * b5 + a7 * b4 + a8 * b3 +
+      a9 * b2 + a10 * b1;
+    t[12] =
+      a2 * b10 + a3 * b9 + a4 * b8 + a5 * b7 + a6 * b6 + a7 * b5 + a8 * b4 + a9 * b3 +
+      a10 * b2;
+    t[13] =
+      a3 * b10 + a4 * b9 + a5 * b8 + a6 * b7 + a7 * b6 + a8 * b5 + a9 * b4 + a10 * b3;
+    t[14] = a4 * b10 + a5 * b9 + a6 * b8 + a7 * b7 + a8 * b6 + a9 * b5 + a10 * b4;
+    t[15] = a5 * b10 + a6 * b9 + a7 * b8 + a8 * b7 + a9 * b6 + a10 * b5;
+    t[16] = a6 * b10 + a7 * b9 + a8 * b8 + a9 * b7 + a10 * b6;
+    t[17] = a7 * b10 + a8 * b9 + a9 * b8 + a10 * b7;
+    t[18] = a8 * b10 + a9 * b9 + a10 * b8;
+    t[19] = a9 * b10 + a10 * b9;
+    t[20] = a10 * b10;
+    return normalize(t);
+  }
+  function sqr(num: K1Input): K1Elem {
+    const a = elem(num);
+    const a0 = a[0], a1 = a[1], a2 = a[2], a3 = a[3], a4 = a[4], a5 = a[5];
+    const a6 = a[6], a7 = a[7], a8 = a[8], a9 = a[9], a10 = a[10];
+    const t = k1Wide();
+    t[0] = a0 * a0;
+    t[1] = 2 * a0 * a1;
+    t[2] = 2 * a0 * a2 + a1 * a1;
+    t[3] = 2 * (a0 * a3 + a1 * a2);
+    t[4] = 2 * (a0 * a4 + a1 * a3) + a2 * a2;
+    t[5] = 2 * (a0 * a5 + a1 * a4 + a2 * a3);
+    t[6] = 2 * (a0 * a6 + a1 * a5 + a2 * a4) + a3 * a3;
+    t[7] = 2 * (a0 * a7 + a1 * a6 + a2 * a5 + a3 * a4);
+    t[8] = 2 * (a0 * a8 + a1 * a7 + a2 * a6 + a3 * a5) + a4 * a4;
+    t[9] = 2 * (a0 * a9 + a1 * a8 + a2 * a7 + a3 * a6 + a4 * a5);
+    t[10] = 2 * (a0 * a10 + a1 * a9 + a2 * a8 + a3 * a7 + a4 * a6) + a5 * a5;
+    t[11] = 2 * (a1 * a10 + a2 * a9 + a3 * a8 + a4 * a7 + a5 * a6);
+    t[12] = 2 * (a2 * a10 + a3 * a9 + a4 * a8 + a5 * a7) + a6 * a6;
+    t[13] = 2 * (a3 * a10 + a4 * a9 + a5 * a8 + a6 * a7);
+    t[14] = 2 * (a4 * a10 + a5 * a9 + a6 * a8) + a7 * a7;
+    t[15] = 2 * (a5 * a10 + a6 * a9 + a7 * a8);
+    t[16] = 2 * (a6 * a10 + a7 * a9) + a8 * a8;
+    t[17] = 2 * (a7 * a10 + a8 * a9);
+    t[18] = 2 * a8 * a10 + a9 * a9;
+    t[19] = 2 * a9 * a10;
+    t[20] = a10 * a10;
+    return normalize(t);
+  }
+  function pow(lhs: K1Input, power: K1Input): K1Elem {
+    const p = typeof power === 'bigint' ? power : toBigint(power);
+    if (p < _0n) throw new Error('invalid exponent, negatives unsupported');
+    if (p === _0n) return copy(ONE);
+    if (p === _1n) return copy(elem(lhs));
+    let digits = powCache.get(p);
+    if (digits === undefined) {
+      const hex = p.toString(16);
+      digits = new Array(hex.length);
+      for (let i = 0; i < hex.length; i++) {
+        const code = hex.charCodeAt(i);
+        digits[i] = code < 58 ? code - 48 : code - 87;
+      }
+      powCache.set(p, digits);
+    }
+    const table = new Array<K1Elem>(16);
+    table[0] = copy(ONE);
+    table[1] = copy(elem(lhs));
+    for (let i = 2; i < 16; i++) table[i] = mul(table[i - 1], table[1]);
+    let out = copy(ONE);
+    for (const idx of digits) {
+      out = sqr(sqr(sqr(sqr(out))));
+      if (idx !== 0) out = mul(out, table[idx]);
+    }
+    return out;
+  }
+  function sqrPow(num: K1Elem, power: number): K1Elem {
+    let out = num;
+    for (let i = 0; i < power; i++) out = sqr(out);
+    return out;
+  }
+  function pow223(num: K1Input): {
+    x1: K1Elem;
+    x2: K1Elem;
+    x3: K1Elem;
+    x22: K1Elem;
+    x223: K1Elem;
+  } {
+    const x1 = copy(elem(num));
+    const x2 = mul(sqr(x1), x1); // x^(2^2 - 1)
+    const x3 = mul(sqr(x2), x1); // x^(2^3 - 1)
+    const x6 = mul(sqrPow(x3, 3), x3);
+    const x9 = mul(sqrPow(x6, 3), x3);
+    const x11 = mul(sqrPow(x9, 2), x2);
+    const x22 = mul(sqrPow(x11, 11), x11);
+    const x44 = mul(sqrPow(x22, 22), x22);
+    const x88 = mul(sqrPow(x44, 44), x44);
+    const x176 = mul(sqrPow(x88, 88), x88);
+    const x220 = mul(sqrPow(x176, 44), x44);
+    const x223 = mul(sqrPow(x220, 3), x3);
+    return { x1, x2, x3, x22, x223 };
+  }
+  function sqrtChain(num: K1Input): K1Elem {
+    const { x2, x22, x223 } = pow223(num);
+    let t = mul(sqrPow(x223, 23), x22);
+    t = mul(sqrPow(t, 6), x2);
+    return sqrPow(t, 2);
+  }
+  function invChain(num: K1Input): K1Elem {
+    const { x1, x2, x22, x223 } = pow223(num);
+    let t = mul(sqrPow(x223, 23), x22);
+    t = mul(sqrPow(t, 5), x1);
+    t = sqr(t);
+    t = mul(sqrPow(t, 2), x2);
+    t = sqr(sqr(t));
+    return mul(t, x1);
+  }
+  function eql(lhs: K1Input, rhs: K1Input): boolean {
+    const a = elem(lhs);
+    const b = elem(rhs);
+    let diff = 0;
+    for (let i = 0; i < K1_LIMBS; i++) diff |= a[i] ^ b[i];
+    return diff === 0;
+  }
+  function is0(num: K1Input): boolean {
+    if (typeof num === 'bigint') return modK1(num) === _0n;
+    const a = assertElem(num);
+    let acc = 0;
+    for (let i = 0; i < K1_LIMBS; i++) acc |= a[i];
+    return acc === 0;
+  }
+  function inv(num: K1Input): K1Elem {
+    if (is0(num)) throw new Error('invert: expected non-zero number');
+    return invChain(num);
+  }
+  function sqrt(num: K1Input): K1Elem {
+    const root = sqrtChain(num);
+    if (!eql(sqr(root), num)) throw new Error('Cannot find square root');
+    return root;
+  }
+  function toBigint(num: K1Input): bigint {
+    if (typeof num === 'bigint') return modK1(num);
+    return bytesToNumberBE(toBE(num));
+  }
+  function invertBatch(lst: K1Elem[]): K1Elem[] {
+    const inverted = new Array<K1Elem>(lst.length).fill(ZERO);
+    const multiplied = new Array<K1Elem>(lst.length);
+    let acc = copy(ONE);
+    for (let i = 0; i < lst.length; i++) {
+      const num = assertElem(lst[i]);
+      if (is0(num)) continue;
+      multiplied[i] = acc;
+      acc = mul(acc, num);
+    }
+    acc = inv(acc);
+    for (let i = lst.length - 1; i >= 0; i--) {
+      const num = assertElem(lst[i]);
+      if (is0(num)) continue;
+      inverted[i] = mul(acc, multiplied[i]);
+      acc = mul(acc, num);
+    }
+    return inverted;
+  }
+  const field: K1Field = {
+    ORDER: K1_P,
+    BITS: 256,
+    BYTES: K1_FIELD_BYTES,
+    isLE: false,
+    get ZERO() {
+      return copy(ZERO);
+    },
+    get ONE() {
+      return copy(ONE);
+    },
+    create(num) {
+      return typeof num === 'bigint' ? fromBigint(num) : copy(assertElem(num));
+    },
+    isValid(num) {
+      if (typeof num === 'bigint') return _0n <= num && num < K1_P;
+      const limbs = assertElem(num);
+      for (let i = 0; i < K1_LIMBS - 1; i++) if (limbs[i] >= K1_BASE) return false;
+      if (limbs[10] >= K1_TOP_BASE) return false;
+      return !gteP(limbs);
+    },
+    is0,
+    isValidNot0(num) {
+      return !is0(num) && this.isValid(num);
+    },
+    isOdd(num) {
+      if (typeof num === 'bigint') return (num & _1n) === _1n;
+      return !!(assertElem(num)[0] & 1);
+    },
+    neg,
+    inv,
+    sqrt,
+    sqr,
+    eql,
+    add,
+    sub,
+    mul,
+    pow,
+    div(lhs, rhs) {
+      return mul(lhs, inv(rhs));
+    },
+    addN: add,
+    subN: sub,
+    mulN: mul,
+    sqrN: sqr,
+    invertBatch,
+    toBytes(num) {
+      return typeof num === 'bigint' ? numberToBytesBE(modK1(num), K1_FIELD_BYTES) : toBE(num);
+    },
+    fromBytes,
+    cmov(a, b, condition) {
+      abool(condition, 'condition');
+      a = assertElem(a);
+      b = assertElem(b);
+      const out = new Uint32Array(K1_LIMBS);
+      const mask = -Number(condition);
+      for (let i = 0; i < K1_LIMBS; i++) out[i] = (a[i] & ~mask) | (b[i] & mask);
+      return out;
+    },
+    fromBigint,
+    toBigint,
+  };
+  Object.freeze(field);
+  return field;
+}
+
+function packK1(limbs: ArrayLike<number>): K1Elem {
+  const out = new Uint32Array(K1_LIMBS);
+  for (let i = 0; i < K1_LIMBS; i++) out[i] = limbs[i] || 0;
+  return out;
+}
+
+export const secp256k1_Fp: Readonly<K1Field> = /* @__PURE__ */ (() => FieldSecp256k1())();
+export const secp256k1_Fn: Readonly<CtField> = /* @__PURE__ */ (() =>
+  FieldCt(secp256k1_CURVE.n))();
+
+const Fpk1 = secp256k1_Fp;
+const Fnk1 = /* @__PURE__ */ (() => FieldCtBigint(secp256k1_CURVE.n))();
+const secp256k1_CURVE_CT = /* @__PURE__ */ (() =>
+  Object.freeze({
+    ...secp256k1_CURVE,
+    a: Fpk1.fromBigint(secp256k1_CURVE.a),
+    b: Fpk1.fromBigint(secp256k1_CURVE.b),
+    Gx: Fpk1.fromBigint(secp256k1_CURVE.Gx),
+    Gy: Fpk1.fromBigint(secp256k1_CURVE.Gy),
+  }))();
+const Pointk1: WeierstrassPointCons<bigint> = /* @__PURE__ */ weierstrass(
+  secp256k1_CURVE_CT as any,
+  {
+    Fp: Fpk1 as any,
+    Fn: Fnk1,
+    endo: secp256k1_ENDO,
+  } as any
+);
 
 /**
  * secp256k1 curve: ECDSA and ECDH methods.
@@ -151,12 +696,12 @@ function schnorrGetExtPubKey(priv: TArg<Uint8Array>) {
 function lift_x(x: bigint): PointType<bigint> {
   const Fp = Fpk1;
   if (!Fp.isValidNot0(x)) throw new Error('invalid x: Fail if x ≥ p');
-  const xx = Fp.create(x * x);
-  const c = Fp.create(xx * x + BigInt(7)); // Let c = x³ + 7 mod p.
-  let y = Fp.sqrt(c); // Let y = c^(p+1)/4 mod p. Same as sqrt().
+  const fx = Fp.fromBigint(x);
+  const c = Fp.add(Fp.mul(Fp.sqr(fx), fx), BigInt(7)); // Let c = x³ + 7 mod p.
+  let y = Fp.toBigint(Fp.sqrt(c)); // Let y = c^(p+1)/4 mod p. Same as sqrt().
   // Return the unique point P such that x(P) = x and
   // y(P) = y if y mod 2 = 0 or y(P) = p-y otherwise.
-  if (!hasEven(y)) y = Fp.neg(y);
+  if (!hasEven(y)) y = Fp.toBigint(Fp.neg(y));
   const p = Pointk1.fromAffine({ x, y });
   p.assertValidity();
   return p;
@@ -342,7 +887,7 @@ export const schnorr: SecpSchnorr = /* @__PURE__ */ (() => {
 // The final `1` in each denominator array is the explicit monic leading term.
 const isoMap = /* @__PURE__ */ (() =>
   isogenyMap(
-    Fpk1,
+    Fpk1 as any,
     [
       // xNum
       [
@@ -371,19 +916,26 @@ const isoMap = /* @__PURE__ */ (() =>
         '0x6484aa716545ca2cf3a70c3fa8fe337e0a3d21162f0d6299a7bf8192bfd2a76f',
         '0x0000000000000000000000000000000000000000000000000000000000000001', // LAST 1
       ],
-    ].map((i) => i.map((j) => BigInt(j))) as [bigint[], bigint[], bigint[], bigint[]]
-  ))();
+    ].map((i) => i.map((j) => Fpk1.fromBigint(BigInt(j)))) as [
+      K1Elem[],
+      K1Elem[],
+      K1Elem[],
+      K1Elem[],
+    ]
+  ) as (x: K1Elem, y: K1Elem) => { x: K1Elem; y: K1Elem })();
 // RFC 9380 §8.7 secp256k1 E' parameters for the SWU-to-isogeny pipeline below.
-let mapSWU: ((u: bigint) => { x: bigint; y: bigint }) | undefined;
+let mapSWU: ((u: K1Elem) => { x: K1Elem; y: K1Elem }) | undefined;
 const getMapSWU = () =>
   mapSWU ||
-  (mapSWU = mapToCurveSimpleSWU(Fpk1, {
+  (mapSWU = mapToCurveSimpleSWU(Fpk1 as any, {
     // Building the SWU sqrt-ratio helper eagerly adds noticeable `secp256k1.js` import cost, so
     // defer it to first use; after that the cached mapper is reused directly.
-    A: BigInt('0x3f8731abdd661adca08a5558f0f5d272e953d363cb6f0e5d405447c01a444533'),
-    B: BigInt('1771'),
+    A: Fpk1.fromBigint(
+      BigInt('0x3f8731abdd661adca08a5558f0f5d272e953d363cb6f0e5d405447c01a444533')
+    ),
+    B: Fpk1.fromBigint(BigInt('1771')),
     Z: Fpk1.create(BigInt('-11')),
-  }));
+  }) as unknown as (u: K1Elem) => { x: K1Elem; y: K1Elem });
 
 /**
  * Hashing / encoding to secp256k1 points / field. RFC 9380 methods.
@@ -399,7 +951,8 @@ export const secp256k1_hasher: H2CHasher<WeierstrassPointCons<bigint>> = /* @__P
     Pointk1,
     (scalars: bigint[]) => {
       const { x, y } = getMapSWU()(Fpk1.create(scalars[0]));
-      return isoMap(x, y);
+      const p = isoMap(x, y);
+      return { x: Fpk1.toBigint(p.x), y: Fpk1.toBigint(p.y) };
     },
     {
       DST: 'secp256k1_XMD:SHA-256_SSWU_RO_',

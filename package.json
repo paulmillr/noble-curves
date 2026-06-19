@@ -40,6 +40,7 @@
     "./abstract/curve.js": "./abstract/curve.js",
     "./abstract/edwards.js": "./abstract/edwards.js",
     "./abstract/fft.js": "./abstract/fft.js",
+    "./abstract/field-ct.js": "./abstract/field-ct.js",
     "./abstract/frost.js": "./abstract/frost.js",
     "./abstract/hash-to-curve.js": "./abstract/hash-to-curve.js",
     "./abstract/modular.js": "./abstract/modular.js",

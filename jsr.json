@@ -7,6 +7,7 @@
     "./abstract/curve.js": "./src/abstract/curve.ts",
     "./abstract/edwards.js": "./src/abstract/edwards.ts",
     "./abstract/fft.js": "./src/abstract/fft.ts",
+    "./abstract/field-ct.js": "./src/abstract/field-ct.ts",
     "./abstract/frost.js": "./src/abstract/frost.ts",
     "./abstract/hash-to-curve.js": "./src/abstract/hash-to-curve.ts",
     "./abstract/modular.js": "./src/abstract/modular.ts",
