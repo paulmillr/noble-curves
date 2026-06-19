@@ -286,6 +286,14 @@ export interface WeierstrassPointCons<T> extends CurvePointCons<WeierstrassPoint
   CURVE(): WeierstrassOpts<T>;
 }
 
+/** Optional scalar multiplication override used by curve-specific accelerators. */
+export type WeierstrassMultiply<T> = (
+  c: WeierstrassPointCons<T>,
+  point: WeierstrassPoint<T>,
+  scalar: bigint,
+  isConstantTime: boolean
+) => WeierstrassPoint<T> | undefined;
+
 /**
  * Weierstrass curve options.
  *
@@ -342,6 +350,8 @@ export type WeierstrassExtraOpts<T> = Partial<{
     point: WeierstrassPoint<T>,
     isCompressed: boolean
   ) => TRet<Uint8Array>;
+  /** Optional scalar multiplication override. */
+  multiply: WeierstrassMultiply<T>;
 }>;
 
 /**
@@ -690,6 +700,7 @@ export function weierstrass<T>(
       allowInfinityPoint: 'boolean',
       clearCofactor: 'function',
       isTorsionFree: 'function',
+      multiply: 'function',
       fromBytes: 'function',
       toBytes: 'function',
       endo: 'object',
@@ -1066,6 +1077,8 @@ export function weierstrass<T>(
       // In key/signature-style callers, those values usually mean broken hash/scalar plumbing,
       // and failing closed is safer than silently producing the identity point.
       if (!Fn.isValidNot0(scalar)) throw new RangeError('invalid scalar: out of range'); // 0 is invalid
+      const override = extraOpts.multiply?.(Point, this, scalar, true);
+      if (override !== undefined) return override as Point;
       let point: Point, fake: Point; // Fake point is used to const-time mult
       const mul = (n: bigint) => wnaf.cached(this, n, (p) => normalizeZ(Point, p));
       /** See docs for {@link EndomorphismOpts} */
@@ -1096,6 +1109,8 @@ export function weierstrass<T>(
       // Public-scalar callers may need 0, but n and larger values stay rejected here too.
       // Reducing them mod n would turn bad caller input into an accidental identity point.
       if (!Fn.isValid(sc)) throw new RangeError('invalid scalar: out of range'); // 0 is valid
+      const override = extraOpts.multiply?.(Point, p, sc, false);
+      if (override !== undefined) return override as Point;
       if (sc === _0n || p.is0()) return Point.ZERO; // 0
       if (sc === _1n) return p; // 1
       if (wnaf.hasCache(this)) return this.multiply(sc); // precomputes

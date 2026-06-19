@@ -36,6 +36,7 @@ import {
   type TArg,
   type TRet,
 } from './utils.ts';
+import { secp256k1WasmMultiply } from './wasm/secp256k1.ts';
 
 // Seems like generator was produced from some seed:
 // `Pointk1.BASE.multiply(Pointk1.Fn.inv(2n, N)).toAffine().x`
@@ -93,6 +94,7 @@ const Fpk1 = Field(secp256k1_CURVE.p, { sqrt: sqrtMod });
 const Pointk1 = /* @__PURE__ */ weierstrass(secp256k1_CURVE, {
   Fp: Fpk1,
   endo: secp256k1_ENDO,
+  multiply: secp256k1WasmMultiply,
 });
 
 /**
