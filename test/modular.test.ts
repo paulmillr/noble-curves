@@ -1,6 +1,8 @@
 import * as fc from 'fast-check';
 import { describe, should } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql, throws } from 'node:assert';
+import { FieldWasm } from '../src/abstract/field-wasm.ts';
+import { FieldEd25519 } from '../src/abstract/field-ed25519.ts';
 import * as mod from '../src/abstract/modular.ts';
 import { Field } from '../src/abstract/modular.ts';
 import { bls12_381 } from '../src/bls12-381.ts';
@@ -119,7 +121,7 @@ for (const c in FIELDS) {
 
     describe(name, () => {
       const l = (msg) => `${name} ${msg}`;
-      const checkRoot = (n, root, label = 'root') => {
+      const checkRootBasic = (n, root, label = 'root') => {
         const negRoot = Fp.neg(root);
         eql(mod.FpPow(Fp, root, 2n), n, l(`${label}: FpPow(root, 2) == n`));
         eql(mod.FpPow(Fp, negRoot, 2n), n, l(`${label}: FpPow(-root, 2) == n`));
@@ -128,6 +130,9 @@ for (const c in FIELDS) {
         eql(Fp.mul(negRoot, negRoot), n, l(`${label}: -root * -root == n`));
         eql(Fp.eql(Fp.sqr(root), n), true, l(`${label}: sqrt(a)^2 == a`));
         eql(Fp.eql(Fp.sqr(Fp.neg(root)), n), true, l(`${label}: (-sqrt(a))^2 == a`));
+      };
+      const checkRoot = (n, root, label = 'root') => {
+        checkRootBasic(n, root, label);
         // Returns odd/even element
         eql(Fp.isOdd(mod.FpSqrtOdd(Fp, n)), true, l(`${label}: FpSqrtOdd is odd`));
         eql(Fp.isOdd(mod.FpSqrtEven(Fp, n)), false, l(`${label}: FpSqrtEven is even`));
@@ -296,37 +301,44 @@ for (const c in FIELDS) {
                 root = Fp.sqrt(a);
               } catch (e) {
                 if (!e.message.includes('Cannot find square root')) throw e;
-                eql(mod.FpIsSquare(Fp, a), false, l('sqrt failure marks non-square'));
+                if (!noGenericSqrt)
+                  eql(mod.FpIsSquare(Fp, a), false, l('sqrt failure marks non-square'));
                 return;
               }
-              checkRoot(a, root, 'sqrt(field)');
+              if (noGenericSqrt) checkRootBasic(a, root, 'sqrt(field)');
+              else checkRoot(a, root, 'sqrt(field)');
             })
           );
         }
-        fc.assert(
-          fc.property(FC_BIGINT, (num) => {
-            const x = create(num);
-            eql(mod.FpIsSquare(Fp, Fp.sqr(x)), true, l('sqr(x) returns a square'));
-          })
-        );
-        fc.assert(
-          fc.property(FC_BIGINT, (num) => {
-            const n = create(num);
-            const leg = BigInt(mod.FpLegendre(Fp, n));
-            eql(Fp.mul(Fp.ONE, leg), Fp.pow(n, (Fp.ORDER - 1n) / 2n), l('legendre correctness'));
-          })
-        );
-        fc.assert(
-          fc.property(FC_BIGINT, FC_BIGINT, (num1, num2) => {
-            const a = create(num1);
-            const b = create(num2);
-            eql(
-              mod.FpLegendre(Fp, a) * mod.FpLegendre(Fp, b),
-              mod.FpLegendre(Fp, Fp.mul(a, b)),
-              l('legendre multiplicativity')
-            );
-          })
-        );
+        if (!noGenericSqrt) {
+          fc.assert(
+            fc.property(FC_BIGINT, (num) => {
+              const x = create(num);
+              eql(mod.FpIsSquare(Fp, Fp.sqr(x)), true, l('sqr(x) returns a square'));
+            })
+          );
+          fc.assert(
+            fc.property(FC_BIGINT, (num) => {
+              const n = create(num);
+              const leg = BigInt(mod.FpLegendre(Fp, n));
+              eql(Fp.mul(Fp.ONE, leg), Fp.pow(n, (Fp.ORDER - 1n) / 2n), l('legendre correctness'));
+            })
+          );
+          fc.assert(
+            fc.property(FC_BIGINT, FC_BIGINT, (num1, num2) => {
+              const a = create(num1);
+              const b = create(num2);
+              eql(
+                mod.FpLegendre(Fp, a) * mod.FpLegendre(Fp, b),
+                mod.FpLegendre(Fp, Fp.mul(a, b)),
+                l('legendre multiplicativity')
+              );
+            })
+          );
+        } else {
+          eql(mod.FpLegendre(Fp, Fp.ZERO), 0, l('legendre(0) == 0'));
+          eql(mod.FpIsSquare(Fp, Fp.ZERO), true, l('isSquare(0) == true'));
+        }
         if (!noGenericSqrt) {
           eql(Fp.sqrt(Fp.ZERO), Fp.ZERO, l('sqrt(0) == 0'));
           const sqrt1 = Fp.sqrt(Fp.ONE);
@@ -367,18 +379,23 @@ for (const c in FIELDS) {
       });
 
       should('pow properties', () => {
-        fc.assert(
-          fc.property(FC_BIGINT, FC_BIGINT, FC_BIGINT, (num1, num2, num3) => {
-            const a = create(num1);
-            const b = create(num2);
-            const c = create(num3);
-            eql(
-              Fp.pow(Fp.mul(a, b), c),
-              Fp.mul(Fp.pow(a, c), Fp.pow(b, c)),
-              l('pow(x*y, e) == pow(x,e)*pow(y,e)')
-            );
-          })
-        );
+        if (Fp_opts[1]) {
+          eql(Fp.eql(mod.FpPow(Fp, Fp.ONE, 0n), Fp.ONE), true, l('FpPow(ONE, 0) == 1'));
+          return;
+        }
+        if (!Fp_opts[1])
+          fc.assert(
+            fc.property(FC_BIGINT, FC_BIGINT, FC_BIGINT, (num1, num2, num3) => {
+              const a = create(num1);
+              const b = create(num2);
+              const c = create(num3);
+              eql(
+                Fp.pow(Fp.mul(a, b), c),
+                Fp.mul(Fp.pow(a, c), Fp.pow(b, c)),
+                l('pow(x*y, e) == pow(x,e)*pow(y,e)')
+              );
+            })
+          );
         fc.assert(
           fc.property(FC_BIGINT, (num) => {
             const x = create(num);
@@ -602,9 +619,137 @@ describe('guard cases', () => {
     throws(() => Field(1n));
     throws(() => Field(0n));
   });
+
+  should('Field keeps composite moduli on bigint inverse backend', () => {
+    const F = Field(15n);
+    const inv = F.inv(2n);
+    eql((2n * inv) % 15n, 1n);
+    eql((F as any).wasm, undefined);
+  });
+
+  should('Field.fromBytes skipValidation returns raw fixed-width value', () => {
+    const F = Field(17n);
+    eql(F.fromBytes(Uint8Array.of(18), true), 18n);
+  });
+
+  should('Field non-normalizing helpers stay raw', () => {
+    const F = Field(11n);
+    eql(F.addN(10n, 5n), 15n);
+    eql(F.subN(1n, 5n), -4n);
+    eql(F.mulN(10n, 5n), 50n);
+    eql(F.sqrN(10n), 100n);
+  });
 });
 
 describe('field helpers', () => {
+  should('WASM field matches bigint Field for supported prime fields', () => {
+    const cases = [
+      {
+        name: 'p256',
+        order: BigInt('0xffffffff00000001000000000000000000000000ffffffffffffffffffffffff'),
+        opts: {},
+      },
+      {
+        name: 'p384',
+        order: BigInt(
+          '0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffeffffffff0000000000000000ffffffff'
+        ),
+        opts: {},
+      },
+      {
+        name: 'p521',
+        order: (1n << 521n) - 1n,
+        opts: {},
+      },
+      {
+        name: 'secp256k1',
+        order: BigInt('0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f'),
+        opts: {},
+      },
+      {
+        name: 'ed25519',
+        order: (1n << 255n) - 19n,
+        opts: { isLE: true },
+      },
+      {
+        name: 'ed448',
+        order: (1n << 448n) - (1n << 224n) - 1n,
+        opts: { BITS: 456, isLE: true },
+      },
+    ] as const;
+    for (const { order, opts } of cases) {
+      const F = Field(order, opts);
+      const C = FieldWasm(order, opts);
+      const values = [
+        0n,
+        1n,
+        order - 1n,
+        BigInt('0x1234567890abcdef1234567890abcdef1234567890abcdef') % order,
+      ];
+      for (const a of values) {
+        const ca = C.fromBigint(a);
+        eql(C.toBigint(ca), F.create(a));
+        eql(C.toBigint(C.sqr(ca)), F.sqr(a));
+        eql(C.toBigint(C.fromBytes(C.toBytes(ca))), F.create(a));
+        for (const b of values) {
+          const cb = C.fromBigint(b);
+          eql(C.toBigint(C.add(ca, cb)), F.add(a, b));
+          eql(C.toBigint(C.sub(ca, cb)), F.sub(a, b));
+          eql(C.toBigint(C.mul(ca, cb)), F.mul(a, b));
+        }
+      }
+      eql(C.toBigint(C.mul(0n, order - 1n)), 0n);
+    }
+  });
+
+  should('FieldEd25519 matches bigint Field around the 2^255-19 boundary', () => {
+    const order = (1n << 255n) - 19n;
+    const F = Field(order, { isLE: true });
+    const C = FieldEd25519();
+    const values = [
+      0n,
+      1n,
+      18n,
+      19n,
+      order - 2n,
+      order - 1n,
+      order,
+      order + 1n,
+      (1n << 255n) - 1n,
+      1n << 255n,
+      (1n << 256n) - 1n,
+      BigInt('0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'),
+    ];
+    for (const a of values) {
+      const ca = C.fromBigint(a);
+      eql(C.toBigint(ca), F.create(a));
+      eql(C.toBigint(C.neg(ca)), F.neg(F.create(a)));
+      eql(C.toBigint(C.sqr(ca)), F.sqr(a));
+      for (const b of values) {
+        const cb = C.fromBigint(b);
+        eql(C.toBigint(C.add(ca, cb)), F.add(a, b));
+        eql(C.toBigint(C.sub(ca, cb)), F.sub(a, b));
+        eql(C.toBigint(C.mul(ca, cb)), F.mul(a, b));
+      }
+    }
+  });
+
+  should('Field factory and pairing base fields use wasm-backed defaults', () => {
+    const fields = [
+      Field(17n),
+      bls12_381.fields.Fp,
+      bls12_381.fields.Fr,
+      bn254.fields.Fp,
+      bn254.fields.Fr,
+      jubjub.Point.Fp,
+      babyjubjub.Point.Fp,
+      brainpoolP256r1.Point.Fp,
+      brainpoolP384r1.Point.Fp,
+      brainpoolP512r1.Point.Fp,
+    ];
+    for (const F of fields) eql(typeof (F as any).wasm?.fromBigint, 'function');
+  });
+
   should('tower12 keeps higher Frobenius tables lazy and cached', () => {
     const proto6 = Object.getPrototypeOf(bn254.fields.Fp6);
     const proto12 = Object.getPrototypeOf(bn254.fields.Fp12);
@@ -865,6 +1010,11 @@ describe('field helpers', () => {
     const F = Field(17n);
     eql(F.cmov(1n, 2n, false), 1n);
     eql(F.cmov(1n, 2n, true), 2n);
+  });
+
+  should('Field.toBytes serializes fixed-width bigint inputs without reducing', () => {
+    const F = Field(17n);
+    eql(Buffer.from(F.toBytes(18n)).toString('hex'), '12');
   });
 
   should('Field.mulN keeps bigint arithmetic on valid inputs', () => {

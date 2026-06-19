@@ -21,6 +21,7 @@ import {
   type TArg,
   type TRet,
 } from '../utils.ts';
+import { FieldWasmBigint } from './field-wasm.ts';
 
 // Numbers aren't used in x25519 / x448 builds
 // prettier-ignore
@@ -30,6 +31,60 @@ const _3n = /* @__PURE__ */ BigInt(3), _4n = /* @__PURE__ */ BigInt(4), _5n = /*
 // prettier-ignore
 const _7n = /* @__PURE__ */ BigInt(7), _8n = /* @__PURE__ */ BigInt(8), _9n = /* @__PURE__ */ BigInt(9);
 const _16n = /* @__PURE__ */ BigInt(16);
+const MAX_GENERIC_SQRT_BITS = 1100;
+const PRIME_CACHE = new Map<bigint, boolean>();
+const PRIME_SMALL = [2n, 3n, 5n, 7n, 11n, 13n, 17n, 19n, 23n, 29n, 31n, 37n];
+const PRIME_MR_BASES = [2n, 3n, 5n, 7n, 11n, 13n, 17n, 19n];
+
+function powMod(num: bigint, power: bigint, modulo: bigint): bigint {
+  let res = _1n;
+  num = mod(num, modulo);
+  while (power > _0n) {
+    if (power & _1n) res = mod(res * num, modulo);
+    num = mod(num * num, modulo);
+    power >>= _1n;
+  }
+  return res;
+}
+
+function isProbablyPrime(num: bigint): boolean {
+  let cached = PRIME_CACHE.get(num);
+  if (cached !== undefined) return cached;
+  let res = true;
+  if (num < _2n) res = false;
+  for (const p of PRIME_SMALL) {
+    if (!res) break;
+    if (num === p) break;
+    if (num % p === _0n) res = false;
+  }
+  if (res && !PRIME_SMALL.includes(num)) {
+    let d = num - _1n;
+    let s = 0;
+    while ((d & _1n) === _0n) {
+      d >>= _1n;
+      s++;
+    }
+    for (const a of PRIME_MR_BASES) {
+      if (a >= num - _2n) continue;
+      let x = powMod(a, d, num);
+      if (x === _1n || x === num - _1n) continue;
+      let witness = true;
+      for (let r = 1; r < s; r++) {
+        x = mod(x * x, num);
+        if (x === num - _1n) {
+          witness = false;
+          break;
+        }
+      }
+      if (witness) {
+        res = false;
+        break;
+      }
+    }
+  }
+  PRIME_CACHE.set(num, res);
+  return res;
+}
 
 /**
  * @param a - Dividend value.
@@ -297,6 +352,10 @@ export function tonelliShanks(P: bigint): TRet<<T>(Fp: IField<T>, n: T) => T> {
  * ```
  */
 export function FpSqrt(P: bigint): TRet<<T>(Fp: IField<T>, n: T) => T> {
+  if (bitLen(P) > MAX_GENERIC_SQRT_BITS)
+    return ((_: IField<unknown>, __: unknown) => {
+      throw new Error('Cannot find square root');
+    }) as TRet<<T>(Fp: IField<T>, n: T) => T>;
   // P ≡ 3 (mod 4) => √n = n^((P+1)/4)
   if (P % _4n === _3n) return sqrt3mod4 as TRet<<T>(Fp: IField<T>, n: T) => T>;
   // P ≡ 5 (mod 8) => Atkin algorithm, page 10 of https://eprint.iacr.org/2012/685.pdf
@@ -664,6 +723,9 @@ export function FpDiv<T>(Fp: TArg<IField<T>>, lhs: T, rhs: T | bigint): T {
 export function FpLegendre<T>(Fp: TArg<IField<T>>, n: T): -1 | 0 | 1 {
   validateField(Fp);
   const F = Fp as IField<T>;
+  if (F.is0(n)) return 0;
+  if (bitLen(F.ORDER) > MAX_GENERIC_SQRT_BITS)
+    throw new Error('Legendre is not supported for this field');
   // We can use 3rd argument as optional cache of this value
   // but seems unneeded for now. The operation is very fast.
   const p1mod2 = (F.ORDER - _1n) / _2n;
@@ -923,6 +985,14 @@ Object.freeze(_Field.prototype);
  * ```
  */
 export function Field(ORDER: bigint, opts: FieldOpts = {}): TRet<Readonly<FpField>> {
+  const bits = nLength(ORDER, opts?.BITS).nBitLength;
+  if (
+    (ORDER & _1n) === _1n &&
+    bits <= 544 &&
+    typeof opts?.sqrt !== 'function' &&
+    isProbablyPrime(ORDER)
+  )
+    return FieldWasmBigint(ORDER, opts) as unknown as TRet<Readonly<FpField>>;
   return new _Field(ORDER, opts);
 }
 

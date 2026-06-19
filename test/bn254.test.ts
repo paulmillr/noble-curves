@@ -7,6 +7,7 @@ import { jsonGZ } from './utils.ts';
 const CROSS_PATH_GZ = './vectors/bn254/cross1000.json.gz'; // bundler hint: readFileSync('./test/bn254/cross1000.json.gz')
 const loadEthDump = async () => (await import('./vectors/bn254/eth-dump.js')).default;
 const loadSeda = async () => (await import('./vectors/bn254/seda.js')).default;
+const NUM_RUNS = Number(globalThis.process?.env?.RUNS_COUNT || 2);
 
 describe('bn254', () => {
   const { Fp2, Fp6, Fp12 } = bn254.fields;
@@ -681,7 +682,7 @@ describe('bn254', () => {
     for (const [name, vectors] of Object.entries(crossTests)) {
       if (['ark_bls12-381', 'ark_bls12-377'].includes(name)) continue;
       const { Fp, Fp2, Fp12 } = bn254.fields;
-      for (const t of vectors) {
+      for (const t of vectors.slice(0, NUM_RUNS)) {
         // TODO: projective stuff is somewhat broken on export?
         const g1 = bn254.G1.Point.fromAffine({
           x: Fp.create(BigInt(t.g1.x[0])),

@@ -342,6 +342,14 @@ export type WeierstrassExtraOpts<T> = Partial<{
     point: WeierstrassPoint<T>,
     isCompressed: boolean
   ) => TRet<Uint8Array>;
+  /** Use faster Jacobian-coordinate formulas. Intended for a=0 and a=-3 curves. */
+  jacobian: boolean;
+  /** Optional private WASM-backed scalar multiplication override. */
+  wasmMultiply: (
+    point: WeierstrassPoint<T>,
+    scalar: bigint,
+    opts: Readonly<{ unsafe: boolean; isBase: boolean }>
+  ) => readonly [T, T, T] | undefined;
 }>;
 
 /**
@@ -692,13 +700,16 @@ export function weierstrass<T>(
       isTorsionFree: 'function',
       fromBytes: 'function',
       toBytes: 'function',
+      jacobian: 'boolean',
       endo: 'object',
+      wasmMultiply: 'function',
     }
   );
 
   // Snapshot constructor-time flags whose later mutation would otherwise change
   // validity semantics of an already-built point type.
   const { endo, allowInfinityPoint } = extraOpts;
+  const jacobian = extraOpts.jacobian === true;
   if (endo) {
     if (!Fp.is0(CURVE.a) || typeof endo.beta !== 'bigint' || !Array.isArray(endo.basises)) {
       throw new Error('invalid endo: expected "beta": bigint and "basises": array');
@@ -789,6 +800,14 @@ export function weierstrass<T>(
     const right = weierstrassEquation(x); // x³ + ax + b
     return Fp.eql(left, right);
   }
+  const FpToBigint = (Fp as unknown as { toBigint?: (num: T) => bigint }).toBigint;
+  const FpFromBigint = (Fp as unknown as { fromBigint?: (num: bigint) => T }).fromBigint;
+  const fieldToPublic = FpToBigint
+    ? (num: T): T => FpToBigint.call(Fp, num) as unknown as T
+    : (num: T): T => num;
+  const fieldFromPublic = FpFromBigint
+    ? (num: T): T => (typeof num === 'bigint' ? (FpFromBigint.call(Fp, num) as unknown as T) : num)
+    : (num: T): T => num;
 
   // Keep constructor-time generator validation cheap: callers are responsible for supplying the
   // correct prime-order base point, while eager subgroup checks here would slow heavy module imports.
@@ -800,11 +819,17 @@ export function weierstrass<T>(
   const _4a3 = Fp.mul(Fp.pow(CURVE.a, _3n), _4n);
   const _27b2 = Fp.mul(Fp.sqr(CURVE.b), BigInt(27));
   if (Fp.is0(Fp.add(_4a3, _27b2))) throw new Error('bad curve params: a or b');
+  const FpZERO = Fp.ZERO;
+  const FpONE = Fp.ONE;
+  const aIs0 = Fp.is0(CURVE.a);
+  const aIsNeg3 = jacobian && !aIs0 ? Fp.is0(Fp.add(CURVE.a, _3n as unknown as T)) : false;
+  if (jacobian && !(aIs0 || aIsNeg3)) throw new Error('jacobian formulas require a=0 or a=-3');
+  const b3 = Fp.mul(CURVE.b, _3n);
 
   /** Asserts coordinate is valid: 0 <= n < Fp.ORDER. */
   function acoord(title: string, n: T, banZero = false) {
     if (!Fp.isValid(n) || (banZero && Fp.is0(n))) throw new Error(`bad point coordinate ${title}`);
-    return n;
+    return fieldFromPublic(n);
   }
 
   function aprjpoint(other: unknown): asserts other is Point {
@@ -836,9 +861,9 @@ export function weierstrass<T>(
    */
   class Point implements WeierstrassPoint<T> {
     // base / generator point
-    static readonly BASE = new Point(CURVE.Gx, CURVE.Gy, Fp.ONE);
+    static readonly BASE = new Point(CURVE.Gx, CURVE.Gy, FpONE);
     // zero / infinity / identity point
-    static readonly ZERO = new Point(Fp.ZERO, Fp.ONE, Fp.ZERO); // 0, 1, 0
+    static readonly ZERO = new Point(FpZERO, FpONE, FpZERO); // 0, 1, 0
     // math field
     static readonly Fp = Fp;
     // scalar field
@@ -870,7 +895,7 @@ export function weierstrass<T>(
       if (p instanceof Point) throw new Error('projective point not allowed');
       // (0, 0) would've produced (0, 0, 1) - instead, we need (0, 1, 0)
       if (Fp.is0(x) && Fp.is0(y)) return Point.ZERO;
-      return new Point(x, y, Fp.ONE);
+      return new Point(x, y, FpONE);
     }
 
     static fromBytes(bytes: TArg<Uint8Array>): Point {
@@ -911,7 +936,7 @@ export function weierstrass<T>(
         // In BLS, ZERO can be serialized, so we allow it.
         // Keep the accepted infinity encoding canonical: projective-equivalent (X, Y, 0) points
         // like (1, 1, 0) compare equal to ZERO, but only (0, 1, 0) should pass this guard.
-        if (extraOpts.allowInfinityPoint && Fp.is0(p.X) && Fp.eql(p.Y, Fp.ONE) && Fp.is0(p.Z))
+        if (extraOpts.allowInfinityPoint && Fp.is0(p.X) && Fp.eql(p.Y, FpONE) && Fp.is0(p.Z))
           return;
         throw new Error('bad point: ZERO');
       }
@@ -933,6 +958,14 @@ export function weierstrass<T>(
       aprjpoint(other);
       const { X: X1, Y: Y1, Z: Z1 } = this;
       const { X: X2, Y: Y2, Z: Z2 } = other;
+      if (jacobian) {
+        const Z1Z1 = Fp.sqr(Z1);
+        const Z2Z2 = Fp.sqr(Z2);
+        const U1 = Fp.eql(Fp.mul(X1, Z2Z2), Fp.mul(X2, Z1Z1));
+        const S1 = Fp.mul(Fp.mul(Y1, Z2), Z2Z2);
+        const S2 = Fp.mul(Fp.mul(Y2, Z1), Z1Z1);
+        return U1 && Fp.eql(S1, S2);
+      }
       const U1 = Fp.eql(Fp.mul(X1, Z2), Fp.mul(X2, Z1));
       const U2 = Fp.eql(Fp.mul(Y1, Z2), Fp.mul(Y2, Z1));
       return U1 && U2;
@@ -948,8 +981,43 @@ export function weierstrass<T>(
     // https://eprint.iacr.org/2015/1060, algorithm 3
     // Cost: 8M + 3S + 3*a + 2*b3 + 15add.
     double() {
-      const { a, b } = CURVE;
-      const b3 = Fp.mul(b, _3n);
+      if (jacobian) {
+        const { X: X1, Y: Y1, Z: Z1 } = this;
+        if (Fp.is0(Z1) || Fp.is0(Y1)) return Point.ZERO;
+        if (aIs0) {
+          const A = Fp.sqr(X1);
+          const B = Fp.sqr(Y1);
+          const C = Fp.sqr(B);
+          let D = Fp.sqr(Fp.add(X1, B));
+          D = Fp.sub(Fp.sub(D, A), C);
+          D = Fp.add(D, D);
+          const E = Fp.add(Fp.add(A, A), A);
+          const F = Fp.sqr(E);
+          const X3 = Fp.sub(Fp.sub(F, D), D);
+          let Y3 = Fp.sub(D, X3);
+          Y3 = Fp.mul(E, Y3);
+          const fourC = Fp.add(Fp.add(C, C), Fp.add(C, C));
+          Y3 = Fp.sub(Y3, Fp.add(fourC, fourC));
+          const Z3 = Fp.mul(Fp.add(Y1, Y1), Z1);
+          return new Point(X3, Y3, Z3);
+        } else {
+          const delta = Fp.sqr(Z1);
+          const gamma = Fp.sqr(Y1);
+          const beta = Fp.mul(X1, gamma);
+          let alpha = Fp.mul(Fp.sub(X1, delta), Fp.add(X1, delta));
+          alpha = Fp.add(Fp.add(alpha, alpha), alpha);
+          const fourBeta = Fp.add(Fp.add(beta, beta), Fp.add(beta, beta));
+          const X3 = Fp.sub(Fp.sqr(alpha), Fp.add(fourBeta, fourBeta));
+          const gamma2 = Fp.sqr(gamma);
+          let Y3 = Fp.sub(fourBeta, X3);
+          Y3 = Fp.mul(alpha, Y3);
+          const fourGamma2 = Fp.add(Fp.add(gamma2, gamma2), Fp.add(gamma2, gamma2));
+          Y3 = Fp.sub(Y3, Fp.add(fourGamma2, fourGamma2));
+          const Z3 = Fp.sub(Fp.sub(Fp.sqr(Fp.add(Y1, Z1)), gamma), delta);
+          return new Point(X3, Y3, Z3);
+        }
+      }
+      const { a } = CURVE;
       const { X: X1, Y: Y1, Z: Z1 } = this;
       let X3 = Fp.ZERO, Y3 = Fp.ZERO, Z3 = Fp.ZERO; // prettier-ignore
       let t0 = Fp.mul(X1, X1); // step 1
@@ -959,7 +1027,7 @@ export function weierstrass<T>(
       t3 = Fp.add(t3, t3); // step 5
       Z3 = Fp.mul(X1, Z1);
       Z3 = Fp.add(Z3, Z3);
-      X3 = Fp.mul(a, Z3);
+      X3 = aIs0 ? FpZERO : Fp.mul(a, Z3);
       Y3 = Fp.mul(b3, t2);
       Y3 = Fp.add(X3, Y3); // step 10
       X3 = Fp.sub(t1, Y3);
@@ -967,10 +1035,15 @@ export function weierstrass<T>(
       Y3 = Fp.mul(X3, Y3);
       X3 = Fp.mul(t3, X3);
       Z3 = Fp.mul(b3, Z3); // step 15
-      t2 = Fp.mul(a, t2);
-      t3 = Fp.sub(t0, t2);
-      t3 = Fp.mul(a, t3);
-      t3 = Fp.add(t3, Z3);
+      if (aIs0) {
+        t2 = FpZERO;
+        t3 = Z3;
+      } else {
+        t2 = Fp.mul(a, t2);
+        t3 = Fp.sub(t0, t2);
+        t3 = Fp.mul(a, t3);
+        t3 = Fp.add(t3, Z3);
+      }
       Z3 = Fp.add(t0, t0); // step 20
       t0 = Fp.add(Z3, t0);
       t0 = Fp.add(t0, t2);
@@ -992,11 +1065,52 @@ export function weierstrass<T>(
     // Cost: 12M + 0S + 3*a + 3*b3 + 23add.
     add(other: WeierstrassPoint<T>): Point {
       aprjpoint(other);
+      if (jacobian) {
+        const p = this;
+        const q = other as Point;
+        if (Fp.is0(p.Z)) return q;
+        if (Fp.is0(q.Z)) return p;
+        const { X: X1, Y: Y1, Z: Z1 } = p;
+        const { X: X2, Y: Y2, Z: Z2 } = q;
+        let U2: T, S2: T, Z3: T;
+        if (Fp.eql(Z2, FpONE)) {
+          const Z1Z1 = Fp.sqr(Z1);
+          U2 = Fp.mul(X2, Z1Z1);
+          S2 = Fp.mul(Fp.mul(Y2, Z1), Z1Z1);
+          Z3 = Z1;
+        } else {
+          const Z1Z1 = Fp.sqr(Z1);
+          const Z2Z2 = Fp.sqr(Z2);
+          const U1 = Fp.mul(X1, Z2Z2);
+          U2 = Fp.mul(X2, Z1Z1);
+          const S1 = Fp.mul(Fp.mul(Y1, Z2), Z2Z2);
+          S2 = Fp.mul(Fp.mul(Y2, Z1), Z1Z1);
+          const H = Fp.sub(U2, U1);
+          const R = Fp.sub(S2, S1);
+          if (Fp.is0(H)) return Fp.is0(R) ? p.double() : Point.ZERO;
+          const HH = Fp.sqr(H);
+          const HHH = Fp.mul(H, HH);
+          const V = Fp.mul(U1, HH);
+          const X3 = Fp.sub(Fp.sub(Fp.sqr(R), HHH), Fp.add(V, V));
+          const Y3 = Fp.sub(Fp.mul(R, Fp.sub(V, X3)), Fp.mul(S1, HHH));
+          Z3 = Fp.mul(Fp.mul(Z1, Z2), H);
+          return new Point(X3, Y3, Z3);
+        }
+        const H = Fp.sub(U2, X1);
+        const R = Fp.sub(S2, Y1);
+        if (Fp.is0(H)) return Fp.is0(R) ? p.double() : Point.ZERO;
+        const HH = Fp.sqr(H);
+        const HHH = Fp.mul(H, HH);
+        const V = Fp.mul(X1, HH);
+        const X3 = Fp.sub(Fp.sub(Fp.sqr(R), HHH), Fp.add(V, V));
+        const Y3 = Fp.sub(Fp.mul(R, Fp.sub(V, X3)), Fp.mul(Y1, HHH));
+        Z3 = Fp.mul(Z3, H);
+        return new Point(X3, Y3, Z3);
+      }
       const { X: X1, Y: Y1, Z: Z1 } = this;
       const { X: X2, Y: Y2, Z: Z2 } = other;
       let X3 = Fp.ZERO, Y3 = Fp.ZERO, Z3 = Fp.ZERO; // prettier-ignore
       const a = CURVE.a;
-      const b3 = Fp.mul(CURVE.b, _3n);
       let t0 = Fp.mul(X1, X2); // step 1
       let t1 = Fp.mul(Y1, Y2);
       let t2 = Fp.mul(Z1, Z2);
@@ -1015,7 +1129,7 @@ export function weierstrass<T>(
       t5 = Fp.mul(t5, X3);
       X3 = Fp.add(t1, t2);
       t5 = Fp.sub(t5, X3);
-      Z3 = Fp.mul(a, t4);
+      Z3 = aIs0 ? FpZERO : Fp.mul(a, t4);
       X3 = Fp.mul(b3, t2); // step 20
       Z3 = Fp.add(X3, Z3);
       X3 = Fp.sub(t1, Z3);
@@ -1023,11 +1137,11 @@ export function weierstrass<T>(
       Y3 = Fp.mul(X3, Z3);
       t1 = Fp.add(t0, t0); // step 25
       t1 = Fp.add(t1, t0);
-      t2 = Fp.mul(a, t2);
+      t2 = aIs0 ? FpZERO : Fp.mul(a, t2);
       t4 = Fp.mul(b3, t4);
       t1 = Fp.add(t1, t2);
       t2 = Fp.sub(t0, t2); // step 30
-      t2 = Fp.mul(a, t2);
+      t2 = aIs0 ? FpZERO : Fp.mul(a, t2);
       t4 = Fp.add(t4, t2);
       t0 = Fp.mul(t1, t4);
       Y3 = Fp.add(Y3, t0);
@@ -1048,7 +1162,7 @@ export function weierstrass<T>(
     }
 
     is0(): boolean {
-      return this.equals(Point.ZERO);
+      return Fp.is0(this.Z);
     }
 
     /**
@@ -1066,6 +1180,11 @@ export function weierstrass<T>(
       // In key/signature-style callers, those values usually mean broken hash/scalar plumbing,
       // and failing closed is safer than silently producing the identity point.
       if (!Fn.isValidNot0(scalar)) throw new RangeError('invalid scalar: out of range'); // 0 is invalid
+      const wasm = extraOpts.wasmMultiply?.(this, scalar, {
+        unsafe: false,
+        isBase: this === Point.BASE,
+      });
+      if (wasm) return new Point(wasm[0], wasm[1], wasm[2]);
       let point: Point, fake: Point; // Fake point is used to const-time mult
       const mul = (n: bigint) => wnaf.cached(this, n, (p) => normalizeZ(Point, p));
       /** See docs for {@link EndomorphismOpts} */
@@ -1098,6 +1217,8 @@ export function weierstrass<T>(
       if (!Fn.isValid(sc)) throw new RangeError('invalid scalar: out of range'); // 0 is valid
       if (sc === _0n || p.is0()) return Point.ZERO; // 0
       if (sc === _1n) return p; // 1
+      const wasm = extraOpts.wasmMultiply?.(p, sc, { unsafe: true, isBase: p === Point.BASE });
+      if (wasm) return new Point(wasm[0], wasm[1], wasm[2]);
       if (wnaf.hasCache(this)) return this.multiply(sc); // precomputes
       // We don't have method for double scalar multiplication (aP + bQ):
       // Even with using Strauss-Shamir trick, it's 35% slower than naïve mul+add.
@@ -1122,17 +1243,26 @@ export function weierstrass<T>(
         throw new RangeError('"invertedZ" expected valid field element');
       const { X, Y, Z } = p;
       // Fast-path for normalized points
-      if (Fp.eql(Z, Fp.ONE)) return { x: X, y: Y };
+      if (Fp.eql(Z, FpONE)) return { x: fieldToPublic(X), y: fieldToPublic(Y) };
       const is0 = p.is0();
       // If invZ was 0, we return zero point. However we still want to execute
       // all operations, so we replace invZ with a random number, 1.
-      if (iz == null) iz = is0 ? Fp.ONE : Fp.inv(Z);
+      if (iz == null) iz = is0 ? FpONE : Fp.inv(Z);
+      if (jacobian) {
+        const iz2 = Fp.sqr(iz);
+        const x = Fp.mul(X, iz2);
+        const y = Fp.mul(Y, Fp.mul(iz, iz2));
+        const zz = Fp.mul(Z, iz);
+        if (is0) return { x: fieldToPublic(Fp.ZERO), y: fieldToPublic(Fp.ZERO) };
+        if (!Fp.eql(zz, FpONE)) throw new Error('invZ was invalid');
+        return { x: fieldToPublic(x), y: fieldToPublic(y) };
+      }
       const x = Fp.mul(X, iz);
       const y = Fp.mul(Y, iz);
       const zz = Fp.mul(Z, iz);
-      if (is0) return { x: Fp.ZERO, y: Fp.ZERO };
-      if (!Fp.eql(zz, Fp.ONE)) throw new Error('invZ was invalid');
-      return { x, y };
+      if (is0) return { x: fieldToPublic(Fp.ZERO), y: fieldToPublic(Fp.ZERO) };
+      if (!Fp.eql(zz, FpONE)) throw new Error('invZ was invalid');
+      return { x: fieldToPublic(x), y: fieldToPublic(y) };
     }
 
     /**

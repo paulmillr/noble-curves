@@ -14,6 +14,7 @@
     "@noble/hashes": "2.2.0"
   },
   "devDependencies": {
+    "@awasm/compiler": "^0.1.3",
     "@paulmillr/jsbt": "0.5.2",
     "@types/node": "25.3.0",
     "fast-check": "4.2.0",
@@ -40,6 +41,7 @@
     "./abstract/curve.js": "./abstract/curve.js",
     "./abstract/edwards.js": "./abstract/edwards.js",
     "./abstract/fft.js": "./abstract/fft.js",
+    "./abstract/field-wasm.js": "./abstract/field-wasm.js",
     "./abstract/frost.js": "./abstract/frost.js",
     "./abstract/hash-to-curve.js": "./abstract/hash-to-curve.js",
     "./abstract/modular.js": "./abstract/modular.js",

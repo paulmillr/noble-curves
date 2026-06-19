@@ -56,6 +56,12 @@ describe('ed448', () => {
   ed448.Point.BASE.precompute(4, false);
   const Point = ed.Point;
 
+  should('uses wasm-backed fields by default', () => {
+    eql(typeof (Point.Fp as any).wasm?.fromBigint, 'function');
+    eql(typeof (Point.Fn as any).wasm?.fromBigint, 'function');
+    eql(typeof (E448.Fp as any).wasm?.fromBigint, 'function');
+  });
+
   should(`Basic, decompress, strict verify defaults, and RFC8032`, () => {
     const G1 = Point.BASE.toAffine();
     eql(

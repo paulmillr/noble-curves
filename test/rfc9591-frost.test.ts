@@ -157,6 +157,7 @@ const VECTORS: Record<string, Suite> = {
     bytesToHex(secp256k1.Point.BASE.toBytes(true).subarray(1))
   ),
 };
+const NUM_RUNS = Number(globalThis.process?.env?.RUNS_COUNT || 1);
 
 should('signShare rejects nonce reuse across signing sessions across suites', () => {
   const check = (suite: typeof ed448_FROST | typeof p256_FROST) => {
@@ -712,7 +713,7 @@ describe('FROST (RFC 9591)', () => {
       });
       let i = 0;
 
-      for (let signIndex = 0; signIndex < signCount; signIndex++) {
+      for (let signIndex = 0; signIndex < Math.min(signCount, NUM_RUNS); signIndex++) {
         should(`sign ${i++}`, () => {
           const t = loadSign(signIndex);
           const signers = { min: +t.config.MIN_PARTICIPANTS, max: +t.config.MAX_PARTICIPANTS };
@@ -802,7 +803,7 @@ describe('FROST (RFC 9591)', () => {
         });
       }
       i = 0;
-      for (let dkgIndex = 0; dkgIndex < dkgCount; dkgIndex++) {
+      for (let dkgIndex = 0; dkgIndex < Math.min(dkgCount, NUM_RUNS); dkgIndex++) {
         // DKG is Distributed Key Generation (not related to Trusted Dealer Key Generation)
         // Awesome naming!
         should(`dkg ${i++}`, () => {

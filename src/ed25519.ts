@@ -19,6 +19,8 @@ import {
   type EdwardsPoint,
   type EdwardsPointCons,
 } from './abstract/edwards.ts';
+import { FieldWasmBigint } from './abstract/field-wasm.ts';
+import { FieldEd25519 } from './abstract/field-ed25519.ts';
 import { createFROST, type FROST } from './abstract/frost.ts';
 import {
   _DST_scalar,
@@ -61,6 +63,12 @@ const ed25519_CURVE: EdwardsOpts = /* @__PURE__ */ (() => ({
   Gx: BigInt('0x216936d3cd6e53fec0a4e231fdd6dc5c692cc7609525a7b2c9562d608f25d51a'),
   Gy: BigInt('0x6666666666666666666666666666666666666666666666666666666666666658'),
 }))();
+
+// Public field alias stays stricter than the RFC 8032 Appendix A sample code:
+// `Fp.inv(0)` throws instead of returning `0`.
+const Fp = /* @__PURE__ */ (() => FieldWasmBigint(ed25519_CURVE_p, { isLE: true }))();
+const Fn = /* @__PURE__ */ (() => FieldWasmBigint(ed25519_CURVE.n, { isLE: true }))();
+const FpPoint = /* @__PURE__ */ (() => FieldEd25519())();
 
 function ed25519_pow_2_252_3(x: bigint) {
   // prettier-ignore
@@ -120,11 +128,13 @@ function uvRatio(u: bigint, v: bigint): { isValid: boolean; value: bigint } {
   return { isValid: useRoot1 || useRoot2, value: x };
 }
 
-const ed25519_Point = /* @__PURE__ */ edwards(ed25519_CURVE, { uvRatio });
-// Public field alias stays stricter than the RFC 8032 Appendix A sample code:
-// `Fp.inv(0)` throws instead of returning `0`.
-const Fp = /* @__PURE__ */ (() => ed25519_Point.Fp)();
-const Fn = /* @__PURE__ */ (() => ed25519_Point.Fn)();
+const ed25519_Point = /* @__PURE__ */ edwards(ed25519_CURVE, {
+  Fp: FpPoint as any,
+  FpPublic: Fp,
+  Fn,
+  uvRatio,
+  precompute: 11,
+});
 
 // RFC 8032 `dom2` helper for ctx/ph variants only. Plain Ed25519 keeps the
 // empty-domain path in `ed()` and would be wrong if routed through this helper.
@@ -247,6 +257,7 @@ export const x25519: TRet<MontgomeryECDH> = /* @__PURE__ */ (() => {
   const P = ed25519_CURVE_p;
   return montgomery({
     P,
+    Fp: FpPoint,
     type: 'x25519',
     powPminus2: (x: bigint): bigint => {
       // x^(p-2) aka x^(2^255-21)

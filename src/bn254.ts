@@ -200,6 +200,7 @@ const bn254_G1 = /* @__PURE__ */ weierstrass(bn254_G1_CURVE, {
   // even though it is not an affine curve point, and `fromAffine()` stays lazy:
   // adversarial inputs still need `assertValidity()`.
   allowInfinityPoint: true,
+  jacobian: true,
 });
 const bn254_G2 = /* @__PURE__ */ weierstrass(bn254_G2_CURVE, {
   Fp: Fp2,
@@ -207,6 +208,7 @@ const bn254_G2 = /* @__PURE__ */ weierstrass(bn254_G2_CURVE, {
   // Ethereum encodes infinity as `((0, 0), (0, 0))`, so the public point API
   // accepts it even though it is not an affine curve point.
   allowInfinityPoint: true,
+  jacobian: true,
   // Optimized BN254 G2 subgroup test used to satisfy the EIP-197 order check.
   isTorsionFree: (c, P) => P.multiplyUnsafe(SIX_X_SQUARED).equals(G2psi(c, P)), // [p]P = [6X^2]P
 });

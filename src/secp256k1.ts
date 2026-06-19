@@ -16,8 +16,11 @@ import {
   type FrostSecret,
   type Nonces,
 } from './abstract/frost.ts';
+import { FieldWasm, FieldWasmBigint, type WasmField } from './abstract/field-wasm.ts';
+import { FieldSecp256k1 } from './abstract/field-secp256k1.ts';
+import { secp256k1WasmMultiply } from './abstract/secp256k1-wasm-mul.ts';
 import { createHasher, type H2CHasher, isogenyMap } from './abstract/hash-to-curve.ts';
-import { Field, mapHashToField, pow2 } from './abstract/modular.ts';
+import { mapHashToField } from './abstract/modular.ts';
 import {
   type ECDSA,
   ecdsa,
@@ -61,39 +64,29 @@ const secp256k1_ENDO: EndomorphismOpts = {
 const _0n = /* @__PURE__ */ BigInt(0);
 const _2n = /* @__PURE__ */ BigInt(2);
 
-/**
- * √n = n^((p+1)/4) for fields p = 3 mod 4. We unwrap the loop and multiply bit-by-bit.
- * (P+1n/4n).toString(2) would produce bits [223x 1, 0, 22x 1, 4x 0, 11, 00]
- */
-function sqrtMod(y: bigint): bigint {
-  const P = secp256k1_CURVE.p;
-  // prettier-ignore
-  const _3n = BigInt(3), _6n = BigInt(6), _11n = BigInt(11), _22n = BigInt(22);
-  // prettier-ignore
-  const _23n = BigInt(23), _44n = BigInt(44), _88n = BigInt(88);
-  const b2 = (y * y * y) % P; // x^3, 11
-  const b3 = (b2 * b2 * y) % P; // x^7
-  const b6 = (pow2(b3, _3n, P) * b3) % P;
-  const b9 = (pow2(b6, _3n, P) * b3) % P;
-  const b11 = (pow2(b9, _2n, P) * b2) % P;
-  const b22 = (pow2(b11, _11n, P) * b11) % P;
-  const b44 = (pow2(b22, _22n, P) * b22) % P;
-  const b88 = (pow2(b44, _44n, P) * b44) % P;
-  const b176 = (pow2(b88, _88n, P) * b88) % P;
-  const b220 = (pow2(b176, _44n, P) * b44) % P;
-  const b223 = (pow2(b220, _3n, P) * b3) % P;
-  const t1 = (pow2(b223, _23n, P) * b22) % P;
-  const t2 = (pow2(t1, _6n, P) * b2) % P;
-  const root = pow2(t2, _2n, P);
-  if (!Fpk1.eql(Fpk1.sqr(root), y)) throw new Error('Cannot find square root');
-  return root;
-}
+export const secp256k1_Fp: Readonly<WasmField> = /* @__PURE__ */ (() => FieldSecp256k1())();
+export const secp256k1_Fn: Readonly<WasmField> = /* @__PURE__ */ (() => FieldWasm(secp256k1_CURVE.n))();
 
-const Fpk1 = Field(secp256k1_CURVE.p, { sqrt: sqrtMod });
-const Pointk1 = /* @__PURE__ */ weierstrass(secp256k1_CURVE, {
-  Fp: Fpk1,
-  endo: secp256k1_ENDO,
-});
+const Fpk1 = secp256k1_Fp;
+const Fnk1 = /* @__PURE__ */ (() => FieldWasmBigint(secp256k1_CURVE.n))();
+const secp256k1_CURVE_CT = /* @__PURE__ */ (() =>
+  Object.freeze({
+    ...secp256k1_CURVE,
+    a: Fpk1.fromBigint(secp256k1_CURVE.a),
+    b: Fpk1.fromBigint(secp256k1_CURVE.b),
+    Gx: Fpk1.fromBigint(secp256k1_CURVE.Gx),
+    Gy: Fpk1.fromBigint(secp256k1_CURVE.Gy),
+  }))();
+const Pointk1: WeierstrassPointCons<bigint> = /* @__PURE__ */ weierstrass(
+  secp256k1_CURVE_CT as any,
+  {
+    Fp: Fpk1 as any,
+    Fn: Fnk1,
+    endo: secp256k1_ENDO,
+    jacobian: true,
+    wasmMultiply: secp256k1WasmMultiply,
+  } as any
+);
 
 /**
  * secp256k1 curve: ECDSA and ECDH methods.
@@ -151,12 +144,12 @@ function schnorrGetExtPubKey(priv: TArg<Uint8Array>) {
 function lift_x(x: bigint): PointType<bigint> {
   const Fp = Fpk1;
   if (!Fp.isValidNot0(x)) throw new Error('invalid x: Fail if x ≥ p');
-  const xx = Fp.create(x * x);
-  const c = Fp.create(xx * x + BigInt(7)); // Let c = x³ + 7 mod p.
-  let y = Fp.sqrt(c); // Let y = c^(p+1)/4 mod p. Same as sqrt().
+  const fx = Fp.fromBigint(x);
+  const c = Fp.add(Fp.mul(Fp.sqr(fx), fx), BigInt(7)); // Let c = x³ + 7 mod p.
+  let y = Fp.toBigint(Fp.sqrt(c)); // Let y = c^(p+1)/4 mod p. Same as sqrt().
   // Return the unique point P such that x(P) = x and
   // y(P) = y if y mod 2 = 0 or y(P) = p-y otherwise.
-  if (!hasEven(y)) y = Fp.neg(y);
+  if (!hasEven(y)) y = Fp.toBigint(Fp.neg(y));
   const p = Pointk1.fromAffine({ x, y });
   p.assertValidity();
   return p;
@@ -342,7 +335,7 @@ export const schnorr: SecpSchnorr = /* @__PURE__ */ (() => {
 // The final `1` in each denominator array is the explicit monic leading term.
 const isoMap = /* @__PURE__ */ (() =>
   isogenyMap(
-    Fpk1,
+    Fpk1 as any,
     [
       // xNum
       [
@@ -371,19 +364,26 @@ const isoMap = /* @__PURE__ */ (() =>
         '0x6484aa716545ca2cf3a70c3fa8fe337e0a3d21162f0d6299a7bf8192bfd2a76f',
         '0x0000000000000000000000000000000000000000000000000000000000000001', // LAST 1
       ],
-    ].map((i) => i.map((j) => BigInt(j))) as [bigint[], bigint[], bigint[], bigint[]]
-  ))();
+    ].map((i) => i.map((j) => Fpk1.fromBigint(BigInt(j)))) as [
+      Uint8Array[],
+      Uint8Array[],
+      Uint8Array[],
+      Uint8Array[],
+    ]
+  ) as (x: Uint8Array, y: Uint8Array) => { x: Uint8Array; y: Uint8Array })();
 // RFC 9380 §8.7 secp256k1 E' parameters for the SWU-to-isogeny pipeline below.
-let mapSWU: ((u: bigint) => { x: bigint; y: bigint }) | undefined;
+let mapSWU: ((u: Uint8Array) => { x: Uint8Array; y: Uint8Array }) | undefined;
 const getMapSWU = () =>
   mapSWU ||
-  (mapSWU = mapToCurveSimpleSWU(Fpk1, {
+  (mapSWU = mapToCurveSimpleSWU(Fpk1 as any, {
     // Building the SWU sqrt-ratio helper eagerly adds noticeable `secp256k1.js` import cost, so
     // defer it to first use; after that the cached mapper is reused directly.
-    A: BigInt('0x3f8731abdd661adca08a5558f0f5d272e953d363cb6f0e5d405447c01a444533'),
-    B: BigInt('1771'),
+    A: Fpk1.fromBigint(
+      BigInt('0x3f8731abdd661adca08a5558f0f5d272e953d363cb6f0e5d405447c01a444533')
+    ),
+    B: Fpk1.fromBigint(BigInt('1771')),
     Z: Fpk1.create(BigInt('-11')),
-  }));
+  }) as (u: Uint8Array) => { x: Uint8Array; y: Uint8Array });
 
 /**
  * Hashing / encoding to secp256k1 points / field. RFC 9380 methods.
@@ -399,7 +399,8 @@ export const secp256k1_hasher: H2CHasher<WeierstrassPointCons<bigint>> = /* @__P
     Pointk1,
     (scalars: bigint[]) => {
       const { x, y } = getMapSWU()(Fpk1.create(scalars[0]));
-      return isoMap(x, y);
+      const p = isoMap(x, y);
+      return { x: Fpk1.toBigint(p.x), y: Fpk1.toBigint(p.y) };
     },
     {
       DST: 'secp256k1_XMD:SHA-256_SSWU_RO_',

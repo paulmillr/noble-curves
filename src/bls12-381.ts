@@ -469,6 +469,7 @@ const G1_Point = weierstrass(bls12_381_CURVE_G1, {
   // Public point APIs still accept infinity, even though the Zcash proof
   // encoding rules cited above only define nonzero point encodings.
   allowInfinityPoint: true,
+  jacobian: true,
   Fn: bls12_381_Fr,
   fromBytes: g1.point.decode,
   toBytes: (
@@ -503,6 +504,7 @@ const G2_Point = weierstrass(bls12_381_CURVE_G2, {
   // Public point APIs still accept infinity, even though the Zcash proof
   // encoding rules cited above only define nonzero point encodings.
   allowInfinityPoint: true,
+  jacobian: true,
   Fn: bls12_381_Fr,
   fromBytes: g2.point.decode,
   toBytes: (

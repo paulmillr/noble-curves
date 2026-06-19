@@ -26,6 +26,11 @@ describe('ed25519', () => {
 
   if (isNobleCurves) Point.BASE.precompute(8, false);
 
+  should('uses wasm-backed fields by default', () => {
+    strictEqual(typeof (Point.Fp as any).wasm?.fromBigint, 'function');
+    strictEqual(typeof (Point.Fn as any).wasm?.fromBigint, 'function');
+  });
+
   describe('getPublicKey()', () => {
     should('reject invalid inputs', () => {
       const invalidPriv = new Uint8Array(33).fill(1);

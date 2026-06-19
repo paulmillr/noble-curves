@@ -58,6 +58,14 @@ should('fields', () => {
   for (const n in vectors) eql(NIST[n].Point.Fp.ORDER, vectors[n]);
 });
 
+should('uses wasm-backed field defaults for supported prime curves', () => {
+  for (const curve of [p256, p384, p521, secp256k1]) {
+    eql(typeof (curve.Point.Fp as any).fromBigint, 'function');
+    eql(typeof (curve.Point.Fp as any).toBigint, 'function');
+    eql(typeof (curve.Point.Fn as any).wasm?.fromBigint, 'function');
+  }
+});
+
 // We don't support ASN.1 encoding of points. For tests we've implemented quick
 // and dirty parser: take X last bytes of ASN.1 encoded sequence.
 // If that doesn't work, we ignore such vector.

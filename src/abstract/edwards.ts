@@ -27,7 +27,6 @@ import {
 import {
   createCurveFields,
   createKeygen,
-  normalizeZ,
   validatePointCons,
   wNAF,
   type AffinePoint,
@@ -35,7 +34,7 @@ import {
   type CurvePoint,
   type CurvePointCons,
 } from './curve.ts';
-import { type IField } from './modular.ts';
+import { FpInvertBatch, type IField } from './modular.ts';
 
 // Be friendly to bad ECMAScript parsers by not using bigint literals
 // prettier-ignore
@@ -111,16 +110,21 @@ export type EdwardsOpts = Readonly<{
  * * Fp: redefined Field over curve.p
  * * Fn: redefined Field over curve.n
  * * uvRatio: helper function for decompression, calculating √(u/v)
+ * * precompute: optional fixed-base precompute window for Point.BASE
  */
 export type EdwardsExtraOpts = Partial<{
   /** Optional base-field override. */
-  Fp: IField<bigint>;
+  Fp: IField<any>;
+  /** Optional public base-field facade exposed as `Point.Fp`. */
+  FpPublic: IField<bigint>;
   /** Optional scalar-field override. */
   Fn: IField<bigint>;
   /** Whether field encodings are little-endian. */
   FpFnLE: boolean;
   /** Square-root ratio helper used during point decompression. */
   uvRatio: (u: bigint, v: bigint) => { isValid: boolean; value: bigint };
+  /** Fixed-base precompute window for the curve base point. */
+  precompute: number;
 }>;
 
 /**
@@ -293,25 +297,56 @@ export function edwards(
   const opts = extraOpts as EdwardsExtraOpts;
   const validated = createCurveFields('edwards', params as EdwardsOpts, opts, opts.FpFnLE);
   const { Fp, Fn } = validated;
+  const FpPublic = opts.FpPublic || (Fp as unknown as IField<bigint>);
   let CURVE = validated.CURVE as EdwardsOpts;
   const { h: cofactor } = CURVE;
-  validateObject(opts, {}, { uvRatio: 'function' });
+  validateObject(opts, {}, { FpPublic: 'object', uvRatio: 'function', precompute: 'number' });
+  const basePrecompute = opts.precompute === undefined ? 8 : opts.precompute;
+  asafenumber(basePrecompute, 'precompute');
 
   // Coordinate and ZIP-215 bounds follow the base-field byte container, not scalar bytes.
   const MASK = _2n << (BigInt(Fp.BYTES * 8) - _1n);
-  const modP = (n: bigint) => Fp.create(n); // Function overrides
+  const F = Fp as IField<any> & {
+    fromBigint?: (num: bigint) => any;
+    toBigint?: (num: any) => bigint;
+  };
+  const hasFieldCodec = typeof F.fromBigint === 'function' && typeof F.toBigint === 'function';
+  const isFieldElement = (num: unknown): boolean => hasFieldCodec && num instanceof Uint8Array;
+  const fromBig = (num: bigint): any => (hasFieldCodec ? F.fromBigint!(num) : num);
+  const toBig = (num: any): bigint => (hasFieldCodec ? F.toBigint!(num) : num);
+  const one = fromBig(_1n);
+  const zero = fromBig(_0n);
+  const eight = fromBig(_8n);
+  const a = fromBig(CURVE.a);
+  const d = fromBig(CURVE.d);
+  const Gx = fromBig(CURVE.Gx);
+  const Gy = fromBig(CURVE.Gy);
+  const aIsMinus1 = CURVE.a === CURVE.p - _1n;
+  const add = (lhs: any, rhs: any) => F.add(lhs, rhs);
+  const sub = (lhs: any, rhs: any) => F.sub(lhs, rhs);
+  const mul = (lhs: any, rhs: any) => F.mul(lhs, rhs);
+  const sqr = (num: any) => F.sqr(num);
+  const neg = (num: any) => F.neg(num);
+  const eql = (lhs: any, rhs: any) => F.eql(lhs, rhs);
+  const is0 = (num: any) => F.is0(num);
+  const d2 = add(d, d);
+  const isOdd = (num: any): boolean =>
+    typeof F.isOdd === 'function' ? F.isOdd(num) : (toBig(num) & _1n) === _1n;
 
   // sqrt(u/v)
   const uvRatio =
     opts.uvRatio === undefined
-      ? (u: bigint, v: bigint) => {
+      ? (u: any, v: any) => {
           try {
             return { isValid: true, value: Fp.sqrt(Fp.div(u, v)) };
           } catch (e) {
-            return { isValid: false, value: _0n };
+            return { isValid: false, value: zero };
           }
         }
-      : opts.uvRatio;
+      : (u: any, v: any) => {
+          const result = opts.uvRatio!(toBig(u), toBig(v));
+          return { isValid: result.isValid, value: fromBig(result.value) };
+        };
 
   // Validate whether the passed curve params are valid.
   // equation ax² + y² = 1 + dx²y² should work for generator point.
@@ -323,9 +358,20 @@ export function edwards(
    * Coordinates >= Fp.ORDER are allowed for zip215.
    */
   function acoord(title: string, n: bigint, banZero = false) {
+    if (typeof n !== 'bigint')
+      throw new TypeError('coordinate ' + title + ' expected bigint, got type=' + typeof n);
     const min = banZero ? _1n : _0n;
     aInRange('coordinate ' + title, n, min, MASK);
     return n;
+  }
+
+  function coord(title: string, n: any, banZero = false): any {
+    if (isFieldElement(n)) {
+      F.isValid(n);
+      if (banZero && is0(n)) throw new Error('coordinate ' + title + ' must be non-zero');
+      return n;
+    }
+    return fromBig(acoord(title, n, banZero));
   }
 
   function aedpoint(other: unknown) {
@@ -336,25 +382,38 @@ export function edwards(
   // https://en.wikipedia.org/wiki/Twisted_Edwards_curve#Extended_coordinates
   class Point implements EdwardsPoint {
     // base / generator point
-    static readonly BASE = new Point(CURVE.Gx, CURVE.Gy, _1n, modP(CURVE.Gx * CURVE.Gy));
+    static readonly BASE = new Point(Gx, Gy, one, mul(Gx, Gy));
     // zero / infinity / identity point
-    static readonly ZERO = new Point(_0n, _1n, _1n, _0n); // 0, 1, 1, 0
+    static readonly ZERO = new Point(zero, one, one, zero); // 0, 1, 1, 0
     // math field
-    static readonly Fp = Fp;
+    static readonly Fp = FpPublic;
     // scalar field
     static readonly Fn = Fn;
 
-    readonly X: bigint;
-    readonly Y: bigint;
-    readonly Z: bigint;
-    readonly T: bigint;
+    private readonly _X: any;
+    private readonly _Y: any;
+    private readonly _Z: any;
+    private readonly _T: any;
 
     constructor(X: bigint, Y: bigint, Z: bigint, T: bigint) {
-      this.X = acoord('x', X);
-      this.Y = acoord('y', Y);
-      this.Z = acoord('z', Z, true);
-      this.T = acoord('t', T);
+      this._X = coord('x', X);
+      this._Y = coord('y', Y);
+      this._Z = coord('z', Z, true);
+      this._T = coord('t', T);
       Object.freeze(this);
+    }
+
+    get X(): bigint {
+      return toBig(this._X);
+    }
+    get Y(): bigint {
+      return toBig(this._Y);
+    }
+    get Z(): bigint {
+      return toBig(this._Z);
+    }
+    get T(): bigint {
+      return toBig(this._T);
     }
 
     static CURVE(): EdwardsOpts {
@@ -371,7 +430,9 @@ export function edwards(
       const { x, y } = p || {};
       acoord('x', x);
       acoord('y', y);
-      return new Point(x, y, _1n, modP(x * y));
+      const X = fromBig(x);
+      const Y = fromBig(y);
+      return new Point(X, Y, one, mul(X, Y));
     }
 
     // Uses algo from RFC8032 5.1.3.
@@ -394,22 +455,36 @@ export function edwards(
 
       // Ed25519: x² = (y²-1)/(dy²+1) mod p. Ed448: x² = (y²-1)/(dy²-1) mod p. Generic case:
       // ax²+y²=1+dx²y² => y²-1=dx²y²-ax² => y²-1=x²(dy²-a) => x²=(y²-1)/(dy²-a)
-      const y2 = modP(y * y); // denominator is always non-0 mod p.
-      const u = modP(y2 - _1n); // u = y² - 1
-      const v = modP(d * y2 - a); // v = d y² + 1.
+      const Y = fromBig(y);
+      const y2 = sqr(Y); // denominator is always non-0 mod p.
+      const u = sub(y2, one); // u = y² - 1
+      const v = sub(mul(d, y2), a); // v = d y² + 1.
       let { isValid, value: x } = uvRatio(u, v); // √(u/v)
       if (!isValid) throw new Error('bad point: invalid y coordinate');
-      const isXOdd = (x & _1n) === _1n; // There are 2 square roots. Use x_0 bit to select proper
+      const isXOdd = isOdd(x); // There are 2 square roots. Use x_0 bit to select proper
       const isLastByteOdd = (lastByte & 0x80) !== 0; // x_0, last bit
-      if (!zip215 && x === _0n && isLastByteOdd)
+      if (!zip215 && is0(x) && isLastByteOdd)
         // if x=0 and x_0 = 1, fail
         throw new Error('bad point: x=0 and x_0=1');
-      if (isLastByteOdd !== isXOdd) x = modP(-x); // if x_0 != x mod 2, set x = p-x
-      return Point.fromAffine({ x, y });
+      if (isLastByteOdd !== isXOdd) x = neg(x); // if x_0 != x mod 2, set x = p-x
+      return new Point(x, Y, one, mul(x, Y));
     }
 
     static fromHex(hex: string, zip215 = false): Point {
       return Point.fromBytes(hexToBytes(hex), zip215);
+    }
+
+    private static normalizeZ(points: Point[]): Point[] {
+      const invertedZs = FpInvertBatch(
+        F,
+        points.map((p) => p._Z)
+      );
+      return points.map((p, i) => {
+        const iz = invertedZs[i];
+        const x = mul(p._X, iz);
+        const y = mul(p._Y, iz);
+        return new Point(x, y, one, mul(x, y));
+      });
     }
 
     get x(): bigint {
@@ -428,7 +503,6 @@ export function edwards(
     // Useful in fromAffine() - not for fromBytes(), which always created valid points.
     assertValidity(): void {
       const p = this;
-      const { a, d } = CURVE;
       // Keep generic Edwards validation fail-closed on the neutral point.
       // Even though ZERO is algebraically valid and can roundtrip through encodings, higher-level
       // callers often reach it only through broken hash/scalar plumbing; rejecting it here avoids
@@ -436,61 +510,61 @@ export function edwards(
       if (p.is0()) throw new Error('bad point: ZERO'); // TODO: optimize, with vars below?
       // Equation in affine coordinates: ax² + y² = 1 + dx²y²
       // Equation in projective coordinates (X/Z, Y/Z, Z):  (aX² + Y²)Z² = Z⁴ + dX²Y²
-      const { X, Y, Z, T } = p;
-      const X2 = modP(X * X); // X²
-      const Y2 = modP(Y * Y); // Y²
-      const Z2 = modP(Z * Z); // Z²
-      const Z4 = modP(Z2 * Z2); // Z⁴
-      const aX2 = modP(X2 * a); // aX²
-      const left = modP(Z2 * modP(aX2 + Y2)); // (aX² + Y²)Z²
-      const right = modP(Z4 + modP(d * modP(X2 * Y2))); // Z⁴ + dX²Y²
-      if (left !== right) throw new Error('bad point: equation left != right (1)');
+      const { _X: X, _Y: Y, _Z: Z, _T: T } = p;
+      const X2 = sqr(X); // X²
+      const Y2 = sqr(Y); // Y²
+      const Z2 = sqr(Z); // Z²
+      const Z4 = sqr(Z2); // Z⁴
+      const aX2 = mul(X2, a); // aX²
+      const left = mul(Z2, add(aX2, Y2)); // (aX² + Y²)Z²
+      const right = add(Z4, mul(d, mul(X2, Y2))); // Z⁴ + dX²Y²
+      if (!eql(left, right)) throw new Error('bad point: equation left != right (1)');
       // In Extended coordinates we also have T, which is x*y=T/Z: check X*Y == Z*T
-      const XY = modP(X * Y);
-      const ZT = modP(Z * T);
-      if (XY !== ZT) throw new Error('bad point: equation left != right (2)');
+      const XY = mul(X, Y);
+      const ZT = mul(Z, T);
+      if (!eql(XY, ZT)) throw new Error('bad point: equation left != right (2)');
     }
 
     // Compare one point to another.
     equals(other: Point): boolean {
       aedpoint(other);
-      const { X: X1, Y: Y1, Z: Z1 } = this;
-      const { X: X2, Y: Y2, Z: Z2 } = other;
-      const X1Z2 = modP(X1 * Z2);
-      const X2Z1 = modP(X2 * Z1);
-      const Y1Z2 = modP(Y1 * Z2);
-      const Y2Z1 = modP(Y2 * Z1);
-      return X1Z2 === X2Z1 && Y1Z2 === Y2Z1;
+      const { _X: X1, _Y: Y1, _Z: Z1 } = this;
+      const { _X: X2, _Y: Y2, _Z: Z2 } = other;
+      const X1Z2 = mul(X1, Z2);
+      const X2Z1 = mul(X2, Z1);
+      const Y1Z2 = mul(Y1, Z2);
+      const Y2Z1 = mul(Y2, Z1);
+      return eql(X1Z2, X2Z1) && eql(Y1Z2, Y2Z1);
     }
 
     is0(): boolean {
-      return this.equals(Point.ZERO);
+      return is0(this._X) && eql(this._Y, this._Z);
     }
 
     negate(): Point {
       // Flips point sign to a negative one (-x, y in affine coords)
-      return new Point(modP(-this.X), this.Y, this.Z, modP(-this.T));
+      return new Point(neg(this._X), this._Y, this._Z, neg(this._T));
     }
 
     // Fast algo for doubling Extended Point.
     // https://hyperelliptic.org/EFD/g1p/auto-twisted-extended.html#doubling-dbl-2008-hwcd
     // Cost: 4M + 4S + 1*a + 6add + 1*2.
     double(): Point {
-      const { a } = CURVE;
-      const { X: X1, Y: Y1, Z: Z1 } = this;
-      const A = modP(X1 * X1); // A = X12
-      const B = modP(Y1 * Y1); // B = Y12
-      const C = modP(_2n * modP(Z1 * Z1)); // C = 2*Z12
-      const D = modP(a * A); // D = a*A
-      const x1y1 = X1 + Y1;
-      const E = modP(modP(x1y1 * x1y1) - A - B); // E = (X1+Y1)2-A-B
-      const G = D + B; // G = D+B
-      const F = G - C; // F = G-C
-      const H = D - B; // H = D-B
-      const X3 = modP(E * F); // X3 = E*F
-      const Y3 = modP(G * H); // Y3 = G*H
-      const T3 = modP(E * H); // T3 = E*H
-      const Z3 = modP(F * G); // Z3 = F*G
+      const { _X: X1, _Y: Y1, _Z: Z1 } = this;
+      const A = sqr(X1); // A = X12
+      const B = sqr(Y1); // B = Y12
+      const Z1s = sqr(Z1);
+      const C = add(Z1s, Z1s); // C = 2*Z12
+      const D = aIsMinus1 ? neg(A) : mul(a, A); // D = a*A
+      const x1y1 = add(X1, Y1);
+      const E = sub(sub(sqr(x1y1), A), B); // E = (X1+Y1)2-A-B
+      const G = add(D, B); // G = D+B
+      const F = sub(G, C); // F = G-C
+      const H = sub(D, B); // H = D-B
+      const X3 = mul(E, F); // X3 = E*F
+      const Y3 = mul(G, H); // Y3 = G*H
+      const T3 = mul(E, H); // T3 = E*H
+      const Z3 = mul(F, G); // Z3 = F*G
       return new Point(X3, Y3, Z3, T3);
     }
 
@@ -499,21 +573,36 @@ export function edwards(
     // Cost: 9M + 1*a + 1*d + 7add.
     add(other: Point) {
       aedpoint(other);
-      const { a, d } = CURVE;
-      const { X: X1, Y: Y1, Z: Z1, T: T1 } = this;
-      const { X: X2, Y: Y2, Z: Z2, T: T2 } = other;
-      const A = modP(X1 * X2); // A = X1*X2
-      const B = modP(Y1 * Y2); // B = Y1*Y2
-      const C = modP(T1 * d * T2); // C = T1*d*T2
-      const D = modP(Z1 * Z2); // D = Z1*Z2
-      const E = modP((X1 + Y1) * (X2 + Y2) - A - B); // E = (X1+Y1)*(X2+Y2)-A-B
-      const F = D - C; // F = D-C
-      const G = D + C; // G = D+C
-      const H = modP(B - a * A); // H = B-a*A
-      const X3 = modP(E * F); // X3 = E*F
-      const Y3 = modP(G * H); // Y3 = G*H
-      const T3 = modP(E * H); // T3 = E*H
-      const Z3 = modP(F * G); // Z3 = F*G
+      const { _X: X1, _Y: Y1, _Z: Z1, _T: T1 } = this;
+      const { _X: X2, _Y: Y2, _Z: Z2, _T: T2 } = other;
+      if (aIsMinus1) {
+        const A = mul(sub(Y1, X1), sub(Y2, X2)); // A = (Y1-X1)*(Y2-X2)
+        const B = mul(add(Y1, X1), add(Y2, X2)); // B = (Y1+X1)*(Y2+X2)
+        const C = mul(mul(T1, T2), d2); // C = T1*2*d*T2
+        const Z1Z2 = mul(Z1, Z2);
+        const D = add(Z1Z2, Z1Z2); // D = 2*Z1*Z2
+        const E = sub(B, A);
+        const F = sub(D, C);
+        const G = add(D, C);
+        const H = add(B, A);
+        const X3 = mul(E, F);
+        const Y3 = mul(G, H);
+        const T3 = mul(E, H);
+        const Z3 = mul(F, G);
+        return new Point(X3, Y3, Z3, T3);
+      }
+      const A = mul(X1, X2); // A = X1*X2
+      const B = mul(Y1, Y2); // B = Y1*Y2
+      const C = mul(mul(T1, d), T2); // C = T1*d*T2
+      const D = mul(Z1, Z2); // D = Z1*Z2
+      const E = sub(sub(mul(add(X1, Y1), add(X2, Y2)), A), B); // E = (X1+Y1)*(X2+Y2)-A-B
+      const F = sub(D, C); // F = D-C
+      const G = add(D, C); // G = D+C
+      const H = sub(B, mul(a, A)); // H = B-a*A
+      const X3 = mul(E, F); // X3 = E*F
+      const Y3 = mul(G, H); // Y3 = G*H
+      const T3 = mul(E, H); // T3 = E*H
+      const Z3 = mul(F, G); // Z3 = F*G
       return new Point(X3, Y3, Z3, T3);
     }
 
@@ -532,8 +621,8 @@ export function edwards(
       // and failing closed is safer than silently producing the identity point.
       if (!Fn.isValidNot0(scalar))
         throw new RangeError('invalid scalar: expected 1 <= sc < curve.n');
-      const { p, f } = wnaf.cached(this, scalar, (p) => normalizeZ(Point, p));
-      return normalizeZ(Point, [p, f])[0];
+      const { p, f } = wnaf.cached(this, scalar, (p) => Point.normalizeZ(p));
+      return Point.normalizeZ([p, f])[0];
     }
 
     // Non-constant-time multiplication. Uses double-and-add algorithm.
@@ -546,7 +635,7 @@ export function edwards(
       if (!Fn.isValid(scalar)) throw new RangeError('invalid scalar: expected 0 <= sc < curve.n');
       if (scalar === _0n) return Point.ZERO;
       if (this.is0() || scalar === _1n) return this;
-      return wnaf.unsafe(this, scalar, (p) => normalizeZ(Point, p));
+      return wnaf.unsafe(this, scalar, (p) => Point.normalizeZ(p));
     }
 
     // Checks if point is of small order.
@@ -567,18 +656,18 @@ export function edwards(
     // Can accept precomputed Z^-1 - for example, from invertBatch.
     toAffine(invertedZ?: bigint): AffinePoint<bigint> {
       const p = this;
-      let iz = invertedZ;
-      if (iz != null && typeof iz !== 'bigint')
-        throw new TypeError('"invertedZ" expected bigint, got type=' + typeof iz);
-      const { X, Y, Z } = p;
+      let iz: any = invertedZ;
+      if (iz != null) iz = coord('invertedZ', iz, true);
+      const { _X: X, _Y: Y, _Z: Z } = p;
+      if (iz == null && eql(Z, one)) return { x: toBig(X), y: toBig(Y) };
       const is0 = p.is0();
-      if (iz == null) iz = is0 ? _8n : (Fp.inv(Z) as bigint); // 8 was chosen arbitrarily
-      const x = modP(X * iz);
-      const y = modP(Y * iz);
+      if (iz == null) iz = is0 ? eight : eql(Z, one) ? one : Fp.inv(Z); // 8 was chosen arbitrarily
+      const x = mul(X, iz);
+      const y = mul(Y, iz);
       const zz = Fp.mul(Z, iz);
       if (is0) return { x: _0n, y: _1n };
-      if (zz !== _1n) throw new Error('invZ was invalid');
-      return { x, y };
+      if (!eql(zz, one)) throw new Error('invZ was invalid');
+      return { x: toBig(x), y: toBig(y) };
     }
 
     clearCofactor(): Point {
@@ -587,12 +676,15 @@ export function edwards(
     }
 
     toBytes(): Uint8Array {
-      const { x, y } = this.toAffine();
+      const normalized = eql(this._Z, one);
+      const iz = normalized ? one : this.is0() ? eight : Fp.inv(this._Z);
+      const x = normalized ? this._X : mul(this._X, iz);
+      const y = normalized ? this._Y : mul(this._Y, iz);
       // Fp.toBytes() allows non-canonical encoding of y (>= p).
       const bytes = Fp.toBytes(y);
       // Each y has 2 valid points: (x, y), (x,-y).
       // When compressing, it's enough to store y and use the last byte to encode sign of x
-      bytes[bytes.length - 1] |= x & _1n ? 0x80 : 0;
+      bytes[bytes.length - 1] |= isOdd(x) ? 0x80 : 0;
       return bytes;
     }
     toHex(): string {
@@ -615,7 +707,7 @@ export function edwards(
   const wnaf = new wNAF(Point);
   // Enable precomputes. Slows down first publicKey computation by 20ms.
   // Disable for tiny toy curves, with scalar fields < 8 bits.
-  if (wnaf.bits >= 8) Point.BASE.precompute(8);
+  if (wnaf.bits >= 8) Point.BASE.precompute(basePrecompute);
   Object.freeze(Point.prototype);
   Object.freeze(Point);
   return Point;
@@ -885,7 +977,7 @@ export function eddsa(
     // fails loudly instead of silently producing a degenerate signature.
     const R = BASE.multiply(r).toBytes(); // R = rG
     const k = hashDomainToScalar(options.context, R, pointBytes, msg); // R || A || PH(M)
-    const s = Fn.create(r + k * scalar); // S = (r + k * s) mod L
+    const s = Fn.add(r, Fn.mul(k, scalar)); // S = (r + k * s) mod L
     if (!Fn.isValid(s)) throw new Error('sign failed: invalid s'); // 0 <= s < L
     const rs = concatBytes(R, Fn.toBytes(s));
     return abytes(rs, lengths.signature, 'result') as TRet<Uint8Array>;
@@ -994,7 +1086,9 @@ export function eddsa(
       const size = lengths.publicKey;
       const is25519 = size === 32;
       if (!is25519 && size !== 57) throw new Error('only defined for 25519 and 448');
-      const u = is25519 ? Fp.div(_1n + y, _1n - y) : Fp.div(y - _1n, y + _1n);
+      const u = is25519
+        ? Fp.div(Fp.add(_1n, y), Fp.sub(_1n, y))
+        : Fp.div(Fp.sub(y, _1n), Fp.add(y, _1n));
       return Fp.toBytes(u) as TRet<Uint8Array>;
     },
     toMontgomerySecret(secretKey: TArg<Uint8Array>): TRet<Uint8Array> {
