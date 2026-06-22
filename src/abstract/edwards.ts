@@ -334,6 +334,7 @@ export function edwards(
 
   // Extended Point works in extended coordinates: (X, Y, Z, T) ∋ (x=X/Z, y=Y/Z, T=xy).
   // https://en.wikipedia.org/wiki/Twisted_Edwards_curve#Extended_coordinates
+  let normalizePoint: (points: Point[]) => Point[];
   class Point implements EdwardsPoint {
     // base / generator point
     static readonly BASE = new Point(CURVE.Gx, CURVE.Gy, _1n, modP(CURVE.Gx * CURVE.Gy));
@@ -532,7 +533,7 @@ export function edwards(
       // and failing closed is safer than silently producing the identity point.
       if (!Fn.isValidNot0(scalar))
         throw new RangeError('invalid scalar: expected 1 <= sc < curve.n');
-      const { p, f } = wnaf.cached(this, scalar, (p) => normalizeZ(Point, p));
+      const { p, f } = wnaf.cached(this, scalar, normalizePoint);
       return normalizeZ(Point, [p, f])[0];
     }
 
@@ -546,7 +547,7 @@ export function edwards(
       if (!Fn.isValid(scalar)) throw new RangeError('invalid scalar: expected 0 <= sc < curve.n');
       if (scalar === _0n) return Point.ZERO;
       if (this.is0() || scalar === _1n) return this;
-      return wnaf.unsafe(this, scalar, (p) => normalizeZ(Point, p));
+      return wnaf.unsafe(this, scalar, normalizePoint);
     }
 
     // Checks if point is of small order.
@@ -603,6 +604,7 @@ export function edwards(
       return `<Point ${this.is0() ? 'ZERO' : this.toHex()}>`;
     }
   }
+  normalizePoint = (points: Point[]) => normalizeZ(Point, points);
   // Keep constructor work cheap: subgroup/generator validation belongs to the caller's curve
   // parameters, and doing the extra checks here adds about 10-15ms to heavy module imports.
   // Callers that construct custom curves are responsible for supplying the correct base point.

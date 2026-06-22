@@ -327,9 +327,12 @@ export function normalizeZ<P extends CurvePoint<any, P>, PC extends CurvePointCo
   return points.map((p, i) => c.fromAffine(p.toAffine(invertedZs[i])));
 }
 
+const MAX_PRECOMPUTE_WINDOW = 16;
+
 function validateW(W: number, bits: number) {
-  if (!Number.isSafeInteger(W) || W <= 0 || W > bits)
-    throw new Error('invalid window size, expected [1..' + bits + '], got W=' + W);
+  const max = Math.min(bits, MAX_PRECOMPUTE_WINDOW);
+  if (!Number.isSafeInteger(W) || W <= 0 || W > max)
+    throw new Error('invalid window size, expected [1..' + max + '], got W=' + W);
 }
 
 /** Internal wNAF opts for specific W and scalarBits.
@@ -395,7 +398,14 @@ function validateMSMScalars(scalars: any[], field: any) {
 // Since points in different groups cannot be equal (different object constructor),
 // we can have single place to store precomputes.
 // Allows to make points frozen / immutable.
-const pointPrecomputes = new WeakMap<any, any[]>();
+type PrecomputeCache<P> = {
+  W: number;
+  bits: number;
+  raw: P[];
+  transformed: WeakMap<Mapper<P>, P[]>;
+};
+
+const pointPrecomputes = new WeakMap<any, PrecomputeCache<any>>();
 const pointWindowSizes = new WeakMap<any, number>();
 
 function getW(P: any): number {
@@ -444,6 +454,7 @@ export class wNAF<PC extends PC_ANY> {
   private readonly BASE: PC_P<PC>;
   private readonly ZERO: PC_P<PC>;
   private readonly maxWnafScalar: bigint;
+  private readonly maxUnsafeScalar: bigint;
   private readonly maxScalar: bigint;
   readonly bits: number;
 
@@ -460,6 +471,7 @@ export class wNAF<PC extends PC_ANY> {
     // `_splitEndoScalar` in `weierstrass.ts` has similar logic:
     //     const MAX_NUM = bitMask(Math.ceil(bitLen(n) / 2)) + _1n;
     this.maxWnafScalar = maxw;
+    this.maxUnsafeScalar = Point.Fn.ORDER + _1n;
     // Hard cap to mitigate DoS
     this.maxScalar = maxw ** BigInt(4);
   }
@@ -577,20 +589,37 @@ export class wNAF<PC extends PC_ANY> {
     return acc;
   }
 
-  private getPrecomputes(W: number, point: PC_P<PC>, transform?: Mapper<PC_P<PC>>): PC_P<PC>[] {
-    // Cache key is only point identity plus the remembered window size; callers must not reuse the
-    // same point with incompatible `transform(...)` layouts and expect a separate cache entry.
-    let comp = pointPrecomputes.get(point);
-    if (!comp) {
-      // e.g. creates 4224 points for W=8 on 256-bit curve
-      comp = this.precomputeWindow(point, W) as PC_P<PC>[];
-      if (W !== 1) {
-        // Doing transform outside of if brings 15% perf hit
-        if (typeof transform === 'function') comp = transform(comp);
-        pointPrecomputes.set(point, comp);
-      }
+  private assertPrecomputes(W: number, comp: PC_P<PC>[], title: string): void {
+    const { windows, windowSize } = calcWOpts(W, this.bits);
+    const expected = windows * windowSize;
+    if (!Array.isArray(comp) || comp.length !== expected)
+      throw new Error(`invalid ${title}: expected ${expected} points`);
+    for (let i = 0; i < comp.length; i++) {
+      if (!(comp[i] instanceof this.Point)) throw new Error(`invalid ${title} at index ${i}`);
     }
-    return comp;
+  }
+
+  private getPrecomputes(W: number, point: PC_P<PC>, transform?: Mapper<PC_P<PC>>): PC_P<PC>[] {
+    if (transform !== undefined) afunction(transform, 'transform');
+    let cache = pointPrecomputes.get(point) as PrecomputeCache<PC_P<PC>> | undefined;
+    if (!cache || cache.W !== W || cache.bits !== this.bits) {
+      // e.g. creates 4224 points for W=8 on 256-bit curve
+      const raw = this.precomputeWindow(point, W) as PC_P<PC>[];
+      cache = { W, bits: this.bits, raw, transformed: new WeakMap() };
+      if (W !== 1) pointPrecomputes.set(point, cache);
+    }
+    // Doing transform outside of W !== 1 brings a noticeable perf hit for uncached multiplication.
+    if (W === 1 || transform === undefined) return cache.raw;
+    let transformed = cache.transformed.get(transform);
+    if (!transformed) {
+      // Never hand the cached raw table directly to user-provided transforms: a transform that
+      // mutates or reorders the array must not poison later no-transform or different-transform
+      // multiplications for the same point identity.
+      transformed = transform(cache.raw.slice());
+      this.assertPrecomputes(W, transformed, 'transformed precomputes');
+      cache.transformed.set(transform, transformed);
+    }
+    return transformed;
   }
 
   cached(
@@ -609,9 +638,14 @@ export class wNAF<PC extends PC_ANY> {
     if (!(isPosBig(scalar) && scalar < this.maxScalar)) throw new Error('invalid scalar');
   }
 
+  private assertUnsafeScalar(scalar: bigint): void {
+    if (!(isPosBig(scalar) && scalar < this.maxUnsafeScalar)) throw new Error('invalid scalar');
+  }
+
   unsafe(point: PC_P<PC>, scalar: bigint, transform?: Mapper<PC_P<PC>>, prev?: PC_P<PC>): PC_P<PC> {
     if (!(point instanceof this.Point))
       throw new TypeError('"point" expected Point instance, got type=' + typeof point);
+    this.assertUnsafeScalar(scalar);
     const W = getW(point);
     // W === 1 should use ladder, because it's 2x faster there.
     //

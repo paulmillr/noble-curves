@@ -136,6 +136,17 @@ describe('basic curve tests', () => {
               'unsafe(point, scalar, acc)'
             );
             eql(w.unsafe(point, 0n, undefined, acc).equals(acc), true, 'unsafe(point, 0, acc)');
+            eql(w.unsafe(point, CURVE_ORDER).equals(G[0]), true, 'unsafe(point, CURVE_ORDER)');
+            throws(() => w.unsafe(point, CURVE_ORDER + 1n), /invalid scalar/);
+            throws(() => G[1].precompute(17), /invalid window size/);
+
+            const cachedPoint = G[1].negate().negate();
+            cachedPoint.precompute(2);
+            w.cached(cachedPoint, 2n, (table) => {
+              table.fill(p.ZERO);
+              return table;
+            });
+            equal(cachedPoint.multiply(2n), G[2], 'transformed wNAF cache cannot poison multiply');
           }
 
           equal(G[3].add(G[3]), G[6], '3*G + 3*G = 6*G');

@@ -152,17 +152,40 @@ describe('createCurve', () => {
     );
     throws(() => new Point(1n, 1n, 0n).assertValidity(), /ZERO|infinity|point/i);
 
+    const toyEndo = {
+      beta: 1n,
+      basises: [
+        [1n, 0n],
+        [0n, 1n],
+      ] as [[bigint, bigint], [bigint, bigint]],
+    };
     const torsionPoint = weierstrass(
       { p: 5n, n: 65535n, h: 2n, a: 0n, b: 1n, Gx: 0n, Gy: 1n },
-      { endo: { beta: 1n, basises: [[1n, 0n, 0n, 1n]] } }
+      { endo: toyEndo }
     );
     eql(typeof torsionPoint.BASE.isTorsionFree(), 'boolean', 'torsion fallback');
 
     const endoPoint = weierstrass(
       { p: 5n, n: 257n, h: 1n, a: 0n, b: 1n, Gx: 0n, Gy: 1n },
-      { endo: { beta: 1n, basises: [[1n, 0n, 0n, 1n]] } }
+      { endo: toyEndo }
     );
     eql(endoPoint.BASE.toAffine(), { x: 0n, y: 1n }, 'small endo base');
+  });
+
+  should('weierstrass snapshots mutable extra options', () => {
+    const opts = {
+      allowInfinityPoint: false,
+      isTorsionFree: () => true,
+      clearCofactor: (_c: any, p: any) => p,
+    };
+    const Point = weierstrass({ p: 5n, n: 257n, h: 2n, a: 0n, b: 1n, Gx: 0n, Gy: 1n }, opts);
+    opts.allowInfinityPoint = true;
+    opts.isTorsionFree = () => false;
+    opts.clearCofactor = (_c: any, _p: any) => Point.ZERO;
+
+    throws(() => Point.ZERO.toBytes(), /ZERO/);
+    eql(Point.BASE.isTorsionFree(), true, 'isTorsionFree hook snapshot');
+    eql(Point.BASE.clearCofactor().equals(Point.BASE), true, 'clearCofactor hook snapshot');
   });
 });
 

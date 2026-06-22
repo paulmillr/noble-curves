@@ -180,4 +180,21 @@ should('_splitEndoScalar rejects scalars outside 0..n-1', () => {
   throws(() => splitScalar(n + 1n, basis as any, n));
 });
 
+should('_splitEndoScalar rejects malformed bases', () => {
+  const n = BigInt('0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141');
+  throws(() => splitScalar(1n, [[1n, 0n, 0n, 1n]] as any, n), /invalid endo/);
+  throws(
+    () =>
+      splitScalar(
+        1n,
+        [
+          [1n, 0n],
+          [0n, 1],
+        ] as any,
+        n
+      ),
+    /invalid endo/
+  );
+});
+
 should.runWhen(import.meta.url);

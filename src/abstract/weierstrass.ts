@@ -124,6 +124,29 @@ export type ScalarEndoParts = {
   k2: bigint;
 };
 
+function validateEndoBasis(basis: unknown): asserts basis is EndoBasis {
+  if (!Array.isArray(basis) || basis.length !== 2)
+    throw new Error('invalid endo: expected "basises": array of two bigint pairs');
+  for (let i = 0; i < 2; i++) {
+    const row = basis[i];
+    if (
+      !Array.isArray(row) ||
+      row.length !== 2 ||
+      typeof row[0] !== 'bigint' ||
+      typeof row[1] !== 'bigint'
+    ) {
+      throw new Error('invalid endo: expected "basises": array of two bigint pairs');
+    }
+  }
+}
+
+function copyEndoBasis(basis: EndoBasis): EndoBasis {
+  return [
+    [basis[0][0], basis[0][1]],
+    [basis[1][0], basis[1][1]],
+  ];
+}
+
 /** Splits scalar for GLV endomorphism. */
 export function _splitEndoScalar(k: bigint, basis: EndoBasis, n: bigint): ScalarEndoParts {
   // Split scalar into two such that part is ~half bits: `abs(part) < sqrt(N)`
@@ -131,6 +154,7 @@ export function _splitEndoScalar(k: bigint, basis: EndoBasis, n: bigint): Scalar
   // Callers must provide a reduced GLV basis whose vectors satisfy
   // `a + b * lambda ≡ 0 (mod n)`; this helper only sees the basis and `n`.
   // Reject unreduced scalars instead of silently treating them mod n.
+  validateEndoBasis(basis);
   aInRange('scalar', k, _0n, n);
   // TODO: verifyScalar function which consumes lambda
   const [[a1, b1], [a2, b2]] = basis;
@@ -696,11 +720,20 @@ export function weierstrass<T>(
     }
   );
 
-  // Snapshot constructor-time flags whose later mutation would otherwise change
+  // Snapshot constructor-time options whose later mutation would otherwise change
   // validity semantics of an already-built point type.
-  const { endo, allowInfinityPoint } = extraOpts;
+  const allowInfinityPoint = extraOpts.allowInfinityPoint === true;
+  const clearCofactorFn = extraOpts.clearCofactor;
+  const isTorsionFreeFn = extraOpts.isTorsionFree;
+  const fromBytesFn = extraOpts.fromBytes;
+  const toBytesFn = extraOpts.toBytes;
+  let endo: EndomorphismOpts | undefined;
+  if (extraOpts.endo) {
+    validateEndoBasis(extraOpts.endo.basises);
+    endo = { beta: extraOpts.endo.beta, basises: copyEndoBasis(extraOpts.endo.basises) };
+  }
   if (endo) {
-    if (!Fp.is0(CURVE.a) || typeof endo.beta !== 'bigint' || !Array.isArray(endo.basises)) {
+    if (!Fp.is0(CURVE.a) || typeof endo.beta !== 'bigint') {
       throw new Error('invalid endo: expected "beta": bigint and "basises": array');
     }
   }
@@ -774,8 +807,8 @@ export function weierstrass<T>(
     }
   }
 
-  const encodePoint = extraOpts.toBytes === undefined ? pointToBytes : extraOpts.toBytes;
-  const decodePoint = extraOpts.fromBytes === undefined ? pointFromBytes : extraOpts.fromBytes;
+  const encodePoint = toBytesFn === undefined ? pointToBytes : toBytesFn;
+  const decodePoint = fromBytesFn === undefined ? pointFromBytes : fromBytesFn;
   function weierstrassEquation(x: T): T {
     const x2 = Fp.sqr(x); // x * x
     const x3 = Fp.mul(x2, x); // x² * x
@@ -834,6 +867,7 @@ export function weierstrass<T>(
    * Default Point works in 2d / affine coordinates: (x, y).
    * We're doing calculations in projective, because its operations don't require costly inversion.
    */
+  let normalizePoint: (points: Point[]) => Point[];
   class Point implements WeierstrassPoint<T> {
     // base / generator point
     static readonly BASE = new Point(CURVE.Gx, CURVE.Gy, Fp.ONE);
@@ -911,8 +945,7 @@ export function weierstrass<T>(
         // In BLS, ZERO can be serialized, so we allow it.
         // Keep the accepted infinity encoding canonical: projective-equivalent (X, Y, 0) points
         // like (1, 1, 0) compare equal to ZERO, but only (0, 1, 0) should pass this guard.
-        if (extraOpts.allowInfinityPoint && Fp.is0(p.X) && Fp.eql(p.Y, Fp.ONE) && Fp.is0(p.Z))
-          return;
+        if (allowInfinityPoint && Fp.is0(p.X) && Fp.eql(p.Y, Fp.ONE) && Fp.is0(p.Z)) return;
         throw new Error('bad point: ZERO');
       }
       // Some 3rd-party test vectors require different wording between here & `fromCompressedHex`
@@ -1061,13 +1094,12 @@ export function weierstrass<T>(
      * @returns New point
      */
     multiply(scalar: bigint): Point {
-      const { endo } = extraOpts;
       // Keep the subgroup-scalar contract strict instead of reducing 0 / n to ZERO.
       // In key/signature-style callers, those values usually mean broken hash/scalar plumbing,
       // and failing closed is safer than silently producing the identity point.
       if (!Fn.isValidNot0(scalar)) throw new RangeError('invalid scalar: out of range'); // 0 is invalid
       let point: Point, fake: Point; // Fake point is used to const-time mult
-      const mul = (n: bigint) => wnaf.cached(this, n, (p) => normalizeZ(Point, p));
+      const mul = (n: bigint) => wnaf.cached(this, n, normalizePoint);
       /** See docs for {@link EndomorphismOpts} */
       if (endo) {
         const { k1neg, k1, k2neg, k2 } = splitEndoScalarN(scalar);
@@ -1090,7 +1122,6 @@ export function weierstrass<T>(
      * an exposed secret key e.g. sig verification, which works over *public* keys.
      */
     multiplyUnsafe(scalar: bigint): Point {
-      const { endo } = extraOpts;
       const p = this as Point;
       const sc = scalar;
       // Public-scalar callers may need 0, but n and larger values stay rejected here too.
@@ -1140,17 +1171,15 @@ export function weierstrass<T>(
      * Always torsion-free for cofactor=1 curves.
      */
     isTorsionFree(): boolean {
-      const { isTorsionFree } = extraOpts;
       if (cofactor === _1n) return true;
-      if (isTorsionFree) return isTorsionFree(Point, this);
+      if (isTorsionFreeFn) return isTorsionFreeFn(Point, this);
       // unsafe() will use ladder internally for endomorphism curves
       return wnaf.unsafe(this, CURVE_ORDER).is0();
     }
 
     clearCofactor(): Point {
-      const { clearCofactor } = extraOpts;
       if (cofactor === _1n) return this; // Fast-path
-      if (clearCofactor) return clearCofactor(Point, this) as Point;
+      if (clearCofactorFn) return clearCofactorFn(Point, this) as Point;
       // Default fallback assumes the cofactor fits the usual subgroup-scalar
       // multiplyUnsafe() contract. Curves with larger / structured cofactors
       // should define a clearCofactor override anyway (e.g. psi/Frobenius maps).
@@ -1178,7 +1207,8 @@ export function weierstrass<T>(
       return `<Point ${this.is0() ? 'ZERO' : this.toHex()}>`;
     }
   }
-  const wnaf = new wNAF(Point, !!extraOpts.endo);
+  normalizePoint = (points: Point[]) => normalizeZ(Point, points);
+  const wnaf = new wNAF(Point, !!endo);
   // Enable precomputes. Slows down first publicKey computation by 20ms.
   // Disable for tiny toy curves, with scalar fields < 8 bits (< 16 bits for endomorphism).
   if (wnaf.bits >= 8) Point.BASE.precompute(8);
