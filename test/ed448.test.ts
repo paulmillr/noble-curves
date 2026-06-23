@@ -1,12 +1,12 @@
+import { shake256 } from '@noble/hashes/sha3.js';
 import {
   hexToBytes as bytes,
   concatBytes,
   bytesToHex as hex,
   randomBytes,
 } from '@noble/hashes/utils.js';
-import { shake256 } from '@noble/hashes/sha3.js';
-import * as fc from 'fast-check';
 import { describe, should } from '@paulmillr/jsbt/test.js';
+import * as fc from 'fast-check';
 import { deepStrictEqual as eql, throws } from 'node:assert';
 import { E448, ed448, ed448ph, x448 } from '../src/ed448.ts';
 import { asciiToBytes, bytesToNumberLE, numberToBytesLE } from '../src/utils.ts';
@@ -411,6 +411,9 @@ describe('ed448', () => {
           'aa3b4749d55b9daf1e5b00288826c467274ce3ebbdd5c17b975e09d4af6c67cf10d087202db88286e2b79fceea3ec353ef54faa26e219f38',
         iters: 1000,
       },
+      // This commented code must be kept for future tests. It takes too long to calculate, but could still be useful
+      // TODO: split into separate ed448-slow-large.test.ts
+      // { scalar: '077f453681caca3693198420bbe515cae0002472519b3e67661a7e89cab94695c8f4bcd66e61b9b9c946da8d524de3d69bd9d9d66b997e37', iters: 1000000 },
     ];
     should('RFC7748, shared-key, wycheproof, and base-point vectors', () => {
       for (let i = 0; i < rfc7748Mul.length; i++) {
