@@ -65,6 +65,12 @@ describe('basic curve tests', () => {
     eql(Point.BASE.X, 256n, 'edwards coordinate mask follows Fp byte width');
   });
 
+  should('weierstrass wNAF precomputes handle ZERO point', () => {
+    const Point = CURVES.secp256r1.Point;
+    eql(Point.ZERO.precompute(8, false), Point.ZERO);
+    equal(Point.ZERO.multiply(2n), Point.ZERO, 'precomputed ZERO * 2 = ZERO');
+  });
+
   for (const name in CURVES) {
     const C = CURVES[name];
     const CURVE_ORDER = C.Point.Fn?.ORDER ?? C.Point.CURVE().n;

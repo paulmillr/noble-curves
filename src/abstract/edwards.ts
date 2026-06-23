@@ -34,8 +34,9 @@ import {
   type CurveLengths,
   type CurvePoint,
   type CurvePointCons,
+  type WNAFPrecomputes,
 } from './curve.ts';
-import { type IField } from './modular.ts';
+import { FpInvertBatch, type IField } from './modular.ts';
 
 // Be friendly to bad ECMAScript parsers by not using bigint literals
 // prettier-ignore
@@ -532,7 +533,7 @@ export function edwards(
       // and failing closed is safer than silently producing the identity point.
       if (!Fn.isValidNot0(scalar))
         throw new RangeError('invalid scalar: expected 1 <= sc < curve.n');
-      const { p, f } = wnaf.cached(this, scalar, (p) => normalizeZ(Point, p));
+      const { p, f } = wnaf.cached(this, scalar, compactWNAF);
       return normalizeZ(Point, [p, f])[0];
     }
 
@@ -546,7 +547,7 @@ export function edwards(
       if (!Fn.isValid(scalar)) throw new RangeError('invalid scalar: expected 0 <= sc < curve.n');
       if (scalar === _0n) return Point.ZERO;
       if (this.is0() || scalar === _1n) return this;
-      return wnaf.unsafe(this, scalar, (p) => normalizeZ(Point, p));
+      return wnaf.unsafe(this, scalar, compactWNAF);
     }
 
     // Checks if point is of small order.
@@ -612,6 +613,26 @@ export function edwards(
   // } catch {
   //   throw new Error('bad curve params: generator point');
   // }
+  function compactWNAF(points: Point[]): WNAFPrecomputes<Point> {
+    const invertedZs = FpInvertBatch(
+      Fp,
+      points.map((p) => p.Z)
+    );
+    const xs = new Array<bigint>(points.length);
+    const ys = new Array<bigint>(points.length);
+    for (let i = 0; i < points.length; i++) {
+      const { x, y } = points[i].toAffine(invertedZs[i]);
+      xs[i] = x;
+      ys[i] = y;
+    }
+    return Object.freeze({
+      get(offset: number, isNeg: boolean): Point {
+        const x = isNeg ? modP(-xs[offset]) : xs[offset];
+        const y = ys[offset];
+        return new Point(x, y, _1n, modP(x * y));
+      },
+    });
+  }
   const wnaf = new wNAF(Point);
   // Enable precomputes. Slows down first publicKey computation by 20ms.
   // Disable for tiny toy curves, with scalar fields < 8 bits.

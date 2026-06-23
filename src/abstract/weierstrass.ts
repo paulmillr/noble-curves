@@ -63,6 +63,7 @@ import {
   type CurveLengths,
   type CurvePoint,
   type CurvePointCons,
+  type WNAFPrecomputes,
 } from './curve.ts';
 import {
   FpInvertBatch,
@@ -1067,7 +1068,7 @@ export function weierstrass<T>(
       // and failing closed is safer than silently producing the identity point.
       if (!Fn.isValidNot0(scalar)) throw new RangeError('invalid scalar: out of range'); // 0 is invalid
       let point: Point, fake: Point; // Fake point is used to const-time mult
-      const mul = (n: bigint) => wnaf.cached(this, n, (p) => normalizeZ(Point, p));
+      const mul = (n: bigint) => wnaf.cached(this, n, compactWNAF);
       /** See docs for {@link EndomorphismOpts} */
       if (endo) {
         const { k1neg, k1, k2neg, k2 } = splitEndoScalarN(scalar);
@@ -1177,6 +1178,27 @@ export function weierstrass<T>(
     toString() {
       return `<Point ${this.is0() ? 'ZERO' : this.toHex()}>`;
     }
+  }
+  function compactWNAF(points: Point[]): WNAFPrecomputes<Point> {
+    const invertedZs = FpInvertBatch(
+      Fp,
+      points.map((p) => p.Z)
+    );
+    const xs = new Array<T>(points.length);
+    const ys = new Array<T>(points.length);
+    const zeroes = new Uint8Array(points.length);
+    for (let i = 0; i < points.length; i++) {
+      const { x, y } = points[i].toAffine(invertedZs[i]);
+      xs[i] = x;
+      ys[i] = y;
+      zeroes[i] = Fp.is0(x) && Fp.is0(y) ? 1 : 0;
+    }
+    return Object.freeze({
+      get(offset: number, isNeg: boolean): Point {
+        if (zeroes[offset]) return Point.ZERO;
+        return new Point(xs[offset], isNeg ? Fp.neg(ys[offset]) : ys[offset], Fp.ONE);
+      },
+    });
   }
   const wnaf = new wNAF(Point, !!extraOpts.endo);
   // Enable precomputes. Slows down first publicKey computation by 20ms.

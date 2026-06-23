@@ -268,8 +268,15 @@ export interface CurveLengths {
   seed?: number;
 }
 
+/** Compact or regular precomputation table for a wNAF multiplication. */
+export type WNAFTable<T> = {
+  /** Return a table entry, optionally negated. */
+  get: (offset: number, isNeg: boolean) => T;
+};
+/** Regular flattened point table or compact curve-specific table. */
+export type WNAFPrecomputes<T> = T[] | WNAFTable<T>;
 /** Reorders or otherwise remaps a batch while preserving its element type. */
-export type Mapper<T> = (i: T[]) => T[];
+export type Mapper<T> = (i: T[]) => WNAFPrecomputes<T>;
 
 /**
  * Computes both candidates first, but the final selection still branches on `condition`, so this
@@ -395,8 +402,27 @@ function validateMSMScalars(scalars: any[], field: any) {
 // Since points in different groups cannot be equal (different object constructor),
 // we can have single place to store precomputes.
 // Allows to make points frozen / immutable.
-const pointPrecomputes = new WeakMap<any, any[]>();
+const pointPrecomputes = new WeakMap<any, WNAFPrecomputes<any>>();
 const pointWindowSizes = new WeakMap<any, number>();
+
+function getPrecompute<T extends { negate: () => T }>(
+  precomputes: WNAFPrecomputes<T>,
+  offset: number,
+  isNeg: boolean
+): T {
+  if (Array.isArray(precomputes)) return negateCt(isNeg, precomputes[offset]);
+  return precomputes.get(offset, isNeg);
+}
+
+function getPrecomputeUnsafe<T extends { negate: () => T }>(
+  precomputes: WNAFPrecomputes<T>,
+  offset: number,
+  isNeg: boolean
+): T {
+  if (!Array.isArray(precomputes)) return precomputes.get(offset, isNeg);
+  const item = precomputes[offset];
+  return isNeg ? item.negate() : item;
+}
 
 function getW(P: any): number {
   // To disable precomputes:
@@ -513,7 +539,11 @@ export class wNAF<PC extends PC_ANY> {
    * https://github.com/paulmillr/noble-secp256k1/blob/47cb1669b6e506ad66b35fe7d76132ae97465da2/index.ts#L502-L541
    * @returns real and fake (for const-time) points
    */
-  private wNAF_CT(W: number, precomputes: PC_P<PC>[], n: bigint): { p: PC_P<PC>; f: PC_P<PC> } {
+  private wNAF_CT(
+    W: number,
+    precomputes: WNAFPrecomputes<PC_P<PC>>,
+    n: bigint
+  ): { p: PC_P<PC>; f: PC_P<PC> } {
     // Scalar should be smaller than field order (1/2 of field order for endomorphism curves)
     if (!(isPosBig(n) && n < this.maxWnafScalar)) throw new Error('invalid scalar');
     // Accumulators
@@ -532,10 +562,10 @@ export class wNAF<PC extends PC_ANY> {
       if (isZero) {
         // bits are 0: add garbage to fake point
         // Important part for const-time getPublicKey: add random "noise" point to f.
-        f = f.add(negateCt(isNegF, precomputes[offsetF]));
+        f = f.add(getPrecompute(precomputes, offsetF, isNegF));
       } else {
         // bits are 1: add to result point
-        p = p.add(negateCt(isNeg, precomputes[offset]));
+        p = p.add(getPrecompute(precomputes, offset, isNeg));
       }
     }
     assert0(n);
@@ -554,7 +584,7 @@ export class wNAF<PC extends PC_ANY> {
    */
   private wNAF_nonCT(
     W: number,
-    precomputes: PC_P<PC>[],
+    precomputes: WNAFPrecomputes<PC_P<PC>>,
     n: bigint,
     acc: PC_P<PC> = this.ZERO
   ): PC_P<PC> {
@@ -569,15 +599,18 @@ export class wNAF<PC extends PC_ANY> {
         // Move to next window.
         continue;
       } else {
-        const item = precomputes[offset];
-        acc = acc.add(isNeg ? item.negate() : item); // Re-using acc allows to save adds in MSM
+        acc = acc.add(getPrecomputeUnsafe(precomputes, offset, isNeg)); // Re-using acc saves adds in MSM
       }
     }
     assert0(n);
     return acc;
   }
 
-  private getPrecomputes(W: number, point: PC_P<PC>, transform?: Mapper<PC_P<PC>>): PC_P<PC>[] {
+  private getPrecomputes(
+    W: number,
+    point: PC_P<PC>,
+    transform?: Mapper<PC_P<PC>>
+  ): WNAFPrecomputes<PC_P<PC>> {
     // Cache key is only point identity plus the remembered window size; callers must not reuse the
     // same point with incompatible `transform(...)` layouts and expect a separate cache entry.
     let comp = pointPrecomputes.get(point);
