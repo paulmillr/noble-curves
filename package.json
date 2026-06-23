@@ -21,10 +21,10 @@
     "typescript": "6.0.2"
   },
   "scripts": {
-    "benchmark": "node benchmark/compare-curves.ts",
+    "benchmark": "node benchmark/curves.ts",
     "build": "tsc",
-    "build:release": "npx --no @paulmillr/jsbt bundle test/build",
-    "check": "npx --no @paulmillr/jsbt check package.json",
+    "bundle": "npx --no @paulmillr/jsbt bundle",
+    "check": "npx --no @paulmillr/jsbt check",
     "build:clean": "rm {.,abstract}/*.{js,d.ts,d.ts.map,js.map} 2> /dev/null",
     "format": "prettier --write 'src/**/*.{js,ts}' 'test/*.{js,ts}'",
     "test": "node --no-warnings test/index.ts",
