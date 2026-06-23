@@ -14,15 +14,14 @@
     "@noble/hashes": "2.2.0"
   },
   "devDependencies": {
-    "@paulmillr/jsbt": "0.5.2",
+    "@paulmillr/jsbt": "0.6.0",
     "@types/node": "25.3.0",
     "fast-check": "4.2.0",
     "prettier": "3.6.2",
     "typescript": "6.0.2"
   },
   "scripts": {
-    "bench": "cd test/benchmark; node secp256k1.ts; node curves.ts; node utils.ts; node bls.ts",
-    "bench:install": "cd test/benchmark; npm install; npm install ../.. --install-links",
+    "benchmark": "node benchmark/compare-curves.ts",
     "build": "tsc",
     "build:release": "npx --no @paulmillr/jsbt bundle test/build",
     "check": "npx --no @paulmillr/jsbt check package.json",

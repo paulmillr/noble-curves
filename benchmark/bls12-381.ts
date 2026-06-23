@@ -3,13 +3,12 @@ import bench from '@paulmillr/jsbt/bench.js';
 import { readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { pippenger } from '../../src/abstract/curve.ts';
-import { bls12_381 as bls } from '../../src/bls12-381.ts';
-import { title } from './_shared.ts';
+import { pippenger } from '../src/abstract/curve.ts';
+import { bls12_381 as bls } from '../src/bls12-381.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const G2_VECTORS = readFileSync(
-  `${__dirname}/../vectors/bls12-381/bls12-381-g2-test-vectors.txt`,
+  `${__dirname}/../test/vectors/bls12-381/bls12-381-g2-test-vectors.txt`,
   'utf-8'
 )
   .trim()
@@ -17,21 +16,25 @@ const G2_VECTORS = readFileSync(
   .map((l) => l.split(':'));
 
 (async () => {
-  title('bls12-381');
+  console.log('# bls12-381');
   let p1, p2, sig, sig_s;
   const blsl = bls.longSignatures;
   const blss = bls.shortSignatures;
-  await bench('init', () => {
-    p1 =
-      bls.G1.Point.BASE.multiply(
-        0x28b90deaf189015d3a325908c5e0e4bf00f84f7e639b056ff82d7e70b6eede4cn
-      );
-    p2 =
-      bls.G2.Point.BASE.multiply(
-        0x28b90deaf189015d3a325908c5e0e4bf00f84f7e639b056ff82d7e70b6eede4dn
-      );
-    bls.pairing(p1, p2);
-  });
+  await bench(
+    'init',
+    () => {
+      p1 =
+        bls.G1.Point.BASE.multiply(
+          0x28b90deaf189015d3a325908c5e0e4bf00f84f7e639b056ff82d7e70b6eede4cn
+        );
+      p2 =
+        bls.G2.Point.BASE.multiply(
+          0x28b90deaf189015d3a325908c5e0e4bf00f84f7e639b056ff82d7e70b6eede4dn
+        );
+      bls.pairing(p1, p2);
+    },
+    { mode: 'runOnce' }
+  );
   const priv = hexToBytes('28b90deaf189015d3a325908c5e0e4bf00f84f7e639b056ff82d7e70b6eede4c');
   sig = blsl.sign(blsl.hash(Uint8Array.of(0x09)), priv);
   sig_s = blss.sign(blss.hash(Uint8Array.of(0x09)), priv);
@@ -49,12 +52,12 @@ const G2_VECTORS = readFileSync(
   const sig2048 = sig512.concat(sig512, sig512, sig512);
   await bench('pairing', () => bls.pairing(p1, p2));
 
-  console.log('# longSignatures')
+  console.log('# longSignatures');
   await bench('getPublicKey', () => blsl.getPublicKey(priv));
   await bench('sign', () => blsl.sign(blsl.hash(Uint8Array.of(0x09)), priv));
   await bench('verify', () => blsl.verify(sig, blsl.hash(Uint8Array.of(0x09)), pub));
 
-  console.log('# shortSignatures')
+  console.log('# shortSignatures');
   await bench('getPublicKey', () => blss.getPublicKey(priv));
   await bench('sign', () => blss.sign(blss.hash(Uint8Array.of(0x09)), priv));
   await bench('verify', () => blss.verify(sig_s, blss.hash(Uint8Array.of(0x09)), pub_s));
@@ -80,7 +83,7 @@ const G2_VECTORS = readFileSync(
     pippenger(bls.G1.Point, pointsG1, scalars2);
   });
 
-  console.log('# aggregate G1 publicKeys / signatures')
+  console.log('# aggregate G1 publicKeys / signatures');
   await bench('agg G1 x8', () => blsl.aggregatePublicKeys(pubs.slice(0, 8)));
   await bench('agg G1 x32', () => blsl.aggregatePublicKeys(pub32));
   await bench('agg G1 x128', () => blsl.aggregatePublicKeys(pub128));
@@ -89,7 +92,7 @@ const G2_VECTORS = readFileSync(
   await bench('agg G1 x8192', () => blsl.aggregatePublicKeys(pointsG1.slice(0, 8192)));
   await bench('agg G1 x32768', () => blsl.aggregatePublicKeys(pointsG1));
 
-  console.log('# aggregate G2 publicKeys / signatures')
+  console.log('# aggregate G2 publicKeys / signatures');
   await bench('agg G2 x8', () => blsl.aggregateSignatures(sigs.slice(0, 8)));
   await bench('agg G2 x32', () => blsl.aggregateSignatures(sig32));
   await bench('agg G2 x128', () => blsl.aggregateSignatures(sig128));

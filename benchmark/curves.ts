@@ -1,48 +1,55 @@
 import { randomBytes } from '@noble/hashes/utils.js';
 import compare from '@paulmillr/jsbt/bench-compare.js';
-import { ed25519, ed25519_hasher, x25519 } from '../../src/ed25519.ts';
-import { ed448, ed448_hasher, x448 } from '../../src/ed448.ts';
-import { p256, p256_hasher, p384, p384_hasher, p521, p521_hasher } from '../../src/nist.ts';
-import { secp256k1, secp256k1_hasher } from '../../src/secp256k1.ts';
-import { bytesToHex } from '../../src/utils.ts';
+import { ed25519, ed25519_hasher, x25519 } from '../src/ed25519.ts';
+import { ed448, ed448_hasher, x448 } from '../src/ed448.ts';
+import { p256, p256_hasher, p384, p384_hasher, p521, p521_hasher } from '../src/nist.ts';
+import { secp256k1, secp256k1_hasher } from '../src/secp256k1.ts';
+import { bytesToHex } from '../src/utils.ts';
 import { generateData } from './_shared.ts';
 
 (async () => {
-  const curves_ = { ed25519, ed448, secp256k1, p256, p384, p521 };
+  const baseCurves = { ed25519, ed448, secp256k1, p256, p384, p521 };
   const hashToCurves = {
     ed25519: ed25519_hasher,
     ed448: ed448_hasher,
     p256: p256_hasher,
     p384: p384_hasher,
     p521: p521_hasher,
-    secp256k1: secp256k1_hasher
-  }
+    secp256k1: secp256k1_hasher,
+  };
   const curves = {};
   const scalar = 2n ** 180n - 15820n;
-  for (let kv of Object.entries(curves_)) {
-    const [name, curve] = kv;
+
+  for (const [name, curve] of Object.entries(baseCurves)) {
     curve.Point.BASE.precompute(8, false);
     const d = generateData(curve);
     const d2 = generateData(curve);
     const pubHex = bytesToHex(d.pub);
     const rand32 = [randomBytes(32), randomBytes(32)];
     const rand56 = [randomBytes(56), randomBytes(56)];
-    const getSharedSecret = name === 'ed25519' ?
-      (() => x25519.getSharedSecret(rand32[0], rand32[1])) :
-      name === 'ed448' ?
-      (() => x448.getSharedSecret(rand56[0], rand56[1])) :
-      (() => curve.getSharedSecret(d.priv, d2.pub));
+    const getSharedSecret =
+      name === 'ed25519'
+        ? () => x25519.getSharedSecret(rand32[0], rand32[1])
+        : name === 'ed448'
+          ? () => x448.getSharedSecret(rand56[0], rand56[1])
+          : () => curve.getSharedSecret(d.priv, d2.pub);
+
     curves[name] = {
       getPublicKey: () => curve.getPublicKey(d.priv),
       sign: () => curve.sign(d.msg, d.priv),
       verify: () => curve.verify(d.sig, d.msg, d.pub),
-      getSharedSecret: getSharedSecret,
+      getSharedSecret,
       fromHex: () => d.Point.fromHex(pubHex),
       hashToCurve: () => hashToCurves[name].hashToCurve(d.msg),
       Point_add: () => d.point.add(d.point),
       Point_mul: () => d.point.multiply(scalar),
-      Point_mulUns: () => d.point.multiplyUnsafe(scalar)
-    }
+      Point_mulUns: () => d.point.multiplyUnsafe(scalar),
+    };
   }
-  compare('curve operations', {}, curves, { libDims: ['curve', 'algorithm'], dims: ['algorithm'], samples: () => 1000 })
+
+  await compare('curve operations', {}, curves, {
+    libraryDimensions: ['curve', 'algorithm'],
+    dimensions: ['algorithm'],
+    iterations: 1000,
+  });
 })();

@@ -1,10 +1,9 @@
 import mark from '@paulmillr/jsbt/bench.js';
-import * as fft from '../../src/abstract/fft.ts';
-import { bls12_381 } from '../../src/bls12-381.ts';
-import { title } from './_shared.ts';
+import * as fft from '../src/abstract/fft.ts';
+import { bls12_381 } from '../src/bls12-381.ts';
 
 (async () => {
-  title('fft');
+  console.log('# fft');
   const curve = bls12_381;
 
   const Fr = curve.fields.Fr;
@@ -21,6 +20,6 @@ import { title } from './_shared.ts';
     inv: Fr.inv,
   });
 
-  await mark('fftFt', () => fftFr.direct(pFR));
+  await mark('fftFr', () => fftFr.direct(pFR));
   await mark('fftG1', () => fftG1.direct(pG1));
 })();
