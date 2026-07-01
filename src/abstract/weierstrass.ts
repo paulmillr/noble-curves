@@ -330,6 +330,8 @@ export type WeierstrassExtraOpts<T> = Partial<{
   allowInfinityPoint: boolean;
   /** Optional GLV endomorphism data. */
   endo: EndomorphismOpts;
+  /** RNG override used for scalar blinding. */
+  randomBytes: (bytesLength?: number) => TRet<Uint8Array>;
   /** Optional torsion-check override. */
   isTorsionFree: (c: WeierstrassPointCons<T>, point: WeierstrassPoint<T>) => boolean;
   /** Optional cofactor-clearing override. */
@@ -693,12 +695,14 @@ export function weierstrass<T>(
       fromBytes: 'function',
       toBytes: 'function',
       endo: 'object',
+      randomBytes: 'function',
     }
   );
 
   // Snapshot constructor-time flags whose later mutation would otherwise change
   // validity semantics of an already-built point type.
   const { endo, allowInfinityPoint } = extraOpts;
+  const randomBytes = extraOpts.randomBytes === undefined ? wcRandomBytes : extraOpts.randomBytes;
   if (endo) {
     if (!Fp.is0(CURVE.a) || typeof endo.beta !== 'bigint' || !Array.isArray(endo.basises)) {
       throw new Error('invalid endo: expected "beta": bigint and "basises": array');
@@ -1056,32 +1060,17 @@ export function weierstrass<T>(
      * Uses wNAF method. Windowed method may be 10% faster,
      * but takes 2x longer to generate and consumes 2x memory.
      * Uses precomputes when available.
-     * Uses endomorphism for Koblitz curves.
+     * Uses scalar blinding and avoids endomorphism splitting in the secret-scalar path.
      * @param scalar - by which the point would be multiplied
      * @returns New point
      */
     multiply(scalar: bigint): Point {
-      const { endo } = extraOpts;
       // Keep the subgroup-scalar contract strict instead of reducing 0 / n to ZERO.
       // In key/signature-style callers, those values usually mean broken hash/scalar plumbing,
       // and failing closed is safer than silently producing the identity point.
       if (!Fn.isValidNot0(scalar)) throw new RangeError('invalid scalar: out of range'); // 0 is invalid
-      let point: Point, fake: Point; // Fake point is used to const-time mult
-      const mul = (n: bigint) => wnaf.cached(this, n, (p) => normalizeZ(Point, p));
-      /** See docs for {@link EndomorphismOpts} */
-      if (endo) {
-        const { k1neg, k1, k2neg, k2 } = splitEndoScalarN(scalar);
-        const { p: k1p, f: k1f } = mul(k1);
-        const { p: k2p, f: k2f } = mul(k2);
-        fake = k1f.add(k2f);
-        point = finishEndo(endo.beta, k1p, k2p, k1neg, k2neg);
-      } else {
-        const { p, f } = mul(scalar);
-        point = p;
-        fake = f;
-      }
-      // Normalize `z` for both points, but return only real one
-      return normalizeZ(Point, [point, fake])[0];
+      const { p, f } = wnaf.cachedSecret(this, scalar, cofactor, (p) => normalizeZ(Point, p));
+      return normalizeZ(Point, [p, f])[0];
     }
 
     /**
@@ -1098,7 +1087,7 @@ export function weierstrass<T>(
       if (!Fn.isValid(sc)) throw new RangeError('invalid scalar: out of range'); // 0 is valid
       if (sc === _0n || p.is0()) return Point.ZERO; // 0
       if (sc === _1n) return p; // 1
-      if (wnaf.hasCache(this)) return this.multiply(sc); // precomputes
+      if (wnaf.hasCache(this)) return wnaf.unsafePublic(p, sc, (p) => normalizeZ(Point, p)); // precomputes
       // We don't have method for double scalar multiplication (aP + bQ):
       // Even with using Strauss-Shamir trick, it's 35% slower than naïve mul+add.
       if (endo) {
@@ -1178,7 +1167,7 @@ export function weierstrass<T>(
       return `<Point ${this.is0() ? 'ZERO' : this.toHex()}>`;
     }
   }
-  const wnaf = new wNAF(Point, !!extraOpts.endo);
+  const wnaf = new wNAF(Point, !!extraOpts.endo, randomBytes);
   // Enable precomputes. Slows down first publicKey computation by 20ms.
   // Disable for tiny toy curves, with scalar fields < 8 bits (< 16 bits for endomorphism).
   if (wnaf.bits >= 8) Point.BASE.precompute(8);

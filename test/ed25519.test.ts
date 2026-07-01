@@ -345,6 +345,7 @@ describe('ed25519', () => {
         strictEqual(point.isTorsionFree(), true, `orig must be torsionFree: ${hex}`);
         strictEqual(dirty.isTorsionFree(), false, `dirty must not be torsionFree: ${hex}`);
         strictEqual(cleared.isTorsionFree(), true, `cleared must be torsionFree: ${hex}`);
+        strictEqual(dirty.multiply(5n).equals(dirty.multiplyUnsafe(5n)), true);
       }
 
       const xy = { x: 0n, y: 1n };

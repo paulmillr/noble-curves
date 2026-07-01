@@ -4,11 +4,13 @@ import { deepStrictEqual as eql, notDeepStrictEqual, throws } from 'node:assert'
 import { edwards } from '../src/abstract/edwards.ts';
 import { montgomery } from '../src/abstract/montgomery.ts';
 import { Field } from '../src/abstract/modular.ts';
+import { normalizeZ, wNAF } from '../src/abstract/curve.ts';
 import { __TEST as towerTest, tower12 } from '../src/abstract/tower.ts';
 import { ecdsa, weierstrass } from '../src/abstract/weierstrass.ts';
 import { bls12_381 } from '../src/bls12-381.ts';
 import { bn254 } from '../src/bn254.ts';
 import { ed25519, x25519 } from '../src/ed25519.ts';
+import { p256 } from '../src/nist.ts';
 import { secp256k1 } from '../src/secp256k1.ts';
 import { json } from './utils.ts';
 
@@ -115,6 +117,60 @@ describe('createCurve', () => {
     eql(WPoint.BASE.toHex(false), '040001');
     const EPoint = edwards({ a: 1n, d: 2n, p: 5n, n: 8n, h: 1n, Gx: 2n, Gy: 2n });
     eql(EPoint.BASE.toAffine(), { x: 2n, y: 2n });
+  });
+
+  should('keeps public precomputed weierstrass multiplication deterministic without RNG', () => {
+    const Point = weierstrass(p256.Point.CURVE(), {
+      Fp: p256.Point.Fp,
+      Fn: p256.Point.Fn,
+      randomBytes: () => {
+        throw new Error('rng used');
+      },
+    });
+    eql(Point.BASE.multiplyUnsafe(2n).equals(Point.BASE.double()), true);
+    throws(() => Point.BASE.multiply(2n), /rng used/);
+  });
+
+  should('rebuilds blinded wNAF precomputes after cross-instance window changes', () => {
+    const randomBytes = (len = 0) => new Uint8Array(len).fill(7);
+    const Point = weierstrass(p256.Point.CURVE(), {
+      Fp: p256.Point.Fp,
+      Fn: p256.Point.Fn,
+      randomBytes,
+    });
+    const P = Point.BASE;
+    const norm = (points: (typeof P)[]) => normalizeZ(Point, points);
+    const a = new wNAF(Point, false, randomBytes);
+    const b = new wNAF(Point, false, randomBytes);
+    a.createCache(P, 8);
+    const r1 = a.cachedBlinded(P, 123n, norm).p;
+    b.createCache(P, 4);
+    const r2 = a.cachedBlinded(P, 123n, norm).p;
+    eql(r2.equals(r1), true);
+  });
+
+  should('uses unblinded multiply for cofactored weierstrass BASE when n*BASE is nonzero', () => {
+    const Point = weierstrass(
+      { p: 5n, n: 19n, h: 2n, a: 0n, b: 1n, Gx: 0n, Gy: 1n },
+      {
+        randomBytes: () => {
+          throw new Error('rng used');
+        },
+      }
+    );
+    eql(Point.BASE.multiply(2n).equals(Point.BASE.multiplyUnsafe(2n)), true);
+  });
+
+  should('checks cofactored edwards BASE order before blinding', () => {
+    const randomBytes = () => {
+      throw new Error('rng used');
+    };
+    const Good = edwards(ed25519.Point.CURVE(), { randomBytes });
+    throws(() => Good.BASE.multiply(2n), /rng used/);
+
+    const curve = ed25519.Point.CURVE();
+    const Bad = edwards({ ...curve, Gx: 0n, Gy: curve.p - 1n }, { randomBytes });
+    eql(Bad.BASE.multiply(2n).equals(Bad.ZERO), true);
   });
 
   should('keeps edwards generator subgroup validation out of the constructor surface', () => {

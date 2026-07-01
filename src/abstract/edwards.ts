@@ -121,6 +121,8 @@ export type EdwardsExtraOpts = Partial<{
   FpFnLE: boolean;
   /** Square-root ratio helper used during point decompression. */
   uvRatio: (u: bigint, v: bigint) => { isValid: boolean; value: bigint };
+  /** RNG override used for scalar blinding. */
+  randomBytes: (bytesLength?: number) => TRet<Uint8Array>;
 }>;
 
 /**
@@ -295,7 +297,8 @@ export function edwards(
   const { Fp, Fn } = validated;
   let CURVE = validated.CURVE as EdwardsOpts;
   const { h: cofactor } = CURVE;
-  validateObject(opts, {}, { uvRatio: 'function' });
+  validateObject(opts, {}, { uvRatio: 'function', randomBytes: 'function' });
+  const randomBytes = opts.randomBytes === undefined ? wcRandomBytes : opts.randomBytes;
 
   // Coordinate and ZIP-215 bounds follow the base-field byte container, not scalar bytes.
   const MASK = _2n << (BigInt(Fp.BYTES * 8) - _1n);
@@ -532,7 +535,7 @@ export function edwards(
       // and failing closed is safer than silently producing the identity point.
       if (!Fn.isValidNot0(scalar))
         throw new RangeError('invalid scalar: expected 1 <= sc < curve.n');
-      const { p, f } = wnaf.cached(this, scalar, (p) => normalizeZ(Point, p));
+      const { p, f } = wnaf.cachedSecret(this, scalar, cofactor, (p) => normalizeZ(Point, p));
       return normalizeZ(Point, [p, f])[0];
     }
 
@@ -612,7 +615,7 @@ export function edwards(
   // } catch {
   //   throw new Error('bad curve params: generator point');
   // }
-  const wnaf = new wNAF(Point);
+  const wnaf = new wNAF(Point, false, randomBytes);
   // Enable precomputes. Slows down first publicKey computation by 20ms.
   // Disable for tiny toy curves, with scalar fields < 8 bits.
   if (wnaf.bits >= 8) Point.BASE.precompute(8);

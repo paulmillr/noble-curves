@@ -11,6 +11,7 @@ import {
   aobject,
   bitLen,
   bitMask,
+  bytesToNumberBE,
   isPosBig,
   validateObject,
   type Signer,
@@ -21,6 +22,8 @@ import { Field, FpInvertBatch, validateField, type IField } from './modular.ts';
 
 const _0n = /* @__PURE__ */ BigInt(0);
 const _1n = /* @__PURE__ */ BigInt(1);
+const WNAF_BLIND_BYTES = 16;
+const WNAF_BLIND_BITS = 8 * WNAF_BLIND_BYTES;
 
 /** Affine point coordinates without projective fields. */
 export type AffinePoint<T> = {
@@ -343,6 +346,7 @@ type WOpts = {
   maxNumber: number;
   shiftBy: bigint;
 };
+type RandomBytes = (bytesLength?: number) => TRet<Uint8Array>;
 
 function calcWOpts(W: number, scalarBits: number): WOpts {
   validateW(W, scalarBits);
@@ -395,7 +399,8 @@ function validateMSMScalars(scalars: any[], field: any) {
 // Since points in different groups cannot be equal (different object constructor),
 // we can have single place to store precomputes.
 // Allows to make points frozen / immutable.
-const pointPrecomputes = new WeakMap<any, any[]>();
+type PrecomputeEntry<T> = { W: number; bits: number; comp: T[] };
+const pointPrecomputes = new WeakMap<any, PrecomputeEntry<any>>();
 const pointWindowSizes = new WeakMap<any, number>();
 
 function getW(P: any): number {
@@ -445,15 +450,20 @@ export class wNAF<PC extends PC_ANY> {
   private readonly ZERO: PC_P<PC>;
   private readonly maxWnafScalar: bigint;
   private readonly maxScalar: bigint;
+  private readonly randomBytes?: RandomBytes;
+  private readonly blindedPrecomputes = new WeakMap<PC_P<PC>, PrecomputeEntry<PC_P<PC>>>();
+  private baseCanBeBlinded: boolean | undefined;
   readonly bits: number;
 
   // Parametrized with a given Point class (not individual point)
-  constructor(Point: PC, hasEndomorphism: boolean = false) {
+  constructor(Point: PC, hasEndomorphism: boolean = false, randomBytes?: RandomBytes) {
     validatePointCons(Point);
     abool(hasEndomorphism, 'hasEndomorphism');
+    if (randomBytes !== undefined) afunction(randomBytes, 'randomBytes');
     this.Point = Point;
     this.BASE = Point.BASE;
     this.ZERO = Point.ZERO;
+    this.randomBytes = randomBytes;
     const bits = Point.Fn.BITS;
     this.bits = hasEndomorphism ? Math.ceil(bits / 2) : bits;
     const maxw = hasEndomorphism ? bitMask(this.bits) + _1n : Point.Fn.ORDER;
@@ -488,8 +498,8 @@ export class wNAF<PC extends PC_ANY> {
    * @param W - window size
    * @returns precomputed point tables flattened to a single array
    */
-  private precomputeWindow(point: PC_P<PC>, W: number): PC_P<PC>[] {
-    const { windows, windowSize } = calcWOpts(W, this.bits);
+  private precomputeWindow(point: PC_P<PC>, W: number, bits: number = this.bits): PC_P<PC>[] {
+    const { windows, windowSize } = calcWOpts(W, bits);
     const points: PC_P<PC>[] = [];
     let p: PC_P<PC> = point;
     let base = p;
@@ -513,18 +523,19 @@ export class wNAF<PC extends PC_ANY> {
    * https://github.com/paulmillr/noble-secp256k1/blob/47cb1669b6e506ad66b35fe7d76132ae97465da2/index.ts#L502-L541
    * @returns real and fake (for const-time) points
    */
-  private wNAF_CT(W: number, precomputes: PC_P<PC>[], n: bigint): { p: PC_P<PC>; f: PC_P<PC> } {
+  private wNAF_CT(
+    W: number,
+    precomputes: PC_P<PC>[],
+    n: bigint,
+    bits: number = this.bits,
+    maxScalar: bigint = this.maxWnafScalar
+  ): { p: PC_P<PC>; f: PC_P<PC> } {
     // Scalar should be smaller than field order (1/2 of field order for endomorphism curves)
-    if (!(isPosBig(n) && n < this.maxWnafScalar)) throw new Error('invalid scalar');
+    if (!(isPosBig(n) && n < maxScalar)) throw new Error('invalid scalar');
     // Accumulators
     let p = this.ZERO;
     let f = this.BASE;
-    // This code was first written with assumption that 'f' and 'p' will never be infinity point:
-    // since each addition is multiplied by 2 ** W, it cannot cancel each other. However,
-    // there is negate now: it is possible that negated element from low value
-    // would be the same as high element, which will create carry into next window.
-    // It's not obvious how this can fail, but still worth investigating later.
-    const wo = calcWOpts(W, this.bits);
+    const wo = calcWOpts(W, bits);
     for (let window = 0; window < wo.windows; window++) {
       // (n === _0n) is handled and not early-exited. isEven and offsetF are used for noise
       const { nextN, offset, isZero, isNeg, isNegF, offsetF } = calcOffsets(n, window, wo);
@@ -540,8 +551,6 @@ export class wNAF<PC extends PC_ANY> {
     }
     assert0(n);
     // Return both real and fake points so JIT keeps the noise path alive.
-    // Known caveat: negate/carry interactions can still drive `f` to infinity even when `p` is not,
-    // which weakens the noise path and leaves this only "less const-time" by about one bigint mul.
     return { p, f };
   }
 
@@ -556,10 +565,11 @@ export class wNAF<PC extends PC_ANY> {
     W: number,
     precomputes: PC_P<PC>[],
     n: bigint,
-    acc: PC_P<PC> = this.ZERO
+    acc: PC_P<PC> = this.ZERO,
+    bits: number = this.bits
   ): PC_P<PC> {
     this.assertScalar(n);
-    const wo = calcWOpts(W, this.bits);
+    const wo = calcWOpts(W, bits);
     for (let window = 0; window < wo.windows; window++) {
       if (n === _0n) break; // Early-exit, skip 0 value
       const { nextN, offset, isZero, isNeg } = calcOffsets(n, window, wo);
@@ -577,20 +587,49 @@ export class wNAF<PC extends PC_ANY> {
     return acc;
   }
 
-  private getPrecomputes(W: number, point: PC_P<PC>, transform?: Mapper<PC_P<PC>>): PC_P<PC>[] {
-    // Cache key is only point identity plus the remembered window size; callers must not reuse the
-    // same point with incompatible `transform(...)` layouts and expect a separate cache entry.
+  private getPrecomputes(
+    W: number,
+    point: PC_P<PC>,
+    transform?: Mapper<PC_P<PC>>,
+    bits: number = this.bits
+  ): PC_P<PC>[] {
+    // Cache key is only point identity plus the remembered window/bit size; callers must not reuse
+    // the same point with incompatible `transform(...)` layouts and expect a separate cache entry.
     let comp = pointPrecomputes.get(point);
+    if (comp && (comp.W !== W || comp.bits !== bits)) comp = undefined;
     if (!comp) {
       // e.g. creates 4224 points for W=8 on 256-bit curve
-      comp = this.precomputeWindow(point, W) as PC_P<PC>[];
+      const table = this.precomputeWindow(point, W, bits) as PC_P<PC>[];
       if (W !== 1) {
         // Doing transform outside of if brings 15% perf hit
-        if (typeof transform === 'function') comp = transform(comp);
+        const transformed = typeof transform === 'function' ? transform(table) : table;
+        comp = { W, bits, comp: transformed };
         pointPrecomputes.set(point, comp);
+      } else {
+        comp = { W, bits, comp: table };
       }
     }
-    return comp;
+    return comp.comp;
+  }
+
+  private getBlindedPrecomputes(
+    W: number,
+    point: PC_P<PC>,
+    transform?: Mapper<PC_P<PC>>
+  ): PC_P<PC>[] {
+    let comp = this.blindedPrecomputes.get(point);
+    if (comp && comp.W !== W) comp = undefined;
+    if (!comp) {
+      const table = this.precomputeWindow(point, W, this.Point.Fn.BITS + WNAF_BLIND_BITS);
+      if (W !== 1) {
+        const transformed = typeof transform === 'function' ? transform(table) : table;
+        comp = { W, bits: this.Point.Fn.BITS + WNAF_BLIND_BITS, comp: transformed };
+        this.blindedPrecomputes.set(point, comp);
+      } else {
+        comp = { W, bits: this.Point.Fn.BITS + WNAF_BLIND_BITS, comp: table };
+      }
+    }
+    return comp.comp;
   }
 
   cached(
@@ -600,16 +639,79 @@ export class wNAF<PC extends PC_ANY> {
   ): { p: PC_P<PC>; f: PC_P<PC> } {
     if (!(point instanceof this.Point))
       throw new TypeError('"point" expected Point instance, got type=' + typeof point);
+    if (!(isPosBig(scalar) && scalar < this.Point.Fn.ORDER)) throw new Error('invalid scalar');
     const W = getW(point);
     const precomputes = this.getPrecomputes(W, point, transform);
     return this.wNAF_CT(W, precomputes, scalar);
+  }
+
+  cachedBlinded(
+    point: PC_P<PC>,
+    scalar: bigint,
+    transform?: Mapper<PC_P<PC>>
+  ): { p: PC_P<PC>; f: PC_P<PC> } {
+    if (!(point instanceof this.Point))
+      throw new TypeError('"point" expected Point instance, got type=' + typeof point);
+    if (!(isPosBig(scalar) && scalar < this.Point.Fn.ORDER)) throw new Error('invalid scalar');
+    // Blinding computes n = scalar + blind*Fn.ORDER, then n*P via constant-time wNAF. This equals
+    // scalar*P only when Fn.ORDER*P == O; callers guarantee that via shouldBlind() (always for
+    // cofactor-1 curves; for cofactored curves only BASE, and only after checking BASE*n == O).
+    // Fail before building the (large) precompute table if randomness is unavailable.
+    if (this.randomBytes === undefined) throw new Error('randomBytes is required for scalar blinding');
+    const W = getW(point);
+    const bits = this.Point.Fn.BITS + WNAF_BLIND_BITS;
+    const precomputes = this.getBlindedPrecomputes(W, point, transform);
+    const blind = this.randomBytes(WNAF_BLIND_BYTES);
+    if (!(blind instanceof Uint8Array) || blind.length !== WNAF_BLIND_BYTES)
+      throw new Error('randomBytes returned invalid byte array');
+    // Force the top two bits of the 128-bit blind to 10xxxxxx, so blind is in [2^127, 1.5*2^127):
+    // * `| 0x80` (bit 127 = 1) is the load-bearing part: it guarantees blind >= 2^127, so the blind
+    //   is always a full-width, nonzero factor and the scalar is masked even under a degenerate RNG.
+    // * `& 0x3f` (bit 126 = 0) is a safety margin: it caps blind < 1.5*2^127, keeping
+    //   blind*Fn.ORDER + scalar < 0.75*2^(nBits+128), i.e. ~half a window below the 2^(nBits+128)
+    //   ceiling. Not strictly required for the bound (see below), but it reserves headroom so the
+    //   guarantee does not rest on the tight `Fn.ORDER < 2^Fn.BITS` fact and the final carry window
+    //   only ever holds a small carry, never a full digit.
+    blind[0] = (blind[0] & 0x3f) | 0x80;
+    // Even at the extreme (blind < 2^128, scalar < Fn.ORDER < 2^nBits): n <= 2^128*Fn.ORDER - 1 <
+    // 2^(nBits+128), so n stays below maxScalar (= bitMask(bits)+1) and within the blinded table's
+    // window count. wNAF_CT runs a fixed number of windows with one point-add each, so the add
+    // count is independent of scalar (constant-time).
+    const n = scalar + bytesToNumberBE(blind) * this.Point.Fn.ORDER;
+    return this.wNAF_CT(W, precomputes, n, bits, bitMask(bits) + _1n);
+  }
+
+  private shouldBlind(point: PC_P<PC>, cofactor: bigint): boolean {
+    if (cofactor === _1n) return true;
+    if (point !== this.BASE) return false;
+    if (this.baseCanBeBlinded === undefined)
+      this.baseCanBeBlinded = this.unsafe(this.BASE, this.Point.Fn.ORDER).is0();
+    return this.baseCanBeBlinded;
+  }
+
+  cachedSecret(
+    point: PC_P<PC>,
+    scalar: bigint,
+    cofactor: bigint,
+    transform?: Mapper<PC_P<PC>>
+  ): { p: PC_P<PC>; f: PC_P<PC> } {
+    return this.shouldBlind(point, cofactor)
+      ? this.cachedBlinded(point, scalar, transform)
+      : this.cached(point, scalar, transform);
   }
 
   private assertScalar(scalar: bigint): void {
     if (!(isPosBig(scalar) && scalar < this.maxScalar)) throw new Error('invalid scalar');
   }
 
-  unsafe(point: PC_P<PC>, scalar: bigint, transform?: Mapper<PC_P<PC>>, prev?: PC_P<PC>): PC_P<PC> {
+  unsafe(
+    point: PC_P<PC>,
+    scalar: bigint,
+    transform?: Mapper<PC_P<PC>>,
+    prev?: PC_P<PC>,
+    bits: number = this.bits,
+    maxWnafScalar: bigint = this.maxWnafScalar
+  ): PC_P<PC> {
     if (!(point instanceof this.Point))
       throw new TypeError('"point" expected Point instance, got type=' + typeof point);
     const W = getW(point);
@@ -619,9 +721,18 @@ export class wNAF<PC extends PC_ANY> {
     // a) user passes large scalar on their own (rare)
     // b) `assertValidity()` calls `isTorsionFree()`, which multiplies point by `Fn.ORDER`
     // When b) happens, max scalar for endomorphism curves would be 1/2 of Fn.ORDER
-    if (W === 1 || scalar >= this.maxWnafScalar) return this.ladder_nonCT(point, scalar, prev);
-    const precomputes = this.getPrecomputes(W, point, transform);
-    return this.wNAF_nonCT(W, precomputes, scalar, prev);
+    if (W === 1 || scalar >= maxWnafScalar) return this.ladder_nonCT(point, scalar, prev);
+    const precomputes = this.getPrecomputes(W, point, transform, bits);
+    return this.wNAF_nonCT(W, precomputes, scalar, prev, bits);
+  }
+
+  unsafePublic(
+    point: PC_P<PC>,
+    scalar: bigint,
+    transform?: Mapper<PC_P<PC>>,
+    prev?: PC_P<PC>
+  ): PC_P<PC> {
+    return this.unsafe(point, scalar, transform, prev, this.Point.Fn.BITS, this.Point.Fn.ORDER);
   }
 
   // We calculate precomputes for elliptic curve point multiplication
@@ -633,6 +744,7 @@ export class wNAF<PC extends PC_ANY> {
     validateW(W, this.bits);
     pointWindowSizes.set(P, W);
     pointPrecomputes.delete(P);
+    this.blindedPrecomputes.delete(P);
   }
 
   hasCache(elm: PC_P<PC>): boolean {
