@@ -593,6 +593,13 @@ export class wNAF<PC extends PC_ANY> {
     transform?: Mapper<PC_P<PC>>,
     bits: number = this.bits
   ): PC_P<PC>[] {
+    // Reuse an existing blinded table instead of building a second one. `precomputeWindow` emits the
+    // same point sequence for any `bits` (which only sets the window count), so this smaller
+    // endo/unsafe table is exactly a prefix of the blinded table (same base point + window layout).
+    // Callers bound their own window iteration by `bits`, so the blinded table's extra windows are
+    // ignored. This removes the redundant endo/unsafe table in any app that both signs and verifies.
+    const blinded = this.blindedPrecomputes.get(point);
+    if (blinded && blinded.W === W && blinded.bits >= bits) return blinded.comp;
     // Cache key is only point identity plus the remembered window/bit size; callers must not reuse
     // the same point with incompatible `transform(...)` layouts and expect a separate cache entry.
     let comp = pointPrecomputes.get(point);
@@ -625,6 +632,9 @@ export class wNAF<PC extends PC_ANY> {
         const transformed = typeof transform === 'function' ? transform(table) : table;
         comp = { W, bits: this.Point.Fn.BITS + WNAF_BLIND_BITS, comp: transformed };
         this.blindedPrecomputes.set(point, comp);
+        // The blinded table is a superset of the endo/unsafe table for this point; drop the latter
+        // (getPrecomputes now serves its prefix from the blinded table) to avoid keeping both.
+        pointPrecomputes.delete(point);
       } else {
         comp = { W, bits: this.Point.Fn.BITS + WNAF_BLIND_BITS, comp: table };
       }

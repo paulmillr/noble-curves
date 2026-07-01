@@ -68,6 +68,7 @@ import {
   FpInvertBatch,
   FpIsSquare,
   getMinHashLength,
+  invertCt,
   mapHashToField,
   validateField,
   type IField,
@@ -1836,7 +1837,10 @@ export function ecdsa(
       // Important: all mod() calls here must be done over N
       const k = bits2int(kBytes); // Cannot use fields methods, since it is group element
       if (!Fn.isValidNot0(k)) return; // Valid scalars (including k) must be in 1..N-1
-      const ik = Fn.inv(k); // k^-1 mod n
+      // k^-1 mod n. Fermat (invertCt) instead of Fn.inv()'s extended-Euclidean so the secret
+      // nonce inversion has data-independent control flow (loop count of Euclid leaks k, cf.
+      // Minerva). ~4x slower than Fn.inv() but tiny next to k⋅G. Requires prime n (true for ECDSA).
+      const ik = invertCt(k, CURVE_ORDER);
       const q = Point.BASE.multiply(k).toAffine(); // q = k⋅G
       const r = Fn.create(q.x); // r = q.x mod n
       if (r === _0n) return;

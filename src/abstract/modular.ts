@@ -112,7 +112,8 @@ export function pow2(x: bigint, power: bigint, modulo: bigint): bigint {
 export function invert(number: bigint, modulo: bigint): bigint {
   if (number === _0n) throw new Error('invert: expected non-zero number');
   if (modulo <= _0n) throw new Error('invert: expected positive modulus, got ' + modulo);
-  // Fermat's little theorem "CT-like" version inv(n) = n^(m-2) mod m is 30x slower.
+  // This is variable-time: the loop count depends on `number`. For a secret-independent
+  // (Fermat) alternative over a prime modulus, see {@link invertCt} (~4x slower).
   let a = mod(number, modulo);
   let b = modulo;
   // prettier-ignore
@@ -128,6 +129,40 @@ export function invert(number: bigint, modulo: bigint): bigint {
   const gcd = b;
   if (gcd !== _1n) throw new Error('invert: does not exist');
   return mod(x, modulo);
+}
+
+/**
+ * Inverses number over modulo using Fermat's little theorem: `a^(p-2) ≡ a⁻¹ (mod p)`.
+ *
+ * Unlike {@link invert} (extended Euclidean), the exponent `p-2` is a public constant, so the
+ * underlying square-and-multiply has the same control flow for every secret `a`: there is no
+ * data-dependent branching or loop count that could leak `a` through timing (e.g. Minerva-style
+ * ECDSA nonce-inversion attacks). This is only "algorithmically" constant-time — JS bigint
+ * multiplication/reduction is still value-dependent — and it is roughly 4x slower than {@link invert}.
+ *
+ * REQUIRES a prime modulus; Fermat's theorem does not hold otherwise. The result is verified to be
+ * a real inverse, so a non-prime modulus (or a non-invertible input) fails closed with an error
+ * instead of returning a wrong value.
+ * @param a - Value to invert.
+ * @param prime - Prime modulus.
+ * @returns Multiplicative inverse in `[1, prime)`.
+ * @throws If the modulus is not > 1, the input reduces to zero, or the inverse does not exist. {@link Error}
+ * @example
+ * Compute one modular inverse without secret-dependent branching.
+ *
+ * ```ts
+ * invertCt(3n, 11n); // 4n, since 3 * 4 = 12 ≡ 1 (mod 11)
+ * ```
+ */
+export function invertCt(a: bigint, prime: bigint): bigint {
+  if (prime <= _1n) throw new Error('invertCt: expected prime modulus > 1, got ' + prime);
+  const an = mod(a, prime);
+  if (an === _0n) throw new Error('invertCt: expected non-zero number');
+  // Exponent (prime - 2) is public, so FpPow's square-and-multiply is secret-independent.
+  const inverse = pow(an, prime - _2n, prime);
+  // O(1) safety net: verifies the inverse and rejects composite moduli where a^(p-2) is not one.
+  if (mod(an * inverse, prime) !== _1n) throw new Error('invertCt: does not exist');
+  return inverse;
 }
 
 function assertIsSquare<T>(Fp: TArg<IField<T>>, root: T, n: T): void {
