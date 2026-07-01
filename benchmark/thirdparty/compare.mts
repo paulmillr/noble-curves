@@ -4,8 +4,6 @@ import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
-import { edwards } from '../../src/abstract/edwards.ts';
-import { weierstrass } from '../../src/abstract/weierstrass.ts';
 import { ed25519 } from '../../src/ed25519.ts';
 import { p256, p521 } from '../../src/nist.ts';
 import { secp256k1 } from '../../src/secp256k1.ts';
@@ -23,39 +21,48 @@ const p256Scalar = scalarBytes(p256.Point.Fn);
 const p521Scalar = scalarBytes(p521.Point.Fn);
 const edScalar = scalarBytes(ed25519.Point.Fn);
 const edSeed = new Uint8Array(32).fill(0).map((_, i) => i + 1) as Bytes;
-
-const nobleSecpW8 = nobleWeierstrass(secp256k1.Point, 8);
-const nobleSecpComb10 = nobleWeierstrass(secp256k1.Point, 10);
-const nobleP256W8 = nobleWeierstrass(p256.Point, 8);
-const nobleP256Comb10 = nobleWeierstrass(p256.Point, 10);
-const nobleP521W8 = nobleWeierstrass(p521.Point, 8);
-const nobleP521Comb10 = nobleWeierstrass(p521.Point, 10);
-const nobleEdW8 = nobleEdwards(8);
-const nobleEdComb10 = nobleEdwards(10);
+const ecdsaMsgHash = bytes(Array.from({ length: 32 }, (_, i) => 0x31 + i));
+const secpSig = bytes(secp256k1.sign(ecdsaMsgHash, secpScalar, { prehash: false }));
+const secpPub = bytes(secp256k1.getPublicKey(secpScalar, true));
+const secpPubFull = bytes(secp256k1.getPublicKey(secpScalar, false));
+const p256Sig = bytes(p256.sign(ecdsaMsgHash, p256Scalar, { prehash: false }));
+const p256Pub = bytes(p256.getPublicKey(p256Scalar, true));
+const p256PubFull = bytes(p256.getPublicKey(p256Scalar, false));
 
 const secpCases: Record<string, BenchCase> = {
-  'noble wNAF W=8': () => consume(nobleMul(nobleSecpW8, secpScalar, true)),
-  'noble default comb W=10': () => consume(nobleMul(nobleSecpComb10, secpScalar, true)),
+  noble: () => consume(nobleMul(secp256k1.Point, secpScalar, true)),
   'secp256k1 native': secp256k1Native(),
-  'elliptic': ellipticSecp256k1(),
-  'ecurve': ecurveSecp256k1(),
-  'sjcl': sjclSecp256k1(),
+  elliptic: ellipticSecp256k1(),
+  ecurve: ecurveSecp256k1(),
+  sjcl: sjclSecp256k1(),
 };
 
 const p256Cases: Record<string, BenchCase> = {
-  'noble wNAF W=8': () => consume(nobleMul(nobleP256W8, p256Scalar, true)),
-  'noble default comb W=10': () => consume(nobleMul(nobleP256Comb10, p256Scalar, true)),
+  noble: () => consume(nobleMul(p256.Point, p256Scalar, true)),
   'ecc-jsbn': eccJsbnP256(),
 };
 
+const secpVerifyCases: Record<string, BenchCase> = {
+  noble: () => consumeBool(nobleVerify(secp256k1, secpSig, secpPub)),
+  'secp256k1 native': secp256k1NativeVerify(),
+  elliptic: ellipticVerify('secp256k1', secpSig, secpPub),
+  ecurve: ecurveSecp256k1Verify(),
+  sjcl: sjclVerify('k256', secpSig, secpPubFull),
+};
+
+const p256VerifyCases: Record<string, BenchCase> = {
+  noble: () => consumeBool(nobleVerify(p256, p256Sig, p256Pub)),
+  elliptic: ellipticVerify('p256', p256Sig, p256Pub),
+  'ecc-jsbn': eccJsbnP256Verify(),
+  sjcl: sjclVerify('c256', p256Sig, p256PubFull),
+};
+
 const edScalarCases: Record<string, BenchCase> = {
-  'noble wNAF W=8': () => consume(nobleMul(nobleEdW8, edScalar)),
-  'noble default comb W=10': () => consume(nobleMul(nobleEdComb10, edScalar)),
+  noble: () => consume(nobleMul(ed25519.Point, edScalar)),
 };
 
 const p521Cases: Record<string, BenchCase> = {
-  'noble wNAF W=8': () => consume(nobleMul(nobleP521W8, p521Scalar, true)),
-  'noble default comb W=10': () => consume(nobleMul(nobleP521Comb10, p521Scalar, true)),
+  noble: () => consume(nobleMul(p521.Point, p521Scalar, true)),
 };
 
 const edSeedCases: Record<string, BenchCase> = {
@@ -65,16 +72,20 @@ const edSeedCases: Record<string, BenchCase> = {
 
 checkCases('secp256k1 scalar-to-public', secpCases);
 checkCases('p256 scalar-to-public', p256Cases);
+checkTrueCases('secp256k1 ecdsa verify', secpVerifyCases);
+checkTrueCases('p256 ecdsa verify', p256VerifyCases);
 checkCases('ed25519 scalar-to-public', edScalarCases);
 checkCases('p521 scalar-to-public', p521Cases);
 checkCases('ed25519 seed-to-public', edSeedCases);
 
 await compare(
-  'third-party scalar-to-public performance',
+  'third-party EC performance',
   {},
   {
     'secp256k1 scalar-to-public': secpCases,
     'p256 scalar-to-public': p256Cases,
+    'secp256k1 ecdsa verify': secpVerifyCases,
+    'p256 ecdsa verify': p256VerifyCases,
     'ed25519 scalar-to-public': edScalarCases,
     'p521 scalar-to-public': p521Cases,
     'ed25519 seed-to-public': edSeedCases,
@@ -91,24 +102,13 @@ if (!existsSync(join(here, 'node_modules', 'wasm-crypto', 'build', 'optimized.wa
   console.log('\n# skipped wasm-crypto: package has no build/optimized.wasm artifact');
 console.log(`# sink=${sink}`);
 
-function nobleWeierstrass(source: typeof secp256k1.Point, W: number) {
-  const Point = weierstrass(source.CURVE(), { Fp: source.Fp, Fn: source.Fn });
-  Point.BASE.precompute(W, false);
-  return Point;
-}
-
-function nobleEdwards(W: number) {
-  const Point = edwards(ed25519.Point.CURVE(), {
-    Fp: ed25519.Point.Fp,
-    Fn: ed25519.Point.Fn,
-  });
-  Point.BASE.precompute(W, false);
-  return Point;
-}
-
 function nobleMul(Point: any, scalarBytes: Bytes, compressed?: boolean): Bytes {
   const scalar = Point.Fn.fromBytes(scalarBytes);
   return bytes(Point.BASE.multiply(scalar).toBytes(compressed));
+}
+
+function nobleVerify(api: any, signature: Bytes, publicKey: Bytes): boolean {
+  return api.verify(signature, ecdsaMsgHash, publicKey, { prehash: false });
 }
 
 function secp256k1Native(): BenchCase {
@@ -116,11 +116,28 @@ function secp256k1Native(): BenchCase {
   return () => consume(bytes(lib.publicKeyCreate(Buffer.from(secpScalar), true)));
 }
 
+function secp256k1NativeVerify(): BenchCase {
+  const lib = require('secp256k1');
+  const signature = Buffer.from(secpSig);
+  const message = Buffer.from(ecdsaMsgHash);
+  const publicKey = Buffer.from(secpPub);
+  return () => consumeBool(lib.ecdsaVerify(signature, message, publicKey));
+}
+
 function ellipticSecp256k1(): BenchCase {
   const elliptic = require('elliptic');
   const ec = new elliptic.ec('secp256k1');
   const hex = Buffer.from(secpScalar).toString('hex');
   return () => consume(bytes(ec.g.mul(hex).encodeCompressed()));
+}
+
+function ellipticVerify(curveName: 'secp256k1' | 'p256', signatureBytes: Bytes, publicKey: Bytes) {
+  const elliptic = require('elliptic');
+  const ec = new elliptic.ec(curveName);
+  const key = ec.keyFromPublic(Buffer.from(publicKey).toString('hex'), 'hex');
+  const message = Buffer.from(ecdsaMsgHash).toString('hex');
+  const signature = splitSigHex(signatureBytes);
+  return () => consumeBool(key.verify(message, signature));
 }
 
 function ecurveSecp256k1(): BenchCase {
@@ -131,11 +148,41 @@ function ecurveSecp256k1(): BenchCase {
   return () => consume(bytes(curve.G.multiply(scalar).getEncoded(true)));
 }
 
+function ecurveSecp256k1Verify(): BenchCase {
+  const ecurve = require('ecurve');
+  const bigi = require('bigi');
+  const curve = ecurve.getCurveByName('secp256k1');
+  const n = curve.n;
+  const Q = ecurve.Point.decodeFrom(curve, Buffer.from(secpPubFull));
+  const z = bigi.fromBuffer(Buffer.from(ecdsaMsgHash));
+  const r = bigi.fromBuffer(Buffer.from(secpSig.subarray(0, 32)));
+  const s = bigi.fromBuffer(Buffer.from(secpSig.subarray(32)));
+  return () => {
+    if (r.signum() <= 0 || r.compareTo(n) >= 0 || s.signum() <= 0 || s.compareTo(n) >= 0)
+      return consumeBool(false);
+    const w = s.modInverse(n);
+    const u1 = z.multiply(w).mod(n);
+    const u2 = r.multiply(w).mod(n);
+    const R = curve.G.multiplyTwo(u1, Q, u2);
+    return consumeBool(!curve.isInfinity(R) && R.affineX.mod(n).equals(r));
+  };
+}
+
 function sjclSecp256k1(): BenchCase {
   const sjcl = loadSjclWithEcc();
   const curve = sjcl.ecc.curves.k256;
   const scalar = new sjcl.bn(`0x${Buffer.from(secpScalar).toString('hex')}`);
   return () => consume(sjclCompressedPoint(sjcl, curve.G.mult(scalar)));
+}
+
+function sjclVerify(curveName: 'k256' | 'c256', signature: Bytes, publicKey: Bytes): BenchCase {
+  const sjcl = loadSjclWithEcc();
+  const curve = sjcl.ecc.curves[curveName];
+  const point = curve.fromBits(sjcl.codec.bytes.toBits([...publicKey.subarray(1)]));
+  const key = new sjcl.ecc.ecdsa.publicKey(curve, point);
+  const hashBits = sjcl.codec.bytes.toBits([...ecdsaMsgHash]);
+  const sigBits = sjcl.codec.bytes.toBits([...signature]);
+  return () => consumeBool(key.verify(hashBits, sigBits) === true);
 }
 
 function eccJsbnP256(): BenchCase {
@@ -146,6 +193,27 @@ function eccJsbnP256(): BenchCase {
   return () => {
     const point = curve.getG().multiply(scalar);
     return consume(hexToBytes(curve.getCurve().encodeCompressedPointHex(point)));
+  };
+}
+
+function eccJsbnP256Verify(): BenchCase {
+  const ecc = require('ecc-jsbn');
+  const { BigInteger } = require('jsbn');
+  const params = ecc.ECCurves.secp256r1();
+  const curve = params.getCurve();
+  const n = params.getN();
+  const Q = curve.decodePointHex(Buffer.from(p256PubFull).toString('hex'));
+  const z = new BigInteger(Buffer.from(ecdsaMsgHash).toString('hex'), 16);
+  const r = new BigInteger(Buffer.from(p256Sig.subarray(0, 32)).toString('hex'), 16);
+  const s = new BigInteger(Buffer.from(p256Sig.subarray(32)).toString('hex'), 16);
+  return () => {
+    if (r.signum() <= 0 || r.compareTo(n) >= 0 || s.signum() <= 0 || s.compareTo(n) >= 0)
+      return consumeBool(false);
+    const w = s.modInverse(n);
+    const u1 = z.multiply(w).mod(n);
+    const u2 = r.multiply(w).mod(n);
+    const R = params.getG().multiplyTwo(u1, Q, u2);
+    return consumeBool(!R.isInfinity() && R.getX().toBigInteger().mod(n).equals(r));
   };
 }
 
@@ -182,7 +250,17 @@ function checkCases(title: string, cases: Record<string, BenchCase>): void {
   }
 }
 
-function scalarBytes(field: { ORDER: bigint; BYTES: number; toBytes: (num: bigint) => Uint8Array }) {
+function checkTrueCases(title: string, cases: Record<string, BenchCase>): void {
+  for (const [name, fn] of Object.entries(cases)) {
+    if (fn() !== true) throw new Error(`${title}: ${name} failed`);
+  }
+}
+
+function scalarBytes(field: {
+  ORDER: bigint;
+  BYTES: number;
+  toBytes: (num: bigint) => Uint8Array;
+}) {
   const hex = 'a5'.repeat(field.BYTES);
   const scalar = (BigInt(`0x${hex}`) % (field.ORDER - 1n)) + 1n;
   return bytes(field.toBytes(scalar));
@@ -193,8 +271,22 @@ function consume(value: unknown): unknown {
   return value;
 }
 
+function consumeBool(value: boolean): boolean {
+  sink ^= value ? 1 : 0;
+  return value;
+}
+
+function splitSigHex(signature: Uint8Array) {
+  const size = signature.length / 2;
+  return {
+    r: Buffer.from(signature.subarray(0, size)).toString('hex'),
+    s: Buffer.from(signature.subarray(size)).toString('hex'),
+  };
+}
+
 function sameBytes(a: unknown, b: unknown): boolean {
-  if (!(a instanceof Uint8Array) || !(b instanceof Uint8Array) || a.length !== b.length) return false;
+  if (!(a instanceof Uint8Array) || !(b instanceof Uint8Array) || a.length !== b.length)
+    return false;
   let diff = 0;
   for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
   return diff === 0;
