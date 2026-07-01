@@ -135,6 +135,15 @@ function assertIsSquare<T>(Fp: TArg<IField<T>>, root: T, n: T): void {
   if (!F.eql(F.sqr(root), n)) throw new Error('Cannot find square root');
 }
 
+// The Legendre symbol and every sqrt variant here are only defined over an odd (prime) modulus.
+// An even ORDER makes their integer divisions — (p-1)/2, (p+1)/4, (p-5)/8, (p+7)/16 — truncate and
+// silently return a wrong result, so reject it explicitly at the entry points instead. This is a
+// cheap necessary-condition check, not a primality test (composite odd moduli are caught later by
+// the Legendre-result / assertIsSquare checks).
+function aoddModulus(order: bigint, fnName: string): void {
+  if ((order & _1n) === _0n) throw new Error(fnName + ': expected odd modulus, got ' + order);
+}
+
 // Not all roots are possible! Example which will throw:
 // const NUM =
 // n = 72057594037927816n;
@@ -209,6 +218,7 @@ export function tonelliShanks(P: bigint): TRet<<T>(Fp: IField<T>, n: T) => T> {
   // Initialization (precomputation).
   // Caching initialization could boost perf by 7%.
   if (P < _3n) throw new Error('sqrt is not defined for small field');
+  aoddModulus(P, 'tonelliShanks');
   // Factor P - 1 = Q * 2^S, where Q is odd
   let Q = P - _1n;
   let S = 0;
@@ -297,6 +307,7 @@ export function tonelliShanks(P: bigint): TRet<<T>(Fp: IField<T>, n: T) => T> {
  * ```
  */
 export function FpSqrt(P: bigint): TRet<<T>(Fp: IField<T>, n: T) => T> {
+  aoddModulus(P, 'Fp.sqrt');
   // P ≡ 3 (mod 4) => √n = n^((P+1)/4)
   if (P % _4n === _3n) return sqrt3mod4 as TRet<<T>(Fp: IField<T>, n: T) => T>;
   // P ≡ 5 (mod 8) => Atkin algorithm, page 10 of https://eprint.iacr.org/2012/685.pdf
@@ -582,11 +593,15 @@ export function FpPow<T>(Fp: TArg<IField<T>>, num: T, power: bigint): T {
 
 /**
  * Efficiently invert an array of Field elements.
- * Exception-free. Zero-valued field elements stay `undefined` unless `passZero` is enabled.
+ * Zero-valued inputs are not inverted: by default their slot stays `undefined` (hence the
+ * `(T | undefined)[]` return type), or becomes `0` when `passZero` is enabled. Because of that the
+ * batch never calls `inv` on a zero, so over a prime field it is exception-free. The single
+ * `Fp.inv` of the accumulated product can still throw, but only for a non-invertible product, which
+ * a prime `ORDER` cannot produce (it requires a composite / non-field `ORDER`).
  * @param Fp - Field implementation.
  * @param nums - Values to invert.
  * @param passZero - map 0 to 0 (instead of undefined)
- * @returns Inverted values.
+ * @returns Inverted values; entries for zero inputs are `undefined` unless `passZero` is set.
  * @example
  * Invert several field elements with one shared inversion.
  *
@@ -596,12 +611,22 @@ export function FpPow<T>(Fp: TArg<IField<T>>, num: T, power: bigint): T {
  * const inv = FpInvertBatch(Fp, [1n, 2n, 4n]);
  * ```
  */
-export function FpInvertBatch<T>(Fp: TArg<IField<T>>, nums: T[], passZero = false): T[] {
+export function FpInvertBatch<T>(Fp: TArg<IField<T>>, nums: T[], passZero: true): T[];
+export function FpInvertBatch<T>(
+  Fp: TArg<IField<T>>,
+  nums: T[],
+  passZero?: boolean
+): (T | undefined)[];
+export function FpInvertBatch<T>(
+  Fp: TArg<IField<T>>,
+  nums: T[],
+  passZero = false
+): (T | undefined)[] {
   validateField(Fp);
   aarray(nums, 'nums');
   abool(passZero, 'passZero');
   const F = Fp as IField<T>;
-  const inverted = new Array(nums.length).fill(passZero ? F.ZERO : undefined) as T[];
+  const inverted = new Array(nums.length).fill(passZero ? F.ZERO : undefined) as (T | undefined)[];
   // Walk from first to last, multiply them by each other MOD p
   const multipliedAcc = nums.reduce((acc, num, i) => {
     if (F.is0(num)) return acc;
@@ -613,7 +638,8 @@ export function FpInvertBatch<T>(Fp: TArg<IField<T>>, nums: T[], passZero = fals
   // Walk from last to first, multiply them by inverted each other MOD p
   nums.reduceRight((acc, num, i) => {
     if (F.is0(num)) return acc;
-    inverted[i] = F.mul(acc, inverted[i]);
+    // Non-zero `num` means the forward pass already stored a defined prefix product at `inverted[i]`.
+    inverted[i] = F.mul(acc, inverted[i]!);
     return F.mul(acc, num);
   }, invertedAcc);
   return inverted;
@@ -664,6 +690,7 @@ export function FpDiv<T>(Fp: TArg<IField<T>>, lhs: T, rhs: T | bigint): T {
 export function FpLegendre<T>(Fp: TArg<IField<T>>, n: T): -1 | 0 | 1 {
   validateField(Fp);
   const F = Fp as IField<T>;
+  aoddModulus(F.ORDER, 'FpLegendre');
   // We can use 3rd argument as optional cache of this value
   // but seems unneeded for now. The operation is very fast.
   const p1mod2 = (F.ORDER - _1n) / _2n;
@@ -881,7 +908,10 @@ class _Field implements IField<bigint> {
   }
   // TODO: we don't need it here, move out to separate fn
   invertBatch(lst: bigint[]): bigint[] {
-    return FpInvertBatch(this, lst);
+    // `passZero` keeps the `bigint[]` contract honest: zero inputs map to `0` instead of leaking
+    // `undefined` into a `bigint[]`. Callers that must distinguish non-invertible inputs should use
+    // `FpInvertBatch` directly, whose default omits `passZero` and returns `(bigint | undefined)[]`.
+    return FpInvertBatch(this, lst, true);
   }
   // We can't move this out because Fp6, Fp12 implement it
   // and it's unclear what to return in there.
@@ -1066,7 +1096,11 @@ export function mapHashToField(
   if (len < minLen || len > 1024)
     throw new Error('expected ' + minLen + '-1024 bytes of input, got ' + len);
   const num = isLE ? bytesToNumberLE(key) : bytesToNumberBE(key);
-  // `mod(x, 11)` can sometimes produce 0. `mod(x, 10) + 1` is the same, but no 0
+  // Map into the non-zero scalar range [1, fieldOrder-1]: reduce mod (fieldOrder-1) to land in
+  // [0, fieldOrder-2], then add 1. This shifts the range off zero; it is NOT equal to
+  // `mod(num, fieldOrder)` (which spans [0, fieldOrder-1] and can be 0). A residual modulo bias
+  // remains but is negligible (~2^-(nBits/2), e.g. ~2^-128 for a 256-bit order) because `key` is
+  // required to be at least `getMinHashLength(fieldOrder)` (~1.5x field size) bytes of input.
   const reduced = mod(num, fieldOrder - _1n) + _1n;
   return isLE ? numberToBytesLE(reduced, fieldLen) : numberToBytesBE(reduced, fieldLen);
 }

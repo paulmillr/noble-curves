@@ -404,7 +404,7 @@ class _Field2 implements mod.IField<Fp2> {
     return mod.FpPow(this, num, power);
   }
   invertBatch(nums: Fp2[]): Fp2[] {
-    return mod.FpInvertBatch(this, nums);
+    return mod.FpInvertBatch(this, nums, true);
   }
   // Normalized
   add(f1: Fp2, f2: Fp2): Fp2 {
@@ -715,7 +715,7 @@ class _Field6 implements Fp6Bls {
     return mod.FpPow(this, num, power);
   }
   invertBatch(nums: Fp6[]): Fp6[] {
-    return mod.FpInvertBatch(this, nums);
+    return mod.FpInvertBatch(this, nums, true);
   }
 
   inv({ c0, c1, c2 }: Fp6) {
@@ -920,7 +920,7 @@ class _Field12 implements Fp12Bls {
     return mod.FpPow(this, num, power);
   }
   invertBatch(nums: Fp12[]): Fp12[] {
-    return mod.FpInvertBatch(this, nums);
+    return mod.FpInvertBatch(this, nums, true);
   }
 
   // Normalized

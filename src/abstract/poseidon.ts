@@ -167,7 +167,9 @@ export function grainGenConstants(
         throw new Error(`Error generating MDS matrix: xs[${i}] + ys[${j}] resulted in zero.`);
       row.push(xy);
     }
-    mds.push(FpInvertBatch(Fp, row));
+    // `row` is guaranteed non-zero (the loop throws on a zero entry above), so `passZero` only
+    // pins the `bigint[]` return type; it does not change any value here.
+    mds.push(FpInvertBatch(Fp, row, true));
   }
 
   return { roundConstants, mds };
