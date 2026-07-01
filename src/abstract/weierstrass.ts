@@ -52,13 +52,13 @@ import {
   type TRet,
 } from '../utils.ts';
 import {
+  Comb,
   createCurveFields,
   createKeygen,
   mulEndoUnsafe,
   negateCt,
   normalizeZ,
   validatePointCons,
-  wNAF,
   type AffinePoint,
   type CurveLengths,
   type CurvePoint,
@@ -81,8 +81,8 @@ type EndoBasis = [[bigint, bigint], [bigint, bigint]];
 /**
  * When Weierstrass curve has `a=0`, it becomes Koblitz curve.
  * Koblitz curves allow using **efficiently-computable GLV endomorphism ψ**.
- * Endomorphism uses 2x less RAM, speeds up precomputation by 2x and ECDH / key recovery by 20%.
- * For precomputed wNAF it trades off 1/2 init time & 1/3 ram for 20% perf hit.
+ * Endomorphism speeds up un-precomputed public-scalar multiplication (verification / key
+ * recovery) by splitting a scalar into two half-width halves that share doublings.
  *
  * Endomorphism consists of beta, lambda and basises:
  *
@@ -145,8 +145,8 @@ export function _splitEndoScalar(k: bigint, basis: EndoBasis, n: bigint): Scalar
   const k2neg = k2 < _0n;
   if (k1neg) k1 = -k1;
   if (k2neg) k2 = -k2;
-  // Double check that resulting scalar less than half bits of N: otherwise wNAF will fail.
-  // This should only happen on wrong bases.
+  // Double check that resulting scalar is less than half bits of N: `mulEndoUnsafe` callers
+  // rely on the halves being short. This should only happen on wrong bases.
   // Also, the math inside is complex enough that this guard is worth keeping.
   const MAX_NUM = bitMask(Math.ceil(bitLen(n) / 2)) + _1n; // Half bits of N
   if (k1 < _0n || k1 >= MAX_NUM || k2 < _0n || k2 >= MAX_NUM) {
@@ -902,7 +902,7 @@ export function weierstrass<T>(
      * @returns
      */
     precompute(windowSize: number = 10, isLazy = true): Point {
-      wnaf.createCache(this, windowSize);
+      comb.createCache(this, windowSize);
       if (!isLazy) this.multiply(_3n); // random number
       return this;
     }
@@ -1058,9 +1058,7 @@ export function weierstrass<T>(
 
     /**
      * Constant time multiplication.
-     * Uses wNAF method. Windowed method may be 10% faster,
-     * but takes 2x longer to generate and consumes 2x memory.
-     * Uses precomputes when available.
+     * Uses comb method with precomputed tables when available.
      * Uses scalar blinding and avoids endomorphism splitting in the secret-scalar path.
      * @param scalar - by which the point would be multiplied
      * @returns New point
@@ -1070,7 +1068,7 @@ export function weierstrass<T>(
       // In key/signature-style callers, those values usually mean broken hash/scalar plumbing,
       // and failing closed is safer than silently producing the identity point.
       if (!Fn.isValidNot0(scalar)) throw new RangeError('invalid scalar: out of range'); // 0 is invalid
-      const { p, f } = wnaf.cachedSecret(this, scalar, cofactor, (p) => normalizeZ(Point, p));
+      const { p, f } = comb.cachedSecret(this, scalar, cofactor, (p) => normalizeZ(Point, p));
       return normalizeZ(Point, [p, f])[0];
     }
 
@@ -1088,15 +1086,15 @@ export function weierstrass<T>(
       if (!Fn.isValid(sc)) throw new RangeError('invalid scalar: out of range'); // 0 is valid
       if (sc === _0n || p.is0()) return Point.ZERO; // 0
       if (sc === _1n) return p; // 1
-      if (wnaf.hasCache(this)) return wnaf.unsafePublic(p, sc, (p) => normalizeZ(Point, p)); // precomputes
+      if (comb.hasCache(this)) return comb.unsafe(p, sc, (p) => normalizeZ(Point, p)); // precomputes
       // We don't have method for double scalar multiplication (aP + bQ):
       // Even with using Strauss-Shamir trick, it's 35% slower than naïve mul+add.
       if (endo) {
         const { k1neg, k1, k2neg, k2 } = splitEndoScalarN(sc);
-        const { p1, p2 } = mulEndoUnsafe(Point, p, k1, k2); // 30% faster vs wnaf.unsafe
+        const { p1, p2 } = mulEndoUnsafe(Point, p, k1, k2); // 30% faster vs comb.unsafe
         return finishEndo(endo.beta, p1, p2, k1neg, k2neg);
       } else {
-        return wnaf.unsafe(p, sc);
+        return comb.unsafe(p, sc);
       }
     }
 
@@ -1134,7 +1132,7 @@ export function weierstrass<T>(
       if (cofactor === _1n) return true;
       if (isTorsionFree) return isTorsionFree(Point, this);
       // unsafe() will use ladder internally for endomorphism curves
-      return wnaf.unsafe(this, CURVE_ORDER).is0();
+      return comb.unsafe(this, CURVE_ORDER).is0();
     }
 
     clearCofactor(): Point {
@@ -1168,10 +1166,10 @@ export function weierstrass<T>(
       return `<Point ${this.is0() ? 'ZERO' : this.toHex()}>`;
     }
   }
-  const wnaf = new wNAF(Point, !!extraOpts.endo, randomBytes);
+  const comb = new Comb(Point, randomBytes);
   // Enable W=10 comb precomputes. Slows down first publicKey computation.
   // Disable for tiny toy curves, with scalar fields < 10 bits.
-  if (wnaf.bits >= 10) Point.BASE.precompute(10);
+  if (comb.bits >= 10) Point.BASE.precompute(10);
   Object.freeze(Point.prototype);
   Object.freeze(Point);
   return Point;

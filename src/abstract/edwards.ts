@@ -25,11 +25,11 @@ import {
   type TRet,
 } from '../utils.ts';
 import {
+  Comb,
   createCurveFields,
   createKeygen,
   normalizeZ,
   validatePointCons,
-  wNAF,
   type AffinePoint,
   type CurveLengths,
   type CurvePoint,
@@ -423,7 +423,7 @@ export function edwards(
     }
 
     precompute(windowSize: number = 10, isLazy = true) {
-      wnaf.createCache(this, windowSize);
+      comb.createCache(this, windowSize);
       if (!isLazy) this.multiply(_2n); // random number
       return this;
     }
@@ -535,7 +535,7 @@ export function edwards(
       // and failing closed is safer than silently producing the identity point.
       if (!Fn.isValidNot0(scalar))
         throw new RangeError('invalid scalar: expected 1 <= sc < curve.n');
-      const { p, f } = wnaf.cachedSecret(this, scalar, cofactor, (p) => normalizeZ(Point, p));
+      const { p, f } = comb.cachedSecret(this, scalar, cofactor, (p) => normalizeZ(Point, p));
       return normalizeZ(Point, [p, f])[0];
     }
 
@@ -549,7 +549,7 @@ export function edwards(
       if (!Fn.isValid(scalar)) throw new RangeError('invalid scalar: expected 0 <= sc < curve.n');
       if (scalar === _0n) return Point.ZERO;
       if (this.is0() || scalar === _1n) return this;
-      return wnaf.unsafe(this, scalar, (p) => normalizeZ(Point, p));
+      return comb.unsafe(this, scalar, (p) => normalizeZ(Point, p));
     }
 
     // Checks if point is of small order.
@@ -563,7 +563,7 @@ export function edwards(
     // Multiplies point by curve order and checks if the result is 0.
     // Returns `false` is the point is dirty.
     isTorsionFree(): boolean {
-      return wnaf.unsafe(this, CURVE.n).is0();
+      return comb.unsafe(this, CURVE.n).is0();
     }
 
     // Converts Extended point to default (x, y) coordinates.
@@ -615,10 +615,10 @@ export function edwards(
   // } catch {
   //   throw new Error('bad curve params: generator point');
   // }
-  const wnaf = new wNAF(Point, false, randomBytes);
+  const comb = new Comb(Point, randomBytes);
   // Enable W=10 comb precomputes. Slows down first publicKey computation.
   // Disable for tiny toy curves, with scalar fields < 10 bits.
-  if (wnaf.bits >= 10) Point.BASE.precompute(10);
+  if (comb.bits >= 10) Point.BASE.precompute(10);
   Object.freeze(Point.prototype);
   Object.freeze(Point);
   return Point;

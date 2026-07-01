@@ -1,9 +1,9 @@
 import {
+  Comb as _Comb,
   createCurveFields as _createCurveFields,
   normalizeZ as _normalizeZ,
   pippenger as _pippenger,
   precomputeMSMUnsafe as _precomputeMSMUnsafe,
-  wNAF as _wNAF,
 } from '../src/abstract/curve.ts';
 import { bls12_381 } from '../src/bls12-381.ts';
 import { edwards as _edwards } from '../src/abstract/edwards.ts';
@@ -58,5 +58,5 @@ export const edwards = _edwards;
 export const pippenger = _pippenger;
 export const precomputeMSMUnsafe = _precomputeMSMUnsafe;
 export const normalizeZ = _normalizeZ;
-export const wNAF = _wNAF;
+export const Comb = _Comb;
 export { hex, hexToBytes, invert, mod };

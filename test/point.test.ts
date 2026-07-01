@@ -10,10 +10,10 @@ import {
   hexToBytes,
   invert,
   mod,
+  Comb,
   normalizeZ,
   pippenger,
   precomputeMSMUnsafe,
-  wNAF,
 } from './point.helpers.ts';
 import { getTypeTests } from './utils.ts';
 
@@ -106,12 +106,12 @@ describe('basic curve tests', () => {
           equal(G[1].multiplyUnsafe(1n), G[1], '(1*G).multiplyUnsafe(1) = 1*G');
           equal(G[0].multiplyUnsafe(5n), G[0], '(0*G).multiplyUnsafe(5) = 0');
 
-          if (typeof wNAF === 'function') {
+          if (typeof Comb === 'function') {
             const point = G[2];
             const acc = G[7];
             const scalar = 5n;
             const want = acc.add(point.multiplyUnsafe(scalar));
-            const w = new wNAF(p) as any;
+            const w = new Comb(p) as any;
             eql(
               w.ladder_nonCT(point, scalar, acc).equals(want),
               true,
@@ -119,16 +119,16 @@ describe('basic curve tests', () => {
             );
             eql(w.ladder_nonCT(point, 0n, acc).equals(acc), true, 'ladder_nonCT(point, 0, acc)');
             throws(() => w.ladder_nonCT(point, -1n, acc), /invalid scalar/);
-            const precomputes = w.getPrecomputes(2, point);
+            const precomputes = w.getCombPrecomputes(2, point, w.bits);
             eql(
-              w.wNAF_nonCT(2, precomputes, scalar, acc).equals(want),
+              w.combNonCT(precomputes, scalar, acc, p.Fn.ORDER).equals(want),
               true,
-              'wNAF_nonCT(point, scalar, acc)'
+              'combNonCT(point, scalar, acc)'
             );
             eql(
-              w.wNAF_nonCT(2, precomputes, 0n, acc).equals(acc),
+              w.combNonCT(precomputes, 0n, acc, p.Fn.ORDER).equals(acc),
               true,
-              'wNAF_nonCT(point, 0, acc)'
+              'combNonCT(point, 0, acc)'
             );
             eql(
               w.unsafe(point, scalar, undefined, acc).equals(want),

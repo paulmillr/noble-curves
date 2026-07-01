@@ -4,7 +4,7 @@ import { deepStrictEqual as eql, notDeepStrictEqual, throws } from 'node:assert'
 import { edwards } from '../src/abstract/edwards.ts';
 import { montgomery } from '../src/abstract/montgomery.ts';
 import { Field } from '../src/abstract/modular.ts';
-import { normalizeZ, wNAF } from '../src/abstract/curve.ts';
+import { Comb, normalizeZ } from '../src/abstract/curve.ts';
 import { __TEST as towerTest, tower12 } from '../src/abstract/tower.ts';
 import { ecdsa, weierstrass } from '../src/abstract/weierstrass.ts';
 import { bls12_381 } from '../src/bls12-381.ts';
@@ -131,7 +131,7 @@ describe('createCurve', () => {
     throws(() => Point.BASE.multiply(2n), /rng used/);
   });
 
-  should('rebuilds blinded wNAF precomputes after cross-instance window changes', () => {
+  should('rebuilds blinded comb precomputes after cross-instance window changes', () => {
     const randomBytes = (len = 0) => new Uint8Array(len).fill(7);
     const Point = weierstrass(p256.Point.CURVE(), {
       Fp: p256.Point.Fp,
@@ -140,8 +140,8 @@ describe('createCurve', () => {
     });
     const P = Point.BASE;
     const norm = (points: (typeof P)[]) => normalizeZ(Point, points);
-    const a = new wNAF(Point, false, randomBytes);
-    const b = new wNAF(Point, false, randomBytes);
+    const a = new Comb(Point, randomBytes);
+    const b = new Comb(Point, randomBytes);
     a.createCache(P, 8);
     const r1 = a.cachedBlinded(P, 123n, norm).p;
     b.createCache(P, 4);
