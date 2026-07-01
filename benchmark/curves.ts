@@ -21,7 +21,7 @@ import { generateData } from './_shared.ts';
   const scalar = 2n ** 180n - 15820n;
 
   for (const [name, curve] of Object.entries(baseCurves)) {
-    curve.Point.BASE.precompute(8, false);
+    curve.Point.BASE.precompute(10, false);
     const d = generateData(curve);
     const d2 = generateData(curve);
     const pubHex = bytesToHex(d.pub);

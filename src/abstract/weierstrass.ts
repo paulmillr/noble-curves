@@ -901,7 +901,7 @@ export function weierstrass<T>(
      * @param isLazy - true will defer table computation until the first multiplication
      * @returns
      */
-    precompute(windowSize: number = 8, isLazy = true): Point {
+    precompute(windowSize: number = 10, isLazy = true): Point {
       wnaf.createCache(this, windowSize);
       if (!isLazy) this.multiply(_3n); // random number
       return this;
@@ -1169,9 +1169,9 @@ export function weierstrass<T>(
     }
   }
   const wnaf = new wNAF(Point, !!extraOpts.endo, randomBytes);
-  // Enable precomputes. Slows down first publicKey computation by 20ms.
-  // Disable for tiny toy curves, with scalar fields < 8 bits (< 16 bits for endomorphism).
-  if (wnaf.bits >= 8) Point.BASE.precompute(8);
+  // Enable W=10 comb precomputes. Slows down first publicKey computation.
+  // Disable for tiny toy curves, with scalar fields < 10 bits.
+  if (wnaf.bits >= 10) Point.BASE.precompute(10);
   Object.freeze(Point.prototype);
   Object.freeze(Point);
   return Point;

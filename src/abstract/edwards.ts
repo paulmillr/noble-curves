@@ -274,7 +274,7 @@ function isEdValidXY(Fp: TArg<IField<bigint>>, CURVE: EdwardsOpts, x: bigint, y:
  *   RFC 8032 base-point constraints like `B != (0,1)` and `[L]B = 0`
  *   are left to the caller's chosen parameters, since eager subgroup
  *   validation here adds about 10-15ms to heavyweight imports like ed448.
- *   The returned constructor also eagerly marks `Point.BASE` for W=8
+ *   The returned constructor also eagerly marks `Point.BASE` for W=10
  *   precompute caching. Some code paths still assume
  *   `Fp.BYTES === Fn.BYTES`, so mismatched byte lengths are not fully audited here.
  * @throws If the curve parameters or Edwards overrides are invalid. {@link Error}
@@ -422,7 +422,7 @@ export function edwards(
       return this.toAffine().y;
     }
 
-    precompute(windowSize: number = 8, isLazy = true) {
+    precompute(windowSize: number = 10, isLazy = true) {
       wnaf.createCache(this, windowSize);
       if (!isLazy) this.multiply(_2n); // random number
       return this;
@@ -616,9 +616,9 @@ export function edwards(
   //   throw new Error('bad curve params: generator point');
   // }
   const wnaf = new wNAF(Point, false, randomBytes);
-  // Enable precomputes. Slows down first publicKey computation by 20ms.
-  // Disable for tiny toy curves, with scalar fields < 8 bits.
-  if (wnaf.bits >= 8) Point.BASE.precompute(8);
+  // Enable W=10 comb precomputes. Slows down first publicKey computation.
+  // Disable for tiny toy curves, with scalar fields < 10 bits.
+  if (wnaf.bits >= 10) Point.BASE.precompute(10);
   Object.freeze(Point.prototype);
   Object.freeze(Point);
   return Point;

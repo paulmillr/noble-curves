@@ -24,6 +24,12 @@ const _0n = /* @__PURE__ */ BigInt(0);
 const _1n = /* @__PURE__ */ BigInt(1);
 const WNAF_BLIND_BYTES = 16;
 const WNAF_BLIND_BITS = 8 * WNAF_BLIND_BYTES;
+// Comb table selected by default precomputed multiplication via `precompute(10)`.
+const COMB_WINDOW = 10;
+// Fixed-window width for the constant-time multiply of un-precomputed points (cachedBlinded, W===1).
+// A flat 2^FW_WINDOW table has a small, scalar-independent build cost, unlike a full-length W=1 wNAF
+// table (one entry per bit) that is discarded after a single multiply.
+const FW_WINDOW = 5;
 
 /** Affine point coordinates without projective fields. */
 export type AffinePoint<T> = {
@@ -346,6 +352,10 @@ type WOpts = {
   maxNumber: number;
   shiftBy: bigint;
 };
+type CombOpts = {
+  d: number;
+  tableSize: number;
+};
 type RandomBytes = (bytesLength?: number) => TRet<Uint8Array>;
 
 function calcWOpts(W: number, scalarBits: number): WOpts {
@@ -356,6 +366,11 @@ function calcWOpts(W: number, scalarBits: number): WOpts {
   const mask = bitMask(W); // W=8 255 == mask 0b11111111
   const shiftBy = BigInt(W); // W=8 8
   return { windows, windowSize, mask, maxNumber, shiftBy };
+}
+
+function calcCombOpts(W: number, scalarBits: number): CombOpts {
+  validateW(W, scalarBits);
+  return { d: Math.ceil(scalarBits / W), tableSize: 2 ** W };
 }
 
 function calcOffsets(n: bigint, window: number, wOpts: WOpts) {
@@ -400,6 +415,7 @@ function validateMSMScalars(scalars: any[], field: any) {
 // we can have single place to store precomputes.
 // Allows to make points frozen / immutable.
 type PrecomputeEntry<T> = { W: number; bits: number; comp: T[] };
+type CombPrecomputeEntry<T> = PrecomputeEntry<T> & { d: number };
 const pointPrecomputes = new WeakMap<any, PrecomputeEntry<any>>();
 const pointWindowSizes = new WeakMap<any, number>();
 
@@ -429,7 +445,9 @@ function assert0(n: bigint): void {
  * - since windows are different, same point inside tables won't be accessed more than once per calc
  * - each multiplication is 'Math.ceil(CURVE_ORDER / 𝑊) + 1' point additions (fixed for any scalar)
  * - +1 window is neccessary for wNAF
- * - wNAF reduces table size: 2x less memory + 2x faster generation, but 10% slower multiplication
+ * - wNAF reduces table size: 2x less memory + 2x faster generation, but slower multiplication
+ * - comb (default W=10 for precomputed secret multiplication) reduces memory further at the cost
+ *   of slower warm multiplication
  *
  * TODO: research returning a 2d JS array of windows instead of a single window.
  * This would allow windows to be in different memory locations.
@@ -452,6 +470,7 @@ export class wNAF<PC extends PC_ANY> {
   private readonly maxScalar: bigint;
   private readonly randomBytes?: RandomBytes;
   private readonly blindedPrecomputes = new WeakMap<PC_P<PC>, PrecomputeEntry<PC_P<PC>>>();
+  private readonly combPrecomputes = new WeakMap<PC_P<PC>, CombPrecomputeEntry<PC_P<PC>>[]>();
   private baseCanBeBlinded: boolean | undefined;
   readonly bits: number;
 
@@ -488,12 +507,12 @@ export class wNAF<PC extends PC_ANY> {
 
   /**
    * Creates a wNAF precomputation window. Used for caching.
-   * Default window size is set by `utils.precompute()` and is equal to 8.
+   * Default window size is set by `utils.precompute()` and is equal to 10.
    * Number of precomputed points depends on the curve size:
    * 2^(𝑊−1) * (Math.ceil(𝑛 / 𝑊) + 1), where:
    * - 𝑊 is the window size
    * - 𝑛 is the bitlength of the curve order.
-   * For a 256-bit curve and window size 8, the number of precomputed points is 128 * 33 = 4224.
+   * For a 256-bit curve and wNAF window size 8, the number of precomputed points is 128 * 33 = 4224.
    * @param point - Point instance
    * @param W - window size
    * @returns precomputed point tables flattened to a single array
@@ -514,6 +533,24 @@ export class wNAF<PC extends PC_ANY> {
       p = base.double();
     }
     return points;
+  }
+
+  private precomputeComb(point: PC_P<PC>, W: number, bits: number): CombPrecomputeEntry<PC_P<PC>> {
+    const { d, tableSize } = calcCombOpts(W, bits);
+    const bases: PC_P<PC>[] = [point];
+    let p = point;
+    for (let i = 1; i < W; i++) {
+      for (let j = 0; j < d; j++) p = p.double();
+      bases.push(p);
+    }
+    const table: PC_P<PC>[] = new Array(tableSize);
+    table[0] = this.ZERO;
+    for (let digit = 1; digit < tableSize; digit++) {
+      const lsb = digit & -digit;
+      const bit = Math.trunc(Math.log2(lsb));
+      table[digit] = table[digit ^ lsb].add(bases[bit]);
+    }
+    return { W, bits, d, comp: table };
   }
 
   /**
@@ -552,6 +589,47 @@ export class wNAF<PC extends PC_ANY> {
     assert0(n);
     // Return both real and fake points so JIT keeps the noise path alive.
     return { p, f };
+  }
+
+  private combCT(precomputes: CombPrecomputeEntry<PC_P<PC>>, n: bigint, maxScalar: bigint) {
+    if (!(isPosBig(n) && n < maxScalar)) throw new Error('invalid scalar');
+    const { W, d, comp } = precomputes;
+    const { tableSize } = calcCombOpts(W, precomputes.bits);
+    let p = this.ZERO;
+    let f = this.BASE;
+    for (let row = d - 1; row >= 0; row--) {
+      if (row !== d - 1) p = p.double();
+      let digit = 0;
+      for (let i = 0; i < W; i++) {
+        digit |= Number((n >> BigInt(row + i * d)) & _1n) << i;
+      }
+      // Data-oblivious select: touch every table entry before the scalar-dependent branch.
+      let selected = comp[0];
+      for (let i = 1; i < tableSize; i++) selected = i === digit ? comp[i] : selected;
+      if (digit === 0) f = f.add(comp[1]);
+      else p = p.add(selected);
+    }
+    return { p, f };
+  }
+
+  private combNonCT(
+    precomputes: CombPrecomputeEntry<PC_P<PC>>,
+    n: bigint,
+    acc: PC_P<PC> | undefined,
+    maxScalar: bigint
+  ): PC_P<PC> {
+    if (!(isPosBig(n) && n < maxScalar)) throw new Error('invalid scalar');
+    const { W, d, comp } = precomputes;
+    let p = this.ZERO;
+    for (let row = d - 1; row >= 0; row--) {
+      if (row !== d - 1) p = p.double();
+      let digit = 0;
+      for (let i = 0; i < W; i++) {
+        digit |= Number((n >> BigInt(row + i * d)) & _1n) << i;
+      }
+      if (digit !== 0) p = p.add(comp[digit]);
+    }
+    return acc === undefined ? p : p.add(acc);
   }
 
   /**
@@ -642,6 +720,27 @@ export class wNAF<PC extends PC_ANY> {
     return comp.comp;
   }
 
+  private getCombPrecomputes(
+    W: number,
+    point: PC_P<PC>,
+    bits: number,
+    transform?: Mapper<PC_P<PC>>
+  ): CombPrecomputeEntry<PC_P<PC>> {
+    let entries = this.combPrecomputes.get(point);
+    let comp = entries?.find((entry) => entry.W === W && entry.bits === bits);
+    if (!comp) {
+      comp = this.precomputeComb(point, W, bits);
+      if (typeof transform === 'function') comp = { ...comp, comp: transform(comp.comp) };
+      if (!entries) {
+        entries = [];
+        this.combPrecomputes.set(point, entries);
+      }
+      entries.push(comp);
+      pointPrecomputes.delete(point);
+    }
+    return comp;
+  }
+
   cached(
     point: PC_P<PC>,
     scalar: bigint,
@@ -651,6 +750,12 @@ export class wNAF<PC extends PC_ANY> {
       throw new TypeError('"point" expected Point instance, got type=' + typeof point);
     if (!(isPosBig(scalar) && scalar < this.Point.Fn.ORDER)) throw new Error('invalid scalar');
     const W = getW(point);
+    if (W === COMB_WINDOW)
+      return this.combCT(
+        this.getCombPrecomputes(W, point, this.bits, transform),
+        scalar,
+        this.maxWnafScalar
+      );
     const precomputes = this.getPrecomputes(W, point, transform);
     return this.wNAF_CT(W, precomputes, scalar);
   }
@@ -670,7 +775,6 @@ export class wNAF<PC extends PC_ANY> {
     if (this.randomBytes === undefined) throw new Error('randomBytes is required for scalar blinding');
     const W = getW(point);
     const bits = this.Point.Fn.BITS + WNAF_BLIND_BITS;
-    const precomputes = this.getBlindedPrecomputes(W, point, transform);
     const blind = this.randomBytes(WNAF_BLIND_BYTES);
     if (!(blind instanceof Uint8Array) || blind.length !== WNAF_BLIND_BYTES)
       throw new Error('randomBytes returned invalid byte array');
@@ -688,7 +792,55 @@ export class wNAF<PC extends PC_ANY> {
     // window count. wNAF_CT runs a fixed number of windows with one point-add each, so the add
     // count is independent of scalar (constant-time).
     const n = scalar + bytesToNumberBE(blind) * this.Point.Fn.ORDER;
+    // Un-precomputed points (W===1, e.g. ECDH peer keys) skip the full-length W=1 wNAF table (one
+    // entry per bit, built then thrown away) in favor of a small fixed-window multiply.
+    if (W === 1) return this.fixedWindowCT(point, n, bits);
+    if (W === COMB_WINDOW)
+      return this.combCT(
+        this.getCombPrecomputes(W, point, bits, transform),
+        n,
+        bitMask(bits) + _1n
+      );
+    const precomputes = this.getBlindedPrecomputes(W, point, transform);
     return this.wNAF_CT(W, precomputes, n, bits, bitMask(bits) + _1n);
+  }
+
+  /**
+   * Constant-time multiplication `n*point` for an un-precomputed point, via a small fixed window.
+   * Building a full-length W=1 wNAF table costs one point-add per scalar bit and is discarded after
+   * a single use; a flat 2^FW_WINDOW table (`size-1` adds) is far cheaper to build. The
+   * point-operation sequence is independent of `n`: build the table, then per window exactly
+   * FW_WINDOW doublings, a data-oblivious scan over every table entry, and one addition (adds the
+   * identity when the window digit is 0 — never skipped).
+   *
+   * `n` must be `< 2^bits`; callers pass the already-blinded scalar, so `Fn.ORDER*point == O` makes
+   * the result equal `scalar*point`. Assumes complete addition (adding the identity costs the same
+   * as any add), which holds for the Weierstrass/Edwards point types used here. The table is left in
+   * projective form (no normalizeZ): normalizing this small a table costs more than the mixed-add
+   * savings it would buy for a single multiply.
+   * @returns real point `p`; `f` duplicates it only to match {@link wNAF_CT}'s return shape (this
+   * path needs no fake accumulator — its op-count is already scalar-independent).
+   */
+  private fixedWindowCT(point: PC_P<PC>, n: bigint, bits: number): { p: PC_P<PC>; f: PC_P<PC> } {
+    const W = FW_WINDOW;
+    const size = 1 << W;
+    const mask = bitMask(W);
+    // Flat table [O, point, 2*point, ..., (size-1)*point].
+    const table: PC_P<PC>[] = new Array(size);
+    table[0] = this.ZERO;
+    for (let i = 1; i < size; i++) table[i] = table[i - 1].add(point);
+    // Horner MSB->LSB. windows*W >= bits and n < 2^bits, so every bit of n is consumed.
+    const windows = Math.ceil(bits / W);
+    let acc = this.ZERO;
+    for (let window = windows - 1; window >= 0; window--) {
+      for (let d = 0; d < W; d++) acc = acc.double(); // W doublings per window
+      const digit = Number((n >> BigInt(window * W)) & mask);
+      // Data-oblivious select: touch every entry (stronger than wNAF_CT's secret-indexed lookup).
+      let sel = table[0];
+      for (let i = 1; i < size; i++) sel = i === digit ? table[i] : sel;
+      acc = acc.add(sel); // one add per window, even for digit 0
+    }
+    return { p: acc, f: acc };
   }
 
   private shouldBlind(point: PC_P<PC>, cofactor: bigint): boolean {
@@ -732,6 +884,13 @@ export class wNAF<PC extends PC_ANY> {
     // b) `assertValidity()` calls `isTorsionFree()`, which multiplies point by `Fn.ORDER`
     // When b) happens, max scalar for endomorphism curves would be 1/2 of Fn.ORDER
     if (W === 1 || scalar >= maxWnafScalar) return this.ladder_nonCT(point, scalar, prev);
+    if (W === COMB_WINDOW)
+      return this.combNonCT(
+        this.getCombPrecomputes(W, point, bits, transform),
+        scalar,
+        prev,
+        maxWnafScalar
+      );
     const precomputes = this.getPrecomputes(W, point, transform, bits);
     return this.wNAF_nonCT(W, precomputes, scalar, prev, bits);
   }
@@ -755,6 +914,7 @@ export class wNAF<PC extends PC_ANY> {
     pointWindowSizes.set(P, W);
     pointPrecomputes.delete(P);
     this.blindedPrecomputes.delete(P);
+    this.combPrecomputes.delete(P);
   }
 
   hasCache(elm: PC_P<PC>): boolean {

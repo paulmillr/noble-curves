@@ -112,7 +112,7 @@ describe('createCurve', () => {
     );
   });
 
-  should('constructs valid tiny curve helpers without forcing W=8 precomputes', () => {
+  should('constructs valid tiny curve helpers without forcing default precomputes', () => {
     const WPoint = weierstrass({ p: 5n, n: 19n, h: 1n, a: 0n, b: 1n, Gx: 0n, Gy: 1n });
     eql(WPoint.BASE.toHex(false), '040001');
     const EPoint = edwards({ a: 1n, d: 2n, p: 5n, n: 8n, h: 1n, Gx: 2n, Gy: 2n });
@@ -147,6 +147,19 @@ describe('createCurve', () => {
     b.createCache(P, 4);
     const r2 = a.cachedBlinded(P, 123n, norm).p;
     eql(r2.equals(r1), true);
+  });
+
+  should('uses W=10 comb precomputes for blinded multiplication', () => {
+    const randomBytes = (len = 0) => new Uint8Array(len).fill(9);
+    const Point = weierstrass(p256.Point.CURVE(), {
+      Fp: p256.Point.Fp,
+      Fn: p256.Point.Fn,
+      randomBytes,
+    });
+    const P = Point.BASE.precompute(10, false);
+    for (const scalar of [1n, 2n, 3n, 123456789n, Point.Fn.ORDER - 1n]) {
+      eql(P.multiply(scalar).equals(P.multiplyUnsafe(scalar)), true);
+    }
   });
 
   should('uses unblinded multiply for cofactored weierstrass BASE when n*BASE is nonzero', () => {

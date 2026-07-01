@@ -24,7 +24,7 @@ describe('ed25519', () => {
     return bytes(hex2.padStart(64, '0'));
   }
 
-  if (isNobleCurves) Point.BASE.precompute(8, false);
+  if (isNobleCurves) Point.BASE.precompute(10, false);
 
   describe('getPublicKey()', () => {
     should('reject invalid inputs', () => {
