@@ -38,11 +38,19 @@ type Curve = {
     utils: { randomSecretKey: () => Uint8Array };
   };
 };
+type OutputFormat = 'table' | 'csv';
 export type CtOptions = {
   batch?: number;
   maxT?: number;
   minNs?: number;
   log?: (message: string) => void;
+  onTest?: (result: CtTestResult) => void;
+  progress?: {
+    step: number;
+    start: (test: string) => void;
+    tick: () => void;
+    end: () => void;
+  };
   throwOnFailure?: boolean;
 };
 export type CtTestResult = {
@@ -83,6 +91,8 @@ const DEFAULT_SAMPLES = 100;
 const DEFAULT_BATCH = 4;
 const DEFAULT_MAX_T = 4.5;
 const DEFAULT_MIN_NS = 1_000;
+const PROGRESS_ESTIMATE_INTERVAL = 20;
+const PROGRESS_MIN_ESTIMATE_MS = 20_000;
 const CURVES: Curve[] = [
   { name: 'p256', curve: p256 },
   { name: 'p384', curve: p384 },
@@ -98,6 +108,8 @@ if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.a
 
 function main() {
   const samples = sampleCount();
+  const format = outputFormat();
+  if (format === 'csv') printCtCsvHeader();
   for (const { name, curve } of selectedCurves()) {
     const peerSecret = curve.utils.randomSecretKey();
     const randomPoint = curve.Point.fromBytes(curve.getPublicKey(peerSecret, true));
@@ -107,13 +119,15 @@ function main() {
       { name: 'RANDOM_POINT*scalar', point: randomPoint },
     ];
     for (const { name: pointName, point } of points) {
-      console.log(`\n# ${name} ${pointName} samples=${samples}`);
       const result = runSecretKeyOperationCt(
         (scalarBytes) => point.multiply(curve.Point.Fn.fromBytes(scalarBytes)).toBytes() as Bytes,
         curve.Point.Fn,
         samples,
         {
-          name: `${name}.${pointName}`,
+          name: `${name} ${pointName}`,
+          log: format === 'csv' ? () => {} : console.log,
+          onTest: format === 'csv' ? (test) => printCtCsvRow(name, pointName, test) : undefined,
+          progress: progressEnabled() ? ctProgress(name, pointName, format) : undefined,
           throwOnFailure: false,
         }
       );
@@ -128,6 +142,10 @@ function main() {
     }
   }
 
+  if (format === 'csv') {
+    if (summary.some((row) => row.failed)) process.exitCode = 1;
+    return;
+  }
   console.log('\n# summary');
   console.log(
     `${pad('', 2)} ${pad('curve', 10)} ${pad('point', 20)} ${pad('samples', 8)} ${pad('mean/op', 9)} ${pad('max |t|', 8)}`
@@ -160,7 +178,7 @@ function maxObservedT(result: CtResult): number {
 }
 
 function fmtNs(ns: number): string {
-  return `${(ns / 1000).toFixed(0)}us`;
+  return `${fmtFixed(ns / 1000, 0)}us`;
 }
 
 function pad(value: string, length: number): string {
@@ -174,38 +192,133 @@ function fmtStatus(failed: boolean): string {
 }
 
 function fmtSummaryT(t: number, failed: boolean): string {
-  const value = pad(t.toFixed(2), 8);
-  if (!failed || !supportsColor()) return value;
-  return `\x1b[31m${value}\x1b[0m`;
+  const value = pad(fmtFixed(t, 1), 8);
+  return fmtTColor(t, value);
 }
 
 function fmtT(t: number, failed: boolean): string {
-  const value = `t=${t.toFixed(2).padEnd(13)}`;
-  if (!failed || !supportsColor()) return value;
-  return `\x1b[31m${value}\x1b[0m`;
+  const value = `t=${fmtFixed(t, 1).padEnd(13)}`;
+  return fmtTColor(t, value);
+}
+
+function fmtTColor(t: number, value: string): string {
+  if (!supportsColor()) return value;
+  if (t >= 10) return `\x1b[31m${value}\x1b[0m`;
+  if (t >= DEFAULT_MAX_T) return `\x1b[33m${value}\x1b[0m`;
+  return value;
+}
+
+function fmtFixed(num: number, digits: number): string {
+  const value = num.toFixed(digits);
+  return Object.is(Number(value), -0) ? (0).toFixed(digits) : value;
+}
+
+function fmtNum(num: number): string {
+  return String(cleanZero(num));
+}
+
+function cleanZero(num: number): number {
+  return Object.is(num, -0) ? 0 : num;
+}
+
+function csvCell(value: unknown): string {
+  const cell = String(value ?? '');
+  return /[",\r\n]/.test(cell) ? `"${cell.replaceAll('"', '""')}"` : cell;
+}
+
+function printCsvRow(values: unknown[]) {
+  console.log(values.map(csvCell).join(','));
+}
+
+function printCtCsvHeader() {
+  printCsvRow(['status', 't', 'curve', 'point', 'test', 'timings_ns']);
+}
+
+function printCtCsvRow(curve: string, point: string, test: CtTestResult) {
+  const timings = test.t < DEFAULT_MAX_T ? '' : fmtTimingRange(test.aMean, test.bMean, fmtNsRaw);
+  printCsvRow([
+    test.failed ? 'fail' : 'pass',
+    fmtFixed(test.t, 1),
+    curve,
+    csvPointName(point),
+    test.name,
+    timings,
+  ]);
+}
+
+function ctProgress(
+  curve: string,
+  point: string,
+  format: OutputFormat
+): NonNullable<CtOptions['progress']> {
+  const prefix = `${curve},${csvPointName(point)}`;
+  return {
+    step: format === 'csv' ? 1 : 5,
+    start: (test) => {
+      process.stderr.write(`# ${prefix},${test} running: [`);
+    },
+    tick: () => {
+      process.stderr.write('.');
+    },
+    end: () => {
+      process.stderr.write(']\n');
+    },
+  };
+}
+
+function csvPointName(point: string): string {
+  if (point === 'BASE*scalar') return 'base_mul';
+  if (point === 'RANDOM_POINT*scalar') return 'rand_mul';
+  return point;
+}
+
+function fmtTimingRange(a: number, b: number, fmt: (value: number) => string): string {
+  return `${fmt(Math.min(a, b))}...${fmt(Math.max(a, b))}`;
+}
+
+function fmtNsRaw(ns: number): string {
+  return fmtFixed(ns, 0);
 }
 
 function supportsColor(): boolean {
+  if (process.env.CLICOLOR_FORCE !== undefined && process.env.CLICOLOR_FORCE !== '0') return true;
+  if (process.env.FORCE_COLOR !== undefined && process.env.FORCE_COLOR !== '0') return true;
   if (process.env.NO_COLOR !== undefined) return false;
-  if (process.env.FORCE_COLOR !== undefined) return process.env.FORCE_COLOR !== '0';
+  if (process.env.FORCE_COLOR === '0') return false;
+  if (process.env.CLICOLOR === '0') return false;
   return process.stdout.isTTY === true && process.env.TERM !== 'dumb';
 }
 
+function outputFormat(): OutputFormat {
+  if (process.env.CT_CSV !== undefined && process.env.CT_CSV !== '0') return 'csv';
+  return supportsColor() ? 'table' : 'csv';
+}
+
+function envDisabled(name: string): boolean {
+  const value = process.env[name];
+  return value !== undefined && value !== '0' && value.toLowerCase() !== 'false';
+}
+
+function progressEnabled(): boolean {
+  if (envDisabled('NO_PROGRESS')) return false;
+  return true;
+}
+
 function sampleCount(): number {
-  const value = process.env.CT_SAMPLES;
+  const value = process.env.SAMPLES;
   if (value === undefined) return DEFAULT_SAMPLES;
   const count = Number(value);
-  if (!Number.isSafeInteger(count) || count <= 0) throw new Error('invalid CT_SAMPLES');
+  if (!Number.isSafeInteger(count) || count <= 0) throw new Error('invalid SAMPLES');
   return count;
 }
 
 function selectedCurves(): Curve[] {
-  const value = process.env.CT_CURVES;
+  const value = process.env.CURVES;
   if (value === undefined) return CURVES;
   const names = new Set(
     value.split(',').map((part) => {
       const name = part.trim();
-      if (name.length === 0) throw new Error('invalid CT_CURVES');
+      if (name.length === 0) throw new Error('invalid CURVES');
       return name;
     })
   );
@@ -213,7 +326,7 @@ function selectedCurves(): Curve[] {
   if (selected.length !== names.size) {
     const known = new Set(CURVES.map((curve) => curve.name));
     const unknown = Array.from(names).filter((name) => !known.has(name));
-    throw new Error(`unknown CT_CURVES: ${unknown.join(', ')}`);
+    throw new Error(`unknown CURVES: ${unknown.join(', ')}`);
   }
   return selected;
 }
@@ -224,9 +337,9 @@ export function runSecretKeyOperationCt(
   samples: number,
   opts: CtOptions & { name?: string } = {}
 ): CtResult {
-  const batch = opts.batch ?? envNum('CT_BATCH', DEFAULT_BATCH);
-  const maxT = opts.maxT ?? envNum('CT_MAX_T', DEFAULT_MAX_T);
-  const minNs = opts.minNs ?? envNum('CT_MIN_NS', DEFAULT_MIN_NS);
+  const batch = opts.batch ?? DEFAULT_BATCH;
+  const maxT = opts.maxT ?? DEFAULT_MAX_T;
+  const minNs = opts.minNs ?? DEFAULT_MIN_NS;
   const name = opts.name ?? 'secret-key operation';
   const log = opts.log ?? console.log;
   const order = field.ORDER;
@@ -321,24 +434,47 @@ export function runSecretKeyOperationCt(
     timeOperation(source.keys[i % source.keys.length]);
   }
 
-  log(`${name} constant-time timing`);
-  log(`samples=${samples} batch=${batch} max_t=${maxT} min_ns=${minNs}`);
+  log(`# ${name} samples=${samples} batch=${batch} max_t=${fmtNum(maxT)} min_ns=${fmtNum(minNs)}`);
 
   const results: CtTestResult[] = [];
   for (const test of tests) {
     const a = initStats();
     const b = initStats();
-    for (let i = 0; i < samples; i++) {
-      if (randBit()) {
-        addSample(a, measure(test.a, i));
-        addSample(b, measure(test.b, i));
-      } else {
-        addSample(b, measure(test.b, i));
-        addSample(a, measure(test.a, i));
+    const progress = opts.progress;
+    const progressStartedAt = Date.now();
+    let progressShown = false;
+    let nextProgress = progress?.step ?? 1;
+    const updateProgress = (done: number) => {
+      if (!progress) return;
+      if (!progressShown) {
+        if (done % PROGRESS_ESTIMATE_INTERVAL !== 0) return;
+        const elapsed = Date.now() - progressStartedAt;
+        const estimated = (elapsed * samples) / done;
+        if (estimated <= PROGRESS_MIN_ESTIMATE_MS) return;
+        progress.start(test.name);
+        progressShown = true;
       }
+      while (nextProgress <= 100 && done * 100 >= nextProgress * samples) {
+        progress.tick();
+        nextProgress += progress.step;
+      }
+    };
+    try {
+      for (let i = 0; i < samples; i++) {
+        if (randBit()) {
+          addSample(a, measure(test.a, i));
+          addSample(b, measure(test.b, i));
+        } else {
+          addSample(b, measure(test.b, i));
+          addSample(a, measure(test.a, i));
+        }
+        updateProgress(i + 1);
+      }
+    } finally {
+      if (progressShown) progress?.end();
     }
-    const t = welchT(a, b);
-    const delta = a.mean - b.mean;
+    const t = cleanZero(welchT(a, b));
+    const delta = cleanZero(a.mean - b.mean);
     const failed = t > maxT;
     const result = {
       name: test.name,
@@ -351,10 +487,11 @@ export function runSecretKeyOperationCt(
       failed,
     };
     results.push(result);
-    log(
-      `${fmtStatus(failed)} ${test.name.padEnd(24)} ${fmtT(t, failed)} δ=${fmtNs(delta)} ` +
-        `${test.a.name}=${fmtNs(a.mean)} ${test.b.name}=${fmtNs(b.mean)}`
-    );
+    opts.onTest?.(result);
+    const timings = t < DEFAULT_MAX_T ? '' : fmtTimingRange(a.mean, b.mean, fmtNs);
+    const tText = timings ? fmtT(t, failed) : `t=${fmtFixed(t, 1)}`;
+    const extra = timings ? ` ${timings}` : '';
+    log(`${fmtStatus(failed)} ${test.name.padEnd(24)} ${tText}${extra}`);
   }
 
   const failed = results.some((result) => result.failed);
@@ -364,14 +501,6 @@ export function runSecretKeyOperationCt(
     throw new Error(`${name} timing differs by secret input class`);
   }
   return res;
-}
-
-function envNum(name: string, fallback: number): number {
-  const value = process.env[name];
-  if (value === undefined) return fallback;
-  const num = Number(value);
-  if (!Number.isFinite(num) || num <= 0) throw new Error(`${name} must be a positive number`);
-  return num;
 }
 
 function randomBytes(length: number): Bytes {

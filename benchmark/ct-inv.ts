@@ -3,7 +3,7 @@
  *
  * Reuses the dudect-style Welch t-test harness from ./ct.ts, but the measured secret-key
  * operation is the modular inverse instead of scalar multiplication. For each curve it runs the
- * same battery of secret-input classes and reports |t| (leak if > CT_MAX_T, default 4.5).
+ * same battery of secret-input classes and reports |t| (leak if > 4.5).
  *
  * Compares the two inverse implementations used for the secret nonce:
  *   - euclid  invert()   : extended Euclidean; loop count depends on k
@@ -24,7 +24,7 @@
  * This quantifies the impact of switching `k2sig`'s `Fn.inv(k)` to `invertCt(k, n)`.
  *
  * Run:  npx tsx benchmark/ct-inv.ts
- * Env:  CT_SAMPLES, CT_CURVES, CT_MAXZ, CT_BATCH, CT_MAX_T, CT_MIN_NS (see ct.ts)
+ * Env:  SAMPLES, CURVES, MAXZ, CT_CSV, NO_PROGRESS
  */
 import { pathToFileURL } from 'node:url';
 import { invert, invertCt } from '../src/abstract/modular.ts';
@@ -36,6 +36,13 @@ import { runSecretKeyOperationCt, type CtResult, type ScalarFieldLike } from './
 
 type Bytes = Uint8Array<ArrayBuffer>;
 type InvFn = (a: bigint, prime: bigint) => bigint;
+type OutputFormat = 'table' | 'csv';
+type Progress = {
+  step: number;
+  start: (test: string) => void;
+  tick: () => void;
+  end: () => void;
+};
 type Row = {
   curve: string;
   method: string;
@@ -61,7 +68,11 @@ const STRUCTURAL_TESTS = new Set([
 
 const DEFAULT_SAMPLES = 200;
 const DEFAULT_BATCH = 16; // inversion is fast; batch to clear timer noise
+const DEFAULT_MAX_T = 4.5;
+const DEFAULT_MIN_NS = 1_000;
 const DEFAULT_MAXZ = 8; // leading-zero scan: nonces with 0..maxZ forced leading zero bits
+const PROGRESS_ESTIMATE_INTERVAL = 20;
+const PROGRESS_MIN_ESTIMATE_MS = 20_000;
 let SINK = 0; // declared before main() runs; prevents dead-code elimination of the timed op
 const CURVES: { name: string; Fn: ScalarFieldLike }[] = [
   { name: 'p256', Fn: p256.Point.Fn },
@@ -71,9 +82,9 @@ const CURVES: { name: string; Fn: ScalarFieldLike }[] = [
   { name: 'ed25519', Fn: ed25519.Point.Fn },
   { name: 'ed448', Fn: ed448.Point.Fn },
 ];
-const METHODS: { name: string; fn: InvFn }[] = [
-  { name: 'euclid(invert)', fn: invert },
-  { name: 'fermat(invertCt)', fn: invertCt },
+const METHODS: { id: string; fn: InvFn }[] = [
+  { id: 'euclid_inv', fn: invert },
+  { id: 'fermat_inv', fn: invertCt },
 ];
 
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href)
@@ -81,38 +92,68 @@ if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.a
 
 function main() {
   const samples = sampleCount();
-  const maxZ = Math.floor(envNum('CT_MAXZ', DEFAULT_MAXZ));
+  const maxZ = maxZCount();
+  const format = outputFormat();
   const rows: Row[] = [];
+  if (format === 'csv') printInvCsvHeader();
   for (const { name, Fn } of selectedCurves()) {
     for (const method of METHODS) {
-      console.log(`\n# ${name} ${method.name} k^-1 mod n  samples=${samples}`);
+      const progress = progressEnabled() ? ctProgress(name, method.id, format) : undefined;
+      if (format === 'table')
+        console.log(
+          `# ${name} ${method.id} samples=${samples} batch=${DEFAULT_BATCH} ` +
+            `max_t=${fmtNum(DEFAULT_MAX_T)} min_ns=${fmtNum(DEFAULT_MIN_NS)} max_z=${maxZ}`
+        );
       // operation: bytes(scalar) -> bytes(scalar^-1 mod n)
       const op = (scalarBytes: Bytes): Bytes =>
         Fn.toBytes(method.fn(Fn.fromBytes(scalarBytes), Fn.ORDER)) as Bytes;
-      const batch = envNum('CT_BATCH', DEFAULT_BATCH);
+      const batch = DEFAULT_BATCH;
       const result = runSecretKeyOperationCt(op, Fn, samples, {
-        name: `${name}.${method.name}`,
+        name: `${name} ${method.id}`,
         batch,
+        log: () => {},
+        onTest: (test) =>
+          printInvRow(
+            format,
+            name,
+            method.id,
+            test.name,
+            !test.failed,
+            test.t,
+            test.aMean,
+            test.bMean
+          ),
+        progress,
         throwOnFailure: false,
       });
-      // random-vs-random measures population-MEAN stability. It is INSENSITIVE to per-sample leaks
-      // (both random populations share the same mean), so it cannot see the Minerva-style leak on
-      // its own — it is reported only for context / as a sanity check.
-      const rr = randomVsRandomT(op, Fn, samples, batch);
-      console.log(`  random-vs-random |t|=${rr.t.toFixed(2)} (mean-only, insensitive)  a=${fmtNs(rr.aMean)} b=${fmtNs(rr.bMean)}`);
-      // leading-zero scan: how does k^-1 timing scale with the number of forced leading zero bits?
-      // This is the sharpest, most directly exploitable (HNP/Minerva) probe.
-      const lz = leadingZeroScan(op, Fn, samples, batch, maxZ);
-      console.log('  leading-zero scan (mean, δ vs z=0, |t| vs z=0):');
+      const rr = randomVsRandomT(op, Fn, samples, batch, progress);
+      printInvRow(
+        format,
+        name,
+        method.id,
+        'random-vs-random',
+        rr.t <= DEFAULT_MAX_T,
+        rr.t,
+        rr.aMean,
+        rr.bMean
+      );
+      const lz = leadingZeroScan(op, Fn, samples, batch, maxZ, progress);
+      const baseline = lz[0].mean;
       for (const p of lz)
-        console.log(
-          `    z=${String(p.z).padStart(2)} ${pad(fmtNs(p.mean), 7)}` +
-            (p.z === 0 ? ' baseline' : ` δ=${fmtNsSigned(p.delta)} |t|=${p.t.toFixed(2)}`)
+        printInvRow(
+          format,
+          name,
+          method.id,
+          `lz@${p.z}`,
+          p.t <= DEFAULT_MAX_T,
+          p.t,
+          baseline,
+          p.mean
         );
       const lzTop = lz[lz.length - 1];
       rows.push({
         curve: name,
-        method: method.name,
+        method: method.id,
         maxT: maxObservedT(result),
         structT: structuralMaxT(result),
         rrT: rr.t,
@@ -123,29 +164,54 @@ function main() {
       });
     }
   }
+  if (format === 'csv') {
+    if (rows.some((r) => r.method === 'fermat_inv' && r.lzT > DEFAULT_MAX_T)) process.exitCode = 1;
+    return;
+  }
   printSummary(rows, maxZ);
   // Euclidean is EXPECTED to leak; only fail the run if the constant-time method (fermat) leaks
   // on the leading-zero probe (the sharpest exploitable metric).
-  if (rows.some((r) => r.method.startsWith('fermat') && r.lzT > 4.5)) process.exitCode = 1;
+  if (rows.some((r) => r.method === 'fermat_inv' && r.lzT > DEFAULT_MAX_T)) process.exitCode = 1;
+}
+
+function printInvCsvHeader() {
+  printCsvRow(['status', 't', 'curve', 'method', 'test', 'timings_ns']);
+}
+
+function printInvRow(
+  format: OutputFormat,
+  curve: string,
+  method: string,
+  test: string,
+  passed: boolean,
+  t: number,
+  aMean: number,
+  bMean: number
+) {
+  const timings = t < DEFAULT_MAX_T ? '' : fmtTimingRange(aMean, bMean, fmtNsRaw);
+  if (format === 'csv') {
+    printCsvRow([passed ? 'pass' : 'fail', fmtFixed(t, 1), curve, method, test, timings]);
+    return;
+  }
+  const tText = timings ? fmtT(t, !passed) : `t=${fmtFixed(t, 1)}`;
+  console.log(`${fmtStatus(!passed)} ${test.padEnd(24)} ${tText}${timings ? ` ${timings}` : ''}`);
 }
 
 function printSummary(rows: Row[], maxZ: number) {
-  console.log('\n# summary: k^-1 mod n constant-time (Welch |t|, leak if > 4.5)');
-  console.log(`   lz@${maxZ} = leading-zero probe (${maxZ} forced leading-zero-bit nonces vs full) = sharpest exploitable leak; VERDICT`);
-  console.log('   structural = varied full-size inputs; harness-max = incl. degenerate 1/n-1; rand-rand = mean-only (insensitive)');
+  console.log('\n# summary');
   console.log(
-    `${pad('', 2)} ${pad('curve', 10)} ${pad('method', 18)} ${pad(`lz@${maxZ} |t|`, 14)} ${pad('lz δ', 9)} ${pad('struct', 8)} ${pad('h-max', 8)} ${pad('rand', 7)} mean/op`
+    `${pad('', 2)} ${pad('curve', 10)} ${pad('method', 11)} ${pad(`lz@${maxZ}`, 9)} ${pad('lz delta', 9)} ${pad('struct', 8)} ${pad('h-max', 8)} ${pad('rand', 7)} mean/op`
   );
   for (const r of rows) {
     // The sharpest exploitable verdict is the leading-zero probe |t|.
-    const leak = r.lzT > 4.5;
+    const leak = r.lzT > DEFAULT_MAX_T;
     console.log(
-      `${fmtStatus(leak)} ${pad(r.curve, 10)} ${pad(r.method, 18)} ` +
-        `${pad(`${r.lzT.toFixed(2)} ${leak ? 'LEAK' : 'ok'}`, 14)} ${pad(fmtNsSigned(r.lzDeltaNs), 9)} ` +
-        `${pad(r.structT.toFixed(1), 8)} ${pad(r.maxT.toFixed(0), 8)} ${pad(r.rrT.toFixed(2), 7)} ${fmtNs(r.meanNs)}`
+      `${fmtStatus(leak)} ${pad(r.curve, 10)} ${pad(r.method, 11)} ` +
+        `${pad(`${fmtFixed(r.lzT, 1)} ${leak ? 'LEAK' : 'ok'}`, 9)} ${pad(fmtNsSigned(r.lzDeltaNs), 9)} ` +
+        `${pad(fmtFixed(r.structT, 1), 8)} ${pad(fmtFixed(r.maxT, 0), 8)} ${pad(fmtFixed(r.rrT, 1), 7)} ${fmtNs(r.meanNs)}`
     );
   }
-  console.log(`\n# impact (euclid -> fermat): lz@${maxZ} |t| / δ is the sharpest exploitable-leak metric`);
+  console.log(`\n# impact`);
   const byCurve = new Map<string, Row[]>();
   for (const r of rows) (byCurve.get(r.curve) ?? byCurve.set(r.curve, []).get(r.curve)!).push(r);
   for (const [curve, pair] of byCurve) {
@@ -153,9 +219,9 @@ function printSummary(rows: Row[], maxZ: number) {
     const fe = pair.find((r) => r.method.startsWith('fermat'));
     if (!eu || !fe) continue;
     console.log(
-      `  ${pad(curve, 10)} lz@${maxZ} |t| ${eu.lzT.toFixed(1)} ${eu.lzT > 4.5 ? 'LEAK' : 'ok'} (δ ${fmtNsSigned(eu.lzDeltaNs)}) -> ` +
-        `${fe.lzT.toFixed(1)} ${fe.lzT > 4.5 ? 'LEAK' : 'ok'} (δ ${fmtNsSigned(fe.lzDeltaNs)})   ` +
-        `speed ${fmtNs(eu.meanNs)} -> ${fmtNs(fe.meanNs)} (${(fe.meanNs / eu.meanNs).toFixed(1)}x)`
+      `  ${pad(curve, 10)} lz@${maxZ} |t| ${fmtFixed(eu.lzT, 1)} ${eu.lzT > DEFAULT_MAX_T ? 'LEAK' : 'ok'} (δ ${fmtNsSigned(eu.lzDeltaNs)}) -> ` +
+        `${fmtFixed(fe.lzT, 1)} ${fe.lzT > DEFAULT_MAX_T ? 'LEAK' : 'ok'} (δ ${fmtNsSigned(fe.lzDeltaNs)})   ` +
+        `speed ${fmtNs(eu.meanNs)} -> ${fmtNs(fe.meanNs)} (${fmtFixed(fe.meanNs / eu.meanNs, 1)}x)`
     );
   }
 }
@@ -223,7 +289,8 @@ function randomVsRandomT(
   op: (k: Bytes) => Bytes,
   Fn: ScalarFieldLike,
   samples: number,
-  batch: number
+  batch: number,
+  progress?: Progress
 ): { t: number; aMean: number; bMean: number } {
   const rnd = (): Bytes => Fn.toBytes(randBig(Fn.ORDER - 1n) + 1n) as Bytes; // [1, n-1]
   const A: Bytes[] = [];
@@ -235,16 +302,22 @@ function randomVsRandomT(
   for (let i = 0; i < 50; i++) timeOp(op, A[i % samples], batch); // warmup
   const a = initStats();
   const b = initStats();
-  for (let i = 0; i < samples; i++) {
-    if (randomBytes1() & 1) {
-      addSample(a, timeOp(op, A[i], batch));
-      addSample(b, timeOp(op, B[i], batch));
-    } else {
-      addSample(b, timeOp(op, B[i], batch));
-      addSample(a, timeOp(op, A[i], batch));
+  const tracker = progressTracker(progress, 'random-vs-random', samples);
+  try {
+    for (let i = 0; i < samples; i++) {
+      if (randomBytes1() & 1) {
+        addSample(a, timeOp(op, A[i], batch));
+        addSample(b, timeOp(op, B[i], batch));
+      } else {
+        addSample(b, timeOp(op, B[i], batch));
+        addSample(a, timeOp(op, A[i], batch));
+      }
+      tracker.update(i + 1);
     }
+  } finally {
+    tracker.end();
   }
-  return { t: welch(a, b), aMean: a.mean, bMean: b.mean };
+  return { t: cleanZero(welch(a, b)), aMean: a.mean, bMean: b.mean };
 }
 
 /**
@@ -260,7 +333,8 @@ function leadingZeroScan(
   Fn: ScalarFieldLike,
   samples: number,
   batch: number,
-  maxZ: number
+  maxZ: number,
+  progress?: Progress
 ): { z: number; mean: number; t: number; delta: number }[] {
   // exact bit length of the order (do not trust a possibly-padded Fn.BITS)
   let nb = 0n;
@@ -285,19 +359,25 @@ function leadingZeroScan(
   for (let i = 0; i < 50; i++) timeOp(op, classes[0].keys[i % samples], batch); // warmup
   const stats = classes.map(() => initStats());
   const order = classes.map((_, i) => i);
-  for (let i = 0; i < samples; i++) {
-    for (let j = order.length - 1; j > 0; j--) {
-      // reshuffle class order each round (Fisher-Yates) to avoid systematic ordering bias
-      const r = randomBytes1() % (j + 1);
-      [order[j], order[r]] = [order[r], order[j]];
+  const tracker = progressTracker(progress, 'leading-zero-scan', samples);
+  try {
+    for (let i = 0; i < samples; i++) {
+      for (let j = order.length - 1; j > 0; j--) {
+        // reshuffle class order each round (Fisher-Yates) to avoid systematic ordering bias
+        const r = randomBytes1() % (j + 1);
+        [order[j], order[r]] = [order[r], order[j]];
+      }
+      for (const idx of order) addSample(stats[idx], timeOp(op, classes[idx].keys[i], batch));
+      tracker.update(i + 1);
     }
-    for (const idx of order) addSample(stats[idx], timeOp(op, classes[idx].keys[i], batch));
+  } finally {
+    tracker.end();
   }
   return classes.map((c, idx) => ({
     z: c.z,
     mean: stats[idx].mean,
-    t: welch(stats[idx], stats[0]),
-    delta: stats[idx].mean - stats[0].mean,
+    t: cleanZero(welch(stats[idx], stats[0])),
+    delta: cleanZero(stats[idx].mean - stats[0].mean),
   }));
 }
 
@@ -317,41 +397,142 @@ function maxObservedT(result: CtResult): number {
   return max;
 }
 function fmtNs(ns: number): string {
-  return `${(ns / 1000).toFixed(0)}us`;
+  return `${fmtFixed(ns / 1000, 0)}us`;
 }
 function fmtNsSigned(ns: number): string {
   // signed µs with 2 decimals: leading-zero δ is often sub-µs
-  return `${ns >= 0 ? '+' : '-'}${(Math.abs(ns) / 1000).toFixed(2)}us`;
+  const clean = cleanZero(ns);
+  return `${clean >= 0 ? '+' : '-'}${fmtFixed(Math.abs(clean) / 1000, 2)}us`;
 }
 function pad(value: string, length: number): string {
   return value.padEnd(length);
 }
 function fmtStatus(failed: boolean): string {
-  return failed ? '✕' : '✓';
+  const status = failed ? '✕' : '✓';
+  if (!supportsColor()) return status;
+  return failed ? `\x1b[31m${status}\x1b[0m` : `\x1b[32m${status}\x1b[0m`;
+}
+function fmtT(t: number, failed: boolean): string {
+  const value = `t=${fmtFixed(t, 1).padEnd(13)}`;
+  return fmtTColor(t, value);
+}
+function fmtTColor(t: number, value: string): string {
+  if (!supportsColor()) return value;
+  if (t >= 10) return `\x1b[31m${value}\x1b[0m`;
+  if (t >= DEFAULT_MAX_T) return `\x1b[33m${value}\x1b[0m`;
+  return value;
+}
+function fmtFixed(num: number, digits: number): string {
+  const value = num.toFixed(digits);
+  return Object.is(Number(value), -0) ? (0).toFixed(digits) : value;
+}
+function fmtNum(num: number): string {
+  return String(cleanZero(num));
+}
+function fmtNsRaw(ns: number): string {
+  return fmtFixed(ns, 0);
+}
+function cleanZero(num: number): number {
+  return Object.is(num, -0) ? 0 : num;
+}
+function fmtTimingRange(a: number, b: number, fmt: (value: number) => string): string {
+  return `${fmt(Math.min(a, b))}...${fmt(Math.max(a, b))}`;
+}
+function csvCell(value: unknown): string {
+  const cell = String(value ?? '');
+  return /[",\r\n]/.test(cell) ? `"${cell.replaceAll('"', '""')}"` : cell;
+}
+function printCsvRow(values: unknown[]) {
+  console.log(values.map(csvCell).join(','));
+}
+function supportsColor(): boolean {
+  if (process.env.CLICOLOR_FORCE !== undefined && process.env.CLICOLOR_FORCE !== '0') return true;
+  if (process.env.FORCE_COLOR !== undefined && process.env.FORCE_COLOR !== '0') return true;
+  if (process.env.NO_COLOR !== undefined) return false;
+  if (process.env.FORCE_COLOR === '0') return false;
+  if (process.env.CLICOLOR === '0') return false;
+  return process.stdout.isTTY === true && process.env.TERM !== 'dumb';
+}
+function outputFormat(): OutputFormat {
+  if (process.env.CT_CSV !== undefined && process.env.CT_CSV !== '0') return 'csv';
+  return supportsColor() ? 'table' : 'csv';
+}
+function envDisabled(name: string): boolean {
+  const value = process.env[name];
+  return value !== undefined && value !== '0' && value.toLowerCase() !== 'false';
+}
+function progressEnabled(): boolean {
+  if (envDisabled('NO_PROGRESS')) return false;
+  return true;
+}
+function ctProgress(curve: string, method: string, format: OutputFormat): Progress {
+  const prefix = `${curve},${method}`;
+  return {
+    step: format === 'csv' ? 1 : 5,
+    start: (test) => {
+      process.stderr.write(`# ${prefix},${test} running: [`);
+    },
+    tick: () => {
+      process.stderr.write('.');
+    },
+    end: () => {
+      process.stderr.write(']\n');
+    },
+  };
+}
+function progressTracker(progress: Progress | undefined, test: string, samples: number) {
+  const progressStartedAt = Date.now();
+  let progressShown = false;
+  let nextProgress = progress?.step ?? 1;
+  return {
+    update(done: number) {
+      if (!progress) return;
+      if (!progressShown) {
+        if (done % PROGRESS_ESTIMATE_INTERVAL !== 0) return;
+        const elapsed = Date.now() - progressStartedAt;
+        const estimated = (elapsed * samples) / done;
+        if (estimated <= PROGRESS_MIN_ESTIMATE_MS) return;
+        progress.start(test);
+        progressShown = true;
+      }
+      while (nextProgress <= 100 && done * 100 >= nextProgress * samples) {
+        progress.tick();
+        nextProgress += progress.step;
+      }
+    },
+    end() {
+      if (progressShown) progress?.end();
+    },
+  };
 }
 function sampleCount(): number {
-  const value = process.env.CT_SAMPLES;
+  const value = process.env.SAMPLES;
   if (value === undefined) return DEFAULT_SAMPLES;
   const count = Number(value);
-  if (!Number.isSafeInteger(count) || count <= 0) throw new Error('invalid CT_SAMPLES');
+  if (!Number.isSafeInteger(count) || count <= 0) throw new Error('invalid SAMPLES');
+  return count;
+}
+function maxZCount(): number {
+  const value = process.env.MAXZ;
+  if (value === undefined) return DEFAULT_MAXZ;
+  const count = Number(value);
+  if (!Number.isSafeInteger(count) || count < 0) throw new Error('invalid MAXZ');
   return count;
 }
 function selectedCurves(): { name: string; Fn: ScalarFieldLike }[] {
-  const value = process.env.CT_CURVES;
+  const value = process.env.CURVES;
   if (value === undefined) return CURVES;
-  const names = new Set(value.split(',').map((p) => p.trim()).filter((p) => p.length));
+  const names = new Set(
+    value
+      .split(',')
+      .map((p) => p.trim())
+      .filter((p) => p.length)
+  );
   const selected = CURVES.filter((c) => names.has(c.name));
   if (selected.length !== names.size) {
     const known = new Set(CURVES.map((c) => c.name));
     const unknown = [...names].filter((n) => !known.has(n));
-    throw new Error(`unknown CT_CURVES: ${unknown.join(', ')}`);
+    throw new Error(`unknown CURVES: ${unknown.join(', ')}`);
   }
   return selected;
-}
-function envNum(name: string, fallback: number): number {
-  const value = process.env[name];
-  if (value === undefined) return fallback;
-  const num = Number(value);
-  if (!Number.isFinite(num) || num <= 0) throw new Error(`${name} must be a positive number`);
-  return num;
 }

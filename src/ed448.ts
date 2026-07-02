@@ -93,7 +93,7 @@ const shake256_114 = /* @__PURE__ */ wrapConstructor(() => shake256.create({ dkL
 const shake256_64 = /* @__PURE__ */ wrapConstructor(() => shake256.create({ dkLen: 64 }));
 
 // prettier-ignore
-const _1n = /* @__PURE__ */ BigInt(1), _2n = /* @__PURE__ */ BigInt(2), _3n = /* @__PURE__ */ BigInt(3), _4n = /* @__PURE__ */ BigInt(4), _11n = /* @__PURE__ */ BigInt(11);
+const _0n = /* @__PURE__ */ BigInt(0), _1n = /* @__PURE__ */ BigInt(1), _2n = /* @__PURE__ */ BigInt(2), _3n = /* @__PURE__ */ BigInt(3), _4n = /* @__PURE__ */ BigInt(4), _11n = /* @__PURE__ */ BigInt(11);
 // prettier-ignore
 const _22n = /* @__PURE__ */ BigInt(22), _44n = /* @__PURE__ */ BigInt(44), _88n = /* @__PURE__ */ BigInt(88), _223n = /* @__PURE__ */ BigInt(223);
 
@@ -261,15 +261,30 @@ export const E448: EdwardsPointCons = /* @__PURE__ */ edwards(E448_CURVE, { Fp, 
  */
 export const x448: TRet<MontgomeryECDH> = /* @__PURE__ */ (() => {
   const P = ed448_CURVE_p;
+  const powPminus2 = (x: bigint): bigint => {
+    const Pminus3div4 = ed448_pow_Pminus3div4(x);
+    const Pminus3 = pow2(Pminus3div4, _2n, P);
+    return mod(Pminus3 * x, P); // Pminus3 * x = Pminus2
+  };
   return montgomery({
     P,
     type: 'x448',
-    powPminus2: (x: bigint): bigint => {
-      const Pminus3div4 = ed448_pow_Pminus3div4(x);
-      const Pminus3 = pow2(Pminus3div4, _2n, P);
-      return mod(Pminus3 * x, P); // Pminus3 * x = Pminus2
-    },
+    powPminus2,
     adjustScalarBytes,
+    // ~3x faster fixed-base: [k]B on Ed448-Goldilocks using cached base tables, mapped back
+    // through the 4-isogeny to curve448: u = y²/x² = Y²/X² (the isogeny is a homomorphism and
+    // sends the Ed448 base point to u=5, so no scalar correction factor is needed).
+    scalarMultBase: (k: bigint): bigint => {
+      // Clamped k (≈2^447) exceeds n, but B has prime order n, so [k]B == [k mod n]B.
+      const kn = mod(k, ed448_Point.Fn.ORDER);
+      // k ≡ 0 (mod n): [k]B is the point at infinity, whose u is 0 in the x-only ladder;
+      // returning 0 makes montgomery() reject it exactly like the ladder path.
+      if (kn === _0n) return _0n;
+      const p = ed448_Point.BASE.multiply(kn);
+      // X == 0 only at the identity and the order-2 point, both excluded from the prime-order
+      // subgroup hit by kn in 1..n-1.
+      return mod(p.Y * p.Y * powPminus2(mod(p.X * p.X, P)), P);
+    },
   });
 })();
 

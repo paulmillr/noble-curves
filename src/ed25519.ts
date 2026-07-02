@@ -245,15 +245,29 @@ export const ed25519_FROST: TRet<FROST> = /* @__PURE__ */ (() =>
  */
 export const x25519: TRet<MontgomeryECDH> = /* @__PURE__ */ (() => {
   const P = ed25519_CURVE_p;
+  const powPminus2 = (x: bigint): bigint => {
+    // x^(p-2) aka x^(2^255-21)
+    const { pow_p_5_8, b2 } = ed25519_pow_2_252_3(x);
+    return mod(pow2(pow_p_5_8, _3n, P) * b2, P);
+  };
   return montgomery({
     P,
     type: 'x25519',
-    powPminus2: (x: bigint): bigint => {
-      // x^(p-2) aka x^(2^255-21)
-      const { pow_p_5_8, b2 } = ed25519_pow_2_252_3(x);
-      return mod(pow2(pow_p_5_8, _3n, P) * b2, P);
-    },
+    powPminus2,
     adjustScalarBytes,
+    // ~3x faster fixed-base: [k]B on the birationally-equivalent Edwards curve using cached
+    // base tables, mapped back via u = (1+y)/(1-y) = (Z+Y)/(Z-Y) with one Fermat inversion.
+    // Same construction as libsodium's crypto_scalarmult_curve25519_base.
+    scalarMultBase: (k: bigint): bigint => {
+      // Clamped k (≈2^254) exceeds n, but B has prime order n, so [k]B == [k mod n]B.
+      const kn = mod(k, ed25519_Point.Fn.ORDER);
+      // k ≡ 0 (mod n): [k]B is the point at infinity, whose u is 0 in the x-only ladder;
+      // returning 0 makes montgomery() reject it exactly like the ladder path.
+      if (kn === _0n) return _0n;
+      const p = ed25519_Point.BASE.multiply(kn);
+      // Z-Y == 0 only at the identity, which kn != 0 excludes.
+      return mod((p.Z + p.Y) * powPminus2(mod(p.Z - p.Y, P)), P);
+    },
   });
 })();
 
