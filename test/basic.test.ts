@@ -119,7 +119,7 @@ describe('createCurve', () => {
     eql(EPoint.BASE.toAffine(), { x: 2n, y: 2n });
   });
 
-  should('keeps public precomputed weierstrass multiplication deterministic without RNG', () => {
+  should('falls back to unblinded multiply when RNG is unavailable', () => {
     const Point = weierstrass(p256.Point.CURVE(), {
       Fp: p256.Point.Fp,
       Fn: p256.Point.Fn,
@@ -128,7 +128,8 @@ describe('createCurve', () => {
       },
     });
     eql(Point.BASE.multiplyUnsafe(2n).equals(Point.BASE.double()), true);
-    throws(() => Point.BASE.multiply(2n), /rng used/);
+    // The constructor RNG probe failed: multiply() still works, on the unblinded CT path.
+    eql(Point.BASE.multiply(2n).equals(Point.BASE.double()), true);
   });
 
   should('rebuilds blinded precomputes after cross-instance window changes', () => {
@@ -163,15 +164,18 @@ describe('createCurve', () => {
   });
 
   should('uses unblinded multiply for cofactored weierstrass BASE when n*BASE is nonzero', () => {
+    let calls = 0;
+    const randomBytes = (len = 0) => {
+      calls++;
+      return new Uint8Array(len).fill(7);
+    };
     const Point = weierstrass(
       { p: 5n, n: 19n, h: 2n, a: 0n, b: 1n, Gx: 0n, Gy: 1n },
-      {
-        randomBytes: () => {
-          throw new Error('rng used');
-        },
-      }
+      { randomBytes }
     );
+    const before = calls;
     eql(Point.BASE.multiply(2n).equals(Point.BASE.multiplyUnsafe(2n)), true);
+    eql(calls, before, 'no blind drawn for non-blindable BASE');
   });
 
   should('mulAddUnsafe matches multiplyUnsafe composition (with and without endo)', () => {
@@ -199,15 +203,21 @@ describe('createCurve', () => {
   });
 
   should('checks cofactored edwards BASE order before blinding', () => {
-    const randomBytes = () => {
-      throw new Error('rng used');
+    let calls = 0;
+    const randomBytes = (len = 0) => {
+      calls++;
+      return new Uint8Array(len).fill(7);
     };
     const Good = edwards(ed25519.Point.CURVE(), { randomBytes });
-    throws(() => Good.BASE.multiply(2n), /rng used/);
+    const beforeGood = calls;
+    Good.BASE.multiply(2n);
+    eql(calls > beforeGood, true, 'order-L BASE gets blinded (draws randomness)');
 
     const curve = ed25519.Point.CURVE();
     const Bad = edwards({ ...curve, Gx: 0n, Gy: curve.p - 1n }, { randomBytes });
+    const beforeBad = calls;
     eql(Bad.BASE.multiply(2n).equals(Bad.ZERO), true);
+    eql(calls, beforeBad, 'small-order BASE skips blinding');
   });
 
   should('keeps edwards generator subgroup validation out of the constructor surface', () => {

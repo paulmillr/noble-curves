@@ -486,7 +486,20 @@ export class wNAF<PC extends PC_ANY> {
   // Parametrized with a given Point class (not individual point)
   constructor(Point: PC, randomBytes?: RandomBytes) {
     validatePointCons(Point);
-    if (randomBytes !== undefined) afunction(randomBytes, 'randomBytes');
+    if (randomBytes !== undefined) {
+      afunction(randomBytes, 'randomBytes');
+      // Probe the RNG once: in environments without working randomness (e.g. no WebCrypto),
+      // shouldBlind() then routes secret multiplication to the unblinded constant-time path
+      // instead of throwing on every multiply(). Blinding is defense-in-depth (DPA/template
+      // hardening), not a correctness or key-secrecy requirement, so availability-based
+      // downgrade is acceptable; the shape of returned bytes is still validated on every
+      // blinded call.
+      try {
+        randomBytes(BLIND_BYTES);
+      } catch {
+        randomBytes = undefined;
+      }
+    }
     this.Point = Point;
     this.BASE = Point.BASE;
     this.ZERO = Point.ZERO;
@@ -705,6 +718,8 @@ export class wNAF<PC extends PC_ANY> {
   }
 
   private shouldBlind(point: PC_P<PC>, cofactor: bigint): boolean {
+    // No usable RNG (probed in the constructor): blinding is impossible, use the plain CT path.
+    if (this.randomBytes === undefined) return false;
     if (cofactor === _1n) return true;
     if (point !== this.BASE) return false;
     if (this.baseCanBeBlinded === undefined)
