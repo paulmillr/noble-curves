@@ -4,7 +4,7 @@ import { deepStrictEqual as eql, notDeepStrictEqual, throws } from 'node:assert'
 import { edwards } from '../src/abstract/edwards.ts';
 import { montgomery } from '../src/abstract/montgomery.ts';
 import { Field } from '../src/abstract/modular.ts';
-import { normalizeZ, wNAF } from '../src/abstract/curve.ts';
+import { normalizeZ, ScalarMultiplier } from '../src/abstract/curve.ts';
 import { __TEST as towerTest, tower12 } from '../src/abstract/tower.ts';
 import { ecdsa, weierstrass } from '../src/abstract/weierstrass.ts';
 import { bls12_381 } from '../src/bls12-381.ts';
@@ -141,12 +141,12 @@ describe('createCurve', () => {
     });
     const P = Point.BASE;
     const norm = (points: (typeof P)[]) => normalizeZ(Point, points);
-    const a = new wNAF(Point, randomBytes);
-    const b = new wNAF(Point, randomBytes);
-    a.createCache(P, 8);
-    const r1 = a.cachedBlinded(P, 123n, norm).p;
-    b.createCache(P, 4);
-    const r2 = a.cachedBlinded(P, 123n, norm).p;
+    const a = new ScalarMultiplier(Point, randomBytes);
+    const b = new ScalarMultiplier(Point, randomBytes);
+    a.setWindowSize(P, 8);
+    const r1 = a.mulCTBlinded(P, 123n, norm).p;
+    b.setWindowSize(P, 4);
+    const r2 = a.mulCTBlinded(P, 123n, norm).p;
     eql(r2.equals(r1), true);
   });
 

@@ -1,6 +1,6 @@
 /**
  * Methods for elliptic curve multiplication by scalars.
- * Contains wNAF, pippenger.
+ * Contains wNAF-based ScalarMultiplier, pippenger.
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
@@ -12,6 +12,7 @@ import {
   bitLen,
   bitMask,
   bytesToNumberBE,
+  inRange,
   isPosBig,
   validateObject,
   type Signer,
@@ -22,6 +23,7 @@ import { Field, FpInvertBatch, validateField, type IField } from './modular.ts';
 
 const _0n = /* @__PURE__ */ BigInt(0);
 const _1n = /* @__PURE__ */ BigInt(1);
+const _4n = /* @__PURE__ */ BigInt(4);
 const BLIND_BYTES = 16;
 const BLIND_BITS = 8 * BLIND_BYTES;
 // Fixed-window width for the constant-time multiply of un-precomputed points (W===1).
@@ -120,7 +122,7 @@ export interface CurvePoint<F, P extends CurvePoint<F, P>> {
    */
   multiplyUnsafe(scalar: bigint): P;
   /**
-   * Massively speeds up `p.multiply(n)` by using precompute tables (caching). See {@link wNAF}.
+   * Massively speeds up `p.multiply(n)` by using precompute tables (caching). See {@link ScalarMultiplier}.
    * Cache state lives in internal WeakMaps keyed by point identity, not on the point object.
    * Repeating `precompute(...)` for the same point identity replaces the remembered window size
    * and forces table regeneration for that point.
@@ -255,6 +257,10 @@ export function validatePointCons<P extends CurvePoint<any, P>>(Point: CurvePoin
   afunction(pc.fromAffine, 'Point.fromAffine');
   afunction(pc.fromBytes, 'Point.fromBytes');
   afunction(pc.fromHex, 'Point.fromHex');
+  // Generic helpers (ScalarMultiplier, normalizeZ, MSM) dereference BASE / ZERO:
+  // fail here with a typed error instead of an `undefined` access later.
+  aobject(pc.BASE, 'Point.BASE');
+  aobject(pc.ZERO, 'Point.ZERO');
   validateField(pc.Fp);
   validateField(pc.Fn);
 }
@@ -277,29 +283,6 @@ export interface CurveLengths {
 
 /** Reorders or otherwise remaps a batch while preserving its element type. */
 export type Mapper<T> = (i: T[]) => T[];
-
-/**
- * Computes both candidates first, but the final selection still branches on `condition`, so this
- * is not a strict constant-time CMOV primitive.
- * @param condition - Whether to negate the point.
- * @param item - Point-like value.
- * @returns Original or negated value.
- * @example
- * Keep the point or return its negation based on one boolean branch.
- *
- * ```ts
- * import { negateCt } from '@noble/curves/abstract/curve.js';
- * import { p256 } from '@noble/curves/nist.js';
- * const maybeNegated = negateCt(true, p256.Point.BASE);
- * ```
- */
-export function negateCt<T extends { negate: () => T }>(condition: boolean, item: T): T {
-  abool(condition, 'condition');
-  aobject(item as any, 'item');
-  afunction(item.negate, 'item.negate');
-  const neg = item.negate();
-  return condition ? neg : item;
-}
 
 /**
  * Takes a bunch of Projective Points but executes only one
@@ -327,6 +310,9 @@ export function normalizeZ<P extends CurvePoint<any, P>, PC extends CurvePointCo
   // Match MSM helpers: reject malformed public inputs before reading projective internals.
   validatePointCons(c);
   validateMSMPoints(points, c);
+  // Identity points (Z=0) rely on an implicit contract: FpInvertBatch without `passZero`
+  // yields `undefined` for zero inputs, and `toAffine(undefined)` falls back to its internal
+  // is0 handling instead of using the batch inverse.
   const invertedZs = FpInvertBatch(
     c.Fp,
     points.map((p) => p.Z!)
@@ -334,9 +320,9 @@ export function normalizeZ<P extends CurvePoint<any, P>, PC extends CurvePointCo
   return points.map((p, i) => c.fromAffine(p.toAffine(invertedZs[i])));
 }
 
-function validateW(W: number, bits: number) {
-  if (!Number.isSafeInteger(W) || W <= 0 || W > bits)
-    throw new Error('invalid window size, expected [1..' + bits + '], got W=' + W);
+function validateW(W: number, bits: number, min: number = 1) {
+  if (!Number.isSafeInteger(W) || W < min || W > bits)
+    throw new Error('invalid window size, expected [' + min + '..' + bits + '], got W=' + W);
 }
 
 type RandomBytes = (bytesLength?: number) => TRet<Uint8Array>;
@@ -347,10 +333,13 @@ function validateMSMPoints(points: any[], c: any) {
     if (!(p instanceof c)) throw new Error('invalid point at index ' + i);
   });
 }
-function validateMSMScalars(scalars: any[], field: any) {
+// Default bound is field membership (0 <= s < field.ORDER); a `maxScalar` override widens it
+// to 0 <= s < maxScalar for callers that accept oversized scalars.
+function validateMSMScalars(scalars: any[], field: any, maxScalar?: bigint) {
   if (!Array.isArray(scalars)) throw new Error('array of scalars expected');
   scalars.forEach((s, i) => {
-    if (!field.isValid(s)) throw new Error('invalid scalar at index ' + i);
+    const ok = maxScalar === undefined ? field.isValid(s) : isPosBig(s) && s < maxScalar;
+    if (!ok) throw new Error('invalid scalar at index ' + i);
   });
 }
 
@@ -358,12 +347,12 @@ function validateMSMScalars(scalars: any[], field: any) {
 // we can have single place to store window sizes.
 // Allows to make points frozen / immutable.
 type WnafPrecomputeEntry<T> = { W: number; bits: number; windows: number; comp: T[] };
+/** Result of a constant-time multiply: real point `p`, fake accumulator `f` (discarded). */
+type MulResult<P> = { p: P; f: P };
 const pointWindowSizes = new WeakMap<any, number>();
 
-function getW(P: any): number {
-  // To disable precomputes:
-  // return 1;
-  // `1` is also the uncached sentinel: use the non-precomputed (wNAF / fixed-window) path.
+function getWindowSize(P: any): number {
+  // `1` is the uncached sentinel: use the non-precomputed (wNAF / fixed-window) path.
   return pointWindowSizes.get(P) || 1;
 }
 
@@ -449,35 +438,36 @@ function wnafWalk<P extends { double(): P; add(other: P): P; negate(): P }>(
 }
 
 /**
- * Elliptic curve multiplication of Point by scalar, via precompute tables. Fragile.
+ * Elliptic curve multiplication of Point by scalar.
+ * Routes between cached-table, fixed-window, and one-shot wNAF paths; entry points validate
+ * their own scalars (`mulCT`/`mulCTBlinded`: `1 <= s < Fn.ORDER`; `mulUnsafe`: up to the
+ * `Fn.ORDER^4` DoS cap via {@link mulAddUnsafe}).
  * Table generation is expensive and happens on first call of `multiply()`
  * (or eagerly via `precompute(W, false)`). By default, `BASE` point is precomputed.
  *
- * Scalars should always be less than curve order: this should be checked inside of a curve itself.
  * Cached algorithm is signed fixed-window wNAF:
  * - table stores, for every window w, the multiples `[1..2^(W−1)]⋅2^(w⋅W)⋅P` — all doublings
  *   are baked in, so a multiplication is exactly one table addition per window
  * - window count is fixed (`ceil(bits/W) + 1`), so the point-operation count is scalar-independent
  *   (basis of the constant-time path)
  * - for a 256-bit curve and W=6: 44⋅32 = 1408 table points, 44 additions per multiply
- * - secret scalars are additionally blinded (see {@link wNAF.cachedBlinded}), which widens
- *   tables by 128 bits
+ * - secret scalars are additionally blinded (see {@link ScalarMultiplier.mulCTBlinded}), which
+ *   widens tables by 128 bits
  * @param Point - Point constructor.
  * @param randomBytes - RNG used for scalar blinding; required by the blinded secret path.
  * @example
  * Elliptic curve multiplication of Point by scalar.
  *
  * ```ts
- * import { wNAF } from '@noble/curves/abstract/curve.js';
+ * import { ScalarMultiplier } from '@noble/curves/abstract/curve.js';
  * import { p256 } from '@noble/curves/nist.js';
- * const mul = new wNAF(p256.Point);
+ * const mul = new ScalarMultiplier(p256.Point);
  * ```
  */
-export class wNAF<PC extends PC_ANY> {
+export class ScalarMultiplier<PC extends PC_ANY> {
   private readonly Point: PC;
   private readonly BASE: PC_P<PC>;
   private readonly ZERO: PC_P<PC>;
-  private readonly maxScalar: bigint;
   private readonly randomBytes?: RandomBytes;
   private readonly wnafPrecomputes = new WeakMap<PC_P<PC>, WnafPrecomputeEntry<PC_P<PC>>[]>();
   private baseCanBeBlinded: boolean | undefined;
@@ -505,22 +495,6 @@ export class wNAF<PC extends PC_ANY> {
     this.ZERO = Point.ZERO;
     this.randomBytes = randomBytes;
     this.bits = Point.Fn.BITS;
-    // Hard cap to mitigate DoS
-    this.maxScalar = Point.Fn.ORDER ** BigInt(4);
-  }
-
-  /**
-   * Non-constant-time multiplication for un-precomputed points, via width-4 wNAF.
-   * Same ~bitLen(n) doublings as a double-and-add ladder, but one addition per ~5 bits
-   * (3-add table of odd multiples + signed digits) instead of one per set bit (~bitLen/2):
-   * ~15-20% faster for random scalars. Handles oversized scalars up to the DoS cap,
-   * e.g. isTorsionFree's `Fn.ORDER⋅P` or cofactor-clearing multiples.
-   */
-  private wnafNonCT(elm: PC_P<PC>, n: bigint, p: PC_P<PC> = this.ZERO): PC_P<PC> {
-    this.assertScalar(n);
-    if (n === _0n) return p;
-    const acc = wnafWalk(this.ZERO, [oddMultiples(elm, 4)], [wnafDigits(n, 4)]);
-    return p === this.ZERO ? acc : acc.add(p);
   }
 
   /**
@@ -533,8 +507,9 @@ export class wNAF<PC extends PC_ANY> {
    * @param W - window size
    * @param bits - scalar bitlength the table must cover
    */
-  private precomputeWnaf(point: PC_P<PC>, W: number, bits: number): WnafPrecomputeEntry<PC_P<PC>> {
-    validateW(W, bits);
+  private buildWnafTable(point: PC_P<PC>, W: number, bits: number): WnafPrecomputeEntry<PC_P<PC>> {
+    // W needs no re-validation: its only source is setWindowSize(), which enforces
+    // 1 <= W <= Fn.BITS <= bits (the blinded path only ever widens bits).
     const windows = Math.ceil(bits / W) + 1;
     const half = 2 ** (W - 1);
     const comp: PC_P<PC>[] = [];
@@ -554,10 +529,12 @@ export class wNAF<PC extends PC_ANY> {
    * Implements ec multiplication using precomputed signed fixed-window wNAF tables.
    * Constant-time: fixed window count with one table addition per window — zero digits feed
    * the fake accumulator — and no doublings; the lookup scans the whole window slice.
+   * Scalar bounds are validated by the public entry points ({@link ScalarMultiplier.mulCT},
+   * {@link ScalarMultiplier.mulCTBlinded}, {@link ScalarMultiplier.mulUnsafe});
+   * signedWindowDigits throws if `n` exceeds the table.
    * @returns real and fake (for const-time) points
    */
-  private wnafCachedCT(precomputes: WnafPrecomputeEntry<PC_P<PC>>, n: bigint, maxScalar: bigint) {
-    if (!(isPosBig(n) && n < maxScalar)) throw new Error('invalid scalar');
+  private wnafCachedCT(precomputes: WnafPrecomputeEntry<PC_P<PC>>, n: bigint): MulResult<PC_P<PC>> {
     const { W, windows, comp } = precomputes;
     const half = 2 ** (W - 1);
     const digits = signedWindowDigits(n, W, windows);
@@ -577,32 +554,6 @@ export class wNAF<PC extends PC_ANY> {
     return { p, f };
   }
 
-  /**
-   * Implements unsafe ec multiplication using precomputed signed fixed-window wNAF tables:
-   * zero-digit windows skip their addition. Not constant-time.
-   * @param acc - accumulator point to add result of multiplication
-   * @returns point
-   */
-  private wnafCachedNonCT(
-    precomputes: WnafPrecomputeEntry<PC_P<PC>>,
-    n: bigint,
-    acc: PC_P<PC> | undefined,
-    maxScalar: bigint
-  ): PC_P<PC> {
-    if (!(isPosBig(n) && n < maxScalar)) throw new Error('invalid scalar');
-    const { W, windows, comp } = precomputes;
-    const half = 2 ** (W - 1);
-    const digits = signedWindowDigits(n, W, windows);
-    let p = this.ZERO;
-    for (let w = 0; w < windows; w++) {
-      const digit = digits[w];
-      if (digit === 0) continue;
-      const item = comp[w * half + Math.abs(digit) - 1];
-      p = p.add(digit < 0 ? item.negate() : item);
-    }
-    return acc === undefined ? p : p.add(acc);
-  }
-
   // Cache key is point identity plus (W, bits); at most two entries exist per point (public-width
   // `Fn.BITS` and blinded `Fn.BITS + BLIND_BITS`). Callers must not reuse the same point with
   // incompatible `transform(...)` layouts and expect a separate cache entry.
@@ -615,7 +566,7 @@ export class wNAF<PC extends PC_ANY> {
     let entries = this.wnafPrecomputes.get(point);
     let comp = entries?.find((entry) => entry.W === W && entry.bits === bits);
     if (!comp) {
-      comp = this.precomputeWnaf(point, W, bits);
+      comp = this.buildWnafTable(point, W, bits);
       if (typeof transform === 'function') comp = { ...comp, comp: transform(comp.comp) };
       if (!entries) {
         entries = [];
@@ -626,36 +577,46 @@ export class wNAF<PC extends PC_ANY> {
     return comp;
   }
 
-  cached(
-    point: PC_P<PC>,
-    scalar: bigint,
-    transform?: Mapper<PC_P<PC>>
-  ): { p: PC_P<PC>; f: PC_P<PC> } {
+  private assertPoint(point: PC_P<PC>): void {
     if (!(point instanceof this.Point))
       throw new TypeError('"point" expected Point instance, got type=' + typeof point);
-    if (!(isPosBig(scalar) && scalar < this.Point.Fn.ORDER)) throw new Error('invalid scalar');
-    const W = getW(point);
-    // Un-precomputed points: a throwaway cached table is wasteful; use a small fixed window.
-    if (W === 1) return this.fixedWindowCT(point, scalar, this.bits);
-    const precomputes = this.getWnafPrecomputes(W, point, this.bits, transform);
-    return this.wnafCachedCT(precomputes, scalar, this.Point.Fn.ORDER);
   }
 
-  cachedBlinded(
+  // Shared prologue of the constant-time entry points. Rejects scalar 0: in key/signature-style
+  // callers a zero scalar means broken upstream plumbing, and concrete Points already reject it.
+  // Uses inRange instead of Fn.isValidNot0: validateField() only certifies the arithmetic subset.
+  private validateMulInput(point: PC_P<PC>, scalar: bigint): void {
+    this.assertPoint(point);
+    if (!inRange(scalar, _1n, this.Point.Fn.ORDER)) throw new Error('invalid scalar');
+  }
+
+  // Constant-time dispatch shared by mulCT / mulCTBlinded. Un-precomputed points (W===1, e.g.
+  // ECDH peer keys) skip building a throwaway cached table in favor of a small fixed-window
+  // multiply. `n` must be < 2^bits.
+  private runCT(
     point: PC_P<PC>,
-    scalar: bigint,
+    n: bigint,
+    bits: number,
     transform?: Mapper<PC_P<PC>>
-  ): { p: PC_P<PC>; f: PC_P<PC> } {
-    if (!(point instanceof this.Point))
-      throw new TypeError('"point" expected Point instance, got type=' + typeof point);
-    if (!(isPosBig(scalar) && scalar < this.Point.Fn.ORDER)) throw new Error('invalid scalar');
+  ): MulResult<PC_P<PC>> {
+    const W = getWindowSize(point);
+    if (W === 1) return this.fixedWindowCT(point, n, bits);
+    return this.wnafCachedCT(this.getWnafPrecomputes(W, point, bits, transform), n);
+  }
+
+  mulCT(point: PC_P<PC>, scalar: bigint, transform?: Mapper<PC_P<PC>>): MulResult<PC_P<PC>> {
+    this.validateMulInput(point, scalar);
+    return this.runCT(point, scalar, this.bits, transform);
+  }
+
+  mulCTBlinded(point: PC_P<PC>, scalar: bigint, transform?: Mapper<PC_P<PC>>): MulResult<PC_P<PC>> {
+    this.validateMulInput(point, scalar);
     // Blinding computes n = scalar + blind*Fn.ORDER, then n*P via a constant-time multiply. This
     // equals scalar*P only when Fn.ORDER*P == O; callers guarantee that via shouldBlind() (always
     // for cofactor-1 curves; for cofactored curves only BASE, and only after checking BASE*n == O).
     // Fail before building the (large) precompute table if randomness is unavailable.
     if (this.randomBytes === undefined)
       throw new Error('randomBytes is required for scalar blinding');
-    const W = getW(point);
     const bits = this.Point.Fn.BITS + BLIND_BITS;
     const blind = this.randomBytes(BLIND_BYTES);
     if (!(blind instanceof Uint8Array) || blind.length !== BLIND_BYTES)
@@ -670,15 +631,11 @@ export class wNAF<PC extends PC_ANY> {
     //   only ever holds a small carry, never a full digit.
     blind[0] = (blind[0] & 0x3f) | 0x80;
     // Even at the extreme (blind < 2^128, scalar < Fn.ORDER < 2^nBits): n <= 2^128*Fn.ORDER - 1 <
-    // 2^(nBits+128), so n stays below maxScalar (= bitMask(bits)+1) and within the blinded table's
+    // 2^(nBits+128), so n stays below 2^bits and within the blinded table's
     // window count. Both cached CT kernels run a fixed number of windows/rows with one point-add
     // each, so the add count is independent of scalar (constant-time).
     const n = scalar + bytesToNumberBE(blind) * this.Point.Fn.ORDER;
-    // Un-precomputed points (W===1, e.g. ECDH peer keys) skip building a throwaway cached table
-    // in favor of a small fixed-window multiply.
-    if (W === 1) return this.fixedWindowCT(point, n, bits);
-    const precomputes = this.getWnafPrecomputes(W, point, bits, transform);
-    return this.wnafCachedCT(precomputes, n, bitMask(bits) + _1n);
+    return this.runCT(point, n, bits, transform);
   }
 
   /**
@@ -695,7 +652,7 @@ export class wNAF<PC extends PC_ANY> {
    * @returns real point `p`; `f` duplicates it only to match {@link wnafCachedCT}'s return shape (this
    * path needs no fake accumulator — its op-count is already scalar-independent).
    */
-  private fixedWindowCT(point: PC_P<PC>, n: bigint, bits: number): { p: PC_P<PC>; f: PC_P<PC> } {
+  private fixedWindowCT(point: PC_P<PC>, n: bigint, bits: number): MulResult<PC_P<PC>> {
     const W = FW_WINDOW;
     const size = 1 << W;
     const mask = bitMask(W);
@@ -707,7 +664,9 @@ export class wNAF<PC extends PC_ANY> {
     const windows = Math.ceil(bits / W);
     let acc = this.ZERO;
     for (let window = windows - 1; window >= 0; window--) {
-      for (let d = 0; d < W; d++) acc = acc.double(); // W doublings per window
+      // W doublings per window; skipped for the first (topmost) window, where acc is still the
+      // identity. The skip is scalar-independent: it depends only on the loop index.
+      if (window !== windows - 1) for (let d = 0; d < W; d++) acc = acc.double();
       const digit = Number((n >> BigInt(window * W)) & mask);
       // Data-oblivious select: touch every entry, same as wnafCachedCT.
       let sel = table[0];
@@ -723,53 +682,54 @@ export class wNAF<PC extends PC_ANY> {
     if (cofactor === _1n) return true;
     if (point !== this.BASE) return false;
     if (this.baseCanBeBlinded === undefined)
-      this.baseCanBeBlinded = this.unsafe(this.BASE, this.Point.Fn.ORDER).is0();
+      this.baseCanBeBlinded = this.mulUnsafe(this.BASE, this.Point.Fn.ORDER).is0();
     return this.baseCanBeBlinded;
   }
 
-  cachedSecret(
+  mulSecret(
     point: PC_P<PC>,
     scalar: bigint,
     cofactor: bigint,
     transform?: Mapper<PC_P<PC>>
-  ): { p: PC_P<PC>; f: PC_P<PC> } {
+  ): MulResult<PC_P<PC>> {
     return this.shouldBlind(point, cofactor)
-      ? this.cachedBlinded(point, scalar, transform)
-      : this.cached(point, scalar, transform);
+      ? this.mulCTBlinded(point, scalar, transform)
+      : this.mulCT(point, scalar, transform);
   }
 
-  private assertScalar(scalar: bigint): void {
-    if (!(isPosBig(scalar) && scalar < this.maxScalar)) throw new Error('invalid scalar');
-  }
-
-  unsafe(point: PC_P<PC>, scalar: bigint, transform?: Mapper<PC_P<PC>>, prev?: PC_P<PC>): PC_P<PC> {
-    if (!(point instanceof this.Point))
-      throw new TypeError('"point" expected Point instance, got type=' + typeof point);
-    const W = getW(point);
-    // W === 1 (un-precomputed): one-shot width-4 wNAF, a cached table would be thrown away
-    // after one use.
+  mulUnsafe(point: PC_P<PC>, scalar: bigint, transform?: Mapper<PC_P<PC>>): PC_P<PC> {
+    this.assertPoint(point);
+    if (!isPosBig(scalar)) throw new Error('invalid scalar');
+    const W = getWindowSize(point);
+    // W === 1 (un-precomputed): one-shot width-4 wNAF via {@link mulAddUnsafe} with L=1 —
+    // a cached table would be thrown away after one use. `allowOversized` swaps the
+    // `s < Fn.ORDER` check for mulAddUnsafe's `Fn.ORDER^4` DoS cap.
     //
     // Oversized scalar could happen when:
     // a) user passes large scalar on their own (rare)
     // b) `assertValidity()` calls `isTorsionFree()`, which multiplies point by `Fn.ORDER`
-    if (W === 1 || scalar >= this.Point.Fn.ORDER) return this.wnafNonCT(point, scalar, prev);
+    if (W === 1 || scalar >= this.Point.Fn.ORDER)
+      return mulAddUnsafe(this.Point, [point], [scalar], true);
+    // Precomputed points reuse the CT kernel (fake accumulator discarded): with W=6 only
+    // ~1/64 of window-adds are skippable, so a dedicated vartime kernel saved just ~6% on
+    // this path while doubling the cached-table code surface.
     const precomputes = this.getWnafPrecomputes(W, point, this.bits, transform);
-    return this.wnafCachedNonCT(precomputes, scalar, prev, this.Point.Fn.ORDER);
+    return this.wnafCachedCT(precomputes, scalar).p;
   }
 
-  // We calculate precomputes for elliptic curve point multiplication
-  // using wNAF method. This specifies window size and
-  // stores precomputed values. Usually only base point would be precomputed.
-  createCache(P: PC_P<PC>, W: number): void {
-    if (!(P instanceof this.Point))
-      throw new TypeError('"P" expected Point instance, got type=' + typeof P);
+  // Remembers the window size used for precomputed wNAF multiplication of the given point
+  // and drops any previously built tables. Usually only the base point is precomputed.
+  // W=1 resets the point to the un-precomputed (table-less) paths.
+  setWindowSize(point: PC_P<PC>, W: number): void {
+    this.assertPoint(point);
     validateW(W, this.bits);
-    pointWindowSizes.set(P, W);
-    this.wnafPrecomputes.delete(P);
+    pointWindowSizes.set(point, W);
+    this.wnafPrecomputes.delete(point);
   }
 
-  hasCache(elm: PC_P<PC>): boolean {
-    return getW(elm) !== 1;
+  // True when a window size is set: tables themselves are built lazily on first multiply.
+  hasWindowSize(point: PC_P<PC>): boolean {
+    return getWindowSize(point) !== 1;
   }
 }
 
@@ -786,6 +746,9 @@ export class wNAF<PC extends PC_ANY> {
  * @param c - Point constructor.
  * @param points - Array of curve points.
  * @param scalars - Array of non-negative scalars, same length as points.
+ * @param allowOversized - Replace the `s < Fn.ORDER` scalar check with a `Fn.ORDER^4` DoS cap.
+ *   Off by default. For scalars that must NOT be reduced mod ORDER: torsion checks
+ *   (`Fn.ORDER⋅P ≟ O`) and cofactor-clearing multiples. Walk length grows with `bitLen(s)`.
  * @returns Combined multiplication result; identity for empty input.
  * @throws If the point set or scalar set is invalid. {@link Error}
  * @example
@@ -801,11 +764,14 @@ export class wNAF<PC extends PC_ANY> {
 export function mulAddUnsafe<P extends CurvePoint<any, P>, PC extends CurvePointCons<P>>(
   c: PC,
   points: P[],
-  scalars: bigint[]
+  scalars: bigint[],
+  allowOversized: boolean = false
 ): P {
   validatePointCons(c);
   validateMSMPoints(points, c);
-  validateMSMScalars(scalars, c.Fn);
+  abool(allowOversized, 'allowOversized');
+  // Oversized cap is ORDER^4: hard bound to mitigate DoS, walk length grows with bitLen(s).
+  validateMSMScalars(scalars, c.Fn, allowOversized ? c.Fn.ORDER ** _4n : undefined);
   if (points.length !== scalars.length)
     throw new Error('arrays of points and scalars must have equal length');
   const tables = points.map((p) => oddMultiples(p, 4));
@@ -817,7 +783,9 @@ export function mulAddUnsafe<P extends CurvePoint<any, P>, PC extends CurvePoint
  * Pippenger algorithm for multi-scalar multiplication (MSM, Pa + Qb + Rc + ...).
  * 30x faster vs naive addition on L=4096, 10x faster than precomputes.
  * For N=254bit, L=1, it does: 1024 ADD + 254 DBL. For L=5: 1536 ADD + 254 DBL.
- * Algorithmically constant-time (for same L), even when 1 point + scalar, or when scalar = 0.
+ * Point-operation count is scalar-independent (for same L), even when 1 point + scalar, or when
+ * scalar = 0 — but bucket indices are scalar windows, so the memory-access pattern is
+ * scalar-dependent: do not rely on this for secret scalars.
  * @param c - Curve Point constructor
  * @param points - array of L curve points
  * @param scalars - array of L scalars (aka secret keys / bigints)
@@ -850,7 +818,6 @@ export function pippenger<P extends CurvePoint<any, P>, PC extends CurvePointCon
   const plength = points.length;
   const slength = scalars.length;
   if (plength !== slength) throw new Error('arrays of points and scalars must have equal length');
-  // if (plength === 0) throw new Error('array must be of length >= 2');
   const zero = c.ZERO;
   const wbits = bitLen(BigInt(plength));
   let windowSize = 1; // bits
@@ -916,16 +883,14 @@ export function interleavedMSMUnsafe<P extends CurvePoint<any, P>, PC extends Cu
 ): (scalars: bigint[]) => P {
   validatePointCons(c);
   const fieldN = c.Fn;
-  validateW(windowSize, fieldN.BITS);
   // Signed odd digits need at least width 2 (W=2 is plain NAF with a single-entry table).
-  if (windowSize < 2)
-    throw new Error('invalid window size, expected [2..' + fieldN.BITS + '], got W=' + windowSize);
+  validateW(windowSize, fieldN.BITS, 2);
   validateMSMPoints(points, c);
   const tables = points.map((p) => oddMultiples(p, 2 ** (windowSize - 2)));
   return (scalars: bigint[]): P => {
     validateMSMScalars(scalars, fieldN);
     if (scalars.length > points.length)
-      throw new Error('array of scalars must be smaller than array of points');
+      throw new Error('array of scalars must not be larger than array of points');
     return wnafWalk(
       c.ZERO,
       tables,
@@ -1030,10 +995,7 @@ export function createCurveFields<T>(
   return { CURVE, Fp, Fn } as TRet<FpFn<T> & { CURVE: ValidCurveParams<T> }>;
 }
 
-type KeygenFn = (
-  seed?: Uint8Array,
-  isCompressed?: boolean
-) => { secretKey: Uint8Array; publicKey: Uint8Array };
+type KeygenFn = (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
 /**
  * @param randomSecretKey - Secret-key generator.
  * @param getPublicKey - Public-key derivation helper.

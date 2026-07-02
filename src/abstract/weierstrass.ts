@@ -52,7 +52,7 @@ import {
   type TRet,
 } from '../utils.ts';
 import {
-  wNAF,
+  ScalarMultiplier,
   createCurveFields,
   createKeygen,
   mulAddUnsafe,
@@ -918,7 +918,7 @@ export function weierstrass<T>(
      * @returns
      */
     precompute(windowSize: number = 6, isLazy = true): Point {
-      wnaf.createCache(this, windowSize);
+      wnaf.setWindowSize(this, windowSize);
       if (!isLazy) this.multiply(_3n); // random number
       return this;
     }
@@ -1084,7 +1084,7 @@ export function weierstrass<T>(
       // In key/signature-style callers, those values usually mean broken hash/scalar plumbing,
       // and failing closed is safer than silently producing the identity point.
       if (!Fn.isValidNot0(scalar)) throw new RangeError('invalid scalar: out of range'); // 0 is invalid
-      const { p, f } = wnaf.cachedSecret(this, scalar, cofactor, (p) => normalizeZ(Point, p));
+      const { p, f } = wnaf.mulSecret(this, scalar, cofactor, (p) => normalizeZ(Point, p));
       return normalizeZ(Point, [p, f])[0];
     }
 
@@ -1102,7 +1102,7 @@ export function weierstrass<T>(
       if (!Fn.isValid(sc)) throw new RangeError('invalid scalar: out of range'); // 0 is valid
       if (sc === _0n || p.is0()) return Point.ZERO; // 0
       if (sc === _1n) return p; // 1
-      if (wnaf.hasCache(this)) return wnaf.unsafe(p, sc, (p) => normalizeZ(Point, p)); // precomputes
+      if (wnaf.hasWindowSize(this)) return wnaf.mulUnsafe(p, sc, (p) => normalizeZ(Point, p)); // precomputes
       const points: Point[] = [];
       const scalars: bigint[] = [];
       pushWnafPair(points, scalars, p, sc);
@@ -1159,7 +1159,7 @@ export function weierstrass<T>(
       if (cofactor === _1n) return true;
       if (isTorsionFree) return isTorsionFree(Point, this);
       // unsafe() will use the uncached wNAF path internally, since CURVE_ORDER >= Fn.ORDER
-      return wnaf.unsafe(this, CURVE_ORDER).is0();
+      return wnaf.mulUnsafe(this, CURVE_ORDER).is0();
     }
 
     clearCofactor(): Point {
@@ -1193,7 +1193,7 @@ export function weierstrass<T>(
       return `<Point ${this.is0() ? 'ZERO' : this.toHex()}>`;
     }
   }
-  const wnaf = new wNAF(Point, randomBytes);
+  const wnaf = new ScalarMultiplier(Point, randomBytes);
   // Enable W=6 wNAF precomputes. Slows down first publicKey computation.
   // Disable for tiny toy curves, with scalar fields < 6 bits.
   if (wnaf.bits >= 6) Point.BASE.precompute(6);

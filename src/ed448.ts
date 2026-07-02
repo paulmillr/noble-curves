@@ -29,14 +29,7 @@ import {
   type H2CHasher,
   type H2CHasherBase,
 } from './abstract/hash-to-curve.ts';
-import {
-  Field,
-  FpInvertBatch,
-  isNegativeLE,
-  mod,
-  pow2,
-  type IField,
-} from './abstract/modular.ts';
+import { Field, FpInvertBatch, isNegativeLE, mod, pow2, type IField } from './abstract/modular.ts';
 import { montgomery, type MontgomeryECDH } from './abstract/montgomery.ts';
 import { createOPRF, type OPRF } from './abstract/oprf.ts';
 import {
@@ -171,8 +164,7 @@ const Fn = /* @__PURE__ */ (() => Field(ed448_CURVE.n, { BITS: 456, isLE: true }
 // Generic 56-byte field shape used by decaf448 and raw X448 u-coordinates.
 // Plain `Field` decoding stays canonical here, so callers that want RFC 7748's
 // modulo-p acceptance must reduce externally.
-const Fp448 = /* @__PURE__ */ (() =>
-  Field(ed448_CURVE_p, { BITS: 448, isLE: true }))();
+const Fp448 = /* @__PURE__ */ (() => Field(ed448_CURVE_p, { BITS: 448, isLE: true }))();
 // Strict 56-byte scalar parser matching RFC 9496's recommended canonical form.
 const Fn448 = /* @__PURE__ */ (() => Field(ed448_CURVE.n, { BITS: 448, isLE: true }))();
 

@@ -25,7 +25,7 @@ import {
   type TRet,
 } from '../utils.ts';
 import {
-  wNAF,
+  ScalarMultiplier,
   createCurveFields,
   createKeygen,
   normalizeZ,
@@ -423,7 +423,7 @@ export function edwards(
     }
 
     precompute(windowSize: number = 6, isLazy = true) {
-      wnaf.createCache(this, windowSize);
+      wnaf.setWindowSize(this, windowSize);
       if (!isLazy) this.multiply(_2n); // random number
       return this;
     }
@@ -535,7 +535,7 @@ export function edwards(
       // and failing closed is safer than silently producing the identity point.
       if (!Fn.isValidNot0(scalar))
         throw new RangeError('invalid scalar: expected 1 <= sc < curve.n');
-      const { p, f } = wnaf.cachedSecret(this, scalar, cofactor, (p) => normalizeZ(Point, p));
+      const { p, f } = wnaf.mulSecret(this, scalar, cofactor, (p) => normalizeZ(Point, p));
       return normalizeZ(Point, [p, f])[0];
     }
 
@@ -549,7 +549,7 @@ export function edwards(
       if (!Fn.isValid(scalar)) throw new RangeError('invalid scalar: expected 0 <= sc < curve.n');
       if (scalar === _0n) return Point.ZERO;
       if (this.is0() || scalar === _1n) return this;
-      return wnaf.unsafe(this, scalar, (p) => normalizeZ(Point, p));
+      return wnaf.mulUnsafe(this, scalar, (p) => normalizeZ(Point, p));
     }
 
     // Checks if point is of small order.
@@ -563,7 +563,7 @@ export function edwards(
     // Multiplies point by curve order and checks if the result is 0.
     // Returns `false` is the point is dirty.
     isTorsionFree(): boolean {
-      return wnaf.unsafe(this, CURVE.n).is0();
+      return wnaf.mulUnsafe(this, CURVE.n).is0();
     }
 
     // Converts Extended point to default (x, y) coordinates.
@@ -615,7 +615,7 @@ export function edwards(
   // } catch {
   //   throw new Error('bad curve params: generator point');
   // }
-  const wnaf = new wNAF(Point, randomBytes);
+  const wnaf = new ScalarMultiplier(Point, randomBytes);
   // Enable W=6 wNAF precomputes. Slows down first publicKey computation.
   // Disable for tiny toy curves, with scalar fields < 6 bits.
   if (wnaf.bits >= 6) Point.BASE.precompute(6);

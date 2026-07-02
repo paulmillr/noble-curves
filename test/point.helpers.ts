@@ -1,6 +1,7 @@
 import {
-  wNAF as _wNAF,
+  ScalarMultiplier as _ScalarMultiplier,
   createCurveFields as _createCurveFields,
+  mulAddUnsafe as _mulAddUnsafe,
   normalizeZ as _normalizeZ,
   pippenger as _pippenger,
   interleavedMSMUnsafe as _interleavedMSMUnsafe,
@@ -57,6 +58,7 @@ export const createCurveFields = _createCurveFields;
 export const edwards = _edwards;
 export const pippenger = _pippenger;
 export const interleavedMSMUnsafe = _interleavedMSMUnsafe;
+export const mulAddUnsafe = _mulAddUnsafe;
 export const normalizeZ = _normalizeZ;
-export const wNAF = _wNAF;
+export const ScalarMultiplier = _ScalarMultiplier;
 export { hex, hexToBytes, invert, mod };

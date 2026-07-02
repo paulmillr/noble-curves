@@ -10,7 +10,8 @@ import {
   hexToBytes,
   invert,
   mod,
-  wNAF,
+  ScalarMultiplier,
+  mulAddUnsafe,
   normalizeZ,
   pippenger,
   interleavedMSMUnsafe,
@@ -106,36 +107,52 @@ describe('basic curve tests', () => {
           equal(G[1].multiplyUnsafe(1n), G[1], '(1*G).multiplyUnsafe(1) = 1*G');
           equal(G[0].multiplyUnsafe(5n), G[0], '(0*G).multiplyUnsafe(5) = 0');
 
-          if (typeof wNAF === 'function') {
+          if (typeof ScalarMultiplier === 'function') {
             const point = G[2];
-            const acc = G[7];
             const scalar = 5n;
-            const want = acc.add(point.multiplyUnsafe(scalar));
-            const w = new wNAF(p) as any;
+            const want = point.multiplyUnsafe(scalar);
+            const w = new ScalarMultiplier(p) as any;
+            // mulAddUnsafe allowOversized: swaps `s < Fn.ORDER` for the ORDER^4 DoS cap
+            const Point = p as any;
             eql(
-              w.wnafNonCT(point, scalar, acc).equals(want),
+              mulAddUnsafe(Point, [point], [scalar], true).equals(want),
               true,
-              'wnafNonCT(point, scalar, acc)'
-            );
-            eql(w.wnafNonCT(point, 0n, acc).equals(acc), true, 'wnafNonCT(point, 0, acc)');
-            throws(() => w.wnafNonCT(point, -1n, acc), /invalid scalar/);
-            const precomputes = w.getWnafPrecomputes(2, point, w.bits);
-            eql(
-              w.wnafCachedNonCT(precomputes, scalar, acc, p.Fn.ORDER).equals(want),
-              true,
-              'wnafCachedNonCT(point, scalar, acc)'
+              'mulAddUnsafe(c, [point], [scalar], oversized)'
             );
             eql(
-              w.wnafCachedNonCT(precomputes, 0n, acc, p.Fn.ORDER).equals(acc),
+              mulAddUnsafe(Point, [point], [0n], true).equals(G[0]),
               true,
-              'wnafCachedNonCT(point, 0, acc)'
+              'mulAddUnsafe(c, [point], [0], oversized)'
             );
+            throws(() => mulAddUnsafe(Point, [point], [-1n], true), /invalid scalar/);
+            const order = Point.Fn.ORDER;
+            // point is in the prime-order subgroup, so ORDER⋅point = O
             eql(
-              w.unsafe(point, scalar, undefined, acc).equals(want),
+              mulAddUnsafe(Point, [point], [order], true).equals(G[0]),
               true,
-              'unsafe(point, scalar, acc)'
+              'mulAddUnsafe oversized accepts s = ORDER'
             );
-            eql(w.unsafe(point, 0n, undefined, acc).equals(acc), true, 'unsafe(point, 0, acc)');
+            throws(
+              () => mulAddUnsafe(Point, [point], [order ** 4n], true),
+              /invalid scalar/,
+              'DoS cap: rejects s >= ORDER^4'
+            );
+            throws(
+              () => mulAddUnsafe(Point, [point], [order]),
+              /invalid scalar/,
+              'default: rejects s >= ORDER'
+            );
+            // precomputed-point path: mulUnsafe reuses the CT kernel
+            w.setWindowSize(point, 2);
+            eql(
+              w.mulUnsafe(point, scalar).equals(want),
+              true,
+              'mulUnsafe(precomputed point, scalar)'
+            );
+            w.setWindowSize(point, 1); // reset to un-precomputed
+            eql(w.mulUnsafe(point, scalar).equals(want), true, 'mulUnsafe(point, scalar)');
+            eql(w.mulUnsafe(point, 0n).equals(G[0]), true, 'mulUnsafe(point, 0)');
+            throws(() => w.mulUnsafe(point, -1n), /invalid scalar/);
           }
 
           equal(G[3].add(G[3]), G[6], '3*G + 3*G = 6*G');
