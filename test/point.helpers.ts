@@ -3,7 +3,7 @@ import {
   createCurveFields as _createCurveFields,
   normalizeZ as _normalizeZ,
   pippenger as _pippenger,
-  precomputeMSMUnsafe as _precomputeMSMUnsafe,
+  interleavedMSMUnsafe as _interleavedMSMUnsafe,
 } from '../src/abstract/curve.ts';
 import { bls12_381 } from '../src/bls12-381.ts';
 import { edwards as _edwards } from '../src/abstract/edwards.ts';
@@ -56,7 +56,7 @@ export function getOtherCurve(currCurveName) {
 export const createCurveFields = _createCurveFields;
 export const edwards = _edwards;
 export const pippenger = _pippenger;
-export const precomputeMSMUnsafe = _precomputeMSMUnsafe;
+export const interleavedMSMUnsafe = _interleavedMSMUnsafe;
 export const normalizeZ = _normalizeZ;
 export const Comb = _Comb;
 export { hex, hexToBytes, invert, mod };

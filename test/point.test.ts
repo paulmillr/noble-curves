@@ -13,7 +13,7 @@ import {
   Comb,
   normalizeZ,
   pippenger,
-  precomputeMSMUnsafe,
+  interleavedMSMUnsafe,
 } from './point.helpers.ts';
 import { getTypeTests } from './utils.ts';
 
@@ -245,7 +245,7 @@ describe('basic curve tests', () => {
       });
 
       describe('multiscalar multiplication', () => {
-        if (typeof pippenger !== 'function' || typeof precomputeMSMUnsafe !== 'function') return;
+        if (typeof pippenger !== 'function' || typeof interleavedMSMUnsafe !== 'function') return;
         should('basic, random, and precomputed MSM', () => {
           const msm = (points, scalars) => pippenger(p, points, scalars);
           equal(msm([p.BASE], [0n]), p.ZERO, '0*G');
@@ -280,10 +280,11 @@ describe('basic curve tests', () => {
           const points2 = [p.BASE, p.BASE.multiply(2n), p.BASE.multiply(4n), p.BASE.multiply(8n)];
           const scalars = [3n, 5n, 7n, 11n];
           const res = p.BASE.multiply(129n);
-          for (let windowSize = 1; windowSize <= 10; windowSize++) {
-            const mul = precomputeMSMUnsafe(Point, points2, windowSize);
+          for (let windowSize = 2; windowSize <= 10; windowSize++) {
+            const mul = interleavedMSMUnsafe(Point, points2, windowSize);
             equal(mul(scalars), res, 'windowSize=' + windowSize);
           }
+          throws(() => interleavedMSMUnsafe(Point, points2, 1), /window/);
 
           fc.assert(
             fc.property(fc.array(fc.tuple(FC_BIGINT, FC_BIGINT)), FC_BIGINT, (pairs) => {
@@ -301,8 +302,8 @@ describe('basic curve tests', () => {
               total = mod(total, CURVE_ORDER);
               const res = total ? p.BASE.multiply(total) : p.ZERO;
 
-              for (let windowSize = 1; windowSize <= 10; windowSize++) {
-                const mul = precomputeMSMUnsafe(Point, points, windowSize);
+              for (let windowSize = 2; windowSize <= 10; windowSize++) {
+                const mul = interleavedMSMUnsafe(Point, points, windowSize);
                 equal(mul(scalars), res, 'windowSize=' + windowSize);
               }
             }),

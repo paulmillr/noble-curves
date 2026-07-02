@@ -22,7 +22,6 @@ import { Field, FpInvertBatch, validateField, type IField } from './modular.ts';
 
 const _0n = /* @__PURE__ */ BigInt(0);
 const _1n = /* @__PURE__ */ BigInt(1);
-const _15n = /* @__PURE__ */ BigInt(15);
 const BLIND_BYTES = 16;
 const BLIND_BITS = 8 * BLIND_BYTES;
 // Fixed-window width for the constant-time multiply of un-precomputed points (W===1).
@@ -377,31 +376,60 @@ function getW(P: any): number {
   return pointWindowSizes.get(P) || 1;
 }
 
-/** Table of odd multiples [1P, 3P, 5P, 7P] for width-4 wNAF. */
-function oddMultiples<P extends { double(): P; add(other: P): P }>(p: P): P[] {
+/** Table of odd multiples [1P, 3P, ..., (2⋅size−1)P]; width-W wNAF uses size = 2^(W−2). */
+function oddMultiples<P extends { double(): P; add(other: P): P }>(p: P, size: number): P[] {
   const dbl = p.double();
   const t = [p];
-  for (let j = 1; j < 4; j++) t.push(t[j - 1].add(dbl));
+  for (let j = 1; j < size; j++) t.push(t[j - 1].add(dbl));
   return t;
 }
 
 /**
- * Width-4 wNAF signed-digit recoding, LSB-first: digits are 0 or odd in [-7, 7],
- * nonzero density ~1/5 (after a nonzero digit, the next three are zero).
+ * Width-W wNAF signed-digit recoding (W >= 2), LSB-first: digits are 0 or odd with
+ * |digit| < 2^(W−1); nonzero density ~1/(W+1) (a nonzero digit is followed by W−1 zeros).
  */
-function wnaf4Digits(n: bigint): number[] {
+function wnafDigits(n: bigint, W: number): number[] {
+  const size = 2 ** W;
+  const half = size / 2;
+  const mask = BigInt(size - 1);
   const d: number[] = [];
   while (n > _0n) {
     let w = 0;
     if (n & _1n) {
-      w = Number(n & _15n); // n mod 16, odd
-      if (w > 8) w -= 16;
-      n -= BigInt(w); // n - w ≡ 0 mod 16: next three digits are zero
+      w = Number(n & mask); // n mod 2^W, odd
+      if (w >= half) w -= size; // signed residue
+      n -= BigInt(w); // n - w ≡ 0 mod 2^W: next W−1 digits are zero
     }
     d.push(w);
     n >>= _1n;
   }
   return d;
+}
+
+/**
+ * Shared vartime walk over per-scalar wNAF digit streams: one doubling of a single shared
+ * accumulator per bit position of the longest recoding, one signed table addition per
+ * nonzero digit. `tables[i]` must hold the odd multiples of the i-th point.
+ */
+function wnafWalk<P extends { double(): P; add(other: P): P; negate(): P }>(
+  zero: P,
+  tables: P[][],
+  digits: number[][]
+): P {
+  let max = 0;
+  for (const d of digits) max = Math.max(max, d.length);
+  let acc = zero;
+  for (let bit = max - 1; bit >= 0; bit--) {
+    if (bit !== max - 1) acc = acc.double();
+    for (let i = 0; i < digits.length; i++) {
+      const w = digits[i][bit]; // reads past shorter recodings yield undefined, skipped below
+      if (w) {
+        const item = tables[i][(Math.abs(w) - 1) >> 1];
+        acc = acc.add(w < 0 ? item.negate() : item);
+      }
+    }
+  }
+  return acc;
 }
 
 /**
@@ -462,17 +490,7 @@ export class Comb<PC extends PC_ANY> {
   private wnafNonCT(elm: PC_P<PC>, n: bigint, p: PC_P<PC> = this.ZERO): PC_P<PC> {
     this.assertScalar(n);
     if (n === _0n) return p;
-    const table = oddMultiples(elm);
-    const digits = wnaf4Digits(n);
-    let acc = this.ZERO;
-    for (let i = digits.length - 1; i >= 0; i--) {
-      if (i !== digits.length - 1) acc = acc.double();
-      const w = digits[i];
-      if (w) {
-        const item = table[(Math.abs(w) - 1) >> 1];
-        acc = acc.add(w < 0 ? item.negate() : item);
-      }
-    }
+    const acc = wnafWalk(this.ZERO, [oddMultiples(elm, 4)], [wnafDigits(n, 4)]);
     return p === this.ZERO ? acc : acc.add(p);
   }
 
@@ -766,22 +784,9 @@ export function mulAddUnsafe<P extends CurvePoint<any, P>, PC extends CurvePoint
   validateMSMScalars(scalars, c.Fn);
   if (points.length !== scalars.length)
     throw new Error('arrays of points and scalars must have equal length');
-  const tables = points.map((p) => oddMultiples(p));
-  const digits = scalars.map((n) => wnaf4Digits(n));
-  let max = 0;
-  for (const d of digits) max = Math.max(max, d.length);
-  let acc = c.ZERO;
-  for (let bit = max - 1; bit >= 0; bit--) {
-    if (bit !== max - 1) acc = acc.double(); // one shared doubling per bit position
-    for (let i = 0; i < digits.length; i++) {
-      const w = digits[i][bit]; // reads past shorter recodings yield undefined, skipped below
-      if (w) {
-        const item = tables[i][(Math.abs(w) - 1) >> 1];
-        acc = acc.add(w < 0 ? item.negate() : item);
-      }
-    }
-  }
-  return acc;
+  const tables = points.map((p) => oddMultiples(p, 4));
+  const digits = scalars.map((n) => wnafDigits(n, 4));
+  return wnafWalk(c.ZERO, tables, digits);
 }
 
 /**
@@ -851,96 +856,57 @@ export function pippenger<P extends CurvePoint<any, P>, PC extends CurvePointCon
   return sum as P;
 }
 /**
- * Precomputed multi-scalar multiplication (MSM, Pa + Qb + Rc + ...).
+ * Interleaved wNAF multi-scalar multiplication (MSM, Pa + Qb + Rc + ...) over a FIXED set
+ * of points: each point gets a one-time table of odd multiples
+ * `[1P, 3P, ..., (2^(W−1)−1)P]`, and the returned closure evaluates MSMs against those
+ * tables. All scalars share one doubling chain (Straus 1964) — one doubling per scalar bit
+ * plus one signed table addition per nonzero width-W wNAF digit (density ~1/(W+1)) — the
+ * "interleaving" method of Möller, "Algorithms for multi-exponentiation" (SAC 2001).
+ *
+ * Table memory is `L⋅2^(W−2)` points. Prefer this over {@link pippenger} when the same
+ * points are reused across many MSMs (fixed-base commitments etc.) and up to a few hundred
+ * points; prefer pippenger for one-shot MSMs or thousands of points, where bucketing beats
+ * per-point tables.
+ *
+ * Not constant-time (zero digits are skipped): public inputs only.
  * @param c - Curve Point constructor
- * @param points - array of L curve points
- * @param windowSize - Precompute window size.
+ * @param points - array of L curve points, captured by the returned closure
+ * @param windowSize - window width W in bits, 2 <= W <= Fn.BITS
  * @returns Function which multiplies points with scalars. The closure accepts
  *   `scalars.length <= points.length`, and omitted trailing scalars are treated as zero.
  * @throws If the point set or precompute window is invalid. {@link Error}
  * @example
- * Precomputed multi-scalar multiplication (MSM, Pa + Qb + Rc + ...).
+ * Interleaved wNAF multi-scalar multiplication (MSM, Pa + Qb + Rc + ...).
  *
  * ```ts
- * import { precomputeMSMUnsafe } from '@noble/curves/abstract/curve.js';
+ * import { interleavedMSMUnsafe } from '@noble/curves/abstract/curve.js';
  * import { p256 } from '@noble/curves/nist.js';
- * const msm = precomputeMSMUnsafe(p256.Point, [p256.Point.BASE], 4);
+ * const msm = interleavedMSMUnsafe(p256.Point, [p256.Point.BASE], 4);
  * const point = msm([3n]);
  * ```
  */
-export function precomputeMSMUnsafe<P extends CurvePoint<any, P>, PC extends CurvePointCons<P>>(
+export function interleavedMSMUnsafe<P extends CurvePoint<any, P>, PC extends CurvePointCons<P>>(
   c: PC,
   points: P[],
   windowSize: number
 ): (scalars: bigint[]) => P {
-  /**
-   * Performance Analysis of Window-based Precomputation
-   *
-   * Base Case (256-bit scalar, 8-bit window):
-   * - Standard precomputation requires:
-   *   - 31 additions per scalar × 256 scalars = 7,936 ops
-   *   - Plus 255 summary additions = 8,191 total ops
-   *   Note: Summary additions can be optimized via accumulator
-   *
-   * Chunked Precomputation Analysis:
-   * - Using 32 chunks requires:
-   *   - 255 additions per chunk
-   *   - 256 doublings
-   *   - Total: (255 × 32) + 256 = 8,416 ops
-   *
-   * Memory Usage Comparison:
-   * Window Size | Standard Points | Chunked Points
-   * ------------|-----------------|---------------
-   *     4-bit   |     520         |      15
-   *     8-bit   |    4,224        |     255
-   *    10-bit   |   13,824        |   1,023
-   *    16-bit   |  557,056        |  65,535
-   *
-   * Key Advantages:
-   * 1. Enables larger window sizes due to reduced memory overhead
-   * 2. More efficient for smaller scalar counts:
-   *    - 16 chunks: (16 × 255) + 256 = 4,336 ops
-   *    - ~2x faster than standard 8,191 ops
-   *
-   * Limitations:
-   * - Not suitable for plain precomputes (requires 256 constant doublings)
-   * - Performance degrades with larger scalar counts:
-   *   - Optimal for ~256 scalars
-   *   - Less efficient for 4096+ scalars (Pippenger preferred)
-   */
   validatePointCons(c);
   const fieldN = c.Fn;
   validateW(windowSize, fieldN.BITS);
+  // Signed odd digits need at least width 2 (W=2 is plain NAF with a single-entry table).
+  if (windowSize < 2)
+    throw new Error('invalid window size, expected [2..' + fieldN.BITS + '], got W=' + windowSize);
   validateMSMPoints(points, c);
-  const zero = c.ZERO;
-  const tableSize = 2 ** windowSize - 1; // table size (without zero)
-  const chunks = Math.ceil(fieldN.BITS / windowSize); // chunks of item
-  const MASK = bitMask(windowSize);
-  const tables = points.map((p: P) => {
-    const res = [];
-    for (let i = 0, acc = p; i < tableSize; i++) {
-      res.push(acc);
-      acc = acc.add(p);
-    }
-    return res;
-  });
+  const tables = points.map((p) => oddMultiples(p, 2 ** (windowSize - 2)));
   return (scalars: bigint[]): P => {
     validateMSMScalars(scalars, fieldN);
     if (scalars.length > points.length)
       throw new Error('array of scalars must be smaller than array of points');
-    let res = zero;
-    for (let i = 0; i < chunks; i++) {
-      // No need to double if accumulator is still zero.
-      if (res !== zero) for (let j = 0; j < windowSize; j++) res = res.double();
-      const shiftBy = BigInt(chunks * windowSize - (i + 1) * windowSize);
-      for (let j = 0; j < scalars.length; j++) {
-        const n = scalars[j];
-        const curr = Number((n >> shiftBy) & MASK);
-        if (!curr) continue; // skip zero scalars chunks
-        res = res.add(tables[j][curr - 1]);
-      }
-    }
-    return res;
+    return wnafWalk(
+      c.ZERO,
+      tables,
+      scalars.map((n) => wnafDigits(n, windowSize))
+    );
   };
 }
 
