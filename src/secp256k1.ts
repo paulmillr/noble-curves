@@ -17,7 +17,7 @@ import {
   type Nonces,
 } from './abstract/frost.ts';
 import { createHasher, type H2CHasher, isogenyMap } from './abstract/hash-to-curve.ts';
-import { Field, mapHashToField, pow2 } from './abstract/modular.ts';
+import { mapHashToField, pow2, pseudoMersenneField } from './abstract/modular.ts';
 import {
   type ECDSA,
   ecdsa,
@@ -89,7 +89,9 @@ function sqrtMod(y: bigint): bigint {
   return root;
 }
 
-const Fpk1 = Field(secp256k1_CURVE.p, { sqrt: sqrtMod });
+// p = 2^256 − 2^32 − 977 is pseudo-Mersenne: fast reduction, gated by the global
+// FAST_REDUCTION switch in modular.ts.
+const Fpk1 = /* @__PURE__ */ pseudoMersenneField(secp256k1_CURVE.p, { sqrt: sqrtMod });
 const Pointk1 = /* @__PURE__ */ weierstrass(secp256k1_CURVE, {
   Fp: Fpk1,
   endo: secp256k1_ENDO,
@@ -236,7 +238,7 @@ function schnorrVerify(
     // int(challenge(bytes(r) || bytes(P) || m)) % n
     const e = challenge(Fn.toBytes(r), pointToBytes(P), m);
     // R = s⋅G - e⋅P, where -eP == (n-e)P
-    const R = BASE.multiplyUnsafe(s).add(P.multiplyUnsafe(Fn.neg(e)));
+    const R = BASE.mulAddUnsafe(s, P, Fn.neg(e)); // s⋅G + (-e)⋅P, joint Strauss–Shamir
     const { x, y } = R.toAffine();
     // Fail if is_infinite(R) / not has_even_y(R) / x(R) ≠ r.
     if (R.is0() || !hasEven(y) || x !== r) return false;

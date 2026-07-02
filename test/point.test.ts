@@ -113,12 +113,12 @@ describe('basic curve tests', () => {
             const want = acc.add(point.multiplyUnsafe(scalar));
             const w = new Comb(p) as any;
             eql(
-              w.ladder_nonCT(point, scalar, acc).equals(want),
+              w.wnafNonCT(point, scalar, acc).equals(want),
               true,
-              'ladder_nonCT(point, scalar, acc)'
+              'wnafNonCT(point, scalar, acc)'
             );
-            eql(w.ladder_nonCT(point, 0n, acc).equals(acc), true, 'ladder_nonCT(point, 0, acc)');
-            throws(() => w.ladder_nonCT(point, -1n, acc), /invalid scalar/);
+            eql(w.wnafNonCT(point, 0n, acc).equals(acc), true, 'wnafNonCT(point, 0, acc)');
+            throws(() => w.wnafNonCT(point, -1n, acc), /invalid scalar/);
             const precomputes = w.getCombPrecomputes(2, point, w.bits);
             eql(
               w.combNonCT(precomputes, scalar, acc, p.Fn.ORDER).equals(want),

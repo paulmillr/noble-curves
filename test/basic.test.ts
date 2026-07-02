@@ -3,7 +3,7 @@ import { describe, should } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql, notDeepStrictEqual, throws } from 'node:assert';
 import { edwards } from '../src/abstract/edwards.ts';
 import { montgomery } from '../src/abstract/montgomery.ts';
-import { Field } from '../src/abstract/modular.ts';
+import { Field, pseudoMersenneField } from '../src/abstract/modular.ts';
 import { Comb, normalizeZ } from '../src/abstract/curve.ts';
 import { __TEST as towerTest, tower12 } from '../src/abstract/tower.ts';
 import { ecdsa, weierstrass } from '../src/abstract/weierstrass.ts';
@@ -172,6 +172,60 @@ describe('createCurve', () => {
       }
     );
     eql(Point.BASE.multiply(2n).equals(Point.BASE.multiplyUnsafe(2n)), true);
+  });
+
+  should('mulAddUnsafe matches multiplyUnsafe composition (with and without endo)', () => {
+    for (const curve of [secp256k1, p256]) {
+      const { Point } = curve;
+      const G = Point.BASE;
+      const n = Point.Fn.ORDER;
+      const Q = G.multiply(123456789n);
+      const cases: [bigint, bigint][] = [
+        [1n, 1n],
+        [0n, 5n],
+        [7n, 0n],
+        [0n, 0n],
+        [n - 1n, n - 1n],
+        [n >> 1n, (n >> 1n) + 3n],
+        [0xdeadbeefn, 0xc0ffeen],
+      ];
+      for (const [a, b] of cases) {
+        const want = G.multiplyUnsafe(a).add(Q.multiplyUnsafe(b));
+        eql(G.mulAddUnsafe(a, Q, b).equals(want), true, `a=${a} b=${b}`);
+      }
+      throws(() => G.mulAddUnsafe(-1n, Q, 1n));
+      throws(() => G.mulAddUnsafe(n, Q, 1n));
+    }
+  });
+
+  should('pseudoMersenneField matches generic Field on all wired primes', () => {
+    const primes = [
+      secp256k1.Point.Fp.ORDER, // 2^256 − 2^32 − 977
+      2n ** 255n - 19n, // ed25519
+      2n ** 448n - 2n ** 224n - 1n, // ed448
+      2n ** 384n - 2n ** 128n - 2n ** 96n + 2n ** 32n - 1n, // p384
+      2n ** 521n - 1n, // p521
+    ];
+    for (const P of primes) {
+      const fast = pseudoMersenneField(P);
+      const ref = Field(P);
+      for (const x of [0n, 1n, P - 1n, P, P + 1n, 2n * P, (P - 1n) * (P - 1n), P * P - 1n]) {
+        eql(fast.create(x), ref.create(x), `create ${P}: ${x}`);
+      }
+      eql(fast.create(-5n), ref.create(-5n), `negative ${P}`);
+      let a = ref.create(0xdeadbeefcafebaben);
+      let b = ref.create(0xc0ffee31337n);
+      for (let i = 0; i < 50; i++) {
+        a = ref.create(a * a + 3n);
+        b = ref.create(b * b + 7n);
+        eql(fast.mul(a, b), ref.mul(a, b), `mul ${P}`);
+        eql(fast.sqr(a), ref.sqr(a), `sqr ${P}`);
+        eql(fast.add(a, b), ref.add(a, b), `add ${P}`);
+        eql(fast.sub(a, b), ref.sub(a, b), `sub ${P}`);
+        eql(fast.neg(a), ref.neg(a), `neg ${P}`);
+        eql(fast.inv(a === 0n ? 1n : a), ref.inv(a === 0n ? 1n : a), `inv ${P}`);
+      }
+    }
   });
 
   should('checks cofactored edwards BASE order before blinding', () => {

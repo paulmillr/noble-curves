@@ -22,6 +22,7 @@ import { Field, FpInvertBatch, validateField, type IField } from './modular.ts';
 
 const _0n = /* @__PURE__ */ BigInt(0);
 const _1n = /* @__PURE__ */ BigInt(1);
+const _15n = /* @__PURE__ */ BigInt(15);
 const BLIND_BYTES = 16;
 const BLIND_BITS = 8 * BLIND_BYTES;
 // Fixed-window width for the constant-time multiply of un-precomputed points (W===1).
@@ -372,8 +373,35 @@ const pointWindowSizes = new WeakMap<any, number>();
 function getW(P: any): number {
   // To disable precomputes:
   // return 1;
-  // `1` is also the uncached sentinel: use the ladder / non-precomputed path.
+  // `1` is also the uncached sentinel: use the non-precomputed (wNAF / fixed-window) path.
   return pointWindowSizes.get(P) || 1;
+}
+
+/** Table of odd multiples [1P, 3P, 5P, 7P] for width-4 wNAF. */
+function oddMultiples<P extends { double(): P; add(other: P): P }>(p: P): P[] {
+  const dbl = p.double();
+  const t = [p];
+  for (let j = 1; j < 4; j++) t.push(t[j - 1].add(dbl));
+  return t;
+}
+
+/**
+ * Width-4 wNAF signed-digit recoding, LSB-first: digits are 0 or odd in [-7, 7],
+ * nonzero density ~1/5 (after a nonzero digit, the next three are zero).
+ */
+function wnaf4Digits(n: bigint): number[] {
+  const d: number[] = [];
+  while (n > _0n) {
+    let w = 0;
+    if (n & _1n) {
+      w = Number(n & _15n); // n mod 16, odd
+      if (w > 8) w -= 16;
+      n -= BigInt(w); // n - w ≡ 0 mod 16: next three digits are zero
+    }
+    d.push(w);
+    n >>= _1n;
+  }
+  return d;
 }
 
 /**
@@ -424,16 +452,28 @@ export class Comb<PC extends PC_ANY> {
     this.maxScalar = Point.Fn.ORDER ** BigInt(4);
   }
 
-  // Non constant-time multiplication ladder
-  private ladder_nonCT(elm: PC_P<PC>, n: bigint, p: PC_P<PC> = this.ZERO): PC_P<PC> {
+  /**
+   * Non-constant-time multiplication for un-precomputed points, via width-4 wNAF.
+   * Same ~bitLen(n) doublings as a double-and-add ladder, but one addition per ~5 bits
+   * (3-add table of odd multiples + signed digits) instead of one per set bit (~bitLen/2):
+   * ~15-20% faster for random scalars. Handles oversized scalars up to the DoS cap,
+   * e.g. isTorsionFree's `Fn.ORDER⋅P` or cofactor-clearing multiples.
+   */
+  private wnafNonCT(elm: PC_P<PC>, n: bigint, p: PC_P<PC> = this.ZERO): PC_P<PC> {
     this.assertScalar(n);
-    let d: PC_P<PC> = elm;
-    while (n > _0n) {
-      if (n & _1n) p = p.add(d);
-      d = d.double();
-      n >>= _1n;
+    if (n === _0n) return p;
+    const table = oddMultiples(elm);
+    const digits = wnaf4Digits(n);
+    let acc = this.ZERO;
+    for (let i = digits.length - 1; i >= 0; i--) {
+      if (i !== digits.length - 1) acc = acc.double();
+      const w = digits[i];
+      if (w) {
+        const item = table[(Math.abs(w) - 1) >> 1];
+        acc = acc.add(w < 0 ? item.negate() : item);
+      }
     }
-    return p;
+    return p === this.ZERO ? acc : acc.add(p);
   }
 
   /**
@@ -660,12 +700,13 @@ export class Comb<PC extends PC_ANY> {
     if (!(point instanceof this.Point))
       throw new TypeError('"point" expected Point instance, got type=' + typeof point);
     const W = getW(point);
-    // W === 1 (un-precomputed): use ladder, a comb table would be thrown away after one use.
+    // W === 1 (un-precomputed): one-shot width-4 wNAF, a comb table would be thrown away
+    // after one use.
     //
     // Oversized scalar could happen when:
     // a) user passes large scalar on their own (rare)
     // b) `assertValidity()` calls `isTorsionFree()`, which multiplies point by `Fn.ORDER`
-    if (W === 1 || scalar >= this.Point.Fn.ORDER) return this.ladder_nonCT(point, scalar, prev);
+    if (W === 1 || scalar >= this.Point.Fn.ORDER) return this.wnafNonCT(point, scalar, prev);
     return this.combNonCT(
       this.getCombPrecomputes(W, point, this.bits, transform),
       scalar,
@@ -691,42 +732,56 @@ export class Comb<PC extends PC_ANY> {
 }
 
 /**
- * Endomorphism-specific multiplication for Koblitz curves.
- * Cost: 128 dbl, 0-256 adds.
- * @param Point - Point constructor.
- * @param point - Input point.
- * @param k1 - First non-negative absolute scalar chunk.
- * @param k2 - Second non-negative absolute scalar chunk.
- * @returns Partial multiplication results.
+ * Combined multi-scalar multiplication `Σ scalars[i]⋅points[i]` via interleaved width-4 wNAF
+ * (Strauss–Shamir). Every input gets its own table of odd multiples `[1P, 3P, 5P, 7P]` and
+ * signed-digit recoding, but all walks share one doubling chain, so total cost is
+ * `~bits` doublings + `L⋅bits/5` additions instead of `L⋅bits` doublings for separate
+ * multiplications. Intended for the 2-4 point shapes of signature verification
+ * (`R = u1⋅G + u2⋅P`); use {@link pippenger} for larger batches.
+ *
+ * Not constant-time: only for public inputs. Scalars must satisfy `0 <= s < Fn.ORDER`;
+ * fold negative signs into the points before calling.
+ * @param c - Point constructor.
+ * @param points - Array of curve points.
+ * @param scalars - Array of non-negative scalars, same length as points.
+ * @returns Combined multiplication result; identity for empty input.
+ * @throws If the point set or scalar set is invalid. {@link Error}
  * @example
- * Endomorphism-specific multiplication for Koblitz curves.
+ * Combined multi-scalar multiplication via Strauss–Shamir.
  *
  * ```ts
- * import { mulEndoUnsafe } from '@noble/curves/abstract/curve.js';
- * import { secp256k1 } from '@noble/curves/secp256k1.js';
- * const parts = mulEndoUnsafe(secp256k1.Point, secp256k1.Point.BASE, 3n, 5n);
+ * import { mulAddUnsafe } from '@noble/curves/abstract/curve.js';
+ * import { p256 } from '@noble/curves/nist.js';
+ * const G = p256.Point.BASE;
+ * const R = mulAddUnsafe(p256.Point, [G, G.double()], [2n, 3n]); // 2⋅G + 3⋅(2⋅G)
  * ```
  */
-export function mulEndoUnsafe<P extends CurvePoint<any, P>, PC extends CurvePointCons<P>>(
-  Point: PC,
-  point: P,
-  k1: bigint,
-  k2: bigint
-): { p1: P; p2: P } {
-  validatePointCons(Point);
-  if (!(point instanceof Point))
-    throw new TypeError('"point" expected Point instance, got type=' + typeof point);
-  let acc = point;
-  let p1 = Point.ZERO;
-  let p2 = Point.ZERO;
-  while (k1 > _0n || k2 > _0n) {
-    if (k1 & _1n) p1 = p1.add(acc);
-    if (k2 & _1n) p2 = p2.add(acc);
-    acc = acc.double();
-    k1 >>= _1n;
-    k2 >>= _1n;
+export function mulAddUnsafe<P extends CurvePoint<any, P>, PC extends CurvePointCons<P>>(
+  c: PC,
+  points: P[],
+  scalars: bigint[]
+): P {
+  validatePointCons(c);
+  validateMSMPoints(points, c);
+  validateMSMScalars(scalars, c.Fn);
+  if (points.length !== scalars.length)
+    throw new Error('arrays of points and scalars must have equal length');
+  const tables = points.map((p) => oddMultiples(p));
+  const digits = scalars.map((n) => wnaf4Digits(n));
+  let max = 0;
+  for (const d of digits) max = Math.max(max, d.length);
+  let acc = c.ZERO;
+  for (let bit = max - 1; bit >= 0; bit--) {
+    if (bit !== max - 1) acc = acc.double(); // one shared doubling per bit position
+    for (let i = 0; i < digits.length; i++) {
+      const w = digits[i][bit]; // reads past shorter recodings yield undefined, skipped below
+      if (w) {
+        const item = tables[i][(Math.abs(w) - 1) >> 1];
+        acc = acc.add(w < 0 ? item.negate() : item);
+      }
+    }
   }
-  return { p1, p2 };
+  return acc;
 }
 
 /**

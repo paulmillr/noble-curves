@@ -7,6 +7,7 @@
 import { sha256, sha384, sha512 } from '@noble/hashes/sha2.js';
 import { createFROST, type FROST } from './abstract/frost.ts';
 import { createHasher, type H2CHasher } from './abstract/hash-to-curve.ts';
+import { pseudoMersenneField } from './abstract/modular.ts';
 import { createOPRF, type OPRF } from './abstract/oprf.ts';
 import {
   ecdsa,
@@ -181,8 +182,11 @@ export const p256_FROST: TRet<FROST> = /* @__PURE__ */ (() =>
     hash: sha256,
   }))();
 
-// NIST P384
-const p384_Point = /* @__PURE__ */ weierstrass(p384_CURVE);
+// NIST P384. p = 2^384 − 2^128 − 2^96 + 2^32 − 1 is pseudo-Mersenne (129-bit c).
+// P256 stays on the generic Field: its c is 224-bit, folding degenerates (see modular.ts).
+const p384_Point = /* @__PURE__ */ weierstrass(p384_CURVE, {
+  Fp: /* @__PURE__ */ pseudoMersenneField(p384_CURVE.p),
+});
 /**
  * NIST P384 (aka secp384r1) curve, ECDSA and ECDH methods. Hashes inputs with sha384 by default.
  * @example
@@ -262,7 +266,10 @@ export const p384_oprf: TRet<OPRF> = /* @__PURE__ */ (() =>
 // exactly 65 bytes here: the coherent choices are canonical 66 only, or a broader integer-style
 // parser across many widths. Since this field parser is fixed-width, keep it canonical and use the
 // default exact-66-byte scalar field path.
-const p521_Point = /* @__PURE__ */ weierstrass(p521_CURVE);
+// p = 2^521 − 1 is a true Mersenne prime: reduction is mask + shift + add.
+const p521_Point = /* @__PURE__ */ weierstrass(p521_CURVE, {
+  Fp: /* @__PURE__ */ pseudoMersenneField(p521_CURVE.p),
+});
 /**
  * NIST P521 (aka secp521r1) curve, ECDSA and ECDH methods. Hashes inputs with sha512 by default.
  * Deterministic `keygen(seed)` expects 99 seed bytes here because the generic scalar-derivation
