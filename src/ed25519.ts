@@ -120,8 +120,6 @@ function uvRatio(u: bigint, v: bigint): { isValid: boolean; value: bigint } {
   return { isValid: useRoot1 || useRoot2, value: x };
 }
 
-// Fast pseudo-Mersenne reduction (p = 2^255 − 19) measured neutral here — eddsa time is
-// dominated by hashing — so ed25519 stays on the generic Field. See modular.ts.
 const ed25519_Point = /* @__PURE__ */ edwards(ed25519_CURVE, { uvRatio });
 // Public field alias stays stricter than the RFC 8032 Appendix A sample code:
 // `Fp.inv(0)` throws instead of returning `0`.

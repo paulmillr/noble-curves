@@ -35,7 +35,6 @@ import {
   isNegativeLE,
   mod,
   pow2,
-  pseudoMersenneField,
   type IField,
 } from './abstract/modular.ts';
 import { montgomery, type MontgomeryECDH } from './abstract/montgomery.ts';
@@ -165,9 +164,7 @@ function uvRatio(u: bigint, v: bigint): { isValid: boolean; value: bigint } {
 // values fit in 448 bits and scalars in 446 bits. Noble models that with a
 // 456-bit storage width so the final-octet x-sign bit (bit 455) still fits in
 // the shared little-endian container.
-// p = 2^448 − 2^224 − 1 is pseudo-Mersenne (Solinas); fast reduction folds at bit 448
-// regardless of the wider storage BITS, gated by FAST_REDUCTION in modular.ts.
-const Fp = /* @__PURE__ */ (() => pseudoMersenneField(ed448_CURVE_p, { BITS: 456, isLE: true }))();
+const Fp = /* @__PURE__ */ (() => Field(ed448_CURVE_p, { BITS: 456, isLE: true }))();
 // Same 57-byte container shape as `Fp`; canonical scalar encodings still have
 // the top ten bits clear per RFC 8032.
 const Fn = /* @__PURE__ */ (() => Field(ed448_CURVE.n, { BITS: 456, isLE: true }))();
@@ -175,7 +172,7 @@ const Fn = /* @__PURE__ */ (() => Field(ed448_CURVE.n, { BITS: 456, isLE: true }
 // Plain `Field` decoding stays canonical here, so callers that want RFC 7748's
 // modulo-p acceptance must reduce externally.
 const Fp448 = /* @__PURE__ */ (() =>
-  pseudoMersenneField(ed448_CURVE_p, { BITS: 448, isLE: true }))();
+  Field(ed448_CURVE_p, { BITS: 448, isLE: true }))();
 // Strict 56-byte scalar parser matching RFC 9496's recommended canonical form.
 const Fn448 = /* @__PURE__ */ (() => Field(ed448_CURVE.n, { BITS: 448, isLE: true }))();
 

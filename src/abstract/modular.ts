@@ -991,68 +991,6 @@ export function Field(ORDER: bigint, opts: FieldOpts = {}): TRet<Readonly<FpFiel
   return new _Field(ORDER, opts);
 }
 
-/**
- * Single switch for pseudo-Mersenne fast reduction in every field built via
- * {@link pseudoMersenneField} (secp256k1, p384, p521, ed448).
- * When false, those fields are plain {@link Field}s using native bigint `%`.
- * Measured on V8 (node 24): 15-30% faster field ops depending on the prime; see CLAUDE.md.
- */
-const FAST_REDUCTION = false;
-
-/**
- * Prime field with pseudo-Mersenne fast reduction. For `p = 2^m − c` (m = bitLen(p)),
- * `2^m ≡ c (mod p)` lets reduction fold `x = lo + hi⋅2^m ↦ lo + hi⋅c` instead of dividing;
- * each fold removes `m − bitLen(c)` bits, and the post-fold value `< 2^m = p + c` needs at
- * most one subtraction of p. Only worthwhile when `bitLen(c)` is far below `m` — callers pick
- * suitable primes (e.g. NOT NIST P-256, whose c is 224-bit: folding degenerates to ~8 rounds,
- * slower than native `%`). Falls back to {@link Field} when {@link FAST_REDUCTION} is off;
- * results are identical either way.
- * @param ORDER - Prime of the form 2^m − c with small c.
- * @param opts - Same options as {@link Field}.
- * @returns Field with `create`/`sqr`/`mul`/`add`/`sub`/`neg` routed through fast reduction.
- * @example
- * Create a fast field for secp256k1's prime.
- *
- * ```ts
- * import { pseudoMersenneField } from '@noble/curves/abstract/modular.js';
- * const Fp = pseudoMersenneField(BigInt(2) ** BigInt(255) - BigInt(19));
- * ```
- */
-export function pseudoMersenneField(ORDER: bigint, opts: FieldOpts = {}): TRet<Readonly<FpField>> {
-  const F = Field(ORDER, opts);
-  if (!FAST_REDUCTION) return F;
-  // Fold boundary comes from the prime itself, not F.BITS: callers may override BITS upward
-  // (e.g. ed448 uses BITS=456 containers), which must not change the 2^m ≡ c congruence.
-  const m = BigInt(bitLen(ORDER));
-  const M = (_1n << m) - _1n;
-  const c = M + _1n - ORDER; // c < 2^(m−1), since bitLen(ORDER) = m
-  const red = (x: bigint): bigint => {
-    if (x < _0n) return mod(x, ORDER);
-    let hi = x >> m;
-    while (hi > _0n) {
-      x = (x & M) + hi * c;
-      hi = x >> m;
-    }
-    if (x >= ORDER) x -= ORDER;
-    return x;
-  };
-  // `_Field` methods live on its frozen prototype: a spread would lose them and plain
-  // assignment cannot shadow them. Prototype-chain the instance and defineProperty the
-  // hot-op overrides; consumers reach everything else through the chain.
-  const overrides: Record<string, (...args: bigint[]) => bigint> = {
-    create: (num: bigint) => red(num),
-    sqr: (num: bigint) => red(num * num),
-    mul: (lhs: bigint, rhs: bigint) => red(lhs * rhs),
-    add: (lhs: bigint, rhs: bigint) => red(lhs + rhs),
-    sub: (lhs: bigint, rhs: bigint) => red(lhs - rhs + ORDER),
-    neg: (num: bigint) => red(ORDER - red(num)),
-  };
-  const fast = Object.create(F);
-  for (const k in overrides)
-    Object.defineProperty(fast, k, { value: overrides[k], enumerable: true });
-  return Object.freeze(fast) as TRet<Readonly<FpField>>;
-}
-
 // Generic random scalar, we can do same for other fields if via Fp2.mul(Fp2.ONE, Fp2.random)?
 // This allows unsafe methods like ignore bias or zero. These unsafe, but often used in different protocols (if deterministic RNG).
 // which mean we cannot force this via opts.
