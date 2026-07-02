@@ -1,7 +1,7 @@
 import { describe, should } from '@paulmillr/jsbt/test.js';
 import * as fc from 'fast-check';
 import { deepStrictEqual as eql, throws } from 'node:assert';
-import { Comb } from '../src/abstract/curve.ts';
+import { wNAF } from '../src/abstract/curve.ts';
 import { hash_to_field } from '../src/abstract/hash-to-curve.ts';
 import { bls12_381 as bls, bls12_381 } from '../src/bls12-381.ts';
 import { asciiToBytes, bytesToHex, concatBytes, hexToBytes } from '../src/utils.ts';
@@ -698,8 +698,8 @@ describe('bls12-381 Point', () => {
         ]),
       }),
     ];
-    // Use Comb internals to allow scalars higher than CURVE.r
-    const w = new Comb(G2Point);
+    // Use wNAF internals to allow scalars higher than CURVE.r
+    const w = new wNAF(G2Point);
     const hEff = BigInt(
       '0xbc69f08f2ee75b3584c6a0ea91b352888e2a8e9145ad7689986ff031508ffe1329c2f178731db956d82bf015d1212b02ec0ec69d7477c1ae954cbc06689f6a359894c0adebbf6b4e8020005aaa95551'
     );

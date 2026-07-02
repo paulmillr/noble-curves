@@ -25,7 +25,7 @@ import {
   type TRet,
 } from '../utils.ts';
 import {
-  Comb,
+  wNAF,
   createCurveFields,
   createKeygen,
   normalizeZ,
@@ -274,7 +274,7 @@ function isEdValidXY(Fp: TArg<IField<bigint>>, CURVE: EdwardsOpts, x: bigint, y:
  *   RFC 8032 base-point constraints like `B != (0,1)` and `[L]B = 0`
  *   are left to the caller's chosen parameters, since eager subgroup
  *   validation here adds about 10-15ms to heavyweight imports like ed448.
- *   The returned constructor also eagerly marks `Point.BASE` for W=10
+ *   The returned constructor also eagerly marks `Point.BASE` for W=6
  *   precompute caching. Some code paths still assume
  *   `Fp.BYTES === Fn.BYTES`, so mismatched byte lengths are not fully audited here.
  * @throws If the curve parameters or Edwards overrides are invalid. {@link Error}
@@ -422,8 +422,8 @@ export function edwards(
       return this.toAffine().y;
     }
 
-    precompute(windowSize: number = 10, isLazy = true) {
-      comb.createCache(this, windowSize);
+    precompute(windowSize: number = 6, isLazy = true) {
+      wnaf.createCache(this, windowSize);
       if (!isLazy) this.multiply(_2n); // random number
       return this;
     }
@@ -535,7 +535,7 @@ export function edwards(
       // and failing closed is safer than silently producing the identity point.
       if (!Fn.isValidNot0(scalar))
         throw new RangeError('invalid scalar: expected 1 <= sc < curve.n');
-      const { p, f } = comb.cachedSecret(this, scalar, cofactor, (p) => normalizeZ(Point, p));
+      const { p, f } = wnaf.cachedSecret(this, scalar, cofactor, (p) => normalizeZ(Point, p));
       return normalizeZ(Point, [p, f])[0];
     }
 
@@ -549,7 +549,7 @@ export function edwards(
       if (!Fn.isValid(scalar)) throw new RangeError('invalid scalar: expected 0 <= sc < curve.n');
       if (scalar === _0n) return Point.ZERO;
       if (this.is0() || scalar === _1n) return this;
-      return comb.unsafe(this, scalar, (p) => normalizeZ(Point, p));
+      return wnaf.unsafe(this, scalar, (p) => normalizeZ(Point, p));
     }
 
     // Checks if point is of small order.
@@ -563,7 +563,7 @@ export function edwards(
     // Multiplies point by curve order and checks if the result is 0.
     // Returns `false` is the point is dirty.
     isTorsionFree(): boolean {
-      return comb.unsafe(this, CURVE.n).is0();
+      return wnaf.unsafe(this, CURVE.n).is0();
     }
 
     // Converts Extended point to default (x, y) coordinates.
@@ -615,10 +615,10 @@ export function edwards(
   // } catch {
   //   throw new Error('bad curve params: generator point');
   // }
-  const comb = new Comb(Point, randomBytes);
-  // Enable W=10 comb precomputes. Slows down first publicKey computation.
-  // Disable for tiny toy curves, with scalar fields < 10 bits.
-  if (comb.bits >= 10) Point.BASE.precompute(10);
+  const wnaf = new wNAF(Point, randomBytes);
+  // Enable W=6 wNAF precomputes. Slows down first publicKey computation.
+  // Disable for tiny toy curves, with scalar fields < 6 bits.
+  if (wnaf.bits >= 6) Point.BASE.precompute(6);
   Object.freeze(Point.prototype);
   Object.freeze(Point);
   return Point;

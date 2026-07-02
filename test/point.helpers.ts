@@ -1,5 +1,5 @@
 import {
-  Comb as _Comb,
+  wNAF as _wNAF,
   createCurveFields as _createCurveFields,
   normalizeZ as _normalizeZ,
   pippenger as _pippenger,
@@ -58,5 +58,5 @@ export const edwards = _edwards;
 export const pippenger = _pippenger;
 export const interleavedMSMUnsafe = _interleavedMSMUnsafe;
 export const normalizeZ = _normalizeZ;
-export const Comb = _Comb;
+export const wNAF = _wNAF;
 export { hex, hexToBytes, invert, mod };

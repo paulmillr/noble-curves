@@ -10,7 +10,7 @@ import {
   hexToBytes,
   invert,
   mod,
-  Comb,
+  wNAF,
   normalizeZ,
   pippenger,
   interleavedMSMUnsafe,
@@ -106,12 +106,12 @@ describe('basic curve tests', () => {
           equal(G[1].multiplyUnsafe(1n), G[1], '(1*G).multiplyUnsafe(1) = 1*G');
           equal(G[0].multiplyUnsafe(5n), G[0], '(0*G).multiplyUnsafe(5) = 0');
 
-          if (typeof Comb === 'function') {
+          if (typeof wNAF === 'function') {
             const point = G[2];
             const acc = G[7];
             const scalar = 5n;
             const want = acc.add(point.multiplyUnsafe(scalar));
-            const w = new Comb(p) as any;
+            const w = new wNAF(p) as any;
             eql(
               w.wnafNonCT(point, scalar, acc).equals(want),
               true,
@@ -119,16 +119,16 @@ describe('basic curve tests', () => {
             );
             eql(w.wnafNonCT(point, 0n, acc).equals(acc), true, 'wnafNonCT(point, 0, acc)');
             throws(() => w.wnafNonCT(point, -1n, acc), /invalid scalar/);
-            const precomputes = w.getCombPrecomputes(2, point, w.bits);
+            const precomputes = w.getWnafPrecomputes(2, point, w.bits);
             eql(
-              w.combNonCT(precomputes, scalar, acc, p.Fn.ORDER).equals(want),
+              w.wnafCachedNonCT(precomputes, scalar, acc, p.Fn.ORDER).equals(want),
               true,
-              'combNonCT(point, scalar, acc)'
+              'wnafCachedNonCT(point, scalar, acc)'
             );
             eql(
-              w.combNonCT(precomputes, 0n, acc, p.Fn.ORDER).equals(acc),
+              w.wnafCachedNonCT(precomputes, 0n, acc, p.Fn.ORDER).equals(acc),
               true,
-              'combNonCT(point, 0, acc)'
+              'wnafCachedNonCT(point, 0, acc)'
             );
             eql(
               w.unsafe(point, scalar, undefined, acc).equals(want),

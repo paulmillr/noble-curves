@@ -52,7 +52,7 @@ import {
   type TRet,
 } from '../utils.ts';
 import {
-  Comb,
+  wNAF,
   createCurveFields,
   createKeygen,
   mulAddUnsafe,
@@ -917,8 +917,8 @@ export function weierstrass<T>(
      * @param isLazy - true will defer table computation until the first multiplication
      * @returns
      */
-    precompute(windowSize: number = 10, isLazy = true): Point {
-      comb.createCache(this, windowSize);
+    precompute(windowSize: number = 6, isLazy = true): Point {
+      wnaf.createCache(this, windowSize);
       if (!isLazy) this.multiply(_3n); // random number
       return this;
     }
@@ -1074,7 +1074,7 @@ export function weierstrass<T>(
 
     /**
      * Constant time multiplication.
-     * Uses comb method with precomputed tables when available.
+     * Uses precomputed tables (signed fixed-window wNAF) when available.
      * Uses scalar blinding and avoids endomorphism splitting in the secret-scalar path.
      * @param scalar - by which the point would be multiplied
      * @returns New point
@@ -1084,7 +1084,7 @@ export function weierstrass<T>(
       // In key/signature-style callers, those values usually mean broken hash/scalar plumbing,
       // and failing closed is safer than silently producing the identity point.
       if (!Fn.isValidNot0(scalar)) throw new RangeError('invalid scalar: out of range'); // 0 is invalid
-      const { p, f } = comb.cachedSecret(this, scalar, cofactor, (p) => normalizeZ(Point, p));
+      const { p, f } = wnaf.cachedSecret(this, scalar, cofactor, (p) => normalizeZ(Point, p));
       return normalizeZ(Point, [p, f])[0];
     }
 
@@ -1102,7 +1102,7 @@ export function weierstrass<T>(
       if (!Fn.isValid(sc)) throw new RangeError('invalid scalar: out of range'); // 0 is valid
       if (sc === _0n || p.is0()) return Point.ZERO; // 0
       if (sc === _1n) return p; // 1
-      if (comb.hasCache(this)) return comb.unsafe(p, sc, (p) => normalizeZ(Point, p)); // precomputes
+      if (wnaf.hasCache(this)) return wnaf.unsafe(p, sc, (p) => normalizeZ(Point, p)); // precomputes
       const points: Point[] = [];
       const scalars: bigint[] = [];
       pushWnafPair(points, scalars, p, sc);
@@ -1159,7 +1159,7 @@ export function weierstrass<T>(
       if (cofactor === _1n) return true;
       if (isTorsionFree) return isTorsionFree(Point, this);
       // unsafe() will use the uncached wNAF path internally, since CURVE_ORDER >= Fn.ORDER
-      return comb.unsafe(this, CURVE_ORDER).is0();
+      return wnaf.unsafe(this, CURVE_ORDER).is0();
     }
 
     clearCofactor(): Point {
@@ -1193,10 +1193,10 @@ export function weierstrass<T>(
       return `<Point ${this.is0() ? 'ZERO' : this.toHex()}>`;
     }
   }
-  const comb = new Comb(Point, randomBytes);
-  // Enable W=10 comb precomputes. Slows down first publicKey computation.
-  // Disable for tiny toy curves, with scalar fields < 10 bits.
-  if (comb.bits >= 10) Point.BASE.precompute(10);
+  const wnaf = new wNAF(Point, randomBytes);
+  // Enable W=6 wNAF precomputes. Slows down first publicKey computation.
+  // Disable for tiny toy curves, with scalar fields < 6 bits.
+  if (wnaf.bits >= 6) Point.BASE.precompute(6);
   Object.freeze(Point.prototype);
   Object.freeze(Point);
   return Point;
