@@ -1641,6 +1641,19 @@ export function ecdsa(
 
   const { Fp, Fn } = Point;
   const { ORDER: CURVE_ORDER, BITS: fnBits } = Fn;
+  // Nonce-inversion blinding in k2sig draws `getMinHashLength(n)` bytes per sign. Probe the RNG
+  // once (same pattern as ScalarMultiplier): in environments without working randomness, signing
+  // downgrades to Fermat inversion (invertCt) instead of throwing on every sign(). The shape of
+  // returned bytes is still validated (by mapHashToField) on every blinded call.
+  const blindLength = getMinHashLength(CURVE_ORDER);
+  let csprng: typeof randomBytes | undefined = randomBytes;
+  try {
+    const probe = csprng(blindLength);
+    if (!(probe instanceof Uint8Array) || probe.length !== blindLength) csprng = undefined;
+  } catch {
+    csprng = undefined;
+  }
+  //csprng = undefined;
   const { keygen, getPublicKey, getSharedSecret, utils, lengths } = ecdh(Point, ecdsaOpts);
   const defaultSigOpts: Required<ECDSASignOpts> = {
     prehash: true,
@@ -1854,22 +1867,32 @@ export function ecdsa(
     // q = k⋅G
     // r = q.x mod n
     // s = k^-1(m + rd) mod n
-    // Can use scalar blinding b^-1(bm + bdr) where b ∈ [1,q−1] according to
-    // https://tches.iacr.org/index.php/TCHES/article/view/7337/6509. We've decided against it:
-    // a) dependency on CSPRNG b) 15% slowdown c) doesn't really help since bigints are not CT
+    // The nonce inversion is blinded: with random b ∈ [1,n−1], s = (bk)^-1(bm + bdr) per
+    // https://tches.iacr.org/index.php/TCHES/article/view/7337/6509. Fn.inv()'s extended-Euclidean
+    // loop count depends on its input (cf. Minerva), but here it only ever sees b·k — uniformly
+    // random, independent of k — so its timing reveals nothing about the nonce; b also masks d in
+    // the products. Without a CSPRNG (probed in ecdsa()) we fall back to Fermat inversion
+    // (invertCt), whose control flow is data-independent, at ~4x the inversion cost.
     function k2sig(kBytes: TArg<Uint8Array>): Signature | undefined {
       // RFC 6979 Section 3.2, step 3: k = bits2int(T)
       // Important: all mod() calls here must be done over N
       const k = bits2int(kBytes); // Cannot use fields methods, since it is group element
       if (!Fn.isValidNot0(k)) return; // Valid scalars (including k) must be in 1..N-1
-      // k^-1 mod n. Fermat (invertCt) instead of Fn.inv()'s extended-Euclidean so the secret
-      // nonce inversion has data-independent control flow (loop count of Euclid leaks k, cf.
-      // Minerva). ~4x slower than Fn.inv() but tiny next to k⋅G. Requires prime n (true for ECDSA).
-      const ik = invertCt(k, CURVE_ORDER);
       const q = Point.BASE.multiply(k).toAffine(); // q = k⋅G
       const r = Fn.create(q.x); // r = q.x mod n
       if (r === _0n) return;
-      const s = Fn.create(ik * Fn.create(m + r * d)); // s = k^-1(m + rd) mod n
+      let s: bigint;
+      if (csprng !== undefined) {
+        // mapHashToField maps 1.5x-order-length uniform bytes into [1, n-1], negligible bias.
+        const b = bytesToNumberBE(mapHashToField(csprng(blindLength), CURVE_ORDER));
+        const ibk = Fn.inv(Fn.mul(b, k)); // (bk)^-1: inversion input is decorrelated from k
+        const bm = Fn.mul(b, m);
+        const bd = Fn.mul(b, d);
+        s = Fn.create(ibk * Fn.create(bm + bd * r)); // s = (bk)^-1(bm + bdr) = k^-1(m + rd) mod n
+      } else {
+        const ik = invertCt(k, CURVE_ORDER); // k^-1 mod n with data-independent control flow
+        s = Fn.create(ik * Fn.create(m + r * d)); // s = k^-1(m + rd) mod n
+      }
       if (s === _0n) return;
       let recovery = (q.x === r ? 0 : 2) | Number(q.y & _1n); // recovery bit (2 or 3 when q.x>n)
       let normS = s;

@@ -116,15 +116,16 @@ export function invert(number: bigint, modulo: bigint): bigint {
   // (Fermat) alternative over a prime modulus, see {@link invertCt} (~4x slower).
   let a = mod(number, modulo);
   let b = modulo;
+  // Only the Bézout coefficient of `number` (x/u chain) is tracked; the coefficient of `modulo`
+  // never affects the output, so it is not computed.
   // prettier-ignore
-  let x = _0n, y = _1n, u = _1n, v = _0n;
+  let x = _0n, u = _1n;
   while (a !== _0n) {
     const q = b / a;
     const r = b - a * q;
     const m = x - u * q;
-    const n = y - v * q;
     // prettier-ignore
-    b = a, a = r, x = u, y = v, u = m, v = n;
+    b = a, a = r, x = u, u = m;
   }
   const gcd = b;
   if (gcd !== _1n) throw new Error('invert: does not exist');
@@ -292,7 +293,9 @@ export function tonelliShanks(P: bigint): TRet<<T>(Fp: IField<T>, n: T) => T> {
     // Main loop
     // while t != 1
     while (!F.eql(t, F.ONE)) {
-      if (F.is0(t)) return F.ZERO; // if t=0 return R=0
+      // Unreachable over a genuine field (no zero divisors; n=0 already returned above). A zero t
+      // means composite ORDER, where a fabricated root would be wrong: fail closed instead.
+      if (F.is0(t)) throw new Error('Cannot find square root: probably non-prime P');
       let i = 1;
 
       // Find the smallest i >= 1 such that t^(2^i) ≡ 1 (mod P)
@@ -990,20 +993,6 @@ Object.freeze(_Field.prototype);
 export function Field(ORDER: bigint, opts: FieldOpts = {}): TRet<Readonly<FpField>> {
   return new _Field(ORDER, opts);
 }
-
-// Generic random scalar, we can do same for other fields if via Fp2.mul(Fp2.ONE, Fp2.random)?
-// This allows unsafe methods like ignore bias or zero. These unsafe, but often used in different protocols (if deterministic RNG).
-// which mean we cannot force this via opts.
-// Not sure what to do with randomBytes, we can accept it inside opts if wanted.
-// Probably need to export getMinHashLength somewhere?
-// random(bytes?: Uint8Array, unsafeAllowZero = false, unsafeAllowBias = false) {
-//   const LEN = !unsafeAllowBias ? getMinHashLength(ORDER) : BYTES;
-//   if (bytes === undefined) bytes = randomBytes(LEN); // _opts.randomBytes?
-//   const num = isLE ? bytesToNumberLE(bytes) : bytesToNumberBE(bytes);
-//   // `mod(x, 11)` can sometimes produce 0. `mod(x, 10) + 1` is the same, but no 0
-//   const reduced = unsafeAllowZero ? mod(num, ORDER) : mod(num, ORDER - _1n) + _1n;
-//   return reduced;
-// },
 
 /**
  * @param Fp - Field implementation.
