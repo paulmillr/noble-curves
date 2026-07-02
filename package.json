@@ -21,7 +21,7 @@
     "typescript": "6.0.2"
   },
   "scripts": {
-    "benchmark": "node benchmark/sign.ts && node benchmark/point.ts",
+    "benchmark": "node benchmark/sign.ts",
     "build": "tsc",
     "bundle": "npx --no @paulmillr/jsbt bundle",
     "check": "npx --no @paulmillr/jsbt check",
