@@ -29,7 +29,7 @@ import {
   type H2CHasher,
   type H2CHasherBase,
 } from './abstract/hash-to-curve.ts';
-import { Field, FpInvertBatch, isNegativeLE, mod, pow2, type IField } from './abstract/modular.ts';
+import { Field, FpInvertBatch, mod, pow2, type IField } from './abstract/modular.ts';
 import { montgomery, type MontgomeryECDH } from './abstract/montgomery.ts';
 import { createOPRF, type OPRF } from './abstract/oprf.ts';
 import {
@@ -93,7 +93,7 @@ const shake256_114 = /* @__PURE__ */ wrapConstructor(() => shake256.create({ dkL
 const shake256_64 = /* @__PURE__ */ wrapConstructor(() => shake256.create({ dkLen: 64 }));
 
 // prettier-ignore
-const _1n = /* @__PURE__ */ BigInt(1), _2n = /* @__PURE__ */ BigInt(2), _3n = /* @__PURE__ */ BigInt(3), _4n = /* @__PURE__ */ BigInt(4), _11n = /* @__PURE__ */ BigInt(11);
+const _0n = /* @__PURE__ */ BigInt(0), _1n = /* @__PURE__ */ BigInt(1), _2n = /* @__PURE__ */ BigInt(2), _3n = /* @__PURE__ */ BigInt(3), _4n = /* @__PURE__ */ BigInt(4), _11n = /* @__PURE__ */ BigInt(11);
 // prettier-ignore
 const _22n = /* @__PURE__ */ BigInt(22), _44n = /* @__PURE__ */ BigInt(44), _88n = /* @__PURE__ */ BigInt(88), _223n = /* @__PURE__ */ BigInt(223);
 
@@ -261,21 +261,36 @@ export const E448: EdwardsPointCons = /* @__PURE__ */ edwards(E448_CURVE, { Fp, 
  */
 export const x448: TRet<MontgomeryECDH> = /* @__PURE__ */ (() => {
   const P = ed448_CURVE_p;
+  const powPminus2 = (x: bigint): bigint => {
+    const Pminus3div4 = ed448_pow_Pminus3div4(x);
+    const Pminus3 = pow2(Pminus3div4, _2n, P);
+    return mod(Pminus3 * x, P); // Pminus3 * x = Pminus2
+  };
   return montgomery({
     P,
     type: 'x448',
-    powPminus2: (x: bigint): bigint => {
-      const Pminus3div4 = ed448_pow_Pminus3div4(x);
-      const Pminus3 = pow2(Pminus3div4, _2n, P);
-      return mod(Pminus3 * x, P); // Pminus3 * x = Pminus2
-    },
+    powPminus2,
     adjustScalarBytes,
+    // ~3x faster fixed-base: [k]B on Ed448-Goldilocks using cached base tables, mapped back
+    // through the 4-isogeny to curve448: u = y²/x² = Y²/X² (the isogeny is a homomorphism and
+    // sends the Ed448 base point to u=5, so no scalar correction factor is needed).
+    scalarMultBase: (k: bigint): bigint => {
+      // Clamped k (≈2^447) exceeds n, but B has prime order n, so [k]B == [k mod n]B.
+      const kn = mod(k, ed448_Point.Fn.ORDER);
+      // k ≡ 0 (mod n): [k]B is the point at infinity, whose u is 0 in the x-only ladder;
+      // returning 0 makes montgomery() reject it exactly like the ladder path.
+      if (kn === _0n) return _0n;
+      const p = ed448_Point.BASE.multiply(kn);
+      // X == 0 only at the identity and the order-2 point, both excluded from the prime-order
+      // subgroup hit by kn in 1..n-1.
+      return mod(p.Y * p.Y * powPminus2(mod(p.X * p.X, P)), P);
+    },
   });
 })();
 
 // Hash To Curve Elligator2 Map
-// 1. c1 = (q - 3) / 4 # Integer arithmetic
-const ELL2_C1 = /* @__PURE__ */ (() => (ed448_CURVE_p - BigInt(3)) / BigInt(4))();
+// 1. c1 = (q - 3) / 4 # Integer arithmetic — tv3^c1 below reuses the
+// ed448_pow_Pminus3div4 addition chain, which computes exactly x^((p-3)/4).
 const ELL2_J = /* @__PURE__ */ BigInt(156326);
 
 // Returns RFC 9380 Appendix G.2.3 rational Montgomery numerators/denominators
@@ -295,7 +310,7 @@ function map_to_curve_elligator2_curve448(u: bigint) {
   let tv3 = Fp.sqr(gxd); // 12. tv3 = gxd^2
   tv2 = Fp.mul(gx1, gxd); // 13. tv2 = gx1 * gxd         # gx1 * gxd
   tv3 = Fp.mul(tv3, tv2); // 14. tv3 = tv3 * tv2         # gx1 * gxd^3
-  let y1 = Fp.pow(tv3, ELL2_C1); // 15.  y1 = tv3^c1            # (gx1 * gxd^3)^((p - 3) / 4)
+  let y1 = ed448_pow_Pminus3div4(tv3); // 15.  y1 = tv3^c1      # (gx1 * gxd^3)^((p - 3) / 4)
   y1 = Fp.mul(y1, tv2); // 16.  y1 = y1 * tv2          # gx1 * gxd * (gx1 * gxd^3)^((p - 3) / 4)
   // 17. x2n = -tv1 * x1n # x2 = x2n / xd = -1 * u^2 * x1n / xd
   let x2n = Fp.mul(x1n, Fp.neg(tv1));
@@ -422,9 +437,8 @@ const INVSQRT_MINUS_D = /* @__PURE__ */ BigInt(
 // canonical representative, while ordinary Ed448 decoding still uses `uvRatio()`
 // plus the public sign bit from RFC 8032.
 const sqrtRatioM1 = (u: bigint, v: bigint) => {
-  const P = ed448_CURVE_p;
   const { isValid, value } = uvRatio(u, v);
-  return { isValid, value: isNegativeLE(value, P) ? Fp448.create(-value) : value };
+  return { isValid, value: Fp448.isOdd!(value) ? Fp448.neg(value) : value };
 };
 const invertSqrt = (number: bigint) => sqrtRatioM1(_1n, number);
 
@@ -435,31 +449,43 @@ const invertSqrt = (number: bigint) => sqrtRatioM1(_1n, number);
  * representation, not a public decaf encoding.
  */
 function calcElligatorDecafMap(r0: bigint): EdwardsPoint {
-  const { d, p: P } = ed448_CURVE;
-  const mod = (n: bigint) => Fp448.create(n);
+  const { d } = ed448_CURVE;
 
-  const r = mod(-(r0 * r0)); // 1
-  const u0 = mod(d * (r - _1n)); // 2
-  const u1 = mod((u0 + _1n) * (u0 - r)); // 3
+  const r = Fp448.create(-Fp448.sqrN(r0)); // 1
+  const u0 = Fp448.mul(d, Fp448.subN(r, _1n)); // 2
+  const u1 = Fp448.mul(Fp448.addN(u0, _1n), Fp448.subN(u0, r)); // 3
 
-  const { isValid: was_square, value: v } = sqrtRatioM1(ONE_MINUS_TWO_D, mod((r + _1n) * u1)); // 4
+  const { isValid: was_square, value: v } = sqrtRatioM1(
+    ONE_MINUS_TWO_D,
+    Fp448.mul(Fp448.addN(r, _1n), u1)
+  ); // 4
 
   let v_prime = v; // 5
-  if (!was_square) v_prime = mod(r0 * v);
+  if (!was_square) v_prime = Fp448.mul(r0, v);
 
   let sgn = _1n; // 6
-  if (!was_square) sgn = mod(-_1n);
+  if (!was_square) sgn = Fp448.neg(Fp448.ONE);
 
-  const s = mod(v_prime * (r + _1n)); // 7
+  const s = Fp448.mul(v_prime, Fp448.addN(r, _1n)); // 7
   let s_abs = s;
-  if (isNegativeLE(s, P)) s_abs = mod(-s);
+  if (Fp448.isOdd!(s)) s_abs = Fp448.neg(s);
 
-  const s2 = s * s;
-  const W0 = mod(s_abs * _2n); // 8
-  const W1 = mod(s2 + _1n); // 9
-  const W2 = mod(s2 - _1n); // 10
-  const W3 = mod(v_prime * s * (r - _1n) * ONE_MINUS_TWO_D + sgn); // 11
-  return new ed448_Point(mod(W0 * W3), mod(W2 * W1), mod(W1 * W3), mod(W0 * W2));
+  const s2 = Fp448.sqrN(s);
+  const W0 = Fp448.mul(s_abs, _2n); // 8
+  const W1 = Fp448.create(Fp448.addN(s2, _1n)); // 9
+  const W2 = Fp448.create(Fp448.subN(s2, _1n)); // 10
+  const W3 = Fp448.create(
+    Fp448.addN(
+      Fp448.mulN(Fp448.mulN(Fp448.mulN(v_prime, s), Fp448.subN(r, _1n)), ONE_MINUS_TWO_D),
+      sgn
+    )
+  ); // 11
+  return new ed448_Point(
+    Fp448.mul(W0, W3),
+    Fp448.mul(W2, W1),
+    Fp448.mul(W1, W3),
+    Fp448.mul(W0, W2)
+  );
 }
 
 // Keep the Decaf448 base representative literal here: deriving it with
@@ -521,31 +547,32 @@ class _DecafPoint extends PrimeEdwardsPoint<_DecafPoint> {
 
   static fromBytes(bytes: TArg<Uint8Array>): _DecafPoint {
     abytes(bytes, 56);
-    const { d, p: P } = ed448_CURVE;
-    const mod = (n: bigint) => Fp448.create(n);
+    const { d } = ed448_CURVE;
     const s = Fp448.fromBytes(bytes);
 
     // 1. Check that s_bytes is the canonical encoding of a field element, or else abort.
     // 2. Check that s is non-negative, or else abort
-    if (!equalBytes(Fn448.toBytes(s), bytes) || isNegativeLE(s, P))
+    if (!equalBytes(Fp448.toBytes(s), bytes) || Fp448.isOdd!(s))
       throw new Error('invalid decaf448 encoding 1');
 
-    const s2 = mod(s * s); // 1
-    const u1 = mod(_1n + s2); // 2
-    const u1sq = mod(u1 * u1);
-    const u2 = mod(u1sq - _4n * d * s2); // 3
+    const s2 = Fp448.sqr(s); // 1
+    const u1 = Fp448.add(Fp448.ONE, s2); // 2
+    const u1sq = Fp448.sqr(u1);
+    const u2 = Fp448.create(Fp448.subN(u1sq, Fp448.mulN(Fp448.mulN(_4n, d), s2))); // 3
 
-    const { isValid, value: invsqrt } = invertSqrt(mod(u2 * u1sq)); // 4
+    const { isValid, value: invsqrt } = invertSqrt(Fp448.mul(u2, u1sq)); // 4
 
-    let u3 = mod((s + s) * invsqrt * u1 * SQRT_MINUS_D); // 5
-    if (isNegativeLE(u3, P)) u3 = mod(-u3);
+    let u3 = Fp448.create(
+      Fp448.mulN(Fp448.mulN(Fp448.mulN(Fp448.addN(s, s), invsqrt), u1), SQRT_MINUS_D)
+    ); // 5
+    if (Fp448.isOdd!(u3)) u3 = Fp448.neg(u3);
 
-    const x = mod(u3 * invsqrt * u2 * INVSQRT_MINUS_D); // 6
-    const y = mod((_1n - s2) * invsqrt * u1); // 7
-    const t = mod(x * y); // 8
+    const x = Fp448.create(Fp448.mulN(Fp448.mulN(Fp448.mulN(u3, invsqrt), u2), INVSQRT_MINUS_D)); // 6
+    const y = Fp448.create(Fp448.mulN(Fp448.mulN(Fp448.subN(_1n, s2), invsqrt), u1)); // 7
+    const t = Fp448.mul(x, y); // 8
 
     if (!isValid) throw new Error('invalid decaf448 encoding 2');
-    return new _DecafPoint(new ed448_Point(x, y, _1n, t));
+    return new _DecafPoint(new ed448_Point(x, y, Fp448.ONE, t));
   }
 
   /**
@@ -563,17 +590,17 @@ class _DecafPoint extends PrimeEdwardsPoint<_DecafPoint> {
    */
   toBytes(): TRet<Uint8Array> {
     const { X, Z, T } = this.ep;
-    const P = ed448_CURVE.p;
-    const mod = (n: bigint) => Fp448.create(n);
-    const u1 = mod(mod(X + T) * mod(X - T)); // 1
-    const x2 = mod(X * X);
-    const { value: invsqrt } = invertSqrt(mod(u1 * ONE_MINUS_D * x2)); // 2
-    let ratio = mod(invsqrt * u1 * SQRT_MINUS_D); // 3
-    if (isNegativeLE(ratio, P)) ratio = mod(-ratio);
-    const u2 = mod(INVSQRT_MINUS_D * ratio * Z - T); // 4
-    let s = mod(ONE_MINUS_D * invsqrt * X * u2); // 5
-    if (isNegativeLE(s, P)) s = mod(-s);
-    return Fn448.toBytes(s) as TRet<Uint8Array>;
+    const u1 = Fp448.mul(Fp448.add(X, T), Fp448.sub(X, T)); // 1
+    const x2 = Fp448.sqr(X);
+    const { value: invsqrt } = invertSqrt(
+      Fp448.create(Fp448.mulN(Fp448.mulN(u1, ONE_MINUS_D), x2))
+    ); // 2
+    let ratio = Fp448.create(Fp448.mulN(Fp448.mulN(invsqrt, u1), SQRT_MINUS_D)); // 3
+    if (Fp448.isOdd!(ratio)) ratio = Fp448.neg(ratio);
+    const u2 = Fp448.create(Fp448.subN(Fp448.mulN(Fp448.mulN(INVSQRT_MINUS_D, ratio), Z), T)); // 4
+    let s = Fp448.create(Fp448.mulN(Fp448.mulN(Fp448.mulN(ONE_MINUS_D, invsqrt), X), u2)); // 5
+    if (Fp448.isOdd!(s)) s = Fp448.neg(s);
+    return Fp448.toBytes(s) as TRet<Uint8Array>;
   }
 
   /**
@@ -585,7 +612,7 @@ class _DecafPoint extends PrimeEdwardsPoint<_DecafPoint> {
     const { X: X1, Y: Y1 } = this.ep;
     const { X: X2, Y: Y2 } = other.ep;
     // (x1 * y2 == y1 * x2)
-    return Fp448.create(X1 * Y2) === Fp448.create(Y1 * X2);
+    return Fp448.eql(Fp448.mul(X1, Y2), Fp448.mul(Y1, X2));
   }
 
   is0(): boolean {
