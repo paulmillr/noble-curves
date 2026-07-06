@@ -807,6 +807,30 @@ constant-timeness_. Even statically typed Rust, a language without GC,
 for some cases. If your goal is absolute security, don't use any JS lib — including bindings to native ones.
 Use low-level libraries & languages.
 
+Within those limits, secret-scalar multiplication provides specific, measurable properties:
+
+- **Fixed operation sequence:** `multiply()` uses signed fixed-window tables with
+  data-oblivious table scans — the number and order of point operations
+  is independent of the scalar value.
+- **Scalar blinding:** secret scalars are additionally masked as `s + r·n` with a random
+  128-bit `r` before multiplication. This applies to all multiplications on cofactor-1
+  curves (p256, p384, p521, secp256k1), and to base-point multiplications everywhere.
+- **Statistical validation:** a dudect-style Welch t-test harness (`benchmark/ct.ts`)
+  compares timing across adversarial scalar classes (sparse vs dense, low vs high bits,
+  near-order, bit patterns). Base-point multiplication shows no distinguishable timing on any
+  curve, and random-point multiplication shows none on the Weierstrass curves
+  (max |t| ≤ 2.8 at 1000 samples; threshold 4.5).
+
+Known limitation: on cofactored Edwards curves (ed25519, ed448), multiplying a **non-base**
+point by a secret scalar is not blinded. The same harness detects this reliably. EdDSA signing is
+unaffected (it only multiplies the blinded base point), and X25519/X448 use a separate
+Montgomery-ladder implementation (also unaffected). It matters for protocols that multiply arbitrary
+Edwards/Ristretto points by long-lived secret scalars; prefer scalars that are
+full-width by construction there. Note that detectability in an isolated harness does not
+imply practical exploitability: we attempted scalar extraction in a realistic
+cross-tenant / in-browser setting and were unable to recover Edwards scalars
+even with 100,000 timing samples.
+
 ### Memory dumping
 
 Use low-level languages instead of JS / WASM if your goal is absolute security.

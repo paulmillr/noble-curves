@@ -853,11 +853,6 @@ export function pippenger<P extends CurvePoint<any, P>, PC extends CurvePointCon
   points: P[],
   scalars: bigint[]
 ): P {
-  // If we split scalars by some window (let's say 8 bits), every chunk will only
-  // take 256 buckets even if there are 4096 scalars, also re-uses double.
-  // TODO:
-  // - https://eprint.iacr.org/2024/750.pdf
-  // - https://tches.iacr.org/index.php/TCHES/article/view/10287
   // 0 is accepted in scalars
   validatePointCons(c);
   const fieldN = c.Fn;

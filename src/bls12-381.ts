@@ -252,8 +252,8 @@ const { Fp, Fp2, Fp6, Fp12 } = tower12({
   // the quadratic non-residue for the base Fp2 construction is still `-1`.
   FP2_NONRESIDUE: [_1n, _1n],
   Fp2mulByB: ({ c0, c1 }: Fp2) => {
-    const t0 = Fp.mul(c0, _4n); // 4 * c0
-    const t1 = Fp.mul(c1, _4n); // 4 * c1
+    const t0 = Fp.mul(c0, _4n);
+    const t1 = Fp.mul(c1, _4n);
     // (T0-T1) + (T0+T1)*i
     return { c0: Fp.sub(t0, t1), c1: Fp.add(t0, t1) };
   },

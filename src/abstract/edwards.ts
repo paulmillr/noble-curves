@@ -350,13 +350,9 @@ export function edwards(
   // Extended Point works in extended coordinates: (X, Y, Z, T) ∋ (x=X/Z, y=Y/Z, T=xy).
   // https://en.wikipedia.org/wiki/Twisted_Edwards_curve#Extended_coordinates
   class Point implements EdwardsPoint {
-    // base / generator point
     static readonly BASE = new Point(CURVE.Gx, CURVE.Gy, Fp.ONE, Fp.mul(CURVE.Gx, CURVE.Gy));
-    // zero / infinity / identity point
-    static readonly ZERO = new Point(Fp.ZERO, Fp.ONE, Fp.ONE, Fp.ZERO); // 0, 1, 1, 0
-    // math field
+    static readonly ZERO = new Point(Fp.ZERO, Fp.ONE, Fp.ONE, Fp.ZERO);
     static readonly Fp = Fp;
-    // scalar field
     static readonly Fn = Fn;
 
     readonly X: bigint;

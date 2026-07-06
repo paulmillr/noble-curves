@@ -602,15 +602,15 @@ export function weierstrass<T>(
   const b3 = Fp.mul(CURVE.b, _3n);
   const mulA = Fp.is0(CURVE.a) ? (_: T): T => Fp.ZERO : (x: T): T => Fp.mul(CURVE.a, x);
   function weierstrassEquation(x: T): T {
-    const x2 = Fp.sqr(x); // x * x
-    const x3 = Fp.mul(x2, x); // x² * x
+    const x2 = Fp.sqr(x);
+    const x3 = Fp.mul(x2, x);
     return Fp.add(Fp.add(x3, Fp.mul(x, CURVE.a)), CURVE.b); // x³ + a * x + b
   }
 
   // TODO: move top-level
   /** Checks whether equation holds for given x, y: y² == x³ + ax + b */
   function isValidXY(x: T, y: T): boolean {
-    const left = Fp.sqr(y); // y²
+    const left = Fp.sqr(y);
     const right = weierstrassEquation(x); // x³ + ax + b
     return Fp.eql(left, right);
   }
@@ -673,13 +673,9 @@ export function weierstrass<T>(
    * We're doing calculations in projective, because its operations don't require costly inversion.
    */
   class Point implements WeierstrassPoint<T> {
-    // base / generator point
     static readonly BASE = new Point(CURVE.Gx, CURVE.Gy, Fp.ONE);
-    // zero / infinity / identity point
-    static readonly ZERO = new Point(Fp.ZERO, Fp.ONE, Fp.ZERO); // 0, 1, 0
-    // math field
+    static readonly ZERO = new Point(Fp.ZERO, Fp.ONE, Fp.ZERO);
     static readonly Fp = Fp;
-    // scalar field
     static readonly Fn = Fn;
 
     readonly X: T;
@@ -729,10 +725,7 @@ export function weierstrass<T>(
     }
 
     /**
-     *
-     * @param windowSize
      * @param isLazy - true will defer table computation until the first multiplication
-     * @returns
      */
     precompute(windowSize: number = 6, isLazy = true): Point {
       wnaf.setWindowSize(this, windowSize);
@@ -915,8 +908,8 @@ export function weierstrass<T>(
       // Public-scalar callers may need 0, but n and larger values stay rejected here too.
       // Reducing them mod n would turn bad caller input into an accidental identity point.
       if (!Fn.isValid(sc)) throw new RangeError('invalid scalar: out of range'); // 0 is valid
-      if (sc === _0n || p.is0()) return Point.ZERO; // 0
-      if (sc === _1n) return p; // 1
+      if (sc === _0n || p.is0()) return Point.ZERO;
+      if (sc === _1n) return p;
       if (wnaf.hasWindowSize(this)) return wnaf.mulUnsafe(p, sc, normalize); // precomputes
       const points: Point[] = [];
       const scalars: bigint[] = [];
