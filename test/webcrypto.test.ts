@@ -46,8 +46,10 @@ describe('webcrypto', () => {
   const isDeno = process?.versions?.deno;
   const isBun = process?.versions?.bun;
   for (const c in CURVES) {
-    if (['ed25519', 'x25519', 'ed448', 'x448'].includes(c) && isBun) return;
-    if (['ed448', 'x448', 'p521'].includes(c) && isDeno) return;
+    // `continue`, not `return`: a `return` would exit the whole describe callback, silently
+    // skipping later supported curves (e.g. ed25519/x25519 on Deno) and the standalone tests below.
+    if (['ed25519', 'x25519', 'ed448', 'x448'].includes(c) && isBun) continue;
+    if (['ed448', 'x448', 'p521'].includes(c) && isDeno) continue;
     describe(c, () => {
       const { noble, web, canDerive, canSign } = CURVES[c];
       should('raw, pkcs8, spki, and jwk', async () => {

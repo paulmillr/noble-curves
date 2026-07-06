@@ -402,6 +402,44 @@ should('poseidon validation and small sponge edge cases', () => {
     hash.roundConstants[0][0] = 1n;
   });
   eql(hash([1n, 2n]), before, 'roundConstants immutable');
+  // Permutation inputs are normalized with Fp.create (documented); sponge absorb stays strict.
+  eql(hash([1n + 17n, 2n]), before, 'non-canonical permutation input is reduced');
+  throws(() => hash([1n, 2n, 3n]), /invalid values/);
+
+  const okOpts = {
+    Fp,
+    t: 2,
+    roundsFull: 2,
+    roundsPartial: 1,
+    sboxPower: 3,
+    mds: [
+      [1n, 0n],
+      [0n, 1n],
+    ],
+    roundConstants: [
+      [0n, 0n],
+      [0n, 0n],
+      [0n, 0n],
+    ],
+  };
+  throws(() => poseidon.poseidon({ ...okOpts, roundsFull: 3 }), /not even/);
+  throws(() => poseidon.poseidon({ ...okOpts, sboxPower: 4 }), /invalid sboxPower/);
+  // sboxPower is typed optional but required at runtime: {3, 5, 7, 17} only.
+  const { sboxPower: _unused, ...noSbox } = okOpts;
+  throws(() => poseidon.poseidon(noSbox as any), /invalid sboxPower/);
+  // Round constants must be canonical, unlike MDS entries (which are reduced via Fp.create).
+  throws(
+    () =>
+      poseidon.poseidon({
+        ...okOpts,
+        roundConstants: [
+          [17n, 0n],
+          [0n, 0n],
+          [0n, 0n],
+        ],
+      }),
+    /invalid round constant/
+  );
 
   const FpBls =
     mod.Field(52435875175126190479447740508185965837690552500527637822603658699938581184513n);
@@ -495,6 +533,7 @@ should('poseidon validation and small sponge edge cases', () => {
   });
   const identitySponge = new poseidon.PoseidonSponge(Fp, 1, 1, identityHash);
   throws(() => identitySponge.absorb(new Set([1n]) as never), /expected array/);
+  throws(() => identitySponge.absorb([17n]), /invalid input/, 'sponge rejects non-canonical');
 
   const t = 3;
   const roundsFull = 8;
