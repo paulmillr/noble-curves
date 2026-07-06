@@ -7,7 +7,9 @@ import {
   asafenumber as _asafenumber,
   abytes as _abytes,
   asciiToBytes as _asciiToBytes,
+  bitGet as _bitGet,
   bitLen as _bitLen,
+  bitMask as _bitMask,
   bitSet as _bitSet,
   bytesToHex as _bytesToHex,
   concatBytes as _concatBytes,
@@ -33,7 +35,9 @@ type Etc = {
   copyBytes?: (value: Uint8Array) => Uint8Array;
   equalBytes?: (a: Uint8Array, b: Uint8Array) => boolean;
   asciiToBytes?: (value: string) => Uint8Array;
+  bitGet?: (value: bigint, pos: number) => bigint;
   bitLen?: (value: bigint) => number;
+  bitMask?: (bits: number) => bigint;
   hexToNumber?: (value: string) => bigint;
   numberToHexUnpadded?: (value: number | bigint) => string;
   numberToBytesBE?: (value: number | bigint, length: number) => Uint8Array;
@@ -65,7 +69,9 @@ export const etc: Etc = {
   asafenumber: _asafenumber,
   abytes: _abytes,
   asciiToBytes: _asciiToBytes,
+  bitGet: _bitGet,
   bitLen: _bitLen,
+  bitMask: _bitMask,
   bitSet: _bitSet,
   bytesToHex: _bytesToHex,
   concatBytes: _concatBytes,

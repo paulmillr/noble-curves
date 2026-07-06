@@ -24,7 +24,7 @@ describe('ed25519', () => {
     return bytes(hex2.padStart(64, '0'));
   }
 
-  if (isNobleCurves) Point.BASE.precompute(8, false);
+  if (isNobleCurves) Point.BASE.precompute(6, false);
 
   describe('getPublicKey()', () => {
     should('reject invalid inputs', () => {
@@ -345,12 +345,48 @@ describe('ed25519', () => {
         strictEqual(point.isTorsionFree(), true, `orig must be torsionFree: ${hex}`);
         strictEqual(dirty.isTorsionFree(), false, `dirty must not be torsionFree: ${hex}`);
         strictEqual(cleared.isTorsionFree(), true, `cleared must be torsionFree: ${hex}`);
+        strictEqual(dirty.multiply(5n).equals(dirty.multiplyUnsafe(5n)), true);
       }
 
       const xy = { x: 0n, y: 1n };
       const p = Point.fromAffine(xy);
       eql(p, Point.ZERO);
       eql(p.toAffine(), xy);
+    });
+
+    should('small-order and torsioned points multiply exactly (naive reference)', () => {
+      const P = ed.Point.CURVE().p;
+      const Z = Point.ZERO;
+      const naiveMul = (p, s) => {
+        let acc = Z;
+        let base = p;
+        while (s > 0n) {
+          if (s & 1n) acc = acc.add(base);
+          if (s > 1n) base = base.double();
+          s >>= 1n;
+        }
+        return acc;
+      };
+      // order-2 torsion point (0, -1)
+      const T2 = Point.fromAffine({ x: 0n, y: P - 1n });
+      strictEqual(T2.double().is0(), true, '(0,-1) has order 2');
+      strictEqual(T2.multiply(2n).is0(), true, 'T2*2 = O');
+      strictEqual(T2.multiply(3n).equals(T2), true, 'T2*3 = T2');
+      strictEqual(T2.multiplyUnsafe(8n).is0(), true, 'T2*8 = O');
+      // torsioned point Q+T2: multiply must be exact scalar multiplication, not "mod L
+      // in the subgroup" (exercises the unblinded non-BASE constant-time path)
+      const Q = Point.BASE.multiply(12345n);
+      const P2 = Q.add(T2);
+      for (const s of [1n, 2n, 7n, CURVE_N - 1n, (CURVE_N - 1n) / 2n]) {
+        const want = naiveMul(P2, s);
+        strictEqual(P2.multiply(s).equals(want), true, `torsioned multiply ${s.toString(16)}`);
+        strictEqual(P2.multiplyUnsafe(s).equals(want), true, `torsioned multiplyUnsafe`);
+      }
+      strictEqual(Q.isTorsionFree(), true);
+      strictEqual(P2.isTorsionFree(), false);
+      // BASE path has blinding active (L*BASE == O): must match the naive reference
+      const s = 0xdeadbeefcafen;
+      strictEqual(Point.BASE.multiply(s).equals(naiveMul(Point.BASE, s)), true);
     });
   });
 

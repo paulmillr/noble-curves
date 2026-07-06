@@ -245,15 +245,29 @@ export const ed25519_FROST: TRet<FROST> = /* @__PURE__ */ (() =>
  */
 export const x25519: TRet<MontgomeryECDH> = /* @__PURE__ */ (() => {
   const P = ed25519_CURVE_p;
+  const powPminus2 = (x: bigint): bigint => {
+    // x^(p-2) aka x^(2^255-21)
+    const { pow_p_5_8, b2 } = ed25519_pow_2_252_3(x);
+    return mod(pow2(pow_p_5_8, _3n, P) * b2, P);
+  };
   return montgomery({
     P,
     type: 'x25519',
-    powPminus2: (x: bigint): bigint => {
-      // x^(p-2) aka x^(2^255-21)
-      const { pow_p_5_8, b2 } = ed25519_pow_2_252_3(x);
-      return mod(pow2(pow_p_5_8, _3n, P) * b2, P);
-    },
+    powPminus2,
     adjustScalarBytes,
+    // ~3x faster fixed-base: [k]B on the birationally-equivalent Edwards curve using cached
+    // base tables, mapped back via u = (1+y)/(1-y) = (Z+Y)/(Z-Y) with one Fermat inversion.
+    // Same construction as libsodium's crypto_scalarmult_curve25519_base.
+    scalarMultBase: (k: bigint): bigint => {
+      // Clamped k (≈2^254) exceeds n, but B has prime order n, so [k]B == [k mod n]B.
+      const kn = mod(k, ed25519_Point.Fn.ORDER);
+      // k ≡ 0 (mod n): [k]B is the point at infinity, whose u is 0 in the x-only ladder;
+      // returning 0 makes montgomery() reject it exactly like the ladder path.
+      if (kn === _0n) return _0n;
+      const p = ed25519_Point.BASE.multiply(kn);
+      // Z-Y == 0 only at the identity, which kn != 0 excludes.
+      return mod((p.Z + p.Y) * powPminus2(mod(p.Z - p.Y, P)), P);
+    },
   });
 })();
 
@@ -264,6 +278,7 @@ export const x25519: TRet<MontgomeryECDH> = /* @__PURE__ */ (() => {
 const ELL2_C1 = /* @__PURE__ */ (() => (ed25519_CURVE_p + _3n) / _8n)();
 const ELL2_C2 = /* @__PURE__ */ (() => Fp.pow(_2n, ELL2_C1))(); // 2. c2 = 2^c1
 const ELL2_C3 = /* @__PURE__ */ (() => Fp.sqrt(Fp.neg(Fp.ONE)))(); // 3. c3 = sqrt(-1)
+const ELL2_J = /* @__PURE__ */ BigInt(486662);
 
 /**
  * RFC 9380 method `map_to_curve_elligator2_curve25519`. Experimental name: may be renamed later.
@@ -273,9 +288,8 @@ const ELL2_C3 = /* @__PURE__ */ (() => Fp.sqrt(Fp.neg(Fp.ONE)))(); // 3. c3 = sq
 export function _map_to_curve_elligator2_curve25519(u: bigint): {
   xMn: bigint, xMd: bigint, yMn: bigint, yMd: bigint
 } {
-  const ELL2_C4 = (ed25519_CURVE_p - _5n) / _8n; // 4. c4 = (q - 5) / 8       # Integer arithmetic
-  const ELL2_J = BigInt(486662);
-
+  // 4. c4 = (q - 5) / 8: tv2^c4 below reuses the ed25519_pow_2_252_3 addition chain,
+  // whose pow_p_5_8 output is exactly x^((p-5)/8).
   let tv1 = Fp.sqr(u);          //  1.  tv1 = u^2
   tv1 = Fp.mul(tv1, _2n);       //  2.  tv1 = 2 * tv1
   // 3. xd = tv1 + 1 # Nonzero: -1 is square (mod p), tv1 is not
@@ -292,7 +306,7 @@ export function _map_to_curve_elligator2_curve25519(u: bigint): {
   tv3 = Fp.mul(tv3, gxd);       //  13. tv3 = tv3 * gxd       # gxd^3
   tv3 = Fp.mul(tv3, gx1);       //  14. tv3 = tv3 * gx1       # gx1 * gxd^3
   tv2 = Fp.mul(tv2, tv3);       //  15. tv2 = tv2 * tv3       # gx1 * gxd^7
-  let y11 = Fp.pow(tv2, ELL2_C4); //  16. y11 = tv2^c4        # (gx1 * gxd^7)^((p - 5) / 8)
+  let y11 = ed25519_pow_2_252_3(tv2).pow_p_5_8; //  16. y11 = tv2^c4  # (gx1 * gxd^7)^((p - 5) / 8)
   y11 = Fp.mul(y11, tv3);       //  17. y11 = y11 * tv3       # gx1*gxd^3*(gx1*gxd^7)^((p-5)/8)
   let y12 = Fp.mul(y11, ELL2_C3); //  18. y12 = y11 * c3
   tv2 = Fp.sqr(y11);            //  19. tv2 = y11^2
@@ -408,24 +422,22 @@ const bytes255ToNumberLE = (bytes: TArg<Uint8Array>) =>
  */
 function calcElligatorRistrettoMap(r0: bigint): EdwardsPoint {
   const { d } = ed25519_CURVE;
-  const P = ed25519_CURVE_p;
-  const mod = (n: bigint) => Fp.create(n);
-  const r = mod(SQRT_M1 * r0 * r0); // 1
-  const Ns = mod((r + _1n) * ONE_MINUS_D_SQ); // 2
+  const r = Fp.mul(Fp.mulN(SQRT_M1, r0), r0); // 1
+  const Ns = Fp.mul(Fp.addN(r, _1n), ONE_MINUS_D_SQ); // 2
   let c = BigInt(-1); // 3
-  const D = mod((c - d * r) * mod(r + d)); // 4
+  const D = Fp.mul(Fp.subN(c, Fp.mulN(d, r)), Fp.add(r, d)); // 4
   let { isValid: Ns_D_is_sq, value: s } = uvRatio(Ns, D); // 5
-  let s_ = mod(s * r0); // 6
-  if (!isNegativeLE(s_, P)) s_ = mod(-s_);
+  let s_ = Fp.mul(s, r0); // 6
+  if (!Fp.isOdd!(s_)) s_ = Fp.neg(s_);
   if (!Ns_D_is_sq) s = s_; // 7
   if (!Ns_D_is_sq) c = r; // 8
-  const Nt = mod(c * (r - _1n) * D_MINUS_ONE_SQ - D); // 9
-  const s2 = s * s;
-  const W0 = mod((s + s) * D); // 10
-  const W1 = mod(Nt * SQRT_AD_MINUS_ONE); // 11
-  const W2 = mod(_1n - s2); // 12
-  const W3 = mod(_1n + s2); // 13
-  return new ed25519_Point(mod(W0 * W3), mod(W2 * W1), mod(W1 * W3), mod(W0 * W2));
+  const Nt = Fp.sub(Fp.mulN(Fp.mulN(c, Fp.subN(r, _1n)), D_MINUS_ONE_SQ), D); // 9
+  const s2 = Fp.sqrN(s);
+  const W0 = Fp.mul(Fp.addN(s, s), D); // 10
+  const W1 = Fp.mul(Nt, SQRT_AD_MINUS_ONE); // 11
+  const W2 = Fp.sub(_1n, s2); // 12
+  const W3 = Fp.add(_1n, s2); // 13
+  return new ed25519_Point(Fp.mul(W0, W3), Fp.mul(W2, W1), Fp.mul(W1, W3), Fp.mul(W0, W2));
 }
 
 /**
@@ -478,29 +490,26 @@ class _RistrettoPoint extends PrimeEdwardsPoint<_RistrettoPoint> {
   static fromBytes(bytes: TArg<Uint8Array>): _RistrettoPoint {
     abytes(bytes, 32);
     const { a, d } = ed25519_CURVE;
-    const P = ed25519_CURVE_p;
-    const mod = (n: bigint) => Fp.create(n);
     const s = bytes255ToNumberLE(bytes);
     // 1. Check that s_bytes is the canonical encoding of a field element, or else abort.
     // 3. Check that s is non-negative, or else abort
-    if (!equalBytes(Fp.toBytes(s), bytes) || isNegativeLE(s, P))
+    if (!equalBytes(Fp.toBytes(s), bytes) || Fp.isOdd!(s))
       throw new Error('invalid ristretto255 encoding 1');
-    const s2 = mod(s * s);
-    const u1 = mod(_1n + a * s2); // 4 (a is -1)
-    const u2 = mod(_1n - a * s2); // 5
-    const u1_2 = mod(u1 * u1);
-    const u2_2 = mod(u2 * u2);
-    const v = mod(a * d * u1_2 - u2_2); // 6
-    const { isValid, value: I } = invertSqrt(mod(v * u2_2)); // 7
-    const Dx = mod(I * u2); // 8
-    const Dy = mod(I * Dx * v); // 9
-    let x = mod((s + s) * Dx); // 10
-    if (isNegativeLE(x, P)) x = mod(-x); // 10
-    const y = mod(u1 * Dy); // 11
-    const t = mod(x * y); // 12
-    if (!isValid || isNegativeLE(t, P) || y === _0n)
-      throw new Error('invalid ristretto255 encoding 2');
-    return new _RistrettoPoint(new ed25519_Point(x, y, _1n, t));
+    const s2 = Fp.sqr(s);
+    const u1 = Fp.add(_1n, Fp.mulN(a, s2)); // 4 (a is -1)
+    const u2 = Fp.sub(_1n, Fp.mulN(a, s2)); // 5
+    const u1_2 = Fp.sqr(u1);
+    const u2_2 = Fp.sqr(u2);
+    const v = Fp.sub(Fp.mulN(Fp.mulN(a, d), u1_2), u2_2); // 6
+    const { isValid, value: I } = invertSqrt(Fp.mul(v, u2_2)); // 7
+    const Dx = Fp.mul(I, u2); // 8
+    const Dy = Fp.mul(Fp.mulN(I, Dx), v); // 9
+    let x = Fp.mul(Fp.addN(s, s), Dx); // 10
+    if (Fp.isOdd!(x)) x = Fp.neg(x); // 10
+    const y = Fp.mul(u1, Dy); // 11
+    const t = Fp.mul(x, y); // 12
+    if (!isValid || Fp.isOdd!(t) || Fp.is0(y)) throw new Error('invalid ristretto255 encoding 2');
+    return new _RistrettoPoint(new ed25519_Point(x, y, Fp.ONE, t));
   }
 
   /**
@@ -518,29 +527,27 @@ class _RistrettoPoint extends PrimeEdwardsPoint<_RistrettoPoint> {
    */
   toBytes(): TRet<Uint8Array> {
     let { X, Y, Z, T } = this.ep;
-    const P = ed25519_CURVE_p;
-    const mod = (n: bigint) => Fp.create(n);
-    const u1 = mod(mod(Z + Y) * mod(Z - Y)); // 1
-    const u2 = mod(X * Y); // 2
+    const u1 = Fp.mul(Fp.add(Z, Y), Fp.sub(Z, Y)); // 1
+    const u2 = Fp.mul(X, Y); // 2
     // Square root always exists
-    const u2sq = mod(u2 * u2);
-    const { value: invsqrt } = invertSqrt(mod(u1 * u2sq)); // 3
-    const D1 = mod(invsqrt * u1); // 4
-    const D2 = mod(invsqrt * u2); // 5
-    const zInv = mod(D1 * D2 * T); // 6
+    const u2sq = Fp.sqr(u2);
+    const { value: invsqrt } = invertSqrt(Fp.mul(u1, u2sq)); // 3
+    const D1 = Fp.mul(invsqrt, u1); // 4
+    const D2 = Fp.mul(invsqrt, u2); // 5
+    const zInv = Fp.mul(Fp.mulN(D1, D2), T); // 6
     let D: bigint; // 7
-    if (isNegativeLE(T * zInv, P)) {
-      let _x = mod(Y * SQRT_M1);
-      let _y = mod(X * SQRT_M1);
+    if (Fp.isOdd!(Fp.mul(T, zInv))) {
+      let _x = Fp.mul(Y, SQRT_M1);
+      let _y = Fp.mul(X, SQRT_M1);
       X = _x;
       Y = _y;
-      D = mod(D1 * INVSQRT_A_MINUS_D);
+      D = Fp.mul(D1, INVSQRT_A_MINUS_D);
     } else {
       D = D2; // 8
     }
-    if (isNegativeLE(X * zInv, P)) Y = mod(-Y); // 9
-    let s = mod((Z - Y) * D); // 10 (check footer's note, no sqrt(-a))
-    if (isNegativeLE(s, P)) s = mod(-s);
+    if (Fp.isOdd!(Fp.mul(X, zInv))) Y = Fp.neg(Y); // 9
+    let s = Fp.mul(Fp.subN(Z, Y), D); // 10 (check footer's note, no sqrt(-a))
+    if (Fp.isOdd!(s)) s = Fp.neg(s);
     return Fp.toBytes(s) as TRet<Uint8Array>; // 11
   }
 
@@ -552,10 +559,9 @@ class _RistrettoPoint extends PrimeEdwardsPoint<_RistrettoPoint> {
     this.assertSame(other);
     const { X: X1, Y: Y1 } = this.ep;
     const { X: X2, Y: Y2 } = other.ep;
-    const mod = (n: bigint) => Fp.create(n);
     // (x1 * y2 == y1 * x2) | (y1 * y2 == x1 * x2)
-    const one = mod(X1 * Y2) === mod(Y1 * X2);
-    const two = mod(Y1 * Y2) === mod(X1 * X2);
+    const one = Fp.eql(Fp.mul(X1, Y2), Fp.mul(Y1, X2));
+    const two = Fp.eql(Fp.mul(Y1, Y2), Fp.mul(X1, X2));
     return one || two;
   }
 

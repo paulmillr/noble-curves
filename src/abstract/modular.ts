@@ -29,7 +29,11 @@ const _0n = /* @__PURE__ */ BigInt(0), _1n = /* @__PURE__ */ BigInt(1), _2n = /*
 const _3n = /* @__PURE__ */ BigInt(3), _4n = /* @__PURE__ */ BigInt(4), _5n = /* @__PURE__ */ BigInt(5);
 // prettier-ignore
 const _7n = /* @__PURE__ */ BigInt(7), _8n = /* @__PURE__ */ BigInt(8), _9n = /* @__PURE__ */ BigInt(9);
-const _16n = /* @__PURE__ */ BigInt(16);
+const _15n = /* @__PURE__ */ BigInt(15),
+  _16n = /* @__PURE__ */ BigInt(16);
+// 2^64: exponents below this use plain square-and-multiply in pow()/FpPow(); the windowed path's
+// table build (14 multiplications) only pays off for longer exponents (break-even ~50 bits).
+const POW_WINDOWED_MIN = /* @__PURE__ */ BigInt('0x10000000000000000');
 
 /**
  * @param a - Dividend value.
@@ -66,7 +70,49 @@ export function mod(a: bigint, b: bigint): bigint {
  * ```
  */
 export function pow(num: bigint, power: bigint, modulo: bigint): bigint {
-  return FpPow(Field(modulo), num, power);
+  if (modulo <= _1n) throw new Error('pow: expected modulus > 1, got ' + modulo);
+  // Non-bigint exponents coerce every comparison below to false and would silently return 1.
+  if (typeof power !== 'bigint')
+    throw new TypeError('invalid exponent: expected bigint, got ' + typeof power);
+  if (power < _0n) throw new Error('invalid exponent, negatives unsupported');
+  if (power === _0n) return _1n;
+  if (power === _1n) return num;
+  let d = num % modulo;
+  if (d < _0n) d += modulo;
+  // Control flow in both branches below depends only on the exponent, never on `num` — invertCt()
+  // relies on that for its (public-exponent) secret-independence guarantee.
+  if (power < POW_WINDOWED_MIN) {
+    // Square-and-multiply: cheaper than the windowed path for short exponents.
+    let p = _1n;
+    while (power > _0n) {
+      if (power & _1n) p = (p * d) % modulo;
+      d = (d * d) % modulo;
+      power >>= _1n;
+    }
+    return p;
+  }
+  // Fixed 4-bit windows, MSB-first: a 14-multiplication table drops per-window cost to <1
+  // multiplication (vs ~2 per window for square-and-multiply), ~25-30% faster for the dense
+  // 256-bit exponents of sqrt / Legendre / invertCt.
+  const digits: number[] = [];
+  while (power > _0n) {
+    digits.push(Number(power & _15n));
+    power >>= _4n;
+  }
+  const table: bigint[] = new Array(16);
+  table[0] = _1n;
+  table[1] = d;
+  for (let i = 2; i < 16; i++) table[i] = (table[i - 1] * d) % modulo;
+  let p = table[digits[digits.length - 1]]; // top digit is nonzero: the loop above stops on 0
+  for (let w = digits.length - 2; w >= 0; w--) {
+    p = (p * p) % modulo;
+    p = (p * p) % modulo;
+    p = (p * p) % modulo;
+    p = (p * p) % modulo;
+    const digit = digits[w];
+    if (digit !== 0) p = (p * table[digit]) % modulo;
+  }
+  return p;
 }
 
 /**
@@ -86,6 +132,7 @@ export function pow(num: bigint, power: bigint, modulo: bigint): bigint {
  * ```
  */
 export function pow2(x: bigint, power: bigint, modulo: bigint): bigint {
+  if (modulo <= _1n) throw new Error('pow2: expected modulus > 1, got ' + modulo);
   if (power < _0n) throw new Error('pow2: expected non-negative exponent, got ' + power);
   let res = x;
   while (power-- > _0n) {
@@ -99,7 +146,7 @@ export function pow2(x: bigint, power: bigint, modulo: bigint): bigint {
  * Inverses number over modulo.
  * Implemented using the {@link https://brilliant.org/wiki/extended-euclidean-algorithm/ | extended Euclidean algorithm}.
  * @param number - Value to invert.
- * @param modulo - Positive modulus.
+ * @param modulo - Modulus greater than 1.
  * @returns Multiplicative inverse.
  * @throws If the modulus is invalid or the inverse does not exist. {@link Error}
  * @example
@@ -111,28 +158,75 @@ export function pow2(x: bigint, power: bigint, modulo: bigint): bigint {
  */
 export function invert(number: bigint, modulo: bigint): bigint {
   if (number === _0n) throw new Error('invert: expected non-zero number');
-  if (modulo <= _0n) throw new Error('invert: expected positive modulus, got ' + modulo);
-  // Fermat's little theorem "CT-like" version inv(n) = n^(m-2) mod m is 30x slower.
+  // modulo = 1 is the zero ring: gcd(x, 1) = 1 makes the loop below "succeed" and return the
+  // useless inverse 0. Reject it like pow() and invertCt() do.
+  if (modulo <= _1n) throw new Error('invert: expected modulus > 1, got ' + modulo);
+  // This is variable-time: the loop count depends on `number`. For a secret-independent
+  // (Fermat) alternative over a prime modulus, see {@link invertCt} (~4x slower).
   let a = mod(number, modulo);
   let b = modulo;
+  // Only the Bézout coefficient of `number` (x/u chain) is tracked; the coefficient of `modulo`
+  // never affects the output, so it is not computed.
   // prettier-ignore
-  let x = _0n, y = _1n, u = _1n, v = _0n;
+  let x = _0n, u = _1n;
   while (a !== _0n) {
     const q = b / a;
     const r = b - a * q;
     const m = x - u * q;
-    const n = y - v * q;
     // prettier-ignore
-    b = a, a = r, x = u, y = v, u = m, v = n;
+    b = a, a = r, x = u, u = m;
   }
   const gcd = b;
   if (gcd !== _1n) throw new Error('invert: does not exist');
   return mod(x, modulo);
 }
 
+/**
+ * Inverses number over modulo using Fermat's little theorem: `a^(p-2) ≡ a⁻¹ (mod p)`.
+ *
+ * Unlike {@link invert} (extended Euclidean), the exponent `p-2` is a public constant, so the
+ * underlying square-and-multiply has the same control flow for every secret `a`: there is no
+ * data-dependent branching or loop count that could leak `a` through timing (e.g. Minerva-style
+ * ECDSA nonce-inversion attacks). This is only "algorithmically" constant-time — JS bigint
+ * multiplication/reduction is still value-dependent — and it is roughly 4x slower than {@link invert}.
+ *
+ * REQUIRES a prime modulus; Fermat's theorem does not hold otherwise. The result is verified to be
+ * a real inverse, so a non-prime modulus (or a non-invertible input) fails closed with an error
+ * instead of returning a wrong value.
+ * @param a - Value to invert.
+ * @param prime - Prime modulus.
+ * @returns Multiplicative inverse in `[1, prime)`.
+ * @throws If the modulus is not > 1, the input reduces to zero, or the inverse does not exist. {@link Error}
+ * @example
+ * Compute one modular inverse without secret-dependent branching.
+ *
+ * ```ts
+ * invertCt(3n, 11n); // 4n, since 3 * 4 = 12 ≡ 1 (mod 11)
+ * ```
+ */
+export function invertCt(a: bigint, prime: bigint): bigint {
+  if (prime <= _1n) throw new Error('invertCt: expected prime modulus > 1, got ' + prime);
+  const an = mod(a, prime);
+  if (an === _0n) throw new Error('invertCt: expected non-zero number');
+  // Exponent (prime - 2) is public, so FpPow's square-and-multiply is secret-independent.
+  const inverse = pow(an, prime - _2n, prime);
+  // O(1) safety net: verifies the inverse and rejects composite moduli where a^(p-2) is not one.
+  if (mod(an * inverse, prime) !== _1n) throw new Error('invertCt: does not exist');
+  return inverse;
+}
+
 function assertIsSquare<T>(Fp: TArg<IField<T>>, root: T, n: T): void {
   const F = Fp as IField<T>;
   if (!F.eql(F.sqr(root), n)) throw new Error('Cannot find square root');
+}
+
+// The Legendre symbol and every sqrt variant here are only defined over an odd (prime) modulus.
+// An even ORDER makes their integer divisions — (p-1)/2, (p+1)/4, (p-5)/8, (p+7)/16 — truncate and
+// silently return a wrong result, so reject it explicitly at the entry points instead. This is a
+// cheap necessary-condition check, not a primality test (composite odd moduli are caught later by
+// the Legendre-result / assertIsSquare checks).
+function aoddModulus(order: bigint, fnName: string): void {
+  if ((order & _1n) === _0n) throw new Error(fnName + ': expected odd modulus, got ' + order);
 }
 
 // Not all roots are possible! Example which will throw:
@@ -209,6 +303,7 @@ export function tonelliShanks(P: bigint): TRet<<T>(Fp: IField<T>, n: T) => T> {
   // Initialization (precomputation).
   // Caching initialization could boost perf by 7%.
   if (P < _3n) throw new Error('sqrt is not defined for small field');
+  aoddModulus(P, 'tonelliShanks');
   // Factor P - 1 = Q * 2^S, where Q is odd
   let Q = P - _1n;
   let S = 0;
@@ -247,7 +342,9 @@ export function tonelliShanks(P: bigint): TRet<<T>(Fp: IField<T>, n: T) => T> {
     // Main loop
     // while t != 1
     while (!F.eql(t, F.ONE)) {
-      if (F.is0(t)) return F.ZERO; // if t=0 return R=0
+      // Unreachable over a genuine field (no zero divisors; n=0 already returned above). A zero t
+      // means composite ORDER, where a fabricated root would be wrong: fail closed instead.
+      if (F.is0(t)) throw new Error('Cannot find square root: probably non-prime P');
       let i = 1;
 
       // Find the smallest i >= 1 such that t^(2^i) ≡ 1 (mod P)
@@ -297,6 +394,7 @@ export function tonelliShanks(P: bigint): TRet<<T>(Fp: IField<T>, n: T) => T> {
  * ```
  */
 export function FpSqrt(P: bigint): TRet<<T>(Fp: IField<T>, n: T) => T> {
+  aoddModulus(P, 'Fp.sqrt');
   // P ≡ 3 (mod 4) => √n = n^((P+1)/4)
   if (P % _4n === _3n) return sqrt3mod4 as TRet<<T>(Fp: IField<T>, n: T) => T>;
   // P ≡ 5 (mod 8) => Atkin algorithm, page 10 of https://eprint.iacr.org/2012/685.pdf
@@ -473,7 +571,6 @@ export interface IField<T> {
    * Returns whether the value is odd under the field encoding.
    */
   isOdd?(num: T): boolean;
-  // legendre?(num: T): T;
   /**
    * Invert many field elements in one batch.
    * @param lst - Values to invert.
@@ -567,26 +664,56 @@ export function validateField<T>(field: TArg<IField<T>>): TRet<IField<T>> {
 export function FpPow<T>(Fp: TArg<IField<T>>, num: T, power: bigint): T {
   validateField(Fp);
   const F = Fp as IField<T>;
+  // Non-bigint exponents (e.g. an accidental field element) coerce every comparison below to
+  // false and would silently return ONE.
+  if (typeof power !== 'bigint')
+    throw new TypeError('invalid exponent: expected bigint, got ' + typeof power);
   if (power < _0n) throw new Error('invalid exponent, negatives unsupported');
   if (power === _0n) return F.ONE;
   if (power === _1n) return num;
-  let p = F.ONE;
-  let d = num;
+  if (power < POW_WINDOWED_MIN) {
+    // Square-and-multiply: cheaper than the windowed path for short exponents (e.g. poseidon
+    // sbox x^5), which would waste the 14-multiplication table build.
+    let p = F.ONE;
+    let d = num;
+    while (power > _0n) {
+      if (power & _1n) p = F.mul(p, d);
+      d = F.sqr(d);
+      power >>= _1n;
+    }
+    return p;
+  }
+  // Fixed 4-bit windows, MSB-first — same shape as pow() above, over generic field ops.
+  // Speeds up dense long exponents (extension-field sqrt / Legendre, e.g. Fp2 decompression).
+  const digits: number[] = [];
   while (power > _0n) {
-    if (power & _1n) p = F.mul(p, d);
-    d = F.sqr(d);
-    power >>= _1n;
+    digits.push(Number(power & _15n));
+    power >>= _4n;
+  }
+  const table: T[] = new Array(16);
+  table[0] = F.ONE;
+  table[1] = num;
+  for (let i = 2; i < 16; i++) table[i] = F.mul(table[i - 1], num);
+  let p = table[digits[digits.length - 1]]; // top digit is nonzero: the loop above stops on 0
+  for (let w = digits.length - 2; w >= 0; w--) {
+    p = F.sqr(F.sqr(F.sqr(F.sqr(p))));
+    const digit = digits[w];
+    if (digit !== 0) p = F.mul(p, table[digit]);
   }
   return p;
 }
 
 /**
  * Efficiently invert an array of Field elements.
- * Exception-free. Zero-valued field elements stay `undefined` unless `passZero` is enabled.
+ * Zero-valued inputs are not inverted: by default their slot stays `undefined` (hence the
+ * `(T | undefined)[]` return type), or becomes `0` when `passZero` is enabled. Because of that the
+ * batch never calls `inv` on a zero, so over a prime field it is exception-free. The single
+ * `Fp.inv` of the accumulated product can still throw, but only for a non-invertible product, which
+ * a prime `ORDER` cannot produce (it requires a composite / non-field `ORDER`).
  * @param Fp - Field implementation.
  * @param nums - Values to invert.
  * @param passZero - map 0 to 0 (instead of undefined)
- * @returns Inverted values.
+ * @returns Inverted values; entries for zero inputs are `undefined` unless `passZero` is set.
  * @example
  * Invert several field elements with one shared inversion.
  *
@@ -596,12 +723,22 @@ export function FpPow<T>(Fp: TArg<IField<T>>, num: T, power: bigint): T {
  * const inv = FpInvertBatch(Fp, [1n, 2n, 4n]);
  * ```
  */
-export function FpInvertBatch<T>(Fp: TArg<IField<T>>, nums: T[], passZero = false): T[] {
+export function FpInvertBatch<T>(Fp: TArg<IField<T>>, nums: T[], passZero: true): T[];
+export function FpInvertBatch<T>(
+  Fp: TArg<IField<T>>,
+  nums: T[],
+  passZero?: boolean
+): (T | undefined)[];
+export function FpInvertBatch<T>(
+  Fp: TArg<IField<T>>,
+  nums: T[],
+  passZero = false
+): (T | undefined)[] {
   validateField(Fp);
   aarray(nums, 'nums');
   abool(passZero, 'passZero');
   const F = Fp as IField<T>;
-  const inverted = new Array(nums.length).fill(passZero ? F.ZERO : undefined) as T[];
+  const inverted = new Array(nums.length).fill(passZero ? F.ZERO : undefined) as (T | undefined)[];
   // Walk from first to last, multiply them by each other MOD p
   const multipliedAcc = nums.reduce((acc, num, i) => {
     if (F.is0(num)) return acc;
@@ -613,7 +750,8 @@ export function FpInvertBatch<T>(Fp: TArg<IField<T>>, nums: T[], passZero = fals
   // Walk from last to first, multiply them by inverted each other MOD p
   nums.reduceRight((acc, num, i) => {
     if (F.is0(num)) return acc;
-    inverted[i] = F.mul(acc, inverted[i]);
+    // Non-zero `num` means the forward pass already stored a defined prefix product at `inverted[i]`.
+    inverted[i] = F.mul(acc, inverted[i]!);
     return F.mul(acc, num);
   }, invertedAcc);
   return inverted;
@@ -651,7 +789,7 @@ export function FpDiv<T>(Fp: TArg<IField<T>>, lhs: T, rhs: T | bigint): T {
  * @param Fp - Field implementation.
  * @param n - Value to inspect.
  * @returns Legendre symbol.
- * @throws If the field returns an invalid Legendre symbol value. {@link Error}
+ * @throws If the powered value does not match a valid Legendre symbol. {@link Error}
  * @example
  * Compute the Legendre symbol of one field element.
  *
@@ -664,6 +802,7 @@ export function FpDiv<T>(Fp: TArg<IField<T>>, lhs: T, rhs: T | bigint): T {
 export function FpLegendre<T>(Fp: TArg<IField<T>>, n: T): -1 | 0 | 1 {
   validateField(Fp);
   const F = Fp as IField<T>;
+  aoddModulus(F.ORDER, 'FpLegendre');
   // We can use 3rd argument as optional cache of this value
   // but seems unneeded for now. The operation is very fast.
   const p1mod2 = (F.ORDER - _1n) / _2n;
@@ -816,7 +955,7 @@ class _Field implements IField<bigint> {
     return mod(lhs * rhs, this.ORDER);
   }
   pow(num: bigint, power: bigint): bigint {
-    return FpPow(this, num, power);
+    return pow(num, power, this.ORDER);
   }
   div(lhs: bigint, rhs: bigint) {
     return mod(lhs * invert(rhs, this.ORDER), this.ORDER);
@@ -881,7 +1020,10 @@ class _Field implements IField<bigint> {
   }
   // TODO: we don't need it here, move out to separate fn
   invertBatch(lst: bigint[]): bigint[] {
-    return FpInvertBatch(this, lst);
+    // `passZero` keeps the `bigint[]` contract honest: zero inputs map to `0` instead of leaking
+    // `undefined` into a `bigint[]`. Callers that must distinguish non-invertible inputs should use
+    // `FpInvertBatch` directly, whose default omits `passZero` and returns `(bigint | undefined)[]`.
+    return FpInvertBatch(this, lst, true);
   }
   // We can't move this out because Fp6, Fp12 implement it
   // and it's unclear what to return in there.
@@ -925,20 +1067,6 @@ Object.freeze(_Field.prototype);
 export function Field(ORDER: bigint, opts: FieldOpts = {}): TRet<Readonly<FpField>> {
   return new _Field(ORDER, opts);
 }
-
-// Generic random scalar, we can do same for other fields if via Fp2.mul(Fp2.ONE, Fp2.random)?
-// This allows unsafe methods like ignore bias or zero. These unsafe, but often used in different protocols (if deterministic RNG).
-// which mean we cannot force this via opts.
-// Not sure what to do with randomBytes, we can accept it inside opts if wanted.
-// Probably need to export getMinHashLength somewhere?
-// random(bytes?: Uint8Array, unsafeAllowZero = false, unsafeAllowBias = false) {
-//   const LEN = !unsafeAllowBias ? getMinHashLength(ORDER) : BYTES;
-//   if (bytes === undefined) bytes = randomBytes(LEN); // _opts.randomBytes?
-//   const num = isLE ? bytesToNumberLE(bytes) : bytesToNumberBE(bytes);
-//   // `mod(x, 11)` can sometimes produce 0. `mod(x, 10) + 1` is the same, but no 0
-//   const reduced = unsafeAllowZero ? mod(num, ORDER) : mod(num, ORDER - _1n) + _1n;
-//   return reduced;
-// },
 
 /**
  * @param Fp - Field implementation.
@@ -1066,7 +1194,11 @@ export function mapHashToField(
   if (len < minLen || len > 1024)
     throw new Error('expected ' + minLen + '-1024 bytes of input, got ' + len);
   const num = isLE ? bytesToNumberLE(key) : bytesToNumberBE(key);
-  // `mod(x, 11)` can sometimes produce 0. `mod(x, 10) + 1` is the same, but no 0
+  // Map into the non-zero scalar range [1, fieldOrder-1]: reduce mod (fieldOrder-1) to land in
+  // [0, fieldOrder-2], then add 1. This shifts the range off zero; it is NOT equal to
+  // `mod(num, fieldOrder)` (which spans [0, fieldOrder-1] and can be 0). A residual modulo bias
+  // remains but is negligible (~2^-(nBits/2), e.g. ~2^-128 for a 256-bit order) because `key` is
+  // required to be at least `getMinHashLength(fieldOrder)` (~1.5x field size) bytes of input.
   const reduced = mod(num, fieldOrder - _1n) + _1n;
   return isLE ? numberToBytesLE(reduced, fieldLen) : numberToBytesBE(reduced, fieldLen);
 }

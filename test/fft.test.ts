@@ -117,6 +117,34 @@ describe('FFT', () => {
     });
   });
   describe('rootsOfUnity', () => {
+    should('table structure: inverse, stride, omega primitivity', () => {
+      // pins the cached-table derivations: inverse(b) == elementwise field inversion,
+      // roots(b-1) == even-index stride of roots(b)
+      const checkTables = (F, gen, bits) => {
+        const roots = fft.rootsOfUnity(F, gen);
+        const om = roots.roots(bits);
+        const N = 1 << bits;
+        eql(om.length, N, 'table length');
+        eql(om[0], F.ONE, 'roots[0] == 1');
+        eql(
+          roots.inverse(bits),
+          om.map((x) => F.inv(x)),
+          'inverse == elementwise inv'
+        );
+        eql(
+          roots.roots(bits - 1),
+          om.filter((_, i) => i % 2 === 0),
+          'roots(b-1) == stride-2 of roots(b)'
+        );
+        const w = roots.omega(bits);
+        eql(w, om[1], 'omega == roots[1]');
+        eql(F.pow(w, BigInt(N)), F.ONE, 'omega^N == 1');
+        eql(F.pow(w, BigInt(N / 2)), F.neg(F.ONE), 'omega^(N/2) == -1 (primitive)');
+      };
+      checkTables(Field(17n), undefined, 4); // exercises findGenerator
+      checkTables(bls12_381.fields.Fr, 7n, 5);
+      checkTables(bn254.fields.Fr, 7n, 5);
+    });
     should('cache and fixed vectors', () => {
       let roots = fft.rootsOfUnity(Field(17n));
       const before = roots.inverse(2);
@@ -247,6 +275,101 @@ describe('FFT', () => {
     throws(() => fft.FFTCore(F, { N: 4, roots, dit: true, skipStages: -1 }), /wrong u32/);
     throws(() => fft.FFTCore(F, { N: 4, roots, dit: true, skipStages: 1.5 }), /wrong u32/);
     throws(() => fft.FFTCore(F, { N: 4, roots, dit: true, skipStages: 2 }), /skipStages/);
+  });
+  describe('FFTCore negacyclic NTT (invertButterflies/skipStages)', () => {
+    // Z_3329, the ML-KEM field: 17 is a primitive 256th root of unity.
+    const F = Field(3329n);
+    let seed = 1n;
+    const rand = () => (seed = (seed * 1103515245n + 12345n) % 3329n);
+    // schoolbook multiplication in Zq[x]/(x^N + 1)
+    const naiveNegacyclic = (a, b) => {
+      const N = a.length;
+      const res = new Array(N).fill(0n);
+      for (let i = 0; i < N; i++)
+        for (let j = 0; j < N; j++) {
+          const t = F.mul(a[i], b[j]);
+          res[(i + j) % N] = F.add(res[(i + j) % N], i + j >= N ? F.neg(t) : t);
+        }
+      return res;
+    };
+    should('full negacyclic convolution, same-table inverse (ML-DSA shape)', () => {
+      // x^128 + 1 over Z_3329: psi = 17 is a primitive 2N-th root of unity.
+      // Forward: DIF loop + DIT butterflies reading roots[grp]; output is evaluations
+      // a(psi^(2*brp(k)+1)) in bit-reversed order. Inverse: DIT loop reading roots[N-grp];
+      // the SAME table works because omega^N = 1 makes the reversed walk self-inverse.
+      const N = 128;
+      const bits = 7;
+      const psi = 17n;
+      const zetas = Array.from({ length: N }, (_, k) =>
+        F.pow(psi, BigInt(fft.reverseBits(k, bits)))
+      );
+      const opts = { N, roots: zetas, invertButterflies: true, brp: false };
+      const fwd = fft.FFTCore(F, { dit: false, ...opts });
+      const inv = fft.FFTCore(F, { dit: true, ...opts });
+      const a = Array.from({ length: N }, rand);
+      const b = Array.from({ length: N }, rand);
+      // forward == negacyclic evaluation map, in brp order
+      const A = fwd(a.slice());
+      for (const k of [0, 1, 5, 100]) {
+        const x = F.pow(psi, BigInt(2 * fft.reverseBits(k, bits) + 1));
+        let acc = 0n;
+        for (let i = a.length - 1; i >= 0; i--) acc = F.add(F.mul(acc, x), a[i]);
+        eql(A[k], acc, `fwd[${k}] == a(psi^(2*brp(${k})+1))`);
+      }
+      // roundtrip with 1/N scale
+      const s = F.inv(BigInt(N));
+      eql(
+        inv(fwd(a.slice())).map((x) => F.mul(x, s)),
+        a,
+        'inv(fwd(a))/N == a'
+      );
+      // negacyclic convolution theorem: pointwise product in the transform domain
+      const B = fwd(b.slice());
+      const C = A.map((x, i) => F.mul(x, B[i]));
+      eql(
+        inv(C).map((x) => F.mul(x, s)),
+        naiveNegacyclic(a, b),
+        'pointwise mul == mul mod x^N+1'
+      );
+    });
+    should('ML-KEM shape: skipStages=1 roundtrip and MultiplyNTTs', () => {
+      // FIPS 203: N=256, zeta=17 has order only 256 (no 512th root exists), so the NTT stops
+      // one stage early (skipStages=1) and multiplication happens on 128 degree-1 residues.
+      // The table is zeta^BitRev7(i) over ALL 256 indices: BitRev7 discards the top bit, so
+      // the upper half aliases the lower half - which is exactly what the inverse walk
+      // (rootPos = N - grp, grp restarting at 1) needs to match Algorithm 10.
+      const N = 256;
+      const zeta = 17n;
+      const zetas = Array.from({ length: N }, (_, i) => F.pow(zeta, BigInt(fft.reverseBits(i, 7))));
+      const opts = { N, roots: zetas, invertButterflies: true, skipStages: 1, brp: false };
+      const fwd = fft.FFTCore(F, { dit: false, ...opts });
+      const inv = fft.FFTCore(F, { dit: true, ...opts });
+      const a = Array.from({ length: N }, rand);
+      const b = Array.from({ length: N }, rand);
+      const s = F.inv(128n); // FIPS 203 Algorithm 10 line 14
+      eql(
+        inv(fwd(a.slice())).map((x) => F.mul(x, s)),
+        a,
+        'mlkem roundtrip'
+      );
+      // MultiplyNTTs (FIPS 203 Algorithm 12): pairwise products mod x^2 - zeta^(2*BitRev7(i)+1)
+      const A = fwd(a.slice());
+      const B = fwd(b.slice());
+      const C = new Array(N).fill(0n);
+      for (let i = 0; i < N / 2; i++) {
+        const gamma = F.pow(zeta, BigInt(2 * fft.reverseBits(i, 7) + 1));
+        C[2 * i] = F.add(
+          F.mul(A[2 * i], B[2 * i]),
+          F.mul(F.mul(A[2 * i + 1], B[2 * i + 1]), gamma)
+        );
+        C[2 * i + 1] = F.add(F.mul(A[2 * i], B[2 * i + 1]), F.mul(A[2 * i + 1], B[2 * i]));
+      }
+      eql(
+        inv(C).map((x) => F.mul(x, s)),
+        naiveNegacyclic(a, b),
+        'basemul == mul mod x^256+1'
+      );
+    });
   });
   should('poly.eval rejects mismatched basis vector lengths', () => {
     const F = Field(17n);
@@ -394,6 +517,28 @@ describe('FFT', () => {
           );
         });
       });
+      should('shift/vanishing/dot properties', () => {
+        const l = (msg) => `${name}: ${msg}`;
+        // shift(p, c) is argument scaling: eval(shift(p, c), x) == eval(p, c*x)
+        fc.assert(
+          fc.property(FR_BIGINT_POLY, FR_BIGINT, FR_BIGINT, (p, c, x) => {
+            eql(
+              P.monomial.eval(P.shift(p, c), x),
+              P.monomial.eval(p, Fr.mul(c, x)),
+              l('shift(p,c)(x) == p(c*x)')
+            );
+          })
+        );
+        // vanishing polynomial: monic, degree == #roots, zero at every root
+        const rs = [2n, 3n, 7n];
+        const v = P.vanishing(rs);
+        eql(v.length, rs.length + 1, l('vanishing length'));
+        eql(P.degree(v), rs.length, l('vanishing degree'));
+        eql(v[v.length - 1], Fr.ONE, l('vanishing monic'));
+        for (const r of rs) eql(P.monomial.eval(v, r), 0n, l(`vanishing(${r}) == 0`));
+        // dot is pointwise multiplication
+        eql(P.dot([1n, 2n, 3n], [4n, 5n, 6n]), [4n, 10n, 18n], l('dot pointwise'));
+      });
     });
     // Basic sanity checks
     describe(`FFT/${name}`, () => {
@@ -483,6 +628,33 @@ describe('FFT', () => {
               l('right distributivity fast path')
             );
             eql(lhs, rhs, l('convolve distributivity'));
+          })
+        );
+      });
+      should('DFT semantics and lagrange interpolation', () => {
+        const l = (msg) => `${name}: ${msg}`;
+        const om = roots.roots(3);
+        // direct() is the evaluation map: direct(a)[k] == a(omega^k)
+        fc.assert(
+          fc.property(FR_BIGINT_POLY, (a) => {
+            eql(
+              fftFr.direct(a),
+              om.map((w) => P.monomial.eval(a, w)),
+              l('direct == eval at roots')
+            );
+          })
+        );
+        // lagrange basis interpolates the evaluation form back: for evals v = direct(a),
+        // lagrange.eval(v, x) == a(x); same in brp order
+        fc.assert(
+          fc.property(FR_BIGINT_POLY, FR_BIGINT, (a, x) => {
+            const expected = P.monomial.eval(a, x);
+            eql(P.lagrange.eval(fftFr.direct(a), x), expected, l('lagrange interpolation'));
+            eql(
+              P.lagrange.eval(fftFr.direct(a, false, true), x, true),
+              expected,
+              l('lagrange interpolation, brp')
+            );
           })
         );
       });

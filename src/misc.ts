@@ -118,8 +118,9 @@ export function jubjub_groupHash(
   h.update(tag);
   // NOTE: returns EdwardsPoint, in case it will be multiplied later
   let p = jubjub.Point.fromBytes(h.digest());
-  // NOTE: cannot replace with isSmallOrder, returns Point*8
-  p = p.multiply(jubjub_CURVE.h);
+  // NOTE: cannot replace with isSmallOrder, we need the Point*8 result itself.
+  // clearCofactor (three doublings for h=8) is fine here: inputs are public.
+  p = p.clearCofactor();
   if (p.equals(jubjub.Point.ZERO)) throw new Error('Point has small order');
   return p;
 }
@@ -151,15 +152,15 @@ export function jubjub_findGroupHash(
   // input error and turns it into a misleading "tag overflow".
   abytes(personalization, 8, 'personalization');
   const tag = concatBytes(m, Uint8Array.of(0));
-  const hashes = [];
+  // Return the first tag byte whose hash decodes to a non-small-order point; later candidates
+  // were never used, so there is no reason to compute them.
   for (let i = 0; i < 256; i++) {
     tag[tag.length - 1] = i;
     try {
-      hashes.push(jubjub_groupHash(tag, personalization));
+      return jubjub_groupHash(tag, personalization);
     } catch (e) {}
   }
-  if (!hashes.length) throw new Error('findGroupHash tag overflow');
-  return hashes[0];
+  throw new Error('findGroupHash tag overflow');
 }
 
 const brainpoolP256r1_CURVE: WeierstrassOpts<bigint> = /* @__PURE__ */ (() => ({

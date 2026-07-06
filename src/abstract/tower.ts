@@ -121,10 +121,6 @@ export type Fp12Bls = mod.IField<Fp12> & {
   frobeniusMap(num: Fp12, power: number): Fp12;
   /** Build one field element from a raw twelve-bigint tuple. */
   fromBigTwelve: (t: BigintTwelve) => Fp12;
-  /** Multiply by a sparse `(o0, o1, 0, 0, o4, 0)` element. */
-  mul014(num: Fp12, o0: Fp2, o1: Fp2, o4: Fp2): Fp12;
-  /** Multiply by a sparse `(o0, 0, 0, o3, o4, 0)` element. */
-  mul034(num: Fp12, o0: Fp2, o3: Fp2, o4: Fp2): Fp12;
   /** Multiply by one quadratic-extension element. */
   mulByFp2(lhs: Fp12, rhs: Fp2): Fp12;
   /** Conjugate one degree-12 element. */
@@ -320,7 +316,6 @@ class _Field2 implements mod.IField<Fp2> {
   readonly mulByB: Tower12Opts['Fp2mulByB'];
   readonly Fp_NONRESIDUE: bigint;
   readonly Fp_div2: bigint;
-  readonly FROBENIUS_COEFFICIENTS: readonly Fp[];
 
   constructor(
     Fp: mod.IField<bigint>,
@@ -347,10 +342,9 @@ class _Field2 implements mod.IField<Fp2> {
     this.Fp_NONRESIDUE = Fp.create(NONRESIDUE);
     this.Fp_div2 = Fp.div(Fp.ONE, _2n); // 1/2
     this.NONRESIDUE = this.create({ c0: FP2_NONRESIDUE![0], c1: FP2_NONRESIDUE![1] });
-    // const Fp2Nonresidue = this.create({ c0: FP2_NONRESIDUE![0], c1: FP2_NONRESIDUE![1] });
-    this.FROBENIUS_COEFFICIENTS = Object.freeze(
-      calcFrobeniusCoefficients(Fp, this.Fp_NONRESIDUE, Fp.ORDER, 2)[0]
-    );
+    // NOTE: no Fp2 FROBENIUS_COEFFICIENTS table: for the shipped `u² = -1` tower the coefficients
+    // are always [1, -1] (x²+1 irreducible forces p ≡ 3 mod 4), so frobeniusMap conjugates
+    // directly and the eager table computation was pure import-time waste.
     this.mulByB = (num) => {
       // This config hook is trusted to return a canonical Fp2 value already.
       // Copy+freeze it to keep the tower immutability invariant without mutating caller objects.
@@ -404,7 +398,7 @@ class _Field2 implements mod.IField<Fp2> {
     return mod.FpPow(this, num, power);
   }
   invertBatch(nums: Fp2[]): Fp2[] {
-    return mod.FpInvertBatch(this, nums);
+    return mod.FpInvertBatch(this, nums, true);
   }
   // Normalized
   add(f1: Fp2, f2: Fp2): Fp2 {
@@ -547,13 +541,22 @@ class _Field2 implements mod.IField<Fp2> {
   }
   // multiply by u + 1
   mulByNonresidue({ c0, c1 }: Fp2) {
-    return this.mul({ c0, c1 }, this.NONRESIDUE);
+    const { Fp, NONRESIDUE: nr } = this;
+    if (nr.c0 === Fp.ONE && nr.c1 === Fp.ONE) {
+      return Object.freeze({ c0: Fp.sub(c0, c1), c1: Fp.add(c0, c1) });
+    }
+    if (nr.c1 === Fp.ONE) {
+      return Object.freeze({
+        c0: Fp.sub(Fp.mul(c0, nr.c0), c1),
+        c1: Fp.add(c0, Fp.mul(c1, nr.c0)),
+      });
+    }
+    return this.mul({ c0, c1 }, nr);
   }
-  frobeniusMap({ c0, c1 }: Fp2, power: number): Fp2 {
-    return Object.freeze({
-      c0,
-      c1: this.Fp.mul(c1, this.FROBENIUS_COEFFICIENTS[power % 2]),
-    });
+  frobeniusMap(num: Fp2, power: number): Fp2 {
+    const { c0, c1 } = num;
+    const { Fp } = this;
+    return Object.freeze({ c0, c1: power % 2 === 0 ? c1 : Fp.neg(c1) });
   }
 }
 
@@ -715,7 +718,7 @@ class _Field6 implements Fp6Bls {
     return mod.FpPow(this, num, power);
   }
   invertBatch(nums: Fp6[]): Fp6[] {
-    return mod.FpInvertBatch(this, nums);
+    return mod.FpInvertBatch(this, nums, true);
   }
 
   inv({ c0, c1, c2 }: Fp6) {
@@ -765,7 +768,9 @@ class _Field6 implements Fp6Bls {
       c2: Fp2.fromBigTuple(t.slice(4, 6) as BigintTuple),
     });
   }
-  frobeniusMap({ c0, c1, c2 }: Fp6, power: number) {
+  frobeniusMap(num: Fp6, power: number) {
+    const { c0, c1, c2 } = num;
+    if (power % 6 === 0) return Object.freeze({ c0, c1, c2 });
     const { Fp2 } = this;
     return Object.freeze({
       c0: Fp2.frobeniusMap(c0, power),
@@ -920,7 +925,7 @@ class _Field12 implements Fp12Bls {
     return mod.FpPow(this, num, power);
   }
   invertBatch(nums: Fp12[]): Fp12[] {
-    return mod.FpInvertBatch(this, nums);
+    return mod.FpInvertBatch(this, nums, true);
   }
 
   // Normalized
@@ -1018,10 +1023,13 @@ class _Field12 implements Fp12Bls {
   }
   // Raises to q**i -th power
   frobeniusMap(lhs: Fp12, power: number) {
+    const p = power % 12;
+    if (p === 0) return Object.freeze({ c0: lhs.c0, c1: lhs.c1 });
+    if (p === 6) return this.conjugate(lhs);
     const { Fp6 } = this;
     const { Fp2 } = Fp6;
     const { c0, c1, c2 } = Fp6.frobeniusMap(lhs.c1, power);
-    const coeff = this.FROBENIUS_COEFFICIENTS[power % 12];
+    const coeff = this.FROBENIUS_COEFFICIENTS[p];
     return Object.freeze({
       c0: Fp6.frobeniusMap(lhs.c0, power),
       c1: Object.freeze({
@@ -1042,34 +1050,6 @@ class _Field12 implements Fp12Bls {
     // Reuse `c0` by reference and only negate the `w` coefficient.
     return Object.freeze({ c0, c1: this.Fp6.neg(c1) });
   }
-  // Sparse multiplication
-  mul014({ c0, c1 }: Fp12, o0: Fp2, o1: Fp2, o4: Fp2) {
-    const { Fp6 } = this;
-    const { Fp2 } = Fp6;
-    let t0 = Fp6.mul01(c0, o0, o1);
-    let t1 = Fp6.mul1(c1, o4);
-    return Object.freeze({
-      c0: Fp6.add(Fp6.mulByNonresidue(t1), t0), // T1 * v + T0
-      // (c1 + c0) * [o0, o1+o4] - T0 - T1
-      c1: Fp6.sub(Fp6.sub(Fp6.mul01(Fp6.add(c1, c0), o0, Fp2.add(o1, o4)), t0), t1),
-    });
-  }
-  mul034({ c0, c1 }: Fp12, o0: Fp2, o3: Fp2, o4: Fp2) {
-    const { Fp6 } = this;
-    const { Fp2 } = Fp6;
-    const a = Object.freeze({
-      c0: Fp2.mul(c0.c0, o0),
-      c1: Fp2.mul(c0.c1, o0),
-      c2: Fp2.mul(c0.c2, o0),
-    });
-    const b = Fp6.mul01(c1, o3, o4);
-    const e = Fp6.mul01(Fp6.add(c0, c1), Fp2.add(o0, o3), o4);
-    return Object.freeze({
-      c0: Fp6.add(Fp6.mulByNonresidue(b), a),
-      c1: Fp6.sub(e, Fp6.add(a, b)),
-    });
-  }
-
   // A cyclotomic group is a subgroup of Fp^n defined by
   //   GΦₙ(p) = {α ∈ Fpⁿ : α^Φₙ(p) = 1}
   // The result of any pairing is in a cyclotomic subgroup
@@ -1102,8 +1082,9 @@ class _Field12 implements Fp12Bls {
     // The loop only consumes `X_LEN` bits, so out-of-range exponents would otherwise get silently
     // truncated (or sign-extended for negatives) instead of matching the caller's requested power.
     aInRange('cyclotomic exponent', n, _0n, _1n << BigInt(this.X_LEN));
-    let z = this.ONE;
-    for (let i = this.X_LEN - 1; i >= 0; i--) {
+    if (n === _0n) return this.ONE;
+    let z = num;
+    for (let i = bitLen(n) - 2; i >= 0; i--) {
       z = this._cyclotomicSquare(z);
       if (bitGet(n, i)) z = this.mul(z, num);
     }

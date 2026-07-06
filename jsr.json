@@ -5,6 +5,7 @@
     ".": "./src/index.ts",
     "./abstract/bls.js": "./src/abstract/bls.ts",
     "./abstract/curve.js": "./src/abstract/curve.ts",
+    "./abstract/der.js": "./src/abstract/der.ts",
     "./abstract/edwards.js": "./src/abstract/edwards.ts",
     "./abstract/fft.js": "./src/abstract/fft.ts",
     "./abstract/frost.js": "./src/abstract/frost.ts",

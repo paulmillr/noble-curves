@@ -14,14 +14,15 @@
     "@noble/hashes": "2.2.0"
   },
   "devDependencies": {
-    "@paulmillr/jsbt": "0.6.0",
+    "@paulmillr/jsbt": "0.6.1",
     "@types/node": "25.3.0",
     "fast-check": "4.2.0",
     "prettier": "3.6.2",
     "typescript": "6.0.2"
   },
   "scripts": {
-    "benchmark": "node benchmark/curves.ts",
+    "benchmark": "node benchmark/main.ts",
+    "benchmark:ct": "node benchmark/ct.ts",
     "build": "tsc",
     "bundle": "npx --no @paulmillr/jsbt bundle",
     "check": "npx --no @paulmillr/jsbt check",
@@ -37,6 +38,7 @@
     ".": "./index.js",
     "./abstract/bls.js": "./abstract/bls.js",
     "./abstract/curve.js": "./abstract/curve.js",
+    "./abstract/der.js": "./abstract/der.js",
     "./abstract/edwards.js": "./abstract/edwards.js",
     "./abstract/fft.js": "./abstract/fft.js",
     "./abstract/frost.js": "./abstract/frost.js",

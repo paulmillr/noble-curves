@@ -64,7 +64,7 @@ import {
   type TArg,
   type TRet,
 } from '../utils.ts';
-import { pippenger, validatePointCons, type CurvePoint, type CurvePointCons } from './curve.ts';
+import { mulAddUnsafe, validatePointCons, type CurvePoint, type CurvePointCons } from './curve.ts';
 import { _DST_scalar, type H2CDSTOpts } from './hash-to-curve.ts';
 import { getMinHashLength, mapHashToField } from './modular.ts';
 
@@ -359,7 +359,7 @@ export type OPRF = {
     blindEvaluateBatch(
       secretKey: TArg<ScalarBytes>,
       blinded: TArg<PointBytes[]>,
-      rng: RNG
+      rng?: RNG
     ): TRet<OPRFBlindEvalBatch>;
 
     /**
@@ -462,7 +462,10 @@ export function createOPRF<P extends CurvePoint<any, P>>(opts: OPRFOpts<P>): TRe
     return Fn.isLE ? bytesToNumberLE(t) : bytesToNumberBE(t);
   };
 
-  const msm = (points: P[], scalars: bigint[]) => pippenger(Point, points, scalars);
+  // Every MSM input in this module is public (hash-derived transcript weights, wire-decoded
+  // points, proof scalars), so the vartime shared-doubling-chain walk is safe. It is also
+  // 1.6-2.5x faster than pippenger() for all realistic batch sizes (measured up to L=2048).
+  const msm = (points: P[], scalars: bigint[]) => mulAddUnsafe(Point, points, scalars);
 
   const getCtx = (mode: number) =>
     concatBytes(asciiToBytes('OPRFV1-'), new Uint8Array([mode]), asciiToBytes('-' + name));
@@ -552,8 +555,8 @@ export function createOPRF<P extends CurvePoint<any, P>>(opts: OPRFOpts<P>): TRe
     const [c, s] = [proof.subarray(0, Fn.BYTES), proof.subarray(Fn.BYTES)].map((f) =>
       Fn.fromBytes(f)
     );
-    const t2 = Point.BASE.multiply(s).add(B.multiply(c)); // s*G + c*B
-    const t3 = M.multiply(s).add(Z.multiply(c)); // s*M + c*Z
+    const t2 = msm([Point.BASE, B], [s, c]); // s*G + c*B
+    const t3 = msm([M, Z], [s, c]); // s*M + c*Z
     const expectedC = challengeTranscript(B, M, Z, t2, t3, ctx);
     if (!Fn.eql(c, expectedC)) throw new Error('proof verification failed');
   }
@@ -676,7 +679,14 @@ export function createOPRF<P extends CurvePoint<any, P>>(opts: OPRFOpts<P>): TRe
       const blindedPoints = items.map((i) => wirePoint('blinded', i.blinded));
       const evalPoints = items.map((i) => wirePoint('evaluated', i.evaluated));
       verifyProof(ctxVOPRF, pkS, blindedPoints, evalPoints, proof);
-      return items.map((i) => oprf.finalize(i.input, i.blind, i.evaluated)) as TRet<Bytes[]>;
+      // Same unblind+hash as oprf.finalize(), but reuses the evaluated points already decoded
+      // (and identity-checked) for verifyProof instead of deserializing each one again.
+      return items.map((i, j) => {
+        const input = inputBytes('input', i.input);
+        const blind = Fn.fromBytes(i.blind);
+        const unblinded = evalPoints[j].multiply(Fn.inv(blind)).toBytes();
+        return hashInput(input, unblinded);
+      }) as TRet<Bytes[]>;
     },
     finalize(
       input: TArg<Bytes>,

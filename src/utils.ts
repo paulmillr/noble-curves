@@ -638,9 +638,8 @@ export function bitLen(n: bigint): number {
   // Size callers in this repo only use non-negative orders / scalars, so negative inputs are a
   // contract bug and must not silently collapse to zero bits.
   if (n < _0n) throw new Error('expected non-negative bigint, got ' + n);
-  let len;
-  for (len = 0; n > _0n; n >>= _1n, len += 1);
-  return len;
+  // Native radix conversion beats a shift loop at every size, and the loop is quadratic in bits.
+  return n === _0n ? 0 : n.toString(2).length;
 }
 
 /**

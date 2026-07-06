@@ -451,20 +451,122 @@ function createBlsPairing(
     { randomBytes: 'function', postPrecompute: 'function' },
     'params'
   );
-  const { Fr, Fp2, Fp12 } = fields;
+  const { Fp, Fr, Fp2, Fp12 } = fields;
   const { twistType, ateLoopSize, xNegative, postPrecompute } = params;
   type G1 = typeof G1.BASE;
   type G2 = typeof G2.BASE;
+  const fp2 = (c0: Fp, c1: Fp): Fp2 => ({ c0, c1 });
+  const fp2f = ({ c0, c1 }: Fp2): Fp2 => Object.freeze({ c0, c1 });
+  const add2 = (a: Fp2, b: Fp2) => fp2(Fp.add(a.c0, b.c0), Fp.add(a.c1, b.c1));
+  const sub2 = (a: Fp2, b: Fp2) => fp2(Fp.sub(a.c0, b.c0), Fp.sub(a.c1, b.c1));
+  const mul2 = (a: Fp2, b: Fp2) => {
+    const t0 = Fp.mul(a.c0, b.c0);
+    const t1 = Fp.mul(a.c1, b.c1);
+    return fp2(
+      Fp.sub(t0, t1),
+      Fp.sub(Fp.mul(Fp.add(a.c0, a.c1), Fp.add(b.c0, b.c1)), Fp.add(t0, t1))
+    );
+  };
+  const mul2ByFp = (a: Fp2, rhs: Fp) => fp2(Fp.mul(a.c0, rhs), Fp.mul(a.c1, rhs));
+  // Delegates to the tower's mulByNonresidue: it has fast paths for ξ = u+1 / ξ = a+u
+  // (adds/scalar-muls instead of a full Karatsuba Fp2 multiplication).
+  const mul2ByNonresidue = (a: Fp2): Fp2 => Fp2.mulByNonresidue(a);
+  const mul014ByLine = ({ c0: f0, c1: f1 }: Fp12, o0: Fp2, l1: Fp2, l4: Fp2, Px: Fp, Py: Fp) => {
+    const o1 = mul2ByFp(l1, Px);
+    const o4 = mul2ByFp(l4, Py);
+    const { c0: a0, c1: a1, c2: a2 } = f0;
+    const { c0: b0, c1: b1, c2: b2 } = f1;
+
+    // t0 = Fp6.mul01(f0, o0, o1)
+    const t0_0 = mul2(a0, o0);
+    const t0_1 = mul2(a1, o1);
+    const t0_c0 = add2(mul2ByNonresidue(sub2(mul2(add2(a1, a2), o1), t0_1)), t0_0);
+    const t0_c1 = sub2(sub2(mul2(add2(o0, o1), add2(a0, a1)), t0_0), t0_1);
+    const t0_c2 = add2(sub2(mul2(add2(a0, a2), o0), t0_0), t0_1);
+
+    // t1 = Fp6.mul1(f1, o4)
+    const t1_c0 = mul2ByNonresidue(mul2(b2, o4));
+    const t1_c1 = mul2(b0, o4);
+    const t1_c2 = mul2(b1, o4);
+
+    // t2 = Fp6.mul01(Fp6.add(f0, f1), o0, Fp2.add(o1, o4))
+    const s0 = add2(a0, b0);
+    const s1 = add2(a1, b1);
+    const s2 = add2(a2, b2);
+    const o14 = add2(o1, o4);
+    const t2_0 = mul2(s0, o0);
+    const t2_1 = mul2(s1, o14);
+    const t2_c0 = add2(mul2ByNonresidue(sub2(mul2(add2(s1, s2), o14), t2_1)), t2_0);
+    const t2_c1 = sub2(sub2(mul2(add2(o0, o14), add2(s0, s1)), t2_0), t2_1);
+    const t2_c2 = add2(sub2(mul2(add2(s0, s2), o0), t2_0), t2_1);
+
+    return Object.freeze({
+      c0: Object.freeze({
+        c0: fp2f(add2(mul2ByNonresidue(t1_c2), t0_c0)),
+        c1: fp2f(add2(t1_c0, t0_c1)),
+        c2: fp2f(add2(t1_c1, t0_c2)),
+      }),
+      c1: Object.freeze({
+        c0: fp2f(sub2(sub2(t2_c0, t0_c0), t1_c0)),
+        c1: fp2f(sub2(sub2(t2_c1, t0_c1), t1_c1)),
+        c2: fp2f(sub2(sub2(t2_c2, t0_c2), t1_c2)),
+      }),
+    });
+  };
+  // Like mul014ByLine, params are named after the sparse slot they end up in: l0 is scaled by
+  // Py into o0, l3 is scaled by Px into o3, o4 is used as-is.
+  const mul034ByLine = ({ c0: f0, c1: f1 }: Fp12, l0: Fp2, l3: Fp2, o4: Fp2, Px: Fp, Py: Fp) => {
+    const o0 = mul2ByFp(l0, Py);
+    const o3 = mul2ByFp(l3, Px);
+    const { c0: a0, c1: a1, c2: a2 } = f0;
+    const { c0: b0, c1: b1, c2: b2 } = f1;
+
+    // a = f0 * o0
+    const a_c0 = mul2(a0, o0);
+    const a_c1 = mul2(a1, o0);
+    const a_c2 = mul2(a2, o0);
+
+    // b = Fp6.mul01(f1, o3, o4)
+    const b0m = mul2(b0, o3);
+    const b1m = mul2(b1, o4);
+    const b_c0 = add2(mul2ByNonresidue(sub2(mul2(add2(b1, b2), o4), b1m)), b0m);
+    const b_c1 = sub2(sub2(mul2(add2(o3, o4), add2(b0, b1)), b0m), b1m);
+    const b_c2 = add2(sub2(mul2(add2(b0, b2), o3), b0m), b1m);
+
+    // e = Fp6.mul01(Fp6.add(f0, f1), Fp2.add(o0, o3), o4)
+    const s0 = add2(a0, b0);
+    const s1 = add2(a1, b1);
+    const s2 = add2(a2, b2);
+    const o03 = add2(o0, o3);
+    const e0m = mul2(s0, o03);
+    const e1m = mul2(s1, o4);
+    const e_c0 = add2(mul2ByNonresidue(sub2(mul2(add2(s1, s2), o4), e1m)), e0m);
+    const e_c1 = sub2(sub2(mul2(add2(o03, o4), add2(s0, s1)), e0m), e1m);
+    const e_c2 = add2(sub2(mul2(add2(s0, s2), o03), e0m), e1m);
+
+    return Object.freeze({
+      c0: Object.freeze({
+        c0: fp2f(add2(mul2ByNonresidue(b_c2), a_c0)),
+        c1: fp2f(add2(b_c0, a_c1)),
+        c2: fp2f(add2(b_c1, a_c2)),
+      }),
+      c1: Object.freeze({
+        c0: fp2f(sub2(sub2(e_c0, a_c0), b_c0)),
+        c1: fp2f(sub2(sub2(e_c1, a_c1), b_c1)),
+        c2: fp2f(sub2(sub2(e_c2, a_c2), b_c2)),
+      }),
+    });
+  };
   // Applies sparse multiplication as line function
   let lineFunction: (c0: Fp2, c1: Fp2, c2: Fp2, f: Fp12, Px: Fp, Py: Fp) => Fp12;
   if (twistType === 'multiplicative') {
     lineFunction = (c0: Fp2, c1: Fp2, c2: Fp2, f: Fp12, Px: Fp, Py: Fp) =>
-      Fp12.mul014(f, c0, Fp2.mul(c1, Px), Fp2.mul(c2, Py));
+      mul014ByLine(f, c0, c1, c2, Px, Py);
   } else if (twistType === 'divisive') {
     // NOTE: it should be [c0, c1, c2], but we use different order here to reduce complexity of
     // precompute calculations.
     lineFunction = (c0: Fp2, c1: Fp2, c2: Fp2, f: Fp12, Px: Fp, Py: Fp) =>
-      Fp12.mul034(f, Fp2.mul(c2, Py), Fp2.mul(c1, Px), c0);
+      mul034ByLine(f, c2, c1, c0, Px, Py);
   } else throw new Error('bls: unknown twist type');
 
   const Fp2div2 = Fp2.div(Fp2.ONE, Fp2.mul(Fp2.ONE, _2n));
@@ -549,7 +651,7 @@ function createBlsPairing(
     if (pairs.length) {
       const ellLen = pairs[0][0].length;
       for (let i = 0; i < ellLen; i++) {
-        f12 = Fp12.sqr(f12); // This allows us to do sqr only one time for all pairings
+        if (i !== 0) f12 = Fp12.sqr(f12); // sqr only one time for all pairings; skip sqr(ONE) at i=0
         // NOTE: we apply multiple pairings in parallel here
         for (const [ell, Px, Py] of pairs) {
           for (const [c0, c1, c2] of ell[i]) f12 = lineFunction(c0, c1, c2, f12, Px, Py);

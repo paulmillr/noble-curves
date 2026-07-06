@@ -1,16 +1,15 @@
 /**
- * Internal module for NIST P256, P384, P521 curves.
- * Do not use for now.
+ * NIST P256, P384, P521 curves.
+ * https://www.secg.org/sec2-v2.pdf, https://neuromancer.sk/std/nist/P-256
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha256, sha384, sha512 } from '@noble/hashes/sha2.js';
 import { createFROST, type FROST } from './abstract/frost.ts';
-import { createHasher, type H2CHasher } from './abstract/hash-to-curve.ts';
+import { createHasher, type H2CHasher, mapToCurveSimpleSWU } from './abstract/hash-to-curve.ts';
 import { createOPRF, type OPRF } from './abstract/oprf.ts';
 import {
   ecdsa,
-  mapToCurveSimpleSWU,
   weierstrass,
   type ECDSA,
   type WeierstrassOpts,
@@ -127,7 +126,7 @@ export const p256_hasher: H2CHasher<WeierstrassPointCons<bigint>> = /* @__PURE__
     createSWU(p256_Point, {
       A: p256_CURVE.a,
       B: p256_CURVE.b,
-      Z: p256_Point.Fp.create(BigInt('-10')),
+      Z: p256_Point.Fp.neg(BigInt(10)),
     }),
     {
       DST: 'P256_XMD:SHA-256_SSWU_RO_',
@@ -181,7 +180,6 @@ export const p256_FROST: TRet<FROST> = /* @__PURE__ */ (() =>
     hash: sha256,
   }))();
 
-// NIST P384
 const p384_Point = /* @__PURE__ */ weierstrass(p384_CURVE);
 /**
  * NIST P384 (aka secp384r1) curve, ECDSA and ECDH methods. Hashes inputs with sha384 by default.
@@ -211,7 +209,7 @@ export const p384_hasher: H2CHasher<WeierstrassPointCons<bigint>> = /* @__PURE__
     createSWU(p384_Point, {
       A: p384_CURVE.a,
       B: p384_CURVE.b,
-      Z: p384_Point.Fp.create(BigInt('-12')),
+      Z: p384_Point.Fp.neg(BigInt(12)),
     }),
     {
       DST: 'P384_XMD:SHA-384_SSWU_RO_',
@@ -262,6 +260,8 @@ export const p384_oprf: TRet<OPRF> = /* @__PURE__ */ (() =>
 // exactly 65 bytes here: the coherent choices are canonical 66 only, or a broader integer-style
 // parser across many widths. Since this field parser is fixed-width, keep it canonical and use the
 // default exact-66-byte scalar field path.
+// A dedicated MersenneField primitive would allow speed-ups here: +40% getPublicKey, +23% sign,
+// +53% verify, +53% getSharedSecret.
 const p521_Point = /* @__PURE__ */ weierstrass(p521_CURVE);
 /**
  * NIST P521 (aka secp521r1) curve, ECDSA and ECDH methods. Hashes inputs with sha512 by default.
@@ -293,7 +293,7 @@ export const p521_hasher: H2CHasher<WeierstrassPointCons<bigint>> = /* @__PURE__
     createSWU(p521_Point, {
       A: p521_CURVE.a,
       B: p521_CURVE.b,
-      Z: p521_Point.Fp.create(BigInt('-4')),
+      Z: p521_Point.Fp.neg(BigInt(4)),
     }),
     {
       DST: 'P521_XMD:SHA-512_SSWU_RO_',

@@ -1,3 +1,5 @@
+import { hmac } from '@noble/hashes/hmac.js';
+import { sha256 } from '@noble/hashes/sha2.js';
 import { describe, should } from '@paulmillr/jsbt/test.js';
 import * as fc from 'fast-check';
 import { deepStrictEqual as eql, throws } from 'node:assert';
@@ -140,6 +142,8 @@ describe('utils', () => {
     should('equalBytes', () => {
       eql(equalBytes(Uint8Array.of(1, 2), Uint8Array.of(1, 2)), true);
       eql(equalBytes(Uint8Array.of(1, 2), Uint8Array.of(1, 3)), false);
+      eql(equalBytes(Uint8Array.of(1, 2), Uint8Array.of(1, 2, 0)), false, 'length mismatch');
+      eql(equalBytes(Uint8Array.of(), Uint8Array.of()), true, 'both empty');
       throws(
         () => equalBytes([1, 2] as any, Uint8Array.of(1, 2)),
         new TypeError('expected Uint8Array, got type=object')
@@ -209,6 +213,8 @@ describe('utils', () => {
       eql(bitLen(0n), 0);
       eql(bitLen(1n), 1);
       eql(bitLen(8n), 4);
+      eql(bitLen(2n ** 255n - 1n), 255);
+      eql(bitLen(2n ** 255n), 256);
       throws(() => bitLen(-1n), /expected non-negative bigint/);
     });
   }
@@ -366,6 +372,28 @@ describe('utils', () => {
     should('bitSet', () => {
       eql(bitSet(0n, 1, true), 2n);
       eql(bitSet(5n, 2, false), 1n);
+      eql(bitSet(5n, 0, true), 5n, 'setting an already-set bit is a no-op');
+    });
+  }
+  if (extra.bitGet) {
+    const bitGet = extra.bitGet;
+    should('bitGet', () => {
+      eql(bitGet(5n, 0), 1n);
+      eql(bitGet(5n, 1), 0n);
+      eql(bitGet(5n, 2), 1n);
+      eql(bitGet(5n, 300), 0n);
+      throws(() => bitGet('5' as any, 0), TypeError);
+      throws(() => bitGet(5n, 1.5), RangeError);
+    });
+  }
+  if (extra.bitMask) {
+    const bitMask = extra.bitMask;
+    should('bitMask', () => {
+      eql(bitMask(0), 0n);
+      eql(bitMask(1), 1n);
+      eql(bitMask(4), 15n);
+      eql(bitMask(256), 2n ** 256n - 1n);
+      throws(() => bitMask(1.5), RangeError);
     });
   }
   if (extra.createHmacDrbg) {
@@ -382,6 +410,22 @@ describe('utils', () => {
           return calls === 1 ? 0 : 7;
         }),
         0
+      );
+    });
+    should('createHmacDrbg reseeds between rejected candidates and enforces iteration cap', () => {
+      const hmacFn = (key: Uint8Array, msg: Uint8Array) => hmac(sha256, key, msg);
+      const drbg = createHmacDrbg(32, 32, hmacFn);
+      const seen: string[] = [];
+      const out = drbg(Uint8Array.of(1, 2, 3), ((bytes: Uint8Array) => {
+        seen.push(bytesToHex(bytes));
+        return seen.length === 3 ? 42n : undefined;
+      }) as any);
+      eql(out, 42n, 'accepted third candidate');
+      eql(new Set(seen).size, 3, 'reseed produced distinct candidates');
+      // Same drbg instance is reusable: counter resets per genUntil call.
+      throws(
+        () => drbg(Uint8Array.of(1), (() => undefined) as any),
+        /drbg: tried max amount of iterations/
       );
     });
   }

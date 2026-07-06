@@ -116,6 +116,7 @@ for (const c in FIELDS) {
       bn254.fields.Fp12,
     ].includes(Fp);
     const noGenericSqrt = noSqrt || [bls12_381.fields.Fp2, bn254.fields.Fp2].includes(Fp);
+    const expensiveLegendrePow = Fp.ORDER.toString(2).length > 1000;
 
     describe(name, () => {
       const l = (msg) => `${name} ${msg}`;
@@ -309,13 +310,15 @@ for (const c in FIELDS) {
             eql(mod.FpIsSquare(Fp, Fp.sqr(x)), true, l('sqr(x) returns a square'));
           })
         );
-        fc.assert(
-          fc.property(FC_BIGINT, (num) => {
-            const n = create(num);
-            const leg = BigInt(mod.FpLegendre(Fp, n));
-            eql(Fp.mul(Fp.ONE, leg), Fp.pow(n, (Fp.ORDER - 1n) / 2n), l('legendre correctness'));
-          })
-        );
+        if (!expensiveLegendrePow) {
+          fc.assert(
+            fc.property(FC_BIGINT, (num) => {
+              const n = create(num);
+              const leg = BigInt(mod.FpLegendre(Fp, n));
+              eql(Fp.mul(Fp.ONE, leg), Fp.pow(n, (Fp.ORDER - 1n) / 2n), l('legendre correctness'));
+            })
+          );
+        }
         fc.assert(
           fc.property(FC_BIGINT, FC_BIGINT, (num1, num2) => {
             const a = create(num1);
@@ -354,31 +357,46 @@ for (const c in FIELDS) {
               }
             })
           );
-        } else {
+        } else if (!expensiveLegendrePow) {
           fc.assert(
             fc.property(FC_BIGINT, (num) => {
               const a = create(num);
-              throws(() => mod.FpSqrt(Fp.ORDER)(Fp, n));
+              throws(() => mod.FpSqrt(Fp.ORDER)(Fp, a));
             })
           );
+        } else {
+          throws(() => Fp.sqrt(Fp.ZERO));
         }
         eql(mod.FpLegendre(Fp, Fp.ZERO), 0, l('legendre(0) == 0'));
         eql(mod.FpIsSquare(Fp, Fp.ZERO), true, l('isSquare(0) == true'));
       });
 
       should('pow properties', () => {
+        // Exponents are plain bigints for every field (incl. extension fields, where FC_BIGINT
+        // generates coordinate tuples). Range crosses the 64-bit windowed-pow threshold.
+        const FC_EXP = fc.bigInt(0n, 1n << 320n);
         fc.assert(
-          fc.property(FC_BIGINT, FC_BIGINT, FC_BIGINT, (num1, num2, num3) => {
+          fc.property(FC_BIGINT, FC_BIGINT, FC_EXP, (num1, num2, e) => {
             const a = create(num1);
             const b = create(num2);
-            const c = create(num3);
             eql(
-              Fp.pow(Fp.mul(a, b), c),
-              Fp.mul(Fp.pow(a, c), Fp.pow(b, c)),
+              Fp.pow(Fp.mul(a, b), e),
+              Fp.mul(Fp.pow(a, e), Fp.pow(b, e)),
               l('pow(x*y, e) == pow(x,e)*pow(y,e)')
             );
           })
         );
+        fc.assert(
+          fc.property(FC_BIGINT, FC_EXP, FC_EXP, (num, e1, e2) => {
+            const x = create(num);
+            eql(
+              Fp.mul(Fp.pow(x, e1), Fp.pow(x, e2)),
+              Fp.pow(x, e1 + e2),
+              l('pow(x,e1)*pow(x,e2) == pow(x,e1+e2)')
+            );
+          })
+        );
+        throws(() => Fp.pow(Fp.ONE, 1 as any), l('pow rejects non-bigint exponent'));
         fc.assert(
           fc.property(FC_BIGINT, (num) => {
             const x = create(num);
@@ -487,6 +505,269 @@ describe('sqrt cases', () => {
         21888242871839275222246405745257275088614511777268538073601725287587578984328n
       )
     );
+  });
+
+  should('sqrt/legendre match brute force exhaustively on small primes', () => {
+    // Primes covering all four sqrt dispatch classes (3 mod 4, 5 mod 8, 9 mod 16, generic
+    // Tonelli-Shanks), incl. deeper 2-adicity: 257 (S=8), 7681 (S=9). Ground truth is the
+    // brute-force set of quadratic residues.
+    // prettier-ignore
+    const smalls = [3n, 5n, 7n, 11n, 13n, 17n, 19n, 23n, 29n, 31n, 37n, 41n, 73n, 89n, 97n,
+      113n, 193n, 233n, 241n, 257n, 337n, 353n, 1039n, 7681n];
+    for (const P of smalls) {
+      const F = Field(P);
+      const qrs = new Set<bigint>();
+      for (let x = 0n; x < P; x++) qrs.add((x * x) % P);
+      for (let n = 0n; n < P; n++) {
+        const expected = n === 0n ? 0 : qrs.has(n) ? 1 : -1;
+        eql(mod.FpLegendre(F, n), expected, `FpLegendre(${n}, ${P})`);
+        eql(mod.FpIsSquare(F, n), expected >= 0, `FpIsSquare(${n}, ${P})`);
+        if (expected >= 0) {
+          const r = F.sqrt(n);
+          eql(mod.mod(r * r, P), n, `sqrt(${n}) mod ${P} -> ${r} is a root`);
+        } else {
+          throws(() => F.sqrt(n), `sqrt(${n}) mod ${P} non-residue`);
+        }
+      }
+    }
+  });
+
+  should('sqrt on a high 2-adicity prime (stark, S=192)', () => {
+    const stark = (1n << 251n) + 17n * (1n << 192n) + 1n; // ≡ 1 mod 16, S=192
+    const F = Field(stark);
+    const { rndBelow } = makeRng(0x57a4cn);
+    for (let i = 0; i < 6; i++) {
+      const x = rndBelow(stark);
+      const n = (x * x) % stark;
+      const r = F.sqrt(n);
+      eql(mod.mod(r * r, stark), n, `sqrt(x^2), x=${x}`);
+    }
+    let z = 2n;
+    while (mod.FpLegendre(F, z) !== -1) z++;
+    throws(() => F.sqrt(z), 'sqrt(non-residue) must throw');
+    eql(F.sqrt(0n), 0n);
+    const r1 = F.sqrt(1n);
+    eql(r1 === 1n || r1 === stark - 1n, true, 'sqrt(1) is ±1');
+  });
+
+  should(
+    'sqrt constructors reject even and composite moduli; composites never return non-roots',
+    () => {
+      throws(() => mod.FpSqrt(16n), 'even modulus');
+      throws(() => mod.tonelliShanks(2n));
+      throws(() => mod.tonelliShanks(25n), 'composite 25: invalid legendre in Z-search');
+      throws(() => mod.FpLegendre(Field(15n), 2n), 'composite legendre yields invalid symbol');
+      // 15 ≡ 3 mod 4 dispatches to sqrt3mod4, which cannot detect compositeness upfront:
+      // it must still never return a value that is not an actual root (self-check).
+      const F15 = Field(15n);
+      for (let n = 0n; n < 15n; n++) {
+        let r: bigint | undefined;
+        try {
+          r = F15.sqrt(n);
+        } catch {
+          continue; // throwing is always allowed for composite moduli
+        }
+        eql(mod.mod(r * r, 15n), n, `F15.sqrt(${n}) returned non-root ${r}`);
+      }
+    }
+  );
+});
+
+// Deterministic xorshift64 PRNG: reproducible complement to fast-check for the reference
+// fuzz tests below, which need inputs of many exact bit lengths.
+function makeRng(initialSeed: bigint) {
+  let seed = initialSeed;
+  const mask64 = (1n << 64n) - 1n;
+  const rnd64 = () => {
+    seed = (seed ^ (seed << 13n)) & mask64;
+    seed ^= seed >> 7n;
+    seed = (seed ^ (seed << 17n)) & mask64;
+    return seed;
+  };
+  const rndBig = (bits: number) => {
+    let r = 0n;
+    for (let i = 0; i < bits; i += 64) r = (r << 64n) | rnd64();
+    return r & ((1n << BigInt(bits)) - 1n);
+  };
+  const rndBelow = (n: bigint) => {
+    const bits = n.toString(2).length;
+    while (true) {
+      const r = rndBig(bits);
+      if (r < n) return r;
+    }
+  };
+  return { rndBig, rndBelow };
+}
+
+// Reference LSB-first square-and-multiply, independent of the library implementation.
+function refModPow(base: bigint, exp: bigint, m: bigint): bigint {
+  let b = ((base % m) + m) % m;
+  let r = 1n;
+  while (exp > 0n) {
+    if (exp & 1n) r = (r * b) % m;
+    b = (b * b) % m;
+    exp >>= 1n;
+  }
+  return r;
+}
+
+function gcd(a: bigint, b: bigint): bigint {
+  while (b) [a, b] = [b, a % b];
+  return a < 0n ? -a : a;
+}
+
+describe('invert / pow', () => {
+  const P_SECP = secp256k1.Point.Fp.ORDER;
+  const N_SECP = secp256k1.Point.Fn.ORDER;
+
+  should('invertCt matches invert over prime moduli', () => {
+    const P_ED = ed25519.Point.Fp.ORDER;
+    const N_P256 = secp256r1.Point.Fn.ORDER;
+    for (const p of [3n, 5n, 7n, 11n, 233n, 1039n, 65537n, P_SECP, N_SECP, P_ED, N_P256]) {
+      fc.assert(
+        fc.property(fc.bigInt(1n, p - 1n), (a) => {
+          eql(mod.invertCt(a, p), mod.invert(a, p), `p=${p}`);
+        }),
+        { numRuns: 32 }
+      );
+      // unreduced and boundary inputs are reduced first, like invert
+      eql(mod.invertCt(p + 1n, p), 1n, `invertCt(p+1) p=${p}`);
+      eql(mod.invertCt(-1n, p), p - 1n, `invertCt(-1) p=${p}`);
+      eql(mod.invertCt(p - 1n, p), p - 1n, `invertCt(p-1) p=${p}`);
+    }
+    // negative inputs are reduced first, like invert
+    eql(mod.invertCt(-5n, 7n), mod.invert(-5n, 7n));
+    eql(mod.invertCt(1n, 2n), 1n);
+  });
+
+  should('invertCt rejects zero, degenerate moduli, and wrong composite results', () => {
+    throws(() => mod.invertCt(0n, 7n));
+    throws(() => mod.invertCt(7n, 7n)); // reduces to zero
+    throws(() => mod.invertCt(3n, 1n));
+    throws(() => mod.invertCt(3n, 0n));
+    throws(() => mod.invertCt(3n, -7n));
+    // Composite moduli: a^(m-2) is generally not the inverse; the self-check must fail closed.
+    throws(() => mod.invertCt(3n, 15n));
+    throws(() => mod.invertCt(2n, 4n));
+    // ...unless a^(m-2) happens to be a true inverse (4*4 == 16 == 1 mod 15): the self-check
+    // verifies real inverses, it is not a primality test.
+    eql(mod.invertCt(4n, 15n), 4n);
+  });
+
+  should('pow matches reference square-and-multiply across the windowed threshold', () => {
+    // Independent reference: plain LSB-first binary ladder (the pre-windowed implementation).
+    const powRef = (num: bigint, power: bigint, modulo: bigint) => {
+      let p = 1n;
+      let d = ((num % modulo) + modulo) % modulo;
+      while (power > 0n) {
+        if (power & 1n) p = (p * d) % modulo;
+        d = (d * d) % modulo;
+        power >>= 1n;
+      }
+      return p;
+    };
+    const B64 = 1n << 64n;
+    // Deterministic boundary cases around the small-exponent/windowed switch.
+    for (const e of [2n, 15n, 16n, 17n, B64 - 1n, B64, B64 + 1n, (1n << 65n) - 1n]) {
+      eql(mod.pow(0xdeadbeefn, e, P_SECP), powRef(0xdeadbeefn, e, P_SECP), `e=${e}`);
+    }
+    fc.assert(
+      fc.property(fc.bigInt(0n, 1n << 320n), fc.bigInt(2n, 1n << 320n), (num, e) => {
+        eql(mod.pow(num, e, P_SECP), powRef(num, e, P_SECP));
+        eql(mod.pow(num, e, 2n), powRef(num, e, 2n), 'tiny modulus');
+      }),
+      { numRuns: 64 }
+    );
+    // pow(x, 1, m) keeps its documented unreduced fast path.
+    eql(mod.pow(20n, 1n, 11n), 20n);
+  });
+
+  should('pow/FpPow/pow2 reject non-bigint exponents and degenerate moduli', () => {
+    throws(() => mod.pow(3n, 5 as any, 11n), /expected bigint/);
+    throws(() => mod.pow(3n, undefined as any, 11n), /expected bigint/);
+    throws(() => mod.FpPow(Field(11n), 3n, 5 as any), /expected bigint/);
+    throws(() => mod.FpPow(Field(11n), 3n, {} as any), /expected bigint/);
+    throws(() => mod.pow(2n, -1n, 5n), 'pow negative exponent');
+    throws(() => mod.FpPow(Field(11n), 2n, -1n), 'FpPow negative exponent');
+    throws(() => mod.pow(2n, 5n, -7n), 'pow negative modulus');
+    throws(() => mod.pow2(3n, 2n, 0n));
+    throws(() => mod.pow2(3n, 2n, 1n));
+    throws(() => mod.pow2(3n, 2n, -5n));
+  });
+
+  should('pow matches reference over random moduli, signs, and exponent shapes', () => {
+    const { rndBig, rndBelow } = makeRng(0x12345678n);
+    const B64 = 1n << 64n;
+    for (let i = 0; i < 1500; i++) {
+      const mbits = 2 + (i % 260);
+      let m = rndBig(mbits) | 1n; // mostly odd
+      if (i % 5 === 0) m = rndBig(mbits); // any modulus, incl. even
+      if (m <= 1n) m = 2n;
+      let num = rndBig(mbits + 12); // often unreduced
+      if (i % 7 === 0) num = -num; // negative base
+      if (i % 11 === 0) num = 0n;
+      // Exponent shapes: fast paths (0, 1), the square-and-multiply/windowed threshold at
+      // 64 bits, wide windowed exponents, and single-top-digit exponents (all-zero windows).
+      const exps = [
+        0n,
+        1n,
+        2n,
+        rndBig(40),
+        B64 - 1n,
+        B64,
+        B64 + 1n,
+        rndBig(70 + (i % 200)),
+        1n << BigInt(64 + (i % 200)),
+      ];
+      const p = exps[i % exps.length];
+      const got = mod.pow(num, p, m);
+      // pow documents unreduced fast paths for power 0 and 1
+      const want = p === 0n ? 1n : p === 1n ? num : refModPow(num, p, m);
+      eql(got, want, `pow(${num}, ${p}, ${m})`);
+    }
+    // structured exponents: many zero digits and all-F digits
+    const m = (1n << 255n) - 19n;
+    for (const p of [1n << 256n, (1n << 256n) - 1n, 0xf0f0f0f0f0f0f0f0f0n, (0xfn << 252n) | 0xfn]) {
+      const num = rndBelow(m);
+      eql(mod.pow(num, p, m), refModPow(num, p, m), `structured exp 0x${p.toString(16)}`);
+    }
+  });
+
+  should('pow2 matches pow(x, 2^k) and keeps the power=0 unreduced identity', () => {
+    const { rndBig, rndBelow } = makeRng(0x777n);
+    for (let i = 0; i < 300; i++) {
+      const m = rndBig(80) + 2n;
+      const x = rndBelow(m);
+      const k = BigInt(i % 11);
+      const got = mod.pow2(x, k, m);
+      // power=0 returns the input unchanged (documented low-level fast path)
+      eql(got, k === 0n ? x : refModPow(x, 1n << k, m), `pow2(${x}, ${k}, ${m})`);
+    }
+    eql(mod.pow2(12345n, 0n, 7n), 12345n);
+  });
+
+  should('invert returns canonical inverses and rejects non-coprime/degenerate inputs', () => {
+    const { rndBig } = makeRng(0xbeefn);
+    for (let i = 0; i < 1000; i++) {
+      const mbits = 3 + (i % 260);
+      const m = rndBig(mbits) + 3n;
+      let a = rndBig(mbits + 8) - rndBig(mbits + 4); // mixed signs, often unreduced
+      if (mod.mod(a, m) === 0n) a += 1n;
+      if (mod.mod(a, m) === 0n) continue;
+      if (gcd(mod.mod(a, m), m) === 1n) {
+        const inv = mod.invert(a, m);
+        eql(0n <= inv && inv < m, true, `invert(${a}, ${m}) canonical`);
+        eql(mod.mod(a * inv, m), 1n, `invert(${a}, ${m}) is an inverse`);
+      } else {
+        throws(() => mod.invert(a, m), `invert non-coprime (${a}, ${m})`);
+      }
+    }
+    throws(() => mod.invert(0n, 7n));
+    throws(() => mod.invert(5n, 0n));
+    throws(() => mod.invert(5n, -7n));
+    eql(mod.invert(1n, 7n), 1n);
+    eql(mod.invert(6n, 7n), 6n, 'invert(m-1) == m-1');
+    eql(mod.invert(-1n, 7n), 6n);
   });
 });
 
@@ -961,6 +1242,44 @@ describe('field helpers', () => {
       { fieldOrder: 257n, isLE: false, hex: '0002', expected: '0002' },
       { fieldOrder: 257n, isLE: true, hex: '0200', expected: '0200' },
     ]);
+  });
+
+  should('FpInvertBatch handles zeros in both modes, empty and all-zero arrays', () => {
+    const P = (1n << 255n) - 19n;
+    const F = Field(P);
+    const { rndBelow } = makeRng(0xba7c4n);
+    for (let trial = 0; trial < 60; trial++) {
+      const len = trial % 12;
+      const nums: bigint[] = [];
+      for (let i = 0; i < len; i++) nums.push(trial % 3 === 0 && i % 2 === 0 ? 0n : rndBelow(P));
+      const inv1 = mod.FpInvertBatch(F, nums);
+      const inv2 = mod.FpInvertBatch(F, nums, true);
+      for (let i = 0; i < len; i++) {
+        if (nums[i] === 0n) {
+          eql(inv1[i], undefined, `default zero -> undefined @${i}`);
+          eql(inv2[i], 0n, `passZero zero -> 0 @${i}`);
+        } else {
+          eql(inv1[i], mod.invert(nums[i], P), `batch matches invert @${i}`);
+          eql(inv2[i], inv1[i], `passZero same for nonzero @${i}`);
+        }
+      }
+    }
+    eql(mod.FpInvertBatch(F, []), [], 'empty batch');
+    eql(mod.FpInvertBatch(F, [0n, 0n], true), [0n, 0n], 'all-zero passZero batch');
+  });
+
+  should('FpDiv reduces oversized bigint divisors and rejects zero', () => {
+    const P = (1n << 255n) - 19n;
+    const F = Field(P);
+    const { rndBelow } = makeRng(0xd117n);
+    for (let i = 0; i < 30; i++) {
+      const a = rndBelow(P);
+      const b = rndBelow(P - 1n) + 1n;
+      const want = mod.mod(a * mod.invert(b, P), P);
+      eql(mod.FpDiv(F, a, b), want, 'field-range rhs');
+      eql(mod.FpDiv(F, a, b + P), want, 'oversized bigint rhs is reduced');
+    }
+    throws(() => mod.FpDiv(F, 3n, 0n), 'division by zero');
   });
 
   should('nLength rejects cached bit lengths smaller than len(n)', () => {

@@ -95,11 +95,10 @@ import {
   type TRet,
 } from './utils.ts';
 // Types
-import { isogenyMap } from './abstract/hash-to-curve.ts';
+import { isogenyMap, mapToCurveSimpleSWU } from './abstract/hash-to-curve.ts';
 import type { BigintTuple, Fp, Fp12, Fp2, Fp6 } from './abstract/tower.ts';
 import { psiFrobenius, tower12 } from './abstract/tower.ts';
 import {
-  mapToCurveSimpleSWU,
   weierstrass,
   type AffinePoint,
   type WeierstrassOpts,
@@ -159,6 +158,91 @@ const bls12_381_CURVE_G1: WeierstrassOpts<bigint> = {
 export const bls12_381_Fr: TRet<IField<bigint>> = Field(bls12_381_CURVE_G1.n, {
   modFromBytes: true,
 }) as TRet<IField<bigint>>;
+
+type Fp12Compressed = { g2: Fp2; g3: Fp2; g4: Fp2; g5: Fp2 };
+
+// Karabina's G2345 compression for the cyclotomic subgroup. Noble stores Fp12 as
+// (c0 + c1*w), so (g0, g1, g2, g3, g4, g5) map to (c0.c0, c1.c1, c1.c0, c0.c2, c0.c1, c1.c2).
+function bls12FromCompressed(g0: Fp2, g1: Fp2, { g2, g3, g4, g5 }: Fp12Compressed): Fp12 {
+  return { c0: { c0: g0, c1: g4, c2: g3 }, c1: { c0: g2, c1: g1, c2: g5 } };
+}
+
+function bls12Compress({ c0, c1 }: Fp12): Fp12Compressed {
+  return { g2: c1.c0, g3: c0.c2, g4: c0.c1, g5: c1.c2 };
+}
+
+function bls12CyclotomicSquareCompressed({ g2, g3, g4, g5 }: Fp12Compressed): Fp12Compressed {
+  const { first: h23c0, second: h23c1 } = Fp2.Fp4Square(g4, g5);
+  const { first: h45c0, second: h45c1 } = Fp2.Fp4Square(g2, g3);
+  const d2 = Fp2.add(g2, g2);
+  const d3 = Fp2.add(g3, g3);
+  const d4 = Fp2.add(g4, g4);
+  const d5 = Fp2.add(g5, g5);
+  return {
+    g2: Fp2.add(Fp2.mul(Fp2.mulByNonresidue(h23c1), _3n), d2),
+    g3: Fp2.sub(Fp2.mul(h23c0, _3n), d3),
+    g4: Fp2.sub(Fp2.mul(h45c0, _3n), d4),
+    g5: Fp2.add(Fp2.mul(h45c1, _3n), d5),
+  };
+}
+
+function bls12RecoverG1Ratio({ g2, g3, g4, g5 }: Fp12Compressed): { num: Fp2; den: Fp2 } {
+  if (Fp2.is0(g2)) return { num: Fp2.mul(Fp2.mul(g4, g5), _2n), den: g3 };
+  return {
+    num: Fp2.add(
+      Fp2.sub(Fp2.mul(Fp2.sqr(g4), _3n), Fp2.mul(g3, _2n)),
+      Fp2.mulByNonresidue(Fp2.sqr(g5))
+    ),
+    den: Fp2.mul(g2, _4n),
+  };
+}
+
+function bls12RecoverG0(g1: Fp2, { g2, g3, g4, g5 }: Fp12Compressed): Fp2 {
+  const g3g4 = Fp2.mul(g3, g4);
+  const t = Fp2.add(Fp2.sub(Fp2.mul(Fp2.sub(Fp2.sqr(g1), g3g4), _2n), g3g4), Fp2.mul(g2, g5));
+  return Fp2.add(Fp2.mulByNonresidue(t), Fp2.ONE);
+}
+
+function bls12CyclotomicExpCompressed(
+  num: Fp12,
+  squarings: readonly [number, number, number]
+): { result: Fp12; last: Fp12 } {
+  const gs: Fp12Compressed[] = [];
+  let g = bls12Compress(num);
+  for (const count of squarings) {
+    for (let i = 0; i < count; i++) g = bls12CyclotomicSquareCompressed(g);
+    gs.push(g);
+  }
+  // Karabina decompression is undefined at g2 = g3 = 0. Every element decompressed here lies in
+  // the cyclotomic subgroup GΦ₁₂, where the only such element is the identity: unitarity
+  // (z⋅z^(p⁶) = 1) forces g4² = ξ⋅g5², so g4 = g5 = 0 because ξ is a non-square in Fp2, leaving
+  // z ∈ Fp4* ∩ GΦ₁₂ — trivial since gcd(p⁴−p²+1, p⁴−1) = gcd(3, p²−2) = 1 for p ≡ 1 mod 3.
+  // Handle the identity explicitly instead of relying on invertBatch's passZero mapping the zero
+  // denominator to 0 (which happens to reconstruct ONE, but only by coincidence of formulas).
+  const isOne = gs.map(({ g2, g3 }) => Fp2.is0(g2) && Fp2.is0(g3));
+  const ratios = gs.map(bls12RecoverG1Ratio);
+  const invDens = Fp2.invertBatch(ratios.map(({ den }) => den));
+  const elems = gs.map((compressed, i) => {
+    if (isOne[i]) return Fp12.ONE;
+    const g1 = Fp2.mul(ratios[i].num, invDens[i]);
+    return bls12FromCompressed(bls12RecoverG0(g1, compressed), g1, compressed);
+  });
+  return { result: Fp12.mul(Fp12.mul(elems[0], elems[1]), elems[2]), last: elems[2] };
+}
+
+function bls12CyclotomicExpX(num: Fp12): Fp12 {
+  // BLS_X = 2^63 + 2^62 + 2^60 + 2^57 + 2^48 + 2^16.
+  const { result, last } = bls12CyclotomicExpCompressed(num, [16, 32, 9]);
+  let r = result;
+  let s = last;
+  for (let i = 0; i < 3; i++) s = Fp12._cyclotomicSquare(s);
+  r = Fp12.mul(r, s);
+  for (let i = 0; i < 2; i++) s = Fp12._cyclotomicSquare(s);
+  r = Fp12.mul(r, s);
+  s = Fp12._cyclotomicSquare(s);
+  return Fp12.mul(r, s);
+}
+
 const { Fp, Fp2, Fp6, Fp12 } = tower12({
   ORDER: bls12_381_CURVE_G1.p,
   X_LEN: BLS_X_LEN,
@@ -174,17 +258,17 @@ const { Fp, Fp2, Fp6, Fp12 } = tower12({
     return { c0: Fp.sub(t0, t1), c1: Fp.add(t0, t1) };
   },
   Fp12finalExponentiate: (num: Fp12) => {
-    const x = BLS_X;
+    const powMinusX = (num: Fp12) => Fp12.conjugate(bls12CyclotomicExpX(num));
     // this^(q⁶) / this
     const t0 = Fp12.div(Fp12.frobeniusMap(num, 6), num);
     // t0^(q²) * t0
     const t1 = Fp12.mul(Fp12.frobeniusMap(t0, 2), t0);
-    const t2 = Fp12.conjugate(Fp12._cyclotomicExp(t1, x));
+    const t2 = powMinusX(t1);
     const t3 = Fp12.mul(Fp12.conjugate(Fp12._cyclotomicSquare(t1)), t2);
-    const t4 = Fp12.conjugate(Fp12._cyclotomicExp(t3, x));
-    const t5 = Fp12.conjugate(Fp12._cyclotomicExp(t4, x));
-    const t6 = Fp12.mul(Fp12.conjugate(Fp12._cyclotomicExp(t5, x)), Fp12._cyclotomicSquare(t2));
-    const t7 = Fp12.conjugate(Fp12._cyclotomicExp(t6, x));
+    const t4 = powMinusX(t3);
+    const t5 = powMinusX(t4);
+    const t6 = Fp12.mul(powMinusX(t5), Fp12._cyclotomicSquare(t2));
+    const t7 = powMinusX(t6);
     const t2_t5_pow_q2 = Fp12.frobeniusMap(Fp12.mul(t2, t5), 2);
     const t4_t1_pow_q3 = Fp12.frobeniusMap(Fp12.mul(t4, t1), 3);
     const t6_t1c_pow_q1 = Fp12.frobeniusMap(Fp12.mul(t6, Fp12.conjugate(t1)), 1);

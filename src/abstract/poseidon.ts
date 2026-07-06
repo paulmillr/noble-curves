@@ -167,7 +167,9 @@ export function grainGenConstants(
         throw new Error(`Error generating MDS matrix: xs[${i}] + ys[${j}] resulted in zero.`);
       row.push(xy);
     }
-    mds.push(FpInvertBatch(Fp, row));
+    // `row` is guaranteed non-zero (the loop throws on a zero entry above), so `passZero` only
+    // pins the `bigint[]` return type; it does not change any value here.
+    mds.push(FpInvertBatch(Fp, row, true));
   }
 
   return { roundConstants, mds };
@@ -346,12 +348,17 @@ export function poseidon(opts: TArg<PoseidonOpts>): PoseidonFn {
   const halfRoundsFull = _opts.roundsFull / 2;
   const partialIdx = _opts.reversePartialPowIdx ? t - 1 : 0;
   const poseidonRound = (values: bigint[], isFull: boolean, idx: number) => {
-    values = values.map((i, j) => Fp.add(i, roundConstants[idx][j]));
-
-    if (isFull) values = values.map((i) => sboxFn(i));
-    else values[partialIdx] = sboxFn(values[partialIdx]);
-    // Matrix multiplication
-    values = mds.map((i) => i.reduce((acc, i, j) => Fp.add(acc, Fp.mulN(i, values[j])), Fp.ZERO));
+    const rc = roundConstants[idx];
+    if (isFull) values = values.map((i, j) => sboxFn(Fp.add(i, rc[j])));
+    else {
+      values = values.map((i, j) => Fp.add(i, rc[j]));
+      values[partialIdx] = sboxFn(values[partialIdx]);
+    }
+    // Matrix multiplication. Row entries and values are reduced (< p), so each product is < p²
+    // and a row sum is < t⋅p²: accumulate without mod, reduce once per row instead of per cell.
+    values = mds.map((row) =>
+      Fp.create(row.reduce((acc, m, j) => Fp.addN(acc, Fp.mulN(m, values[j])), Fp.ZERO))
+    );
     return values;
   };
   const poseidonHash = function poseidonHash(values: bigint[]) {

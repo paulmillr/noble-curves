@@ -3,7 +3,8 @@ import { describe, should } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql } from 'node:assert';
 import { randomBytes } from 'node:crypto';
 import { sha256 } from '@noble/hashes/sha2.js';
-import { DER, ecdh, ecdsa } from '../src/abstract/weierstrass.ts';
+import { DER } from '../src/abstract/der.ts';
+import { ecdh, ecdsa } from '../src/abstract/weierstrass.ts';
 import { bls12_381 } from '../src/bls12-381.ts';
 import { bn254 } from '../src/bn254.ts';
 import {

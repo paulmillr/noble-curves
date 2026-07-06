@@ -14,7 +14,7 @@ import {
   isogenyMap,
 } from '../src/abstract/hash-to-curve.ts';
 import { Field } from '../src/abstract/modular.ts';
-import { mapToCurveSimpleSWU, SWUFpSqrtRatio } from '../src/abstract/weierstrass.ts';
+import { mapToCurveSimpleSWU, SWUFpSqrtRatio } from '../src/abstract/hash-to-curve.ts';
 import { bls12_381 } from '../src/bls12-381.ts';
 import { ed25519_hasher, ristretto255_hasher } from '../src/ed25519.ts';
 import { decaf448_hasher, ed448_hasher } from '../src/ed448.ts';
@@ -205,6 +205,24 @@ describe('RFC9380 hash-to-curve', () => {
     const expected = nist.p256_hasher.hashToScalar(pinMsg, { DST: 'DST' });
     const actual = nist.p256_hasher.hashToScalar(pinMsg, { DST: 'DST', p: 1n, m: 2 } as never);
     eql(actual, expected, 'scalar field pins');
+
+    // Per-call options are H2CDSTOpts: off-type extra keys must not replace suite parameters.
+    const offType = { DST: 'DST', p: 17n, m: 2, k: 0, hash: sha512, expand: 'xof' } as never;
+    eql(
+      nist.p256_hasher.hashToCurve(pinMsg, offType).toHex(),
+      nist.p256_hasher.hashToCurve(pinMsg, { DST: 'DST' }).toHex(),
+      'hashToCurve ignores off-type suite overrides'
+    );
+    eql(
+      nist.p256_hasher.encodeToCurve(pinMsg, offType).toHex(),
+      nist.p256_hasher.encodeToCurve(pinMsg, { DST: 'DST' }).toHex(),
+      'encodeToCurve ignores off-type suite overrides'
+    );
+    eql(
+      nist.p256_hasher.hashToScalar(pinMsg, offType),
+      expected,
+      'hashToScalar ignores off-type suite overrides'
+    );
   });
 
   describe('expand_message_xmd', () => {

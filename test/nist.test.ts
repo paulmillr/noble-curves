@@ -2,7 +2,8 @@ import { sha224, sha256, sha384, sha512 } from '@noble/hashes/sha2.js';
 import { sha3_224, sha3_256, sha3_384, sha3_512, shake128, shake256 } from '@noble/hashes/sha3.js';
 import { describe, should } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql, throws } from 'node:assert';
-import { DER, ecdsa } from '../src/abstract/weierstrass.ts';
+import { DER } from '../src/abstract/der.ts';
+import { ecdsa } from '../src/abstract/weierstrass.ts';
 import { brainpoolP256r1, brainpoolP384r1, brainpoolP512r1 } from '../src/misc.ts';
 import { p256, p384, p521 } from '../src/nist.ts';
 import { secp256k1 } from '../src/secp256k1.ts';
@@ -440,6 +441,8 @@ should('properly add leading zero to DER', () => {
   throws(() => DER._tlv.encode(256, ''));
   throws(() => DER._tlv.encode(1.5 as any, ''));
   throws(() => DER._tlv.encode(0x02, null as any), /string|type=object/i);
+  throws(() => DER._tlv.decode(256, new Uint8Array([0x02, 0x00])), /tlv\.decode: wrong tag/);
+  throws(() => DER._tlv.decode(0x03, new Uint8Array([0x02, 0x00])), /wrong tlv/);
   throws(
     () => DER._tlv.decode(0x02, { length: 2, 0: 0x02, 1: 0x00 } as any),
     /Uint8Array|DER data/i

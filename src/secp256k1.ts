@@ -16,13 +16,17 @@ import {
   type FrostSecret,
   type Nonces,
 } from './abstract/frost.ts';
-import { createHasher, type H2CHasher, isogenyMap } from './abstract/hash-to-curve.ts';
+import {
+  createHasher,
+  type H2CHasher,
+  isogenyMap,
+  mapToCurveSimpleSWU,
+} from './abstract/hash-to-curve.ts';
 import { Field, mapHashToField, pow2 } from './abstract/modular.ts';
 import {
   type ECDSA,
   ecdsa,
   type EndomorphismOpts,
-  mapToCurveSimpleSWU,
   type WeierstrassPoint as PointType,
   weierstrass,
   type WeierstrassOpts,
@@ -89,7 +93,7 @@ function sqrtMod(y: bigint): bigint {
   return root;
 }
 
-const Fpk1 = Field(secp256k1_CURVE.p, { sqrt: sqrtMod });
+const Fpk1 = /* @__PURE__ */ Field(secp256k1_CURVE.p, { sqrt: sqrtMod });
 const Pointk1 = /* @__PURE__ */ weierstrass(secp256k1_CURVE, {
   Fp: Fpk1,
   endo: secp256k1_ENDO,
@@ -119,7 +123,7 @@ export const secp256k1: ECDSA = /* @__PURE__ */ ecdsa(Pointk1, sha256);
 // Schnorr signatures are superior to ECDSA from above. Below is Schnorr-specific BIP0340 code.
 // https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki
 /** An object mapping tags to their tagged hash prefix of [SHA256(tag) | SHA256(tag)] */
-const TAGGED_HASH_PREFIXES: { [tag: string]: Uint8Array } = {};
+const TAGGED_HASH_PREFIXES: { [tag: string]: Uint8Array } = Object.create(null);
 // BIP-340 phrases tags as UTF-8, but all current standardized names here are 7-bit ASCII.
 function taggedHash(tag: string, ...messages: TArg<Uint8Array[]>): TRet<Uint8Array> {
   let tagP = TAGGED_HASH_PREFIXES[tag];
@@ -134,15 +138,18 @@ function taggedHash(tag: string, ...messages: TArg<Uint8Array[]>): TRet<Uint8Arr
 // ECDSA compact points are 33-byte. Schnorr is 32: we strip first byte 0x02 or 0x03
 const pointToBytes = (point: TArg<PointType<bigint>>): TRet<Uint8Array> =>
   point.toBytes(true).slice(1) as TRet<Uint8Array>;
-const hasEven = (y: bigint) => y % _2n === _0n;
+const affineXToBytes = ({ x }: { x: bigint }): TRet<Uint8Array> =>
+  Fpk1.toBytes(x) as TRet<Uint8Array>;
+const hasEven = (y: bigint) => !Fpk1.isOdd(y);
 
 // Calculate point, scalar and bytes
 function schnorrGetExtPubKey(priv: TArg<Uint8Array>) {
   const { Fn, BASE } = Pointk1;
   const d_ = Fn.fromBytes(abytes(priv, 32, 'secretKey'));
   const p = BASE.multiply(d_); // P = d'⋅G; 0 < d' < n check is done inside
-  const scalar = hasEven(p.y) ? d_ : Fn.neg(d_);
-  return { scalar, bytes: pointToBytes(p) };
+  const affine = p.toAffine();
+  const scalar = hasEven(affine.y) ? d_ : Fn.neg(d_);
+  return { scalar, bytes: affineXToBytes(affine) };
 }
 /**
  * lift_x from BIP340. Convert 32-byte x coordinate to elliptic curve point.
@@ -151,8 +158,8 @@ function schnorrGetExtPubKey(priv: TArg<Uint8Array>) {
 function lift_x(x: bigint): PointType<bigint> {
   const Fp = Fpk1;
   if (!Fp.isValidNot0(x)) throw new Error('invalid x: Fail if x ≥ p');
-  const xx = Fp.create(x * x);
-  const c = Fp.create(xx * x + BigInt(7)); // Let c = x³ + 7 mod p.
+  const xx = Fp.sqr(x);
+  const c = Fp.add(Fp.mulN(xx, x), BigInt(7)); // Let c = x³ + 7 mod p.
   let y = Fp.sqrt(c); // Let y = c^(p+1)/4 mod p. Same as sqrt().
   // Return the unique point P such that x(P) = x and
   // y(P) = y if y mod 2 = 0 or y(P) = p-y otherwise.
@@ -199,8 +206,9 @@ function schnorrSign(
   // BIP-340: "Let k' = int(rand) mod n. Fail if k' = 0. Let R = k'⋅G."
   if (k_ === _0n) throw new Error('sign failed: k is zero');
   const p = BASE.multiply(k_); // Rejects zero; only the raw nonce hash needs reduction.
-  const k = hasEven(p.y) ? k_ : Fn.neg(k_);
-  const rx = pointToBytes(p);
+  const affine = p.toAffine();
+  const k = hasEven(affine.y) ? k_ : Fn.neg(k_);
+  const rx = affineXToBytes(affine);
   const e = challenge(rx, px, m); // Let e = int(hash/challenge(bytes(R) || bytes(P) || m)) mod n.
   const sig = new Uint8Array(64); // Let sig = bytes(R) || bytes((k + ed) mod n).
   sig.set(rx, 0);
@@ -225,7 +233,8 @@ function schnorrVerify(
   const pub = abytes(publicKey, 32, 'publicKey');
   try {
     const P = lift_x(num(pub)); // P = lift_x(int(pk)); fail if that fails
-    const r = num(sig.subarray(0, 32)); // Let r = int(sig[0:32]); fail if r ≥ p.
+    const rBytes = sig.subarray(0, 32);
+    const r = num(rBytes); // Let r = int(sig[0:32]); fail if r ≥ p.
     if (!Fp.isValidNot0(r)) return false;
     const s = num(sig.subarray(32, 64)); // Let s = int(sig[32:64]); fail if s ≥ n.
     // Stricter than BIP-340/libsecp256k1, which only reject s >= n. Honest signing reaches
@@ -234,19 +243,23 @@ function schnorrVerify(
     if (!Fn.isValidNot0(s)) return false;
 
     // int(challenge(bytes(r) || bytes(P) || m)) % n
-    const e = challenge(Fn.toBytes(r), pointToBytes(P), m);
+    const e = challenge(rBytes, pointToBytes(P), m);
     // R = s⋅G - e⋅P, where -eP == (n-e)P
-    const R = BASE.multiplyUnsafe(s).add(P.multiplyUnsafe(Fn.neg(e)));
+    const R = BASE.mulAddUnsafe(s, P, Fn.neg(e)); // s⋅G + (-e)⋅P, joint Strauss–Shamir
     const { x, y } = R.toAffine();
     // Fail if is_infinite(R) / not has_even_y(R) / x(R) ≠ r.
-    if (R.is0() || !hasEven(y) || x !== r) return false;
+    if (R.is0() || !hasEven(y) || !Fp.eql(x, r)) return false;
     return true;
   } catch (error) {
     return false;
   }
 }
 
-export const __TEST: { lift_x: typeof lift_x } = /* @__PURE__ */ Object.freeze({ lift_x });
+export const __TEST: {
+  lift_x: typeof lift_x;
+  frostTweakPublic: typeof frostTweakPublic;
+  frostTweakSecret: typeof frostTweakSecret;
+} = /* @__PURE__ */ Object.freeze({ lift_x, frostTweakPublic, frostTweakSecret });
 
 /** Schnorr-specific secp256k1 API from BIP340. */
 export type SecpSchnorr = {
@@ -468,8 +481,11 @@ function frostSecretToEvenY(s: TArg<FrostSecret>, pub: TArg<FrostPublic>): TRet<
     signingShare: Fn.toBytes(Fn.neg(Fn.fromBytes(s.signingShare))),
   } as TRet<FrostSecret>;
 }
-function frostNoncesToEvenY(PK: PointType<bigint>, nonces: TArg<Nonces>): TRet<Nonces> {
-  if (hasEven(PK.y)) return nonces as TRet<Nonces>;
+function frostNoncesToEvenY(
+  groupCommitment: PointType<bigint>,
+  nonces: TArg<Nonces>
+): TRet<Nonces> {
+  if (hasEven(groupCommitment.y)) return nonces as TRet<Nonces>;
   const Fn = Pointk1.Fn;
   return {
     binding: Fn.toBytes(Fn.neg(Fn.fromBytes(nonces.binding))),
@@ -499,6 +515,9 @@ function frostTweakPublic(
 ): TRet<FrostPublic> {
   const PKPackage = frostPubToEvenY(pub);
   const t = tweak(Pointk1.fromBytes(PKPackage.commitments[0]), merkleRoot);
+  // Disabled TapTweak (t=0): return the even-Y-normalized package as-is. multiply() rejects
+  // zero scalars, and adding [0]G would be a no-op anyway.
+  if (t === _0n) return PKPackage;
   const tp = Pointk1.BASE.multiply(t);
   const commitments = PKPackage.commitments.map((c, i) =>
     (i === 0 ? Pointk1.fromBytes(c).add(tp) : Pointk1.fromBytes(c)).toBytes()

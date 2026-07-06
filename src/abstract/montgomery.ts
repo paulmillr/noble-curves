@@ -48,6 +48,16 @@ export type MontgomeryOpts = {
    * @returns Random bytes.
    */
   randomBytes?: (bytesLength?: number) => TRet<Uint8Array>;
+  /**
+   * Optional fast fixed-base multiplication, replacing the Montgomery ladder in
+   * `scalarMultBase()` / `getPublicKey()` only. Standard implementation computes `[k]B` on the
+   * equivalent Edwards curve with cached base-point tables and maps the result back to a
+   * Montgomery `u` coordinate (libsodium does the same for X25519); ~3x faster than the ladder.
+   * @param k - Decoded, clamped scalar; guaranteed to be in the RFC 7748 clamped range.
+   * @returns `u([k]G)` as an integer. Must return `0` when `[k]G` is the point at infinity
+   *   (`k ≡ 0 mod n`) so the caller can reject it exactly like the ladder path does.
+   */
+  scalarMultBase?: (k: bigint) => bigint;
 };
 
 /** Public X25519/X448 ECDH API built on a Montgomery ladder. */
@@ -113,6 +123,7 @@ function validateOpts(curve: TArg<MontgomeryOpts>) {
     },
     {
       randomBytes: 'function',
+      scalarMultBase: 'function',
     }
   );
   return Object.freeze({ ...curve } as const);
@@ -159,6 +170,7 @@ function validateOpts(curve: TArg<MontgomeryOpts>) {
 export function montgomery(curveDef: TArg<MontgomeryOpts>): TRet<MontgomeryECDH> {
   const CURVE = validateOpts(curveDef);
   const { P, type, adjustScalarBytes, powPminus2, randomBytes: rand } = CURVE;
+  const mulBaseHook = CURVE.scalarMultBase;
   const is25519 = type === 'x25519';
   if (!is25519 && type !== 'x448') throw new Error('invalid type');
   const randomBytes_ = rand === undefined ? randomBytes : rand;
@@ -207,8 +219,15 @@ export function montgomery(curveDef: TArg<MontgomeryOpts>): TRet<MontgomeryECDH>
     return encodeU(pu);
   }
   // Computes public key from private. By doing scalar multiplication of base point.
+  // With a curve-provided fixed-base hook (Edwards tables), the ladder is skipped, but the
+  // contract — scalar validation, low-order rejection, encoding — stays identical.
   function scalarMultBase(scalar: TArg<Uint8Array>): TRet<Uint8Array> {
-    return scalarMult(scalar, GuBytes);
+    if (mulBaseHook === undefined) return scalarMult(scalar, GuBytes);
+    const k = decodeScalar(scalar);
+    aInRange('scalar', k, minScalar, maxScalar);
+    const pu = modP(mulBaseHook(k));
+    if (pu === _0n) throw new Error('invalid private or public key received');
+    return encodeU(pu);
   }
   const getPublicKey = scalarMultBase;
   const getSharedSecret = scalarMult;
