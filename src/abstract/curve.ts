@@ -13,6 +13,7 @@ import {
   bitMask,
   bytesToNumberBE,
   inRange,
+  isBytes,
   isPosBig,
   validateObject,
   type Signer,
@@ -368,7 +369,7 @@ export function probeRandomBytes(
   afunction(randomBytes, 'randomBytes');
   try {
     const probe = randomBytes(length);
-    if (!(probe instanceof Uint8Array) || probe.length !== length) return undefined;
+    if (!isBytes(probe) || probe.length !== length) return undefined;
   } catch {
     return undefined;
   }
@@ -658,7 +659,7 @@ export class ScalarMultiplier<PC extends PC_ANY> {
       throw new Error('randomBytes is required for scalar blinding');
     const bits = this.Point.Fn.BITS + BLIND_BITS;
     const blind = this.randomBytes(BLIND_BYTES);
-    if (!(blind instanceof Uint8Array) || blind.length !== BLIND_BYTES)
+    if (!isBytes(blind) || blind.length !== BLIND_BYTES)
       throw new Error('randomBytes returned invalid byte array');
     // Force the top two bits of the 128-bit blind to 10xxxxxx, so blind is in [2^127, 1.5*2^127):
     // * `| 0x80` (bit 127 = 1) is the load-bearing part: it guarantees blind >= 2^127, so the blind
