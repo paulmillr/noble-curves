@@ -638,6 +638,28 @@ describe('verify()', () => {
         point.assertValidity();
       });
     });
+
+    should('recovers public key for recovery id 2/3 (R.x = r + n lift)', () => {
+      // x = n + 2 is on the curve, and its canonical sqrt is odd. An ECDSA nonce point with
+      // that x gives r = x mod n = 2 and recovery id 2|1 = 3, exercising the `radj = r + n`
+      // lift in recoverPublicKey, which random signing hits with probability ~2^-128.
+      // recovery computes Q = r^-1(sR - hG); by construction (r, s) then verifies under Q.
+      const msgHash = hexToBytes(
+        '00000000000000000000000000000000000000000000000000000000deadbeef'
+      );
+      const s = 0x1337n; // arbitrary valid low-s value
+      const sig = new secp.Signature(2n, s, 3);
+      const Q = sig.recoverPublicKey(msgHash);
+      const pub = Q.toBytes(true);
+      eql(secp.verify(sig.toBytes('compact'), msgHash, pub, { prehash: false }), true);
+      // Top-level recovered-format path reaches the same key.
+      eql(secp.recoverPublicKey(sig.toBytes('recovered'), msgHash, { prehash: false }), pub);
+      // Lift falling outside the base field must fail loudly: (n-1) + n > p.
+      throws(
+        () => new secp.Signature(CURVE_N - 1n, s, 2).recoverPublicKey(msgHash),
+        /invalid recovery id/
+      );
+    });
   });
 });
 
@@ -662,6 +684,33 @@ describe('secp256k1 schnorr.sign()', () => {
         eql(passed, passes === 'TRUE', `${label}: verify vector`);
       }
     }
+  });
+
+  should('taggedHash accepts tags that collide with Object prototype names', () => {
+    const msg = Uint8Array.of(1, 2, 3);
+    for (const tag of ['__proto__', 'constructor', 'toString']) {
+      const hash = schnorr.utils.taggedHash(tag, msg);
+      eql(hash.length, 32, tag);
+      eql(hash, schnorr.utils.taggedHash(tag, msg), tag);
+    }
+  });
+
+  should('lift_x rejects x = 0 and x >= p', () => {
+    const p = secp.Point.CURVE().p;
+    throws(() => schnorr.utils.lift_x(0n), /invalid x/);
+    throws(() => schnorr.utils.lift_x(p), /invalid x/);
+    // x = p - 1: in-range but x^3 + 7 is a non-square, so no point exists
+    throws(() => schnorr.utils.lift_x(p - 1n));
+  });
+
+  should('verify fails closed on s = 0 (stricter than BIP-340)', () => {
+    const { secretKey, publicKey } = schnorr.keygen();
+    const msg = Uint8Array.of(1, 2, 3);
+    const sig = schnorr.sign(msg, secretKey);
+    eql(schnorr.verify(sig, msg, publicKey), true);
+    const zeroS = sig.slice();
+    zeroS.fill(0, 32);
+    eql(schnorr.verify(zeroS, msg, publicKey), false);
   });
 });
 

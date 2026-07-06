@@ -21,7 +21,7 @@ import {
   type TArg,
   type TRet,
 } from '../utils.ts';
-import { pippenger, validatePointCons, type CurvePoint, type CurvePointCons } from './curve.ts';
+import { mulAddUnsafe, validatePointCons, type CurvePoint, type CurvePointCons } from './curve.ts';
 import { poly, type RootsOfUnity } from './fft.ts';
 import { type H2CDSTOpts } from './hash-to-curve.ts';
 import { getMinHashLength, mapHashToField, type IField } from './modular.ts';
@@ -239,11 +239,11 @@ export type FrostOpts<P extends FROSTPoint<P>> = {
   readonly challenge?: (R: P, PK: P, msg: TArg<Uint8Array>) => bigint;
   /**
    * Optional nonce-package adjustment hook.
-   * @param PK - Group public key point.
+   * @param R - Group commitment point for the current signing session.
    * @param nonces - Nonce package.
    * @returns Adjusted nonce package.
    */
-  readonly adjustNonces?: (PK: P, nonces: TArg<Nonces>) => TRet<Nonces>;
+  readonly adjustNonces?: (R: P, nonces: TArg<Nonces>) => TRet<Nonces>;
   /**
    * Optional secret-package adjustment hook.
    * @param secret - Secret package.
@@ -677,7 +677,11 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
     decode: (sig: TArg<Uint8Array>) => {
       if (opts.adjustTx) sig = opts.adjustTx.decode(sig);
       // We don't know size of point, but we know size of scalar
-      const R = parsePoint(sig.subarray(0, -Fn.BYTES));
+      const Rbytes = sig.subarray(0, -Fn.BYTES);
+      const R = parsePoint(Rbytes);
+      // RFC 9591 Section 3.1 SerializeElement is canonical: a signature must not verify under an
+      // alternative point encoding (e.g. re-encoding a weierstrass R uncompressed as 65 bytes).
+      if (serializePoint(R).length !== Rbytes.length) throw new Error('invalid signature encoding');
       const z = Fn.fromBytes(sig.subarray(-Fn.BYTES));
       return { R, z };
     },
@@ -710,7 +714,9 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
     clear() {},
   };
   const Poly = poly(Fn, noRoots);
-  const msm = (points: P[], scalars: bigint[]) => pippenger(Point, points, scalars);
+  // Variable-time MSM over public inputs only (VSS / nonce commitments, binding factors).
+  // Interleaved wNAF beats pippenger ~3x at FROST-sized inputs (n <= dozens of signers).
+  const msm = (points: P[], scalars: bigint[]) => mulAddUnsafe(Point, points, scalars);
 
   // Internal stuff uses bigints & Points, external Uint8Arrays
   const polynomialEvaluate = (x: bigint, coeffs: bigint[]): bigint => {
@@ -782,8 +788,8 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
       const { R, z } = Signature.decode(proof);
       const phi = parsePoint(commitment[0]);
       const c = this.challenge(id, phi, R);
-      // R === z*G - phi*c
-      if (!R.equals(Point.BASE.multiply(z).subtract(phi.multiply(c))))
+      // R === z*G - phi*c. All inputs are public: variable-time multiplication is safe here.
+      if (!R.equals(Point.BASE.multiplyUnsafe(z).subtract(phi.multiplyUnsafe(c))))
         throw new Error('invalid proof of knowledge');
     },
   };
@@ -802,9 +808,10 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
     verify(msg: TArg<Uint8Array>, R: P, z: bigint, PK: P): boolean {
       if (opts.adjustPoint) PK = opts.adjustPoint(PK);
       if (opts.adjustPoint) R = opts.adjustPoint(R);
+      // Signature, message and public key are all public: variable-time is safe on this path.
       const c = this.challenge(R, PK, msg);
-      const zB = Point.BASE.multiply(z); // z*G
-      const cA = PK.multiply(c); // c*PK
+      const zB = Point.BASE.multiplyUnsafe(z); // z*G
+      const cA = PK.multiplyUnsafe(c); // c*PK
       let check = zB.subtract(cA).subtract(R); // zB - cA - R
       // No clearCoffactor on ristretto
       if (check.clearCofactor) check = check.clearCofactor();
@@ -862,14 +869,18 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
     for (const [i, id] of CL) {
       bindingFactors[i] = H1(concatBytes(rhoPrefix, Fn.toBytes(id)));
     }
+    // Hiding commitments all carry scalar 1, so add them directly and keep only the
+    // binding commitments in the MSM: same result, half the MSM size.
+    let hidingSum = Point.ZERO;
     const points: P[] = [];
     const scalars: bigint[] = [];
     for (const [i, _, hC, bC] of CL) {
       if (Point.ZERO.equals(hC) || Point.ZERO.equals(bC)) throw new Error('infinity commitment');
-      points.push(hC, bC);
-      scalars.push(Fn.ONE, bindingFactors[i]);
+      hidingSum = hidingSum.add(hC);
+      points.push(bC);
+      scalars.push(bindingFactors[i]);
     }
-    const groupCommitment = msm(points, scalars); //  GC += hC + bC*bindingFactor
+    const groupCommitment = hidingSum.add(msm(points, scalars)); //  GC += hC + bC*bindingFactor
     const identifiers = CL.map((i) => i[1]);
     return { identifiers, groupCommitment, bindingFactors };
   };
@@ -1264,13 +1275,16 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
         msg,
         identifier
       );
+      // Signature shares, commitments and verifying shares are public: vartime is safe here.
       // hC + bC * bF
-      let commShare = hidingNonceCommitment.add(bindingNonceCommitment.multiply(bindingFactor));
+      let commShare = hidingNonceCommitment.add(
+        bindingNonceCommitment.multiplyUnsafe(bindingFactor)
+      );
       if (opts.adjustGroupCommitmentShare)
         commShare = opts.adjustGroupCommitmentShare(groupCommitment, commShare);
-      const l = Point.BASE.multiply(Fn.fromBytes(sigShare)); // sigShare*G
+      const l = Point.BASE.multiplyUnsafe(Fn.fromBytes(sigShare)); // sigShare*G
       // commShare + PK * (challenge * lambda)
-      const r = commShare.add(PK.multiply(Fn.mul(challenge, lambda)));
+      const r = commShare.add(PK.multiplyUnsafe(Fn.mul(challenge, lambda)));
       return l.equals(r);
     },
     // Aggregate multiple signature shares into groupSignature

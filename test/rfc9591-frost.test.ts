@@ -18,8 +18,14 @@ import * as mod from '../src/abstract/modular.ts';
 import { ed25519, ed25519_FROST, ristretto255, ristretto255_FROST } from '../src/ed25519.ts';
 import { ed448, ed448_FROST } from '../src/ed448.ts';
 import { p256, p256_FROST } from '../src/nist.ts';
-import { schnorr, schnorr_FROST, secp256k1, secp256k1_FROST } from '../src/secp256k1.ts';
-import { numberToBytesBE, numberToBytesLE } from '../src/utils.ts';
+import {
+  __TEST as secpTEST,
+  schnorr,
+  schnorr_FROST,
+  secp256k1,
+  secp256k1_FROST,
+} from '../src/secp256k1.ts';
+import { bytesToNumberBE, concatBytes, numberToBytesBE, numberToBytesLE } from '../src/utils.ts';
 import { json } from './utils.ts';
 
 type ScalarField = {
@@ -307,6 +313,50 @@ const createSession = (frost: FROST, identifiers?: string[]) => {
     commitmentList,
   };
 };
+const fullSign = (frost: FROST, msg: Uint8Array) => {
+  const { publicKey, secretShares, ids, secretNonces, commitmentList } = createSession(frost);
+  const sigShares: Record<string, Uint8Array> = {};
+  for (const id of ids)
+    sigShares[id] = frost.signShare(
+      secretShares[id],
+      publicKey,
+      secretNonces[id],
+      commitmentList,
+      msg
+    );
+  const sig = frost.aggregate(publicKey, commitmentList, msg, sigShares);
+  return { sig, groupPk: publicKey.commitments[0] };
+};
+
+should('aggregated signatures verify under plain single-signer verifiers', () => {
+  const msg = new Uint8Array([1, 2, 3, 4, 5]);
+  // FROST(Ed25519, SHA-512) uses the undecorated RFC 8032 challenge hash, so its
+  // aggregated output is a plain ed25519 signature for the group public key.
+  const e = fullSign(ed25519_FROST, msg);
+  eql(ed25519.verify(e.sig, msg, e.groupPk), true);
+  // FROST(secp256k1, SHA-256, TR) produces BIP340 signatures for the x-only group key.
+  const t = fullSign(schnorr_FROST, msg);
+  eql(t.sig.length, 64);
+  eql(schnorr.verify(t.sig, msg, t.groupPk.subarray(1)), true);
+});
+
+should('verify rejects re-encoded signatures (weierstrass uncompressed R)', () => {
+  const msg = new Uint8Array([5, 4, 3, 2, 1]);
+  // RFC 9591 SerializeElement is canonical (compressed): the same signature re-encoded
+  // with an uncompressed R must not verify.
+  const check = (
+    frost: FROST,
+    fromBytes: (b: Uint8Array) => { toBytes(c?: boolean): Uint8Array }
+  ) => {
+    const { sig, groupPk } = fullSign(frost, msg);
+    eql(frost.verify(sig, msg, groupPk), true);
+    const bad = concatBytes(fromBytes(sig.subarray(0, 33)).toBytes(false), sig.subarray(33));
+    eql(bad.length, 97);
+    throws(() => frost.verify(bad, msg, groupPk));
+  };
+  check(secp256k1_FROST, (b) => secp256k1.Point.fromBytes(b));
+  check(p256_FROST, (b) => p256.Point.fromBytes(b));
+});
 
 describe('FROST (RFC 9591)', () => {
   for (const name in VECTORS) {
@@ -501,6 +551,30 @@ describe('FROST (RFC 9591)', () => {
           throws(() =>
             schnorr_FROST.verify(xOnlySig, xOnlyMsg, secp256k1.getPublicKey(xOnlySecretKey, false))
           );
+        });
+        should('frostTweak helpers: undefined merkleRoot disables TapTweak', () => {
+          const Point = secp256k1.Point;
+          const Fn = Point.Fn;
+          const keys = schnorr_FROST.trustedDealer({ min: 2, max: 3 });
+          const VK = Point.fromBytes(keys.public.commitments[0]);
+          const evenVK = VK.y % 2n === 0n ? VK : VK.negate();
+          // Disabled tweak (t=0): must not throw and only normalize to even Y.
+          const untweaked = secpTEST.frostTweakPublic(keys.public);
+          eql(untweaked.commitments[0], evenVK.toBytes());
+          const id = Object.keys(keys.secretShares)[0];
+          const untweakedShare = secpTEST.frostTweakSecret(keys.secretShares[id], keys.public);
+          const s0 = Fn.fromBytes(keys.secretShares[id].signingShare);
+          eql(
+            Fn.fromBytes(untweakedShare.signingShare),
+            VK.y % 2n === 0n ? s0 : Fn.neg(s0),
+            'disabled tweak keeps share up to even-Y negation'
+          );
+          // Empty merkle root: BIP-341 tweak with t = TapTweak(x-only VK).
+          const tweaked = secpTEST.frostTweakPublic(keys.public, new Uint8Array(0));
+          const t = bytesToNumberBE(
+            schnorr.utils.taggedHash('TapTweak', evenVK.toBytes(true).subarray(1))
+          );
+          eql(tweaked.commitments[0], evenVK.add(Point.BASE.multiply(t)).toBytes());
         });
       }
       should('reject non-canonical identifier hex', () => {
