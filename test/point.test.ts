@@ -818,6 +818,18 @@ describe('scalar-mult vs naive reference: real curves', () => {
       want = want.add(naiveMul(Z, P, s));
     }
     eql(pippenger(Point, pts, ss).equals(want), true, 'pippenger L=7');
+    {
+      const L = 2048;
+      const carryScalar = (1n << 10n) - 1n;
+      const ps = Array(L).fill(G);
+      const ss = Array(L).fill(carryScalar);
+      const total = (BigInt(L) * carryScalar) % n;
+      eql(
+        pippenger(Point, ps, ss).equals(G.multiplyUnsafe(total)),
+        true,
+        'pippenger large carry-heavy'
+      );
+    }
     const msm = interleavedMSMUnsafe(Point, pts.slice(0, 3), 5);
     const want3 = naiveMul(Z, pts[0], ss[0])
       .add(naiveMul(Z, pts[1], ss[1]))

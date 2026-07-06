@@ -829,6 +829,10 @@ export function mulAddUnsafe<P extends CurvePoint<any, P>, PC extends CurvePoint
  * Point-operation count is scalar-independent (for same L), even when 1 point + scalar, or when
  * scalar = 0 — but bucket indices are scalar windows, so the memory-access pattern is
  * scalar-dependent: do not rely on this for secret scalars.
+ *
+ * A repaired LFG bucket-set variant from ePrint 2024/750 was benchmarked on BLS12-381 G1
+ * against this implementation: ~1.4x faster at 2048 points and ~1.1-1.25x faster at
+ * 4096-32768 points, at the cost of extra recoding and multiplier-table complexity.
  * @param c - Curve Point constructor
  * @param points - array of L curve points
  * @param scalars - array of L scalars (aka secret keys / bigints)
