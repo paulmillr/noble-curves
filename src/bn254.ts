@@ -108,6 +108,36 @@ const Fp2B = /* @__PURE__ */ (() => ({
 // Bootstrap binding: `Fp12finalExponentiate` needs to reference the finished
 // field object while `tower12(...)` is still constructing it.
 let Fp12: ReturnType<typeof tower12>['Fp12'];
+const bn254CyclotomicExpX = (num: Fp12): Fp12 => {
+  const cyclSqrN = (n: Fp12, count: number) => {
+    for (let i = 0; i < count; i++) n = Fp12._cyclotomicSquare(n);
+    return n;
+  };
+  // Addition chain for BN_X = 0x44e992b44a6909f1. This keeps the same cyclotomic-square
+  // count as binary exponentiation, but cuts Fp12 multiplications by about a third.
+  const x10 = Fp12._cyclotomicSquare(num);
+  const x100 = Fp12._cyclotomicSquare(x10);
+  const x1000 = Fp12._cyclotomicSquare(x100);
+  const x10000 = Fp12._cyclotomicSquare(x1000);
+  const x10001 = Fp12.mul(x10000, num);
+  const x10011 = Fp12.mul(x10001, x10);
+  const x10100 = Fp12.mul(x10011, num);
+  const x11001 = Fp12.mul(x1000, x10001);
+  const x100010 = Fp12._cyclotomicSquare(x10001);
+  const x100111 = Fp12.mul(x10011, x10100);
+  const x101001 = Fp12.mul(x10, x100111);
+  let r = cyclSqrN(x100010, 6);
+  r = Fp12.mul(Fp12.mul(r, x100), x11001);
+  r = Fp12.mul(cyclSqrN(r, 7), x11001);
+  r = cyclSqrN(r, 8);
+  r = Fp12.mul(Fp12.mul(r, x101001), x10);
+  r = Fp12.mul(cyclSqrN(r, 6), x10001);
+  r = Fp12.mul(cyclSqrN(r, 8), x101001);
+  r = Fp12.mul(cyclSqrN(r, 6), x101001);
+  r = Fp12.mul(cyclSqrN(r, 10), x100111);
+  r = Fp12.mul(Fp12.mul(cyclSqrN(r, 6), x101001), x1000);
+  return r;
+};
 const tower = /* @__PURE__ */ (() => {
   const res = tower12({
     ORDER: bn254_G1_CURVE.p,
@@ -117,7 +147,7 @@ const tower = /* @__PURE__ */ (() => {
     FP2_NONRESIDUE: [BigInt(9), _1n],
     Fp2mulByB: (num: Fp2) => Fp2.mul(num, Fp2B),
     Fp12finalExponentiate: (num: Fp12) => {
-      const powMinusX = (num: Fp12) => Fp12.conjugate(Fp12._cyclotomicExp(num, BN_X));
+      const powMinusX = (num: Fp12) => Fp12.conjugate(bn254CyclotomicExpX(num));
       const r0 = Fp12.mul(Fp12.conjugate(num), Fp12.inv(num));
       const r = Fp12.mul(Fp12.frobeniusMap(r0, 2), r0);
       const y1 = Fp12._cyclotomicSquare(powMinusX(r));

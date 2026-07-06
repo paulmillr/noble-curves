@@ -1,7 +1,7 @@
 import { describe, should } from '@paulmillr/jsbt/test.js';
 import * as fc from 'fast-check';
 import { deepStrictEqual as eql, throws } from 'node:assert';
-import { wNAF } from '../src/abstract/curve.ts';
+import { mulAddUnsafe, ScalarMultiplier } from '../src/abstract/curve.ts';
 import { hash_to_field } from '../src/abstract/hash-to-curve.ts';
 import { bls12_381 as bls, bls12_381 } from '../src/bls12-381.ts';
 import { asciiToBytes, bytesToHex, concatBytes, hexToBytes } from '../src/utils.ts';
@@ -620,7 +620,7 @@ describe('bls12-381 Point', () => {
     });
   });
 
-  const wNAF_VECTORS = [
+  const MUL_VECTORS = [
     0x28b90deaf189015d3a325908c5e0e4bf00f84f7e639b056ff82d7e70b6eede4cn,
     0x1_3eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001n,
     0x2_3eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001n,
@@ -638,10 +638,44 @@ describe('bls12-381 Point', () => {
         for (const W of [1, 4, 5]) {
           let G = Point.BASE.negate().negate(); // create new point
           G.precompute(W);
-          for (let k of wNAF_VECTORS) {
+          for (let k of MUL_VECTORS) {
             eql(G.multiply(k).equals(G.multiplyUnsafe(k)), true, `${label}, W=${W}, k=${k}`);
           }
         }
+      }
+    });
+
+    should('G1/G2 match naive double-and-add; n*BASE == O (big-cofactor blinding gate)', () => {
+      for (const [label, Point] of [
+        ['G1', PointG1],
+        ['G2', PointG2],
+      ] as const) {
+        const n = (Point as any).Fn.ORDER as bigint;
+        const G: any = Point.BASE;
+        const Z: any = Point.ZERO;
+        const naiveMul = (p: any, s: bigint) => {
+          let acc = Z;
+          let base = p;
+          while (s > 0n) {
+            if (s & 1n) acc = acc.add(base);
+            if (s > 1n) base = base.double();
+            s >>= 1n;
+          }
+          return acc;
+        };
+        for (const s of [1n, 2n, n - 1n, (1n << 128n) + 1n]) {
+          const want = naiveMul(G, s);
+          eql(G.multiply(s).equals(want), true, `${label} multiply ${s.toString(16)}`);
+          eql(G.multiplyUnsafe(s).equals(want), true, `${label} multiplyUnsafe ${s.toString(16)}`);
+        }
+        // fresh (uncached) instance: fixed-window CT path (Fp2 coordinates for G2)
+        const Q = G.multiply(12345n);
+        const QF = (Point as any).fromAffine(Q.toAffine());
+        eql(QF.multiply(54321n).equals(naiveMul(Q, 54321n)), true, `${label} fresh multiply`);
+        // BASE blinding gate: h != 1, so blinding requires ORDER*BASE == O (true for BLS BASE).
+        // Public multiplyUnsafe rejects s >= n by design; use the internal oversized route.
+        eql(new ScalarMultiplier(Point as any).mulUnsafe(G, n).is0(), true, `${label} n*BASE = O`);
+        eql(Q.isTorsionFree(), true, `${label} subgroup point is torsion-free`);
       }
     });
   });
@@ -698,14 +732,13 @@ describe('bls12-381 Point', () => {
         ]),
       }),
     ];
-    // Use wNAF allow scalars higher than CURVE.r
-    const w = new wNAF(G2Point);
     const hEff = BigInt(
       '0xbc69f08f2ee75b3584c6a0ea91b352888e2a8e9145ad7689986ff031508ffe1329c2f178731db956d82bf015d1212b02ec0ec69d7477c1ae954cbc06689f6a359894c0adebbf6b4e8020005aaa95551'
     );
     for (let p of points) {
       const ours = p.clearCofactor();
-      const shouldBe = (w as any).ladder_nonCT(p, hEff);
+      // allowOversized: hEff is much larger than CURVE.r
+      const shouldBe = mulAddUnsafe(G2Point as any, [p], [hEff], true);
       eql(ours.equals(shouldBe), true, 'clearLast');
     }
   });
@@ -1414,6 +1447,51 @@ describe('bls12-381 deterministic', () => {
           0x08f574e635870b8f4ad8c18d162055ab6136db296ad5f25151244e3b1ce0d81389b9d1752a46af018e8fb1ac01b683e1n,
         ])
       );
+    });
+    should('finalExponentiate(ONE) is ONE (Karabina g2=g3=0 special case)', () => {
+      // Identity is the only GΦ₁₂ element where Karabina decompression is degenerate; it flows
+      // through the compressed exp-by-x path inside finalExponentiate and must not throw or
+      // produce a wrong value.
+      eql(Fp12.finalExponentiate(Fp12.ONE), Fp12.ONE);
+    });
+    should('frobeniusMap is x^(p^i): ground truth at i=1, composition above', () => {
+      // Pins the hardcoded Fp2 conjugation, the Fp6/Fp12 power%6 / power%12 shortcuts, and the
+      // coefficient tables to the mathematical definition φ(x) = x^p, for generic
+      // (non-cyclotomic) field elements.
+      const { Fp, Fp2, Fp6 } = bls.fields;
+      const p = Fp.ORDER;
+      const x12 = Fp12.fromBigTwelve(
+        Array.from({ length: 12 }, (_, i) => BigInt(i + 3) ** 101n) as Parameters<
+          typeof Fp12.fromBigTwelve
+        >[0]
+      );
+      eql(Fp12.eql(Fp12.frobeniusMap(x12, 1), Fp12.pow(x12, p)), true, 'Fp12 φ(x) == x^p');
+      let acc12 = x12;
+      for (let i = 1; i <= 12; i++) {
+        acc12 = Fp12.frobeniusMap(acc12, 1);
+        eql(Fp12.eql(Fp12.frobeniusMap(x12, i), acc12), true, `Fp12 φ^${i} == φ∘…∘φ`);
+      }
+      eql(Fp12.eql(acc12, x12), true, 'Fp12 φ^12 == id');
+      const x6 = x12.c1;
+      eql(Fp6.eql(Fp6.frobeniusMap(x6, 1), Fp6.pow(x6, p)), true, 'Fp6 φ(x) == x^p');
+      let acc6 = x6;
+      for (let i = 1; i <= 6; i++) {
+        acc6 = Fp6.frobeniusMap(acc6, 1);
+        eql(Fp6.eql(Fp6.frobeniusMap(x6, i), acc6), true, `Fp6 φ^${i}`);
+      }
+      eql(Fp6.eql(acc6, x6), true, 'Fp6 φ^6 == id');
+      const x2 = x12.c0.c1;
+      eql(Fp2.eql(Fp2.frobeniusMap(x2, 1), Fp2.pow(x2, p)), true, 'Fp2 φ(x) == x^p');
+      eql(Fp2.eql(Fp2.frobeniusMap(Fp2.frobeniusMap(x2, 1), 1), x2), true, 'Fp2 φ^2 == id');
+    });
+    should('pairingBatch of canceling pairs is ONE', () => {
+      // e(P, Q) ⋅ e(−P, Q) = 1: the shared final exponentiation sees a degenerate Miller-loop
+      // product, exercising the identity path of the compressed cyclotomic exponentiation.
+      const res = bls.pairingBatch([
+        { g1: G1, g2: G2 },
+        { g1: G1.negate(), g2: G2 },
+      ]);
+      eql(Fp12.eql(res, Fp12.ONE), true);
     });
   });
 
