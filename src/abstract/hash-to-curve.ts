@@ -18,7 +18,10 @@ import {
   validateObject,
 } from '../utils.ts';
 import type { AffinePoint, PC_ANY, PC_F, PC_P } from './curve.ts';
-import { FpInvertBatch, mod, type IField, validateField } from './modular.ts';
+import { FpInvertBatch, FpIsSquare, mod, type IField, validateField } from './modular.ts';
+
+// prettier-ignore
+const _0n = /* @__PURE__ */ BigInt(0), _1n = /* @__PURE__ */ BigInt(1), _2n = /* @__PURE__ */ BigInt(2), _3n = /* @__PURE__ */ BigInt(3), _4n = /* @__PURE__ */ BigInt(4);
 
 /** ASCII domain-separation tag or raw bytes. */
 export type AsciiOrBytes = string | Uint8Array;
@@ -268,8 +271,9 @@ export function expand_message_xof(
     const dkLen = Math.ceil((2 * k) / 8);
     DST = H.create({ dkLen }).update(asciiToBytes('H2C-OVERSIZE-DST-')).update(DST).digest();
   }
-  // Oversize DSTs are compressed above; fail closed if a custom XOF still returns one.
-  if (DST.length > 255) throw new Error('expand_message_xof: invalid lenInBytes');
+  // Oversize DSTs are compressed above; fail closed if a custom XOF still returns one
+  // (possible when k > 1020 makes the compression dkLen itself exceed 255 bytes).
+  if (DST.length > 255) throw new Error('expand_message_xof: invalid DST');
   return (
     H.create({ dkLen: lenInBytes })
       .update(msg)
@@ -338,7 +342,8 @@ export function hash_to_field(
   } else if (expand === 'xof') {
     prb = expand_message_xof(msg, DST, len_in_bytes, k, hash);
   } else if (expand === '_internal_pass') {
-    // for internal tests only
+    // for internal tests only: msg is used as the uniform bytes directly. Short msg is allowed
+    // on purpose (subarray() slices are short): zkcrypto map_scalar vectors feed empty okm.
     prb = msg;
   } else {
     throw new Error('expand must be "xmd" or "xof"');
@@ -456,6 +461,11 @@ export function createHasher<PC extends PC_ANY>(
   // Otherwise a caller could mutate `hasher.defaults.DST` in place and poison
   // the singleton hasher for every other consumer in the same process.
   const safeDefaults = snapshot(defaults);
+  // Per-call options are H2CDSTOpts: only DST may be overridden. Copying just that key keeps
+  // off-type option objects from silently replacing suite parameters (p/m/k/hash/expand) at
+  // runtime — same pinning hashToScalar always did for p/m.
+  const dstOverride = (options?: TArg<H2CDSTOpts>) =>
+    options && options.DST !== undefined ? { DST: options.DST } : undefined;
   function map(num: bigint[]): PC_P<PC> {
     return Point.fromAffine(mapToCurve(num)) as PC_P<PC>;
   }
@@ -475,7 +485,7 @@ export function createHasher<PC extends PC_ANY>(
     Point,
 
     hashToCurve(msg: TArg<Uint8Array>, options?: TArg<H2CDSTOpts>): PC_P<PC> {
-      const opts = Object.assign({}, safeDefaults, options);
+      const opts = Object.assign({}, safeDefaults, dstOverride(options));
       const u = hash_to_field(msg, 2, opts);
       const u0 = map(u[0]);
       const u1 = map(u[1]);
@@ -483,7 +493,7 @@ export function createHasher<PC extends PC_ANY>(
     },
     encodeToCurve(msg: TArg<Uint8Array>, options?: TArg<H2CDSTOpts>): PC_P<PC> {
       const optsDst = safeDefaults.encodeDST === undefined ? {} : { DST: safeDefaults.encodeDST };
-      const opts = Object.assign({}, safeDefaults, optsDst, options);
+      const opts = Object.assign({}, safeDefaults, optsDst, dstOverride(options));
       const u = hash_to_field(msg, 1, opts);
       const u0 = map(u[0]);
       return clear(u0);
@@ -510,8 +520,198 @@ export function createHasher<PC extends PC_ANY>(
     hashToScalar(msg: TArg<Uint8Array>, options?: TArg<H2CDSTOpts>): bigint {
       // @ts-ignore
       const N = Point.Fn.ORDER;
-      const opts = Object.assign({}, safeDefaults, { DST: _DST_scalar }, options, { p: N, m: 1 });
+      const opts = Object.assign({}, safeDefaults, { DST: _DST_scalar }, dstOverride(options), {
+        p: N,
+        m: 1,
+      });
       return hash_to_field(msg, 1, opts)[0][0];
     },
   });
+}
+
+/**
+ * Implementation of the Shallue and van de Woestijne method for any weierstrass curve.
+ * TODO: check if there is a way to merge this with uvRatio in Edwards; move to modular.
+ * b = True and y = sqrt(u / v) if (u / v) is square in F, and
+ * b = False and y = sqrt(Z * (u / v)) otherwise.
+ * RFC 9380 expects callers to provide `v != 0`; this helper does not enforce it.
+ * @param Fp - Field implementation.
+ * @param Z - Simplified SWU map parameter.
+ * @returns Square-root ratio helper.
+ * @example
+ * Build the square-root ratio helper used by SWU map implementations.
+ *
+ * ```ts
+ * import { SWUFpSqrtRatio } from '@noble/curves/abstract/hash-to-curve.js';
+ * import { Field } from '@noble/curves/abstract/modular.js';
+ * const Fp = Field(17n);
+ * const sqrtRatio = SWUFpSqrtRatio(Fp, 3n);
+ * const out = sqrtRatio(4n, 1n);
+ * ```
+ */
+export function SWUFpSqrtRatio<T>(
+  Fp: TArg<IField<T>>,
+  Z: T
+): (u: T, v: T) => { isValid: boolean; value: T } {
+  // Fail with the usual field-shape error before touching pow/cmov on malformed field shims.
+  const F = validateField(Fp as IField<T>) as IField<T>;
+  // Generic implementation
+  const q = F.ORDER;
+  let l = _0n;
+  for (let o = q - _1n; o % _2n === _0n; o /= _2n) l += _1n;
+  const c1 = l; // 1. c1, the largest integer such that 2^c1 divides q - 1.
+  // We need 2n ** c1 and 2n ** (c1-1). We can't use **; but we can use <<.
+  // 2n ** c1 == 2n << (c1-1)
+  const _2n_pow_c1_1 = _2n << (c1 - _1n - _1n);
+  const _2n_pow_c1 = _2n_pow_c1_1 * _2n;
+  const c2 = (q - _1n) / _2n_pow_c1; // 2. c2 = (q - 1) / (2^c1)  # Integer arithmetic
+  const c3 = (c2 - _1n) / _2n; // 3. c3 = (c2 - 1) / 2            # Integer arithmetic
+  const c4 = _2n_pow_c1 - _1n; // 4. c4 = 2^c1 - 1                # Integer arithmetic
+  const c5 = _2n_pow_c1_1; // 5. c5 = 2^(c1 - 1)                  # Integer arithmetic
+  const c6 = F.pow(Z, c2); // 6. c6 = Z^c2
+  const c7 = F.pow(Z, (c2 + _1n) / _2n); // 7. c7 = Z^((c2 + 1) / 2)
+  // RFC 9380 Appendix F.2.1.1 defines sqrt_ratio(u, v) only for v != 0.
+  // We keep v=0 on the regular result path with isValid=false instead of
+  // throwing so the helper stays closer to the RFC's fixed control flow.
+  let sqrtRatio = (u: T, v: T): { isValid: boolean; value: T } => {
+    let tv1 = c6; // 1. tv1 = c6
+    let tv2 = F.pow(v, c4); // 2. tv2 = v^c4
+    let tv3 = F.sqr(tv2); // 3. tv3 = tv2^2
+    tv3 = F.mul(tv3, v); // 4. tv3 = tv3 * v
+    let tv5 = F.mul(u, tv3); // 5. tv5 = u * tv3
+    tv5 = F.pow(tv5, c3); // 6. tv5 = tv5^c3
+    tv5 = F.mul(tv5, tv2); // 7. tv5 = tv5 * tv2
+    tv2 = F.mul(tv5, v); // 8. tv2 = tv5 * v
+    tv3 = F.mul(tv5, u); // 9. tv3 = tv5 * u
+    let tv4 = F.mul(tv3, tv2); // 10. tv4 = tv3 * tv2
+    tv5 = F.pow(tv4, c5); // 11. tv5 = tv4^c5
+    let isQR = F.eql(tv5, F.ONE); // 12. isQR = tv5 == 1
+    tv2 = F.mul(tv3, c7); // 13. tv2 = tv3 * c7
+    tv5 = F.mul(tv4, tv1); // 14. tv5 = tv4 * tv1
+    tv3 = F.cmov(tv2, tv3, isQR); // 15. tv3 = CMOV(tv2, tv3, isQR)
+    tv4 = F.cmov(tv5, tv4, isQR); // 16. tv4 = CMOV(tv5, tv4, isQR)
+    // 17. for i in (c1, c1 - 1, ..., 2):
+    for (let i = c1; i > _1n; i--) {
+      let tv5 = i - _2n; // 18.    tv5 = i - 2
+      tv5 = _2n << (tv5 - _1n); // 19.    tv5 = 2^tv5
+      let tvv5 = F.pow(tv4, tv5); // 20.    tv5 = tv4^tv5
+      const e1 = F.eql(tvv5, F.ONE); // 21.    e1 = tv5 == 1
+      tv2 = F.mul(tv3, tv1); // 22.    tv2 = tv3 * tv1
+      tv1 = F.mul(tv1, tv1); // 23.    tv1 = tv1 * tv1
+      tvv5 = F.mul(tv4, tv1); // 24.    tv5 = tv4 * tv1
+      tv3 = F.cmov(tv2, tv3, e1); // 25.    tv3 = CMOV(tv2, tv3, e1)
+      tv4 = F.cmov(tvv5, tv4, e1); // 26.    tv4 = CMOV(tv5, tv4, e1)
+    }
+    // RFC 9380 Appendix F.2.1.1 defines sqrt_ratio(u, v) for v != 0.
+    // When u = 0 and v != 0, u / v = 0 is square and the computed root is
+    // still 0, so widen only the final flag and keep the full control flow.
+    return { isValid: !F.is0(v) && (isQR || F.is0(u)), value: tv3 };
+  };
+  if (F.ORDER % _4n === _3n) {
+    // sqrt_ratio_3mod4(u, v)
+    const c1 = (F.ORDER - _3n) / _4n; // 1. c1 = (q - 3) / 4     # Integer arithmetic
+    const c2 = F.sqrt(F.neg(Z)); // 2. c2 = sqrt(-Z)
+    sqrtRatio = (u: T, v: T) => {
+      let tv1 = F.sqr(v); // 1. tv1 = v^2
+      const tv2 = F.mul(u, v); // 2. tv2 = u * v
+      tv1 = F.mul(tv1, tv2); // 3. tv1 = tv1 * tv2
+      let y1 = F.pow(tv1, c1); // 4. y1 = tv1^c1
+      y1 = F.mul(y1, tv2); // 5. y1 = y1 * tv2
+      const y2 = F.mul(y1, c2); // 6. y2 = y1 * c2
+      const tv3 = F.mul(F.sqr(y1), v); // 7. tv3 = y1^2; 8. tv3 = tv3 * v
+      const isQR = F.eql(tv3, u); // 9. isQR = tv3 == u
+      let y = F.cmov(y2, y1, isQR); // 10. y = CMOV(y2, y1, isQR)
+      return { isValid: !F.is0(v) && isQR, value: y }; // 11. return (isQR, y) isQR ? y : y*c2
+    };
+  }
+  // No curves uses that
+  // if (Fp.ORDER % _8n === _5n) // sqrt_ratio_5mod8
+  return sqrtRatio;
+}
+/**
+ * Simplified Shallue-van de Woestijne-Ulas Method
+ * See {@link https://www.rfc-editor.org/rfc/rfc9380#section-6.6.2 | RFC 9380 section 6.6.2}.
+ * @param Fp - Field implementation.
+ * @param opts - SWU parameters:
+ *   - `A`: Curve parameter `A`.
+ *   - `B`: Curve parameter `B`.
+ *   - `Z`: Simplified SWU map parameter.
+ * @returns Deterministic map-to-curve function.
+ * @throws If the SWU parameters are invalid or the field lacks the required helpers. {@link Error}
+ * @example
+ * Map one field element to a Weierstrass curve point with the SWU recipe.
+ *
+ * ```ts
+ * import { mapToCurveSimpleSWU } from '@noble/curves/abstract/hash-to-curve.js';
+ * import { Field } from '@noble/curves/abstract/modular.js';
+ * const Fp = Field(17n);
+ * const map = mapToCurveSimpleSWU(Fp, { A: 1n, B: 2n, Z: 3n });
+ * const point = map(5n);
+ * ```
+ */
+export function mapToCurveSimpleSWU<T>(
+  Fp: TArg<IField<T>>,
+  opts: {
+    A: T;
+    B: T;
+    Z: T;
+  }
+): (u: T) => { x: T; y: T } {
+  const F = validateField(Fp as IField<T>) as IField<T>;
+  validateObject(opts as any, {}, {}, 'opts');
+  const { A, B, Z } = opts;
+  if (!F.isValidNot0(A) || !F.isValidNot0(B) || !F.isValid(Z))
+    throw new Error('mapToCurveSimpleSWU: invalid opts');
+  // RFC 9380 §6.6.2 and Appendix H.2 require:
+  // 1. Z is non-square in F
+  // 2. Z != -1 in F
+  // 3. g(x) - Z is irreducible over F
+  // 4. g(B / (Z * A)) is square in F
+  // We can enforce 1, 2, and 4 with the current field API.
+  // Criterion 3 is not checked here because generic `IField<T>` does not expose
+  // polynomial-ring / irreducibility operations, and this helper is used for
+  // both prime and extension fields.
+  if (F.eql(Z, F.neg(F.ONE)) || FpIsSquare(F, Z))
+    throw new Error('mapToCurveSimpleSWU: invalid opts');
+  // RFC 9380 Appendix H.2 criterion 4: g(B / (Z * A)) is square in F.
+  // x = B / (Z * A)
+  const x = F.mul(B, F.inv(F.mul(Z, A)));
+  // g(x) = x^3 + A*x + B
+  const gx = F.add(F.add(F.mul(F.sqr(x), x), F.mul(A, x)), B);
+  if (!FpIsSquare(F, gx)) throw new Error('mapToCurveSimpleSWU: invalid opts');
+  const sqrtRatio = SWUFpSqrtRatio(F, Z);
+  if (!F.isOdd) throw new Error('Field does not have .isOdd()');
+  // Input: u, an element of F.
+  // Output: (x, y), a point on E.
+  return (u: T): { x: T; y: T } => {
+    // prettier-ignore
+    let tv1, tv2, tv3, tv4, tv5, tv6, x, y;
+    tv1 = F.sqr(u); // 1.  tv1 = u^2
+    tv1 = F.mul(tv1, Z); // 2.  tv1 = Z * tv1
+    tv2 = F.sqr(tv1); // 3.  tv2 = tv1^2
+    tv2 = F.add(tv2, tv1); // 4.  tv2 = tv2 + tv1
+    tv3 = F.add(tv2, F.ONE); // 5.  tv3 = tv2 + 1
+    tv3 = F.mul(tv3, B); // 6.  tv3 = B * tv3
+    tv4 = F.cmov(Z, F.neg(tv2), !F.eql(tv2, F.ZERO)); // 7.  tv4 = CMOV(Z, -tv2, tv2 != 0)
+    tv4 = F.mul(tv4, A); // 8.  tv4 = A * tv4
+    tv2 = F.sqr(tv3); // 9.  tv2 = tv3^2
+    tv6 = F.sqr(tv4); // 10. tv6 = tv4^2
+    tv5 = F.mul(tv6, A); // 11. tv5 = A * tv6
+    tv2 = F.add(tv2, tv5); // 12. tv2 = tv2 + tv5
+    tv2 = F.mul(tv2, tv3); // 13. tv2 = tv2 * tv3
+    tv6 = F.mul(tv6, tv4); // 14. tv6 = tv6 * tv4
+    tv5 = F.mul(tv6, B); // 15. tv5 = B * tv6
+    tv2 = F.add(tv2, tv5); // 16. tv2 = tv2 + tv5
+    x = F.mul(tv1, tv3); // 17.   x = tv1 * tv3
+    const { isValid, value } = sqrtRatio(tv2, tv6); // 18. (is_gx1_square, y1) = sqrt_ratio(tv2, tv6)
+    y = F.mul(tv1, u); // 19.   y = tv1 * u  -> Z * u^3 * y1
+    y = F.mul(y, value); // 20.   y = y * y1
+    x = F.cmov(x, tv3, isValid); // 21.   x = CMOV(x, tv3, is_gx1_square)
+    y = F.cmov(y, value, isValid); // 22.   y = CMOV(y, y1, is_gx1_square)
+    const e1 = F.isOdd!(u) === F.isOdd!(y); // 23.  e1 = sgn0(u) == sgn0(y)
+    y = F.cmov(F.neg(y), y, e1); // 24.   y = CMOV(-y, y, e1)
+    const tv4_inv = FpInvertBatch(F, [tv4], true)[0];
+    x = F.mul(x, tv4_inv); // 25.   x = x / tv4
+    return { x, y };
+  };
 }
