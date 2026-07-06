@@ -472,13 +472,11 @@ function calcElligatorDecafMap(r0: bigint): EdwardsPoint {
 
   const s2 = Fp448.sqrN(s);
   const W0 = Fp448.mul(s_abs, _2n); // 8
-  const W1 = Fp448.create(Fp448.addN(s2, _1n)); // 9
-  const W2 = Fp448.create(Fp448.subN(s2, _1n)); // 10
-  const W3 = Fp448.create(
-    Fp448.addN(
-      Fp448.mulN(Fp448.mulN(Fp448.mulN(v_prime, s), Fp448.subN(r, _1n)), ONE_MINUS_TWO_D),
-      sgn
-    )
+  const W1 = Fp448.add(s2, _1n); // 9
+  const W2 = Fp448.sub(s2, _1n); // 10
+  const W3 = Fp448.add(
+    Fp448.mulN(Fp448.mulN(Fp448.mulN(v_prime, s), Fp448.subN(r, _1n)), ONE_MINUS_TWO_D),
+    sgn
   ); // 11
   return new ed448_Point(
     Fp448.mul(W0, W3),
@@ -558,17 +556,15 @@ class _DecafPoint extends PrimeEdwardsPoint<_DecafPoint> {
     const s2 = Fp448.sqr(s); // 1
     const u1 = Fp448.add(Fp448.ONE, s2); // 2
     const u1sq = Fp448.sqr(u1);
-    const u2 = Fp448.create(Fp448.subN(u1sq, Fp448.mulN(Fp448.mulN(_4n, d), s2))); // 3
+    const u2 = Fp448.sub(u1sq, Fp448.mulN(Fp448.mulN(_4n, d), s2)); // 3
 
     const { isValid, value: invsqrt } = invertSqrt(Fp448.mul(u2, u1sq)); // 4
 
-    let u3 = Fp448.create(
-      Fp448.mulN(Fp448.mulN(Fp448.mulN(Fp448.addN(s, s), invsqrt), u1), SQRT_MINUS_D)
-    ); // 5
+    let u3 = Fp448.mul(Fp448.mulN(Fp448.mulN(Fp448.addN(s, s), invsqrt), u1), SQRT_MINUS_D); // 5
     if (Fp448.isOdd!(u3)) u3 = Fp448.neg(u3);
 
-    const x = Fp448.create(Fp448.mulN(Fp448.mulN(Fp448.mulN(u3, invsqrt), u2), INVSQRT_MINUS_D)); // 6
-    const y = Fp448.create(Fp448.mulN(Fp448.mulN(Fp448.subN(_1n, s2), invsqrt), u1)); // 7
+    const x = Fp448.mul(Fp448.mulN(Fp448.mulN(u3, invsqrt), u2), INVSQRT_MINUS_D); // 6
+    const y = Fp448.mul(Fp448.mulN(Fp448.subN(_1n, s2), invsqrt), u1); // 7
     const t = Fp448.mul(x, y); // 8
 
     if (!isValid) throw new Error('invalid decaf448 encoding 2');
@@ -592,13 +588,11 @@ class _DecafPoint extends PrimeEdwardsPoint<_DecafPoint> {
     const { X, Z, T } = this.ep;
     const u1 = Fp448.mul(Fp448.add(X, T), Fp448.sub(X, T)); // 1
     const x2 = Fp448.sqr(X);
-    const { value: invsqrt } = invertSqrt(
-      Fp448.create(Fp448.mulN(Fp448.mulN(u1, ONE_MINUS_D), x2))
-    ); // 2
-    let ratio = Fp448.create(Fp448.mulN(Fp448.mulN(invsqrt, u1), SQRT_MINUS_D)); // 3
+    const { value: invsqrt } = invertSqrt(Fp448.mul(Fp448.mulN(u1, ONE_MINUS_D), x2)); // 2
+    let ratio = Fp448.mul(Fp448.mulN(invsqrt, u1), SQRT_MINUS_D); // 3
     if (Fp448.isOdd!(ratio)) ratio = Fp448.neg(ratio);
-    const u2 = Fp448.create(Fp448.subN(Fp448.mulN(Fp448.mulN(INVSQRT_MINUS_D, ratio), Z), T)); // 4
-    let s = Fp448.create(Fp448.mulN(Fp448.mulN(Fp448.mulN(ONE_MINUS_D, invsqrt), X), u2)); // 5
+    const u2 = Fp448.sub(Fp448.mulN(Fp448.mulN(INVSQRT_MINUS_D, ratio), Z), T); // 4
+    let s = Fp448.mul(Fp448.mulN(Fp448.mulN(ONE_MINUS_D, invsqrt), X), u2); // 5
     if (Fp448.isOdd!(s)) s = Fp448.neg(s);
     return Fp448.toBytes(s) as TRet<Uint8Array>;
   }

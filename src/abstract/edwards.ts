@@ -411,7 +411,7 @@ export function edwards(
       // ax²+y²=1+dx²y² => y²-1=dx²y²-ax² => y²-1=x²(dy²-a) => x²=(y²-1)/(dy²-a)
       const y2 = Fp.sqr(y); // denominator is always non-0 mod p.
       const u = Fp.sub(y2, Fp.ONE); // u = y² - 1
-      const v = Fp.create(Fp.subN(Fp.mulN(d, y2), a)); // v = d y² - a.
+      const v = Fp.sub(Fp.mulN(d, y2), a); // v = d y² - a.
       let { isValid, value: x } = uvRatio(u, v); // √(u/v)
       if (!isValid) throw new Error('bad point: invalid y coordinate');
       const isXOdd = isOdd(x); // There are 2 square roots. Use x_0 bit to select proper
@@ -497,7 +497,7 @@ export function edwards(
       const C = Fp.mul(Fp.sqr(Z1), _2n); // C = 2*Z12
       const D = mulA(A); // D = a*A
       const x1y1 = Fp.addN(X1, Y1);
-      const E = Fp.create(Fp.subN(Fp.subN(Fp.sqr(x1y1), A), B)); // E = (X1+Y1)2-A-B
+      const E = Fp.sub(Fp.subN(Fp.sqr(x1y1), A), B); // E = (X1+Y1)2-A-B
       const G = Fp.addN(D, B); // G = D+B
       const F = Fp.subN(G, C); // F = G-C
       const H = Fp.subN(D, B); // H = D-B
@@ -518,12 +518,12 @@ export function edwards(
       const { X: X2, Y: Y2, Z: Z2, T: T2 } = other;
       const A = Fp.mul(X1, X2); // A = X1*X2
       const B = Fp.mul(Y1, Y2); // B = Y1*Y2
-      const C = Fp.create(Fp.mulN(Fp.mulN(T1, d), T2)); // C = T1*d*T2
+      const C = Fp.mul(Fp.mulN(T1, d), T2); // C = T1*d*T2
       const D = Fp.mul(Z1, Z2); // D = Z1*Z2
-      const E = Fp.create(Fp.subN(Fp.subN(Fp.mulN(Fp.addN(X1, Y1), Fp.addN(X2, Y2)), A), B)); // E = (X1+Y1)*(X2+Y2)-A-B
+      const E = Fp.sub(Fp.subN(Fp.mulN(Fp.addN(X1, Y1), Fp.addN(X2, Y2)), A), B); // E = (X1+Y1)*(X2+Y2)-A-B
       const F = Fp.subN(D, C); // F = D-C
       const G = Fp.addN(D, C); // G = D+C
-      const H = Fp.create(Fp.subN(B, mulA(A))); // H = B-a*A
+      const H = Fp.sub(B, mulA(A)); // H = B-a*A
       const X3 = Fp.mul(E, F); // X3 = E*F
       const Y3 = Fp.mul(G, H); // Y3 = G*H
       const T3 = Fp.mul(E, H); // T3 = E*H

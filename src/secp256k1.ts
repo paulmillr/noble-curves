@@ -159,7 +159,7 @@ function lift_x(x: bigint): PointType<bigint> {
   const Fp = Fpk1;
   if (!Fp.isValidNot0(x)) throw new Error('invalid x: Fail if x ≥ p');
   const xx = Fp.sqr(x);
-  const c = Fp.create(Fp.addN(Fp.mulN(xx, x), BigInt(7))); // Let c = x³ + 7 mod p.
+  const c = Fp.add(Fp.mulN(xx, x), BigInt(7)); // Let c = x³ + 7 mod p.
   let y = Fp.sqrt(c); // Let y = c^(p+1)/4 mod p. Same as sqrt().
   // Return the unique point P such that x(P) = x and
   // y(P) = y if y mod 2 = 0 or y(P) = p-y otherwise.

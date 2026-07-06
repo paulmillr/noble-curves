@@ -422,21 +422,21 @@ const bytes255ToNumberLE = (bytes: TArg<Uint8Array>) =>
  */
 function calcElligatorRistrettoMap(r0: bigint): EdwardsPoint {
   const { d } = ed25519_CURVE;
-  const r = Fp.create(Fp.mulN(Fp.mulN(SQRT_M1, r0), r0)); // 1
-  const Ns = Fp.create(Fp.mulN(Fp.addN(r, _1n), ONE_MINUS_D_SQ)); // 2
+  const r = Fp.mul(Fp.mulN(SQRT_M1, r0), r0); // 1
+  const Ns = Fp.mul(Fp.addN(r, _1n), ONE_MINUS_D_SQ); // 2
   let c = BigInt(-1); // 3
-  const D = Fp.create(Fp.mulN(Fp.subN(c, Fp.mulN(d, r)), Fp.add(r, d))); // 4
+  const D = Fp.mul(Fp.subN(c, Fp.mulN(d, r)), Fp.add(r, d)); // 4
   let { isValid: Ns_D_is_sq, value: s } = uvRatio(Ns, D); // 5
   let s_ = Fp.mul(s, r0); // 6
   if (!Fp.isOdd!(s_)) s_ = Fp.neg(s_);
   if (!Ns_D_is_sq) s = s_; // 7
   if (!Ns_D_is_sq) c = r; // 8
-  const Nt = Fp.create(Fp.subN(Fp.mulN(Fp.mulN(c, Fp.subN(r, _1n)), D_MINUS_ONE_SQ), D)); // 9
+  const Nt = Fp.sub(Fp.mulN(Fp.mulN(c, Fp.subN(r, _1n)), D_MINUS_ONE_SQ), D); // 9
   const s2 = Fp.sqrN(s);
   const W0 = Fp.mul(Fp.addN(s, s), D); // 10
   const W1 = Fp.mul(Nt, SQRT_AD_MINUS_ONE); // 11
-  const W2 = Fp.create(Fp.subN(_1n, s2)); // 12
-  const W3 = Fp.create(Fp.addN(_1n, s2)); // 13
+  const W2 = Fp.sub(_1n, s2); // 12
+  const W3 = Fp.add(_1n, s2); // 13
   return new ed25519_Point(Fp.mul(W0, W3), Fp.mul(W2, W1), Fp.mul(W1, W3), Fp.mul(W0, W2));
 }
 
@@ -496,14 +496,14 @@ class _RistrettoPoint extends PrimeEdwardsPoint<_RistrettoPoint> {
     if (!equalBytes(Fp.toBytes(s), bytes) || Fp.isOdd!(s))
       throw new Error('invalid ristretto255 encoding 1');
     const s2 = Fp.sqr(s);
-    const u1 = Fp.create(Fp.addN(_1n, Fp.mulN(a, s2))); // 4 (a is -1)
-    const u2 = Fp.create(Fp.subN(_1n, Fp.mulN(a, s2))); // 5
+    const u1 = Fp.add(_1n, Fp.mulN(a, s2)); // 4 (a is -1)
+    const u2 = Fp.sub(_1n, Fp.mulN(a, s2)); // 5
     const u1_2 = Fp.sqr(u1);
     const u2_2 = Fp.sqr(u2);
-    const v = Fp.create(Fp.subN(Fp.mulN(Fp.mulN(a, d), u1_2), u2_2)); // 6
+    const v = Fp.sub(Fp.mulN(Fp.mulN(a, d), u1_2), u2_2); // 6
     const { isValid, value: I } = invertSqrt(Fp.mul(v, u2_2)); // 7
     const Dx = Fp.mul(I, u2); // 8
-    const Dy = Fp.create(Fp.mulN(Fp.mulN(I, Dx), v)); // 9
+    const Dy = Fp.mul(Fp.mulN(I, Dx), v); // 9
     let x = Fp.mul(Fp.addN(s, s), Dx); // 10
     if (Fp.isOdd!(x)) x = Fp.neg(x); // 10
     const y = Fp.mul(u1, Dy); // 11
@@ -534,7 +534,7 @@ class _RistrettoPoint extends PrimeEdwardsPoint<_RistrettoPoint> {
     const { value: invsqrt } = invertSqrt(Fp.mul(u1, u2sq)); // 3
     const D1 = Fp.mul(invsqrt, u1); // 4
     const D2 = Fp.mul(invsqrt, u2); // 5
-    const zInv = Fp.create(Fp.mulN(Fp.mulN(D1, D2), T)); // 6
+    const zInv = Fp.mul(Fp.mulN(D1, D2), T); // 6
     let D: bigint; // 7
     if (Fp.isOdd!(Fp.mul(T, zInv))) {
       let _x = Fp.mul(Y, SQRT_M1);
