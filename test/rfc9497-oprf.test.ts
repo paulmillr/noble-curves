@@ -235,6 +235,70 @@ describe('RFC-9497 (OPRF)', () => {
         err
       );
 
+      const dleqInput = asciiToBytes('dleq rejection input');
+      for (const suite of [p256_oprf, ristretto255_oprf]) {
+        const keys = suite.voprf.generateKeyPair();
+        const N = 3;
+        const blinds = Array.from({ length: N }, () => suite.voprf.blind(dleqInput));
+        const { evaluated, proof } = suite.voprf.blindEvaluateBatch(
+          keys.secretKey,
+          keys.publicKey,
+          blinds.map((b) => b.blinded)
+        );
+        const items = blinds.map((b, i) => ({
+          input: dleqInput,
+          blind: b.blind,
+          evaluated: evaluated[i],
+          blinded: b.blinded,
+        }));
+        // batch outputs must match the non-interactive evaluation for every item
+        const outputs = suite.voprf.finalizeBatch(items, keys.publicKey, proof);
+        const direct = suite.voprf.evaluate(keys.secretKey, dleqInput);
+        for (const o of outputs) eql(o, direct, 'voprf batch matches evaluate');
+        // rotating evaluated elements between items keeps every point valid but must fail the proof
+        const rotated = items.map((it, j) => ({ ...it, evaluated: evaluated[(j + 1) % N] }));
+        throws(
+          () => suite.voprf.finalizeBatch(rotated, keys.publicKey, proof),
+          /proof verification failed/
+        );
+        // truncated proof, non-canonical proof scalars (>= order), and c=s=0 must all reject
+        throws(() => suite.voprf.finalizeBatch(items, keys.publicKey, proof.slice(1)));
+        throws(() =>
+          suite.voprf.finalizeBatch(items, keys.publicKey, new Uint8Array(proof.length).fill(0xff))
+        );
+        // c=s=0 fails closed on every suite, but the error differs: weierstrass throws while
+        // serializing the identity t2 = 0*G + 0*B for the challenge transcript, ristretto
+        // encodes identity fine and reaches the challenge mismatch.
+        throws(() =>
+          suite.voprf.finalizeBatch(items, keys.publicKey, new Uint8Array(proof.length))
+        );
+
+        const pop = suite.poprf(asciiToBytes('batch info'));
+        const pkeys = pop.generateKeyPair();
+        const pblinds = Array.from({ length: N }, () => pop.blind(dleqInput, pkeys.publicKey));
+        const pev = pop.blindEvaluateBatch(
+          pkeys.secretKey,
+          pblinds.map((b) => b.blinded)
+        );
+        const pitems = pblinds.map((b, i) => ({
+          input: dleqInput,
+          blind: b.blind,
+          evaluated: pev.evaluated[i],
+          blinded: b.blinded,
+        }));
+        const pouts = pop.finalizeBatch(pitems, pev.proof, pblinds[0].tweakedKey);
+        const pdirect = pop.evaluate(pkeys.secretKey, dleqInput);
+        for (const o of pouts) eql(o, pdirect, 'poprf batch matches evaluate');
+        // a tweakedKey from a different info domain must fail proof verification
+        const otherTweaked = suite
+          .poprf(asciiToBytes('other info'))
+          .blind(dleqInput, pkeys.publicKey).tweakedKey;
+        throws(
+          () => pop.finalizeBatch(pitems, pev.proof, otherTweaked),
+          /proof verification failed/
+        );
+      }
+
       const mutableInfo = Uint8Array.of(1, 2, 3);
       const expected = p256_oprf.poprf(Uint8Array.of(1, 2, 3));
       const actual = p256_oprf.poprf(mutableInfo);
