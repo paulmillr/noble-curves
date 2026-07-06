@@ -215,7 +215,7 @@ export type RootsOfUnity = {
   clear: () => void;
 };
 /**
- * We limit roots up to 2**31, which is a lot: 2-billion polynomimal should be rare.
+ * We limit roots up to 2**31, which is a lot: 2-billion polynomial should be rare.
  * @param field - Field implementation.
  * @param generator - Optional trusted non-quadratic-residue override for callers that already know the field.
  * @returns Roots-of-unity cache.
@@ -256,9 +256,16 @@ export function rootsOfUnity(field: TArg<IField<bigint>>, generator?: bigint): R
     checkBits(maxPower);
     for (let power = maxPower; power >= 0; power--) {
       if (rootsCache[power]) continue; // Skip if we've already computed roots for this power
+      const above = rootsCache[power + 1];
       const rootsAtPower: bigint[] = [];
-      for (let j = 0, cur = field.ONE; j < 2 ** power; j++, cur = field.mul(cur, omegas[power]))
-        rootsAtPower.push(cur);
+      if (above) {
+        // ω_{2^p} = ω_{2^{p+1}}², so the smaller table is the even-index stride of the bigger
+        // one: only the largest requested power pays for the multiplication chain.
+        for (let j = 0; j < 2 ** power; j++) rootsAtPower.push(above[2 * j]);
+      } else {
+        for (let j = 0, cur = field.ONE; j < 2 ** power; j++, cur = field.mul(cur, omegas[power]))
+          rootsAtPower.push(cur);
+      }
       rootsCache[power] = rootsAtPower;
     }
     return rootsCache[maxPower];
@@ -268,7 +275,7 @@ export function rootsOfUnity(field: TArg<IField<bigint>>, generator?: bigint): R
   // roots()/brp()/inverse() expose shared cached arrays by reference for speed; callers must treat them as read-only.
 
   // NOTE: we use bits instead of power, because power = 2**bits,
-  // but power is not neccesary isPowerOfTwo(power)!
+  // but power is not necessarily isPowerOfTwo(power)!
   return {
     info: { G, powerOfTwo, oddFactor },
     roots: (bits: number): bigint[] => {
@@ -288,7 +295,10 @@ export function rootsOfUnity(field: TArg<IField<bigint>>, generator?: bigint): R
       const b = checkBits(bits);
       if (inverseCache.has(b)) return inverseCache.get(b)!;
       else {
-        const res = field.invertBatch(this.roots(b));
+        // ωᴺ = 1, so inv(ωᵏ) = ωᴺ⁻ᵏ: the inverse table is the reversed roots table.
+        // Value-identical to field.invertBatch(roots), but skips its 3N muls + inversion.
+        const r = this.roots(b);
+        const res = [r[0]].concat(r.slice(1).reverse());
         inverseCache.set(b, res);
         return res;
       }
@@ -369,7 +379,7 @@ export type FFTCoreLoop<T> = <P extends Polynomial<T>>(values: P) => P;
 /**
  * Constructs different flavors of FFT. radix2 implementation of low level mutating API. Flavors:
  *
- * - DIT (Decimation-in-Time): Bottom-Up (leaves to root), Cool-Turkey
+ * - DIT (Decimation-in-Time): Bottom-Up (leaves to root), Cooley-Tukey
  * - DIF (Decimation-in-Frequency): Top-Down (root to leaves), Gentleman-Sande
  *
  * DIT takes brp input, returns natural output.
@@ -381,6 +391,14 @@ export type FFTCoreLoop<T> = <P extends Polynomial<T>>(values: P) => P;
  *
  * Cyclic NTT: Rq = Zq[x]/(x^n-1). butterfly_DIT+loop_DIT OR butterfly_DIF+loop_DIT, roots are omega
  * Negacyclic NTT: Rq = Zq[x]/(x^n+1). butterfly_DIT+loop_DIF, at least for mlkem / mldsa
+ *
+ * `invertButterflies` indexes roots by a per-butterfly-group counter (`grp`): forward
+ * (`dit: false`) reads `roots[grp]` with grp = 1..; inverse (`dit: true`) reads `roots[N - grp]`
+ * with grp restarting at 1. With `skipStages: 0` one table serves both directions (ωᴺ = 1 makes
+ * the reversed walk self-inverse). With `skipStages > 0` the inverse walk starts at `N - 1`
+ * instead of continuing where the skipped stages would have left off, so the caller must supply
+ * a table shaped for that (ML-KEM: `ζ^BitRev7(i)` over all N=256 indices, whose aliased upper
+ * half is exactly the FIPS 203 inverse walk).
  * @param F - Field operations.
  * @param coreOpts - FFT configuration. See {@link FFTCoreOpts}:
  *   - `N`: Transform size. Must be a power of two.
@@ -500,33 +518,47 @@ export type FFTMethods<T> = {
  * ```
  */
 export function FFT<T>(roots: RootsOfUnity, opts: FFTOpts<T, bigint>): FFTMethods<T> {
+  // Loops are cached per (size, direction, brp flags): FFTCore construction validates options
+  // and allocates closures, which costs more than a small transform itself. The cached loop
+  // closes over the root table active at first use; `roots.clear()` rebuilds value-identical
+  // tables, so a stale reference stays correct.
+  const loops = new Map<number, FFTCoreLoop<T>>();
   const getLoop = (
     N: number,
-    roots: Polynomial<bigint>,
-    brpInput = false,
-    brpOutput = false
+    rootsTable: Polynomial<bigint>,
+    key: number
   ): (<P extends Polynomial<T>>(values: P) => P) => {
+    const cached = loops.get(key);
+    if (cached) return cached;
+    const brpInput = !!(key & 2);
+    const brpOutput = !!(key & 1);
+    let loop: FFTCoreLoop<T>;
     if (brpInput && brpOutput) {
       // we cannot optimize this case, but lets support it anyway
-      return (values) =>
-        FFTCore(opts, { N, roots, dit: false, brp: false })(bitReversalInplace(values));
-    }
-    if (brpInput) return FFTCore(opts, { N, roots, dit: true, brp: false });
-    if (brpOutput) return FFTCore(opts, { N, roots, dit: false, brp: false });
-    return FFTCore(opts, { N, roots, dit: true, brp: true }); // all natural
+      const core = FFTCore(opts, { N, roots: rootsTable, dit: false, brp: false });
+      loop = (values) => core(bitReversalInplace(values));
+    } else if (brpInput) loop = FFTCore(opts, { N, roots: rootsTable, dit: true, brp: false });
+    else if (brpOutput) loop = FFTCore(opts, { N, roots: rootsTable, dit: false, brp: false });
+    else loop = FFTCore(opts, { N, roots: rootsTable, dit: true, brp: true }); // all natural
+    loops.set(key, loop);
+    return loop;
   };
+  const loopKey = (bits: number, isInverse: boolean, brpInput: boolean, brpOutput: boolean) =>
+    (bits << 3) | (isInverse ? 4 : 0) | (brpInput ? 2 : 0) | (brpOutput ? 1 : 0);
   return {
     direct<P extends Polynomial<T>>(values: P, brpInput = false, brpOutput = false): P {
       const N = values.length;
       if (!isPowerOfTwo(N)) throw new Error('FFT: Polynomial size should be power of two');
       const bits = log2(N);
-      return getLoop(N, roots.roots(bits), brpInput, brpOutput)<P>(values.slice());
+      const key = loopKey(bits, false, brpInput, brpOutput);
+      return getLoop(N, roots.roots(bits), key)<P>(values.slice());
     },
     inverse<P extends Polynomial<T>>(values: P, brpInput = false, brpOutput = false): P {
       const N = values.length;
       if (!isPowerOfTwo(N)) throw new Error('FFT: Polynomial size should be power of two');
       const bits = log2(N);
-      const res = getLoop(N, roots.inverse(bits), brpInput, brpOutput)(values.slice());
+      const key = loopKey(bits, true, brpInput, brpOutput);
+      const res = getLoop(N, roots.inverse(bits), key)(values.slice());
       const ivm = opts.inv(BigInt(values.length)); // scale
       // we can get brp output if we use dif instead of dit!
       for (let i = 0; i < res.length; i++) res[i] = opts.mul(res[i], ivm);
