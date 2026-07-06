@@ -161,6 +161,42 @@ describe('weierstrass ECDH', () => {
   });
 });
 
+describe('ECDSA nonce-blinding RNG probe', () => {
+  const msg = new Uint8Array(32).fill(1);
+
+  should('RNG broken at construction downgrades to invertCt; signatures value-identical', () => {
+    const keys = p256.keygen();
+    const want = p256.sign(msg, keys.secretKey); // RFC 6979 deterministic, blinded path
+    const throwingRng = () => {
+      throw new Error('no entropy');
+    };
+    const nullRng = (() => null) as never as (len?: number) => Uint8Array;
+    const shortRng = () => new Uint8Array(3);
+    for (const rng of [throwingRng, nullRng, shortRng]) {
+      // probe fails -> k2sig falls back to Fermat inversion; blinding is value-identical,
+      // so the downgraded signature must match the blinded one bit-for-bit
+      const C = ecdsa(p256.Point, sha256, { randomBytes: rng as never });
+      eql(C.sign(msg, keys.secretKey), want, `downgraded sign matches (${rng.name})`);
+      eql(C.verify(want, msg, keys.publicKey), true);
+    }
+  });
+
+  should('rogue RNG misbehaving after a good probe makes sign() fail closed', () => {
+    // A stateful RNG can always behave while probed and misbehave later; that case must
+    // throw (per-call validation), never silently drop the nonce blinding.
+    const keys = p256.keygen();
+    let calls = 0;
+    const rogue = ((len = 0) => {
+      calls++;
+      if (calls === 1) return randomBytes(len); // pass the probe
+      return null; // garbage afterwards
+    }) as never as (len?: number) => Uint8Array;
+    const C = ecdsa(p256.Point, sha256, { randomBytes: rogue });
+    throws(() => C.sign(msg, keys.secretKey));
+    eql(calls >= 2, true, 'rogue RNG was actually consulted after the probe');
+  });
+});
+
 should(
   'recovered-signature support is not rejected for a valid h=2 curve just because 2n < p',
   () => {

@@ -25,11 +25,11 @@ import {
   type TRet,
 } from '../utils.ts';
 import {
+  ScalarMultiplier,
   createCurveFields,
   createKeygen,
   normalizeZ,
   validatePointCons,
-  wNAF,
   type AffinePoint,
   type CurveLengths,
   type CurvePoint,
@@ -39,7 +39,7 @@ import { type IField } from './modular.ts';
 
 // Be friendly to bad ECMAScript parsers by not using bigint literals
 // prettier-ignore
-const _0n = /* @__PURE__ */ BigInt(0), _1n = /* @__PURE__ */ BigInt(1), _2n = /* @__PURE__ */ BigInt(2), _8n = /* @__PURE__ */ BigInt(8);
+const _0n = /* @__PURE__ */ BigInt(0), _1n = /* @__PURE__ */ BigInt(1), _2n = /* @__PURE__ */ BigInt(2), _4n = /* @__PURE__ */ BigInt(4), _8n = /* @__PURE__ */ BigInt(8);
 
 /** Extended Edwards point with X/Y/Z/T coordinates. */
 export interface EdwardsPoint extends CurvePoint<bigint, EdwardsPoint> {
@@ -121,6 +121,8 @@ export type EdwardsExtraOpts = Partial<{
   FpFnLE: boolean;
   /** Square-root ratio helper used during point decompression. */
   uvRatio: (u: bigint, v: bigint) => { isValid: boolean; value: bigint };
+  /** RNG override used for scalar blinding. */
+  randomBytes: (bytesLength?: number) => TRet<Uint8Array>;
 }>;
 
 /**
@@ -272,7 +274,7 @@ function isEdValidXY(Fp: TArg<IField<bigint>>, CURVE: EdwardsOpts, x: bigint, y:
  *   RFC 8032 base-point constraints like `B != (0,1)` and `[L]B = 0`
  *   are left to the caller's chosen parameters, since eager subgroup
  *   validation here adds about 10-15ms to heavyweight imports like ed448.
- *   The returned constructor also eagerly marks `Point.BASE` for W=8
+ *   The returned constructor also eagerly marks `Point.BASE` for W=6
  *   precompute caching. Some code paths still assume
  *   `Fp.BYTES === Fn.BYTES`, so mismatched byte lengths are not fully audited here.
  * @throws If the curve parameters or Edwards overrides are invalid. {@link Error}
@@ -295,11 +297,16 @@ export function edwards(
   const { Fp, Fn } = validated;
   let CURVE = validated.CURVE as EdwardsOpts;
   const { h: cofactor } = CURVE;
-  validateObject(opts, {}, { uvRatio: 'function' });
+  validateObject(opts, {}, { uvRatio: 'function', randomBytes: 'function' });
+  const randomBytes = opts.randomBytes === undefined ? wcRandomBytes : opts.randomBytes;
 
   // Coordinate and ZIP-215 bounds follow the base-field byte container, not scalar bytes.
   const MASK = _2n << (BigInt(Fp.BYTES * 8) - _1n);
-  const modP = (n: bigint) => Fp.create(n); // Function overrides
+
+  function isOdd(n: bigint): boolean {
+    if (!Fp.isOdd) throw new Error('Field does not have .isOdd()');
+    return Fp.isOdd(n);
+  }
 
   // sqrt(u/v)
   const uvRatio =
@@ -317,6 +324,14 @@ export function edwards(
   // equation ax² + y² = 1 + dx²y² should work for generator point.
   if (!isEdValidXY(Fp, CURVE, CURVE.Gx, CURVE.Gy))
     throw new Error('bad curve params: generator point');
+
+  // Multiplication by param `a` sits on the double() / add() hot paths. For the common twists
+  // a=-1 (ed25519, jubjub) and a=1 (ed448) the full field multiplication is replaced with
+  // negation / identity. Selection depends only on public curve constants.
+  const mulA =
+    Fp.eql(CURVE.a, Fp.neg(Fp.ONE)) ? (x: bigint): bigint => Fp.neg(x)
+    : Fp.eql(CURVE.a, Fp.ONE) ? (x: bigint): bigint => x
+    : (x: bigint): bigint => Fp.mul(CURVE.a, x); // prettier-ignore
 
   /**
    * Asserts coordinate is valid: 0 <= n < MASK.
@@ -336,9 +351,9 @@ export function edwards(
   // https://en.wikipedia.org/wiki/Twisted_Edwards_curve#Extended_coordinates
   class Point implements EdwardsPoint {
     // base / generator point
-    static readonly BASE = new Point(CURVE.Gx, CURVE.Gy, _1n, modP(CURVE.Gx * CURVE.Gy));
+    static readonly BASE = new Point(CURVE.Gx, CURVE.Gy, Fp.ONE, Fp.mul(CURVE.Gx, CURVE.Gy));
     // zero / infinity / identity point
-    static readonly ZERO = new Point(_0n, _1n, _1n, _0n); // 0, 1, 1, 0
+    static readonly ZERO = new Point(Fp.ZERO, Fp.ONE, Fp.ONE, Fp.ZERO); // 0, 1, 1, 0
     // math field
     static readonly Fp = Fp;
     // scalar field
@@ -371,7 +386,7 @@ export function edwards(
       const { x, y } = p || {};
       acoord('x', x);
       acoord('y', y);
-      return new Point(x, y, _1n, modP(x * y));
+      return new Point(x, y, Fp.ONE, Fp.mul(x, y));
     }
 
     // Uses algo from RFC8032 5.1.3.
@@ -394,17 +409,17 @@ export function edwards(
 
       // Ed25519: x² = (y²-1)/(dy²+1) mod p. Ed448: x² = (y²-1)/(dy²-1) mod p. Generic case:
       // ax²+y²=1+dx²y² => y²-1=dx²y²-ax² => y²-1=x²(dy²-a) => x²=(y²-1)/(dy²-a)
-      const y2 = modP(y * y); // denominator is always non-0 mod p.
-      const u = modP(y2 - _1n); // u = y² - 1
-      const v = modP(d * y2 - a); // v = d y² + 1.
+      const y2 = Fp.sqr(y); // denominator is always non-0 mod p.
+      const u = Fp.sub(y2, Fp.ONE); // u = y² - 1
+      const v = Fp.create(Fp.subN(Fp.mulN(d, y2), a)); // v = d y² - a.
       let { isValid, value: x } = uvRatio(u, v); // √(u/v)
       if (!isValid) throw new Error('bad point: invalid y coordinate');
-      const isXOdd = (x & _1n) === _1n; // There are 2 square roots. Use x_0 bit to select proper
+      const isXOdd = isOdd(x); // There are 2 square roots. Use x_0 bit to select proper
       const isLastByteOdd = (lastByte & 0x80) !== 0; // x_0, last bit
-      if (!zip215 && x === _0n && isLastByteOdd)
+      if (!zip215 && Fp.is0(x) && isLastByteOdd)
         // if x=0 and x_0 = 1, fail
         throw new Error('bad point: x=0 and x_0=1');
-      if (isLastByteOdd !== isXOdd) x = modP(-x); // if x_0 != x mod 2, set x = p-x
+      if (isLastByteOdd !== isXOdd) x = Fp.neg(x); // if x_0 != x mod 2, set x = p-x
       return Point.fromAffine({ x, y });
     }
 
@@ -419,8 +434,8 @@ export function edwards(
       return this.toAffine().y;
     }
 
-    precompute(windowSize: number = 8, isLazy = true) {
-      wnaf.createCache(this, windowSize);
+    precompute(windowSize: number = 6, isLazy = true) {
+      wnaf.setWindowSize(this, windowSize);
       if (!isLazy) this.multiply(_2n); // random number
       return this;
     }
@@ -437,18 +452,18 @@ export function edwards(
       // Equation in affine coordinates: ax² + y² = 1 + dx²y²
       // Equation in projective coordinates (X/Z, Y/Z, Z):  (aX² + Y²)Z² = Z⁴ + dX²Y²
       const { X, Y, Z, T } = p;
-      const X2 = modP(X * X); // X²
-      const Y2 = modP(Y * Y); // Y²
-      const Z2 = modP(Z * Z); // Z²
-      const Z4 = modP(Z2 * Z2); // Z⁴
-      const aX2 = modP(X2 * a); // aX²
-      const left = modP(Z2 * modP(aX2 + Y2)); // (aX² + Y²)Z²
-      const right = modP(Z4 + modP(d * modP(X2 * Y2))); // Z⁴ + dX²Y²
-      if (left !== right) throw new Error('bad point: equation left != right (1)');
+      const X2 = Fp.sqr(X); // X²
+      const Y2 = Fp.sqr(Y); // Y²
+      const Z2 = Fp.sqr(Z); // Z²
+      const Z4 = Fp.sqr(Z2); // Z⁴
+      const aX2 = Fp.mul(X2, a); // aX²
+      const left = Fp.mul(Fp.add(aX2, Y2), Z2); // (aX² + Y²)Z²
+      const right = Fp.add(Z4, Fp.mul(d, Fp.mul(X2, Y2))); // Z⁴ + dX²Y²
+      if (!Fp.eql(left, right)) throw new Error('bad point: equation left != right (1)');
       // In Extended coordinates we also have T, which is x*y=T/Z: check X*Y == Z*T
-      const XY = modP(X * Y);
-      const ZT = modP(Z * T);
-      if (XY !== ZT) throw new Error('bad point: equation left != right (2)');
+      const XY = Fp.mul(X, Y);
+      const ZT = Fp.mul(Z, T);
+      if (!Fp.eql(XY, ZT)) throw new Error('bad point: equation left != right (2)');
     }
 
     // Compare one point to another.
@@ -456,11 +471,11 @@ export function edwards(
       aedpoint(other);
       const { X: X1, Y: Y1, Z: Z1 } = this;
       const { X: X2, Y: Y2, Z: Z2 } = other;
-      const X1Z2 = modP(X1 * Z2);
-      const X2Z1 = modP(X2 * Z1);
-      const Y1Z2 = modP(Y1 * Z2);
-      const Y2Z1 = modP(Y2 * Z1);
-      return X1Z2 === X2Z1 && Y1Z2 === Y2Z1;
+      const X1Z2 = Fp.mul(X1, Z2);
+      const X2Z1 = Fp.mul(X2, Z1);
+      const Y1Z2 = Fp.mul(Y1, Z2);
+      const Y2Z1 = Fp.mul(Y2, Z1);
+      return Fp.eql(X1Z2, X2Z1) && Fp.eql(Y1Z2, Y2Z1);
     }
 
     is0(): boolean {
@@ -469,28 +484,27 @@ export function edwards(
 
     negate(): Point {
       // Flips point sign to a negative one (-x, y in affine coords)
-      return new Point(modP(-this.X), this.Y, this.Z, modP(-this.T));
+      return new Point(Fp.neg(this.X), this.Y, this.Z, Fp.neg(this.T));
     }
 
     // Fast algo for doubling Extended Point.
     // https://hyperelliptic.org/EFD/g1p/auto-twisted-extended.html#doubling-dbl-2008-hwcd
     // Cost: 4M + 4S + 1*a + 6add + 1*2.
     double(): Point {
-      const { a } = CURVE;
       const { X: X1, Y: Y1, Z: Z1 } = this;
-      const A = modP(X1 * X1); // A = X12
-      const B = modP(Y1 * Y1); // B = Y12
-      const C = modP(_2n * modP(Z1 * Z1)); // C = 2*Z12
-      const D = modP(a * A); // D = a*A
-      const x1y1 = X1 + Y1;
-      const E = modP(modP(x1y1 * x1y1) - A - B); // E = (X1+Y1)2-A-B
-      const G = D + B; // G = D+B
-      const F = G - C; // F = G-C
-      const H = D - B; // H = D-B
-      const X3 = modP(E * F); // X3 = E*F
-      const Y3 = modP(G * H); // Y3 = G*H
-      const T3 = modP(E * H); // T3 = E*H
-      const Z3 = modP(F * G); // Z3 = F*G
+      const A = Fp.sqr(X1); // A = X12
+      const B = Fp.sqr(Y1); // B = Y12
+      const C = Fp.mul(Fp.sqr(Z1), _2n); // C = 2*Z12
+      const D = mulA(A); // D = a*A
+      const x1y1 = Fp.addN(X1, Y1);
+      const E = Fp.create(Fp.subN(Fp.subN(Fp.sqr(x1y1), A), B)); // E = (X1+Y1)2-A-B
+      const G = Fp.addN(D, B); // G = D+B
+      const F = Fp.subN(G, C); // F = G-C
+      const H = Fp.subN(D, B); // H = D-B
+      const X3 = Fp.mul(E, F); // X3 = E*F
+      const Y3 = Fp.mul(G, H); // Y3 = G*H
+      const T3 = Fp.mul(E, H); // T3 = E*H
+      const Z3 = Fp.mul(F, G); // Z3 = F*G
       return new Point(X3, Y3, Z3, T3);
     }
 
@@ -499,21 +513,21 @@ export function edwards(
     // Cost: 9M + 1*a + 1*d + 7add.
     add(other: Point) {
       aedpoint(other);
-      const { a, d } = CURVE;
+      const { d } = CURVE;
       const { X: X1, Y: Y1, Z: Z1, T: T1 } = this;
       const { X: X2, Y: Y2, Z: Z2, T: T2 } = other;
-      const A = modP(X1 * X2); // A = X1*X2
-      const B = modP(Y1 * Y2); // B = Y1*Y2
-      const C = modP(T1 * d * T2); // C = T1*d*T2
-      const D = modP(Z1 * Z2); // D = Z1*Z2
-      const E = modP((X1 + Y1) * (X2 + Y2) - A - B); // E = (X1+Y1)*(X2+Y2)-A-B
-      const F = D - C; // F = D-C
-      const G = D + C; // G = D+C
-      const H = modP(B - a * A); // H = B-a*A
-      const X3 = modP(E * F); // X3 = E*F
-      const Y3 = modP(G * H); // Y3 = G*H
-      const T3 = modP(E * H); // T3 = E*H
-      const Z3 = modP(F * G); // Z3 = F*G
+      const A = Fp.mul(X1, X2); // A = X1*X2
+      const B = Fp.mul(Y1, Y2); // B = Y1*Y2
+      const C = Fp.create(Fp.mulN(Fp.mulN(T1, d), T2)); // C = T1*d*T2
+      const D = Fp.mul(Z1, Z2); // D = Z1*Z2
+      const E = Fp.create(Fp.subN(Fp.subN(Fp.mulN(Fp.addN(X1, Y1), Fp.addN(X2, Y2)), A), B)); // E = (X1+Y1)*(X2+Y2)-A-B
+      const F = Fp.subN(D, C); // F = D-C
+      const G = Fp.addN(D, C); // G = D+C
+      const H = Fp.create(Fp.subN(B, mulA(A))); // H = B-a*A
+      const X3 = Fp.mul(E, F); // X3 = E*F
+      const Y3 = Fp.mul(G, H); // Y3 = G*H
+      const T3 = Fp.mul(E, H); // T3 = E*H
+      const Z3 = Fp.mul(F, G); // Z3 = F*G
       return new Point(X3, Y3, Z3, T3);
     }
 
@@ -532,8 +546,8 @@ export function edwards(
       // and failing closed is safer than silently producing the identity point.
       if (!Fn.isValidNot0(scalar))
         throw new RangeError('invalid scalar: expected 1 <= sc < curve.n');
-      const { p, f } = wnaf.cached(this, scalar, (p) => normalizeZ(Point, p));
-      return normalizeZ(Point, [p, f])[0];
+      const { p, f } = wnaf.mulSecret(this, scalar, cofactor, normalize);
+      return normalize([p, f])[0];
     }
 
     // Non-constant-time multiplication. Uses double-and-add algorithm.
@@ -546,7 +560,7 @@ export function edwards(
       if (!Fn.isValid(scalar)) throw new RangeError('invalid scalar: expected 0 <= sc < curve.n');
       if (scalar === _0n) return Point.ZERO;
       if (this.is0() || scalar === _1n) return this;
-      return wnaf.unsafe(this, scalar, (p) => normalizeZ(Point, p));
+      return wnaf.mulUnsafe(this, scalar, normalize);
     }
 
     // Checks if point is of small order.
@@ -560,7 +574,7 @@ export function edwards(
     // Multiplies point by curve order and checks if the result is 0.
     // Returns `false` is the point is dirty.
     isTorsionFree(): boolean {
-      return wnaf.unsafe(this, CURVE.n).is0();
+      return wnaf.mulUnsafe(this, CURVE.n).is0();
     }
 
     // Converts Extended point to default (x, y) coordinates.
@@ -572,17 +586,21 @@ export function edwards(
         throw new TypeError('"invertedZ" expected bigint, got type=' + typeof iz);
       const { X, Y, Z } = p;
       const is0 = p.is0();
-      if (iz == null) iz = is0 ? _8n : (Fp.inv(Z) as bigint); // 8 was chosen arbitrarily
-      const x = modP(X * iz);
-      const y = modP(Y * iz);
+      if (iz == null) iz = is0 ? Fp.create(_8n) : (Fp.inv(Z) as bigint);
+      const x = Fp.mul(X, iz);
+      const y = Fp.mul(Y, iz);
       const zz = Fp.mul(Z, iz);
-      if (is0) return { x: _0n, y: _1n };
-      if (zz !== _1n) throw new Error('invZ was invalid');
+      if (is0) return { x: Fp.ZERO, y: Fp.ONE };
+      if (!Fp.eql(zz, Fp.ONE)) throw new Error('invZ was invalid');
       return { x, y };
     }
 
     clearCofactor(): Point {
       if (cofactor === _1n) return this;
+      // 2.8-3.8x speed-up vs naive
+      if (cofactor === _2n) return this.double();
+      if (cofactor === _4n) return this.double().double();
+      if (cofactor === _8n) return this.double().double().double();
       return this.multiplyUnsafe(cofactor);
     }
 
@@ -592,7 +610,7 @@ export function edwards(
       const bytes = Fp.toBytes(y);
       // Each y has 2 valid points: (x, y), (x,-y).
       // When compressing, it's enough to store y and use the last byte to encode sign of x
-      bytes[bytes.length - 1] |= x & _1n ? 0x80 : 0;
+      bytes[bytes.length - 1] |= isOdd(x) ? 0x80 : 0;
       return bytes;
     }
     toHex(): string {
@@ -612,10 +630,11 @@ export function edwards(
   // } catch {
   //   throw new Error('bad curve params: generator point');
   // }
-  const wnaf = new wNAF(Point);
-  // Enable precomputes. Slows down first publicKey computation by 20ms.
-  // Disable for tiny toy curves, with scalar fields < 8 bits.
-  if (wnaf.bits >= 8) Point.BASE.precompute(8);
+  const normalize = (points: Point[]) => normalizeZ(Point, points);
+  const wnaf = new ScalarMultiplier(Point, randomBytes);
+  // Enable W=6 wNAF precomputes. Slows down first publicKey computation.
+  // Disable for tiny toy curves, with scalar fields < 6 bits.
+  if (wnaf.bits >= 6) Point.BASE.precompute(6);
   Object.freeze(Point.prototype);
   Object.freeze(Point);
   return Point;

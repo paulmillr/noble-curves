@@ -28,12 +28,9 @@
 import { hmac as nobleHmac } from '@noble/hashes/hmac.js';
 import { ahash } from '@noble/hashes/utils.js';
 import {
-  abignumber,
   abool,
   abytes,
   aInRange,
-  asafenumber,
-  astring,
   bitLen,
   bitMask,
   bytesToHex,
@@ -42,7 +39,6 @@ import {
   createHmacDrbg,
   hexToBytes,
   isBytes,
-  numberToHexUnpadded,
   validateObject,
   randomBytes as wcRandomBytes,
   type CHash,
@@ -52,36 +48,33 @@ import {
   type TRet,
 } from '../utils.ts';
 import {
+  ScalarMultiplier,
   createCurveFields,
   createKeygen,
-  mulEndoUnsafe,
-  negateCt,
+  mulAddUnsafe,
   normalizeZ,
+  probeRandomBytes,
   validatePointCons,
-  wNAF,
   type AffinePoint,
   type CurveLengths,
   type CurvePoint,
   type CurvePointCons,
 } from './curve.ts';
-import {
-  FpInvertBatch,
-  FpIsSquare,
-  getMinHashLength,
-  mapHashToField,
-  validateField,
-  type IField,
-} from './modular.ts';
+import { DER } from './der.ts';
+import { getMinHashLength, invertCt, mapHashToField, type IField } from './modular.ts';
 
 /** Shared affine point shape used by Weierstrass helpers. */
 export type { AffinePoint };
+
+// DER codec lives in der.ts; re-exported here because ECDSA signatures are its main consumer.
+export { DER, DERErr, type IDER } from './der.ts';
 
 type EndoBasis = [[bigint, bigint], [bigint, bigint]];
 /**
  * When Weierstrass curve has `a=0`, it becomes Koblitz curve.
  * Koblitz curves allow using **efficiently-computable GLV endomorphism ψ**.
- * Endomorphism uses 2x less RAM, speeds up precomputation by 2x and ECDH / key recovery by 20%.
- * For precomputed wNAF it trades off 1/2 init time & 1/3 ram for 20% perf hit.
+ * Endomorphism speeds up un-precomputed public-scalar multiplication (verification / key
+ * recovery) by splitting a scalar into two half-width halves that share doublings.
  *
  * Endomorphism consists of beta, lambda and basises:
  *
@@ -144,8 +137,8 @@ export function _splitEndoScalar(k: bigint, basis: EndoBasis, n: bigint): Scalar
   const k2neg = k2 < _0n;
   if (k1neg) k1 = -k1;
   if (k2neg) k2 = -k2;
-  // Double check that resulting scalar less than half bits of N: otherwise wNAF will fail.
-  // This should only happen on wrong bases.
+  // Double check that resulting scalar is less than half bits of N: the wNAF pair walk
+  // relies on the halves being short. This should only happen on wrong bases.
   // Also, the math inside is complex enough that this guard is worth keeping.
   const MAX_NUM = bitMask(Math.ceil(bitLen(n) / 2)) + _1n; // Half bits of N
   if (k1 < _0n || k1 >= MAX_NUM || k2 < _0n || k2 >= MAX_NUM) {
@@ -273,6 +266,17 @@ export interface WeierstrassPoint<T> extends CurvePoint<T, WeierstrassPoint<T>> 
    * @returns Encoded point hex.
    */
   toHex(isCompressed?: boolean): string;
+  /**
+   * Double-scalar multiplication `a⋅this + b⋅other` via Strauss–Shamir: both scalar walks
+   * share one doubling chain, and GLV endomorphism (when the curve has one) halves the chain
+   * again by splitting each scalar. 1.3-1.7x faster than two `multiplyUnsafe()` calls.
+   * Not constant-time: only for public scalars, e.g. ECDSA verification's `u1⋅G + u2⋅P`.
+   * @param a - Scalar for this point.
+   * @param other - Second point.
+   * @param b - Scalar for the second point.
+   * @returns Combined product point.
+   */
+  mulAddUnsafe(a: bigint, other: WeierstrassPoint<T>, b: bigint): WeierstrassPoint<T>;
 }
 
 /** Constructor and metadata helpers for Weierstrass points. */
@@ -330,6 +334,8 @@ export type WeierstrassExtraOpts<T> = Partial<{
   allowInfinityPoint: boolean;
   /** Optional GLV endomorphism data. */
   endo: EndomorphismOpts;
+  /** RNG override used for scalar blinding. */
+  randomBytes: (bytesLength?: number) => TRet<Uint8Array>;
   /** Optional torsion-check override. */
   isTorsionFree: (c: WeierstrassPointCons<T>, point: WeierstrassPoint<T>) => boolean;
   /** Optional cofactor-clearing override. */
@@ -457,194 +463,6 @@ export interface ECDSA extends ECDH {
   /** Signature constructor and parser helpers. */
   Signature: ECDSASignatureCons;
 }
-/**
- * @param m - Error message.
- * @example
- * Throw a DER-specific error when signature parsing encounters invalid bytes.
- *
- * ```ts
- * new DERErr('bad der');
- * ```
- */
-export class DERErr extends Error {
-  constructor(m = '') {
-    super(m);
-  }
-}
-/** DER helper namespace used by ECDSA signature parsing and encoding. */
-export type IDER = {
-  // asn.1 DER encoding utils
-  /**
-   * DER-specific error constructor.
-   * @param m - Error message.
-   * @returns DER-specific error instance.
-   */
-  Err: typeof DERErr;
-  // Basic building block is TLV (Tag-Length-Value)
-  /** Low-level tag-length-value helpers used by DER encoders. */
-  _tlv: {
-    /**
-     * Encode one TLV record.
-     * @param tag - ASN.1 tag byte.
-     * @param data - Hex-encoded value payload.
-     * @returns Encoded TLV string.
-     */
-    encode: (tag: number, data: string) => string;
-    // v - value, l - left bytes (unparsed)
-    /**
-     * Decode one TLV record and return the value plus leftover bytes.
-     * @param tag - Expected ASN.1 tag byte.
-     * @param data - Remaining DER bytes.
-     * @returns Parsed value plus leftover bytes.
-     */
-    decode(tag: number, data: TArg<Uint8Array>): TRet<{ v: Uint8Array; l: Uint8Array }>;
-  };
-  // https://crypto.stackexchange.com/a/57734 Leftmost bit of first byte is 'negative' flag,
-  // since we always use positive integers here. It must always be empty:
-  // - add zero byte if exists
-  // - if next byte doesn't have a flag, leading zero is not allowed (minimal encoding)
-  /** Positive-integer DER helpers used by ECDSA signature encoding. */
-  _int: {
-    /**
-     * Encode one positive bigint as a DER INTEGER.
-     * @param num - Positive integer to encode.
-     * @returns Encoded DER INTEGER.
-     */
-    encode(num: bigint): string;
-    /**
-     * Decode one DER INTEGER into a bigint.
-     * @param data - DER INTEGER bytes.
-     * @returns Decoded bigint.
-     */
-    decode(data: TArg<Uint8Array>): bigint;
-  };
-  /**
-   * Parse a DER signature into `{ r, s }`.
-   * @param bytes - DER signature bytes.
-   * @returns Parsed signature components.
-   */
-  toSig(bytes: TArg<Uint8Array>): { r: bigint; s: bigint };
-  /**
-   * Encode `{ r, s }` as a DER signature.
-   * @param sig - Signature components.
-   * @returns DER-encoded signature hex.
-   */
-  hexFromSig(sig: { r: bigint; s: bigint }): string;
-};
-/**
- * ASN.1 DER encoding utilities. ASN is very complex & fragile. Format:
- *
- *     [0x30 (SEQUENCE), bytelength, 0x02 (INTEGER), intLength, R, 0x02 (INTEGER), intLength, S]
- *
- * Docs: {@link https://letsencrypt.org/docs/a-warm-welcome-to-asn1-and-der/ | Let's Encrypt ASN.1 guide} and
- * {@link https://luca.ntop.org/Teaching/Appunti/asn1.html | Luca Deri's ASN.1 notes}.
- * @example
- * ASN.1 DER encoding utilities.
- *
- * ```ts
- * const der = DER.hexFromSig({ r: 1n, s: 2n });
- * ```
- */
-export const DER: IDER = {
-  // asn.1 DER encoding utils
-  Err: DERErr,
-  // Basic building block is TLV (Tag-Length-Value)
-  _tlv: {
-    encode: (tag: number, data: string): string => {
-      const { Err: E } = DER;
-      asafenumber(tag, 'tag');
-      if (tag < 0 || tag > 255) throw new E('tlv.encode: wrong tag');
-      astring(data, 'data');
-      // Internal helper: callers hand this already-validated hex payload, so we only enforce
-      // byte alignment here instead of re-validating every nibble.
-      if (data.length & 1) throw new E('tlv.encode: unpadded data');
-      const dataLen = data.length / 2;
-      const len = numberToHexUnpadded(dataLen);
-      if ((len.length / 2) & 0b1000_0000) throw new E('tlv.encode: long form length too big');
-      // length of length with long form flag
-      const lenLen = dataLen > 127 ? numberToHexUnpadded((len.length / 2) | 0b1000_0000) : '';
-      const t = numberToHexUnpadded(tag);
-      return t + lenLen + len + data;
-    },
-    // v - value, l - left bytes (unparsed)
-    decode(tag: number, data: TArg<Uint8Array>): TRet<{ v: Uint8Array; l: Uint8Array }> {
-      const { Err: E } = DER;
-      data = abytes(data, undefined, 'DER data');
-      let pos = 0;
-      if (tag < 0 || tag > 255) throw new E('tlv.encode: wrong tag');
-      if (data.length < 2 || data[pos++] !== tag) throw new E('tlv.decode: wrong tlv');
-      const first = data[pos++];
-      // First bit of first length byte is the short/long form flag.
-      const isLong = !!(first & 0b1000_0000);
-      let length = 0;
-      if (!isLong) length = first;
-      else {
-        // Long form: [longFlag(1bit), lengthLength(7bit), length (BE)]
-        const lenLen = first & 0b0111_1111;
-        if (!lenLen) throw new E('tlv.decode(long): indefinite length not supported');
-        // This would overflow u32 in JS.
-        if (lenLen > 4) throw new E('tlv.decode(long): byte length is too big');
-        const lengthBytes = data.subarray(pos, pos + lenLen);
-        if (lengthBytes.length !== lenLen) throw new E('tlv.decode: length bytes not complete');
-        if (lengthBytes[0] === 0) throw new E('tlv.decode(long): zero leftmost byte');
-        for (const b of lengthBytes) length = (length << 8) | b;
-        pos += lenLen;
-        if (length < 128) throw new E('tlv.decode(long): not minimal encoding');
-      }
-      const v = data.subarray(pos, pos + length);
-      if (v.length !== length) throw new E('tlv.decode: wrong value length');
-      return { v, l: data.subarray(pos + length) } as TRet<{ v: Uint8Array; l: Uint8Array }>;
-    },
-  },
-  // https://crypto.stackexchange.com/a/57734 Leftmost bit of first byte is 'negative' flag,
-  // since we always use positive integers here. It must always be empty:
-  // - add zero byte if exists
-  // - if next byte doesn't have a flag, leading zero is not allowed (minimal encoding)
-  _int: {
-    encode(num: bigint): string {
-      const { Err: E } = DER;
-      abignumber(num);
-      if (num < _0n) throw new E('integer: negative integers are not allowed');
-      let hex = numberToHexUnpadded(num);
-      // Pad with zero byte if negative flag is present
-      if (Number.parseInt(hex[0], 16) & 0b1000) hex = '00' + hex;
-      if (hex.length & 1) throw new E('unexpected DER parsing assertion: unpadded hex');
-      return hex;
-    },
-    decode(data: TArg<Uint8Array>): bigint {
-      const { Err: E } = DER;
-      if (data.length < 1) throw new E('invalid signature integer: empty');
-      if (data[0] & 0b1000_0000) throw new E('invalid signature integer: negative');
-      // Single-byte zero `00` is the canonical DER INTEGER encoding for zero.
-      if (data.length > 1 && data[0] === 0x00 && !(data[1] & 0b1000_0000))
-        throw new E('invalid signature integer: unnecessary leading zero');
-      return bytesToNumberBE(data);
-    },
-  },
-  toSig(bytes: TArg<Uint8Array>): { r: bigint; s: bigint } {
-    // parse DER signature
-    const { Err: E, _int: int, _tlv: tlv } = DER;
-    const data = abytes(bytes, undefined, 'signature');
-    const { v: seqBytes, l: seqLeftBytes } = tlv.decode(0x30, data);
-    if (seqLeftBytes.length) throw new E('invalid signature: left bytes after parsing');
-    const { v: rBytes, l: rLeftBytes } = tlv.decode(0x02, seqBytes);
-    const { v: sBytes, l: sLeftBytes } = tlv.decode(0x02, rLeftBytes);
-    if (sLeftBytes.length) throw new E('invalid signature: left bytes after parsing');
-    return { r: int.decode(rBytes), s: int.decode(sBytes) };
-  },
-  hexFromSig(sig: { r: bigint; s: bigint }): string {
-    const { _tlv: tlv, _int: int } = DER;
-    validateObject(sig, { r: 'bigint', s: 'bigint' }, {}, 'sig');
-    const rs = tlv.encode(0x02, int.encode(sig.r));
-    const ss = tlv.encode(0x02, int.encode(sig.s));
-    const seq = rs + ss;
-    return tlv.encode(0x30, seq);
-  },
-};
-Object.freeze(DER._tlv);
-Object.freeze(DER._int);
-Object.freeze(DER);
-
 // Be friendly to bad ECMAScript parsers by not using bigint literals
 // prettier-ignore
 const _0n = /* @__PURE__ */ BigInt(0), _1n = /* @__PURE__ */ BigInt(1), _2n = /* @__PURE__ */ BigInt(2), _3n = /* @__PURE__ */ BigInt(3), _4n = /* @__PURE__ */ BigInt(4);
@@ -693,12 +511,14 @@ export function weierstrass<T>(
       fromBytes: 'function',
       toBytes: 'function',
       endo: 'object',
+      randomBytes: 'function',
     }
   );
 
   // Snapshot constructor-time flags whose later mutation would otherwise change
   // validity semantics of an already-built point type.
   const { endo, allowInfinityPoint } = extraOpts;
+  const randomBytes = extraOpts.randomBytes === undefined ? wcRandomBytes : extraOpts.randomBytes;
   if (endo) {
     if (!Fp.is0(CURVE.a) || typeof endo.beta !== 'bigint' || !Array.isArray(endo.basises)) {
       throw new Error('invalid endo: expected "beta": bigint and "basises": array');
@@ -776,6 +596,11 @@ export function weierstrass<T>(
 
   const encodePoint = extraOpts.toBytes === undefined ? pointToBytes : extraOpts.toBytes;
   const decodePoint = extraOpts.fromBytes === undefined ? pointFromBytes : extraOpts.fromBytes;
+  // Hoisted from double() / add(): curve params never change after construction.
+  // Koblitz curves (a=0, e.g. secp256k1) skip the three a-multiplications per operation;
+  // the selection depends only on public curve constants.
+  const b3 = Fp.mul(CURVE.b, _3n);
+  const mulA = Fp.is0(CURVE.a) ? (_: T): T => Fp.ZERO : (x: T): T => Fp.mul(CURVE.a, x);
   function weierstrassEquation(x: T): T {
     const x2 = Fp.sqr(x); // x * x
     const x3 = Fp.mul(x2, x); // x² * x
@@ -816,18 +641,31 @@ export function weierstrass<T>(
     return _splitEndoScalar(k, endo.basises, Fn.ORDER);
   }
 
-  function finishEndo(
-    endoBeta: EndomorphismOpts['beta'],
-    k1p: Point,
-    k2p: Point,
-    k1neg: boolean,
-    k2neg: boolean
-  ) {
-    k2p = new Point(Fp.mul(k2p.X, endoBeta), k2p.Y, k2p.Z);
-    k1p = negateCt(k1neg, k1p);
-    k2p = negateCt(k2neg, k2p);
-    return k1p.add(k2p);
+  /**
+   * Appends a (point, scalar) pair to the inputs of a vartime wNAF walk
+   * ({@link mulAddUnsafe}). With GLV endomorphism the scalar is split into two half-width
+   * pairs against P and ψ(P) = (β⋅x, y), halving the walk's shared doubling chain;
+   * split signs fold into the points.
+   */
+  function pushWnafPair(points: Point[], scalars: bigint[], p: Point, k: bigint): void {
+    if (!Fn.isValid(k)) throw new RangeError('invalid scalar: out of range'); // 0 is valid
+    if (endo) {
+      const { k1neg, k1, k2neg, k2 } = splitEndoScalarN(k);
+      const psi = new Point(Fp.mul(p.X, endo.beta), p.Y, p.Z);
+      points.push(k1neg ? p.negate() : p, k2neg ? psi.negate() : psi);
+      scalars.push(k1, k2);
+    } else {
+      points.push(p);
+      scalars.push(k);
+    }
   }
+
+  // Successful assertValidity() results are cached: Point instances are frozen at construction,
+  // so on-curve + subgroup facts cannot change afterwards. Only success is cached — invalid
+  // points re-throw on every call. This matters most for pairing curves, where subgroup checks
+  // cost a scalar multiplication and the same instance is re-validated across layers
+  // (signature fromBytes, pairingBatch) or across repeated verifies with a cached public key.
+  const validityCache = new WeakSet<object>();
 
   /**
    * Projective Point works in 3d / projective (homogeneous) coordinates:(X, Y, Z) ∋ (x=X/Z, y=Y/Z).
@@ -896,8 +734,8 @@ export function weierstrass<T>(
      * @param isLazy - true will defer table computation until the first multiplication
      * @returns
      */
-    precompute(windowSize: number = 8, isLazy = true): Point {
-      wnaf.createCache(this, windowSize);
+    precompute(windowSize: number = 6, isLazy = true): Point {
+      wnaf.setWindowSize(this, windowSize);
       if (!isLazy) this.multiply(_3n); // random number
       return this;
     }
@@ -915,11 +753,13 @@ export function weierstrass<T>(
           return;
         throw new Error('bad point: ZERO');
       }
+      if (validityCache.has(p)) return;
       // Some 3rd-party test vectors require different wording between here & `fromCompressedHex`
       const { x, y } = p.toAffine();
       if (!Fp.isValid(x) || !Fp.isValid(y)) throw new Error('bad point: x or y not field elements');
       if (!isValidXY(x, y)) throw new Error('bad point: equation left != right');
       if (!p.isTorsionFree()) throw new Error('bad point: not in prime-order subgroup');
+      validityCache.add(p);
     }
 
     hasEvenY(): boolean {
@@ -948,8 +788,6 @@ export function weierstrass<T>(
     // https://eprint.iacr.org/2015/1060, algorithm 3
     // Cost: 8M + 3S + 3*a + 2*b3 + 15add.
     double() {
-      const { a, b } = CURVE;
-      const b3 = Fp.mul(b, _3n);
       const { X: X1, Y: Y1, Z: Z1 } = this;
       let X3 = Fp.ZERO, Y3 = Fp.ZERO, Z3 = Fp.ZERO; // prettier-ignore
       let t0 = Fp.mul(X1, X1); // step 1
@@ -959,7 +797,7 @@ export function weierstrass<T>(
       t3 = Fp.add(t3, t3); // step 5
       Z3 = Fp.mul(X1, Z1);
       Z3 = Fp.add(Z3, Z3);
-      X3 = Fp.mul(a, Z3);
+      X3 = mulA(Z3);
       Y3 = Fp.mul(b3, t2);
       Y3 = Fp.add(X3, Y3); // step 10
       X3 = Fp.sub(t1, Y3);
@@ -967,9 +805,9 @@ export function weierstrass<T>(
       Y3 = Fp.mul(X3, Y3);
       X3 = Fp.mul(t3, X3);
       Z3 = Fp.mul(b3, Z3); // step 15
-      t2 = Fp.mul(a, t2);
+      t2 = mulA(t2);
       t3 = Fp.sub(t0, t2);
-      t3 = Fp.mul(a, t3);
+      t3 = mulA(t3);
       t3 = Fp.add(t3, Z3);
       Z3 = Fp.add(t0, t0); // step 20
       t0 = Fp.add(Z3, t0);
@@ -995,8 +833,6 @@ export function weierstrass<T>(
       const { X: X1, Y: Y1, Z: Z1 } = this;
       const { X: X2, Y: Y2, Z: Z2 } = other;
       let X3 = Fp.ZERO, Y3 = Fp.ZERO, Z3 = Fp.ZERO; // prettier-ignore
-      const a = CURVE.a;
-      const b3 = Fp.mul(CURVE.b, _3n);
       let t0 = Fp.mul(X1, X2); // step 1
       let t1 = Fp.mul(Y1, Y2);
       let t2 = Fp.mul(Z1, Z2);
@@ -1015,7 +851,7 @@ export function weierstrass<T>(
       t5 = Fp.mul(t5, X3);
       X3 = Fp.add(t1, t2);
       t5 = Fp.sub(t5, X3);
-      Z3 = Fp.mul(a, t4);
+      Z3 = mulA(t4);
       X3 = Fp.mul(b3, t2); // step 20
       Z3 = Fp.add(X3, Z3);
       X3 = Fp.sub(t1, Z3);
@@ -1023,11 +859,11 @@ export function weierstrass<T>(
       Y3 = Fp.mul(X3, Z3);
       t1 = Fp.add(t0, t0); // step 25
       t1 = Fp.add(t1, t0);
-      t2 = Fp.mul(a, t2);
+      t2 = mulA(t2);
       t4 = Fp.mul(b3, t4);
       t1 = Fp.add(t1, t2);
       t2 = Fp.sub(t0, t2); // step 30
-      t2 = Fp.mul(a, t2);
+      t2 = mulA(t2);
       t4 = Fp.add(t4, t2);
       t0 = Fp.mul(t1, t4);
       Y3 = Fp.add(Y3, t0);
@@ -1053,44 +889,27 @@ export function weierstrass<T>(
 
     /**
      * Constant time multiplication.
-     * Uses wNAF method. Windowed method may be 10% faster,
-     * but takes 2x longer to generate and consumes 2x memory.
-     * Uses precomputes when available.
-     * Uses endomorphism for Koblitz curves.
+     * Uses precomputed tables (signed fixed-window wNAF) when available.
+     * Uses scalar blinding and avoids endomorphism splitting in the secret-scalar path.
      * @param scalar - by which the point would be multiplied
      * @returns New point
      */
     multiply(scalar: bigint): Point {
-      const { endo } = extraOpts;
       // Keep the subgroup-scalar contract strict instead of reducing 0 / n to ZERO.
       // In key/signature-style callers, those values usually mean broken hash/scalar plumbing,
       // and failing closed is safer than silently producing the identity point.
       if (!Fn.isValidNot0(scalar)) throw new RangeError('invalid scalar: out of range'); // 0 is invalid
-      let point: Point, fake: Point; // Fake point is used to const-time mult
-      const mul = (n: bigint) => wnaf.cached(this, n, (p) => normalizeZ(Point, p));
-      /** See docs for {@link EndomorphismOpts} */
-      if (endo) {
-        const { k1neg, k1, k2neg, k2 } = splitEndoScalarN(scalar);
-        const { p: k1p, f: k1f } = mul(k1);
-        const { p: k2p, f: k2f } = mul(k2);
-        fake = k1f.add(k2f);
-        point = finishEndo(endo.beta, k1p, k2p, k1neg, k2neg);
-      } else {
-        const { p, f } = mul(scalar);
-        point = p;
-        fake = f;
-      }
-      // Normalize `z` for both points, but return only real one
-      return normalizeZ(Point, [point, fake])[0];
+      const { p, f } = wnaf.mulSecret(this, scalar, cofactor, normalize);
+      return normalize([p, f])[0];
     }
 
     /**
-     * Non-constant-time multiplication. Uses double-and-add algorithm.
+     * Non-constant-time multiplication. Uses width-4 wNAF with GLV endomorphism splitting
+     * when available (two half-width scalars sharing one halved doubling chain).
      * It's faster, but should only be used when you don't care about
      * an exposed secret key e.g. sig verification, which works over *public* keys.
      */
     multiplyUnsafe(scalar: bigint): Point {
-      const { endo } = extraOpts;
       const p = this as Point;
       const sc = scalar;
       // Public-scalar callers may need 0, but n and larger values stay rejected here too.
@@ -1098,16 +917,27 @@ export function weierstrass<T>(
       if (!Fn.isValid(sc)) throw new RangeError('invalid scalar: out of range'); // 0 is valid
       if (sc === _0n || p.is0()) return Point.ZERO; // 0
       if (sc === _1n) return p; // 1
-      if (wnaf.hasCache(this)) return this.multiply(sc); // precomputes
-      // We don't have method for double scalar multiplication (aP + bQ):
-      // Even with using Strauss-Shamir trick, it's 35% slower than naïve mul+add.
-      if (endo) {
-        const { k1neg, k1, k2neg, k2 } = splitEndoScalarN(sc);
-        const { p1, p2 } = mulEndoUnsafe(Point, p, k1, k2); // 30% faster vs wnaf.unsafe
-        return finishEndo(endo.beta, p1, p2, k1neg, k2neg);
-      } else {
-        return wnaf.unsafe(p, sc);
-      }
+      if (wnaf.hasWindowSize(this)) return wnaf.mulUnsafe(p, sc, normalize); // precomputes
+      const points: Point[] = [];
+      const scalars: bigint[] = [];
+      pushWnafPair(points, scalars, p, sc);
+      return mulAddUnsafe(Point, points, scalars);
+    }
+
+    /**
+     * Non-constant-time double-scalar multiplication `a⋅this + b⋅other` (Strauss–Shamir).
+     * Both walks share one doubling chain via {@link mulAddUnsafe}, and GLV endomorphism
+     * (when available) halves the chain again by splitting each scalar into two half-width
+     * parts. Used by ECDSA verification and public-key recovery for `R = u1⋅G + u2⋅P`.
+     * Only for public scalars.
+     */
+    mulAddUnsafe(a: bigint, other: Point, b: bigint): Point {
+      aprjpoint(other);
+      const points: Point[] = [];
+      const scalars: bigint[] = [];
+      pushWnafPair(points, scalars, this as Point, a);
+      pushWnafPair(points, scalars, other, b);
+      return mulAddUnsafe(Point, points, scalars);
     }
 
     /**
@@ -1143,8 +973,8 @@ export function weierstrass<T>(
       const { isTorsionFree } = extraOpts;
       if (cofactor === _1n) return true;
       if (isTorsionFree) return isTorsionFree(Point, this);
-      // unsafe() will use ladder internally for endomorphism curves
-      return wnaf.unsafe(this, CURVE_ORDER).is0();
+      // unsafe() will use the uncached wNAF path internally, since CURVE_ORDER >= Fn.ORDER
+      return wnaf.mulUnsafe(this, CURVE_ORDER).is0();
     }
 
     clearCofactor(): Point {
@@ -1178,10 +1008,11 @@ export function weierstrass<T>(
       return `<Point ${this.is0() ? 'ZERO' : this.toHex()}>`;
     }
   }
-  const wnaf = new wNAF(Point, !!extraOpts.endo);
-  // Enable precomputes. Slows down first publicKey computation by 20ms.
-  // Disable for tiny toy curves, with scalar fields < 8 bits (< 16 bits for endomorphism).
-  if (wnaf.bits >= 8) Point.BASE.precompute(8);
+  const normalize = (points: Point[]) => normalizeZ(Point, points);
+  const wnaf = new ScalarMultiplier(Point, randomBytes);
+  // Enable W=6 wNAF precomputes. Slows down first publicKey computation.
+  // Disable for tiny toy curves, with scalar fields < 6 bits.
+  if (wnaf.bits >= 6) Point.BASE.precompute(6);
   Object.freeze(Point.prototype);
   Object.freeze(Point);
   return Point;
@@ -1248,193 +1079,6 @@ export type ECDSASignatureCons = {
 // Points start with byte 0x02 when y is even; otherwise 0x03
 function pprefix(hasEvenY: boolean): TRet<Uint8Array> {
   return Uint8Array.of(hasEvenY ? 0x02 : 0x03) as TRet<Uint8Array>;
-}
-
-/**
- * Implementation of the Shallue and van de Woestijne method for any weierstrass curve.
- * TODO: check if there is a way to merge this with uvRatio in Edwards; move to modular.
- * b = True and y = sqrt(u / v) if (u / v) is square in F, and
- * b = False and y = sqrt(Z * (u / v)) otherwise.
- * RFC 9380 expects callers to provide `v != 0`; this helper does not enforce it.
- * @param Fp - Field implementation.
- * @param Z - Simplified SWU map parameter.
- * @returns Square-root ratio helper.
- * @example
- * Build the square-root ratio helper used by SWU map implementations.
- *
- * ```ts
- * import { SWUFpSqrtRatio } from '@noble/curves/abstract/weierstrass.js';
- * import { Field } from '@noble/curves/abstract/modular.js';
- * const Fp = Field(17n);
- * const sqrtRatio = SWUFpSqrtRatio(Fp, 3n);
- * const out = sqrtRatio(4n, 1n);
- * ```
- */
-export function SWUFpSqrtRatio<T>(
-  Fp: TArg<IField<T>>,
-  Z: T
-): (u: T, v: T) => { isValid: boolean; value: T } {
-  // Fail with the usual field-shape error before touching pow/cmov on malformed field shims.
-  const F = validateField(Fp as IField<T>) as IField<T>;
-  // Generic implementation
-  const q = F.ORDER;
-  let l = _0n;
-  for (let o = q - _1n; o % _2n === _0n; o /= _2n) l += _1n;
-  const c1 = l; // 1. c1, the largest integer such that 2^c1 divides q - 1.
-  // We need 2n ** c1 and 2n ** (c1-1). We can't use **; but we can use <<.
-  // 2n ** c1 == 2n << (c1-1)
-  const _2n_pow_c1_1 = _2n << (c1 - _1n - _1n);
-  const _2n_pow_c1 = _2n_pow_c1_1 * _2n;
-  const c2 = (q - _1n) / _2n_pow_c1; // 2. c2 = (q - 1) / (2^c1)  # Integer arithmetic
-  const c3 = (c2 - _1n) / _2n; // 3. c3 = (c2 - 1) / 2            # Integer arithmetic
-  const c4 = _2n_pow_c1 - _1n; // 4. c4 = 2^c1 - 1                # Integer arithmetic
-  const c5 = _2n_pow_c1_1; // 5. c5 = 2^(c1 - 1)                  # Integer arithmetic
-  const c6 = F.pow(Z, c2); // 6. c6 = Z^c2
-  const c7 = F.pow(Z, (c2 + _1n) / _2n); // 7. c7 = Z^((c2 + 1) / 2)
-  // RFC 9380 Appendix F.2.1.1 defines sqrt_ratio(u, v) only for v != 0.
-  // We keep v=0 on the regular result path with isValid=false instead of
-  // throwing so the helper stays closer to the RFC's fixed control flow.
-  let sqrtRatio = (u: T, v: T): { isValid: boolean; value: T } => {
-    let tv1 = c6; // 1. tv1 = c6
-    let tv2 = F.pow(v, c4); // 2. tv2 = v^c4
-    let tv3 = F.sqr(tv2); // 3. tv3 = tv2^2
-    tv3 = F.mul(tv3, v); // 4. tv3 = tv3 * v
-    let tv5 = F.mul(u, tv3); // 5. tv5 = u * tv3
-    tv5 = F.pow(tv5, c3); // 6. tv5 = tv5^c3
-    tv5 = F.mul(tv5, tv2); // 7. tv5 = tv5 * tv2
-    tv2 = F.mul(tv5, v); // 8. tv2 = tv5 * v
-    tv3 = F.mul(tv5, u); // 9. tv3 = tv5 * u
-    let tv4 = F.mul(tv3, tv2); // 10. tv4 = tv3 * tv2
-    tv5 = F.pow(tv4, c5); // 11. tv5 = tv4^c5
-    let isQR = F.eql(tv5, F.ONE); // 12. isQR = tv5 == 1
-    tv2 = F.mul(tv3, c7); // 13. tv2 = tv3 * c7
-    tv5 = F.mul(tv4, tv1); // 14. tv5 = tv4 * tv1
-    tv3 = F.cmov(tv2, tv3, isQR); // 15. tv3 = CMOV(tv2, tv3, isQR)
-    tv4 = F.cmov(tv5, tv4, isQR); // 16. tv4 = CMOV(tv5, tv4, isQR)
-    // 17. for i in (c1, c1 - 1, ..., 2):
-    for (let i = c1; i > _1n; i--) {
-      let tv5 = i - _2n; // 18.    tv5 = i - 2
-      tv5 = _2n << (tv5 - _1n); // 19.    tv5 = 2^tv5
-      let tvv5 = F.pow(tv4, tv5); // 20.    tv5 = tv4^tv5
-      const e1 = F.eql(tvv5, F.ONE); // 21.    e1 = tv5 == 1
-      tv2 = F.mul(tv3, tv1); // 22.    tv2 = tv3 * tv1
-      tv1 = F.mul(tv1, tv1); // 23.    tv1 = tv1 * tv1
-      tvv5 = F.mul(tv4, tv1); // 24.    tv5 = tv4 * tv1
-      tv3 = F.cmov(tv2, tv3, e1); // 25.    tv3 = CMOV(tv2, tv3, e1)
-      tv4 = F.cmov(tvv5, tv4, e1); // 26.    tv4 = CMOV(tv5, tv4, e1)
-    }
-    // RFC 9380 Appendix F.2.1.1 defines sqrt_ratio(u, v) for v != 0.
-    // When u = 0 and v != 0, u / v = 0 is square and the computed root is
-    // still 0, so widen only the final flag and keep the full control flow.
-    return { isValid: !F.is0(v) && (isQR || F.is0(u)), value: tv3 };
-  };
-  if (F.ORDER % _4n === _3n) {
-    // sqrt_ratio_3mod4(u, v)
-    const c1 = (F.ORDER - _3n) / _4n; // 1. c1 = (q - 3) / 4     # Integer arithmetic
-    const c2 = F.sqrt(F.neg(Z)); // 2. c2 = sqrt(-Z)
-    sqrtRatio = (u: T, v: T) => {
-      let tv1 = F.sqr(v); // 1. tv1 = v^2
-      const tv2 = F.mul(u, v); // 2. tv2 = u * v
-      tv1 = F.mul(tv1, tv2); // 3. tv1 = tv1 * tv2
-      let y1 = F.pow(tv1, c1); // 4. y1 = tv1^c1
-      y1 = F.mul(y1, tv2); // 5. y1 = y1 * tv2
-      const y2 = F.mul(y1, c2); // 6. y2 = y1 * c2
-      const tv3 = F.mul(F.sqr(y1), v); // 7. tv3 = y1^2; 8. tv3 = tv3 * v
-      const isQR = F.eql(tv3, u); // 9. isQR = tv3 == u
-      let y = F.cmov(y2, y1, isQR); // 10. y = CMOV(y2, y1, isQR)
-      return { isValid: !F.is0(v) && isQR, value: y }; // 11. return (isQR, y) isQR ? y : y*c2
-    };
-  }
-  // No curves uses that
-  // if (Fp.ORDER % _8n === _5n) // sqrt_ratio_5mod8
-  return sqrtRatio;
-}
-/**
- * Simplified Shallue-van de Woestijne-Ulas Method
- * See {@link https://www.rfc-editor.org/rfc/rfc9380#section-6.6.2 | RFC 9380 section 6.6.2}.
- * @param Fp - Field implementation.
- * @param opts - SWU parameters:
- *   - `A`: Curve parameter `A`.
- *   - `B`: Curve parameter `B`.
- *   - `Z`: Simplified SWU map parameter.
- * @returns Deterministic map-to-curve function.
- * @throws If the SWU parameters are invalid or the field lacks the required helpers. {@link Error}
- * @example
- * Map one field element to a Weierstrass curve point with the SWU recipe.
- *
- * ```ts
- * import { mapToCurveSimpleSWU } from '@noble/curves/abstract/weierstrass.js';
- * import { Field } from '@noble/curves/abstract/modular.js';
- * const Fp = Field(17n);
- * const map = mapToCurveSimpleSWU(Fp, { A: 1n, B: 2n, Z: 3n });
- * const point = map(5n);
- * ```
- */
-export function mapToCurveSimpleSWU<T>(
-  Fp: TArg<IField<T>>,
-  opts: {
-    A: T;
-    B: T;
-    Z: T;
-  }
-): (u: T) => { x: T; y: T } {
-  const F = validateField(Fp as IField<T>) as IField<T>;
-  validateObject(opts as any, {}, {}, 'opts');
-  const { A, B, Z } = opts;
-  if (!F.isValidNot0(A) || !F.isValidNot0(B) || !F.isValid(Z))
-    throw new Error('mapToCurveSimpleSWU: invalid opts');
-  // RFC 9380 §6.6.2 and Appendix H.2 require:
-  // 1. Z is non-square in F
-  // 2. Z != -1 in F
-  // 3. g(x) - Z is irreducible over F
-  // 4. g(B / (Z * A)) is square in F
-  // We can enforce 1, 2, and 4 with the current field API.
-  // Criterion 3 is not checked here because generic `IField<T>` does not expose
-  // polynomial-ring / irreducibility operations, and this helper is used for
-  // both prime and extension fields.
-  if (F.eql(Z, F.neg(F.ONE)) || FpIsSquare(F, Z))
-    throw new Error('mapToCurveSimpleSWU: invalid opts');
-  // RFC 9380 Appendix H.2 criterion 4: g(B / (Z * A)) is square in F.
-  // x = B / (Z * A)
-  const x = F.mul(B, F.inv(F.mul(Z, A)));
-  // g(x) = x^3 + A*x + B
-  const gx = F.add(F.add(F.mul(F.sqr(x), x), F.mul(A, x)), B);
-  if (!FpIsSquare(F, gx)) throw new Error('mapToCurveSimpleSWU: invalid opts');
-  const sqrtRatio = SWUFpSqrtRatio(F, Z);
-  if (!F.isOdd) throw new Error('Field does not have .isOdd()');
-  // Input: u, an element of F.
-  // Output: (x, y), a point on E.
-  return (u: T): { x: T; y: T } => {
-    // prettier-ignore
-    let tv1, tv2, tv3, tv4, tv5, tv6, x, y;
-    tv1 = F.sqr(u); // 1.  tv1 = u^2
-    tv1 = F.mul(tv1, Z); // 2.  tv1 = Z * tv1
-    tv2 = F.sqr(tv1); // 3.  tv2 = tv1^2
-    tv2 = F.add(tv2, tv1); // 4.  tv2 = tv2 + tv1
-    tv3 = F.add(tv2, F.ONE); // 5.  tv3 = tv2 + 1
-    tv3 = F.mul(tv3, B); // 6.  tv3 = B * tv3
-    tv4 = F.cmov(Z, F.neg(tv2), !F.eql(tv2, F.ZERO)); // 7.  tv4 = CMOV(Z, -tv2, tv2 != 0)
-    tv4 = F.mul(tv4, A); // 8.  tv4 = A * tv4
-    tv2 = F.sqr(tv3); // 9.  tv2 = tv3^2
-    tv6 = F.sqr(tv4); // 10. tv6 = tv4^2
-    tv5 = F.mul(tv6, A); // 11. tv5 = A * tv6
-    tv2 = F.add(tv2, tv5); // 12. tv2 = tv2 + tv5
-    tv2 = F.mul(tv2, tv3); // 13. tv2 = tv2 * tv3
-    tv6 = F.mul(tv6, tv4); // 14. tv6 = tv6 * tv4
-    tv5 = F.mul(tv6, B); // 15. tv5 = B * tv6
-    tv2 = F.add(tv2, tv5); // 16. tv2 = tv2 + tv5
-    x = F.mul(tv1, tv3); // 17.   x = tv1 * tv3
-    const { isValid, value } = sqrtRatio(tv2, tv6); // 18. (is_gx1_square, y1) = sqrt_ratio(tv2, tv6)
-    y = F.mul(tv1, u); // 19.   y = tv1 * u  -> Z * u^3 * y1
-    y = F.mul(y, value); // 20.   y = y * y1
-    x = F.cmov(x, tv3, isValid); // 21.   x = CMOV(x, tv3, is_gx1_square)
-    y = F.cmov(y, value, isValid); // 22.   y = CMOV(y, y1, is_gx1_square)
-    const e1 = F.isOdd!(u) === F.isOdd!(y); // 23.  e1 = sgn0(u) == sgn0(y)
-    y = F.cmov(F.neg(y), y, e1); // 24.   y = CMOV(-y, y, e1)
-    const tv4_inv = FpInvertBatch(F, [tv4], true)[0];
-    x = F.mul(x, tv4_inv); // 25.   x = x / tv4
-    return { x, y };
-  };
 }
 
 function getWLengths<T>(Fp: TArg<IField<T>>, Fn: TArg<IField<bigint>>) {
@@ -1617,19 +1261,26 @@ export function ecdsa(
       bits2int_modN: 'function',
     }
   );
-  ecdsaOpts = Object.assign({}, ecdsaOpts);
-  const randomBytes = ecdsaOpts.randomBytes === undefined ? wcRandomBytes : ecdsaOpts.randomBytes;
+  const opts = Object.assign({}, ecdsaOpts) as ECDSAOpts;
+  const randomBytes = opts.randomBytes === undefined ? wcRandomBytes : opts.randomBytes;
   const hmac =
-    ecdsaOpts.hmac === undefined
+    opts.hmac === undefined
       ? (key: TArg<Uint8Array>, msg: TArg<Uint8Array>) => nobleHmac(hash_, key, msg)
-      : (ecdsaOpts.hmac as HmacFn);
+      : (opts.hmac as HmacFn);
 
   const { Fp, Fn } = Point;
   const { ORDER: CURVE_ORDER, BITS: fnBits } = Fn;
-  const { keygen, getPublicKey, getSharedSecret, utils, lengths } = ecdh(Point, ecdsaOpts);
+  // Nonce-inversion blinding in k2sig draws `getMinHashLength(n)` bytes per sign. Probe the RNG
+  // once (see {@link probeRandomBytes}, shared with ScalarMultiplier): in environments without
+  // working randomness, signing downgrades to Fermat inversion (invertCt) instead of throwing on
+  // every sign(). The shape of returned bytes is still validated (by mapHashToField) on every
+  // blinded call, where breakage fails closed.
+  const blindLength = getMinHashLength(CURVE_ORDER);
+  const csprng = probeRandomBytes(randomBytes, blindLength);
+  const { keygen, getPublicKey, getSharedSecret, utils, lengths } = ecdh(Point, opts);
   const defaultSigOpts: Required<ECDSASignOpts> = {
     prehash: true,
-    lowS: typeof ecdsaOpts.lowS === 'boolean' ? ecdsaOpts.lowS : true,
+    lowS: typeof opts.lowS === 'boolean' ? opts.lowS : true,
     format: 'compact' as ECDSASignatureFormat,
     extraEntropy: false,
   };
@@ -1647,6 +1298,9 @@ export function ecdsa(
     if (!Fn.isValidNot0(num))
       throw new Error(`invalid signature ${title}: out of range 1..Point.Fn.ORDER`);
     return num;
+  }
+  function assertFieldSignIsSupported(): void {
+    if (!Fp.isOdd) throw new Error("Field doesn't support isOdd");
   }
   function assertRecoverableCurve(): void {
     // ECDSA recovery only supports curves where the current recovery id can distinguish
@@ -1734,7 +1388,7 @@ export function ecdsa(
       const u1 = Fn.create(-h * ir); // -hr^-1
       const u2 = Fn.create(s * ir); // sr^-1
       // (sr^-1)R-(hr^-1)G = -(hr^-1)G + (sr^-1). unsafe is fine: there is no private data.
-      const Q = Point.BASE.multiplyUnsafe(u1).add(R.multiplyUnsafe(u2));
+      const Q = Point.BASE.mulAddUnsafe(u1, R, u2);
       if (Q.is0()) throw new Error('invalid recovery: point at infinify');
       Q.assertValidity();
       return Q;
@@ -1771,7 +1425,7 @@ export function ecdsa(
   // bits2int can produce res>N, we can do mod(res, N) since the bitLen is the same.
   // int2octets can't be used; pads small msgs with 0: unacceptatble for trunc as per RFC vectors
   const bits2int: (bytes: TArg<Uint8Array>) => bigint =
-    ecdsaOpts.bits2int === undefined
+    opts.bits2int === undefined
       ? function bits2int_def(bytes: TArg<Uint8Array>): bigint {
           // Our custom check "just in case", for protection against DoS
           if (bytes.length > 8192) throw new Error('input is too large');
@@ -1781,13 +1435,13 @@ export function ecdsa(
           const delta = bytes.length * 8 - fnBits; // truncate to nBitLength leftmost bits
           return delta > 0 ? num >> BigInt(delta) : num;
         }
-      : (ecdsaOpts.bits2int as (bytes: TArg<Uint8Array>) => bigint);
+      : (opts.bits2int as (bytes: TArg<Uint8Array>) => bigint);
   const bits2int_modN: (bytes: TArg<Uint8Array>) => bigint =
-    ecdsaOpts.bits2int_modN === undefined
+    opts.bits2int_modN === undefined
       ? function bits2int_modN_def(bytes: TArg<Uint8Array>): bigint {
           return Fn.create(bits2int(bytes)); // can't use bytesToNumberBE here
         }
-      : (ecdsaOpts.bits2int_modN as (bytes: TArg<Uint8Array>) => bigint);
+      : (opts.bits2int_modN as (bytes: TArg<Uint8Array>) => bigint);
   const ORDER_MASK = bitMask(fnBits);
   // Pads output with zero as per spec.
   /** Converts to bytes. Checks if num in `[0..ORDER_MASK-1]` e.g.: `[0..2^256-1]`. */
@@ -1839,21 +1493,35 @@ export function ecdsa(
     // q = k⋅G
     // r = q.x mod n
     // s = k^-1(m + rd) mod n
-    // Can use scalar blinding b^-1(bm + bdr) where b ∈ [1,q−1] according to
-    // https://tches.iacr.org/index.php/TCHES/article/view/7337/6509. We've decided against it:
-    // a) dependency on CSPRNG b) 15% slowdown c) doesn't really help since bigints are not CT
+    // The nonce inversion is blinded: with random b ∈ [1,n−1], s = (bk)^-1(bm + bdr) per
+    // https://tches.iacr.org/index.php/TCHES/article/view/7337/6509. Fn.inv()'s extended-Euclidean
+    // loop count depends on its input (cf. Minerva), but here it only ever sees b·k — uniformly
+    // random, independent of k — so its timing reveals nothing about the nonce; b also masks d in
+    // the products. Without a CSPRNG (probed in ecdsa()) we fall back to Fermat inversion
+    // (invertCt), whose control flow is data-independent, at ~4x the inversion cost.
     function k2sig(kBytes: TArg<Uint8Array>): Signature | undefined {
       // RFC 6979 Section 3.2, step 3: k = bits2int(T)
       // Important: all mod() calls here must be done over N
       const k = bits2int(kBytes); // Cannot use fields methods, since it is group element
       if (!Fn.isValidNot0(k)) return; // Valid scalars (including k) must be in 1..N-1
-      const ik = Fn.inv(k); // k^-1 mod n
       const q = Point.BASE.multiply(k).toAffine(); // q = k⋅G
       const r = Fn.create(q.x); // r = q.x mod n
       if (r === _0n) return;
-      const s = Fn.create(ik * Fn.create(m + r * d)); // s = k^-1(m + rd) mod n
+      let s: bigint;
+      if (csprng !== undefined) {
+        // mapHashToField maps 1.5x-order-length uniform bytes into [1, n-1], negligible bias.
+        const b = bytesToNumberBE(mapHashToField(csprng(blindLength), CURVE_ORDER));
+        const ibk = Fn.inv(Fn.mul(b, k)); // (bk)^-1: inversion input is decorrelated from k
+        const bm = Fn.mul(b, m);
+        const bd = Fn.mul(b, d);
+        s = Fn.create(ibk * Fn.create(bm + bd * r)); // s = (bk)^-1(bm + bdr) = k^-1(m + rd) mod n
+      } else {
+        const ik = invertCt(k, CURVE_ORDER); // k^-1 mod n with data-independent control flow
+        s = Fn.create(ik * Fn.create(m + r * d)); // s = k^-1(m + rd) mod n
+      }
       if (s === _0n) return;
-      let recovery = (q.x === r ? 0 : 2) | Number(q.y & _1n); // recovery bit (2 or 3 when q.x>n)
+      assertFieldSignIsSupported();
+      let recovery = (q.x === r ? 0 : 2) | Number(Fp.isOdd!(q.y)); // recovery bit (2 or 3 when q.x>n)
       let normS = s;
       if (lowS && isBiggerThanHalfOrder(s)) {
         normS = Fn.neg(s); // if lowS was passed, ensure s is always in the bottom half of N
@@ -1924,7 +1592,7 @@ export function ecdsa(
       const is = Fn.inv(s); // s^-1 mod n
       const u1 = Fn.create(h * is); // u1 = hs^-1 mod n
       const u2 = Fn.create(r * is); // u2 = rs^-1 mod n
-      const R = Point.BASE.multiplyUnsafe(u1).add(P.multiplyUnsafe(u2)); // u1⋅G + u2⋅P
+      const R = Point.BASE.mulAddUnsafe(u1, P, u2); // u1⋅G + u2⋅P, joint Strauss–Shamir
       if (R.is0()) return false;
       const v = Fn.create(R.x); // v = r.x mod n
       return v === r;

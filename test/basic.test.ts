@@ -4,11 +4,13 @@ import { deepStrictEqual as eql, notDeepStrictEqual, throws } from 'node:assert'
 import { edwards } from '../src/abstract/edwards.ts';
 import { montgomery } from '../src/abstract/montgomery.ts';
 import { Field } from '../src/abstract/modular.ts';
+import { normalizeZ, ScalarMultiplier } from '../src/abstract/curve.ts';
 import { __TEST as towerTest, tower12 } from '../src/abstract/tower.ts';
 import { ecdsa, weierstrass } from '../src/abstract/weierstrass.ts';
 import { bls12_381 } from '../src/bls12-381.ts';
 import { bn254 } from '../src/bn254.ts';
 import { ed25519, x25519 } from '../src/ed25519.ts';
+import { p256 } from '../src/nist.ts';
 import { secp256k1 } from '../src/secp256k1.ts';
 import { json } from './utils.ts';
 
@@ -110,11 +112,262 @@ describe('createCurve', () => {
     );
   });
 
-  should('constructs valid tiny curve helpers without forcing W=8 precomputes', () => {
+  should('constructs valid tiny curve helpers without forcing default precomputes', () => {
     const WPoint = weierstrass({ p: 5n, n: 19n, h: 1n, a: 0n, b: 1n, Gx: 0n, Gy: 1n });
     eql(WPoint.BASE.toHex(false), '040001');
     const EPoint = edwards({ a: 1n, d: 2n, p: 5n, n: 8n, h: 1n, Gx: 2n, Gy: 2n });
     eql(EPoint.BASE.toAffine(), { x: 2n, y: 2n });
+  });
+
+  should('falls back to unblinded multiply when RNG is unavailable', () => {
+    const Point = weierstrass(p256.Point.CURVE(), {
+      Fp: p256.Point.Fp,
+      Fn: p256.Point.Fn,
+      randomBytes: () => {
+        throw new Error('rng used');
+      },
+    });
+    eql(Point.BASE.multiplyUnsafe(2n).equals(Point.BASE.double()), true);
+    // The constructor RNG probe failed: multiply() still works, on the unblinded CT path.
+    eql(Point.BASE.multiply(2n).equals(Point.BASE.double()), true);
+  });
+
+  should('rebuilds blinded precomputes after cross-instance window changes', () => {
+    const randomBytes = (len = 0) => new Uint8Array(len).fill(7);
+    const Point = weierstrass(p256.Point.CURVE(), {
+      Fp: p256.Point.Fp,
+      Fn: p256.Point.Fn,
+      randomBytes,
+    });
+    const P = Point.BASE;
+    const norm = (points: (typeof P)[]) => normalizeZ(Point, points);
+    const a = new ScalarMultiplier(Point, randomBytes);
+    const b = new ScalarMultiplier(Point, randomBytes);
+    a.setWindowSize(P, 8);
+    const r1 = a.mulCTBlinded(P, 123n, norm).p;
+    b.setWindowSize(P, 4);
+    const r2 = a.mulCTBlinded(P, 123n, norm).p;
+    eql(r2.equals(r1), true);
+  });
+
+  should('uses W=6 wNAF precomputes for blinded multiplication', () => {
+    const randomBytes = (len = 0) => new Uint8Array(len).fill(9);
+    const Point = weierstrass(p256.Point.CURVE(), {
+      Fp: p256.Point.Fp,
+      Fn: p256.Point.Fn,
+      randomBytes,
+    });
+    const P = Point.BASE.precompute(6, false);
+    for (const scalar of [1n, 2n, 3n, 123456789n, Point.Fn.ORDER - 1n]) {
+      eql(P.multiply(scalar).equals(P.multiplyUnsafe(scalar)), true);
+    }
+  });
+
+  should('ScalarMultiplier RNG probe fails open; later misbehavior fails closed', () => {
+    const Point = p256.Point;
+    const G = Point.BASE;
+    const want = G.multiplyUnsafe(5n);
+    // The constructor probes the RNG once: an RNG that is broken at construction time —
+    // throwing or returning malformed bytes — downgrades mulSecret to the unblinded
+    // constant-time path instead of failing on every multiply.
+    const throwingRng = (_len?: number): Uint8Array => {
+      throw new Error('no entropy');
+    };
+    const m1 = new ScalarMultiplier(Point, throwingRng);
+    eql(m1.mulSecret(G, 5n, 1n).p.equals(want), true, 'throwing RNG downgrades to mulCT');
+    const nullRng = ((_len?: number) => null) as never as (len?: number) => Uint8Array;
+    const m2 = new ScalarMultiplier(Point, nullRng);
+    eql(m2.mulSecret(G, 5n, 1n).p.equals(want), true, 'null-returning RNG downgrades to mulCT');
+    const shortRng = (_len?: number) => new Uint8Array(8);
+    const m3 = new ScalarMultiplier(Point, shortRng);
+    eql(m3.mulSecret(G, 5n, 1n).p.equals(want), true, 'wrong-length RNG downgrades to mulCT');
+    // The downgrade decision is static. After a good probe the RNG is part of the trusted
+    // contract: a rogue RNG that behaves while probed and misbehaves later must fail closed
+    // (throw), never silently downgrade — a dynamic fallback would let a tampered RNG strip
+    // blinding on demand.
+    let garbageCalls = 0;
+    const rogueGarbage = ((len = 0) =>
+      ++garbageCalls === 1 ? new Uint8Array(len) : null) as never as (len?: number) => Uint8Array;
+    const m4 = new ScalarMultiplier(Point, rogueGarbage);
+    throws(() => m4.mulSecret(G, 5n, 1n), 'garbage after good probe fails closed');
+    eql(garbageCalls >= 2, true, 'rogue RNG was actually consulted after the probe');
+    let throwCalls = 0;
+    const rogueThrow = (len = 0): Uint8Array => {
+      if (++throwCalls === 1) return new Uint8Array(len);
+      throw new Error('no entropy');
+    };
+    const m5 = new ScalarMultiplier(Point, rogueThrow);
+    throws(() => m5.mulSecret(G, 5n, 1n), 'throw after good probe fails closed');
+    // non-function RNG is a caller type error, not an availability downgrade
+    throws(() => new ScalarMultiplier(Point, 123 as never), 'non-function RNG rejected');
+  });
+
+  should('setWindowSize validates W; W=1 resets to un-precomputed', () => {
+    const m = new ScalarMultiplier(p256.Point);
+    const Q = p256.Point.BASE.double(); // fresh instance: window sizes are tracked per point
+    throws(() => m.setWindowSize(Q, 0));
+    throws(() => m.setWindowSize(Q, 1.5));
+    throws(() => m.setWindowSize(Q, 1000), 'W > curve bits');
+    m.setWindowSize(Q, 4);
+    eql(m.hasWindowSize(Q), true);
+    m.setWindowSize(Q, 1);
+    eql(m.hasWindowSize(Q), false, 'W=1 means no window size');
+  });
+
+  should('forced extreme blinds keep 256-bit blinded multiplication exact', () => {
+    // mulCTBlinded masks the blind's top byte to 10xxxxxx: an all-zero RNG forces the minimum
+    // blind 2^127, an all-ff RNG the maximum 0xbfff…ff. Both extremes must stay value-identical
+    // to a naive double-and-add reference, incl. on W=6 window-boundary carry-chain scalars.
+    const rngMin = (len = 16) => new Uint8Array(len);
+    const rngMax = (len = 16) => new Uint8Array(len).fill(0xff);
+    const naiveMul = (zero: any, p: any, s: bigint) => {
+      let acc = zero;
+      let base = p;
+      while (s > 0n) {
+        if (s & 1n) acc = acc.add(base);
+        if (s > 1n) base = base.double();
+        s >>= 1n;
+      }
+      return acc;
+    };
+    // secp256k1 BASE (cofactor 1) and ed25519 BASE (cofactor 8, order-L base) are both blindable.
+    for (const Point of [secp256k1.Point, ed25519.Point] as any[]) {
+      const n: bigint = Point.Fn.ORDER;
+      const G = Point.BASE;
+      const Z = Point.ZERO;
+      const mulMin = new ScalarMultiplier(Point, rngMin);
+      const mulMax = new ScalarMultiplier(Point, rngMax);
+      const bare = new ScalarMultiplier(Point);
+      const edges: bigint[] = [1n, 2n, n - 1n, n - 2n, (n - 1n) / 2n];
+      for (const k of [64, 128, 192, 255]) {
+        for (const d of [-1n, 0n, 1n]) {
+          const v = (1n << BigInt(k)) + d;
+          if (v >= 1n && v < n) edges.push(v);
+        }
+      }
+      // every W=6 window digit at half / half±1 / max: worst-case signed-digit carry chains
+      for (const dd of [31n, 32n, 33n, 63n]) {
+        let s = 0n;
+        for (let w = 0; w * 6 < 250; w++) s |= dd << BigInt(w * 6);
+        if (s < n) edges.push(s);
+      }
+      const fresh = Point.fromAffine(G.toAffine()); // uncached: blinded fixed-window path
+      for (const s of edges) {
+        const hexs = s.toString(16).slice(0, 12);
+        const want = naiveMul(Z, G, s);
+        eql(mulMin.mulCTBlinded(G, s).p.equals(want), true, `blind-min cached ${hexs}`);
+        eql(mulMax.mulCTBlinded(G, s).p.equals(want), true, `blind-max cached ${hexs}`);
+        eql(mulMin.mulCTBlinded(fresh, s).p.equals(want), true, `blind-min fixed-window ${hexs}`);
+        eql(mulMax.mulCTBlinded(fresh, s).p.equals(want), true, `blind-max fixed-window ${hexs}`);
+        eql(bare.mulCT(G, s).p.equals(want), true, `unblinded cached ${hexs}`);
+        eql(bare.mulUnsafe(G, s).equals(want), true, `vartime cached ${hexs}`);
+      }
+    }
+  });
+
+  should('uses unblinded multiply for cofactored weierstrass BASE when n*BASE is nonzero', () => {
+    let calls = 0;
+    const randomBytes = (len = 0) => {
+      calls++;
+      return new Uint8Array(len).fill(7);
+    };
+    const Point = weierstrass(
+      { p: 5n, n: 19n, h: 2n, a: 0n, b: 1n, Gx: 0n, Gy: 1n },
+      { randomBytes }
+    );
+    const before = calls;
+    eql(Point.BASE.multiply(2n).equals(Point.BASE.multiplyUnsafe(2n)), true);
+    eql(calls, before, 'no blind drawn for non-blindable BASE');
+  });
+
+  should('mulAddUnsafe matches multiplyUnsafe composition (with and without endo)', () => {
+    for (const curve of [secp256k1, p256]) {
+      const { Point } = curve;
+      const G = Point.BASE;
+      const n = Point.Fn.ORDER;
+      const Q = G.multiply(123456789n);
+      const cases: [bigint, bigint][] = [
+        [1n, 1n],
+        [0n, 5n],
+        [7n, 0n],
+        [0n, 0n],
+        [n - 1n, n - 1n],
+        [n >> 1n, (n >> 1n) + 3n],
+        [0xdeadbeefn, 0xc0ffeen],
+      ];
+      for (const [a, b] of cases) {
+        const want = G.multiplyUnsafe(a).add(Q.multiplyUnsafe(b));
+        eql(G.mulAddUnsafe(a, Q, b).equals(want), true, `a=${a} b=${b}`);
+      }
+      throws(() => G.mulAddUnsafe(-1n, Q, 1n));
+      throws(() => G.mulAddUnsafe(n, Q, 1n));
+    }
+  });
+
+  should('edwards extended formulas match affine reference for generic param a', () => {
+    // Tiny complete twisted Edwards curve with a ∉ {1, p-1}: a=3 is a square and d=8 a
+    // non-square mod 13, subgroup order 5, cofactor 4. All shipped curves use a = ±1
+    // (ed25519/jubjub: -1, ed448: 1), so this pins the generic mul-by-a code path.
+    const p = 13n, a = 3n, d = 8n; // prettier-ignore
+    const G = { x: 5n, y: 8n };
+    const EPoint = edwards({ p, n: 5n, h: 4n, a, d, Gx: G.x, Gy: G.y });
+    const F = Field(p);
+    type Aff = { x: bigint; y: bigint };
+    const refAdd = (P: Aff, Q: Aff): Aff => {
+      const t = F.mul(F.mul(d, F.mul(P.x, Q.x)), F.mul(P.y, Q.y)); // d·x1x2y1y2
+      const x = F.div(F.add(F.mul(P.x, Q.y), F.mul(Q.x, P.y)), F.add(F.ONE, t));
+      const y = F.div(F.sub(F.mul(P.y, Q.y), F.mul(a, F.mul(P.x, Q.x))), F.sub(F.ONE, t));
+      return { x, y };
+    };
+    // Walk k·G for k = 2..12: passes through the identity at k = 5 and 10, so additions
+    // involving the neutral element are exercised too.
+    let R = EPoint.BASE;
+    let ref: Aff = G;
+    for (let k = 2; k <= 12; k++) {
+      R = R.add(EPoint.BASE);
+      ref = refAdd(ref, G);
+      eql(R.toAffine(), ref, `k=${k}`);
+      if (!R.is0()) R.assertValidity();
+    }
+    eql(EPoint.BASE.double().toAffine(), refAdd(G, G), 'double');
+    eql(EPoint.BASE.multiplyUnsafe(4n).add(EPoint.BASE).is0(), true, 'order 5');
+    for (const k of [1n, 2n, 3n, 4n]) {
+      eql(EPoint.BASE.multiply(k).equals(EPoint.BASE.multiplyUnsafe(k)), true, `mul ${k}`);
+    }
+  });
+
+  should('toAffine accepts precomputed invertedZ and rejects wrong values', () => {
+    for (const Point of [secp256k1.Point, ed25519.Point]) {
+      const { Fp } = Point;
+      const P = Point.BASE.double().add(Point.BASE); // non-normalized: Z != 1
+      eql(Fp.eql(P.Z, Fp.ONE), false, 'test point must not be normalized');
+      const iz = Fp.inv(P.Z);
+      eql(P.toAffine(iz), P.toAffine());
+      throws(() => P.toAffine(Fp.mul(iz, 2n)), /invZ was invalid/);
+    }
+    // Malformed invertedZ fails before any math.
+    const W = secp256k1.Point.BASE.double();
+    throws(() => W.toAffine(secp256k1.Point.Fp.ORDER), /invertedZ/);
+    const E = ed25519.Point.BASE.double();
+    throws(() => E.toAffine('1' as any), /invertedZ/);
+  });
+
+  should('checks cofactored edwards BASE order before blinding', () => {
+    let calls = 0;
+    const randomBytes = (len = 0) => {
+      calls++;
+      return new Uint8Array(len).fill(7);
+    };
+    const Good = edwards(ed25519.Point.CURVE(), { randomBytes });
+    const beforeGood = calls;
+    Good.BASE.multiply(2n);
+    eql(calls > beforeGood, true, 'order-L BASE gets blinded (draws randomness)');
+
+    const curve = ed25519.Point.CURVE();
+    const Bad = edwards({ ...curve, Gx: 0n, Gy: curve.p - 1n }, { randomBytes });
+    const beforeBad = calls;
+    eql(Bad.BASE.multiply(2n).equals(Bad.ZERO), true);
+    eql(calls, beforeBad, 'small-order BASE skips blinding');
   });
 
   should('keeps edwards generator subgroup validation out of the constructor surface', () => {
@@ -175,7 +428,9 @@ describe('Pairings', () => {
       const { Fp12 } = curve.fields;
       const G1Point = curve.G1.Point;
       const G2Point = curve.G2.Point;
-      const CURVE_ORDER = curve.ORDER;
+      // Subgroup order r. (`curve.ORDER` does not exist: it made this exponent `undefined`, which
+      // old FpPow silently mapped to ONE — the 'output order' check below was vacuous.)
+      const CURVE_ORDER = G1Point.Fn.ORDER;
       const G1 = G1Point.BASE;
       const G2 = G2Point.BASE;
 

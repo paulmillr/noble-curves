@@ -10,10 +10,12 @@ import {
   hexToBytes,
   invert,
   mod,
+  ScalarMultiplier,
+  mulAddUnsafe,
   normalizeZ,
   pippenger,
-  precomputeMSMUnsafe,
-  wNAF,
+  interleavedMSMUnsafe,
+  weierstrass,
 } from './point.helpers.ts';
 import { getTypeTests } from './utils.ts';
 
@@ -106,36 +108,52 @@ describe('basic curve tests', () => {
           equal(G[1].multiplyUnsafe(1n), G[1], '(1*G).multiplyUnsafe(1) = 1*G');
           equal(G[0].multiplyUnsafe(5n), G[0], '(0*G).multiplyUnsafe(5) = 0');
 
-          if (typeof wNAF === 'function') {
+          if (typeof ScalarMultiplier === 'function') {
             const point = G[2];
-            const acc = G[7];
             const scalar = 5n;
-            const want = acc.add(point.multiplyUnsafe(scalar));
-            const w = new wNAF(p) as any;
+            const want = point.multiplyUnsafe(scalar);
+            const w = new ScalarMultiplier(p) as any;
+            // mulAddUnsafe allowOversized: swaps `s < Fn.ORDER` for the ORDER^4 DoS cap
+            const Point = p as any;
             eql(
-              w.ladder_nonCT(point, scalar, acc).equals(want),
+              mulAddUnsafe(Point, [point], [scalar], true).equals(want),
               true,
-              'ladder_nonCT(point, scalar, acc)'
-            );
-            eql(w.ladder_nonCT(point, 0n, acc).equals(acc), true, 'ladder_nonCT(point, 0, acc)');
-            throws(() => w.ladder_nonCT(point, -1n, acc), /invalid scalar/);
-            const precomputes = w.getPrecomputes(2, point);
-            eql(
-              w.wNAF_nonCT(2, precomputes, scalar, acc).equals(want),
-              true,
-              'wNAF_nonCT(point, scalar, acc)'
+              'mulAddUnsafe(c, [point], [scalar], oversized)'
             );
             eql(
-              w.wNAF_nonCT(2, precomputes, 0n, acc).equals(acc),
+              mulAddUnsafe(Point, [point], [0n], true).equals(G[0]),
               true,
-              'wNAF_nonCT(point, 0, acc)'
+              'mulAddUnsafe(c, [point], [0], oversized)'
             );
+            throws(() => mulAddUnsafe(Point, [point], [-1n], true), /invalid scalar/);
+            const order = Point.Fn.ORDER;
+            // point is in the prime-order subgroup, so ORDER⋅point = O
             eql(
-              w.unsafe(point, scalar, undefined, acc).equals(want),
+              mulAddUnsafe(Point, [point], [order], true).equals(G[0]),
               true,
-              'unsafe(point, scalar, acc)'
+              'mulAddUnsafe oversized accepts s = ORDER'
             );
-            eql(w.unsafe(point, 0n, undefined, acc).equals(acc), true, 'unsafe(point, 0, acc)');
+            throws(
+              () => mulAddUnsafe(Point, [point], [order ** 4n], true),
+              /invalid scalar/,
+              'DoS cap: rejects s >= ORDER^4'
+            );
+            throws(
+              () => mulAddUnsafe(Point, [point], [order]),
+              /invalid scalar/,
+              'default: rejects s >= ORDER'
+            );
+            // precomputed-point path: mulUnsafe reuses the CT kernel
+            w.setWindowSize(point, 2);
+            eql(
+              w.mulUnsafe(point, scalar).equals(want),
+              true,
+              'mulUnsafe(precomputed point, scalar)'
+            );
+            w.setWindowSize(point, 1); // reset to un-precomputed
+            eql(w.mulUnsafe(point, scalar).equals(want), true, 'mulUnsafe(point, scalar)');
+            eql(w.mulUnsafe(point, 0n).equals(G[0]), true, 'mulUnsafe(point, 0)');
+            throws(() => w.mulUnsafe(point, -1n), /invalid scalar/);
           }
 
           equal(G[3].add(G[3]), G[6], '3*G + 3*G = 6*G');
@@ -245,7 +263,7 @@ describe('basic curve tests', () => {
       });
 
       describe('multiscalar multiplication', () => {
-        if (typeof pippenger !== 'function' || typeof precomputeMSMUnsafe !== 'function') return;
+        if (typeof pippenger !== 'function' || typeof interleavedMSMUnsafe !== 'function') return;
         should('basic, random, and precomputed MSM', () => {
           const msm = (points, scalars) => pippenger(p, points, scalars);
           equal(msm([p.BASE], [0n]), p.ZERO, '0*G');
@@ -280,10 +298,11 @@ describe('basic curve tests', () => {
           const points2 = [p.BASE, p.BASE.multiply(2n), p.BASE.multiply(4n), p.BASE.multiply(8n)];
           const scalars = [3n, 5n, 7n, 11n];
           const res = p.BASE.multiply(129n);
-          for (let windowSize = 1; windowSize <= 10; windowSize++) {
-            const mul = precomputeMSMUnsafe(Point, points2, windowSize);
+          for (let windowSize = 2; windowSize <= 10; windowSize++) {
+            const mul = interleavedMSMUnsafe(Point, points2, windowSize);
             equal(mul(scalars), res, 'windowSize=' + windowSize);
           }
+          throws(() => interleavedMSMUnsafe(Point, points2, 1), /window/);
 
           fc.assert(
             fc.property(fc.array(fc.tuple(FC_BIGINT, FC_BIGINT)), FC_BIGINT, (pairs) => {
@@ -301,8 +320,8 @@ describe('basic curve tests', () => {
               total = mod(total, CURVE_ORDER);
               const res = total ? p.BASE.multiply(total) : p.ZERO;
 
-              for (let windowSize = 1; windowSize <= 10; windowSize++) {
-                const mul = precomputeMSMUnsafe(Point, points, windowSize);
+              for (let windowSize = 2; windowSize <= 10; windowSize++) {
+                const mul = interleavedMSMUnsafe(Point, points, windowSize);
                 equal(mul(scalars), res, 'windowSize=' + windowSize);
               }
             }),
@@ -497,6 +516,317 @@ describe('basic curve tests', () => {
       }
     });
   }
+});
+
+// Deterministic xorshift64 PRNG: reproducible complement to fast-check for the
+// kernel tests below.
+function makeRng(initialSeed: bigint) {
+  let seed = initialSeed;
+  const mask64 = (1n << 64n) - 1n;
+  const rnd64 = () => {
+    seed = (seed ^ (seed << 13n)) & mask64;
+    seed ^= seed >> 7n;
+    seed = (seed ^ (seed << 17n)) & mask64;
+    return seed;
+  };
+  const rndBig = (bits: number) => {
+    let r = 0n;
+    for (let i = 0; i < bits; i += 64) r = (r << 64n) | rnd64();
+    return r & ((1n << BigInt(bits)) - 1n);
+  };
+  const rndBelow = (n: bigint) => {
+    const bits = n.toString(2).length;
+    while (true) {
+      const r = rndBig(bits);
+      if (r < n) return r;
+    }
+  };
+  return { rndBig, rndBelow };
+}
+
+// Naive double-and-add using only add/double: independent reference for every kernel.
+function naiveMul(zero, p, s: bigint) {
+  let acc = zero;
+  let base = p;
+  while (s > 0n) {
+    if (s & 1n) acc = acc.add(base);
+    if (s > 1n) base = base.double();
+    s >>= 1n;
+  }
+  return acc;
+}
+
+describe('scalar-mult kernels: toy curve, exhaustive', () => {
+  // y² = x³ + x + 6 over F_1039 has prime order 1009 (cofactor 1). Params were found once by
+  // exhaustive point counting over small (a, b); hardcoded so tests skip the search. The small
+  // order allows checking every kernel on EVERY scalar against a full naive multiple table.
+  const toy = { p: 1039n, a: 1n, b: 6n, n: 1009n, h: 1n, Gx: 1n, Gy: 221n };
+  const TPoint = weierstrass(toy);
+  const TN = toy.n;
+  const TG = TPoint.BASE;
+  const TZ = TPoint.ZERO;
+  // Full naive multiple table, exact by construction: nmul[i] = i*G via repeated add().
+  const nmul = [TZ];
+  for (let i = 1; i <= Number(TN); i++) nmul.push(nmul[i - 1].add(TG));
+  // Forced extreme blinds: mulCTBlinded masks the top byte to 10xxxxxx, so all-zero bytes give
+  // the minimum blind 0x80 00…00 = 2^127 and all-ff bytes the maximum blind 0xbf ff…ff.
+  const rngMin = (l = 16) => new Uint8Array(l);
+  const rngMax = (l = 16) => new Uint8Array(l).fill(0xff);
+
+  should('N*G == O and (N-1)*G != O', () => {
+    eql(nmul[Number(TN)].is0(), true);
+    eql(nmul[Number(TN) - 1].is0(), false);
+  });
+
+  should('all kernels agree with the naive table on every scalar', () => {
+    const freshG = TPoint.fromAffine(TG.toAffine()); // separate identity: uncached fixed-window path
+    const bare = new ScalarMultiplier(TPoint); // no RNG: unblinded CT paths
+    const mulMin = new ScalarMultiplier(TPoint, rngMin);
+    const mulMax = new ScalarMultiplier(TPoint, rngMax);
+    for (let s = 1n; s < TN; s++) {
+      const want = nmul[Number(s)];
+      eql(TG.multiply(s).equals(want), true, `multiply(BASE, ${s})`);
+      eql(freshG.multiply(s).equals(want), true, `multiply(fresh, ${s})`);
+      eql(bare.mulCT(TG, s).p.equals(want), true, `mulCT cached ${s}`);
+      eql(bare.mulCT(freshG, s).p.equals(want), true, `mulCT fixed-window ${s}`);
+      eql(mulMin.mulCTBlinded(TG, s).p.equals(want), true, `blind-min cached ${s}`);
+      eql(mulMax.mulCTBlinded(TG, s).p.equals(want), true, `blind-max cached ${s}`);
+      eql(mulMin.mulCTBlinded(freshG, s).p.equals(want), true, `blind-min fixed-window ${s}`);
+      eql(mulMax.mulCTBlinded(freshG, s).p.equals(want), true, `blind-max fixed-window ${s}`);
+      eql(TG.multiplyUnsafe(s).equals(want), true, `multiplyUnsafe(BASE, ${s})`);
+      eql(freshG.multiplyUnsafe(s).equals(want), true, `multiplyUnsafe(fresh, ${s})`);
+    }
+  });
+
+  should('cached wNAF at every window width W=1..8 on every scalar', () => {
+    for (let W = 1; W <= 8; W++) {
+      const Q = TPoint.fromAffine(TG.toAffine());
+      Q.precompute(W, false); // eager build; W=1 resets to the un-precomputed paths
+      for (let s = 1n; s < TN; s++) {
+        eql(Q.multiply(s).equals(nmul[Number(s)]), true, `W=${W} multiply ${s}`);
+        eql(Q.multiplyUnsafe(s).equals(nmul[Number(s)]), true, `W=${W} multiplyUnsafe ${s}`);
+      }
+    }
+  });
+
+  should('vartime oversized scalars: reduction mod n, ORDER^4 DoS cap, bounds', () => {
+    const bare = new ScalarMultiplier(TPoint);
+    const freshG = TPoint.fromAffine(TG.toAffine());
+    // ScalarMultiplier.mulUnsafe routes oversized scalars through the allowOversized wNAF path
+    for (const s of [TN, TN + 1n, 2n * TN + 3n, TN * TN, TN ** 3n + 17n, TN ** 4n - 1n]) {
+      const want = nmul[Number(s % TN)];
+      eql(bare.mulUnsafe(TG, s).equals(want), true, `mulUnsafe oversized ${s}`);
+      eql(bare.mulUnsafe(freshG, s).equals(want), true, `mulUnsafe oversized fresh ${s}`);
+    }
+    throws(() => bare.mulUnsafe(TG, TN ** 4n), 'ORDER^4 cap');
+    throws(() => bare.mulUnsafe(TG, -1n));
+    eql(bare.mulUnsafe(TG, 0n).is0(), true);
+    eql(bare.mulUnsafe(freshG, 0n).is0(), true);
+    // multiply()/mulCT/mulCTBlinded bound checks
+    throws(() => TG.multiply(0n));
+    throws(() => TG.multiply(TN));
+    throws(() => bare.mulCT(TG, 0n));
+    throws(() => bare.mulCT(TG, TN));
+    const mulMin = new ScalarMultiplier(TPoint, rngMin);
+    throws(() => mulMin.mulCTBlinded(TG, TN));
+  });
+
+  should('blind determinism and ZERO handling', () => {
+    const s = 777n % TN;
+    const base0 = TG.multiply(s);
+    // multiply() draws a fresh random blind per call; the result must not depend on it
+    for (let i = 0; i < 30; i++) eql(TG.multiply(s).equals(base0), true, 'blind determinism');
+    eql(TZ.multiply(5n).is0(), true);
+    eql(TZ.multiplyUnsafe(5n).is0(), true);
+  });
+
+  should('mulAddUnsafe: dense grid, edges, oversized, invalid inputs', () => {
+    const G2 = TG.double();
+    const G3 = G2.add(TG);
+    for (let s1 = 0n; s1 < TN; s1 += 5n) {
+      for (let s2 = 0n; s2 < TN; s2 += 97n) {
+        const want = nmul[Number((s1 + 2n * s2) % TN)];
+        eql(mulAddUnsafe(TPoint, [TG, G2], [s1, s2]).equals(want), true, `grid ${s1},${s2}`);
+      }
+    }
+    eql(mulAddUnsafe(TPoint, [], []).is0(), true, 'empty');
+    eql(mulAddUnsafe(TPoint, [TG], [0n]).is0(), true, '[0]');
+    eql(mulAddUnsafe(TPoint, [TG, G2], [0n, 0n]).is0(), true, 'zeros');
+    eql(mulAddUnsafe(TPoint, [TG, TZ], [3n, 5n]).equals(nmul[3]), true, 'with ZERO point');
+    eql(
+      mulAddUnsafe(TPoint, [TG, G2, G3], [TN - 1n, TN - 1n, TN - 1n]).equals(
+        nmul[Number((6n * (TN - 1n)) % TN)]
+      ),
+      true,
+      'max scalars'
+    );
+    const so = TN ** 3n + 12345n;
+    eql(mulAddUnsafe(TPoint, [TG], [so], true).equals(nmul[Number(so % TN)]), true, 'oversized');
+    throws(() => mulAddUnsafe(TPoint, [TG], [TN]), 'scalar=N without allowOversized');
+    throws(() => mulAddUnsafe(TPoint, [TG], [TN ** 4n], true), 'ORDER^4 cap');
+    throws(() => mulAddUnsafe(TPoint, [TG], [-1n], true));
+    throws(() => mulAddUnsafe(TPoint, [TG], [1n, 2n]), 'length mismatch');
+    throws(() => mulAddUnsafe(TPoint, [{} as never], [1n]), 'foreign point');
+  });
+
+  should('pippenger and interleavedMSMUnsafe vs the naive table', () => {
+    const { rndBelow } = makeRng(0xdeadbeefn);
+    const G2 = TG.double();
+    const G3 = G2.add(TG);
+    for (const L of [1, 2, 3, 8, 33, 100]) {
+      const ps = [];
+      const ss = [];
+      let total = 0n;
+      for (let i = 0; i < L; i++) {
+        const k = rndBelow(TN);
+        const s = i % 4 === 0 ? 0n : rndBelow(TN); // mix in zero scalars
+        ps.push(nmul[Number(k)]);
+        ss.push(s);
+        total = (total + k * s) % TN;
+      }
+      eql(pippenger(TPoint, ps, ss).equals(nmul[Number(total)]), true, `pippenger L=${L}`);
+    }
+    eql(pippenger(TPoint, [], []).is0(), true, 'pippenger empty');
+    eql(pippenger(TPoint, [TG, G2], [0n, 0n]).is0(), true, 'pippenger all-zero');
+    eql(pippenger(TPoint, [TG], [TN - 1n]).equals(nmul[Number(TN - 1n)]), true, 'pippenger n-1');
+    throws(() => pippenger(TPoint, [TG], [TN]), 'pippenger scalar=N');
+    throws(() => pippenger(TPoint, [TG], [1n, 2n]), 'pippenger length mismatch');
+
+    const pts = [TG, G2, G3];
+    for (const W of [2, 3, 4, 8]) {
+      const msm = interleavedMSMUnsafe(TPoint, pts, W);
+      for (let t = 0; t < 20; t++) {
+        const ss = [rndBelow(TN), rndBelow(TN), rndBelow(TN)];
+        const total = (ss[0] + 2n * ss[1] + 3n * ss[2]) % TN;
+        eql(msm(ss).equals(nmul[Number(total)]), true, `interleaved W=${W} t=${t}`);
+      }
+      // fewer scalars than points: trailing zeros
+      eql(msm([5n]).equals(nmul[5]), true, `interleaved W=${W} partial scalars`);
+      eql(msm([]).is0(), true, `interleaved W=${W} no scalars`);
+      throws(() => msm([1n, 2n, 3n, 4n]), 'too many scalars');
+      throws(() => msm([TN]), 'scalar=N');
+    }
+  });
+
+  should('normalizeZ normalizes Z without changing values', () => {
+    const G2 = TG.double();
+    const batch = [TG, G2, TZ, G2.double()];
+    const norm = normalizeZ(TPoint, batch);
+    for (let i = 0; i < batch.length; i++) {
+      eql(norm[i].equals(batch[i]), true, `equality @${i}`);
+      eql(norm[i].is0() || (norm[i] as never as { Z: bigint }).Z === 1n, true, `Z=1 @${i}`);
+    }
+  });
+});
+
+describe('scalar-mult vs naive reference: real curves', () => {
+  function edgeScalars(n: bigint): bigint[] {
+    const out = new Set<bigint>();
+    const add = (x: bigint) => {
+      if (x >= 1n && x < n) out.add(x);
+    };
+    [1n, 2n, 3n, 7n, n - 1n, n - 2n, (n - 1n) / 2n, (n + 1n) / 2n].forEach(add);
+    // prettier-ignore
+    for (const k of [8, 16, 32, 63, 64, 65, 127, 128, 129, 191, 192, 250, 251, 252, 253, 254, 255]) {
+      add(1n << BigInt(k));
+      add((1n << BigInt(k)) - 1n);
+      add((1n << BigInt(k)) + 1n);
+    }
+    // W=6 window-boundary patterns: every window at half / half±1 / max digit (carry chains)
+    for (const d of [31n, 32n, 33n, 63n]) {
+      let s = 0n;
+      for (let w = 0; w * 6 < 250; w++) s |= d << BigInt(w * 6);
+      add(s);
+    }
+    // alternating bit patterns 0b1010… and 0b0101…
+    let alt = 0n;
+    for (let i = 0; i < 128; i++) alt = (alt << 2n) | 2n;
+    add(alt);
+    add(alt >> 1n);
+    return [...out];
+  }
+
+  // secp256k1 exercises the GLV endo path; p256 the plain weierstrass path; ed25519 the
+  // cofactored edwards path.
+  for (const name of ['secp256k1', 'secp256r1', 'ed25519']) {
+    should(`${name}: edge + random scalars across kernels`, () => {
+      const Point = CURVES[name].Point;
+      const n = Point.Fn.ORDER;
+      const G = Point.BASE;
+      const Z = Point.ZERO;
+      const { rndBelow } = makeRng(0xc0ffeen);
+      const scalars = edgeScalars(n).concat(
+        Array.from({ length: 20 }, () => rndBelow(n - 1n) + 1n)
+      );
+      const freshG = Point.fromAffine(G.toAffine()); // separate identity: uncached fixed-window path
+      const bare = new ScalarMultiplier(Point);
+      let i = 0;
+      for (const s of scalars) {
+        const want = naiveMul(Z, G, s);
+        eql(G.multiply(s).equals(want), true, `multiply(BASE, ${s.toString(16)})`);
+        eql(G.multiplyUnsafe(s).equals(want), true, `multiplyUnsafe(BASE, ${s.toString(16)})`);
+        // uncached paths are slower; run on a subset
+        if (i % 3 === 0) {
+          eql(freshG.multiply(s).equals(want), true, `multiply(fresh, ${s.toString(16)})`);
+          eql(freshG.multiplyUnsafe(s).equals(want), true, `multiplyUnsafe(fresh)`);
+          eql(bare.mulCT(G, s).p.equals(want), true, `mulCT ${s.toString(16)}`);
+        }
+        i++;
+      }
+    });
+  }
+
+  should('joint mulAddUnsafe (incl. GLV endo split) vs naive', () => {
+    const { rndBelow } = makeRng(0x5eedn);
+    for (const name of ['secp256k1', 'secp256r1']) {
+      const Point = CURVES[name].Point;
+      const n = Point.Fn.ORDER;
+      const G = Point.BASE;
+      const Z = Point.ZERO;
+      const Q = G.multiply(rndBelow(n - 1n) + 1n);
+      for (let t = 0; t < 8; t++) {
+        const a = t === 0 ? 0n : t === 1 ? n - 1n : rndBelow(n);
+        const b = t === 2 ? 0n : t === 3 ? n - 1n : rndBelow(n);
+        const want = naiveMul(Z, G, a).add(naiveMul(Z, Q, b));
+        eql(G.mulAddUnsafe(a, Q, b).equals(want), true, `${name} t=${t}`);
+      }
+      // curve-level joint MSM with generic points (no endo folding: direct path)
+      for (let t = 0; t < 4; t++) {
+        const pts = [G, Q, Q.double()];
+        const ss = [rndBelow(n), rndBelow(n), rndBelow(n)];
+        let want = Z;
+        for (let j = 0; j < 3; j++) want = want.add(naiveMul(Z, pts[j], ss[j]));
+        eql(mulAddUnsafe(Point, pts, ss).equals(want), true, `${name} L=3 t=${t}`);
+      }
+    }
+  });
+
+  should('pippenger/interleaved on secp256k1 + cross-curve point rejection', () => {
+    const Point = CURVES.secp256k1.Point;
+    const n = Point.Fn.ORDER;
+    const G = Point.BASE;
+    const Z = Point.ZERO;
+    const { rndBelow } = makeRng(0xabcdefn);
+    const pts = [];
+    const ss = [];
+    let want = Z;
+    for (let i = 0; i < 7; i++) {
+      const P = G.multiplyUnsafe(rndBelow(n - 1n) + 1n);
+      const s = i === 3 ? 0n : rndBelow(n);
+      pts.push(P);
+      ss.push(s);
+      want = want.add(naiveMul(Z, P, s));
+    }
+    eql(pippenger(Point, pts, ss).equals(want), true, 'pippenger L=7');
+    const msm = interleavedMSMUnsafe(Point, pts.slice(0, 3), 5);
+    const want3 = naiveMul(Z, pts[0], ss[0])
+      .add(naiveMul(Z, pts[1], ss[1]))
+      .add(naiveMul(Z, pts[2], ss[2]));
+    eql(msm(ss.slice(0, 3)).equals(want3), true, 'interleaved L=3 W=5');
+    const foreign = CURVES.secp256r1.Point.BASE;
+    throws(() => pippenger(Point, [foreign as never], [1n]), 'pippenger foreign point');
+    throws(() => mulAddUnsafe(Point, [foreign as never], [1n]), 'mulAddUnsafe foreign point');
+  });
 });
 
 should.runWhen(import.meta.url);

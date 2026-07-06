@@ -1,12 +1,14 @@
 import {
+  ScalarMultiplier as _ScalarMultiplier,
   createCurveFields as _createCurveFields,
+  mulAddUnsafe as _mulAddUnsafe,
   normalizeZ as _normalizeZ,
   pippenger as _pippenger,
-  precomputeMSMUnsafe as _precomputeMSMUnsafe,
-  wNAF as _wNAF,
+  interleavedMSMUnsafe as _interleavedMSMUnsafe,
 } from '../src/abstract/curve.ts';
 import { bls12_381 } from '../src/bls12-381.ts';
 import { edwards as _edwards } from '../src/abstract/edwards.ts';
+import { weierstrass as _weierstrass } from '../src/abstract/weierstrass.ts';
 import { ed25519, ed25519ctx, ed25519ph, ristretto255 } from '../src/ed25519.ts';
 import { decaf448, ed448, ed448ph } from '../src/ed448.ts';
 import {
@@ -55,8 +57,10 @@ export function getOtherCurve(currCurveName) {
 
 export const createCurveFields = _createCurveFields;
 export const edwards = _edwards;
+export const weierstrass = _weierstrass;
 export const pippenger = _pippenger;
-export const precomputeMSMUnsafe = _precomputeMSMUnsafe;
+export const interleavedMSMUnsafe = _interleavedMSMUnsafe;
+export const mulAddUnsafe = _mulAddUnsafe;
 export const normalizeZ = _normalizeZ;
-export const wNAF = _wNAF;
+export const ScalarMultiplier = _ScalarMultiplier;
 export { hex, hexToBytes, invert, mod };
