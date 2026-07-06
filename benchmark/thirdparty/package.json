@@ -1,0 +1,23 @@
+{
+  "name": "thirdparty",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "bip-schnorr": "^0.6.7",
+    "ecc-jsbn": "^0.2.0",
+    "ecurve": "^1.0.6",
+    "elliptic": "^6.6.1",
+    "secp256k1": "^5.0.1",
+    "sjcl": "^1.0.9",
+    "tweetnacl": "^1.0.3",
+    "wasm-crypto": "^0.0.13"
+  }
+}

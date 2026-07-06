@@ -4,7 +4,7 @@ import { generateData } from './_shared.ts';
 
 (async () => {
   console.log('# secp256k1');
-  await mark('init', () => secp256k1.Point.BASE.precompute(8, false));
+  await mark('init', () => secp256k1.Point.BASE.precompute(6, false));
   const d = generateData(secp256k1);
   await mark('getPublicKey', () => secp256k1.getPublicKey(d.priv));
   await mark('sign', () => secp256k1.sign(d.msg, d.priv));
@@ -16,6 +16,7 @@ import { generateData } from './_shared.ts';
   await mark('getSharedSecret', () => secp256k1.getSharedSecret(d.priv, pub2));
   const s = schnorr.sign(d.msg, d.priv);
   const spub = schnorr.getPublicKey(d.priv);
+  await mark('schnorr.getPublicKey', () => schnorr.getPublicKey(d.priv));
   await mark('schnorr.sign', () => schnorr.sign(d.msg, d.priv));
   await mark('schnorr.verify', () => schnorr.verify(s, d.msg, spub));
 })();
