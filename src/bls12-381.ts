@@ -83,7 +83,6 @@ import { Field, type IField } from './abstract/modular.ts';
 import {
   abytes,
   bitLen,
-  bitMask,
   bytesToHex,
   bytesToNumberBE,
   concatBytes,
@@ -363,12 +362,17 @@ const fp2 = {
   decode(bytes: TArg<Uint8Array>) {
     const { BYTES: L } = Fp;
     return Fp2.create({
-      c0: Fp.create(bytesToNumberBE(bytes.subarray(L))),
-      c1: Fp.create(bytesToNumberBE(bytes.subarray(0, L))),
+      c0: decodeFp(bytes.subarray(L)),
+      c1: decodeFp(bytes.subarray(0, L)),
     });
   },
 };
 const BaseFp = Fp;
+function decodeFp(bytes: TArg<Uint8Array>): Fp {
+  const num = bytesToNumberBE(bytes);
+  if (num >= Fp.ORDER) throw new Error('invalid BLS12-381 field element');
+  return Fp.create(num);
+}
 type Mask = { compressed: boolean; infinity: boolean; sort: boolean };
 // Keep BLS12-381 point/signature codecs on one control-flow skeleton: the G1/G2
 // and point/signature variants differ only in field packing, subgroup bytes, and
@@ -406,8 +410,8 @@ const coder = <T>(
       const len = compressed ? W : 2 * W;
       if (value.length !== len) throw new Error(`invalid ${name} point: expected ${len} bytes`);
       if (infinity) {
-        // Infinity canonicality has to be checked on raw bytes before decode()
-        // reduces coordinates modulo p and turns non-empty payloads into zero.
+        // Infinity has a dedicated encoding: after the flag bits are cleared, every
+        // remaining payload byte must be zero.
         for (const b of value) {
           if (b) throw new Error(`invalid ${name} point: non-canonical zero`);
         }
@@ -422,8 +426,8 @@ const coder = <T>(
       } else {
         y = dec(value.subarray(W));
       }
-      // Noble keeps the permissive coordinate reduction path here, but an
-      // omitted infinity flag must not still decode to ZERO afterwards.
+      // The all-zero uncompressed payload must use the infinity flag instead of
+      // decoding as an ordinary affine point.
       if (!compressed && F.is0(x) && F.is0(y))
         throw new Error(`invalid ${name} point: uncompressed`);
       return { x, y };
@@ -444,7 +448,6 @@ function validateMask({ compressed, infinity, sort }: Mask) {
 }
 function parseMask(bytes: TArg<Uint8Array>) {
   // Copy, so we can remove mask data.
-  // It will be removed also later, when Fp.create will call modulo.
   bytes = copyBytes(bytes);
   const mask = bytes[0] & 0b1110_0000;
   const compressed = !!((mask >> 7) & 1); // compression bit (0b1000_0000)
@@ -472,7 +475,7 @@ const g1coder = coder(
   Fp,
   Fp.create(bls12_381_CURVE_G1.b),
   (x: Fp) => numberToBytesBE(x, Fp.BYTES),
-  (bytes: TArg<Uint8Array>) => Fp.create(bytesToNumberBE(bytes) & bitMask(Fp.BITS)),
+  decodeFp,
   (y: Fp) => [y]
 );
 const g1 = { point: g1coder(true), sig: g1coder(false) };

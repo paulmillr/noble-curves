@@ -735,13 +735,14 @@ function createBlsSig<P, S>(
       toHex: notImplemented,
     };
   }
+  const sigCoder = SignatureCoder;
   type PubPoint = WeierstrassPoint<P>;
   type SigPoint = WeierstrassPoint<S>;
   function normPub(point: PubPoint | BLSInput): PubPoint {
     return point instanceof PubPoint ? (point as PubPoint) : PubPoint.fromBytes(point);
   }
   function normSig(point: SigPoint | BLSInput): SigPoint {
-    return point instanceof SigPoint ? (point as SigPoint) : SigPoint.fromBytes(point);
+    return point instanceof SigPoint ? (point as SigPoint) : sigCoder.fromBytes(point);
   }
   // Sign/verify here take points already hashed onto the signature subgroup.
   // Raw bytes and points from the other subgroup must fail this constructor-brand
@@ -874,7 +875,7 @@ function createBlsSig<P, S>(
       const opts = DST === undefined ? undefined : { DST };
       return hashToSigCurve(messageBytes, opts);
     },
-    Signature: Object.freeze({ ...SignatureCoder }),
+    Signature: Object.freeze({ ...sigCoder }),
   }) /*satisfies Signer */;
 }
 

@@ -1086,6 +1086,24 @@ describe('bls12-381 verify', () => {
         eql(resHex, false);
       }
     });
+    should('rejects uncompressed signature bytes in raw-byte APIs', () => {
+      const secretKey = privKeyNumToBytes(42n);
+      const msg = blsl.hash(asciiToBytes('long signature codec'));
+      const sig = blsl.sign(msg, secretKey);
+      const pub = blsl.getPublicKey(secretKey);
+      const sigBytes = blsl.Signature.toBytes(sig);
+      const sigUncompressed = sig.toBytes(false);
+      const pubUncompressed = pub.toBytes(false);
+
+      eql(blsl.verify(sig, msg, pub), true);
+      eql(blsl.verify(sigBytes, msg, pubUncompressed), true);
+      throws(() => blsl.verify(sigUncompressed, msg, pub), /signature|point|bytes/);
+      throws(
+        () => blsl.verifyBatch(sigUncompressed, [{ message: msg, publicKey: pub }]),
+        /signature|point|bytes/
+      );
+      throws(() => blsl.aggregateSignatures([sigUncompressed]), /signature|point|bytes/);
+    });
   });
   describe('shortSignatures', () => {
     should('sign, verify, and negative cases', () => {
@@ -1132,6 +1150,24 @@ describe('bls12-381 verify', () => {
         const resHex = blss.verify(sig, msg, invPub);
         eql(resHex, false);
       }
+    });
+    should('rejects uncompressed signature bytes in raw-byte APIs', () => {
+      const secretKey = privKeyNumToBytes(42n);
+      const msg = blss.hash(asciiToBytes('short signature codec'));
+      const sig = blss.sign(msg, secretKey);
+      const pub = blss.getPublicKey(secretKey);
+      const sigBytes = blss.Signature.toBytes(sig);
+      const sigUncompressed = sig.toBytes(false);
+      const pubUncompressed = pub.toBytes(false);
+
+      eql(blss.verify(sig, msg, pub), true);
+      eql(blss.verify(sigBytes, msg, pubUncompressed), true);
+      throws(() => blss.verify(sigUncompressed, msg, pub), /signature|point|bytes/);
+      throws(
+        () => blss.verifyBatch(sigUncompressed, [{ message: msg, publicKey: pub }]),
+        /signature|point|bytes/
+      );
+      throws(() => blss.aggregateSignatures([sigUncompressed]), /signature|point|bytes/);
     });
   });
   should('verify augmented signature', () => {
@@ -1701,6 +1737,50 @@ describe('bls12-381 deterministic', () => {
 });
 
 describe('BLS flag edge cases', () => {
+  should('reject non-canonical field limbs in point and signature encodings', () => {
+    const { Fp } = bls12_381.fields;
+    const p = Fp.ORDER;
+    const L = Fp.BYTES;
+    const pBytes = utils.numberToBytesBE(p, L);
+    const withLimb = (len: number, offset: number, flags = 0) => {
+      const out = new Uint8Array(len);
+      out.set(pBytes, offset);
+      out[0] |= flags;
+      return out;
+    };
+
+    const g1CompressedP = withLimb(L, 0, 0x80);
+    throws(() => bls12_381.G1.Point.fromBytes(g1CompressedP));
+    throws(() => bls12_381.shortSignatures.Signature.fromBytes(g1CompressedP));
+
+    for (const offset of [0, L]) {
+      throws(() => bls12_381.G1.Point.fromBytes(withLimb(2 * L, offset)));
+    }
+
+    for (const offset of [0, L]) {
+      const g2CompressedP = withLimb(2 * L, offset, 0x80);
+      throws(() => bls12_381.G2.Point.fromBytes(g2CompressedP));
+      throws(() => bls12_381.longSignatures.Signature.fromBytes(g2CompressedP));
+    }
+
+    for (const offset of [0, L, 2 * L, 3 * L]) {
+      throws(() => bls12_381.G2.Point.fromBytes(withLimb(4 * L, offset)));
+    }
+  });
+
+  should('reject non-flag high bits in uncompressed coordinate limbs', () => {
+    const L = bls12_381.fields.Fp.BYTES;
+    const g1 = bls12_381.G1.Point.BASE.toBytes(false);
+    g1[L] |= 0x20;
+    throws(() => bls12_381.G1.Point.fromBytes(g1));
+
+    for (const offset of [L, 2 * L, 3 * L]) {
+      const g2 = bls12_381.G2.Point.BASE.toBytes(false);
+      g2[offset] |= 0x20;
+      throws(() => bls12_381.G2.Point.fromBytes(g2));
+    }
+  });
+
   should('reject uncompressed points that decode to infinity without the infinity flag', () => {
     const { Fp } = bls12_381.fields;
     const p = Fp.ORDER;
