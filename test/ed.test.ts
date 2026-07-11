@@ -2,7 +2,7 @@ import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import { describe, should } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql } from 'node:assert';
 import { ed25519, ed25519ctx, ed25519ph, x25519 } from '../src/ed25519.ts';
-import { ed448 } from '../src/ed448.ts';
+import { ed448, x448 } from '../src/ed448.ts';
 import { numberToBytesLE } from '../src/utils.ts';
 import { deepHexToBytes, json } from './utils.ts';
 
@@ -144,7 +144,7 @@ describe('X25519 RFC7748 ECDH', () => {
   });
 
   describe('toMontgomery()', () => {
-    should('edwardsToMontgomery outputs, keyPair, and ECDH', () => {
+    should('ed25519 toMontgomery outputs, keyPair, and ECDH', () => {
       const edSecret = hexToBytes(
         '77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a'
       );
@@ -174,15 +174,43 @@ describe('X25519 RFC7748 ECDH', () => {
           ed25519.utils.toMontgomery(edPublic1)
         )
       );
+    });
 
-      const ed448Secret = hexToBytes(
+    should('ed448 toMontgomery outputs, keyPair, and ECDH', () => {
+      const edSecret = hexToBytes(
         '77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab1'
       );
-      const ed448Public = ed448.getPublicKey(ed448Secret);
-      const ed448XPublic = ed448.utils.toMontgomery(ed448Public);
+      const edPublic = ed448.getPublicKey(edSecret);
+      const xPrivate = ed448.utils.toMontgomerySecret(edSecret);
       eql(
-        bytesToHex(ed448XPublic),
-        'f0301c19656bce1d1cd0a474c952d196041811b63617fc8fdaacee533644e2b2d49273426c8dbb5a76033ea84fb5215b84f9ebf22bde0b0700'
+        bytesToHex(xPrivate),
+        'b891484436bde1596114f68f5911a7c1c08908c4150724e7a4b9efe5c9dc7ed97a19a10319f2ac14bed4087c688d66b51d3f4f281bd362a9'
+      );
+      const xPublic = ed448.utils.toMontgomery(edPublic);
+      eql(
+        bytesToHex(xPublic),
+        '8b596ceacda13c99a4c968f6feac6c101f4eb1e7d6c45192f029ee7725e3a10bc64b123322e0f7b4e9edeaa70e05e297311171ee73f550a0'
+      );
+
+      const randomEdSecret = ed448.utils.randomSecretKey();
+      const randomEdPublic = ed448.getPublicKey(randomEdSecret);
+      const xSecret = ed448.utils.toMontgomerySecret(randomEdSecret);
+      const expectedXPublic = x448.getPublicKey(xSecret);
+      eql(ed448.utils.toMontgomery(randomEdPublic), expectedXPublic);
+
+      const edSecret1 = ed448.utils.randomSecretKey();
+      const edPublic1 = ed448.getPublicKey(edSecret1);
+      const edSecret2 = ed448.utils.randomSecretKey();
+      const edPublic2 = ed448.getPublicKey(edSecret2);
+      eql(
+        x448.getSharedSecret(
+          ed448.utils.toMontgomerySecret(edSecret1),
+          ed448.utils.toMontgomery(edPublic2)
+        ),
+        x448.getSharedSecret(
+          ed448.utils.toMontgomerySecret(edSecret2),
+          ed448.utils.toMontgomery(edPublic1)
+        )
       );
     });
   });

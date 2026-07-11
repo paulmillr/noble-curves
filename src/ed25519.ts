@@ -124,6 +124,23 @@ const ed25519_Point = /* @__PURE__ */ edwards(ed25519_CURVE, { uvRatio });
 // Public field alias stays stricter than the RFC 8032 Appendix A sample code:
 // `Fp.inv(0)` throws instead of returning `0`.
 const Fp = /* @__PURE__ */ (() => ed25519_Point.Fp)();
+
+function toMontgomery(point: EdwardsPoint): TRet<Uint8Array> {
+  // Birational map from Ed25519 to Curve25519 / X25519:
+  //   (u, v) = ((1 + y) / (1 - y), sqrt(-486664) * u / x)
+  //   (x, y) = (sqrt(-486664) * u / v, (u - 1) / (u + 1))
+  const { y } = point;
+  return Fp.toBytes(Fp.div(_1n + y, _1n - y)) as TRet<Uint8Array>;
+}
+
+function toMontgomerySecret(secretKey: TArg<Uint8Array>): TRet<Uint8Array> {
+  const size = ed25519_Point.Fp.BYTES;
+  abytes(secretKey, size);
+  return adjustScalarBytes(sha512(secretKey.subarray(0, size))).subarray(
+    0,
+    size
+  ) as TRet<Uint8Array>;
+}
 const Fn = /* @__PURE__ */ (() => ed25519_Point.Fn)();
 
 // RFC 8032 `dom2` helper for ctx/ph variants only. Plain Ed25519 keeps the
@@ -147,7 +164,10 @@ function ed(opts: TArg<EdDSAOpts>) {
   return eddsa(
     ed25519_Point,
     sha512,
-    Object.assign({ adjustScalarBytes, zip215: true }, opts as EdDSAOpts)
+    Object.assign(
+      { adjustScalarBytes, toMontgomery, toMontgomerySecret, zip215: true },
+      opts as EdDSAOpts
+    )
   );
 }
 

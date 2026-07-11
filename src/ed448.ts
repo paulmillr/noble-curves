@@ -168,6 +168,25 @@ const Fp448 = /* @__PURE__ */ (() => Field(ed448_CURVE_p, { BITS: 448, isLE: tru
 // Strict 56-byte scalar parser matching RFC 9496's recommended canonical form.
 const Fn448 = /* @__PURE__ */ (() => Field(ed448_CURVE.n, { BITS: 448, isLE: true }))();
 
+function toMontgomery(point: EdwardsPoint): TRet<Uint8Array> {
+  // RFC 7748 section 4.2 maps Ed448-Goldilocks to Curve448 via a 4-isogeny.
+  // The u-coordinate map is:
+  //   u = y^2 / x^2
+  // In projective coordinates this is:
+  //   u = Y^2 / X^2
+  const u = Fp.div(Fp.mul(point.Y, point.Y), Fp.mul(point.X, point.X));
+  return Fp448.toBytes(u) as TRet<Uint8Array>;
+}
+
+function toMontgomerySecret(secretKey: TArg<Uint8Array>): TRet<Uint8Array> {
+  const size = ed448_Point.Fp.BYTES;
+  abytes(secretKey, size);
+  return adjustScalarBytes(shake256_114(secretKey.subarray(0, size))).subarray(
+    0,
+    56
+  ) as TRet<Uint8Array>;
+}
+
 // SHAKE256(dom4(phflag,context)||x, 114)
 // RFC 8032 `dom4` prefix. Empty contexts are valid; the accepted length range
 // is 0..255 octets inclusive.
@@ -188,7 +207,10 @@ function ed4(opts: TArg<EdDSAOpts>) {
   return eddsa(
     ed448_Point,
     shake256_114,
-    Object.assign({ adjustScalarBytes, domain: dom4 }, opts as EdDSAOpts)
+    Object.assign(
+      { adjustScalarBytes, domain: dom4, toMontgomery, toMontgomerySecret },
+      opts as EdDSAOpts
+    )
   );
 }
 

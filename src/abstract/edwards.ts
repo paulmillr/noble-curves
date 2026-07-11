@@ -142,6 +142,10 @@ export type EdDSAOpts = Partial<{
   domain: (data: TArg<Uint8Array>, ctx: TArg<Uint8Array>, phflag: boolean) => TRet<Uint8Array>;
   /** Optional hash-to-curve mapper for protocols like Ristretto hash-to-group. */
   mapToCurve: (scalar: bigint[]) => AffinePoint<bigint>;
+  /** Optional conversion from this Edwards curve to a birational/isogenous Montgomery curve. */
+  toMontgomery: (point: EdwardsPoint) => TRet<Uint8Array>;
+  /** Optional secret-key conversion for the same Montgomery curve as `toMontgomery`. */
+  toMontgomerySecret: (secretKey: TArg<Uint8Array>) => TRet<Uint8Array>;
   /** Optional prehash function used before signing or verifying messages. */
   prehash: FHash;
   /** Default verification decoding policy. ZIP-215 is more permissive than RFC 8032 / NIST. */
@@ -213,6 +217,7 @@ export interface EdDSA {
 
     /**
      * Converts ed public key to x public key.
+     * Throws when the Edwards curve has no supported Montgomery conversion.
      *
      * There is NO `fromMontgomery`:
      * - There are 2 valid ed25519 points for every x25519, with flipped coordinate
@@ -232,6 +237,7 @@ export interface EdDSA {
     toMontgomery: (publicKey: TArg<Uint8Array>) => TRet<Uint8Array>;
     /**
      * Converts ed secret key to x secret key.
+     * Throws when the Edwards curve has no supported Montgomery conversion.
      * @example
      * Converts ed secret key to x secret key.
      *
@@ -811,6 +817,8 @@ export function eddsa(
       prehash: 'function',
       zip215: 'boolean',
       mapToCurve: 'function',
+      toMontgomery: 'function',
+      toMontgomerySecret: 'function',
     }
   );
 
@@ -827,6 +835,8 @@ export function eddsa(
   }
 
   const randomBytes = opts.randomBytes === undefined ? wcRandomBytes : opts.randomBytes;
+  const toMontgomery = opts.toMontgomery;
+  const toMontgomerySecret = opts.toMontgomerySecret;
   const adjustScalarBytes =
     opts.adjustScalarBytes === undefined
       ? (bytes: TArg<Uint8Array>) => bytes as TRet<Uint8Array>
@@ -995,28 +1005,16 @@ export function eddsa(
     randomSecretKey,
     isValidSecretKey,
     isValidPublicKey,
-    /**
-     * Converts ed public key to x public key. Uses formula:
-     * - ed25519:
-     *   - `(u, v) = ((1+y)/(1-y), sqrt(-486664)*u/x)`
-     *   - `(x, y) = (sqrt(-486664)*u/v, (u-1)/(u+1))`
-     * - ed448:
-     *   - `(u, v) = ((y-1)/(y+1), sqrt(156324)*u/x)`
-     *   - `(x, y) = (sqrt(156324)*u/v, (1+u)/(1-u))`
-     */
+    /** Converts an Edwards public key to a companion Montgomery public key. */
     toMontgomery(publicKey: TArg<Uint8Array>): TRet<Uint8Array> {
-      const { y } = Point.fromBytes(publicKey);
-      const size = lengths.publicKey;
-      const is25519 = size === 32;
-      if (!is25519 && size !== 57) throw new Error('only defined for 25519 and 448');
-      const u = is25519 ? Fp.div(_1n + y, _1n - y) : Fp.div(y - _1n, y + _1n);
-      return Fp.toBytes(u) as TRet<Uint8Array>;
+      if (toMontgomery === undefined)
+        throw new Error('Montgomery conversion is not supported for this curve');
+      return toMontgomery(Point.fromBytes(publicKey));
     },
     toMontgomerySecret(secretKey: TArg<Uint8Array>): TRet<Uint8Array> {
-      const size = lengths.secretKey;
-      abytes(secretKey, size);
-      const hashed = hash(secretKey.subarray(0, size));
-      return adjustScalarBytes(hashed).subarray(0, size) as TRet<Uint8Array>;
+      if (toMontgomerySecret === undefined)
+        throw new Error('Montgomery conversion is not supported for this curve');
+      return toMontgomerySecret(secretKey);
     },
   };
   Object.freeze(lengths);
