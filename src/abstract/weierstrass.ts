@@ -1580,6 +1580,7 @@ export function ecdsa(
       const sig = Signature.fromBytes(signature, format);
       const P = Point.fromBytes(publicKey);
       if (lowS && sig.hasHighS()) return false;
+      if (format === 'recovered' && !sig.recoverPublicKey(message).equals(P)) return false;
       const { r, s } = sig;
       const h = bits2int_modN(message); // mod n, not mod p
       const is = Fn.inv(s); // s^-1 mod n
