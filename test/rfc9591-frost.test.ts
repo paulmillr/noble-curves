@@ -784,31 +784,34 @@ describe('FROST (RFC 9591)', () => {
         alice.secret.commitment[0] = commitment0;
         eql(frost.DKG.round2(alice.secret, [bob.public]), first);
       });
-      should('DKG round2 replay does not expose enough shares to recover the local polynomial', () => {
-        const signers = { min: 2, max: 2 };
-        const alice = frost.DKG.round1(frost.Identifier.fromNumber(1), signers);
-        const bob = frost.DKG.round1(frost.Identifier.fromNumber(2), signers);
-        const carol = frost.DKG.round1(frost.Identifier.fromNumber(3), signers);
-        const bobId = bob.public.identifier;
-        const carolId = carol.public.identifier;
-        const first = frost.DKG.round2(alice.secret, [bob.public]);
-        throws(() => {
-          const replay = frost.DKG.round2(alice.secret, [carol.public]);
-          const carolShare = replay[carolId];
-          if (!carolShare) throw new Error('round2 replay did not produce a new recipient share');
-          const recovered = frost.combineSecret(
-            [
-              { identifier: bobId, signingShare: first[bobId].signingShare },
-              { identifier: carolId, signingShare: carolShare.signingShare },
-            ],
-            signers
-          );
-          eql(
-            bytesToHex(recovered),
-            bytesToHex(frost.utils.Fn.toBytes(alice.secret.coefficients![0]))
-          );
-        }, /round2 replay did not produce a new recipient share/);
-      });
+      should(
+        'DKG round2 replay does not expose enough shares to recover the local polynomial',
+        () => {
+          const signers = { min: 2, max: 2 };
+          const alice = frost.DKG.round1(frost.Identifier.fromNumber(1), signers);
+          const bob = frost.DKG.round1(frost.Identifier.fromNumber(2), signers);
+          const carol = frost.DKG.round1(frost.Identifier.fromNumber(3), signers);
+          const bobId = bob.public.identifier;
+          const carolId = carol.public.identifier;
+          const first = frost.DKG.round2(alice.secret, [bob.public]);
+          throws(() => {
+            const replay = frost.DKG.round2(alice.secret, [carol.public]);
+            const carolShare = replay[carolId];
+            if (!carolShare) throw new Error('round2 replay did not produce a new recipient share');
+            const recovered = frost.combineSecret(
+              [
+                { identifier: bobId, signingShare: first[bobId].signingShare },
+                { identifier: carolId, signingShare: carolShare.signingShare },
+              ],
+              signers
+            );
+            eql(
+              bytesToHex(recovered),
+              bytesToHex(frost.utils.Fn.toBytes(alice.secret.coefficients![0]))
+            );
+          }, /round2 replay did not produce a new recipient share/);
+        }
+      );
       let i = 0;
 
       for (let signIndex = 0; signIndex < signCount; signIndex++) {
