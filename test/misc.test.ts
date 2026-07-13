@@ -20,6 +20,12 @@ const G_PROOF = new Point(
 const getXY = (p) => ({ x: p.x, y: p.y });
 
 describe('jubjub', () => {
+  should('rejects unsupported Montgomery conversion', () => {
+    const secret = new Uint8Array(32).fill(1);
+    throws(() => jubjub.utils.toMontgomery(jubjub.getPublicKey(secret)), /not supported/);
+    throws(() => jubjub.utils.toMontgomerySecret(secret), /not supported/);
+  });
+
   should('toBytes/fromBytes', () => {
     // More than field
     throws(() =>
@@ -85,6 +91,12 @@ describe('jubjub', () => {
 });
 
 describe('babyjubjub', () => {
+  should('rejects unsupported Montgomery conversion', () => {
+    const secret = new Uint8Array(32).fill(1);
+    throws(() => babyjubjub.utils.toMontgomery(babyjubjub.getPublicKey(secret)), /not supported/);
+    throws(() => babyjubjub.utils.toMontgomerySecret(secret), /not supported/);
+  });
+
   should('signing, hash validation, and base point', () => {
     const seed = new Uint8Array(32).fill(9);
     const msg = new Uint8Array([1, 2, 3]);
