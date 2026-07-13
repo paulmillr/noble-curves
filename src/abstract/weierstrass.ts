@@ -67,7 +67,7 @@ import { getMinHashLength, invertCt, mapHashToField, type IField } from './modul
 export type { AffinePoint };
 
 // DER codec lives in der.ts; re-exported here because ECDSA signatures are its main consumer.
-  export { DER, DERErr, type IDER } from './der.ts';
+export { DER, DERErr, type IDER } from './der.ts';
 
 type EndoBasis = [[bigint, bigint], [bigint, bigint]];
 /**
@@ -1295,6 +1295,12 @@ export function ecdsa(
   function assertFieldSignIsSupported(): void {
     if (!Fp.isOdd) throw new Error("Field doesn't support isOdd");
   }
+  // Recovery id of an affine point (x, y) whose x reduces to signature `r` mod n:
+  // bit 0 = y parity, bit 1 = x overflowed the group order (x = r + n).
+  function getRecoveryBit(x: bigint, y: bigint, r: bigint): number {
+    assertFieldSignIsSupported();
+    return (x === r ? 0 : 2) | Number(Fp.isOdd!(y));
+  }
   function assertRecoverableCurve(): void {
     // ECDSA recovery only supports curves where the current recovery id can distinguish
     // q.x = r and q.x = r + n; larger lifts may need additional `r + n*i` branches.
@@ -1513,8 +1519,7 @@ export function ecdsa(
         s = Fn.create(ik * Fn.create(m + r * d)); // s = k^-1(m + rd) mod n
       }
       if (s === _0n) return;
-      assertFieldSignIsSupported();
-      let recovery = (q.x === r ? 0 : 2) | Number(Fp.isOdd!(q.y)); // recovery bit (2 or 3 when q.x>n)
+      let recovery = getRecoveryBit(q.x, q.y, r); // recovery bit (2 or 3 when q.x>n)
       let normS = s;
       if (lowS && isBiggerThanHalfOrder(s)) {
         normS = Fn.neg(s); // if lowS was passed, ensure s is always in the bottom half of N
@@ -1580,7 +1585,6 @@ export function ecdsa(
       const sig = Signature.fromBytes(signature, format);
       const P = Point.fromBytes(publicKey);
       if (lowS && sig.hasHighS()) return false;
-      if (format === 'recovered' && !sig.recoverPublicKey(message).equals(P)) return false;
       const { r, s } = sig;
       const h = bits2int_modN(message); // mod n, not mod p
       const is = Fn.inv(s); // s^-1 mod n
@@ -1588,8 +1592,13 @@ export function ecdsa(
       const u2 = Fn.create(r * is); // u2 = rs^-1 mod n
       const R = Point.BASE.mulAddUnsafe(u1, P, u2); // u1⋅G + u2⋅P, joint Strauss–Shamir
       if (R.is0()) return false;
-      const v = Fn.create(R.x); // v = r.x mod n
-      return v === r;
+      const q = R.toAffine();
+      const v = Fn.create(q.x); // v = R.x mod n
+      if (v !== r) return false;
+      // R is the exact point `recoverPublicKey(r, recid)` reconstructs (sR = hG + rP),
+      // so binding the signature to its recovery id only needs R's parity/overflow bits.
+      if (format === 'recovered' && sig.recovery !== getRecoveryBit(q.x, q.y, r)) return false;
+      return true;
     } catch (e) {
       return false;
     }
