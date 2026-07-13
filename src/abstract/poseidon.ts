@@ -327,6 +327,12 @@ export type PoseidonFn = {
 };
 /** Poseidon NTT-friendly hash. */
 /**
+ * Partial rounds use the sparse MDS decomposition from the reference "optimized Poseidon"
+ * (also in circomlib and neptune): output-identical, `2t-1` field multiplications per
+ * partial round instead of `t²`. The decomposition is computed lazily on the first call
+ * (it costs a few ms) and requires certain MDS minors to be invertible — always true for
+ * a real MDS matrix; degenerate matrices fall back to dense per-round multiplication.
+ *
  * @param opts - Poseidon options. See {@link PoseidonOpts}.
  * @returns Poseidon permutation.
  * @throws If the Poseidon options or state vector are invalid. {@link Error}
@@ -347,20 +353,25 @@ export function poseidon(opts: TArg<PoseidonOpts>): PoseidonFn {
   const { Fp, mds, roundConstants, rounds: totalRounds, roundsPartial, sboxFn, t } = _opts;
   const halfRoundsFull = _opts.roundsFull / 2;
   const partialIdx = _opts.reversePartialPowIdx ? t - 1 : 0;
-  const poseidonRound = (values: bigint[], isFull: boolean, idx: number) => {
-    const rc = roundConstants[idx];
-    if (isFull) values = values.map((i, j) => sboxFn(Fp.add(i, rc[j])));
-    else {
-      values = values.map((i, j) => Fp.add(i, rc[j]));
-      values[partialIdx] = sboxFn(values[partialIdx]);
-    }
-    // Matrix multiplication. Row entries and values are reduced (< p), so each product is < p²
-    // and a row sum is < t⋅p²: accumulate without mod, reduce once per row instead of per cell.
-    values = mds.map((row) =>
+  // Matrix multiplication. Row entries and values are reduced (< p), so each product is < p²
+  // and a row sum is < t⋅p²: accumulate without mod, reduce once per row instead of per cell.
+  const denseMul = (matrix: bigint[][], values: bigint[]) =>
+    matrix.map((row) =>
       Fp.create(row.reduce((acc, m, j) => Fp.addN(acc, Fp.mulN(m, values[j])), Fp.ZERO))
     );
-    return values;
+  const fullRound = (values: bigint[], idx: number, matrix: bigint[][]) => {
+    const rc = roundConstants[idx];
+    return denseMul(
+      matrix,
+      values.map((i, j) => sboxFn(Fp.add(i, rc[j])))
+    );
   };
+  // Sparse partial-round decomposition ("optimized Poseidon"): output-identical, but each
+  // partial round costs 2t-1 multiplications instead of t². Computed lazily on first call —
+  // it costs a few ms and poseidon instances are often constructed at import time.
+  // undefined = not computed yet, null = dense fallback (a partial-round minor was singular,
+  // which cannot happen for a true MDS matrix).
+  let sparse: PoseidonSparse | null | undefined;
   const poseidonHash = function poseidonHash(values: bigint[]) {
     if (!Array.isArray(values) || values.length !== t)
       throw new Error('invalid values, expected array of bigints with length ' + t);
@@ -371,13 +382,51 @@ export function poseidon(opts: TArg<PoseidonOpts>): PoseidonFn {
       if (typeof i !== 'bigint') throw new Error('invalid bigint=' + i);
       values[j] = Fp.create(i);
     }
+    if (sparse === undefined) {
+      try {
+        sparse = sparseConstants(_opts);
+      } catch (e) {
+        sparse = null;
+      }
+    }
     let lastRound = 0;
-    // Apply r_f/2 full rounds.
-    for (let i = 0; i < halfRoundsFull; i++) values = poseidonRound(values, true, lastRound++);
+    // Apply r_f/2 full rounds; with the sparse decomposition, the last one applies preSparse
+    // instead of the MDS, absorbing the dense factor telescoped out of the partial block.
+    for (let i = 0; i < halfRoundsFull; i++)
+      values = fullRound(
+        values,
+        lastRound++,
+        sparse && i === halfRoundsFull - 1 ? sparse.preSparse : mds
+      );
     // Apply r_p partial rounds.
-    for (let i = 0; i < roundsPartial; i++) values = poseidonRound(values, false, lastRound++);
+    if (sparse) {
+      for (let i = 0; i < roundsPartial; i++) {
+        const rc = sparse.roundConstants[lastRound++];
+        values = values.map((v, j) => Fp.add(v, rc[j]));
+        values[partialIdx] = sboxFn(values[partialIdx]);
+        const { diag, row, col } = sparse.factors[i];
+        const xp = values[partialIdx];
+        const out = values.slice();
+        let acc = Fp.mulN(diag, xp);
+        for (let j = 0, k = 0; j < t; j++) {
+          if (j === partialIdx) continue;
+          acc = Fp.addN(acc, Fp.mulN(row[k], values[j]));
+          out[j] = Fp.create(Fp.addN(values[j], Fp.mulN(col[k], xp)));
+          k++;
+        }
+        out[partialIdx] = Fp.create(acc);
+        values = out;
+      }
+    } else {
+      for (let i = 0; i < roundsPartial; i++) {
+        const rc = roundConstants[lastRound++];
+        values = values.map((v, j) => Fp.add(v, rc[j]));
+        values[partialIdx] = sboxFn(values[partialIdx]);
+        values = denseMul(mds, values);
+      }
+    }
     // Apply r_f/2 full rounds.
-    for (let i = 0; i < halfRoundsFull; i++) values = poseidonRound(values, true, lastRound++);
+    for (let i = 0; i < halfRoundsFull; i++) values = fullRound(values, lastRound++, mds);
 
     if (lastRound !== totalRounds) throw new Error('invalid number of rounds');
     return values;
@@ -388,6 +437,113 @@ export function poseidon(opts: TArg<PoseidonOpts>): PoseidonFn {
     enumerable: true,
   });
   return poseidonHash;
+}
+
+// Gauss-Jordan inverse over Fp. Matrices here are tiny ((t-1)x(t-1)) and this only
+// runs at construction time, so clarity beats speed.
+function matInv(Fp: TArg<IField<bigint>>, matrix: bigint[][]): bigint[][] {
+  const n = matrix.length;
+  const a = matrix.map((row) => row.slice());
+  const inv = a.map((_, i) => a.map((_, j) => (i === j ? Fp.ONE : Fp.ZERO)));
+  for (let col = 0; col < n; col++) {
+    let pivot = -1;
+    for (let row = col; row < n; row++) {
+      if (!Fp.is0(a[row][col])) {
+        pivot = row;
+        break;
+      }
+    }
+    if (pivot < 0) throw new Error('poseidonSparseConstants: MDS minor is not invertible');
+    if (pivot !== col) {
+      [a[col], a[pivot]] = [a[pivot], a[col]];
+      [inv[col], inv[pivot]] = [inv[pivot], inv[col]];
+    }
+    const iv = Fp.inv(a[col][col]);
+    for (let j = 0; j < n; j++) {
+      a[col][j] = Fp.mul(a[col][j], iv);
+      inv[col][j] = Fp.mul(inv[col][j], iv);
+    }
+    for (let row = 0; row < n; row++) {
+      if (row === col || Fp.is0(a[row][col])) continue;
+      const f = a[row][col];
+      for (let j = 0; j < n; j++) {
+        a[row][j] = Fp.sub(a[row][j], Fp.mul(f, a[col][j]));
+        inv[row][j] = Fp.sub(inv[row][j], Fp.mul(f, inv[col][j]));
+      }
+    }
+  }
+  return inv;
+}
+
+/**
+ * Precomputed sparse partial-round decomposition. `factors[i]` is the sparse factor of the
+ * MDS for partial round i: identity everywhere except the S-boxed lane p's diagonal entry
+ * (`diag`), row (`row`, t-1 values) and column (`col`, t-1 values) — `2t-1` multiplications
+ * to apply instead of `t²`. `preSparse` is a dense matrix replacing the MDS in the last
+ * full round before the partial block; `roundConstants` have the partial-round entries
+ * transformed in lockstep.
+ */
+type PoseidonSparse = {
+  preSparse: bigint[][];
+  factors: { diag: bigint; row: bigint[]; col: bigint[] }[];
+  roundConstants: bigint[][];
+};
+
+/**
+ * Computes the sparse partial-round decomposition of Poseidon
+ * ("optimized Poseidon" from the reference implementation; also used by circomlib and neptune).
+ *
+ * The MDS matrix `M` is factored per partial round as `M = T·D`, where `T` is sparse
+ * (identity except the S-boxed lane's row/column) and `D` is identity on the S-boxed lane.
+ * `D` commutes with the single-lane S-box, so it is pushed into the previous round:
+ * its round constants become `D·c` and its matrix becomes `D·M`, which is factored next.
+ * The last leftover `D` is merged into the final full round before the partial block
+ * (`preSparse = D·M`). The result computes the exact same permutation.
+ *
+ * Takes already-validated opts from `validateOpts`. Throws if a partial-round MDS minor is
+ * singular, which cannot happen for a true MDS matrix.
+ */
+function sparseConstants(_opts: TArg<ReturnType<typeof validateOpts>>): PoseidonSparse {
+  const { Fp, mds, roundConstants, roundsPartial, t } = _opts;
+  const halfRoundsFull = _opts.roundsFull / 2;
+  const p = _opts.reversePartialPowIdx ? t - 1 : 0;
+  const rest: number[] = [];
+  for (let i = 0; i < t; i++) if (i !== p) rest.push(i);
+  const rc = roundConstants.map((row) => row.slice());
+  const factors: PoseidonSparse['factors'] = new Array(roundsPartial);
+  let G = mds as bigint[][];
+  // Walk the partial rounds backwards, peeling a sparse factor off the accumulated matrix.
+  for (let j = roundsPartial - 1; j >= 0; j--) {
+    const Ghat = rest.map((i) => rest.map((k) => G[i][k])); // minor of G without lane p
+    const GhatInv = matInv(Fp, Ghat);
+    // row p of the sparse factor: (G row p) · Ghat⁻¹
+    const vHat = rest.map((_, k) =>
+      rest.reduce((acc, ri, i) => Fp.add(acc, Fp.mul(G[p][ri], GhatInv[i][k])), Fp.ZERO)
+    );
+    factors[j] = {
+      diag: G[p][p],
+      row: vHat,
+      col: rest.map((i) => G[i][p]),
+    };
+    // This round's constants absorb the dense factor D = [[1,0],[0,Ghat]]: c ← D·c.
+    const c = rc[halfRoundsFull + j];
+    const cNew = rest.map((_, i) =>
+      rest.reduce((acc, rk, k) => Fp.add(acc, Fp.mul(Ghat[i][k], c[rk])), Fp.ZERO)
+    );
+    rest.forEach((ri, i) => (c[ri] = cNew[i]));
+    // The dense factor moves into the previous round's matrix: G ← D·M.
+    const next = mds.map((row) => row.slice());
+    for (let i = 0; i < rest.length; i++) {
+      for (let col = 0; col < t; col++) {
+        next[rest[i]][col] = rest.reduce(
+          (acc, rk, k) => Fp.add(acc, Fp.mul(Ghat[i][k], mds[rk][col])),
+          Fp.ZERO
+        );
+      }
+    }
+    G = next;
+  }
+  return { preSparse: G, factors, roundConstants: rc };
 }
 
 /**

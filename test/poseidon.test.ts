@@ -821,4 +821,118 @@ describe('PoseidonSponge', () => {
   });
 });
 
+describe('poseidon sparse partial rounds', () => {
+  // Straightforward per-round dense implementation, kept as an independent reference for
+  // the sparse partial-round decomposition used inside poseidon().
+  const poseidonDenseReference = (opts) => {
+    const _opts = poseidon.validateOpts(opts);
+    const { Fp, mds, roundConstants, sboxFn, t, roundsPartial } = _opts;
+    const half = _opts.roundsFull / 2;
+    const p = _opts.reversePartialPowIdx ? t - 1 : 0;
+    const round = (values, isFull, idx) => {
+      const rc = roundConstants[idx];
+      if (isFull) values = values.map((v, j) => sboxFn(Fp.add(v, rc[j])));
+      else {
+        values = values.map((v, j) => Fp.add(v, rc[j]));
+        values[p] = sboxFn(values[p]);
+      }
+      return mds.map((row) =>
+        row.reduce((acc, m, j) => Fp.add(acc, Fp.mul(m, values[j])), Fp.ZERO)
+      );
+    };
+    return (values) => {
+      values = values.map((v) => Fp.create(v));
+      let r = 0;
+      for (let i = 0; i < half; i++) values = round(values, true, r++);
+      for (let i = 0; i < roundsPartial; i++) values = round(values, false, r++);
+      for (let i = 0; i < half; i++) values = round(values, true, r++);
+      return values;
+    };
+  };
+  should('match dense reference across fields/widths/rounds/sbox/partial-lane', () => {
+    const fields = [
+      0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001n, // BN254 Fr
+      (1n << 61n) - 1n,
+      (1n << 127n) - 1n,
+    ];
+    for (const p of fields) {
+      const Fp = mod.Field(p);
+      for (const t of [2, 3, 5]) {
+        for (const roundsPartial of [1, 21]) {
+          for (const roundsFull of [2, 8]) {
+            for (const reversePartialPowIdx of [false, true]) {
+              for (const sboxPower of [3, 17]) {
+                const opts = {
+                  Fp,
+                  t,
+                  roundsFull,
+                  roundsPartial,
+                  sboxPower,
+                  reversePartialPowIdx,
+                  ...poseidon.grainGenConstants({ Fp, t, roundsFull, roundsPartial }),
+                };
+                const input = Array.from({ length: t }, (_, i) =>
+                  Fp.create(BigInt(i) * 12345n + 7n)
+                );
+                eql(
+                  poseidon.poseidon(opts)(input),
+                  poseidonDenseReference(opts)(input),
+                  `p=${p} t=${t} rp=${roundsPartial} rf=${roundsFull} rev=${reversePartialPowIdx} sbox=${sboxPower}`
+                );
+              }
+            }
+          }
+        }
+      }
+    }
+  });
+  should('match dense reference for stark-style params (signed MDS, reversed lane)', () => {
+    const mds = [
+      [3n, 1n, 1n],
+      [1n, -1n, 1n],
+      [1n, 1n, -2n],
+    ];
+    const roundConstants = Array.from({ length: 8 + 83 }, (_, i) => [
+      stark.Fp251.create(BigInt(i) * 7n + 1n),
+      stark.Fp251.create(BigInt(i) * 11n + 2n),
+      stark.Fp251.create(BigInt(i) * 13n + 3n),
+    ]);
+    const opts = {
+      Fp: stark.Fp251,
+      t: 3,
+      roundsFull: 8,
+      roundsPartial: 83,
+      sboxPower: 3,
+      reversePartialPowIdx: true,
+      mds,
+      roundConstants,
+    };
+    const input = [123n, 456n, 789n];
+    eql(poseidon.poseidon(opts)(input), poseidonDenseReference(opts)(input));
+  });
+  should('fall back to dense multiplication on singular MDS minor', () => {
+    const Fp = mod.Field(0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001n);
+    const opts = {
+      Fp,
+      t: 3,
+      roundsFull: 2,
+      roundsPartial: 1,
+      sboxPower: 3,
+      // minor without row/col 0 is [[5,6],[10,12]]: singular, not a valid MDS matrix
+      mds: [
+        [1n, 2n, 3n],
+        [4n, 5n, 6n],
+        [8n, 10n, 12n],
+      ],
+      roundConstants: [
+        [1n, 2n, 3n],
+        [4n, 5n, 6n],
+        [7n, 8n, 9n],
+      ],
+    };
+    const input = [1n, 2n, 3n];
+    eql(poseidon.poseidon(opts)(input), poseidonDenseReference(opts)(input));
+  });
+});
+
 should.runWhen(import.meta.url);
