@@ -12,13 +12,13 @@ import {
   asafenumber,
   asciiToBytes,
   bytesToNumberBE,
-  copyBytes,
   concatBytes,
+  copyBytes,
   isBytes,
   validateObject,
 } from '../utils.ts';
 import type { AffinePoint, PC_ANY, PC_F, PC_P } from './curve.ts';
-import { FpInvertBatch, FpIsSquare, mod, type IField, validateField } from './modular.ts';
+import { FpInvertBatch, FpIsSquare, mod, validateField, type IField } from './modular.ts';
 
 // prettier-ignore
 const _0n = /* @__PURE__ */ BigInt(0), _1n = /* @__PURE__ */ BigInt(1), _2n = /* @__PURE__ */ BigInt(2), _3n = /* @__PURE__ */ BigInt(3), _4n = /* @__PURE__ */ BigInt(4);

@@ -8,7 +8,7 @@
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { aarray, asafenumber, bitGet, validateObject, type TArg, type TRet } from '../utils.ts';
-import { FpInvertBatch, FpPow, type IField, validateField } from './modular.ts';
+import { FpInvertBatch, FpPow, validateField, type IField } from './modular.ts';
 
 // Grain LFSR (Linear-Feedback Shift Register): https://eprint.iacr.org/2009/109.pdf
 function grainLFSR(state: number[]): () => boolean {

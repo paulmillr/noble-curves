@@ -6,7 +6,7 @@
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 import { sha256, sha384, sha512 } from '@noble/hashes/sha2.js';
 import { createFROST, type FROST } from './abstract/frost.ts';
-import { createHasher, type H2CHasher, mapToCurveSimpleSWU } from './abstract/hash-to-curve.ts';
+import { createHasher, mapToCurveSimpleSWU, type H2CHasher } from './abstract/hash-to-curve.ts';
 import { createOPRF, type OPRF } from './abstract/oprf.ts';
 import {
   ecdsa,

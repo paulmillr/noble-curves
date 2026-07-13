@@ -25,10 +25,10 @@ import {
   type TRet,
 } from '../utils.ts';
 import {
-  ScalarMultiplier,
   createCurveFields,
   createKeygen,
   normalizeZ,
+  ScalarMultiplier,
   validatePointCons,
   type AffinePoint,
   type CurveLengths,

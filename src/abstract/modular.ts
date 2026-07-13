@@ -8,10 +8,10 @@
 import {
   aarray,
   abool,
-  afunction,
-  aobject,
   abytes,
+  afunction,
   anumber,
+  aobject,
   asafenumber,
   bitLen,
   bytesToNumberBE,

@@ -48,12 +48,12 @@ import {
   type TRet,
 } from '../utils.ts';
 import {
-  ScalarMultiplier,
   createCurveFields,
   createKeygen,
   mulAddUnsafe,
   normalizeZ,
   probeRandomBytes,
+  ScalarMultiplier,
   validatePointCons,
   type AffinePoint,
   type CurveLengths,
@@ -67,7 +67,7 @@ import { getMinHashLength, invertCt, mapHashToField, type IField } from './modul
 export type { AffinePoint };
 
 // DER codec lives in der.ts; re-exported here because ECDSA signatures are its main consumer.
-export { DER, DERErr, type IDER } from './der.ts';
+  export { DER, DERErr, type IDER } from './der.ts';
 
 type EndoBasis = [[bigint, bigint], [bigint, bigint]];
 /**
