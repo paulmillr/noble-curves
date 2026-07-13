@@ -132,6 +132,23 @@ describe('ECDSA', () => {
       });
     });
   }
+
+  should('verify() binds recovered signatures to their recovery id', () => {
+    const msg = Uint8Array.from({ length: 32 }, (_, i) => i);
+    const secretKey = Uint8Array.from({ length: 32 }, (_, i) => i + 1);
+    const publicKey = p256.getPublicKey(secretKey);
+    const sig = p256.sign(msg, secretKey, { prehash: false, format: 'recovered' });
+    const compact = sig.slice(1);
+    const der = p256.Signature.fromBytes(sig, 'recovered').toBytes('der');
+
+    eql(p256.verify(sig, msg, publicKey, { prehash: false, format: 'recovered' }), true);
+    eql(p256.verify(compact, msg, publicKey, { prehash: false, format: 'compact' }), true);
+    eql(p256.verify(der, msg, publicKey, { prehash: false, format: 'der' }), true);
+
+    const wrongRecovery = sig.slice();
+    wrongRecovery[0] ^= 1;
+    eql(p256.verify(wrongRecovery, msg, publicKey, { prehash: false, format: 'recovered' }), false);
+  });
 });
 
 describe('weierstrass ECDH', () => {
