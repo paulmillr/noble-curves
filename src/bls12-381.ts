@@ -84,7 +84,6 @@ import {
   abytes,
   bitLen,
   bytesToHex,
-  bytesToNumberBE,
   concatBytes,
   copyBytes,
   hexToBytes,
@@ -369,9 +368,7 @@ const fp2 = {
 };
 const BaseFp = Fp;
 function decodeFp(bytes: TArg<Uint8Array>): Fp {
-  const num = bytesToNumberBE(bytes);
-  if (num >= Fp.ORDER) throw new Error('invalid BLS12-381 field element');
-  return Fp.create(num);
+  return Fp.fromBytes(bytes);
 }
 type Mask = { compressed: boolean; infinity: boolean; sort: boolean };
 // Keep BLS12-381 point/signature codecs on one control-flow skeleton: the G1/G2
