@@ -61,11 +61,11 @@ export type DKG_Round1 = {
   /** Signature proving knowledge of the sender's secret coefficient. */
   proofOfKnowledge: TRet<Signature>;
 };
-/** Public DKG round-2 encrypted share package. */
+/** Public DKG round-2 recipient share package. */
 export type DKG_Round2 = {
   /** Sender identifier. */
   identifier: Identifier;
-  /** Encrypted signing share for one receiver. */
+  /** Signing share for one receiver. */
   signingShare: TRet<Bytes>;
 };
 // This is internal, so we can use bigints
@@ -80,6 +80,8 @@ export type DKG_Secret = {
   /** Threshold participant counts. */
   signers: Signers;
   // Keep the local polynomial until round3 succeeds so late DKG failures can be retried.
+  /** Cached round2 packages from the first successful round2 call. */
+  round2Cache?: Record<Identifier, DKG_Round2>;
   /** Current DKG state-machine step. */
   step?: 1 | 2 | 3;
 };
@@ -949,7 +951,7 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
         validateObject(
           secret as any,
           { identifier: 'bigint', commitment: 'object', signers: 'object' },
-          { coefficients: 'object', step: 'number' },
+          { coefficients: 'object', round2Cache: 'object', step: 'number' },
           'secret'
         );
         validateSigners(secret.signers, 'secret.signers');
@@ -958,6 +960,8 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
           throw new Error('wrong number of round1 packages');
         if (!secret.coefficients || secret.step === 3)
           throw new Error('round3 package used in round2');
+        if (secret.round2Cache !== undefined)
+          return secret.round2Cache as TRet<Record<string, DKG_Round2>>;
         const res: Record<Identifier, DKG_Round2> = {};
         for (const p of others) {
           if (p.commitment.length !== secret.signers.min)
@@ -974,6 +978,7 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
             signingShare: signingShare as TRet<Bytes>,
           };
         }
+        secret.round2Cache = res;
         secret.step = 2;
         return res as TRet<Record<string, DKG_Round2>>;
       },
@@ -985,7 +990,7 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
         validateObject(
           secret as any,
           { identifier: 'bigint', commitment: 'object', signers: 'object' },
-          { coefficients: 'object', step: 'number' },
+          { coefficients: 'object', round2Cache: 'object', step: 'number' },
           'secret'
         );
         validateSigners(secret.signers, 'secret.signers');
@@ -1063,6 +1068,7 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
         for (let i = 0; i < secret.coefficients.length; i++)
           secret.coefficients[i] -= secret.coefficients[i];
         delete secret.coefficients;
+        delete secret.round2Cache;
         secret.step = 3;
         return res;
       },
@@ -1070,7 +1076,7 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
         validateObject(
           secret as any,
           { identifier: 'bigint', commitment: 'object', signers: 'object' },
-          { coefficients: 'object', step: 'number' },
+          { coefficients: 'object', round2Cache: 'object', step: 'number' },
           'secret'
         );
         // Instead of replacing secret bigint with another (zero?), we subtract it from itself
@@ -1082,6 +1088,7 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
             secret.coefficients[i] -= secret.coefficients[i];
         }
         // for (const c of secret.commitment) c.fill(0);
+        delete secret.round2Cache;
         secret.step = 3;
       },
     }),
