@@ -3,23 +3,33 @@
  *
  * Reuses the dudect-style Welch t-test harness from ./ct.ts, but the measured secret-key
  * operation is the modular inverse instead of scalar multiplication. For each curve it runs the
- * same battery of secret-input classes and reports |t| (leak if > 4.5).
+ * same battery of secret-input classes plus a leading-zero scan and reports |t|.
  *
  * Compares the two inverse implementations used for the secret nonce:
- *   - euclid  invert()   : extended Euclidean; loop count depends on k
- *   - fermat  invertCt() : a^(n-2), control flow fixed by public exponent
+ *   - euclid  invert()   : extended Euclidean; loop count depends on k. EXPECTED to leak — it is
+ *                          this harness's built-in positive control: a wide-gap scan (0 vs
+ *                          max(32, BITS/8) leading zeros; euclid's per-value scatter dwarfs its
+ *                          per-bit trend at z<=8) must show a leak, else detection power was
+ *                          lost and the run fails.
+ *   - fermat  invertCt() : a^(n-2), control flow fixed by public exponent. Must NOT leak.
  *
  * Which |t| matters (most-to-least meaningful):
  *   - lz@Z (VERDICT) : leading-zero scan. Populations of nonces with 0..Z forced leading zero
  *                  bits; reports how k^-1 timing scales with the zero count. This is the exact
  *                  quantity a Hidden-Number-Problem lattice attack (Minerva) consumes, so it is
  *                  the sharpest, most directly exploitable probe.
- *   - structural : max |t| over full-size, structurally-varied (nonce-like) inputs. Also
+ *   - struct (VERDICT) : max |t| over full-size, structurally-varied (nonce-like) inputs. Also
  *                  Minerva-relevant, but the harness classes are coarser than the lz scan.
- *   - harness-max: worst of ALL classes; inflated by degenerate inputs (1, n-1) that a uniform
- *                  nonce never hits — so both methods "fail" it, which is misleading.
+ *   - degen      : worst |t| over degenerate inputs (1, 2, 3, n-1, n-2) that a uniform nonce
+ *                  never hits — both methods "fail" these, which is why they are quarantined.
  *   - rand-rand  : two random populations; only detects a MEAN shift, so it is insensitive to
- *                  per-sample leaks and reads ~0 even for the leaky Euclidean method. Context only.
+ *                  per-sample leaks and reads ~0 even for the leaky Euclidean method. Context
+ *                  only. The battery also runs a fixed-vs-fixed rig-bias control.
+ *
+ * Verdict: the run fails if fermat leaks on lz OR struct (both require |t| > 4.5 AND |δ| above
+ * a 0.1%-of-op-time effect floor), if a rig-bias control trips, or if euclid fails to leak
+ * (positive control missed). Each battery prints its median minimum-detectable effect (MDE) —
+ * a pass only rules out mean leaks larger than that at the given SAMPLES.
  *
  * This quantifies the impact of switching `k2sig`'s `Fn.inv(k)` to `invertCt(k, n)`.
  *
@@ -32,48 +42,60 @@ import { ed25519 } from '../src/ed25519.ts';
 import { ed448 } from '../src/ed448.ts';
 import { p256, p384, p521 } from '../src/nist.ts';
 import { secp256k1 } from '../src/secp256k1.ts';
-import { runSecretKeyOperationCt, type CtResult, type ScalarFieldLike } from './ct.ts';
+import {
+  DEFAULT_MAX_T,
+  ctProgress,
+  fmtFixed,
+  fmtMark,
+  fmtNs,
+  fmtNs2,
+  fmtNsSigned,
+  fmtNum,
+  leadingZeroScan,
+  lzScanFailed,
+  maxZCount,
+  meanNs,
+  outputFormat,
+  pad,
+  printCsvRow,
+  printLzRows,
+  progressEnabled,
+  runSecretKeyOperationCt,
+  sampleCount,
+  selectByEnv,
+  type CtTestResult,
+  type OutputFormat,
+  type ScalarFieldLike,
+} from './ct.ts';
 
 type Bytes = Uint8Array<ArrayBuffer>;
 type InvFn = (a: bigint, prime: bigint) => bigint;
-type OutputFormat = 'table' | 'csv';
-type Progress = {
-  step: number;
-  start: (test: string) => void;
-  tick: () => void;
-  end: () => void;
-};
 type Row = {
   curve: string;
   method: string;
-  maxT: number; // harness max |t| (includes degenerate 1/n-1 inputs)
+  degenT: number; // worst |t| over degenerate 1/n-1-style inputs (quarantined from verdict)
   structT: number; // max |t| over full-size structural classes = the Minerva-relevant leak
+  structFail: boolean; // struct verdict incl. the |δ| effect floor
   rrT: number; // random-vs-random |t| (insensitive to per-sample leaks; context only)
   lzT: number; // leading-zero scan |t| at z=maxZ vs z=0 (the sharpest exploitable-leak probe)
   lzDeltaNs: number; // timing δ (ns) between maxZ-leading-zero nonces and full nonces
+  lzFail: boolean;
+  biased: boolean; // fixed-vs-fixed control tripped — rig suspect
+  mdeNs: number; // median minimum detectable effect of the battery
   meanNs: number;
-  failed: boolean;
+  pcZ: number; // wide positive-control z gap for this curve (scaled to field size)
+  pcT?: number; // euclid only: wide-gap (z=0 vs z=pcZ) positive-control |t|
+  pcDetected?: boolean;
 };
-
-// Full-size, structurally-varied input classes from the harness. These vary bit-length / value
-// structure while staying representative of a uniform nonce, so a timing difference here is the
-// exploitable (Minerva-style) per-sample leak. The other harness classes involve degenerate inputs
-// (1, 2, 3, n-1, n-2) that a uniform 256-bit nonce hits with probability ~2^-BITS.
-const STRUCTURAL_TESTS = new Set([
-  'mid-vs-top-bit',
-  'alternating-complement',
-  'nibble-complement',
-  'byte-pattern-complement',
-]);
 
 const DEFAULT_SAMPLES = 200;
 const DEFAULT_BATCH = 16; // inversion is fast; batch to clear timer noise
-const DEFAULT_MAX_T = 4.5;
-const DEFAULT_MIN_NS = 1_000;
-const DEFAULT_MAXZ = 8; // leading-zero scan: nonces with 0..maxZ forced leading zero bits
-const PROGRESS_ESTIMATE_INTERVAL = 20;
-const PROGRESS_MIN_ESTIMATE_MS = 20_000;
-let SINK = 0; // declared before main() runs; prevents dead-code elimination of the timed op
+// Positive control: euclid's per-value scatter (~2us, continued-fraction structure) dwarfs its
+// per-bit trend (~0.08us/bit), so the z<=8 scan reads |t|~2-3 at default n. A wide z gap —
+// scaled to 1/8 of the field size so larger moduli keep the same relative gap — makes the
+// bit-length dependence unmissable without needing thousands of samples.
+const pcZOf = (Fn: ScalarFieldLike): number => Math.max(32, Fn.BITS >> 3);
+const PC_MIN_SAMPLES = 150;
 const CURVES: { name: string; Fn: ScalarFieldLike }[] = [
   { name: 'p256', Fn: p256.Point.Fn },
   { name: 'p384', Fn: p384.Point.Fn },
@@ -82,457 +104,195 @@ const CURVES: { name: string; Fn: ScalarFieldLike }[] = [
   { name: 'ed25519', Fn: ed25519.Point.Fn },
   { name: 'ed448', Fn: ed448.Point.Fn },
 ];
-const METHODS: { id: string; fn: InvFn }[] = [
-  { id: 'euclid_inv', fn: invert },
-  { id: 'fermat_inv', fn: invertCt },
+const METHODS: { id: string; fn: InvFn; expectedLeak: boolean }[] = [
+  { id: 'euclid_inv', fn: invert, expectedLeak: true }, // positive control
+  { id: 'fermat_inv', fn: invertCt, expectedLeak: false },
 ];
 
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href)
   main();
 
 function main() {
-  const samples = sampleCount();
+  const samples = sampleCount(DEFAULT_SAMPLES);
   const maxZ = maxZCount();
   const format = outputFormat();
   const rows: Row[] = [];
   if (format === 'csv') printInvCsvHeader();
-  for (const { name, Fn } of selectedCurves()) {
+  for (const { name, Fn } of selectByEnv(CURVES)) {
     for (const method of METHODS) {
       const progress = progressEnabled() ? ctProgress(name, method.id, format) : undefined;
-      if (format === 'table')
-        console.log(
-          `# ${name} ${method.id} samples=${samples} batch=${DEFAULT_BATCH} ` +
-            `max_t=${fmtNum(DEFAULT_MAX_T)} min_ns=${fmtNum(DEFAULT_MIN_NS)} max_z=${maxZ}`
-        );
       // operation: bytes(scalar) -> bytes(scalar^-1 mod n)
       const op = (scalarBytes: Bytes): Bytes =>
         Fn.toBytes(method.fn(Fn.fromBytes(scalarBytes), Fn.ORDER)) as Bytes;
-      const batch = DEFAULT_BATCH;
       const result = runSecretKeyOperationCt(op, Fn, samples, {
         name: `${name} ${method.id}`,
-        batch,
-        log: () => {},
-        onTest: (test) =>
-          printInvRow(
-            format,
-            name,
-            method.id,
-            test.name,
-            !test.failed,
-            test.t,
-            test.aMean,
-            test.bMean
-          ),
+        batch: DEFAULT_BATCH,
+        log: format === 'csv' ? () => {} : console.log,
+        onTest: format === 'csv' ? (test) => printInvCsvRow(name, method.id, test) : undefined,
         progress,
         throwOnFailure: false,
       });
-      const rr = randomVsRandomT(op, Fn, samples, batch, progress);
-      printInvRow(
-        format,
-        name,
-        method.id,
-        'random-vs-random',
-        rr.t <= DEFAULT_MAX_T,
-        rr.t,
-        rr.aMean,
-        rr.bMean
-      );
-      const lz = leadingZeroScan(op, Fn, samples, batch, maxZ, progress);
-      const baseline = lz[0].mean;
-      for (const p of lz)
-        printInvRow(
-          format,
-          name,
-          method.id,
-          `lz@${p.z}`,
-          p.t <= DEFAULT_MAX_T,
-          p.t,
-          baseline,
-          p.mean
-        );
+      const lz = leadingZeroScan(op, Fn, samples, DEFAULT_BATCH, maxZ, progress);
+      printLzRows(lz, format, name, method.id);
+      let pcT: number | undefined;
+      let pcDetected: boolean | undefined;
+      const pcZ = pcZOf(Fn);
+      if (method.expectedLeak) {
+        const pcSamples = Math.max(PC_MIN_SAMPLES, samples);
+        const pc = leadingZeroScan(op, Fn, pcSamples, DEFAULT_BATCH, pcZ, progress, [0, pcZ]);
+        const top = pc[pc.length - 1];
+        pcT = top.t;
+        pcDetected = top.t > DEFAULT_MAX_T;
+        if (format === 'csv') {
+          printCsvRow([
+            pcDetected ? 'pass' : 'fail',
+            'positive-control',
+            fmtFixed(top.t, 1),
+            '',
+            fmtFixed(top.delta, 0),
+            '',
+            name,
+            method.id,
+            `pctrl-lz@${pcZ}`,
+            '',
+          ]);
+        } else {
+          console.log(
+            `${fmtStatusOf(!pcDetected)} ${`pctrl-lz@${pcZ}`.padEnd(24)} ${pad('[pctrl]', 10)}` +
+              `t=${fmtFixed(top.t, 1).padEnd(7)} δ=${fmtNsSigned(top.delta)} ` +
+              (pcDetected
+                ? 'leak detected (harness has power)'
+                : 'NO LEAK DETECTED — harness power lost')
+          );
+        }
+      }
       const lzTop = lz[lz.length - 1];
+      const rr = result.tests.find((t) => t.name === 'random-vs-random');
       rows.push({
         curve: name,
         method: method.id,
-        maxT: maxObservedT(result),
-        structT: structuralMaxT(result),
-        rrT: rr.t,
+        degenT: result.degenT,
+        structT: result.structT,
+        structFail: result.failed,
+        rrT: rr?.t ?? 0,
         lzT: lzTop.t,
         lzDeltaNs: lzTop.delta,
+        lzFail: lzScanFailed(lz, DEFAULT_MAX_T),
+        biased: result.biased,
+        mdeNs: result.mdeNs,
         meanNs: meanNs(result),
-        failed: result.failed,
+        pcZ,
+        pcT,
+        pcDetected,
       });
     }
   }
-  if (format === 'csv') {
-    if (rows.some((r) => r.method === 'fermat_inv' && r.lzT > DEFAULT_MAX_T)) process.exitCode = 1;
-    return;
-  }
-  printSummary(rows, maxZ);
-  // Euclidean is EXPECTED to leak; only fail the run if the constant-time method (fermat) leaks
-  // on the leading-zero probe (the sharpest exploitable metric).
-  if (rows.some((r) => r.method === 'fermat_inv' && r.lzT > DEFAULT_MAX_T)) process.exitCode = 1;
+  // fermat (the constant-time method) must be clean on lz + struct; euclid is the positive
+  // control and must LEAK on the wide-gap probe — a euclid pass means detection power was lost.
+  const fermatLeak = rows.some((r) => isFermat(r) && (r.lzFail || r.structFail));
+  const bias = rows.some((r) => r.biased);
+  const pcMiss = rows.some((r) => r.pcDetected === false);
+  if (fermatLeak || bias || pcMiss) process.exitCode = 1;
+  if (format === 'csv') return;
+  printSummary(rows, maxZ, samples);
+  if (bias) console.log(`${fmtMark('✕', 'red')} rig-bias control tripped — all verdicts suspect`);
+  if (pcMiss)
+    console.log(
+      `${fmtMark('✕', 'red')} positive control MISSED: euclid_inv shows no wide-gap lz leak — ` +
+        `the harness cannot currently detect leaks, negative results are not trustworthy`
+    );
+}
+
+function isFermat(row: Row): boolean {
+  return row.method.startsWith('fermat');
 }
 
 function printInvCsvHeader() {
-  printCsvRow(['status', 't', 'curve', 'method', 'test', 'timings_ns']);
+  printCsvRow([
+    'status',
+    'kind',
+    't',
+    't2',
+    'delta_ns',
+    'mde_ns',
+    'curve',
+    'method',
+    'test',
+    'timings_ns',
+  ]);
 }
 
-function printInvRow(
-  format: OutputFormat,
-  curve: string,
-  method: string,
-  test: string,
-  passed: boolean,
-  t: number,
-  aMean: number,
-  bMean: number
-) {
-  const timings = t < DEFAULT_MAX_T ? '' : fmtTimingRange(aMean, bMean, fmtNsRaw);
-  if (format === 'csv') {
-    printCsvRow([passed ? 'pass' : 'fail', fmtFixed(t, 1), curve, method, test, timings]);
-    return;
-  }
-  const tText = timings ? fmtT(t, !passed) : `t=${fmtFixed(t, 1)}`;
-  console.log(`${fmtStatus(!passed)} ${test.padEnd(24)} ${tText}${timings ? ` ${timings}` : ''}`);
+function printInvCsvRow(curve: string, method: string, test: CtTestResult) {
+  printCsvRow([
+    test.failed ? 'fail' : 'pass',
+    test.kind,
+    fmtFixed(test.t, 1),
+    fmtFixed(test.t2, 1),
+    fmtFixed(test.delta, 0),
+    fmtFixed(test.mdeNs, 0),
+    curve,
+    method,
+    test.name,
+    '',
+  ]);
 }
 
-function printSummary(rows: Row[], maxZ: number) {
-  console.log('\n# summary');
+function printSummary(rows: Row[], maxZ: number, samples: number) {
   console.log(
-    `${pad('', 2)} ${pad('curve', 10)} ${pad('method', 11)} ${pad(`lz@${maxZ}`, 9)} ${pad('lz delta', 9)} ${pad('struct', 8)} ${pad('h-max', 8)} ${pad('rand', 7)} mean/op`
+    '\n# summary — verdict = fermat lz + struct (δ-floored); euclid must leak (positive control)'
+  );
+  console.log(
+    `${pad('', 2)} ${pad('curve', 10)} ${pad('method', 11)} ${pad(`lz@${maxZ}`, 10)} ${pad('lz-δ', 9)} ` +
+      `${pad('struct', 8)} ${pad('degen', 8)} ${pad('rand', 7)} ${pad('mde', 8)} mean/op`
   );
   for (const r of rows) {
-    // The sharpest exploitable verdict is the leading-zero probe |t|.
-    const leak = r.lzT > DEFAULT_MAX_T;
+    const leak = r.lzFail || r.structFail;
+    const expected = !isFermat(r);
+    // fermat leaking or euclid missing its positive control are failures; a leaking euclid ('!')
+    // is the expected result that proves the harness can detect leaks
+    const status = expected
+      ? r.pcDetected
+        ? fmtMark('!', 'yellow')
+        : fmtMark('✕', 'red')
+      : fmtStatusOf(leak);
+    const verdict = expected ? '' : leak ? ' LEAK' : ' ok';
+    const note = expected
+      ? `  pctrl-lz@${r.pcZ} t=${fmtFixed(r.pcT ?? 0, 1)} ${r.pcDetected ? 'detected (expected leak)' : 'MISSED'}`
+      : '';
     console.log(
-      `${fmtStatus(leak)} ${pad(r.curve, 10)} ${pad(r.method, 11)} ` +
-        `${pad(`${fmtFixed(r.lzT, 1)} ${leak ? 'LEAK' : 'ok'}`, 9)} ${pad(fmtNsSigned(r.lzDeltaNs), 9)} ` +
-        `${pad(fmtFixed(r.structT, 1), 8)} ${pad(fmtFixed(r.maxT, 0), 8)} ${pad(fmtFixed(r.rrT, 1), 7)} ${fmtNs(r.meanNs)}`
+      `${status}  ${pad(r.curve, 10)} ${pad(r.method, 11)} ` +
+        `${pad(`${fmtFixed(r.lzT, 1)}${verdict}`, 10)} ${pad(fmtNsSigned(r.lzDeltaNs), 9)} ` +
+        `${pad(fmtFixed(r.structT, 1), 8)} ${pad(fmtFixed(r.degenT, 1), 8)} ${pad(fmtFixed(r.rrT, 1), 7)} ` +
+        `${pad(fmtNs2(r.mdeNs), 8)} ${fmtNs(r.meanNs)}${note}`
     );
   }
   console.log(`\n# impact`);
   const byCurve = new Map<string, Row[]>();
   for (const r of rows) (byCurve.get(r.curve) ?? byCurve.set(r.curve, []).get(r.curve)!).push(r);
   for (const [curve, pair] of byCurve) {
-    const eu = pair.find((r) => r.method.startsWith('euclid'));
-    const fe = pair.find((r) => r.method.startsWith('fermat'));
+    const eu = pair.find((r) => !isFermat(r));
+    const fe = pair.find(isFermat);
     if (!eu || !fe) continue;
     console.log(
-      `  ${pad(curve, 10)} lz@${maxZ} |t| ${fmtFixed(eu.lzT, 1)} ${eu.lzT > DEFAULT_MAX_T ? 'LEAK' : 'ok'} (δ ${fmtNsSigned(eu.lzDeltaNs)}) -> ` +
-        `${fmtFixed(fe.lzT, 1)} ${fe.lzT > DEFAULT_MAX_T ? 'LEAK' : 'ok'} (δ ${fmtNsSigned(fe.lzDeltaNs)})   ` +
+      `  ${pad(curve, 10)} lz@${maxZ} |t| ${fmtFixed(eu.lzT, 1)} ${eu.lzFail ? 'LEAK' : 'ok'} (δ ${fmtNsSigned(eu.lzDeltaNs)}) -> ` +
+        `${fmtFixed(fe.lzT, 1)} ${fe.lzFail ? 'LEAK' : 'ok'} (δ ${fmtNsSigned(fe.lzDeltaNs)})   ` +
         `speed ${fmtNs(eu.meanNs)} -> ${fmtNs(fe.meanNs)} (${fmtFixed(fe.meanNs / eu.meanNs, 1)}x)`
     );
   }
-}
-
-function structuralMaxT(result: CtResult): number {
-  let max = 0;
-  for (const test of result.tests)
-    if (STRUCTURAL_TESTS.has(test.name) && test.t > max) max = test.t;
-  return max;
-}
-
-// --- shared timing + statistics primitives ---
-type Stats = { n: number; mean: number; m2: number };
-
-function initStats(): Stats {
-  return { n: 0, mean: 0, m2: 0 };
-}
-function addSample(s: Stats, v: number): void {
-  s.n++;
-  const d = v - s.mean;
-  s.mean += d / s.n;
-  s.m2 += d * (v - s.mean);
-}
-function welch(a: Stats, b: Stats): number {
-  const va = (a.n > 1 ? a.m2 / (a.n - 1) : 0) / a.n;
-  const vb = (b.n > 1 ? b.m2 / (b.n - 1) : 0) / b.n;
-  const denom = Math.sqrt(va + vb);
-  return denom === 0 ? 0 : Math.abs(a.mean - b.mean) / denom;
-}
-// best-of timing of one operation over `batch` repeats of the same key
-function timeOp(op: (k: Bytes) => Bytes, k: Bytes, batch: number): number {
-  let best = Infinity;
-  for (let attempt = 0; attempt < 8; attempt++) {
-    const t0 = process.hrtime.bigint();
-    for (let j = 0; j < batch; j++) SINK ^= op(k)[0];
-    const el = Number(process.hrtime.bigint() - t0) / batch;
-    if (el < best) best = el;
-    if (el >= 1000) break;
-  }
-  return best;
-}
-function randBig(m: bigint): bigint {
-  let bits = 0n;
-  for (let v = m; v > 0n; v >>= 1n) bits++;
-  const nbytes = Number((bits + 7n) / 8n) + 8; // extra bytes -> negligible modulo bias
-  const b = new Uint8Array(nbytes);
-  globalThis.crypto.getRandomValues(b);
-  let x = 0n;
-  for (const y of b) x = (x << 8n) | BigInt(y);
-  return x % m;
-}
-function randomBytes1(): number {
-  const b = new Uint8Array(1);
-  globalThis.crypto.getRandomValues(b);
-  return b[0];
-}
-
-/**
- * Welch t-test between two independent populations of uniform random nonces. NOTE: this only
- * compares population MEANS, so it is insensitive to per-sample leaks (a bit-length-dependent
- * timing does not shift the mean) — it reads ~0 even for the leaky Euclidean inverse. It is a
- * sanity check for mean stability, not the leakage verdict; see the STRUCTURAL / lz-scan classes.
- */
-function randomVsRandomT(
-  op: (k: Bytes) => Bytes,
-  Fn: ScalarFieldLike,
-  samples: number,
-  batch: number,
-  progress?: Progress
-): { t: number; aMean: number; bMean: number } {
-  const rnd = (): Bytes => Fn.toBytes(randBig(Fn.ORDER - 1n) + 1n) as Bytes; // [1, n-1]
-  const A: Bytes[] = [];
-  const B: Bytes[] = [];
-  for (let i = 0; i < samples; i++) {
-    A.push(rnd());
-    B.push(rnd());
-  }
-  for (let i = 0; i < 50; i++) timeOp(op, A[i % samples], batch); // warmup
-  const a = initStats();
-  const b = initStats();
-  const tracker = progressTracker(progress, 'random-vs-random', samples);
-  try {
-    for (let i = 0; i < samples; i++) {
-      if (randomBytes1() & 1) {
-        addSample(a, timeOp(op, A[i], batch));
-        addSample(b, timeOp(op, B[i], batch));
-      } else {
-        addSample(b, timeOp(op, B[i], batch));
-        addSample(a, timeOp(op, A[i], batch));
-      }
-      tracker.update(i + 1);
-    }
-  } finally {
-    tracker.end();
-  }
-  return { t: cleanZero(welch(a, b)), aMean: a.mean, bMean: b.mean };
-}
-
-/**
- * Leading-zero scan: the most direct measure of the exploitable (HNP / Minerva) quantity.
- * Builds one population per z in [0, maxZ] where every nonce has EXACTLY z leading zero bits
- * (bit-length = bitLen(n) - z), and measures how inversion time scales with z. All z classes are
- * timed interleaved (order reshuffled each round) to cancel CPU-frequency drift, then each is
- * compared to the z=0 baseline via Welch's t. A δ growing monotonically with z (Euclidean) is the
- * exact quantity a lattice attack consumes; a flat δ leaks nothing about the nonce's top bits.
- */
-function leadingZeroScan(
-  op: (k: Bytes) => Bytes,
-  Fn: ScalarFieldLike,
-  samples: number,
-  batch: number,
-  maxZ: number,
-  progress?: Progress
-): { z: number; mean: number; t: number; delta: number }[] {
-  // exact bit length of the order (do not trust a possibly-padded Fn.BITS)
-  let nb = 0n;
-  for (let v = Fn.ORDER; v > 0n; v >>= 1n) nb++;
-  const keyFor = (z: number): Bytes => {
-    let val: bigint;
-    if (z === 0) {
-      const lo = 1n << (nb - 1n); // [2^(nb-1), n): top bit set => 0 leading zeros
-      val = lo + randBig(Fn.ORDER - lo);
-    } else {
-      const base = 1n << (nb - 1n - BigInt(z)); // [2^(nb-1-z), 2^(nb-z)): exactly z leading zeros
-      val = base + randBig(base);
-    }
-    return Fn.toBytes(val) as Bytes;
-  };
-  const classes: { z: number; keys: Bytes[] }[] = [];
-  for (let z = 0; z <= maxZ; z++) {
-    const keys: Bytes[] = [];
-    for (let i = 0; i < samples; i++) keys.push(keyFor(z));
-    classes.push({ z, keys });
-  }
-  for (let i = 0; i < 50; i++) timeOp(op, classes[0].keys[i % samples], batch); // warmup
-  const stats = classes.map(() => initStats());
-  const order = classes.map((_, i) => i);
-  const tracker = progressTracker(progress, 'leading-zero-scan', samples);
-  try {
-    for (let i = 0; i < samples; i++) {
-      for (let j = order.length - 1; j > 0; j--) {
-        // reshuffle class order each round (Fisher-Yates) to avoid systematic ordering bias
-        const r = randomBytes1() % (j + 1);
-        [order[j], order[r]] = [order[r], order[j]];
-      }
-      for (const idx of order) addSample(stats[idx], timeOp(op, classes[idx].keys[i], batch));
-      tracker.update(i + 1);
-    }
-  } finally {
-    tracker.end();
-  }
-  return classes.map((c, idx) => ({
-    z: c.z,
-    mean: stats[idx].mean,
-    t: cleanZero(welch(stats[idx], stats[0])),
-    delta: cleanZero(stats[idx].mean - stats[0].mean),
-  }));
-}
-
-// --- small local helpers (mirroring ct.ts; its versions are module-private) ---
-function meanNs(result: CtResult): number {
-  let sum = 0;
-  let count = 0;
-  for (const test of result.tests) {
-    sum += test.aMean + test.bMean;
-    count += 2;
-  }
-  return count ? sum / count : 0;
-}
-function maxObservedT(result: CtResult): number {
-  let max = 0;
-  for (const test of result.tests) if (test.t > max) max = test.t;
-  return max;
-}
-function fmtNs(ns: number): string {
-  return `${fmtFixed(ns / 1000, 0)}us`;
-}
-function fmtNsSigned(ns: number): string {
-  // signed µs with 2 decimals: leading-zero δ is often sub-µs
-  const clean = cleanZero(ns);
-  return `${clean >= 0 ? '+' : '-'}${fmtFixed(Math.abs(clean) / 1000, 2)}us`;
-}
-function pad(value: string, length: number): string {
-  return value.padEnd(length);
-}
-function fmtStatus(failed: boolean): string {
-  const status = failed ? '✕' : '✓';
-  if (!supportsColor()) return status;
-  return failed ? `\x1b[31m${status}\x1b[0m` : `\x1b[32m${status}\x1b[0m`;
-}
-function fmtT(t: number, failed: boolean): string {
-  const value = `t=${fmtFixed(t, 1).padEnd(13)}`;
-  return fmtTColor(t, value);
-}
-function fmtTColor(t: number, value: string): string {
-  if (!supportsColor()) return value;
-  if (t >= 10) return `\x1b[31m${value}\x1b[0m`;
-  if (t >= DEFAULT_MAX_T) return `\x1b[33m${value}\x1b[0m`;
-  return value;
-}
-function fmtFixed(num: number, digits: number): string {
-  const value = num.toFixed(digits);
-  return Object.is(Number(value), -0) ? (0).toFixed(digits) : value;
-}
-function fmtNum(num: number): string {
-  return String(cleanZero(num));
-}
-function fmtNsRaw(ns: number): string {
-  return fmtFixed(ns, 0);
-}
-function cleanZero(num: number): number {
-  return Object.is(num, -0) ? 0 : num;
-}
-function fmtTimingRange(a: number, b: number, fmt: (value: number) => string): string {
-  return `${fmt(Math.min(a, b))}...${fmt(Math.max(a, b))}`;
-}
-function csvCell(value: unknown): string {
-  const cell = String(value ?? '');
-  return /[",\r\n]/.test(cell) ? `"${cell.replaceAll('"', '""')}"` : cell;
-}
-function printCsvRow(values: unknown[]) {
-  console.log(values.map(csvCell).join(','));
-}
-function supportsColor(): boolean {
-  if (process.env.CLICOLOR_FORCE !== undefined && process.env.CLICOLOR_FORCE !== '0') return true;
-  if (process.env.FORCE_COLOR !== undefined && process.env.FORCE_COLOR !== '0') return true;
-  if (process.env.NO_COLOR !== undefined) return false;
-  if (process.env.FORCE_COLOR === '0') return false;
-  if (process.env.CLICOLOR === '0') return false;
-  return process.stdout.isTTY === true && process.env.TERM !== 'dumb';
-}
-function outputFormat(): OutputFormat {
-  if (process.env.CT_CSV !== undefined && process.env.CT_CSV !== '0') return 'csv';
-  return supportsColor() ? 'table' : 'csv';
-}
-function envDisabled(name: string): boolean {
-  const value = process.env[name];
-  return value !== undefined && value !== '0' && value.toLowerCase() !== 'false';
-}
-function progressEnabled(): boolean {
-  if (envDisabled('NO_PROGRESS')) return false;
-  return true;
-}
-function ctProgress(curve: string, method: string, format: OutputFormat): Progress {
-  const prefix = `${curve},${method}`;
-  return {
-    step: format === 'csv' ? 1 : 5,
-    start: (test) => {
-      process.stderr.write(`# ${prefix},${test} running: [`);
-    },
-    tick: () => {
-      process.stderr.write('.');
-    },
-    end: () => {
-      process.stderr.write(']\n');
-    },
-  };
-}
-function progressTracker(progress: Progress | undefined, test: string, samples: number) {
-  const progressStartedAt = Date.now();
-  let progressShown = false;
-  let nextProgress = progress?.step ?? 1;
-  return {
-    update(done: number) {
-      if (!progress) return;
-      if (!progressShown) {
-        if (done % PROGRESS_ESTIMATE_INTERVAL !== 0) return;
-        const elapsed = Date.now() - progressStartedAt;
-        const estimated = (elapsed * samples) / done;
-        if (estimated <= PROGRESS_MIN_ESTIMATE_MS) return;
-        progress.start(test);
-        progressShown = true;
-      }
-      while (nextProgress <= 100 && done * 100 >= nextProgress * samples) {
-        progress.tick();
-        nextProgress += progress.step;
-      }
-    },
-    end() {
-      if (progressShown) progress?.end();
-    },
-  };
-}
-function sampleCount(): number {
-  const value = process.env.SAMPLES;
-  if (value === undefined) return DEFAULT_SAMPLES;
-  const count = Number(value);
-  if (!Number.isSafeInteger(count) || count <= 0) throw new Error('invalid SAMPLES');
-  return count;
-}
-function maxZCount(): number {
-  const value = process.env.MAXZ;
-  if (value === undefined) return DEFAULT_MAXZ;
-  const count = Number(value);
-  if (!Number.isSafeInteger(count) || count < 0) throw new Error('invalid MAXZ');
-  return count;
-}
-function selectedCurves(): { name: string; Fn: ScalarFieldLike }[] {
-  const value = process.env.CURVES;
-  if (value === undefined) return CURVES;
-  const names = new Set(
-    value
-      .split(',')
-      .map((p) => p.trim())
-      .filter((p) => p.length)
+  const medianMde = median(rows.map((r) => r.mdeNs));
+  console.log(
+    `\n# power: median MDE ≈ ${fmtNs2(medianMde)} at n=${samples} — mean leaks below this are invisible; ` +
+      `raise SAMPLES to shrink it. euclid_inv wide-gap pctrl-lz is the positive control ` +
+      `(threshold ${fmtNum(DEFAULT_MAX_T)}).`
   );
-  const selected = CURVES.filter((c) => names.has(c.name));
-  if (selected.length !== names.size) {
-    const known = new Set(CURVES.map((c) => c.name));
-    const unknown = [...names].filter((n) => !known.has(n));
-    throw new Error(`unknown CURVES: ${unknown.join(', ')}`);
-  }
-  return selected;
+}
+
+function fmtStatusOf(failed: boolean): string {
+  return fmtMark(failed ? '✕' : '✓', failed ? 'red' : 'green');
+}
+
+function median(xs: number[]): number {
+  const sorted = [...xs].sort((x, y) => x - y);
+  const mid = sorted.length >> 1;
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
