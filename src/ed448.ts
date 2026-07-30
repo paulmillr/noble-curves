@@ -635,15 +635,16 @@ class _DecafPoint extends PrimeEdwardsPoint<_DecafPoint> {
     return this.equals(_DecafPoint.ZERO);
   }
 }
-Object.freeze(_DecafPoint.BASE);
-Object.freeze(_DecafPoint.ZERO);
-Object.freeze(_DecafPoint.prototype);
-Object.freeze(_DecafPoint);
-
 /** Prime-order Decaf448 group bundle. */
 export const decaf448: {
   Point: typeof _DecafPoint;
-} = /* @__PURE__ */ Object.freeze({ Point: _DecafPoint });
+} = /* @__PURE__ */ (() => {
+  Object.freeze(_DecafPoint.BASE);
+  Object.freeze(_DecafPoint.ZERO);
+  Object.freeze(_DecafPoint.prototype);
+  Object.freeze(_DecafPoint);
+  return Object.freeze({ Point: _DecafPoint });
+})();
 
 /**
  * Hashing to decaf448 points / field. RFC 9380 methods.
@@ -657,7 +658,7 @@ export const decaf448: {
  * const point = decaf448_hasher.hashToCurve(new TextEncoder().encode('hello noble'));
  * ```
  */
-export const decaf448_hasher: H2CHasherBase<typeof _DecafPoint> = Object.freeze({
+export const decaf448_hasher: H2CHasherBase<typeof _DecafPoint> = /* @__PURE__ */ Object.freeze({
   Point: _DecafPoint,
   hashToCurve(msg: TArg<Uint8Array>, options?: TArg<H2CDSTOpts>): _DecafPoint {
     // Preserve explicit empty/invalid DST overrides so expand_message_xof() can reject them.

@@ -1034,9 +1034,6 @@ class _Field implements IField<bigint> {
     return condition ? b : a;
   }
 }
-// Freeze the shared method surface too; otherwise callers can still poison every Field instance by
-// monkey-patching `_Field.prototype` even if each instance is frozen.
-Object.freeze(_Field.prototype);
 
 /**
  * Creates a finite field. Major performance optimizations:
@@ -1065,6 +1062,11 @@ Object.freeze(_Field.prototype);
  * ```
  */
 export function Field(ORDER: bigint, opts: FieldOpts = {}): TRet<Readonly<FpField>> {
+  // Freeze the shared method surface before any instance is reachable; otherwise callers can
+  // poison every Field instance by monkey-patching `_Field.prototype` even if each instance is
+  // frozen. Freezing here instead of module scope keeps `_Field` tree-shakeable for importers
+  // that never construct a field; the call is idempotent and cheap.
+  Object.freeze(_Field.prototype);
   return new _Field(ORDER, opts);
 }
 

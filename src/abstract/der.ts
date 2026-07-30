@@ -92,27 +92,15 @@ export type IDER = {
    */
   hexFromSig(sig: { r: bigint; s: bigint }): string;
 };
-/**
- * ASN.1 DER encoding utilities. ASN is very complex & fragile. Format:
- *
- *     [0x30 (SEQUENCE), bytelength, 0x02 (INTEGER), intLength, R, 0x02 (INTEGER), intLength, S]
- *
- * Docs: {@link https://letsencrypt.org/docs/a-warm-welcome-to-asn1-and-der/ | Let's Encrypt ASN.1 guide} and
- * {@link https://luca.ntop.org/Teaching/Appunti/asn1.html | Luca Deri's ASN.1 notes}.
- * @example
- * ASN.1 DER encoding utilities.
- *
- * ```ts
- * const der = DER.hexFromSig({ r: 1n, s: 2n });
- * ```
- */
-export const DER: IDER = {
+// Plain const so the freezes can live inside the pure initializer of the `DER` export below:
+// bare top-level `Object.freeze(...)` calls would defeat tree-shaking for every importer.
+const _DER: IDER = {
   // asn.1 DER encoding utils
   Err: DERErr,
   // Basic building block is TLV (Tag-Length-Value)
   _tlv: {
     encode: (tag: number, data: string): string => {
-      const { Err: E } = DER;
+      const { Err: E } = _DER;
       asafenumber(tag, 'tag');
       if (tag < 0 || tag > 255) throw new E('tlv.encode: wrong tag');
       astring(data, 'data');
@@ -129,7 +117,7 @@ export const DER: IDER = {
     },
     // v - value, l - left bytes (unparsed)
     decode(tag: number, data: TArg<Uint8Array>): TRet<{ v: Uint8Array; l: Uint8Array }> {
-      const { Err: E } = DER;
+      const { Err: E } = _DER;
       data = abytes(data, undefined, 'DER data');
       let pos = 0;
       if (tag < 0 || tag > 255) throw new E('tlv.decode: wrong tag');
@@ -163,7 +151,7 @@ export const DER: IDER = {
   // - if next byte doesn't have a flag, leading zero is not allowed (minimal encoding)
   _int: {
     encode(num: bigint): string {
-      const { Err: E } = DER;
+      const { Err: E } = _DER;
       abignumber(num);
       if (num < _0n) throw new E('integer: negative integers are not allowed');
       let hex = numberToHexUnpadded(num);
@@ -173,7 +161,7 @@ export const DER: IDER = {
       return hex;
     },
     decode(data: TArg<Uint8Array>): bigint {
-      const { Err: E } = DER;
+      const { Err: E } = _DER;
       if (data.length < 1) throw new E('invalid signature integer: empty');
       if (data[0] & 0b1000_0000) throw new E('invalid signature integer: negative');
       // Single-byte zero `00` is the canonical DER INTEGER encoding for zero.
@@ -184,7 +172,7 @@ export const DER: IDER = {
   },
   toSig(bytes: TArg<Uint8Array>): { r: bigint; s: bigint } {
     // parse DER signature
-    const { Err: E, _int: int, _tlv: tlv } = DER;
+    const { Err: E, _int: int, _tlv: tlv } = _DER;
     const data = abytes(bytes, undefined, 'signature');
     const { v: seqBytes, l: seqLeftBytes } = tlv.decode(0x30, data);
     if (seqLeftBytes.length) throw new E('invalid signature: left bytes after parsing');
@@ -194,7 +182,7 @@ export const DER: IDER = {
     return { r: int.decode(rBytes), s: int.decode(sBytes) };
   },
   hexFromSig(sig: { r: bigint; s: bigint }): string {
-    const { _tlv: tlv, _int: int } = DER;
+    const { _tlv: tlv, _int: int } = _DER;
     validateObject(sig, { r: 'bigint', s: 'bigint' }, {}, 'sig');
     const rs = tlv.encode(0x02, int.encode(sig.r));
     const ss = tlv.encode(0x02, int.encode(sig.s));
@@ -202,6 +190,23 @@ export const DER: IDER = {
     return tlv.encode(0x30, seq);
   },
 };
-Object.freeze(DER._tlv);
-Object.freeze(DER._int);
-Object.freeze(DER);
+
+/**
+ * ASN.1 DER encoding utilities. ASN is very complex & fragile. Format:
+ *
+ *     [0x30 (SEQUENCE), bytelength, 0x02 (INTEGER), intLength, R, 0x02 (INTEGER), intLength, S]
+ *
+ * Docs: {@link https://letsencrypt.org/docs/a-warm-welcome-to-asn1-and-der/ | Let's Encrypt ASN.1 guide} and
+ * {@link https://luca.ntop.org/Teaching/Appunti/asn1.html | Luca Deri's ASN.1 notes}.
+ * @example
+ * ASN.1 DER encoding utilities.
+ *
+ * ```ts
+ * const der = DER.hexFromSig({ r: 1n, s: 2n });
+ * ```
+ */
+export const DER: IDER = /* @__PURE__ */ (() => {
+  Object.freeze(_DER._tlv);
+  Object.freeze(_DER._int);
+  return Object.freeze(_DER);
+})();
