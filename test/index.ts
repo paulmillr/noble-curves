@@ -16,6 +16,7 @@ import './endomorphism.test.ts';
 import './fft.test.ts';
 import './info.test.ts';
 import './misc.test.ts';
+import './montgomery.test.ts';
 import './nist.test.ts';
 import './poseidon.test.ts';
 import './rfc9380-hash-to-curve.test.ts';
