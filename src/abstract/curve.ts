@@ -26,7 +26,7 @@ const _0n = /* @__PURE__ */ BigInt(0);
 const _1n = /* @__PURE__ */ BigInt(1);
 const _4n = /* @__PURE__ */ BigInt(4);
 const BLIND_BYTES = 16;
-const BLIND_BITS = 8 * BLIND_BYTES;
+const BLIND_BITS = 128;
 // Fixed-window width for the constant-time multiply of un-precomputed points (W===1).
 // A flat 2^FW_WINDOW table has a small, scalar-independent build cost that amortizes over a single
 // multiply, unlike the larger per-point wNAF tables that only pay off when cached.
@@ -34,7 +34,7 @@ const FW_WINDOW = 5;
 // Precompute tables are capped at ~2 GiB of estimated heap. Rejecting larger windows up front
 // turns a typo'd window size into an immediate error instead of a multi-GB allocation (or an
 // effective hang) when the lazy table is built on first multiply.
-const TABLE_BYTES_MAX = 2 ** 31;
+const TABLE_BYTES_MAX = /* @__PURE__ */ (() => 2 ** 31)();
 
 /** Affine point coordinates without projective fields. */
 export type AffinePoint<T> = {

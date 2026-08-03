@@ -3,14 +3,13 @@
 Audited & minimal JS implementation of elliptic curve cryptography.
 
 - 🔒 [**Audited**](#security) by independent security firms
-- 🔻 Tree-shakeable: unused code is excluded from your builds
+- 🪶 Minimal: 15KB (gzipped) secp256k1, unused code is excluded from your builds
 - 🏎 Fast: hand-optimized for caveats of JS engines
-- 🔍 Reliable: cross-library / wycheproof tests and fuzzing ensure correctness
-- ➰ Weierstrass, Edwards, Montgomery curves; ECDSA, EdDSA, Schnorr, BLS signatures
+- 🔍 Reliable: cross-library / wycheproof tests ensure correctness
+- ➰ Weierstrass, Edwards curves; ECDSA, EdDSA, Schnorr, BLS signatures
 - ✍️ ECDH, hash-to-curve, OPRF, FROST, Poseidon hash, FFT
 - 🔖 Non-repudiation (SUF-CMA, SBS) & consensus-friendliness (ZIP215) in ed25519, ed448
-- 🥈 Optional, friendly wrapper over native WebCrypto
-- 🪶 32KB (gzipped) including bundled hashes, 11KB for single-curve build
+- 🥈 Wrapper with identical API over native WebCrypto
 
 Curves have 5kb sister projects
 [secp256k1](https://github.com/paulmillr/noble-secp256k1) & [ed25519](https://github.com/paulmillr/noble-ed25519).
