@@ -55,16 +55,15 @@ describe('basic curve tests', () => {
       /weierstrass.*edwards/,
       'curve family'
     );
-    const Point = edwards({
-      p: 257n,
-      n: 251n,
-      h: 1n,
-      a: 1n,
-      d: 2n,
-      Gx: 256n,
-      Gy: 0n,
-    });
+    // d=3 is a non-residue mod 257 (d=2 is a square there: 257 ≡ 1 mod 8); G=(256, 0)
+    // satisfies a·x²+y²=1+d·x²y² for every d, so the base point stays valid.
+    const toy257 = { p: 257n, n: 251n, h: 1n, a: 1n, d: 3n, Gx: 256n, Gy: 0n };
+    const Point = edwards(toy257);
     eql(Point.BASE.X, 256n, 'edwards coordinate mask follows Fp byte width');
+    // Completeness of add-2008-hwcd requires square a and non-square d; edwards() must
+    // reject curves violating it instead of silently running incomplete formulas.
+    throws(() => edwards({ ...toy257, d: 2n }), /non-square/, 'square d rejected');
+    throws(() => edwards({ ...toy257, a: 3n, d: 5n }), /must be a square/, 'non-square a rejected');
   });
 
   for (const name in CURVES) {
@@ -274,6 +273,20 @@ describe('basic curve tests', () => {
           // 1*3 + 5*2 + 4*7 + 11*8 = 129
           equal(msm(points, [3n, 5n, 7n, 11n]), p.BASE.multiply(129n), '129 * G');
           throws(() => normalizeZ(p, [p.BASE, {} as never]), /invalid point at index 1/);
+          // Regression: identity normalization is an implicit cross-module contract —
+          // FpInvertBatch (no passZero) must yield undefined for zero Z, and
+          // toAffine(undefined) must fall back to its internal is0 handling.
+          // Skipped for group wrappers (ristretto/decaf) whose elements have no projective Z.
+          if (p.ZERO.Z != null) {
+            const arith0 = p.BASE.add(p.BASE.negate()); // identity with arbitrary projective coords
+            const withZeros = normalizeZ(p, [p.ZERO, p.BASE, arith0]);
+            equal(withZeros[0], p.ZERO, 'normalizeZ keeps ZERO');
+            equal(withZeros[1], p.BASE, 'normalizeZ keeps BASE next to ZERO');
+            equal(withZeros[2], p.ZERO, 'normalizeZ keeps arithmetic zero');
+            eql(withZeros[2].is0(), true, 'arithmetic zero is0 after normalizeZ');
+            for (const z of normalizeZ(p, [p.ZERO, p.ZERO]))
+              eql(z.is0(), true, 'all-zero batch stays zero');
+          }
 
           fc.assert(
             fc.property(fc.array(fc.tuple(FC_BIGINT, FC_BIGINT)), FC_BIGINT, (pairs) => {
@@ -715,6 +728,14 @@ describe('scalar-mult kernels: toy curve, exhaustive', () => {
     for (let i = 0; i < batch.length; i++) {
       eql(norm[i].equals(batch[i]), true, `equality @${i}`);
       eql(norm[i].is0() || (norm[i] as never as { Z: bigint }).Z === 1n, true, `Z=1 @${i}`);
+    }
+    // Regression: zero-Z entries must survive the batch inversion (FpInvertBatch without
+    // passZero -> undefined -> toAffine's is0 fallback), including non-canonical zeros
+    // produced by arithmetic and batches made only of zeros.
+    const arith0 = TG.add(TG.negate());
+    for (const z of normalizeZ(TPoint, [TZ, arith0, TZ])) {
+      eql(z.is0(), true, 'zero batch entry is0');
+      eql(z.equals(TZ), true, 'zero batch entry equals ZERO');
     }
   });
 });

@@ -35,7 +35,7 @@ import {
   type CurvePoint,
   type CurvePointCons,
 } from './curve.ts';
-import { type IField } from './modular.ts';
+import { FpLegendre, type IField } from './modular.ts';
 
 // Be friendly to bad ECMAScript parsers by not using bigint literals
 // prettier-ignore
@@ -303,6 +303,15 @@ export function edwards(
   const { Fp, Fn } = validated;
   let CURVE = validated.CURVE as EdwardsOpts;
   const { h: cofactor } = CURVE;
+  // The unified add-2008-hwcd formulas (see EdwardsPoint.add/double) are complete —
+  // exception-free for every input pair — only when a is a square and d a non-square in Fp
+  // (Bernstein–Birkner–Joye–Lange–Peters, "Twisted Edwards curves", thm 3.3). The constant-time
+  // kernels in curve.ts assume completeness, so an incomplete curve could silently produce
+  // wrong results on exceptional inputs. Fail construction instead.
+  if (FpLegendre(Fp, CURVE.a) !== 1)
+    throw new Error('edwards: CURVE.a must be a square in Fp for complete addition formulas');
+  if (FpLegendre(Fp, CURVE.d) !== -1)
+    throw new Error('edwards: CURVE.d must be a non-square in Fp for complete addition formulas');
   validateObject(opts, {}, { uvRatio: 'function', randomBytes: 'function' });
   const randomBytes = opts.randomBytes === undefined ? wcRandomBytes : opts.randomBytes;
 
