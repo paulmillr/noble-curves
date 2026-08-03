@@ -2,7 +2,9 @@
   "extends": "@paulmillr/jsbt/tsconfig.json",
   "compilerOptions": {
     "rootDir": "src",
-    "outDir": "."
+    "outDir": ".",
+    "sourceMap": false,
+    "declarationMap": false
   },
   "include": [
     "src"

@@ -4,9 +4,7 @@
   "description": "Audited & minimal JS implementation of elliptic curve cryptography",
   "files": [
     "*.js",
-    "*.js.map",
     "*.d.ts",
-    "*.d.ts.map",
     "abstract",
     "src"
   ],
