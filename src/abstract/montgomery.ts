@@ -168,7 +168,9 @@ function cmask(P: bigint, swap: bigint): bigint {
  * @param P - Field modulus.
  * @returns A field-bound swap function taking mask, x_2, and x_3.
  */
-function cswap(P: bigint) {
+function cswap(
+  P: bigint
+): (mask: bigint, x_2: bigint, x_3: bigint) => { x_2: bigint; x_3: bigint } {
   const offset = BigInt(6) * P;
   return (mask: bigint, x_2: bigint, x_3: bigint): { x_2: bigint; x_3: bigint } => {
     const sum = x_2 + x_3;
