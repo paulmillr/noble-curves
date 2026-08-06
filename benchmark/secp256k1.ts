@@ -1,4 +1,4 @@
-import mark from '@paulmillr/jsbt/bench.js';
+import mark from '@paulmillr/jsbt/benchmark.js';
 import { schnorr, secp256k1 } from '../src/secp256k1.ts';
 import { generateData } from './_shared.ts';
 

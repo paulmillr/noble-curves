@@ -12,7 +12,7 @@
     "@noble/hashes": "2.2.0"
   },
   "devDependencies": {
-    "@paulmillr/jsbt": "0.6.1",
+    "@paulmillr/jsbt": "0.6.5",
     "@types/node": "25.3.0",
     "fast-check": "4.2.0",
     "prettier": "3.6.2",
@@ -22,15 +22,12 @@
     "benchmark": "node benchmark/main.ts",
     "benchmark:ct": "node benchmark/ct.ts",
     "build": "tsc",
-    "bundle": "npx --no @paulmillr/jsbt bundle",
-    "check": "npx --no @paulmillr/jsbt check",
-    "build:clean": "rm {.,abstract}/*.{js,d.ts,d.ts.map,js.map} 2> /dev/null",
+    "build:clean": "rm {.,abstract}/*.{js,d.ts} 2> /dev/null",
+    "check": "jsbt-check",
     "format": "prettier --write 'src/**/*.{js,ts}' 'test/*.{js,ts}'",
     "test": "node --no-warnings test/index.ts",
-    "test:bun": "bun test/index.ts",
     "test:deno": "deno --allow-env --allow-read test/index.ts",
-    "test:tsc": "cd test; npx tsc; node compiled/test/index.js",
-    "test:coverage": "npm install --no-save c8@10.1.2 && npx c8 npm test"
+    "test:bun": "bun test/index.ts"
   },
   "exports": {
     ".": "./index.js",

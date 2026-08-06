@@ -1,7 +1,7 @@
 import { sha256, sha512 } from '@noble/hashes/sha2.js';
 import { shake256 } from '@noble/hashes/sha3.js';
 import { randomBytes } from '@noble/hashes/utils.js';
-import mark from '@paulmillr/jsbt/bench.js';
+import mark from '@paulmillr/jsbt/benchmark.js';
 import { hash_to_field } from '../src/abstract/hash-to-curve.ts';
 import * as md from '../src/abstract/modular.ts';
 import { ed25519, ristretto255, ristretto255_hasher } from '../src/ed25519.ts';

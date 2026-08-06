@@ -1,5 +1,5 @@
 import { randomBytes } from '@noble/hashes/utils.js';
-import compare from '@paulmillr/jsbt/bench-compare.js';
+import compare from '@paulmillr/jsbt/benchmark-compare.js';
 import { ed25519, x25519 } from '../src/ed25519.ts';
 import { ed448, x448 } from '../src/ed448.ts';
 import { p256, p384, p521 } from '../src/nist.ts';

@@ -1,4 +1,4 @@
-import compare_ from '@paulmillr/jsbt/bench-compare.js';
+import compare_ from '@paulmillr/jsbt/benchmark-compare.js';
 import { pippenger } from '../src/abstract/curve.ts';
 import { bls12_381 } from '../src/bls12-381.ts';
 

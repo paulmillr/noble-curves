@@ -1,4 +1,4 @@
-import compare from '@paulmillr/jsbt/bench-compare.js';
+import compare from '@paulmillr/jsbt/benchmark-compare.js';
 import { ed25519, ed25519_hasher } from '../src/ed25519.ts';
 import { ed448, ed448_hasher } from '../src/ed448.ts';
 import { p256, p256_hasher, p384, p384_hasher, p521, p521_hasher } from '../src/nist.ts';

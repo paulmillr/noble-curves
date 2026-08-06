@@ -1,4 +1,4 @@
-import mark from '@paulmillr/jsbt/bench.js';
+import mark from '@paulmillr/jsbt/benchmark.js';
 import * as fft from '../src/abstract/fft.ts';
 import { bls12_381 } from '../src/bls12-381.ts';
 
