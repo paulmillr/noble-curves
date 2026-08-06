@@ -9,7 +9,7 @@
     "src"
   ],
   "dependencies": {
-    "@noble/hashes": "2.2.0"
+    "@noble/hashes": "2.3.0"
   },
   "devDependencies": {
     "@paulmillr/jsbt": "0.6.5",
