@@ -46,7 +46,6 @@ function checkU32(n: number, title = 'n') {
  * Checks if integer is in form of `1 << X`.
  * @param x - Integer to inspect.
  * @returns `true` when the value is a power of two.
- * @throws If `x` is not a valid unsigned 32-bit integer. {@link Error}
  * @example
  * Validate that an FFT size is a power of two.
  *
@@ -107,7 +106,6 @@ export function reverseBits(n: number, bits: number): number {
  * Similar to `bitLen(x)-1` but much faster for small integers, like indices.
  * @param n - Input value.
  * @returns Base-2 logarithm. For `n = 0`, the current implementation returns `-1`.
- * @throws If `n` is not a valid unsigned 32-bit integer. {@link Error}
  * @example
  * Compute the radix-2 stage count for one transform size.
  *

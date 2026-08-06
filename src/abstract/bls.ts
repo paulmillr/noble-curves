@@ -305,7 +305,9 @@ export interface BlsCurvePair {
   /** Public pairing parameters exposed for introspection. */
   params: {
     ateLoopSize: bigint;
+    xNegative: boolean;
     twistType: BlsTwistType;
+    postPrecompute?: BlsPostPrecomputeFn;
   };
 }
 
@@ -651,7 +653,8 @@ function createBlsPairing(
     if (pairs.length) {
       const ellLen = pairs[0][0].length;
       for (let i = 0; i < ellLen; i++) {
-        if (i !== 0) f12 = Fp12.sqr(f12); // sqr only one time for all pairings; skip sqr(ONE) at i=0
+        // sqr only one time for all pairings; skip sqr(ONE) at i=0
+        if (i !== 0) f12 = Fp12.sqr(f12);
         // NOTE: we apply multiple pairings in parallel here
         for (const [ell, Px, Py] of pairs) {
           for (const [c0, c1, c2] of ell[i]) f12 = lineFunction(c0, c1, c2, f12, Px, Py);
@@ -942,7 +945,9 @@ export function blsBasic(
     fields: Object.freeze({ Fr, Fp, Fp2, Fp6, Fp12 }),
     params: Object.freeze({
       ateLoopSize: params.ateLoopSize,
+      xNegative: params.xNegative,
       twistType: params.twistType,
+      postPrecompute: params.postPrecompute,
     }),
     utils: Object.freeze({
       randomSecretKey,

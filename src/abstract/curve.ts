@@ -127,7 +127,8 @@ export interface CurvePoint<F, P extends CurvePoint<F, P>> {
    */
   multiplyUnsafe(scalar: bigint): P;
   /**
-   * Massively speeds up `p.multiply(n)` by using precompute tables (caching). See {@link ScalarMultiplier}.
+   * Massively speeds up `p.multiply(n)` by using precompute tables (caching).
+   * See {@link ScalarMultiplier}.
    * Cache state lives in internal WeakMaps keyed by point identity, not on the point object.
    * Repeating `precompute(...)` for the same point identity replaces the remembered window size
    * and forces table regeneration for that point.
@@ -298,7 +299,6 @@ export type Mapper<T> = (i: T[]) => T[];
  * @param c - Point constructor.
  * @param points - Projective points.
  * @returns Fresh projective points reconstructed from normalized affine coordinates.
- * @throws If a documented runtime validation or state check fails. {@link Error}
  * @example
  * Batch-normalize projective points with a single shared inversion.
  *
@@ -360,11 +360,22 @@ export type RandomBytes = (bytesLength?: number) => TRet<Uint8Array>;
  * (throw), never downgrade — a dynamic fallback would let a tampered RNG silently strip
  * blinding on demand. A probe can only ever classify broken environments, not adversarial
  * RNGs: a stateful RNG can always behave while probed and misbehave later.
+ * @param randomBytes - RNG to probe, or `undefined` when the environment provides none.
+ * @param length - Byte length requested from the probe call.
+ * @returns The RNG when the probe produced `length` valid bytes; `undefined` otherwise.
+ * @example
+ * Probe an RNG once before enabling scalar blinding.
+ *
+ * ```ts
+ * import { probeRandomBytes } from '@noble/curves/abstract/curve.js';
+ * import { randomBytes } from '@noble/hashes/utils.js';
+ * const rng = probeRandomBytes(randomBytes, 16);
+ * ```
  */
 export function probeRandomBytes(
-  randomBytes: RandomBytes | undefined,
+  randomBytes: TArg<RandomBytes | undefined>,
   length: number
-): RandomBytes | undefined {
+): TRet<RandomBytes | undefined> {
   if (randomBytes === undefined) return undefined;
   afunction(randomBytes, 'randomBytes');
   try {
@@ -373,7 +384,7 @@ export function probeRandomBytes(
   } catch {
     return undefined;
   }
-  return randomBytes;
+  return randomBytes as TRet<RandomBytes>;
 }
 
 function validateMSMPoints(points: any[], c: any) {
@@ -663,7 +674,7 @@ export class ScalarMultiplier<PC extends PC_ANY> {
       throw new Error('randomBytes returned invalid byte array');
     // Force the top two bits of the 128-bit blind to 10xxxxxx, so blind is in [2^127, 1.5*2^127):
     // * `| 0x80` (bit 127 = 1) is the load-bearing part: it guarantees blind >= 2^127, so the blind
-    //   is always a full-width, nonzero factor and the scalar is masked even under a degenerate RNG.
+    //   is always a full-width, nonzero factor and the scalar is masked even with a degenerate RNG.
     // * `& 0x3f` (bit 126 = 0) is a safety margin: it caps blind < 1.5*2^127, keeping
     //   blind*Fn.ORDER + scalar < 0.75*2^(nBits+128), i.e. ~half a window below the 2^(nBits+128)
     //   ceiling. Not strictly required for the bound (see below), but it reserves headroom so the
@@ -680,17 +691,18 @@ export class ScalarMultiplier<PC extends PC_ANY> {
 
   /**
    * Constant-time multiplication `n*point` for an un-precomputed point, via a small fixed window.
-   * A cached wNAF table only pays off when reused; a flat 2^FW_WINDOW table (`size-1` adds) is far cheaper
-   * to build for a single use. The point-operation sequence is independent of `n`: build the table,
-   * then per window exactly FW_WINDOW doublings, a data-oblivious scan over every table entry, and
-   * one addition (adds the identity when the window digit is 0 — never skipped).
+   * A cached wNAF table only pays off when reused; a flat 2^FW_WINDOW table (`size-1` adds) is
+   * far cheaper to build for a single use. The point-operation sequence is independent of `n`:
+   * build the table, then per window exactly FW_WINDOW doublings, a data-oblivious scan over
+   * every table entry, and one addition (adds the identity when the window digit is 0 — never
+   * skipped).
    *
-   * `n` must be `< 2^bits`. Assumes complete addition (adding the identity costs the same
-   * as any add), which holds for the Weierstrass/Edwards point types used here. The table is left in
-   * projective form (no normalizeZ): normalizing this small a table costs more than the mixed-add
-   * savings it would buy for a single multiply.
-   * @returns real point `p`; `f` duplicates it only to match {@link wnafCachedCT}'s return shape (this
-   * path needs no fake accumulator — its op-count is already scalar-independent).
+   * `n` must be `< 2^bits`. Assumes complete addition (adding the identity costs the same as any
+   * add), which holds for the Weierstrass/Edwards point types used here. The table is left in
+   * projective form (no normalizeZ): normalizing this small a table costs more than the
+   * mixed-add savings it would buy for a single multiply.
+   * @returns real point `p`; `f` duplicates it only to match {@link wnafCachedCT}'s return shape
+   * (this path needs no fake accumulator — its op-count is already scalar-independent).
    */
   private fixedWindowCT(point: PC_P<PC>, n: bigint, bits: number): MulResult<PC_P<PC>> {
     const W = FW_WINDOW;
@@ -907,10 +919,10 @@ export function pippenger<P extends CurvePoint<any, P>, PC extends CurvePointCon
  * Not constant-time (zero digits are skipped): public inputs only.
  * @param c - Curve Point constructor
  * @param points - array of L curve points, captured by the returned closure
- * @param windowSize - window width W in bits, 2 <= W <= Fn.BITS; also capped so the
+ * @param windowSize - window width W in bits, from 2 to Fn.BITS; also capped so the
  *   per-closure tables stay under ~2 GiB
- * @returns Function which multiplies points with scalars. The closure accepts
- *   `scalars.length <= points.length`, and omitted trailing scalars are treated as zero.
+ * @returns Function which multiplies points with scalars. The closure accepts at most
+ *   `points.length` scalars, and omitted trailing scalars are treated as zero.
  * @throws If the point set or precompute window is invalid. {@link Error}
  * @example
  * Interleaved wNAF multi-scalar multiplication (MSM, Pa + Qb + Rc + ...).

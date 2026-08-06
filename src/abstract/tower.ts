@@ -1102,12 +1102,13 @@ const _FROBENIUS_COEFFICIENTS_12 = new WeakMap<_Field12, readonly Fp2[]>();
  * Construct the Fp2/Fp6/Fp12 tower used by a pairing-friendly curve.
  *
  * ```ts
+ * import { tower12, type Fp2, type Fp12 } from '@noble/curves/abstract/tower.js';
  * const fields = tower12({
  *   ORDER: 17n,
  *   X_LEN: 4,
  *   FP2_NONRESIDUE: [1n, 1n],
- *   Fp2mulByB: (num) => num,
- *   Fp12finalExponentiate: (num) => num,
+ *   Fp2mulByB: (num: Fp2) => num,
+ *   Fp12finalExponentiate: (num: Fp12) => num,
  * });
  * const fp12 = fields.Fp12.ONE;
  * ```

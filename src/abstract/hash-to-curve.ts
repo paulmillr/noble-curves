@@ -328,7 +328,7 @@ export function hash_to_field(
   asafenumber(k, 'k');
   // RFC 9380 §5.2 defines hash_to_field over a list of one or more field elements and an integer
   // extension degree `m >= 1`; rejecting here avoids degenerate `[]` / `[[]]` helper outputs.
-  // The RFC also treats `p` as a finite-field characteristic; invalid values make log2/mod degenerate.
+  // The RFC also treats `p` as a finite-field characteristic; bad values degenerate log2/mod.
   if (p <= BigInt(1)) throw new Error('hash_to_field: expected valid field characteristic');
   if (count < 1) throw new Error('hash_to_field: expected count >= 1');
   if (m < 1) throw new Error('hash_to_field: expected m >= 1');

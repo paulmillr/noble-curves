@@ -192,7 +192,8 @@ export interface EdDSA {
    * @param options - Optional verification tweaks:
    *   - `context` (optional): Domain-separation context for Ed25519ctx/Ed448.
    *   - `zip215` (optional): Whether to accept ZIP-215 encodings.
-   * @throws Malformed argument or option types may throw; `false` means well-formed inputs failed verification. {@link Error}
+   * @throws Malformed argument or option types may throw; `false` means well-formed inputs
+   *   failed verification. {@link Error}
    * @returns Whether the signature is valid.
    */
   verify: (
@@ -531,7 +532,8 @@ export function edwards(
       const B = Fp.mul(Y1, Y2); // B = Y1*Y2
       const C = Fp.mul(Fp.mulN(T1, d), T2); // C = T1*d*T2
       const D = Fp.mul(Z1, Z2); // D = Z1*Z2
-      const E = Fp.sub(Fp.subN(Fp.mulN(Fp.addN(X1, Y1), Fp.addN(X2, Y2)), A), B); // E = (X1+Y1)*(X2+Y2)-A-B
+      // E = (X1+Y1)*(X2+Y2)-A-B
+      const E = Fp.sub(Fp.subN(Fp.mulN(Fp.addN(X1, Y1), Fp.addN(X2, Y2)), A), B);
       const F = Fp.subN(D, C); // F = D-C
       const G = Fp.addN(D, C); // G = D+C
       const H = Fp.sub(B, mulA(A)); // H = B-a*A
@@ -641,7 +643,7 @@ export function edwards(
   // } catch {
   //   throw new Error('bad curve params: generator point');
   // }
-  const normalize = (points: Point[]) => normalizeZ(Point, points);
+  const normalize = (points: TArg<Point[]>) => normalizeZ(Point, points);
   const wnaf = new ScalarMultiplier(Point, randomBytes);
   // Enable W=6 wNAF precomputes. Slows down first publicKey computation.
   // Disable for tiny toy curves, with scalar fields < 6 bits.

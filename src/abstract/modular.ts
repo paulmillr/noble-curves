@@ -188,7 +188,8 @@ export function invert(number: bigint, modulo: bigint): bigint {
  * underlying square-and-multiply has the same control flow for every secret `a`: there is no
  * data-dependent branching or loop count that could leak `a` through timing (e.g. Minerva-style
  * ECDSA nonce-inversion attacks). This is only "algorithmically" constant-time — JS bigint
- * multiplication/reduction is still value-dependent — and it is roughly 4x slower than {@link invert}.
+ * multiplication/reduction is still value-dependent — and it is roughly 4x slower than
+ * {@link invert}.
  *
  * REQUIRES a prime modulus; Fermat's theorem does not hold otherwise. The result is verified to be
  * a real inverse, so a non-prime modulus (or a non-invertible input) fails closed with an error
@@ -196,7 +197,8 @@ export function invert(number: bigint, modulo: bigint): bigint {
  * @param a - Value to invert.
  * @param prime - Prime modulus.
  * @returns Multiplicative inverse in `[1, prime)`.
- * @throws If the modulus is not > 1, the input reduces to zero, or the inverse does not exist. {@link Error}
+ * @throws If the modulus is below 2, the input reduces to zero, or the inverse does not exist.
+ *   {@link Error}
  * @example
  * Compute one modular inverse without secret-dependent branching.
  *
@@ -750,7 +752,7 @@ export function FpInvertBatch<T>(
   // Walk from last to first, multiply them by inverted each other MOD p
   nums.reduceRight((acc, num, i) => {
     if (F.is0(num)) return acc;
-    // Non-zero `num` means the forward pass already stored a defined prefix product at `inverted[i]`.
+    // Non-zero `num` means the forward pass already stored a defined prefix product at index i.
     inverted[i] = F.mul(acc, inverted[i]!);
     return F.mul(acc, num);
   }, invertedAcc);

@@ -231,7 +231,7 @@ function validateOpts(curve: TArg<MontgomeryOpts>) {
  * const x25519 = montgomery({
  *   P,
  *   type: 'x25519',
- *   adjustScalarBytes(bytes) {
+ *   adjustScalarBytes(bytes: Uint8Array) {
  *     bytes[0] &= 248;
  *     bytes[31] &= 127;
  *     bytes[31] |= 64;

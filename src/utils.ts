@@ -118,6 +118,19 @@ export type TRet<T> = T extends unknown
         : TypedRet<T>)
   : never;
 
+/**
+ * Validates that a value is an array, optionally validating each element.
+ * @param item - Value to validate.
+ * @param title - Label included in thrown errors.
+ * @param inner - Optional per-element validator, called with the element and its label.
+ * @returns The validated array.
+ * @example
+ * Validate an array of points before batch processing.
+ *
+ * ```ts
+ * aarray([1n, 2n], 'scalars');
+ * ```
+ */
 export function aarray<T>(
   item: unknown,
   title: string,
@@ -148,6 +161,7 @@ export const abytes = <T extends TArg<Uint8Array>>(value: T, length?: number, ti
  * Validates that a value is a non-negative safe integer.
  * @param n - Value to validate.
  * @param title - Optional field name.
+ * @returns The validated number.
  * @example
  * Validate a numeric length before allocating buffers.
  *
@@ -307,6 +321,10 @@ export type CHash = {
 export type FHash = (message: TArg<Uint8Array>) => TRet<Uint8Array>;
 /** HMAC callback signature. */
 export type HmacFn = (key: TArg<Uint8Array>, message: TArg<Uint8Array>) => TRet<Uint8Array>;
+// Shared error-message prefix builder. Only called on throw paths, so assert
+// success paths never pay for the string concatenation.
+const atitle = (title: string): string => (title ? `"${title}" ` : '');
+
 /**
  * Validates that a flag is boolean.
  * @param value - Value to validate.
@@ -321,10 +339,8 @@ export type HmacFn = (key: TArg<Uint8Array>, message: TArg<Uint8Array>) => TRet<
  * ```
  */
 export function abool(value: boolean, title: string = ''): boolean {
-  if (typeof value !== 'boolean') {
-    const prefix = title && `"${title}" `;
-    throw new TypeError(prefix + 'expected boolean, got type=' + typeof value);
-  }
+  if (typeof value !== 'boolean')
+    throw new TypeError(atitle(title) + 'expected boolean, got type=' + typeof value);
   return value;
 }
 
@@ -570,6 +586,12 @@ export function asciiToBytes(ascii: string): TRet<Uint8Array> {
  * Checks whether n is non-negative bigint. Historical name.
  * @param n - candidate value
  * @returns `true` when the value is bigint and 0 or larger
+ * @example
+ * Check a candidate scalar before range validation.
+ *
+ * ```ts
+ * isPosBig(2n);
+ * ```
  */
 export function isPosBig(n: bigint): boolean {
   return typeof n === 'bigint' && _0n <= n;
@@ -724,7 +746,8 @@ type Pred<T> = (v: TArg<Uint8Array>) => T | undefined;
  * import { createHmacDrbg } from '@noble/curves/utils.js';
  * import { hmac } from '@noble/hashes/hmac.js';
  * import { sha256 } from '@noble/hashes/sha2.js';
- * const drbg = createHmacDrbg(32, 32, (key, msg) => hmac(sha256, key, msg));
+ * const hmacFn = (key: Uint8Array, msg: Uint8Array) => hmac(sha256, key, msg);
+ * const drbg = createHmacDrbg(32, 32, hmacFn);
  * const seed = new Uint8Array(32);
  * drbg(seed, (bytes) => bytes);
  * ```
@@ -799,6 +822,7 @@ export function createHmacDrbg<T>(
  * @param object - Object to validate.
  * @param fields - Required field types.
  * @param optFields - Optional field types.
+ * @param title - Object label included in thrown errors.
  * @throws On wrong argument types. {@link TypeError}
  * @example
  * Check user options before building a curve helper.
