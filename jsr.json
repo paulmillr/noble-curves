@@ -37,5 +37,6 @@
       "README.md"
     ]
   },
+  "minimumDependencyAge": 0,
   "license": "MIT"
 }
