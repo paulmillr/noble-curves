@@ -1,6 +1,6 @@
-import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import { sha512 } from '@noble/hashes/sha2.js';
-import { describe, should } from '@paulmillr/jsbt/test.js';
+import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
+import { describe, it } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql, throws } from 'node:assert';
 import type {
   DKG_Round1,
@@ -19,11 +19,11 @@ import { ed25519, ed25519_FROST, ristretto255, ristretto255_FROST } from '../src
 import { ed448, ed448_FROST } from '../src/ed448.ts';
 import { p256, p256_FROST } from '../src/nist.ts';
 import {
-  __TEST as secpTEST,
   schnorr,
   schnorr_FROST,
   secp256k1,
   secp256k1_FROST,
+  __TEST as secpTEST,
 } from '../src/secp256k1.ts';
 import { bytesToNumberBE, concatBytes, numberToBytesBE, numberToBytesLE } from '../src/utils.ts';
 import { json } from './utils.ts';
@@ -164,7 +164,7 @@ const VECTORS: Record<string, Suite> = {
   ),
 };
 
-should('signShare rejects nonce reuse across signing sessions across suites', () => {
+it('signShare rejects nonce reuse across signing sessions across suites', () => {
   const check = (suite: typeof ed448_FROST | typeof p256_FROST) => {
     const deal = suite.trustedDealer({ min: 2, max: 2 });
     const ids = Object.keys(deal.secretShares);
@@ -182,7 +182,7 @@ should('signShare rejects nonce reuse across signing sessions across suites', ()
   check(p256_FROST);
 });
 
-should('createFROST rejects opts without a usable Point constructor', () => {
+it('createFROST rejects opts without a usable Point constructor', () => {
   throws(() =>
     createFROST({ name: 'FROST-TEST-SHA512-v1', hash: sha512, Fn: ed25519.Point.Fn } as any)
   );
@@ -198,14 +198,11 @@ describe('createFROST', () => {
     return { frost, msg, sig, publicKey };
   };
 
-  should(
-    'createFROST.parsePoint still accepts canonical ed25519 public keys on the verify path',
-    () => {
-      const { frost, msg, sig, publicKey } = create();
-      eql(frost.verify(sig, msg, publicKey), true);
-    }
-  );
-  should('aggregate passes unadjusted public package to verifyShare attribution', () => {
+  it('createFROST.parsePoint still accepts canonical ed25519 public keys on the verify path', () => {
+    const { frost, msg, sig, publicKey } = create();
+    eql(frost.verify(sig, msg, publicKey), true);
+  });
+  it('aggregate passes unadjusted public package to verifyShare attribution', () => {
     const adjusted = new WeakSet<object>();
     const frost = createFROST({
       name: 'TRACE',
@@ -328,7 +325,7 @@ const fullSign = (frost: FROST, msg: Uint8Array) => {
   return { sig, groupPk: publicKey.commitments[0] };
 };
 
-should('aggregated signatures verify under plain single-signer verifiers', () => {
+it('aggregated signatures verify under plain single-signer verifiers', () => {
   const msg = new Uint8Array([1, 2, 3, 4, 5]);
   // FROST(Ed25519, SHA-512) uses the undecorated RFC 8032 challenge hash, so its
   // aggregated output is a plain ed25519 signature for the group public key.
@@ -340,7 +337,7 @@ should('aggregated signatures verify under plain single-signer verifiers', () =>
   eql(schnorr.verify(t.sig, msg, t.groupPk.subarray(1)), true);
 });
 
-should('verify rejects re-encoded signatures (weierstrass uncompressed R)', () => {
+it('verify rejects re-encoded signatures (weierstrass uncompressed R)', () => {
   const msg = new Uint8Array([5, 4, 3, 2, 1]);
   // RFC 9591 SerializeElement is canonical (compressed): the same signature re-encoded
   // with an uncompressed R must not verify.
@@ -375,7 +372,7 @@ describe('FROST (RFC 9591)', () => {
     } = VECTORS[name];
     describe(`${name}`, () => {
       const Fn = frost.utils.Fn;
-      should('identifiers, samples, repair fixtures, and invalid elements', () => {
+      it('identifiers, samples, repair fixtures, and invalid elements', () => {
         const sample = loadSample();
         const repair = loadRepair();
         const element = loadElement();
@@ -462,7 +459,7 @@ describe('FROST (RFC 9591)', () => {
           eql(frost.verify(groupSig, msg, publicKey.commitments[0]), true);
         }
       };
-      should('Example (DKG, no dealer)', () => {
+      it('Example (DKG, no dealer)', () => {
         // Alice, Bob and Carol decide to create 2-3 multisig (this is outside of protocol)
         const signers = { min: 2, max: 3 };
         const alice: Actor = {
@@ -519,7 +516,7 @@ describe('FROST (RFC 9591)', () => {
           [carol.id]: carol.round3.secret,
         });
       });
-      should('Example (trusted dealer)', () => {
+      it('Example (trusted dealer)', () => {
         const signers = { min: 2, max: 3 };
         // Even if no identifiers & secret key provided, we still can generate everything
         // Trusted dealer generates key for everybody
@@ -530,7 +527,7 @@ describe('FROST (RFC 9591)', () => {
         testSign(keys.public, keys.secretShares);
       });
       if (name === 'secp256k1_tr') {
-        should('Taproot single-key signing and x-only verify behavior', () => {
+        it('Taproot single-key signing and x-only verify behavior', () => {
           const msg = new Uint8Array([9, 8, 7, 6]);
           const secretKey = secp256k1SecretByY(false);
           const sig = schnorr_FROST.sign(msg, secretKey);
@@ -552,7 +549,7 @@ describe('FROST (RFC 9591)', () => {
             schnorr_FROST.verify(xOnlySig, xOnlyMsg, secp256k1.getPublicKey(xOnlySecretKey, false))
           );
         });
-        should('frostTweak helpers: undefined merkleRoot disables TapTweak', () => {
+        it('frostTweak helpers: undefined merkleRoot disables TapTweak', () => {
           const Point = secp256k1.Point;
           const Fn = Point.Fn;
           const keys = schnorr_FROST.trustedDealer({ min: 2, max: 3 });
@@ -577,28 +574,28 @@ describe('FROST (RFC 9591)', () => {
           eql(tweaked.commitments[0], evenVK.add(Point.BASE.multiply(t)).toBytes());
         });
       }
-      should('reject non-canonical identifier hex', () => {
+      it('reject non-canonical identifier hex', () => {
         const bad = frost.Identifier.fromNumber(11).toUpperCase();
         const good = frost.Identifier.fromNumber(12);
         throws(() => frost.trustedDealer({ min: 2, max: 2 }, [bad, good]));
       });
-      should('reject duplicate explicit identifiers in trustedDealer', () => {
+      it('reject duplicate explicit identifiers in trustedDealer', () => {
         const id = frost.Identifier.fromNumber(7);
         throws(() => frost.trustedDealer({ min: 2, max: 2 }, [id, id]));
       });
-      should('trustedDealer returns one shared public package', () => {
+      it('trustedDealer returns one shared public package', () => {
         const deal = frost.trustedDealer({ min: 2, max: 2 });
         eql(Object.keys(deal).sort(), ['public', 'secretShares']);
         eql(Object.keys(deal.public).sort(), ['commitments', 'signers', 'verifyingShares']);
         eql(deal.public.signers, { min: 2, max: 2 });
       });
-      should('trustedDealer secrets do not alias commitment buffers', () => {
+      it('trustedDealer secrets do not alias commitment buffers', () => {
         const deal = frost.trustedDealer({ min: 2, max: 2 });
         const before = Uint8Array.from(deal.public.commitments[0]);
         deal.secretShares[Object.keys(deal.secretShares)[0]].signingShare[0] ^= 1;
         eql(deal.public.commitments[0], before);
       });
-      should('DKG round3 does not alias public and secret buffers', () => {
+      it('DKG round3 does not alias public and secret buffers', () => {
         const signers = { min: 2, max: 2 };
         const alice = frost.DKG.round1(frost.Identifier.fromNumber(1), signers);
         const bob = frost.DKG.round1(frost.Identifier.fromNumber(2), signers);
@@ -615,7 +612,7 @@ describe('FROST (RFC 9591)', () => {
         round3.public.commitments[0][0] ^= 1;
         eql(round3.public.verifyingShares[frost.Identifier.fromNumber(1)], before);
       });
-      should('normalize unsorted commitment lists', () => {
+      it('normalize unsorted commitment lists', () => {
         const { publicKey, secretShares, ids, msg, secretNonces, commitmentList } =
           createSession(frost);
         const nonces2 = {
@@ -639,7 +636,7 @@ describe('FROST (RFC 9591)', () => {
         );
         eql(reversedShare, sortedShare);
       });
-      should('reject mismatched signer commitment pairs', () => {
+      it('reject mismatched signer commitment pairs', () => {
         const { publicKey, secretShares, ids, msg, secretNonces, commitmentList } =
           createSession(frost);
         const tampered = [...commitmentList];
@@ -652,7 +649,7 @@ describe('FROST (RFC 9591)', () => {
           frost.signShare(secretShares[ids[0]], publicKey, secretNonces[ids[0]], tampered, msg)
         );
       });
-      should('reject under-threshold signing sessions before share generation', () => {
+      it('reject under-threshold signing sessions before share generation', () => {
         const signers = { min: 2, max: 3 };
         const deal = frost.trustedDealer(signers);
         const id = Object.keys(deal.secretShares)[0];
@@ -667,7 +664,7 @@ describe('FROST (RFC 9591)', () => {
           )
         );
       });
-      should('reject over-capacity signing sessions before share generation', () => {
+      it('reject over-capacity signing sessions before share generation', () => {
         const deal = frost.trustedDealer({ min: 2, max: 2 });
         const id = Object.keys(deal.secretShares)[0];
         const { nonces, commitments } = frost.commit(deal.secretShares[id]);
@@ -682,7 +679,7 @@ describe('FROST (RFC 9591)', () => {
           )
         );
       });
-      should('combineSecret rejects duplicate shares beyond threshold', () => {
+      it('combineSecret rejects duplicate shares beyond threshold', () => {
         const signers = { min: 2, max: 3 };
         const deal = frost.trustedDealer(signers);
         const ids = Object.keys(deal.secretShares);
@@ -693,11 +690,11 @@ describe('FROST (RFC 9591)', () => {
           )
         );
       });
-      should('combineSecret rejects more shares than signers.max', () => {
+      it('combineSecret rejects more shares than signers.max', () => {
         const deal = frost.trustedDealer({ min: 2, max: 4 });
         throws(() => frost.combineSecret(Object.values(deal.secretShares), { min: 2, max: 3 }));
       });
-      should('reject renamed signature shares during aggregation', () => {
+      it('reject renamed signature shares during aggregation', () => {
         const { publicKey, secretShares, ids, msg, commitmentList, secretNonces } =
           createSession(frost);
         const sigShares: Record<string, Uint8Array> = {};
@@ -715,7 +712,7 @@ describe('FROST (RFC 9591)', () => {
         };
         throws(() => frost.aggregate(publicKey, commitmentList, msg, renamed));
       });
-      should('reject duplicate commitment identifiers during aggregation', () => {
+      it('reject duplicate commitment identifiers during aggregation', () => {
         const { publicKey, secretShares, ids, msg, commitmentList, secretNonces } =
           createSession(frost);
         const sigShares: Record<string, Uint8Array> = {};
@@ -735,13 +732,13 @@ describe('FROST (RFC 9591)', () => {
             err.cheaters.length === 0
         );
       });
-      should('DKG round2 rejects caller package in others', () => {
+      it('DKG round2 rejects caller package in others', () => {
         const signers = { min: 2, max: 3 };
         const alice = frost.DKG.round1(frost.Identifier.fromNumber(1), signers);
         const bob = frost.DKG.round1(frost.Identifier.fromNumber(2), signers);
         throws(() => frost.DKG.round2(alice.secret, [alice.public, bob.public]));
       });
-      should('DKG round2 rejects malformed higher commitments', () => {
+      it('DKG round2 rejects malformed higher commitments', () => {
         const signers = { min: 2, max: 3 };
         const alice = frost.DKG.round1(frost.Identifier.fromNumber(1), signers);
         const bob = frost.DKG.round1(frost.Identifier.fromNumber(2), signers);
@@ -750,7 +747,7 @@ describe('FROST (RFC 9591)', () => {
         malformed.commitment[1] = new Uint8Array([1]);
         throws(() => frost.DKG.round2(alice.secret, [malformed, carol.public]));
       });
-      should('DKG clean does not mutate shared signers state', () => {
+      it('DKG clean does not mutate shared signers state', () => {
         const signers = { min: 2, max: 3 };
         const alice = frost.DKG.round1(frost.Identifier.fromNumber(1), signers);
         const bob = frost.DKG.round1(frost.Identifier.fromNumber(2), signers);
@@ -759,7 +756,7 @@ describe('FROST (RFC 9591)', () => {
         eql(alice.secret.signers, { min: 2, max: 3 });
         eql(bob.secret.signers, { min: 2, max: 3 });
       });
-      should('DKG round3 rejects tampered local secret state', () => {
+      it('DKG round3 rejects tampered local secret state', () => {
         const signers = { min: 2, max: 2 };
         const alice = frost.DKG.round1(frost.Identifier.fromNumber(1), signers);
         const bob = frost.DKG.round1(frost.Identifier.fromNumber(2), signers);
@@ -770,7 +767,7 @@ describe('FROST (RFC 9591)', () => {
           frost.DKG.round3(alice.secret, [bob.public], [bobRound2[frost.Identifier.fromNumber(1)]])
         );
       });
-      should('DKG round2 can retry after a late round3 failure', () => {
+      it('DKG round2 can retry after a late round3 failure', () => {
         const signers = { min: 2, max: 2 };
         const alice = frost.DKG.round1(frost.Identifier.fromNumber(1), signers);
         const bob = frost.DKG.round1(frost.Identifier.fromNumber(2), signers);
@@ -784,38 +781,35 @@ describe('FROST (RFC 9591)', () => {
         alice.secret.commitment[0] = commitment0;
         eql(frost.DKG.round2(alice.secret, [bob.public]), first);
       });
-      should(
-        'DKG round2 replay does not expose enough shares to recover the local polynomial',
-        () => {
-          const signers = { min: 2, max: 2 };
-          const alice = frost.DKG.round1(frost.Identifier.fromNumber(1), signers);
-          const bob = frost.DKG.round1(frost.Identifier.fromNumber(2), signers);
-          const carol = frost.DKG.round1(frost.Identifier.fromNumber(3), signers);
-          const bobId = bob.public.identifier;
-          const carolId = carol.public.identifier;
-          const first = frost.DKG.round2(alice.secret, [bob.public]);
-          throws(() => {
-            const replay = frost.DKG.round2(alice.secret, [carol.public]);
-            const carolShare = replay[carolId];
-            if (!carolShare) throw new Error('round2 replay did not produce a new recipient share');
-            const recovered = frost.combineSecret(
-              [
-                { identifier: bobId, signingShare: first[bobId].signingShare },
-                { identifier: carolId, signingShare: carolShare.signingShare },
-              ],
-              signers
-            );
-            eql(
-              bytesToHex(recovered),
-              bytesToHex(frost.utils.Fn.toBytes(alice.secret.coefficients![0]))
-            );
-          }, /round2 replay did not produce a new recipient share/);
-        }
-      );
+      it('DKG round2 replay does not expose enough shares to recover the local polynomial', () => {
+        const signers = { min: 2, max: 2 };
+        const alice = frost.DKG.round1(frost.Identifier.fromNumber(1), signers);
+        const bob = frost.DKG.round1(frost.Identifier.fromNumber(2), signers);
+        const carol = frost.DKG.round1(frost.Identifier.fromNumber(3), signers);
+        const bobId = bob.public.identifier;
+        const carolId = carol.public.identifier;
+        const first = frost.DKG.round2(alice.secret, [bob.public]);
+        throws(() => {
+          const replay = frost.DKG.round2(alice.secret, [carol.public]);
+          const carolShare = replay[carolId];
+          if (!carolShare) throw new Error('round2 replay did not produce a new recipient share');
+          const recovered = frost.combineSecret(
+            [
+              { identifier: bobId, signingShare: first[bobId].signingShare },
+              { identifier: carolId, signingShare: carolShare.signingShare },
+            ],
+            signers
+          );
+          eql(
+            bytesToHex(recovered),
+            bytesToHex(frost.utils.Fn.toBytes(alice.secret.coefficients![0]))
+          );
+        }, /round2 replay did not produce a new recipient share/);
+      });
       let i = 0;
 
       for (let signIndex = 0; signIndex < signCount; signIndex++) {
-        should(`sign ${i++}`, () => {
+        it(`sign ${i++}`, () => {
           const t = loadSign(signIndex);
           const signers = { min: +t.config.MIN_PARTICIPANTS, max: +t.config.MAX_PARTICIPANTS };
           const msg = hexToBytes(t.inputs.message);
@@ -907,7 +901,7 @@ describe('FROST (RFC 9591)', () => {
       for (let dkgIndex = 0; dkgIndex < dkgCount; dkgIndex++) {
         // DKG is Distributed Key Generation (not related to Trusted Dealer Key Generation)
         // Awesome naming!
-        should(`dkg ${i++}`, () => {
+        it(`dkg ${i++}`, () => {
           const t = loadDkg(dkgIndex);
           const getInput = (id: number): DkgInput => {
             const input = t.inputs[String(id)];
@@ -1013,4 +1007,4 @@ describe('FROST (RFC 9591)', () => {
   }
 });
 
-should.runWhen(import.meta.url);
+it.runWhen(import.meta.url);

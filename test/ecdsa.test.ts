@@ -10,7 +10,7 @@ import {
   turboshake256,
 } from '@noble/hashes/sha3-addons.js';
 import { sha3_224, sha3_256, sha3_384, sha3_512, shake128, shake256 } from '@noble/hashes/sha3.js';
-import { describe, should } from '@paulmillr/jsbt/test.js';
+import { describe, it } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql, throws } from 'node:assert';
 import { randomBytes } from 'node:crypto';
 import { ecdh, ecdsa, weierstrass } from '../src/abstract/weierstrass.ts';
@@ -87,7 +87,7 @@ describe('ECDSA', () => {
   for (const name in ECDSA) {
     const C = ECDSA[name];
     describe(name, () => {
-      should('signing options, ECDH, hashes, and curve opts', () => {
+      it('signing options, ECDH, hashes, and curve opts', () => {
         // pretty slow, but tests if some combination don't work together.
         for (const format of ['compact', 'recovered', 'der', undefined]) {
           for (const prehash of [true, false, undefined]) {
@@ -133,7 +133,7 @@ describe('ECDSA', () => {
     });
   }
 
-  should('verify() binds recovered signatures to their recovery id', () => {
+  it('verify() binds recovered signatures to their recovery id', () => {
     const msg = Uint8Array.from({ length: 32 }, (_, i) => i);
     const secretKey = Uint8Array.from({ length: 32 }, (_, i) => i + 1);
     const publicKey = p256.getPublicKey(secretKey);
@@ -157,7 +157,7 @@ describe('weierstrass ECDH', () => {
       randomBytes: (len = 0) => new Uint8Array(len).fill(7),
     });
 
-  should('argument-order guards and randomSecretKey lengths', () => {
+  it('argument-order guards and randomSecretKey lengths', () => {
     const alice = p521.utils.randomSecretKey();
     const bob = p521.utils.randomSecretKey();
     const alicePub = p521.getPublicKey(alice);
@@ -181,7 +181,7 @@ describe('weierstrass ECDH', () => {
 describe('ECDSA nonce-blinding RNG probe', () => {
   const msg = new Uint8Array(32).fill(1);
 
-  should('RNG broken at construction downgrades to invertCt; signatures value-identical', () => {
+  it('RNG broken at construction downgrades to invertCt; signatures value-identical', () => {
     const keys = p256.keygen();
     const want = p256.sign(msg, keys.secretKey); // RFC 6979 deterministic, blinded path
     const throwingRng = () => {
@@ -198,7 +198,7 @@ describe('ECDSA nonce-blinding RNG probe', () => {
     }
   });
 
-  should('rogue RNG misbehaving after a good probe makes sign() fail closed', () => {
+  it('rogue RNG misbehaving after a good probe makes sign() fail closed', () => {
     // A stateful RNG can always behave while probed and misbehave later; that case must
     // throw (per-call validation), never silently drop the nonce blinding.
     const keys = p256.keygen();
@@ -214,35 +214,32 @@ describe('ECDSA nonce-blinding RNG probe', () => {
   });
 });
 
-should(
-  'recovered-signature support is not rejected for a valid h=2 curve just because 2n < p',
-  () => {
-    const curve = ecdsa(
-      weierstrass({
-        p: 7n,
-        a: 1n,
-        b: 3n,
-        n: 3n,
-        h: 2n,
-        Gx: 6n,
-        Gy: 1n,
-      }),
-      sha256
-    );
-    const compact = Array.from(new curve.Signature(1n, 1n).toBytes());
-    const recovered = (() => {
-      try {
-        return Array.from(new curve.Signature(1n, 1n).addRecoveryBit(0).toBytes('recovered'));
-      } catch (error) {
-        return `ERR:${(error as Error).message}`;
-      }
-    })();
-    eql(compact, [1, 1]);
-    eql(recovered, [0, 1, 1]);
-  }
-);
+it('recovered-signature support is not rejected for a valid h=2 curve just because 2n < p', () => {
+  const curve = ecdsa(
+    weierstrass({
+      p: 7n,
+      a: 1n,
+      b: 3n,
+      n: 3n,
+      h: 2n,
+      Gx: 6n,
+      Gy: 1n,
+    }),
+    sha256
+  );
+  const compact = Array.from(new curve.Signature(1n, 1n).toBytes());
+  const recovered = (() => {
+    try {
+      return Array.from(new curve.Signature(1n, 1n).addRecoveryBit(0).toBytes('recovered'));
+    } catch (error) {
+      return `ERR:${(error as Error).message}`;
+    }
+  })();
+  eql(compact, [1, 1]);
+  eql(recovered, [0, 1, 1]);
+});
 
-should('ECDSA option-bag APIs reject primitive opts values', () => {
+it('ECDSA option-bag APIs reject primitive opts values', () => {
   const msg = Uint8Array.from({ length: 32 }, (_, i) => i);
   for (const C of Object.values(ECDSA)) {
     const sk = C.utils.randomSecretKey();
@@ -255,4 +252,4 @@ should('ECDSA option-bag APIs reject primitive opts values', () => {
   }
 });
 
-should.runWhen(import.meta.url);
+it.runWhen(import.meta.url);

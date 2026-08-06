@@ -1,8 +1,8 @@
+import { sha256 } from '@noble/hashes/sha2.js';
 import { isBytes } from '@noble/hashes/utils.js';
-import { describe, should } from '@paulmillr/jsbt/test.js';
+import { describe, it } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql } from 'node:assert';
 import { randomBytes } from 'node:crypto';
-import { sha256 } from '@noble/hashes/sha2.js';
 import { DER } from '../src/abstract/der.ts';
 import { ecdh, ecdsa } from '../src/abstract/weierstrass.ts';
 import { bls12_381 } from '../src/bls12-381.ts';
@@ -10,10 +10,10 @@ import { bn254 } from '../src/bn254.ts';
 import {
   ED25519_TORSION_SUBGROUP,
   ed25519,
-  ed25519ctx,
-  ed25519ph,
   ed25519_FROST,
   ed25519_hasher,
+  ed25519ctx,
+  ed25519ph,
   ristretto255,
   ristretto255_FROST,
   ristretto255_hasher,
@@ -25,9 +25,9 @@ import {
   decaf448,
   decaf448_hasher,
   ed448,
-  ed448ph,
   ed448_FROST,
   ed448_hasher,
+  ed448ph,
   x448,
 } from '../src/ed448.ts';
 import {
@@ -38,13 +38,13 @@ import {
   jubjub,
 } from '../src/misc.ts';
 import {
-  p256 as secp256r1,
   p256_FROST,
   p256_hasher,
-  p384 as secp384r1,
   p384_hasher,
-  p521 as secp521r1,
   p521_hasher,
+  p256 as secp256r1,
+  p384 as secp384r1,
+  p521 as secp521r1,
 } from '../src/nist.ts';
 import { schnorr, secp256k1 } from '../src/secp256k1.ts';
 import * as webcrypto from '../src/webcrypto.ts';
@@ -78,7 +78,7 @@ describe('info', () => {
   for (const name in CURVES) {
     const curve = CURVES[name];
     describe(name, () => {
-      should('keys and keygen', () => {
+      it('keys and keygen', () => {
         const len = curve.lengths;
         const privateKey = curve.utils.randomSecretKey();
         eql(privateKey.length, len.secretKey);
@@ -106,7 +106,7 @@ describe('info', () => {
     });
   }
 
-  should('freezes signer-style public bundles', () => {
+  it('freezes signer-style public bundles', () => {
     const signers = [
       ['ed25519', ed25519],
       ['ed25519ctx', ed25519ctx],
@@ -144,7 +144,7 @@ describe('info', () => {
     }
   });
 
-  should('freezes secp256k1 and schnorr helper surfaces', () => {
+  it('freezes secp256k1 and schnorr helper surfaces', () => {
     frozen('secp256k1', secp256k1);
     frozen('secp256k1.Point', secp256k1.Point);
     frozen('secp256k1.utils', secp256k1.utils);
@@ -189,7 +189,7 @@ describe('info', () => {
     blocked('schnorr.lengths', schnorr.lengths as unknown as Record<string, unknown>, 'seed', 1);
   });
 
-  should('freezes montgomery-style public bundles', () => {
+  it('freezes montgomery-style public bundles', () => {
     const curves = [
       ['x25519', x25519],
       ['x448', x448],
@@ -208,7 +208,7 @@ describe('info', () => {
     }
   });
 
-  should('freezes prime-order wrapper bundles', () => {
+  it('freezes prime-order wrapper bundles', () => {
     const curves = [
       ['ristretto255', ristretto255],
       ['decaf448', decaf448],
@@ -226,7 +226,7 @@ describe('info', () => {
     }
   });
 
-  should('freezes point prototypes and singleton instances', () => {
+  it('freezes point prototypes and singleton instances', () => {
     const points = [
       ['ed25519.Point', ed25519.Point],
       ['p256.Point', secp256r1.Point],
@@ -273,7 +273,7 @@ describe('info', () => {
     }
   });
 
-  should('freezes hashers', () => {
+  it('freezes hashers', () => {
     const hashers = [
       ['ed25519_hasher', ed25519_hasher],
       ['ed448_hasher', ed448_hasher],
@@ -319,7 +319,7 @@ describe('info', () => {
     }
   });
 
-  should('freezes FROST bundles and helper namespaces', () => {
+  it('freezes FROST bundles and helper namespaces', () => {
     const suites = [
       ['ed25519_FROST', ed25519_FROST],
       ['ed448_FROST', ed448_FROST],
@@ -350,7 +350,7 @@ describe('info', () => {
     }
   });
 
-  should('freezes pairing bundles and nested namespaces', () => {
+  it('freezes pairing bundles and nested namespaces', () => {
     frozen('bls12_381', bls12_381);
     frozen('bls12_381.G1', bls12_381.G1);
     frozen('bls12_381.G2', bls12_381.G2);
@@ -408,7 +408,7 @@ describe('info', () => {
     });
   });
 
-  should('freezes tower field instances', () => {
+  it('freezes tower field instances', () => {
     const suites = [
       ['bn254', bn254.fields],
       ['bls12_381', bls12_381.fields],
@@ -439,7 +439,7 @@ describe('info', () => {
     }
   });
 
-  should('freezes exported debug arrays', () => {
+  it('freezes exported debug arrays', () => {
     const arrays = [
       ['ED25519_TORSION_SUBGROUP', ED25519_TORSION_SUBGROUP],
       ['ED448_TORSION_SUBGROUP', ED448_TORSION_SUBGROUP],
@@ -450,7 +450,7 @@ describe('info', () => {
     }
   });
 
-  should('freezes factory-built weierstrass helper metadata', () => {
+  it('freezes factory-built weierstrass helper metadata', () => {
     const dh = ecdh(secp256r1.Point);
     const curve = ecdsa(secp256r1.Point, sha256);
     frozen('ecdh.lengths', dh.lengths);
@@ -459,7 +459,7 @@ describe('info', () => {
     blocked('ecdsa.lengths', curve.lengths as unknown as Record<string, unknown>, 'signature', 1);
   });
 
-  should('freezes webcrypto and DER helper surfaces', () => {
+  it('freezes webcrypto and DER helper surfaces', () => {
     const suites = [
       ['webcrypto.ed25519', webcrypto.ed25519],
       ['webcrypto.ed448', webcrypto.ed448],
@@ -474,4 +474,4 @@ describe('info', () => {
   });
 });
 
-should.runWhen(import.meta.url);
+it.runWhen(import.meta.url);

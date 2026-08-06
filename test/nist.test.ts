@@ -1,6 +1,6 @@
 import { sha224, sha256, sha384, sha512 } from '@noble/hashes/sha2.js';
 import { sha3_224, sha3_256, sha3_384, sha3_512, shake128, shake256 } from '@noble/hashes/sha3.js';
-import { describe, should } from '@paulmillr/jsbt/test.js';
+import { describe, it } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql, throws } from 'node:assert';
 import { DER } from '../src/abstract/der.ts';
 import { ecdsa } from '../src/abstract/weierstrass.ts';
@@ -45,7 +45,7 @@ const NIST = {
   secp256k1,
 };
 
-should('fields', () => {
+it('fields', () => {
   const vectors = {
     secp192r1: 0xfffffffffffffffffffffffffffffffeffffffffffffffffn,
     secp224r1: 0xffffffffffffffffffffffffffffffff000000000000000000000001n,
@@ -84,7 +84,7 @@ function verifyECDHVector(test, curve) {
 
 describe('wycheproof ECDH', () => {
   for (const curveName of ['secp224r1', 'secp256r1', 'secp384r1', 'secp521r1', 'secp256k1']) {
-    should(curveName, () => {
+    it(curveName, () => {
       const vecdh = deepJson('ecdh');
       const group = vecdh.testGroups.find((group) => group.curve === curveName);
       if (!group) throw new Error('missing ECDH vector: ' + curveName);
@@ -128,7 +128,7 @@ describe('wycheproof ECDH', () => {
     const { curve, tests } = WYCHEPROOF_ECDH[name];
     for (let i = 0; i < tests.length; i++) {
       const file = tests[i];
-      should(`additional ${name}`, () => {
+      it(`additional ${name}`, () => {
         const curveTests = deepJson(file);
         for (let j = 0; j < curveTests.testGroups.length; j++) {
           const group = curveTests.testGroups[j];
@@ -330,7 +330,7 @@ function runWycheproof(name, CURVE, group, index) {
 }
 
 describe('wycheproof ECDSA', () => {
-  should('generic', () => {
+  it('generic', () => {
     const vecdsa = deepJson('ecdsa');
     for (const group of vecdsa.testGroups) {
       // Tested in secp256k1.test.js
@@ -380,7 +380,7 @@ describe('wycheproof ECDSA', () => {
       for (const hName in hashes) {
         const { hash, tests } = hashes[hName];
         const CURVE = ecdsa(curve.Point, hash);
-        should(`${name}/${hName}`, () => {
+        it(`${name}/${hName}`, () => {
           for (let i = 0; i < tests.length; i++) {
             const groups = deepJson(tests[i]).testGroups;
             for (let j = 0; j < groups.length; j++) {
@@ -397,7 +397,7 @@ describe('wycheproof ECDSA', () => {
 const hexToBigint = (hex) => BigInt(`0x${hex}`);
 describe('RFC6979', () => {
   for (const name of ['P192', 'P224', 'P256', 'P384', 'P521']) {
-    should(name, () => {
+    it(name, () => {
       const rfc6979 = json('./vectors/rfc6979.json');
       const v = rfc6979.find((v) => v.curve === name);
       if (!v) throw new Error('missing RFC6979 vector: ' + name);
@@ -437,7 +437,7 @@ describe('RFC6979', () => {
   }
 });
 
-should('properly add leading zero to DER', () => {
+it('properly add leading zero to DER', () => {
   throws(() => DER._tlv.encode(256, ''));
   throws(() => DER._tlv.encode(1.5 as any, ''));
   throws(() => DER._tlv.encode(0x02, null as any), /string|type=object/i);
@@ -486,7 +486,7 @@ should('properly add leading zero to DER', () => {
   eql(DER.toSig(hexToBytes(DER.hexFromSig(zero))), zero);
 });
 
-should('have proper GLV endomorphism logic in secp256k1', () => {
+it('have proper GLV endomorphism logic in secp256k1', () => {
   const endoVectors = json('./vectors/secp256k1/endomorphism.json');
   const Point = secp256k1.Point;
   for (let item of endoVectors) {
@@ -497,7 +497,7 @@ should('have proper GLV endomorphism logic in secp256k1', () => {
   }
 });
 
-should('P256/P521 edge cases', () => {
+it('P256/P521 edge cases', () => {
   const a = { x: 0n, y: 0x99b7a386f1d07c29dbcc42a27b5f9449abe3d50de25178e8d7407a95e8b06c0bn };
   const b = { x: 0n, y: 0x66485c780e2f83d72433bd5d84a06bb6541c2af31dae871728bf856a174f93f4n };
   const pa = new p256.Point(a.x, a.y, 1n);
@@ -531,4 +531,4 @@ should('P256/P521 edge cases', () => {
   throws(() => Fn.fromBytes(canonical.subarray(1)));
 });
 
-should.runWhen(import.meta.url);
+it.runWhen(import.meta.url);

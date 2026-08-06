@@ -1,20 +1,20 @@
-import { describe, should } from '@paulmillr/jsbt/test.js';
+import { describe, it } from '@paulmillr/jsbt/test.js';
 import * as fc from 'fast-check';
 import { deepStrictEqual as eql, throws } from 'node:assert';
 import {
   CURVES,
+  ScalarMultiplier,
   createCurveFields,
   edwards,
   getOtherCurve,
   hex,
   hexToBytes,
+  interleavedMSMUnsafe,
   invert,
   mod,
-  ScalarMultiplier,
   mulAddUnsafe,
   normalizeZ,
   pippenger,
-  interleavedMSMUnsafe,
   weierstrass,
 } from './point.helpers.ts';
 import { getTypeTests } from './utils.ts';
@@ -44,7 +44,7 @@ function equal(a, b, comment) {
 }
 
 describe('basic curve tests', () => {
-  should('curve field constructors validate inputs', () => {
+  it('curve field constructors validate inputs', () => {
     throws(
       () => createCurveFields('weierstrass', validWeierstrass, null as never),
       /expected valid options object/,
@@ -80,7 +80,7 @@ describe('basic curve tests', () => {
     describe(title, () => {
       describe('basic group laws', () => {
         // Here we check basic group laws, to verify that points works as group
-        should('deterministic and random group laws', () => {
+        it('deterministic and random group laws', () => {
           equal(G[0].double(), G[0], '(0*G).double() = 0');
           equal(G[0].add(G[0]), G[0], '0*G + 0*G = 0');
           equal(G[0].subtract(G[0]), G[0], '0*G - 0*G = 0');
@@ -208,7 +208,7 @@ describe('basic curve tests', () => {
       // special case for add, subtract, equals, multiply. NOT multiplyUnsafe
       // [0n, '0n'],
 
-      should('add/subtract type check', () => {
+      it('add/subtract type check', () => {
         for (const op of ['add', 'subtract']) {
           for (let [item, repr_] of getTypeTests()) {
             throws(() => G[1][op](item), `${op}: ${repr_}`);
@@ -227,7 +227,7 @@ describe('basic curve tests', () => {
         }
       });
 
-      should('equals type check', () => {
+      it('equals type check', () => {
         const op = 'equals';
         for (let [item, repr_] of getTypeTests()) {
           throws(() => G[1][op](item), repr_);
@@ -242,7 +242,7 @@ describe('basic curve tests', () => {
         throws(() => G[1].equals(o.BASE), 'other curve point');
       });
 
-      should('multiply type check', () => {
+      it('multiply type check', () => {
         for (const op of ['multiply', 'multiplyUnsafe']) {
           if (!p.BASE[op]) continue;
           for (let [item, repr_] of getTypeTests()) {
@@ -263,7 +263,7 @@ describe('basic curve tests', () => {
 
       describe('multiscalar multiplication', () => {
         if (typeof pippenger !== 'function' || typeof interleavedMSMUnsafe !== 'function') return;
-        should('basic, random, and precomputed MSM', () => {
+        it('basic, random, and precomputed MSM', () => {
           const msm = (points, scalars) => pippenger(p, points, scalars);
           equal(msm([p.BASE], [0n]), p.ZERO, '0*G');
           equal(msm([], []), p.ZERO, 'empty');
@@ -343,7 +343,7 @@ describe('basic curve tests', () => {
         });
       });
 
-      should('point serialization roundtrips', () => {
+      it('point serialization roundtrips', () => {
         equal(p.ZERO, p.fromAffine(p.ZERO.toAffine()), '0 = 0');
         equal(p.BASE, p.fromAffine(p.BASE.toAffine()), '1 = 1');
         equal(p.BASE.multiply(2n), p.fromAffine(p.BASE.multiply(2n).toAffine()), '1 = 1');
@@ -378,7 +378,7 @@ describe('basic curve tests', () => {
 
     describe(name, () => {
       // Generic complex things (getPublicKey/sign/verify/getSharedSecret)
-      should('.getPublicKey() type check', () => {
+      it('.getPublicKey() type check', () => {
         for (let [item, repr_] of getTypeTests()) {
           throws(() => C.getPublicKey(item), repr_);
         }
@@ -389,7 +389,7 @@ describe('basic curve tests', () => {
       });
 
       if (C.verify) {
-        should('.verify() accepts valid signatures', () => {
+        it('.verify() accepts valid signatures', () => {
           fc.assert(
             fc.property(FC_HEX, (msgh) => {
               const msg = hexToBytes(msgh);
@@ -412,7 +412,7 @@ describe('basic curve tests', () => {
             `empty: priv=${hex(k.secretKey)},pub=${hex(k.publicKey)},msg=${msg}`
           );
         });
-        should('.sign() type and edge cases', () => {
+        it('.sign() type and edge cases', () => {
           const msg = Uint8Array.of();
           const k = C.keygen();
           C.sign(msg, k.secretKey);
@@ -431,7 +431,7 @@ describe('basic curve tests', () => {
         describe('verify()', () => {
           const msg = hexToBytes('01'.repeat(32));
           const msgWrong = hexToBytes('11'.repeat(32));
-          should('valid, invalid, and type cases', () => {
+          it('valid, invalid, and type cases', () => {
             const k = C.keygen();
             const sig = C.sign(msg, k.secretKey);
             eql(C.verify(sig, msg, k.publicKey), true, 'proper signature');
@@ -450,7 +450,7 @@ describe('basic curve tests', () => {
         });
       }
       if (C.Signature) {
-        should('Signature serialization and recovery', () => {
+        it('Signature serialization and recovery', () => {
           fc.assert(
             fc.property(FC_HEX, (msgh) => {
               const msg = hexToBytes(msgh);
@@ -511,7 +511,7 @@ describe('basic curve tests', () => {
       }
 
       if (C.getSharedSecret) {
-        should('getSharedSecret() should be commutative', () => {
+        it('getSharedSecret() should be commutative', () => {
           for (let i = 0; i < NUM_RUNS; i++) {
             const a = C.keygen();
             const b = C.keygen();
@@ -586,12 +586,12 @@ describe('scalar-mult kernels: toy curve, exhaustive', () => {
   const rngMin = (l = 16) => new Uint8Array(l);
   const rngMax = (l = 16) => new Uint8Array(l).fill(0xff);
 
-  should('N*G == O and (N-1)*G != O', () => {
+  it('N*G == O and (N-1)*G != O', () => {
     eql(nmul[Number(TN)].is0(), true);
     eql(nmul[Number(TN) - 1].is0(), false);
   });
 
-  should('all kernels agree with the naive table on every scalar', () => {
+  it('all kernels agree with the naive table on every scalar', () => {
     const freshG = TPoint.fromAffine(TG.toAffine()); // separate identity: uncached fixed-window path
     const bare = new ScalarMultiplier(TPoint); // no RNG: unblinded CT paths
     const mulMin = new ScalarMultiplier(TPoint, rngMin);
@@ -611,7 +611,7 @@ describe('scalar-mult kernels: toy curve, exhaustive', () => {
     }
   });
 
-  should('cached wNAF at every window width W=1..8 on every scalar', () => {
+  it('cached wNAF at every window width W=1..8 on every scalar', () => {
     for (let W = 1; W <= 8; W++) {
       const Q = TPoint.fromAffine(TG.toAffine());
       Q.precompute(W, false); // eager build; W=1 resets to the un-precomputed paths
@@ -622,7 +622,7 @@ describe('scalar-mult kernels: toy curve, exhaustive', () => {
     }
   });
 
-  should('vartime oversized scalars: reduction mod n, ORDER^4 DoS cap, bounds', () => {
+  it('vartime oversized scalars: reduction mod n, ORDER^4 DoS cap, bounds', () => {
     const bare = new ScalarMultiplier(TPoint);
     const freshG = TPoint.fromAffine(TG.toAffine());
     // ScalarMultiplier.mulUnsafe routes oversized scalars through the allowOversized wNAF path
@@ -644,7 +644,7 @@ describe('scalar-mult kernels: toy curve, exhaustive', () => {
     throws(() => mulMin.mulCTBlinded(TG, TN));
   });
 
-  should('blind determinism and ZERO handling', () => {
+  it('blind determinism and ZERO handling', () => {
     const s = 777n % TN;
     const base0 = TG.multiply(s);
     // multiply() draws a fresh random blind per call; the result must not depend on it
@@ -653,7 +653,7 @@ describe('scalar-mult kernels: toy curve, exhaustive', () => {
     eql(TZ.multiplyUnsafe(5n).is0(), true);
   });
 
-  should('mulAddUnsafe: dense grid, edges, oversized, invalid inputs', () => {
+  it('mulAddUnsafe: dense grid, edges, oversized, invalid inputs', () => {
     const G2 = TG.double();
     const G3 = G2.add(TG);
     for (let s1 = 0n; s1 < TN; s1 += 5n) {
@@ -682,7 +682,7 @@ describe('scalar-mult kernels: toy curve, exhaustive', () => {
     throws(() => mulAddUnsafe(TPoint, [{} as never], [1n]), 'foreign point');
   });
 
-  should('pippenger and interleavedMSMUnsafe vs the naive table', () => {
+  it('pippenger and interleavedMSMUnsafe vs the naive table', () => {
     const { rndBelow } = makeRng(0xdeadbeefn);
     const G2 = TG.double();
     const G3 = G2.add(TG);
@@ -721,7 +721,7 @@ describe('scalar-mult kernels: toy curve, exhaustive', () => {
     }
   });
 
-  should('normalizeZ normalizes Z without changing values', () => {
+  it('normalizeZ normalizes Z without changing values', () => {
     const G2 = TG.double();
     const batch = [TG, G2, TZ, G2.double()];
     const norm = normalizeZ(TPoint, batch);
@@ -770,7 +770,7 @@ describe('scalar-mult vs naive reference: real curves', () => {
   // secp256k1 exercises the GLV endo path; p256 the plain weierstrass path; ed25519 the
   // cofactored edwards path.
   for (const name of ['secp256k1', 'secp256r1', 'ed25519']) {
-    should(`${name}: edge + random scalars across kernels`, () => {
+    it(`${name}: edge + random scalars across kernels`, () => {
       const Point = CURVES[name].Point;
       const n = Point.Fn.ORDER;
       const G = Point.BASE;
@@ -797,7 +797,7 @@ describe('scalar-mult vs naive reference: real curves', () => {
     });
   }
 
-  should('joint mulAddUnsafe (incl. GLV endo split) vs naive', () => {
+  it('joint mulAddUnsafe (incl. GLV endo split) vs naive', () => {
     const { rndBelow } = makeRng(0x5eedn);
     for (const name of ['secp256k1', 'secp256r1']) {
       const Point = CURVES[name].Point;
@@ -822,7 +822,7 @@ describe('scalar-mult vs naive reference: real curves', () => {
     }
   });
 
-  should('pippenger/interleaved on secp256k1 + cross-curve point rejection', () => {
+  it('pippenger/interleaved on secp256k1 + cross-curve point rejection', () => {
     const Point = CURVES.secp256k1.Point;
     const n = Point.Fn.ORDER;
     const G = Point.BASE;
@@ -862,4 +862,4 @@ describe('scalar-mult vs naive reference: real curves', () => {
   });
 });
 
-should.runWhen(import.meta.url);
+it.runWhen(import.meta.url);

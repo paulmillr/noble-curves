@@ -1,4 +1,4 @@
-import { describe, should } from '@paulmillr/jsbt/test.js';
+import { describe, it } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql } from 'node:assert';
 import { __TEST as montTest } from '../src/abstract/montgomery.ts';
 import { x25519 } from '../src/ed25519.ts';
@@ -6,7 +6,7 @@ import { x448 } from '../src/ed448.ts';
 import { numberToBytesLE } from '../src/utils.ts';
 
 describe('Montgomery low-order keys', () => {
-  should('reject low-order public keys', () => {
+  it('reject low-order public keys', () => {
     // Every u whose order divides the cofactor, on the curve or on its quadratic twist.
     // Same set libsodium and post-CVE-2017-0379 Libgcrypt blocklist. Rejection must happen
     // before the ladder runs, so an unauthenticated peer cannot use these as a free timing
@@ -75,7 +75,7 @@ describe('Montgomery cswap', () => {
     return mod(acc, P);
   };
 
-  should('cmask selects P / P + 1 from the low bit alone', () => {
+  it('cmask selects P / P + 1 from the low bit alone', () => {
     for (const P of PRIMES) {
       // Every value the ladder actually feeds cmask: `kx >> t` at every t, plus k itself.
       // A formula that mishandled wide or sparse inputs would show up here, not on small ints.
@@ -93,7 +93,7 @@ describe('Montgomery cswap', () => {
     }
   });
 
-  should('cswap keeps on P and swaps on P + 1', () => {
+  it('cswap keeps on P and swaps on P + 1', () => {
     for (const P of PRIMES) {
       const keep = cmask(P, 0n);
       const swapMask = cmask(P, 1n);
@@ -121,7 +121,7 @@ describe('Montgomery cswap', () => {
     }
   });
 
-  should('cswap requires canonical inputs', () => {
+  it('cswap requires canonical inputs', () => {
     // Documented precondition, not a bug: cswap skips validation because it runs twice per
     // ladder round. Pin the failure mode so nobody "optimizes" a caller into feeding it
     // unreduced values - the kept side silently returns a wrong representative.
@@ -131,7 +131,7 @@ describe('Montgomery cswap', () => {
     eql(swap(cmask(P, 0n), 1n, 3n), { x_2: 1n, x_3: 3n }); // reduced: correct
   });
 
-  should('cswap drives the ladder exactly like the RFC 7748 reference', () => {
+  it('cswap drives the ladder exactly like the RFC 7748 reference', () => {
     // RFC 7748 tracks `swap` across rounds and swaps conditionally; this implementation
     // recomputes the bit per round and uses the same branchless helper for both selectors. Check
     // the two agree on the full sequence of states, for both curves' bit widths.
@@ -169,4 +169,4 @@ describe('Montgomery cswap', () => {
   });
 });
 
-should.runWhen(import.meta.url);
+it.runWhen(import.meta.url);

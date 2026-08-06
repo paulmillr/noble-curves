@@ -1,5 +1,5 @@
 import { hexToBytes } from '@noble/hashes/utils.js';
-import { describe, should } from '@paulmillr/jsbt/test.js';
+import { describe, it } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql, throws } from 'node:assert';
 import { bn254 } from '../src/bn254.ts';
 import { bytesToNumberBE } from '../src/utils.ts';
@@ -10,14 +10,14 @@ const loadSeda = async () => (await import('./vectors/bn254/seda.js')).default;
 
 describe('bn254', () => {
   const { Fp2, Fp6, Fp12 } = bn254.fields;
-  should('Point.ZERO uses SEC1 infinity encoding 0x00', () => {
+  it('Point.ZERO uses SEC1 infinity encoding 0x00', () => {
     for (const Point of [bn254.G1.Point, bn254.G2.Point]) {
       eql(Point.ZERO.toBytes(), Uint8Array.of(0));
       eql(Point.ZERO.toBytes(false), Uint8Array.of(0));
       eql(Point.fromBytes(Uint8Array.of(0)).is0(), true);
     }
   });
-  should('Fp2', () => {
+  it('Fp2', () => {
     const x = {
       c0: 9175274256610746571769806138441460978067247223835479920885065774008687444157n,
       c1: 20773477212147349335400672939850062067877721538384265447234655811868542594493n,
@@ -109,7 +109,7 @@ describe('bn254', () => {
       ])
     );
   });
-  should('Fp6', () => {
+  it('Fp6', () => {
     const x = {
       c0: {
         c0: 14551901853310307118181117653102171756020286507151693083446930124375536995872n,
@@ -252,7 +252,7 @@ describe('bn254', () => {
   });
 
   describe('Fp12', () => {
-    should('Basic', () => {
+    it('Basic', () => {
       const x = Fp12.fromBigTwelve([
         14551901853310307118181117653102171756020286507151693083446930124375536995872n,
         9312135802322424742640599513015426415694425842442244572104764725304978020017n,
@@ -470,7 +470,7 @@ describe('bn254', () => {
         ])
       );
     });
-    should('finalExponentiate', () => {
+    it('finalExponentiate', () => {
       const mul = Fp12.fromBigTwelve([
         0x1f7e1915f79c255833f7a13152cbde37e75c7477b0e9e43bd7682159c581eb59n,
         0x0b87ab9f76ec58d51764793075679db7ef021b6e9947588cdbfe718efe93313en,
@@ -568,7 +568,7 @@ describe('bn254', () => {
         ])
       );
     });
-    should('Sparse multiplication', () => {
+    it('Sparse multiplication', () => {
       // Sparse
       const f12m = Fp12.fromBigTwelve([
         14244494172137254969594643025187612313596583059399776446481360252038625225561n,
@@ -587,7 +587,7 @@ describe('bn254', () => {
     });
   });
 
-  should(`Basic`, () => {
+  it(`Basic`, () => {
     // Verified with py_ecc
 
     // Ok, this seems correct?
@@ -634,7 +634,7 @@ describe('bn254', () => {
       ])
     );
   });
-  should('frobeniusMap is x^(p^i): ground truth at i=1, composition above', () => {
+  it('frobeniusMap is x^(p^i): ground truth at i=1, composition above', () => {
     // Pins the hardcoded Fp2 conjugation, the Fp6/Fp12 power%6 / power%12 shortcuts, and the
     // coefficient tables to the mathematical definition φ(x) = x^p, for generic (non-cyclotomic)
     // field elements.
@@ -664,7 +664,7 @@ describe('bn254', () => {
     eql(Fp2.eql(Fp2.frobeniusMap(x2, 1), Fp2.pow(x2, p)), true, 'Fp2 φ(x) == x^p');
     eql(Fp2.eql(Fp2.frobeniusMap(Fp2.frobeniusMap(x2, 1), 1), x2), true, 'Fp2 φ^2 == id');
   });
-  should('pairing without final exponent', () => {
+  it('pairing without final exponent', () => {
     eql(
       bn254.pairing(bn254.G1.Point.BASE, bn254.G2.Point.BASE, false),
       Fp12.fromBigTwelve([
@@ -683,7 +683,7 @@ describe('bn254', () => {
       ])
     );
   });
-  should('Cross-tests', () => {
+  it('Cross-tests', () => {
     // verify that we work exactly same as:
     // - https://github.com/paritytech/bn (old version)
     // - https://github.com/zcash-hackworks/bn
@@ -808,7 +808,7 @@ describe('bn254', () => {
       eql(res, out);
     };
 
-    should('add, mul, and pairing', () => {
+    it('add, mul, and pairing', () => {
       const input =
         '0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002';
       const output =
@@ -840,7 +840,7 @@ describe('bn254', () => {
       ];
       for (const { input, output } of vectors) ethPairing(input, output);
     });
-    should('sedaprotocol', async () => {
+    it('sedaprotocol', async () => {
       const seda = await loadSeda();
       for (const t of seda.add) {
         const Ax = BigInt(`0x${t.x1}`);
@@ -863,7 +863,7 @@ describe('bn254', () => {
         eql(A.multiply(scalar).toAffine(), { x: Cx, y: Cy });
       }
     });
-    should('eth dump EC_ADD, EC_MUL, and EC_PAIRING', async () => {
+    it('eth dump EC_ADD, EC_MUL, and EC_PAIRING', async () => {
       const ethDump = await loadEthDump();
       for (const [input, output] of ethDump.NOBLE_DUMP_EC_ADD) ethAdd(input, output);
       for (const [input, output] of ethDump.NOBLE_DUMP_EC_MUL) ethMul(input, output);
@@ -872,4 +872,4 @@ describe('bn254', () => {
   });
 });
 
-should.runWhen(import.meta.url);
+it.runWhen(import.meta.url);

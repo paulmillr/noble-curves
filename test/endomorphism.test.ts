@@ -1,5 +1,5 @@
+import { describe, it } from '@paulmillr/jsbt/test.js';
 import * as fc from 'fast-check';
-import { describe, should } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual, throws } from 'node:assert';
 import {
   _splitEndoScalar as splitScalar,
@@ -102,7 +102,7 @@ function hex(n) {
 }
 
 describe('Endomorphism', () => {
-  should('known curves', () => {
+  it('known curves', () => {
     for (let [name, e] of Object.entries(curvesEndo)) {
       const p = BigInt(e.p);
       const n = BigInt(e.n);
@@ -169,7 +169,7 @@ describe('Endomorphism', () => {
   });
 });
 
-should('_splitEndoScalar rejects scalars outside 0..n-1', () => {
+it('_splitEndoScalar rejects scalars outside 0..n-1', () => {
   const n = BigInt('0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141');
   const basis = [
     [BigInt('0x3086d221a7d46bcde86c90e49284eb15'), -BigInt('0xe4437ed6010e88286f547fa90abfe4c3')],
@@ -180,4 +180,4 @@ should('_splitEndoScalar rejects scalars outside 0..n-1', () => {
   throws(() => splitScalar(n + 1n, basis as any, n));
 });
 
-should.runWhen(import.meta.url);
+it.runWhen(import.meta.url);

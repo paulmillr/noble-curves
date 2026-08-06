@@ -1,11 +1,11 @@
 import { sha256 } from '@noble/hashes/sha2.js';
-import { describe, should } from '@paulmillr/jsbt/test.js';
+import { describe, it } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql, notDeepStrictEqual, throws } from 'node:assert';
-import { edwards } from '../src/abstract/edwards.ts';
-import { montgomery } from '../src/abstract/montgomery.ts';
-import { Field } from '../src/abstract/modular.ts';
 import { normalizeZ, ScalarMultiplier } from '../src/abstract/curve.ts';
-import { __TEST as towerTest, tower12 } from '../src/abstract/tower.ts';
+import { edwards } from '../src/abstract/edwards.ts';
+import { Field } from '../src/abstract/modular.ts';
+import { montgomery } from '../src/abstract/montgomery.ts';
+import { tower12, __TEST as towerTest } from '../src/abstract/tower.ts';
 import { ecdsa, weierstrass } from '../src/abstract/weierstrass.ts';
 import { bls12_381 } from '../src/bls12-381.ts';
 import { bn254 } from '../src/bn254.ts';
@@ -15,7 +15,7 @@ import { secp256k1 } from '../src/secp256k1.ts';
 import { json } from './utils.ts';
 
 describe('edge cases', () => {
-  should('bigInt private keys', () => {
+  it('bigInt private keys', () => {
     // Doesn't support bigints anymore
     throws(() => ed25519.sign(Uint8Array.of(), 123n));
     throws(() => ed25519.getPublicKey(123n));
@@ -25,7 +25,7 @@ describe('edge cases', () => {
     throws(() => secp256k1.sign(Uint8Array.of(), 123n));
   });
 
-  should('x25519 integer range rejects unclamped values above 8*(2^251-1)+2^254', () => {
+  it('x25519 integer range rejects unclamped values above 8*(2^251-1)+2^254', () => {
     // RFC 7748: "the resulting integer is of the form 2^254 plus eight times a value
     // between 0 and 2^251 - 1 (inclusive)."
     // Integers 2^255 - 7 .. 2^255 - 1 must be rejected by the defense-in-depth range
@@ -75,7 +75,7 @@ describe('createCurve', () => {
       'brainpoolP192t1',
     ];
     for (const name of vectorNames) {
-      should(name, () => {
+      it(name, () => {
         const wyche_curves = json('./vectors/wycheproof/ec_prime_order_curves_test.json');
         const v = wyche_curves.testGroups[0].tests.find((v) => v.name === name);
         if (!v) throw new Error('missing curve vector: ' + name);
@@ -95,7 +95,7 @@ describe('createCurve', () => {
     }
   });
 
-  should('validates generator is on-curve', () => {
+  it('validates generator is on-curve', () => {
     throws(() =>
       createCurve(
         {
@@ -112,14 +112,14 @@ describe('createCurve', () => {
     );
   });
 
-  should('constructs valid tiny curve helpers without forcing default precomputes', () => {
+  it('constructs valid tiny curve helpers without forcing default precomputes', () => {
     const WPoint = weierstrass({ p: 5n, n: 19n, h: 1n, a: 0n, b: 1n, Gx: 0n, Gy: 1n });
     eql(WPoint.BASE.toHex(false), '040001');
     const EPoint = edwards({ a: 1n, d: 2n, p: 5n, n: 8n, h: 1n, Gx: 2n, Gy: 2n });
     eql(EPoint.BASE.toAffine(), { x: 2n, y: 2n });
   });
 
-  should('falls back to unblinded multiply when RNG is unavailable', () => {
+  it('falls back to unblinded multiply when RNG is unavailable', () => {
     const Point = weierstrass(p256.Point.CURVE(), {
       Fp: p256.Point.Fp,
       Fn: p256.Point.Fn,
@@ -132,7 +132,7 @@ describe('createCurve', () => {
     eql(Point.BASE.multiply(2n).equals(Point.BASE.double()), true);
   });
 
-  should('rebuilds blinded precomputes after cross-instance window changes', () => {
+  it('rebuilds blinded precomputes after cross-instance window changes', () => {
     const randomBytes = (len = 0) => new Uint8Array(len).fill(7);
     const Point = weierstrass(p256.Point.CURVE(), {
       Fp: p256.Point.Fp,
@@ -150,7 +150,7 @@ describe('createCurve', () => {
     eql(r2.equals(r1), true);
   });
 
-  should('uses W=6 wNAF precomputes for blinded multiplication', () => {
+  it('uses W=6 wNAF precomputes for blinded multiplication', () => {
     const randomBytes = (len = 0) => new Uint8Array(len).fill(9);
     const Point = weierstrass(p256.Point.CURVE(), {
       Fp: p256.Point.Fp,
@@ -163,7 +163,7 @@ describe('createCurve', () => {
     }
   });
 
-  should('ScalarMultiplier RNG probe fails open; later misbehavior fails closed', () => {
+  it('ScalarMultiplier RNG probe fails open; later misbehavior fails closed', () => {
     const Point = p256.Point;
     const G = Point.BASE;
     const want = G.multiplyUnsafe(5n);
@@ -202,7 +202,7 @@ describe('createCurve', () => {
     throws(() => new ScalarMultiplier(Point, 123 as never), 'non-function RNG rejected');
   });
 
-  should('setWindowSize validates W; W=1 resets to un-precomputed', () => {
+  it('setWindowSize validates W; W=1 resets to un-precomputed', () => {
     const m = new ScalarMultiplier(p256.Point);
     const Q = p256.Point.BASE.double(); // fresh instance: window sizes are tracked per point
     throws(() => m.setWindowSize(Q, 0));
@@ -214,7 +214,7 @@ describe('createCurve', () => {
     eql(m.hasWindowSize(Q), false, 'W=1 means no window size');
   });
 
-  should('forced extreme blinds keep 256-bit blinded multiplication exact', () => {
+  it('forced extreme blinds keep 256-bit blinded multiplication exact', () => {
     // mulCTBlinded masks the blind's top byte to 10xxxxxx: an all-zero RNG forces the minimum
     // blind 2^127, an all-ff RNG the maximum 0xbfff…ff. Both extremes must stay value-identical
     // to a naive double-and-add reference, incl. on W=6 window-boundary carry-chain scalars.
@@ -265,7 +265,7 @@ describe('createCurve', () => {
     }
   });
 
-  should('uses unblinded multiply for cofactored weierstrass BASE when n*BASE is nonzero', () => {
+  it('uses unblinded multiply for cofactored weierstrass BASE when n*BASE is nonzero', () => {
     let calls = 0;
     const randomBytes = (len = 0) => {
       calls++;
@@ -280,7 +280,7 @@ describe('createCurve', () => {
     eql(calls, before, 'no blind drawn for non-blindable BASE');
   });
 
-  should('mulAddUnsafe matches multiplyUnsafe composition (with and without endo)', () => {
+  it('mulAddUnsafe matches multiplyUnsafe composition (with and without endo)', () => {
     for (const curve of [secp256k1, p256]) {
       const { Point } = curve;
       const G = Point.BASE;
@@ -304,7 +304,7 @@ describe('createCurve', () => {
     }
   });
 
-  should('edwards extended formulas match affine reference for generic param a', () => {
+  it('edwards extended formulas match affine reference for generic param a', () => {
     // Tiny complete twisted Edwards curve with a ∉ {1, p-1}: a=3 is a square and d=8 a
     // non-square mod 13, subgroup order 5, cofactor 4. All shipped curves use a = ±1
     // (ed25519/jubjub: -1, ed448: 1), so this pins the generic mul-by-a code path.
@@ -336,7 +336,7 @@ describe('createCurve', () => {
     }
   });
 
-  should('toAffine accepts precomputed invertedZ and rejects wrong values', () => {
+  it('toAffine accepts precomputed invertedZ and rejects wrong values', () => {
     for (const Point of [secp256k1.Point, ed25519.Point]) {
       const { Fp } = Point;
       const P = Point.BASE.double().add(Point.BASE); // non-normalized: Z != 1
@@ -352,7 +352,7 @@ describe('createCurve', () => {
     throws(() => E.toAffine('1' as any), /invertedZ/);
   });
 
-  should('checks cofactored edwards BASE order before blinding', () => {
+  it('checks cofactored edwards BASE order before blinding', () => {
     let calls = 0;
     const randomBytes = (len = 0) => {
       calls++;
@@ -370,35 +370,29 @@ describe('createCurve', () => {
     eql(calls, beforeBad, 'small-order BASE skips blinding');
   });
 
-  should('keeps edwards generator subgroup validation out of the constructor surface', () => {
+  it('keeps edwards generator subgroup validation out of the constructor surface', () => {
     const Point = edwards({ ...ed25519.Point.CURVE(), Gx: 0n, Gy: 1n });
     eql(Point.BASE.toAffine(), { x: 0n, y: 1n });
     throws(() => Point.BASE.assertValidity(), /ZERO/);
   });
 
-  should(
-    'rejects invalid generator and config inputs without breaking valid constructor smoke cases',
-    () => {
-      const montgomeryBase = {
-        adjustScalarBytes: (bytes: Uint8Array) => bytes,
-        powPminus2: (x: bigint) => x,
-      };
+  it('rejects invalid generator and config inputs without breaking valid constructor smoke cases', () => {
+    const montgomeryBase = {
+      adjustScalarBytes: (bytes: Uint8Array) => bytes,
+      powPminus2: (x: bigint) => x,
+    };
 
-      throws(
-        () => montgomery({ ...montgomeryBase, type: 'x25519' } as any),
-        /param "P" is invalid/
-      );
-      throws(
-        () => montgomery({ ...montgomeryBase, P: 17n, type: 'x25519', randomBytes: 1 } as any),
-        /param "randomBytes" is invalid/
-      );
+    throws(() => montgomery({ ...montgomeryBase, type: 'x25519' } as any), /param "P" is invalid/);
+    throws(
+      () => montgomery({ ...montgomeryBase, P: 17n, type: 'x25519', randomBytes: 1 } as any),
+      /param "randomBytes" is invalid/
+    );
 
-      const Point = weierstrass({ p: 17n, n: 257n, h: 1n, a: 2n, b: 2n, Gx: 5n, Gy: 1n });
-      eql(Point.BASE.toHex(false), '040501');
-    }
-  );
+    const Point = weierstrass({ p: 17n, n: 257n, h: 1n, a: 2n, b: 2n, Gx: 5n, Gy: 1n });
+    eql(Point.BASE.toHex(false), '040501');
+  });
 
-  should('small constructor edge cases', () => {
+  it('small constructor edge cases', () => {
     const Point = weierstrass(
       { p: 5n, n: 257n, h: 1n, a: 0n, b: 1n, Gx: 0n, Gy: 1n },
       { allowInfinityPoint: true }
@@ -434,7 +428,7 @@ describe('Pairings', () => {
       const G1 = G1Point.BASE;
       const G2 = G2Point.BASE;
 
-      should('pairing algebra properties', () => {
+      it('pairing algebra properties', () => {
         const p1 = pairing(G1, G2);
         const p2 = pairing(G1.negate(), G2);
         eql(Fp12.mul(p1, p2), Fp12.ONE, 'negative G1');
@@ -463,7 +457,7 @@ describe('Pairings', () => {
 });
 
 describe('extension fields', () => {
-  should('ORDER values match the tower degrees', () => {
+  it('ORDER values match the tower degrees', () => {
     const { Fp: blsFp, Fp6: blsFp6, Fp12: blsFp12 } = bls12_381.fields;
     const { Fp: bnFp, Fp6: bnFp6, Fp12: bnFp12 } = bn254.fields;
     const { Fp, Fp2, Fp6, Fp12 } = tower12({
@@ -487,7 +481,7 @@ describe('extension fields', () => {
     );
   });
 
-  should('calcFrobeniusCoefficients rejects invalid parameters', () => {
+  it('calcFrobeniusCoefficients rejects invalid parameters', () => {
     throws(() => towerTest.calcFrobeniusCoefficients(Field(19n), 3n, 19n, 6, 1, 4));
 
     const Fp = Field(19n);
@@ -507,7 +501,7 @@ describe('extension fields', () => {
     );
   });
 
-  should('bn254 tower values stay canonical and immutable', () => {
+  it('bn254 tower values stay canonical and immutable', () => {
     const { Fp, Fp2, Fp6, Fp12 } = bn254.fields;
     eql(Fp2.create({ c0: Fp.ORDER, c1: -1n }), { c0: 0n, c1: Fp.ORDER - 1n });
     eql(Fp2.isValid({ c0: Fp.ORDER, c1: 0n }), false);
@@ -569,7 +563,7 @@ describe('extension fields', () => {
     });
   });
 
-  should('tower tuple constructors and config reject sparse or invalid inputs eagerly', () => {
+  it('tower tuple constructors and config reject sparse or invalid inputs eagerly', () => {
     const bad2 = [1n];
     bad2.length = 2;
     throws(() => bn254.fields.Fp2.fromBigTuple(bad2 as bigint[]));
@@ -609,4 +603,4 @@ describe('extension fields', () => {
   });
 });
 
-should.runWhen(import.meta.url);
+it.runWhen(import.meta.url);

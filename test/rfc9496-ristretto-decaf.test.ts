@@ -1,6 +1,6 @@
 import { sha512 } from '@noble/hashes/sha2.js';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
-import { describe, should } from '@paulmillr/jsbt/test.js';
+import { describe, it } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql, throws } from 'node:assert';
 import { ed25519ctx, ristretto255, ristretto255_hasher } from '../src/ed25519.ts';
 import { decaf448, decaf448_hasher, ed448 } from '../src/ed448.ts';
@@ -10,7 +10,7 @@ const RistrettoPoint = ristretto255.Point;
 const DecafPoint = decaf448.Point;
 
 describe('ristretto255', () => {
-  should('follow the byte encodings of small multiples', () => {
+  it('follow the byte encodings of small multiples', () => {
     const encodingsOfSmallMultiples = [
       // This is the identity point
       '0000000000000000000000000000000000000000000000000000000000000000',
@@ -43,7 +43,7 @@ describe('ristretto255', () => {
       P = P.add(B);
     }
   });
-  should('not convert bad bytes encoding', () => {
+  it('not convert bad bytes encoding', () => {
     const badEncodings = [
       // These are all bad because they're non-canonical field encodings.
       '00ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff',
@@ -85,7 +85,7 @@ describe('ristretto255', () => {
       throws(() => RistrettoPoint.fromBytes(b), badBytes);
     }
   });
-  should('create right points from uniform hash', () => {
+  it('create right points from uniform hash', () => {
     const labels = [
       'Ristretto is traditionally a short shot of espresso coffee',
       'made with the normal amount of ground coffee but extracted with',
@@ -111,7 +111,7 @@ describe('ristretto255', () => {
       eql(bytesToHex(point.toBytes()), encodedHashToPoints[i]);
     }
   });
-  should('uniform byte string (from RFC)', () => {
+  it('uniform byte string (from RFC)', () => {
     const VECTORS = [
       {
         I:
@@ -185,7 +185,7 @@ describe('ristretto255', () => {
       eql(point.toHex(), O.replaceAll(' ', ''));
     }
   });
-  should('have proper equality testing', () => {
+  it('have proper equality testing', () => {
     const MAX_255B = BigInt('0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff');
     const bytes255ToNumberLE = (bytes) =>
       ed25519ctx.Point.Fp.create(bytesToNumberLE(bytes) & MAX_255B);
@@ -202,7 +202,7 @@ describe('ristretto255', () => {
     eql(pub.toBytes(), pub2.toBytes());
   });
 
-  should('ristretto255_hasher and wrapper helpers', () => {
+  it('ristretto255_hasher and wrapper helpers', () => {
     const res = ristretto255_hasher.hashToCurve(new Uint8Array(10).fill(5), {
       DST: 'ristretto255_XMD:SHA-512_R255MAP_RO_',
     });
@@ -229,7 +229,7 @@ describe('ristretto255', () => {
 });
 
 describe('decaf448', () => {
-  should('follow the byte encodings of small multiples', () => {
+  it('follow the byte encodings of small multiples', () => {
     const encodingsOfSmallMultiples = [
       // This is the identity point
       '0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
@@ -260,12 +260,12 @@ describe('decaf448', () => {
       P = P.add(B);
     }
   });
-  should('keeps the Decaf base representative aligned with ed448 BASE * 2', () => {
+  it('keeps the Decaf base representative aligned with ed448 BASE * 2', () => {
     const want = DecafPoint.fromAffine(ed448.Point.BASE.toAffine()).multiplyUnsafe(2n);
     eql(DecafPoint.BASE.toBytes(), want.toBytes());
     eql(DecafPoint.BASE.toAffine(), want.toAffine());
   });
-  should('not convert bad bytes encoding', () => {
+  it('not convert bad bytes encoding', () => {
     const badEncodings = [
       // These are all bad because they're non-canonical field encodings.
       '8e24f838059ee9fef1e209126defe53dcd74ef9b6304601c6966099effffffffffffffffffffffffffffffffffffffffffffffffffffffff',
@@ -297,7 +297,7 @@ describe('decaf448', () => {
       throws(() => DecafPoint.fromBytes(b), badBytes);
     }
   });
-  should('create right points from uniform hash', () => {
+  it('create right points from uniform hash', () => {
     const hashes = [
       'cbb8c991fd2f0b7e1913462d6463e4fd2ce4ccdd28274dc2ca1f4165d5ee6cdccea57be3416e166fd06718a31af45a2f8e987e301be59ae6673e963001dbbda80df47014a21a26d6c7eb4ebe0312aa6fffb8d1b26bc62ca40ed51f8057a635a02c2b8c83f48fa6a2d70f58a1185902c0',
       'b6d8da654b13c3101d6634a231569e6b85961c3f4b460a08ac4a5857069576b64428676584baa45b97701be6d0b0ba18ac28d443403b45699ea0fbd1164f5893d39ad8f29e48e399aec5902508ea95e33bc1e9e4620489d684eb5c26bc1ad1e09aba61fabc2cdfee0b6b6862ffc8e55a',
@@ -323,7 +323,7 @@ describe('decaf448', () => {
       eql(point.toBytes(), hexToBytes(encodedHashToPoints[i]));
     }
   });
-  should('uniform byte string (from RFC)', () => {
+  it('uniform byte string (from RFC)', () => {
     const VECTORS = [
       {
         I:
@@ -401,7 +401,7 @@ describe('decaf448', () => {
       eql(point.toHex(), O.replaceAll(' ', ''));
     }
   });
-  should('have proper equality testing', () => {
+  it('have proper equality testing', () => {
     const MAX_448B = BigInt(
       '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
     );
@@ -416,7 +416,7 @@ describe('decaf448', () => {
     eql(pub.equals(DecafPoint.ZERO), false);
   });
 
-  should('decaf448_hasher and wrapper helpers', () => {
+  it('decaf448_hasher and wrapper helpers', () => {
     eql(
       bytesToHex(
         decaf448_hasher
@@ -441,4 +441,4 @@ describe('decaf448', () => {
   });
 });
 
-should.runWhen(import.meta.url);
+it.runWhen(import.meta.url);

@@ -1,5 +1,5 @@
 import { bytesToHex } from '@noble/hashes/utils.js';
-import { describe, should } from '@paulmillr/jsbt/test.js';
+import { describe, it } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql, throws } from 'node:assert';
 import { json } from './utils.ts';
 // Generic tests for all curves in package
@@ -12,9 +12,10 @@ import {
   expand_message_xof,
   hash_to_field,
   isogenyMap,
+  mapToCurveSimpleSWU,
+  SWUFpSqrtRatio,
 } from '../src/abstract/hash-to-curve.ts';
 import { Field } from '../src/abstract/modular.ts';
-import { mapToCurveSimpleSWU, SWUFpSqrtRatio } from '../src/abstract/hash-to-curve.ts';
 import { bls12_381 } from '../src/bls12-381.ts';
 import { ed25519_hasher, ristretto255_hasher } from '../src/ed25519.ts';
 import { decaf448_hasher, ed448_hasher } from '../src/ed448.ts';
@@ -25,7 +26,7 @@ const PREFIX = './vectors/rfc9380-hash-to-curve/';
 const vector = (name) => json(PREFIX + name + '.json');
 
 function testExpandXMD(hash, name) {
-  should(name, () => {
+  it(name, () => {
     const vectors = vector(name);
     for (let i = 0; i < vectors.tests.length; i++) {
       const t = vectors.tests[i];
@@ -41,7 +42,7 @@ function testExpandXMD(hash, name) {
 }
 
 function testExpandXOF(hash, name) {
-  should(name, () => {
+  it(name, () => {
     const vectors = vector(name);
     for (let i = 0; i < vectors.tests.length; i++) {
       const t = vectors.tests[i];
@@ -67,7 +68,7 @@ function stringToFp(s) {
 }
 
 function testCurve(hasher, roName, nuName) {
-  should(roName, () => {
+  it(roName, () => {
     const ro = vector(roName);
     for (let i = 0; i < ro.vectors.length; i++) {
       const t = ro.vectors[i];
@@ -80,7 +81,7 @@ function testCurve(hasher, roName, nuName) {
       eql(p.y, stringToFp(t.P.y), 'Py');
     }
   });
-  should(nuName, () => {
+  it(nuName, () => {
     const nu = vector(nuName);
     for (let i = 0; i < nu.vectors.length; i++) {
       const t = nu.vectors[i];
@@ -96,7 +97,7 @@ function testCurve(hasher, roName, nuName) {
 }
 
 describe('RFC9380 hash-to-curve', () => {
-  should('helpers and wrappers reject empty DST', () => {
+  it('helpers and wrappers reject empty DST', () => {
     const msg = new Uint8Array([1, 2, 3]);
     const err = (fn: () => unknown) => {
       try {
@@ -132,7 +133,7 @@ describe('RFC9380 hash-to-curve', () => {
     );
   });
 
-  should('createHasher default snapshots and option validation', () => {
+  it('createHasher default snapshots and option validation', () => {
     const msg = Uint8Array.of(7, 8, 9);
     const dst = Uint8Array.of(1, 2, 3);
     const snapshotDefaults = {
@@ -229,7 +230,7 @@ describe('RFC9380 hash-to-curve', () => {
     testExpandXMD(sha256, 'expand_message_xmd_SHA256_38');
     testExpandXMD(sha256, 'expand_message_xmd_SHA256_256');
     testExpandXMD(sha512, 'expand_message_xmd_SHA512_38');
-    should('maximum ell and invalid hash guards', () => {
+    it('maximum ell and invalid hash guards', () => {
       const out = expand_message_xmd(new Uint8Array([1, 2, 3]), new Uint8Array([4]), 8160, sha256);
       eql(out.length, 8160, 'maximum ell');
 
@@ -246,7 +247,7 @@ describe('RFC9380 hash-to-curve', () => {
     testExpandXOF(shake128, 'expand_message_xof_SHAKE128_36');
     testExpandXOF(shake128, 'expand_message_xof_SHAKE128_256');
     testExpandXOF(shake256, 'expand_message_xof_SHAKE256_36');
-    should('invalid lenInBytes and k guards', () => {
+    it('invalid lenInBytes and k guards', () => {
       throws(() => expand_message_xof(new Uint8Array([1]), 'DST', -1, 128, shake128), /lenInBytes/);
 
       const dst = new Uint8Array(256).fill(1);
@@ -285,7 +286,7 @@ describe('RFC9380 hash-to-curve', () => {
   );
   testCurve(ed448_hasher, 'edwards448_XOF_SHAKE256_ELL2_RO_', 'edwards448_XOF_SHAKE256_ELL2_NU_');
 
-  should('hash_to_field validates count, extension degree, k, and characteristic', () => {
+  it('hash_to_field validates count, extension degree, k, and characteristic', () => {
     const msg = new Uint8Array([1, 2, 3]);
     const opts = { DST: 'DST', p: 17n, m: 1, k: 128, expand: 'xmd' as const, hash: sha256 };
     throws(() => hash_to_field(msg, 0, opts));
@@ -307,7 +308,7 @@ describe('RFC9380 hash-to-curve', () => {
   });
 });
 
-should('SWU, isogenyMap, and sqrt_ratio edge cases', () => {
+it('SWU, isogenyMap, and sqrt_ratio edge cases', () => {
   const Fp = Field(13n);
   throws(() => mapToCurveSimpleSWU(Fp, { A: 0n, B: 1n, Z: 6n }), /invalid/i);
   throws(() => mapToCurveSimpleSWU(Fp, { A: 1n, B: 0n, Z: 6n }), /invalid/i);
@@ -336,4 +337,4 @@ should('SWU, isogenyMap, and sqrt_ratio edge cases', () => {
   throws(() => SWUFpSqrtRatio({ ORDER: 11n } as any, 2n), /"BYTES" expected number/);
 });
 
-should.runWhen(import.meta.url);
+it.runWhen(import.meta.url);

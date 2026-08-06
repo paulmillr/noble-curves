@@ -1,5 +1,5 @@
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
-import { describe, should } from '@paulmillr/jsbt/test.js';
+import { describe, it } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql } from 'node:assert';
 import { ed25519, ed25519ctx, ed25519ph, x25519 } from '../src/ed25519.ts';
 import { ed448, x448 } from '../src/ed448.ts';
@@ -69,7 +69,7 @@ const VECTORS_RFC8032 = deepHexToBytes([
 ]);
 
 describe('RFC8032', () => {
-  should('vectors', () => {
+  it('vectors', () => {
     for (let i = 0; i < VECTORS_RFC8032.length; i++) {
       const v = VECTORS_RFC8032[i];
       const { context } = v;
@@ -94,7 +94,7 @@ describe('X25519 RFC7748 ECDH', () => {
       outputU: '95cbde9476e8907d7aade45cb4b873f88b595a68799fa152e6f8f7647aac7957',
     },
   ]);
-  should('scalarMult vectors', () => {
+  it('scalarMult vectors', () => {
     for (let i = 0; i < rfc7748Mul.length; i++) {
       const v = rfc7748Mul[i];
       eql(x25519.scalarMult(v.scalar, v.u), v.outputU, i.toString());
@@ -105,7 +105,7 @@ describe('X25519 RFC7748 ECDH', () => {
     { scalar: '422c8e7a6227d7bca1350b3e2bb7279f7897b87bb6854b783c60e80311ae3079', iters: 1 },
     { scalar: '684cf59ba83309552800ef566f2f4d3c1c3887c49360e3875f2eb94d99532c51', iters: 1000 },
   ];
-  should('scalarMult iterations', () => {
+  it('scalarMult iterations', () => {
     for (let i = 0; i < rfc7748Iter.length; i++) {
       const { scalar, iters } = rfc7748Iter[i];
       let k = x25519.GuBytes;
@@ -114,7 +114,7 @@ describe('X25519 RFC7748 ECDH', () => {
     }
   });
 
-  should('getSharedKey', () => {
+  it('getSharedKey', () => {
     const { alicePrivate, alicePublic, bobPrivate, bobPublic, shared } = deepHexToBytes({
       alicePrivate: '77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a',
       alicePublic: '8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a',
@@ -128,7 +128,7 @@ describe('X25519 RFC7748 ECDH', () => {
     eql(x25519.scalarMult(bobPrivate, alicePublic), shared);
   });
 
-  should('X25519/getSharedSecret() should be commutative', () => {
+  it('X25519/getSharedSecret() should be commutative', () => {
     for (let i = 0; i < 512; i++) {
       const asec = x25519.utils.randomSecretKey();
       const apub = x25519.getPublicKey(asec);
@@ -144,7 +144,7 @@ describe('X25519 RFC7748 ECDH', () => {
   });
 
   describe('toMontgomery()', () => {
-    should('ed25519 toMontgomery outputs, keyPair, and ECDH', () => {
+    it('ed25519 toMontgomery outputs, keyPair, and ECDH', () => {
       const edSecret = hexToBytes(
         '77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a'
       );
@@ -176,7 +176,7 @@ describe('X25519 RFC7748 ECDH', () => {
       );
     });
 
-    should('ed448 toMontgomery outputs, keyPair, and ECDH', () => {
+    it('ed448 toMontgomery outputs, keyPair, and ECDH', () => {
       const edSecret = hexToBytes(
         '77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab1'
       );
@@ -215,14 +215,14 @@ describe('X25519 RFC7748 ECDH', () => {
     });
   });
 
-  should('base point', () => {
+  it('base point', () => {
     const { y } = ed25519ph.Point.BASE;
     const { Fp } = ed25519ph.Point;
     const u = Fp.create((y + 1n) * Fp.inv(1n - y));
     eql(numberToBytesLE(u, 32), x25519.GuBytes);
   });
 
-  should('wycheproof', () => {
+  it('wycheproof', () => {
     const x25519vectors = json('./vectors/wycheproof/x25519_test.json');
     const group = deepHexToBytes(x25519vectors.testGroups[0]);
     group.tests.forEach((v, i) => {
@@ -249,4 +249,4 @@ describe('X25519 RFC7748 ECDH', () => {
   });
 });
 
-should.runWhen(import.meta.url);
+it.runWhen(import.meta.url);

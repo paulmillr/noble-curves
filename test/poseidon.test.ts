@@ -1,4 +1,4 @@
-import { describe, should } from '@paulmillr/jsbt/test.js';
+import { describe, it } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql, throws } from 'node:assert';
 import * as mod from '../src/abstract/modular.ts';
 import * as poseidon from '../src/abstract/poseidon.ts';
@@ -9,7 +9,7 @@ const loadPoseidonVectors = () => json('./vectors/poseidon.json');
 const parseArrBig = (arr) => arr.map((n) => BigInt(n));
 
 describe('Stark', () => {
-  should('poseidonMdsMatrixUnsafe', () => {
+  it('poseidonMdsMatrixUnsafe', () => {
     const matrix = [
       [
         2778560475384578201077246683568670693743746494974613838537993780462451025202n,
@@ -31,7 +31,7 @@ describe('Stark', () => {
     eql(stark._poseidonMDS(stark.Fp251, 'HadesMDS', 3, 0), matrix);
   });
 
-  should('HadesPermutation', () => {
+  it('HadesPermutation', () => {
     eql(
       stark.poseidonSmall([
         4379311784651118086770398084575492314150568148003994287303975907890254409956n,
@@ -45,7 +45,7 @@ describe('Stark', () => {
       ]
     );
   });
-  should('HadesPermutation (custom)', () => {
+  it('HadesPermutation (custom)', () => {
     const h = stark.poseidonCreate({
       Fp: stark.Fp251,
       rate: 2,
@@ -66,7 +66,7 @@ describe('Stark', () => {
       ]
     );
   });
-  should('HadesPermutation (custom, Fp253)', () => {
+  it('HadesPermutation (custom, Fp253)', () => {
     const h = stark.poseidonCreate({
       Fp: stark.Fp253,
       rate: 2,
@@ -87,7 +87,7 @@ describe('Stark', () => {
       ]
     );
   });
-  should('PoseidonHash', () => {
+  it('PoseidonHash', () => {
     eql(
       stark.poseidonHash(
         4379311784651118086770398084575492314150568148003994287303975907890254409956n,
@@ -96,7 +96,7 @@ describe('Stark', () => {
       2457757238178986673695038558497063891521456354791980183317105434323761563347n
     );
   });
-  should('PoseidonHash (custom)', () => {
+  it('PoseidonHash (custom)', () => {
     const h = stark.poseidonCreate({
       Fp: stark.Fp251,
       rate: 2,
@@ -113,7 +113,7 @@ describe('Stark', () => {
       654164301216498483748450956182386165976155551413834652546305861430119544536n
     );
   });
-  should('PoseidonHash (custom, Fp253)', () => {
+  it('PoseidonHash (custom, Fp253)', () => {
     const h = stark.poseidonCreate({
       Fp: stark.Fp253,
       rate: 2,
@@ -134,7 +134,7 @@ describe('Stark', () => {
 // Official vectors:
 // https://extgit.iaik.tugraz.at/krypto/hadeshash/-/blob/master/code/test_vectors.txt
 
-should('poseidonperm_x5_255_3', () => {
+it('poseidonperm_x5_255_3', () => {
   const vecp = loadPoseidonVectors();
   const Fp = mod.Field(
     BigInt('0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001')
@@ -185,7 +185,7 @@ should('poseidonperm_x5_255_3', () => {
   );
 });
 
-should('poseidonperm_x5_255_5', () => {
+it('poseidonperm_x5_255_5', () => {
   const Fp = mod.Field(0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001n);
   const t = 5;
 
@@ -258,7 +258,7 @@ should('poseidonperm_x5_255_5', () => {
   );
 });
 
-should('poseidonperm_x5_254_3', () => {
+it('poseidonperm_x5_254_3', () => {
   const Fp = mod.Field(0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001n);
   const t = 3;
 
@@ -307,7 +307,7 @@ should('poseidonperm_x5_254_3', () => {
   );
 });
 
-should('poseidonperm_x5_254_5', () => {
+it('poseidonperm_x5_254_5', () => {
   const Fp = mod.Field(0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001n);
   const t = 5;
 
@@ -379,7 +379,7 @@ should('poseidonperm_x5_254_5', () => {
     ]
   );
 });
-should('poseidon validation and small sponge edge cases', () => {
+it('poseidon validation and small sponge edge cases', () => {
   const Fp = mod.Field(17n);
   const hash = poseidon.poseidon({
     Fp,
@@ -565,7 +565,7 @@ describe('PoseidonSponge', () => {
       undefined,
       false
     );
-    should('Grain', () => {
+    it('Grain', () => {
       const { mds, roundConstants } = poseidon.grainGenConstants({
         Fp,
         t: 2 + 1,
@@ -592,7 +592,7 @@ describe('PoseidonSponge', () => {
       const vecp = loadPoseidonVectors();
       eql(roundConstants, vecp.aleo_grain_roundConstants.map(parseArrBig));
     });
-    should('rate=2 capacity=1', () => {
+    it('rate=2 capacity=1', () => {
       const rate = 2;
       const capacity = 1;
       const { mds, roundConstants } = poseidon.grainGenConstants({
@@ -725,7 +725,7 @@ describe('PoseidonSponge', () => {
   describe('arkworks', () => {
     const Fp =
       mod.Field(52435875175126190479447740508185965837690552500527637822603658699938581184513n);
-    should('Grain', () => {
+    it('Grain', () => {
       const { mds, roundConstants } = poseidon.grainGenConstants({
         Fp,
         t: 2 + 1,
@@ -752,7 +752,7 @@ describe('PoseidonSponge', () => {
       const vecp = loadPoseidonVectors();
       eql(roundConstants, vecp.arkworks_grain_roundConstants.map(parseArrBig));
     });
-    should('rate=2 capacity=1', () => {
+    it('rate=2 capacity=1', () => {
       const rate = 2;
       const capacity = 1;
       const { mds, roundConstants } = poseidon.grainGenConstants({
@@ -821,4 +821,4 @@ describe('PoseidonSponge', () => {
   });
 });
 
-should.runWhen(import.meta.url);
+it.runWhen(import.meta.url);

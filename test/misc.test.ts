@@ -1,4 +1,4 @@
-import { describe, should } from '@paulmillr/jsbt/test.js';
+import { describe, it } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql, throws } from 'node:assert';
 import { eddsa, edwards } from '../src/abstract/edwards.ts';
 import { babyjubjub, jubjub, jubjub_findGroupHash } from '../src/misc.ts';
@@ -20,13 +20,13 @@ const G_PROOF = new Point(
 const getXY = (p) => ({ x: p.x, y: p.y });
 
 describe('jubjub', () => {
-  should('rejects unsupported Montgomery conversion', () => {
+  it('rejects unsupported Montgomery conversion', () => {
     const secret = new Uint8Array(32).fill(1);
     throws(() => jubjub.utils.toMontgomery(jubjub.getPublicKey(secret)), /not supported/);
     throws(() => jubjub.utils.toMontgomerySecret(secret), /not supported/);
   });
 
-  should('toBytes/fromBytes', () => {
+  it('toBytes/fromBytes', () => {
     // More than field
     throws(() =>
       Point.fromBytes(
@@ -68,7 +68,7 @@ describe('jubjub', () => {
     eql(getXY(G_PROOF.double().toAffine()), getXY(P2_exp));
   });
 
-  should('find generators and validate personalization length', () => {
+  it('find generators and validate personalization length', () => {
     const spend = jubjub_findGroupHash(
       Uint8Array.of(),
       Uint8Array.from([90, 99, 97, 115, 104, 95, 71, 95])
@@ -91,13 +91,13 @@ describe('jubjub', () => {
 });
 
 describe('babyjubjub', () => {
-  should('rejects unsupported Montgomery conversion', () => {
+  it('rejects unsupported Montgomery conversion', () => {
     const secret = new Uint8Array(32).fill(1);
     throws(() => babyjubjub.utils.toMontgomery(babyjubjub.getPublicKey(secret)), /not supported/);
     throws(() => babyjubjub.utils.toMontgomerySecret(secret), /not supported/);
   });
 
-  should('signing, hash validation, and base point', () => {
+  it('signing, hash validation, and base point', () => {
     const seed = new Uint8Array(32).fill(9);
     const msg = new Uint8Array([1, 2, 3]);
     const keys = babyjubjub.keygen(seed);
@@ -124,4 +124,4 @@ describe('babyjubjub', () => {
   });
 });
 
-should.runWhen(import.meta.url);
+it.runWhen(import.meta.url);

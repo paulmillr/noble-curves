@@ -1,5 +1,5 @@
+import { describe, it } from '@paulmillr/jsbt/test.js';
 import * as fc from 'fast-check';
-import { describe, should } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql, throws } from 'node:assert';
 import * as mod from '../src/abstract/modular.ts';
 import { Field } from '../src/abstract/modular.ts';
@@ -136,7 +136,7 @@ for (const c in FIELDS) {
         eql(Fp.eql(Fp.sqr(mod.FpSqrtEven(Fp, n)), n), true, l(`${label}: FpSqrtEven squared == n`));
       };
 
-      should('equality', () => {
+      it('equality', () => {
         fc.assert(
           fc.property(FC_BIGINT, (num) => {
             const a = create(num);
@@ -156,7 +156,7 @@ for (const c in FIELDS) {
         );
       });
 
-      should('add/subtract', () => {
+      it('add/subtract', () => {
         fc.assert(
           fc.property(FC_BIGINT, FC_BIGINT, (num1, num2) => {
             const a = create(num1);
@@ -205,7 +205,7 @@ for (const c in FIELDS) {
         eql(Fp.neg(Fp.ZERO), Fp.ZERO, l('neg(0) == 0'));
       });
 
-      should('multiply/square/pow', () => {
+      it('multiply/square/pow', () => {
         fc.assert(
           fc.property(FC_BIGINT, FC_BIGINT, (num1, num2) => {
             const a = create(num1);
@@ -279,7 +279,7 @@ for (const c in FIELDS) {
       // Extension fields can still use `FpLegendre` / `FpIsSquare` when ORDER=q.
       // Only the generic `FpSqrt(P)` / Tonelli-Shanks path is prime-field-specific here.
       if (!noGenericSqrt) SQRT_FIELDS.push(Fp);
-      should('sqrt/legendre', () => {
+      it('sqrt/legendre', () => {
         if (!noSqrt) {
           fc.assert(
             fc.property(FC_BIGINT, (num) => {
@@ -371,7 +371,7 @@ for (const c in FIELDS) {
         eql(mod.FpIsSquare(Fp, Fp.ZERO), true, l('isSquare(0) == true'));
       });
 
-      should('pow properties', () => {
+      it('pow properties', () => {
         // Exponents are plain bigints for every field (incl. extension fields, where FC_BIGINT
         // generates coordinate tuples). Range crosses the 64-bit windowed-pow threshold.
         const FC_EXP = fc.bigInt(0n, 1n << 320n);
@@ -419,7 +419,7 @@ for (const c in FIELDS) {
         );
       });
 
-      should('division', () => {
+      it('division', () => {
         fc.assert(
           fc.property(FC_BIGINT, (num) => {
             const a = create(num);
@@ -468,7 +468,7 @@ for (const c in FIELDS) {
 }
 
 describe('sqrt cases', () => {
-  should('Sqrt cases', () => {
+  it('Sqrt cases', () => {
     // Verify that we checked fields for every sqrt case
     const CASES = [
       (n) => n % 4n === 3n,
@@ -488,7 +488,7 @@ describe('sqrt cases', () => {
     eql(checkedCases.size, CASES.length);
   });
 
-  should('secp224k1 sqrt bug', () => {
+  it('secp224k1 sqrt bug', () => {
     const { Fp } = secp224r1.Point;
     const sqrtMinus1 = Fp.sqrt(-1n);
     // Verified against sage
@@ -497,7 +497,7 @@ describe('sqrt cases', () => {
     eql(Fp.sqr(sqrtMinus1), Fp.neg(Fp.ONE));
   });
 
-  should('Field: prohibit non-prime sqrt. gh-168', () => {
+  it('Field: prohibit non-prime sqrt. gh-168', () => {
     const Fp =
       Field(21888242871839275222246405745257275088548364400416034343698204186575808495617n);
     throws(() =>
@@ -507,7 +507,7 @@ describe('sqrt cases', () => {
     );
   });
 
-  should('sqrt/legendre match brute force exhaustively on small primes', () => {
+  it('sqrt/legendre match brute force exhaustively on small primes', () => {
     // Primes covering all four sqrt dispatch classes (3 mod 4, 5 mod 8, 9 mod 16, generic
     // Tonelli-Shanks), incl. deeper 2-adicity: 257 (S=8), 7681 (S=9). Ground truth is the
     // brute-force set of quadratic residues.
@@ -532,7 +532,7 @@ describe('sqrt cases', () => {
     }
   });
 
-  should('sqrt on a high 2-adicity prime (stark, S=192)', () => {
+  it('sqrt on a high 2-adicity prime (stark, S=192)', () => {
     const stark = (1n << 251n) + 17n * (1n << 192n) + 1n; // ≡ 1 mod 16, S=192
     const F = Field(stark);
     const { rndBelow } = makeRng(0x57a4cn);
@@ -550,27 +550,24 @@ describe('sqrt cases', () => {
     eql(r1 === 1n || r1 === stark - 1n, true, 'sqrt(1) is ±1');
   });
 
-  should(
-    'sqrt constructors reject even and composite moduli; composites never return non-roots',
-    () => {
-      throws(() => mod.FpSqrt(16n), 'even modulus');
-      throws(() => mod.tonelliShanks(2n));
-      throws(() => mod.tonelliShanks(25n), 'composite 25: invalid legendre in Z-search');
-      throws(() => mod.FpLegendre(Field(15n), 2n), 'composite legendre yields invalid symbol');
-      // 15 ≡ 3 mod 4 dispatches to sqrt3mod4, which cannot detect compositeness upfront:
-      // it must still never return a value that is not an actual root (self-check).
-      const F15 = Field(15n);
-      for (let n = 0n; n < 15n; n++) {
-        let r: bigint | undefined;
-        try {
-          r = F15.sqrt(n);
-        } catch {
-          continue; // throwing is always allowed for composite moduli
-        }
-        eql(mod.mod(r * r, 15n), n, `F15.sqrt(${n}) returned non-root ${r}`);
+  it('sqrt constructors reject even and composite moduli; composites never return non-roots', () => {
+    throws(() => mod.FpSqrt(16n), 'even modulus');
+    throws(() => mod.tonelliShanks(2n));
+    throws(() => mod.tonelliShanks(25n), 'composite 25: invalid legendre in Z-search');
+    throws(() => mod.FpLegendre(Field(15n), 2n), 'composite legendre yields invalid symbol');
+    // 15 ≡ 3 mod 4 dispatches to sqrt3mod4, which cannot detect compositeness upfront:
+    // it must still never return a value that is not an actual root (self-check).
+    const F15 = Field(15n);
+    for (let n = 0n; n < 15n; n++) {
+      let r: bigint | undefined;
+      try {
+        r = F15.sqrt(n);
+      } catch {
+        continue; // throwing is always allowed for composite moduli
       }
+      eql(mod.mod(r * r, 15n), n, `F15.sqrt(${n}) returned non-root ${r}`);
     }
-  );
+  });
 });
 
 // Deterministic xorshift64 PRNG: reproducible complement to fast-check for the reference
@@ -620,7 +617,7 @@ describe('invert / pow', () => {
   const P_SECP = secp256k1.Point.Fp.ORDER;
   const N_SECP = secp256k1.Point.Fn.ORDER;
 
-  should('invertCt matches invert over prime moduli', () => {
+  it('invertCt matches invert over prime moduli', () => {
     const P_ED = ed25519.Point.Fp.ORDER;
     const N_P256 = secp256r1.Point.Fn.ORDER;
     for (const p of [3n, 5n, 7n, 11n, 233n, 1039n, 65537n, P_SECP, N_SECP, P_ED, N_P256]) {
@@ -640,7 +637,7 @@ describe('invert / pow', () => {
     eql(mod.invertCt(1n, 2n), 1n);
   });
 
-  should('invertCt rejects zero, degenerate moduli, and wrong composite results', () => {
+  it('invertCt rejects zero, degenerate moduli, and wrong composite results', () => {
     throws(() => mod.invertCt(0n, 7n));
     throws(() => mod.invertCt(7n, 7n)); // reduces to zero
     throws(() => mod.invertCt(3n, 1n));
@@ -654,7 +651,7 @@ describe('invert / pow', () => {
     eql(mod.invertCt(4n, 15n), 4n);
   });
 
-  should('pow matches reference square-and-multiply across the windowed threshold', () => {
+  it('pow matches reference square-and-multiply across the windowed threshold', () => {
     // Independent reference: plain LSB-first binary ladder (the pre-windowed implementation).
     const powRef = (num: bigint, power: bigint, modulo: bigint) => {
       let p = 1n;
@@ -682,7 +679,7 @@ describe('invert / pow', () => {
     eql(mod.pow(20n, 1n, 11n), 20n);
   });
 
-  should('pow/FpPow/pow2 reject non-bigint exponents and degenerate moduli', () => {
+  it('pow/FpPow/pow2 reject non-bigint exponents and degenerate moduli', () => {
     throws(() => mod.pow(3n, 5 as any, 11n), /expected bigint/);
     throws(() => mod.pow(3n, undefined as any, 11n), /expected bigint/);
     throws(() => mod.FpPow(Field(11n), 3n, 5 as any), /expected bigint/);
@@ -695,7 +692,7 @@ describe('invert / pow', () => {
     throws(() => mod.pow2(3n, 2n, -5n));
   });
 
-  should('pow matches reference over random moduli, signs, and exponent shapes', () => {
+  it('pow matches reference over random moduli, signs, and exponent shapes', () => {
     const { rndBig, rndBelow } = makeRng(0x12345678n);
     const B64 = 1n << 64n;
     for (let i = 0; i < 1500; i++) {
@@ -733,7 +730,7 @@ describe('invert / pow', () => {
     }
   });
 
-  should('pow2 matches pow(x, 2^k) and keeps the power=0 unreduced identity', () => {
+  it('pow2 matches pow(x, 2^k) and keeps the power=0 unreduced identity', () => {
     const { rndBig, rndBelow } = makeRng(0x777n);
     for (let i = 0; i < 300; i++) {
       const m = rndBig(80) + 2n;
@@ -746,7 +743,7 @@ describe('invert / pow', () => {
     eql(mod.pow2(12345n, 0n, 7n), 12345n);
   });
 
-  should('invert returns canonical inverses and rejects non-coprime/degenerate inputs', () => {
+  it('invert returns canonical inverses and rejects non-coprime/degenerate inputs', () => {
     const { rndBig } = makeRng(0xbeefn);
     for (let i = 0; i < 1000; i++) {
       const mbits = 3 + (i % 260);
@@ -772,19 +769,19 @@ describe('invert / pow', () => {
 });
 
 describe('guard cases', () => {
-  should('Field rejects empty allowed-length encodings', () => {
+  it('Field rejects empty allowed-length encodings', () => {
     const FpPad = Field(17n, { allowedLengths: [0, 1] });
     throws(() => FpPad.fromBytes(new Uint8Array([])));
   });
 
-  should('Field runtime properties are not externally mutable', () => {
+  it('Field runtime properties are not externally mutable', () => {
     const Fp = Field(17n);
     const before = Fp.create(20n);
     throws(() => ((Fp as any).ORDER = 19n));
     eql(Fp.create(20n), before);
   });
 
-  should('Field shared prototype methods are not externally mutable', () => {
+  it('Field shared prototype methods are not externally mutable', () => {
     const Fp = Field(17n);
     const before = Fp.create(20n);
     const proto = Object.getPrototypeOf(Fp);
@@ -792,7 +789,7 @@ describe('guard cases', () => {
     eql(Fp.create(20n), before);
   });
 
-  should('positive-order helpers reject non-positive orders and cached bit lengths', () => {
+  it('positive-order helpers reject non-positive orders and cached bit lengths', () => {
     throws(() => mod.getFieldBytesLength(0n));
     throws(() => mod.getFieldBytesLength(1n));
     throws(() => mod.getFieldBytesLength(-5n));
@@ -804,21 +801,21 @@ describe('guard cases', () => {
     throws(() => mod.nLength(255n, 0));
   });
 
-  should('mod rejects zero and negative moduli', () => {
+  it('mod rejects zero and negative moduli', () => {
     throws(() => mod.mod(1n, 0n));
     throws(() => mod.mod(1n, -5n));
   });
 
-  should('pow rejects degenerate moduli of one or less', () => {
+  it('pow rejects degenerate moduli of one or less', () => {
     throws(() => mod.pow(3n, 1n, 1n));
     throws(() => mod.pow(3n, 1n, 0n));
   });
 
-  should('pow2 rejects negative exponents', () => {
+  it('pow2 rejects negative exponents', () => {
     throws(() => mod.pow2(3n, -1n, 11n));
   });
 
-  should('validateField rejects impossible field metadata', () => {
+  it('validateField rejects impossible field metadata', () => {
     const fn = () => 0n;
     const field = {
       ORDER: 17n,
@@ -871,22 +868,22 @@ describe('guard cases', () => {
     );
   });
 
-  should('Field returns a frozen field instance', () => {
+  it('Field returns a frozen field instance', () => {
     eql(Object.isFrozen(Field(17n)), true);
   });
 
-  should('Field rejects cached bit lengths smaller than the order bit length', () => {
+  it('Field rejects cached bit lengths smaller than the order bit length', () => {
     throws(() => Field(257n, { BITS: 1 }));
   });
 
-  should('Field rejects degenerate orders of one or less', () => {
+  it('Field rejects degenerate orders of one or less', () => {
     throws(() => Field(1n));
     throws(() => Field(0n));
   });
 });
 
 describe('field helpers', () => {
-  should('tower12 keeps higher Frobenius tables lazy and cached', () => {
+  it('tower12 keeps higher Frobenius tables lazy and cached', () => {
     const proto6 = Object.getPrototypeOf(bn254.fields.Fp6);
     const proto12 = Object.getPrototypeOf(bn254.fields.Fp12);
     eql(
@@ -911,7 +908,7 @@ describe('field helpers', () => {
     eql(Object.isFrozen(frob12), true);
   });
 
-  should('_Field12.cmov selects by boolean condition on valid inputs', () => {
+  it('_Field12.cmov selects by boolean condition on valid inputs', () => {
     const suites = [
       ['bn254', bn254.fields.Fp12, bn254.fields.Fp],
       ['bls12_381', bls12_381.fields.Fp12, bls12_381.fields.Fp],
@@ -946,7 +943,7 @@ describe('field helpers', () => {
     }
   });
 
-  should('field cmov rejects non-boolean conditions', () => {
+  it('field cmov rejects non-boolean conditions', () => {
     const suites = [
       ['Field', Field(17n), 1n, 2n],
       ['bn254.Fp2', bn254.fields.Fp2, bn254.fields.Fp2.ONE, bn254.fields.Fp2.ZERO],
@@ -971,7 +968,7 @@ describe('field helpers', () => {
     }
   });
 
-  should('_Field12._cyclotomicExp matches pow in range and rejects out-of-range exponents', () => {
+  it('_Field12._cyclotomicExp matches pow in range and rejects out-of-range exponents', () => {
     const suites = [
       ['bn254', bn254.fields.Fp12],
       ['bls12_381', bls12_381.fields.Fp12],
@@ -998,7 +995,7 @@ describe('field helpers', () => {
     }
   });
 
-  should('_Field12.fromBytes rejects non-Uint8Array inputs before subarray access', () => {
+  it('_Field12.fromBytes rejects non-Uint8Array inputs before subarray access', () => {
     const suites = [
       ['bn254', bn254.fields.Fp12],
       ['bls12_381', bls12_381.fields.Fp12],
@@ -1010,7 +1007,7 @@ describe('field helpers', () => {
       );
   });
 
-  should('tower isValid throws on malformed coordinate types', () => {
+  it('tower isValid throws on malformed coordinate types', () => {
     const suites = [
       ['bn254.Fp2', bn254.fields.Fp2, { c0: 1n }, /expected bigint, got undefined/],
       ['bls12_381.Fp2', bls12_381.fields.Fp2, { c1: 1n }, /expected bigint, got undefined/],
@@ -1042,7 +1039,7 @@ describe('field helpers', () => {
     for (const [, F, value, err] of suites) throws(() => F.isValid(value as any), err);
   });
 
-  should('tower isValidNot0 throws on malformed coordinate types', () => {
+  it('tower isValidNot0 throws on malformed coordinate types', () => {
     const suites = [
       ['bn254.Fp2', bn254.fields.Fp2, { c0: 1n }, /expected bigint, got undefined/],
       ['bls12_381.Fp2', bls12_381.fields.Fp2, { c1: 1n }, /expected bigint, got undefined/],
@@ -1074,7 +1071,7 @@ describe('field helpers', () => {
     for (const [, F, value, err] of suites) throws(() => F.isValidNot0(value as any), err);
   });
 
-  should('_Field2.cmov selects by boolean condition on valid inputs', () => {
+  it('_Field2.cmov selects by boolean condition on valid inputs', () => {
     const suites = [
       ['bn254', bn254.fields.Fp2, bn254.fields.Fp],
       ['bls12_381', bls12_381.fields.Fp2, bls12_381.fields.Fp],
@@ -1087,7 +1084,7 @@ describe('field helpers', () => {
     }
   });
 
-  should('_Field2.fromBytes rejects non-Uint8Array inputs before subarray access', () => {
+  it('_Field2.fromBytes rejects non-Uint8Array inputs before subarray access', () => {
     const suites = [
       ['bn254', bn254.fields.Fp2],
       ['bls12_381', bls12_381.fields.Fp2],
@@ -1099,7 +1096,7 @@ describe('field helpers', () => {
       );
   });
 
-  should('_Field6.cmov selects by boolean condition on valid inputs', () => {
+  it('_Field6.cmov selects by boolean condition on valid inputs', () => {
     const suites = [
       ['bn254', bn254.fields.Fp6, bn254.fields.Fp],
       ['bls12_381', bls12_381.fields.Fp6, bls12_381.fields.Fp],
@@ -1120,7 +1117,7 @@ describe('field helpers', () => {
     }
   });
 
-  should('_Field6.fromBytes rejects non-Uint8Array inputs before subarray access', () => {
+  it('_Field6.fromBytes rejects non-Uint8Array inputs before subarray access', () => {
     const suites = [
       ['bn254', bn254.fields.Fp6],
       ['bls12_381', bls12_381.fields.Fp6],
@@ -1132,33 +1129,33 @@ describe('field helpers', () => {
       );
   });
 
-  should('Field.addN keeps bigint arithmetic on valid inputs', () => {
+  it('Field.addN keeps bigint arithmetic on valid inputs', () => {
     const F = Field(11n);
     eql(F.create(F.addN(30n, -2n)), F.add(30n, -2n));
   });
 
-  should('Field accepts coherent cached bit lengths', () => {
+  it('Field accepts coherent cached bit lengths', () => {
     const F = Field(257n, { BITS: 9 });
     eql({ bits: F.BITS, bytes: F.BYTES }, { bits: 9, bytes: 2 });
   });
 
-  should('Field.cmov selects by boolean condition on valid inputs', () => {
+  it('Field.cmov selects by boolean condition on valid inputs', () => {
     const F = Field(17n);
     eql(F.cmov(1n, 2n, false), 1n);
     eql(F.cmov(1n, 2n, true), 2n);
   });
 
-  should('Field.mulN keeps bigint arithmetic on valid inputs', () => {
+  it('Field.mulN keeps bigint arithmetic on valid inputs', () => {
     const F = Field(11n);
     eql(F.create(F.mulN(30n, -2n)), F.mul(30n, -2n));
   });
 
-  should('Field.subN keeps bigint arithmetic on valid inputs', () => {
+  it('Field.subN keeps bigint arithmetic on valid inputs', () => {
     const F = Field(11n);
     eql(F.create(F.subN(30n, -2n)), F.sub(30n, -2n));
   });
 
-  should('getFieldBytesLength uses the element range, not the order bit length', () => {
+  it('getFieldBytesLength uses the element range, not the order bit length', () => {
     eql(
       [255n, 256n, 257n, 65535n, 65536n].map((fieldOrder) => ({
         fieldOrder,
@@ -1174,7 +1171,7 @@ describe('field helpers', () => {
     );
   });
 
-  should('getMinHashLength tracks the minimal byte width of the field range', () => {
+  it('getMinHashLength tracks the minimal byte width of the field range', () => {
     eql(
       [255n, 256n, 257n, 65535n, 65536n].map((fieldOrder) => ({
         fieldOrder,
@@ -1219,7 +1216,7 @@ describe('field helpers', () => {
     return numToBytes(reduced, minBytes(fieldOrder), isLE);
   };
 
-  should('mapHashToField uses the minimal encoding width of the scalar range', () => {
+  it('mapHashToField uses the minimal encoding width of the scalar range', () => {
     const key = new Uint8Array(16).fill(1);
     const out = [
       { fieldOrder: 255n, isLE: false, got: mod.mapHashToField(key, 255n, false) },
@@ -1244,7 +1241,7 @@ describe('field helpers', () => {
     ]);
   });
 
-  should('FpInvertBatch handles zeros in both modes, empty and all-zero arrays', () => {
+  it('FpInvertBatch handles zeros in both modes, empty and all-zero arrays', () => {
     const P = (1n << 255n) - 19n;
     const F = Field(P);
     const { rndBelow } = makeRng(0xba7c4n);
@@ -1268,7 +1265,7 @@ describe('field helpers', () => {
     eql(mod.FpInvertBatch(F, [0n, 0n], true), [0n, 0n], 'all-zero passZero batch');
   });
 
-  should('FpDiv reduces oversized bigint divisors and rejects zero', () => {
+  it('FpDiv reduces oversized bigint divisors and rejects zero', () => {
     const P = (1n << 255n) - 19n;
     const F = Field(P);
     const { rndBelow } = makeRng(0xd117n);
@@ -1282,7 +1279,7 @@ describe('field helpers', () => {
     throws(() => mod.FpDiv(F, 3n, 0n), 'division by zero');
   });
 
-  should('nLength rejects cached bit lengths smaller than len(n)', () => {
+  it('nLength rejects cached bit lengths smaller than len(n)', () => {
     const cases = [
       { n: 255n, bits: 9 },
       { n: 257n, bits: 1 },
@@ -1308,4 +1305,4 @@ describe('field helpers', () => {
   });
 });
 
-should.runWhen(import.meta.url);
+it.runWhen(import.meta.url);

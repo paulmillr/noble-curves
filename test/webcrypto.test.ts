@@ -1,4 +1,4 @@
-import { describe, should } from '@paulmillr/jsbt/test.js';
+import { describe, it } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual, rejects, throws } from 'node:assert';
 import { ed25519, x25519 } from '../src/ed25519.ts';
 import { ed448, x448 } from '../src/ed448.ts';
@@ -52,7 +52,7 @@ describe('webcrypto', () => {
     if (['ed448', 'x448', 'p521'].includes(c) && isDeno) continue;
     describe(c, () => {
       const { noble, web, canDerive, canSign } = CURVES[c];
-      should('raw, pkcs8, spki, and jwk', async () => {
+      it('raw, pkcs8, spki, and jwk', async () => {
         for (const keyType of ['raw', 'pkcs8', 'spki', 'jwk']) {
           // Basic
           deepStrictEqual(await web.isSupported(), true);
@@ -113,7 +113,7 @@ describe('webcrypto', () => {
     });
   }
 
-  should('wrapECDSA utils convert ECDH-flavored JWK secret keys', async () => {
+  it('wrapECDSA utils convert ECDH-flavored JWK secret keys', async () => {
     const secretKey = Uint8Array.from([
       1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26,
       27, 28, 29, 30, 31, 32,
@@ -139,7 +139,7 @@ describe('webcrypto', () => {
     deepStrictEqual(await webcrypto.p256.utils.convertSecretKey(ecdhJwk, 'jwk', 'raw'), secretKey);
   });
 
-  should('raw private-key and local hex validation', async () => {
+  it('raw private-key and local hex validation', async () => {
     await rejects(
       () => webcrypto.p256.utils.convertSecretKey(new Uint8Array(31), 'raw', 'pkcs8'),
       /"secretKey" expected Uint8Array of length 32, got length=31/
@@ -151,4 +151,4 @@ describe('webcrypto', () => {
   });
 });
 
-should.runWhen(import.meta.url);
+it.runWhen(import.meta.url);

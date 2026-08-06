@@ -1,5 +1,5 @@
 import { sha256 } from '@noble/hashes/sha2.js';
-import { describe, should } from '@paulmillr/jsbt/test.js';
+import { describe, it } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql, notDeepEqual, throws } from 'node:assert';
 import * as mod from '../src/abstract/modular.ts';
 import { createOPRF } from '../src/abstract/oprf.ts';
@@ -33,7 +33,7 @@ const SUITES = {
 
 function testExample(name, oprf) {
   describe(name, () => {
-    should('OPRF, VOPRF, and POPRF modes', () => {
+    it('OPRF, VOPRF, and POPRF modes', () => {
       // 1. SETUP (Server-side)
       // The server generates a key pair. The client does not need to know anything.
       let serverKeys = oprf.oprf.generateKeyPair();
@@ -165,7 +165,7 @@ function testExample(name, oprf) {
 }
 
 describe('RFC-9497 (OPRF)', () => {
-  should('createOPRF rejects opts without a usable Point constructor', () => {
+  it('createOPRF rejects opts without a usable Point constructor', () => {
     throws(() =>
       createOPRF({
         name: 'P256-SHA256',
@@ -186,7 +186,7 @@ describe('RFC-9497 (OPRF)', () => {
   });
 
   describe('contracts', () => {
-    should('deriveKeyPair, element, length, and closure edge cases', () => {
+    it('deriveKeyPair, element, length, and closure edge cases', () => {
       for (const suite of Object.values(SUITES)) {
         throws(() => suite.oprf.deriveKeyPair(new Uint8Array(31), new Uint8Array()));
         throws(() => suite.oprf.deriveKeyPair(new Uint8Array(33), new Uint8Array()));
@@ -314,7 +314,7 @@ describe('RFC-9497 (OPRF)', () => {
   });
 
   for (const suite of Object.keys(SUITES)) {
-    should(suite, () => {
+    it(suite, () => {
       if (!SUITES[suite]) throw new Error('missing');
       // Generated using rfc9497-oprf-parser.js.
       const vectors = deepHexToBytes(json('./vectors/rfc9497-oprf.json'));
@@ -480,4 +480,4 @@ describe('RFC-9497 (OPRF)', () => {
   }
 });
 
-should.runWhen(import.meta.url);
+it.runWhen(import.meta.url);

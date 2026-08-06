@@ -5,7 +5,7 @@ import {
   bytesToHex as hex,
   randomBytes,
 } from '@noble/hashes/utils.js';
-import { describe, should } from '@paulmillr/jsbt/test.js';
+import { describe, it } from '@paulmillr/jsbt/test.js';
 import * as fc from 'fast-check';
 import { deepStrictEqual as eql, throws } from 'node:assert';
 import { E448, ed448, ed448ph, x448 } from '../src/ed448.ts';
@@ -56,7 +56,7 @@ describe('ed448', () => {
   ed448.Point.BASE.precompute(4, false);
   const Point = ed.Point;
 
-  should(`Basic, decompress, strict verify defaults, and RFC8032`, () => {
+  it(`Basic, decompress, strict verify defaults, and RFC8032`, () => {
     const G1 = Point.BASE.toAffine();
     eql(
       G1.x,
@@ -122,7 +122,7 @@ describe('ed448', () => {
     return fc.string({ ...constraints, unit: hexa() });
   }
 
-  should('verify random and wrong-message signatures', () => {
+  it('verify random and wrong-message signatures', () => {
     fc.assert(
       fc.property(
         hexaString({ minLength: 2, maxLength: 57 }),
@@ -161,7 +161,7 @@ describe('ed448', () => {
   const msg = bytes('874f9960c5d2b7a9b5fad383e1ba44719ebb743a');
   const wrongMsg = bytes('589d8c7f1da0a24bc07b7381ad48b1cfc211af1c');
   describe('basic methods', () => {
-    should('sign/verify and negative cases', () => {
+    it('sign/verify and negative cases', () => {
       const publicKey = ed.getPublicKey(privKey);
       const signature = ed.sign(msg, privKey);
       eql(ed.verify(signature, msg, publicKey), true, 'sign and verify');
@@ -174,7 +174,7 @@ describe('ed448', () => {
     });
   });
 
-  should('input validation, immutability, and scalar-boundary rejection', () => {
+  it('input validation, immutability, and scalar-boundary rejection', () => {
     throws(() => ed.getPublicKey(new Uint8Array(58).fill(2)));
     for (const num of [0n, 0, -1n, -1, 1.1]) {
       throws(() => ed.Point.BASE.multiply(num));
@@ -233,7 +233,7 @@ describe('ed448', () => {
   });
 
   describe('wycheproof (OLD)', () => {
-    should('ED448 old vectors', () => {
+    it('ED448 old vectors', () => {
       // Old vectors allow to test sign() because they include private key.
       const ed448vectorsOld = json('./vectors/ed448/ed448_test_OLD.json');
       for (let g = 0; g < ed448vectorsOld.testGroups.length; g++) {
@@ -261,7 +261,7 @@ describe('ed448', () => {
   });
 
   describe('wycheproof', () => {
-    should('ED448 vectors', () => {
+    it('ED448 vectors', () => {
       const ed448vectors = json('./vectors/wycheproof/ed448_test.json');
       for (let g = 0; g < ed448vectors.testGroups.length; g++) {
         const group = ed448vectors.testGroups[g];
@@ -304,7 +304,7 @@ describe('ed448', () => {
           '3c00',
       },
     ];
-    should('RFC8032 context vectors', () => {
+    it('RFC8032 context vectors', () => {
       for (let i = 0; i < VECTORS_RFC8032_CTX.length; i++) {
         const v = VECTORS_RFC8032_CTX[i];
         eql(hex(ed.getPublicKey(bytes(v.secretKey))), v.publicKey);
@@ -360,7 +360,7 @@ describe('ed448', () => {
           '2100',
       },
     ];
-    should('RFC8032 prehash vectors', () => {
+    it('RFC8032 prehash vectors', () => {
       for (let i = 0; i < VECTORS_RFC8032_PH.length; i++) {
         const v = VECTORS_RFC8032_PH[i];
         eql(hex(ed448ph.getPublicKey(bytes(v.secretKey))), v.publicKey);
@@ -415,7 +415,7 @@ describe('ed448', () => {
       // TODO: split into separate ed448-slow-large.test.ts
       // { scalar: '077f453681caca3693198420bbe515cae0002472519b3e67661a7e89cab94695c8f4bcd66e61b9b9c946da8d524de3d69bd9d9d66b997e37', iters: 1000000 },
     ];
-    should('RFC7748, shared-key, wycheproof, and base-point vectors', () => {
+    it('RFC7748, shared-key, wycheproof, and base-point vectors', () => {
       for (let i = 0; i < rfc7748Mul.length; i++) {
         const v = rfc7748Mul[i];
         eql(hex(x448.scalarMult(bytes(v.scalar), bytes(v.u))), v.outputU, `scalarMult (${i})`);
@@ -474,7 +474,7 @@ describe('ed448', () => {
     });
   });
 
-  should('E448: encode/decode round-trip for y >= 2^447', () => {
+  it('E448: encode/decode round-trip for y >= 2^447', () => {
     // 2*BASE on E448 has y in [2^447, p), where the x-sign bit must live in a
     // 57-byte container. A 56-byte container would clobber bit 447 of y.
     const P = E448.BASE.add(E448.BASE).add(E448.BASE);
@@ -486,4 +486,4 @@ describe('ed448', () => {
   });
 });
 
-should.runWhen(import.meta.url);
+it.runWhen(import.meta.url);

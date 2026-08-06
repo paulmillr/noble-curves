@@ -1,4 +1,4 @@
-import { describe, should } from '@paulmillr/jsbt/test.js';
+import { describe, it } from '@paulmillr/jsbt/test.js';
 import * as fc from 'fast-check';
 import { deepStrictEqual as eql, throws } from 'node:assert';
 import { mulAddUnsafe, ScalarMultiplier } from '../src/abstract/curve.ts';
@@ -205,7 +205,7 @@ describe('bls12-381 Fields', () => {
   describe('bls12-381 Fp', () => {
     const FC_BIGINT = fc.bigInt(1n, Fp.ORDER - 1n);
 
-    should('multiply/sqrt', () => {
+    it('multiply/sqrt', () => {
       let sqr1 = Fp.sqrt(Fp.create(300855555557n));
       eql(
         sqr1 && sqr1.toString(),
@@ -221,7 +221,7 @@ describe('bls12-381 Fields', () => {
     const FC_BIGINT = fc.bigInt(1n, Fp.ORDER - 1n);
     const FC_BIGINT_2 = fc.array(FC_BIGINT, { minLength: 2, maxLength: 2 });
 
-    should('non-equality, sqrt, division, and frobenius', () => {
+    it('non-equality, sqrt, division, and frobenius', () => {
       fc.assert(
         // @ts-ignore
         fc.property(FC_BIGINT_2, FC_BIGINT_2, (num1, num2) => {
@@ -317,7 +317,7 @@ describe('bls12-381 Point', () => {
   const PointG2 = G2Point;
 
   describe('G1', () => {
-    should('equals', () => {
+    it('equals', () => {
       fc.assert(
         fc.property(
           fc.array(FC_BIGINT, { minLength: 3, maxLength: 3 }),
@@ -336,16 +336,16 @@ describe('bls12-381 Point', () => {
     });
 
     describe('assertValidity', () => {
-      should('passes for x:0, y:0', () => {
+      it('passes for x:0, y:0', () => {
         const a = PointG1.fromAffine({ x: Fp.create(0n), y: Fp.create(0n) });
         a.assertValidity();
       });
-      should('throws on x:0, y:1', () => {
+      it('throws on x:0, y:1', () => {
         const a = PointG1.fromAffine({ x: Fp.create(0n), y: Fp.create(1n) });
         throws(() => a.assertValidity());
       });
 
-      should('passes for x:0x17..., y: 0x08...', () => {
+      it('passes for x:0x17..., y: 0x08...', () => {
         const a = PointG1.fromAffine({
           x: Fp.create(
             0x17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bbn
@@ -356,7 +356,7 @@ describe('bls12-381 Point', () => {
         });
         a.assertValidity();
       });
-      should('passes for x:0x19..., y: 0x74...', () => {
+      it('passes for x:0x19..., y: 0x74...', () => {
         const a = G1Aff(
           Fp.create(
             0x19cdf3807146e68e041314ca93e1fee0991224ec2a74beb2866816fd0826ce7b6263ee31e953a86d1b72cc2215a57793n
@@ -368,7 +368,7 @@ describe('bls12-381 Point', () => {
 
         a.assertValidity();
       });
-      should('throws on x:0x40..., y: 0x6b...', () => {
+      it('throws on x:0x40..., y: 0x6b...', () => {
         const a = G1Aff(
           Fp.create(
             0x40adc763f94017fc9284572bf75217da57c7e1ab4e9f5b385c995bd090f1da8461ff7e90312817534f08f783229433bn
@@ -379,7 +379,7 @@ describe('bls12-381 Point', () => {
         );
         throws(() => a.assertValidity());
       });
-      should('throws on x:0x17..a, y: 0x08...', () => {
+      it('throws on x:0x17..a, y: 0x08...', () => {
         const a = G1Aff(
           Fp.create(
             0x17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6ban
@@ -390,7 +390,7 @@ describe('bls12-381 Point', () => {
         );
         throws(() => a.assertValidity());
       });
-      should('not validate incorrect point', () => {
+      it('not validate incorrect point', () => {
         const x =
           499001545268060011619089734015590154568173930614466321429631711131511181286230338880376679848890024401335766847607n;
         const y =
@@ -402,7 +402,7 @@ describe('bls12-381 Point', () => {
     });
 
     describe('double', () => {
-      should('correct for x:0x17..., y: 0x08...', () => {
+      it('correct for x:0x17..., y: 0x08...', () => {
         const a = G1Aff(
           Fp.create(
             0x17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bbn
@@ -427,7 +427,7 @@ describe('bls12-381 Point', () => {
         equal(double, a.multiply(2n));
         equal(double, a.add(a));
       });
-      should('correct for x:0x19..., y: 0x74...', () => {
+      it('correct for x:0x19..., y: 0x74...', () => {
         const a = G1Aff(
           Fp.create(
             0x19cdf3807146e68e041314ca93e1fee0991224ec2a74beb2866816fd0826ce7b6263ee31e953a86d1b72cc2215a57793n
@@ -456,7 +456,7 @@ describe('bls12-381 Point', () => {
   });
 
   describe('G2', () => {
-    should('equals', () => {
+    it('equals', () => {
       fc.assert(
         fc.property(
           fc.array(fc.array(FC_BIGINT, { minLength: 2, maxLength: 2 }), {
@@ -488,7 +488,7 @@ describe('bls12-381 Point', () => {
       );
     });
     describe('assertValidity', () => {
-      should('passes for 0x02..., 0x0c...', () => {
+      it('passes for 0x02..., 0x0c...', () => {
         const a = new PointG2(
           Fp2.fromBigTuple([
             0x024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb8n,
@@ -502,7 +502,7 @@ describe('bls12-381 Point', () => {
         );
         a.assertValidity();
       });
-      should('passes for 0x18..., 0x7e...', () => {
+      it('passes for 0x18..., 0x7e...', () => {
         const a = PointG2.fromAffine({
           x: Fp2.fromBigTuple([
             0x18405e4b67f957b6465ead9f5afc47832d45643dc3aa03af7314c6cf980fa23dd3bb8db3358693ad06011f6a6b1a5ffn,
@@ -516,7 +516,7 @@ describe('bls12-381 Point', () => {
         a.assertValidity();
       });
 
-      should('throws on vector 1', () => {
+      it('throws on vector 1', () => {
         const a = new PointG2(
           Fp2.fromBigTuple([0n, 0n]),
           Fp2.fromBigTuple([1n, 0n]),
@@ -524,7 +524,7 @@ describe('bls12-381 Point', () => {
         );
         throws(() => a.assertValidity());
       });
-      should('throws on vector 2', () => {
+      it('throws on vector 2', () => {
         const a = new PointG2(
           Fp2.fromBigTuple([
             0x024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4410b647ae3d1770bac0326a805bbefd48056c8c121bdb8n,
@@ -538,7 +538,7 @@ describe('bls12-381 Point', () => {
         );
         throws(() => a.assertValidity());
       });
-      should('throws on vector 3', () => {
+      it('throws on vector 3', () => {
         const a = new PointG2(
           Fp2.fromBigTuple([
             0x877d52dd65245f8908a03288adcd396f489ef87ae23fe110c5aa48bc208fbd1a0ed403df5b1ac137922b915f1f38ec37n,
@@ -559,7 +559,7 @@ describe('bls12-381 Point', () => {
   });
 
   describe('double', () => {
-    should('correct for 0x02..., 0x0c...', () => {
+    it('correct for 0x02..., 0x0c...', () => {
       const a = new PointG2(
         Fp2.fromBigTuple([
           0x024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb8n,
@@ -589,7 +589,7 @@ describe('bls12-381 Point', () => {
       equal(double, a.multiply(2n));
       equal(double, a.add(a));
     });
-    should('correct for 0x18..., 0x7e...', () => {
+    it('correct for 0x18..., 0x7e...', () => {
       const a = PointG2.fromAffine({
         x: Fp2.fromBigTuple([
           0x18405e4b67f957b6465ead9f5afc47832d45643dc3aa03af7314c6cf980fa23dd3bb8db3358693ad06011f6a6b1a5ffn,
@@ -630,7 +630,7 @@ describe('bls12-381 Point', () => {
     0x6_3eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000000n,
   ];
   describe('multiply(k) == multiplyUnsafe(k)', () => {
-    should('G1/G2 window variants', () => {
+    it('G1/G2 window variants', () => {
       for (const [label, Point] of [
         ['G1', PointG1],
         ['G2', PointG2],
@@ -645,7 +645,7 @@ describe('bls12-381 Point', () => {
       }
     });
 
-    should('G1/G2 match naive double-and-add; n*BASE == O (big-cofactor blinding gate)', () => {
+    it('G1/G2 match naive double-and-add; n*BASE == O (big-cofactor blinding gate)', () => {
       for (const [label, Point] of [
         ['G1', PointG1],
         ['G2', PointG2],
@@ -679,7 +679,7 @@ describe('bls12-381 Point', () => {
       }
     });
   });
-  should('clearCofactor() == multiply(hEff)', () => {
+  it('clearCofactor() == multiply(hEff)', () => {
     const points = [
       PointG2.fromAffine({
         x: Fp2.fromBigTuple([
@@ -745,7 +745,7 @@ describe('bls12-381 Point', () => {
 });
 
 describe('bls12-381 encoding', () => {
-  should('G1.fromBytes', () => {
+  it('G1.fromBytes', () => {
     // Test Zero
     const g1 = G1Point.fromBytes(B_192_40_BYTES);
     eql(g1.x, G1Point.ZERO.x);
@@ -772,7 +772,7 @@ describe('bls12-381 encoding', () => {
     eql(g1_.y, y);
   });
 
-  should('G1.fromBytes', () => {
+  it('G1.fromBytes', () => {
     // Test Zero
     const g1 = G1Point.fromBytes(B_192_40_BYTES);
 
@@ -800,7 +800,7 @@ describe('bls12-381 encoding', () => {
     eql(g1_.y, y);
   });
 
-  should('G2.fromBytes', () => {
+  it('G2.fromBytes', () => {
     // Test Zero
     const g2 = G2Point.fromBytes(B_384_40_BYTES);
     eql(g2.x, G2Point.ZERO.x, 'zero(x)');
@@ -833,7 +833,7 @@ describe('bls12-381 encoding', () => {
     eql(g2_.y, y);
   });
 
-  should('G2.fromBytes', () => {
+  it('G2.fromBytes', () => {
     // Test Zero
     const g2 = G2Point.fromBytes(B_384_40_BYTES);
 
@@ -867,7 +867,7 @@ describe('bls12-381 encoding', () => {
     eql(g2_.y, y);
   });
 
-  should('G1.toHex', () => {
+  it('G1.toHex', () => {
     // Test Zero
     eql(G1Point.ZERO.toHex(false), B_192_40);
     // Test Non-Zero
@@ -888,7 +888,7 @@ describe('bls12-381 encoding', () => {
     );
   });
 
-  should('G1.toHex2', () => {
+  it('G1.toHex2', () => {
     // Test Zero
     eql(G1Point.ZERO.toHex(false), B_192_40);
     // Test Non-Zero
@@ -909,7 +909,7 @@ describe('bls12-381 encoding', () => {
     );
   });
 
-  should('G2.toHex', () => {
+  it('G2.toHex', () => {
     // Test Zero
     eql(G2Point.ZERO.toHex(false), B_384_40);
     // Test Non-Zero
@@ -936,7 +936,7 @@ describe('bls12-381 encoding', () => {
     );
   });
 
-  should('G2.toHex2', () => {
+  it('G2.toHex2', () => {
     // Test Zero
     eql(G2Point.ZERO.toHex(false), B_384_40);
 
@@ -964,31 +964,31 @@ describe('bls12-381 encoding', () => {
     );
   });
 
-  should('Fr toBytes + fromBytes roundtrip', () => {
+  it('Fr toBytes + fromBytes roundtrip', () => {
     const scalar = 42n;
     const bytes = bls12_381.fields.Fr.toBytes(scalar);
     eql(bytes, hexToBytes('000000000000000000000000000000000000000000000000000000000000002a'));
     eql(bls12_381.fields.Fr.fromBytes(bytes), 42n);
   });
 
-  should('G1 toBytes + fromBytes roundtrip', () => {
+  it('G1 toBytes + fromBytes roundtrip', () => {
     const priv = G1Point.BASE.multiply(42n);
     const publicKey = priv.toBytes(true);
     const decomp = G1Point.fromBytes(publicKey);
     eql(publicKey, decomp.toBytes(true));
   });
 
-  should('G2 toBytes + fromBytes roundtrip', () => {
+  it('G2 toBytes + fromBytes roundtrip', () => {
     const priv = G2Point.BASE.multiply(42n);
     const publicKey = priv.toBytes(true);
     const decomp = G2Point.fromBytes(publicKey);
     eql(publicKey, decomp.toBytes(true));
   });
 
-  should('G1 fromPrivateKey throws on 0', () => {
+  it('G1 fromPrivateKey throws on 0', () => {
     throws(() => G1Point.BASE.multiply(0n));
   });
-  should('G2 fromPrivateKey throws on 0', () => {
+  it('G2 fromPrivateKey throws on 0', () => {
     throws(() => G2Point.BASE.multiply(0n));
   });
 
@@ -1021,7 +1021,7 @@ describe('bls12-381 encoding', () => {
       ),
       Fp.create(1n)
     );
-    should('works', () => {
+    it('works', () => {
       const agg = blsl.aggregatePublicKeys([VALID_G1, VALID_G1_2]).toAffine();
       eql(
         agg.x,
@@ -1033,7 +1033,7 @@ describe('bls12-381 encoding', () => {
       );
     });
 
-    should('throws on invalid pubkeys', () => {
+    it('throws on invalid pubkeys', () => {
       throws(() => blsl.aggregatePublicKeys([VALID_G1, INVALID_G1]));
     });
   });
@@ -1041,7 +1041,7 @@ describe('bls12-381 encoding', () => {
 
 describe('bls12-381 verify', () => {
   describe('longSignatures', () => {
-    should('sign, verify, and negative cases', () => {
+    it('sign, verify, and negative cases', () => {
       const G2_VECTORS = loadG2Vectors();
       for (let vector of G2_VECTORS) {
         const [priv, msgs, expected] = vector;
@@ -1086,7 +1086,7 @@ describe('bls12-381 verify', () => {
         eql(resHex, false);
       }
     });
-    should('rejects uncompressed signature bytes in raw-byte APIs', () => {
+    it('rejects uncompressed signature bytes in raw-byte APIs', () => {
       const secretKey = privKeyNumToBytes(42n);
       const msg = blsl.hash(asciiToBytes('long signature codec'));
       const sig = blsl.sign(msg, secretKey);
@@ -1106,7 +1106,7 @@ describe('bls12-381 verify', () => {
     });
   });
   describe('shortSignatures', () => {
-    should('sign, verify, and negative cases', () => {
+    it('sign, verify, and negative cases', () => {
       const G1_VECTORS = loadG1Vectors();
       for (let vector of G1_VECTORS) {
         const [priv, msgs, expected] = vector;
@@ -1151,7 +1151,7 @@ describe('bls12-381 verify', () => {
         eql(resHex, false);
       }
     });
-    should('rejects uncompressed signature bytes in raw-byte APIs', () => {
+    it('rejects uncompressed signature bytes in raw-byte APIs', () => {
       const secretKey = privKeyNumToBytes(42n);
       const msg = blss.hash(asciiToBytes('short signature codec'));
       const sig = blss.sign(msg, secretKey);
@@ -1170,7 +1170,7 @@ describe('bls12-381 verify', () => {
       throws(() => blss.aggregateSignatures([sigUncompressed]), /signature|point|bytes/);
     });
   });
-  should('verify augmented signature', () => {
+  it('verify augmented signature', () => {
     // Verify an augmented BLS12-381 signature
     // See https://www.ietf.org/archive/id/draft-irtf-cfrg-bls-signature-05.html#name-message-augmentation for details
     // This sample signature was generated by zkcrypto/bls12_381
@@ -1192,14 +1192,14 @@ describe('bls12-381 verify', () => {
     const isValid = blss.verify(signature, pubMsg, publicKey);
     eql(isValid, true, 'accepted augmented signature');
   });
-  should('hash rejects explicitly empty custom DST', () => {
+  it('hash rejects explicitly empty custom DST', () => {
     const msg = asciiToBytes('message');
     throws(() => blsl.hash(msg, ''), /DST must be non-empty/);
     throws(() => blss.hash(msg, ''), /DST must be non-empty/);
   });
 
   describe('batch', () => {
-    should('verify multi-signature', () => {
+    it('verify multi-signature', () => {
       fc.assert(
         // @ts-ignore
         fc.property(FC_MSG_5, FC_BIGINT_5, (messagesS, privateKeys) => {
@@ -1218,7 +1218,7 @@ describe('bls12-381 verify', () => {
         })
       );
     });
-    should('batch verify multi-signatures 2', () => {
+    it('batch verify multi-signatures 2', () => {
       fc.assert(
         // @ts-ignore
         fc.property(FC_MSG_5, FC_MSG_5, FC_BIGINT_5, (messagesS, wrongMessagesS, privateKeys) => {
@@ -1247,7 +1247,7 @@ describe('bls12-381 verify', () => {
         })
       );
     });
-    should('not verify multi-signature with wrong public keys', () => {
+    it('not verify multi-signature with wrong public keys', () => {
       fc.assert(
         // @ts-ignore
         fc.property(
@@ -1280,7 +1280,7 @@ describe('bls12-381 verify', () => {
         )
       );
     });
-    should('throws on non-hashed message (raw bytes)', () => {
+    it('throws on non-hashed message (raw bytes)', () => {
       const G2_VECTORS = loadG2Vectors();
       const [priv, msgBytes] = G2_VECTORS[0];
       const msg = blsl.hash(msgBytes);
@@ -1290,7 +1290,7 @@ describe('bls12-381 verify', () => {
       const items = [{ message: msgBytes as any, publicKey: pub }];
       throws(() => blsl.verifyBatch(sig, items), /expected valid message hashed/);
     });
-    should('verify multi-signature as simple signature', () => {
+    it('verify multi-signature as simple signature', () => {
       fc.assert(
         // @ts-ignore
         fc.property(FC_MSG, FC_BIGINT_5, (messageS, privateKeys) => {
@@ -1312,7 +1312,7 @@ describe('bls12-381 verify', () => {
         })
       );
     });
-    should('not verify wrong multi-signature as simple signature', () => {
+    it('not verify wrong multi-signature as simple signature', () => {
       fc.assert(
         // @ts-ignore
         fc.property(FC_MSG, FC_MSG, FC_BIGINT_5, (messageS, wrongMessageS, privateKeys) => {
@@ -1353,7 +1353,7 @@ describe('bls12-381 deterministic', () => {
 
   // hashToCurve
   describe('hash-to-curve killic', () => {
-    should('G1/G2 hash, encode, defaults, and scalar field vectors', () => {
+    it('G1/G2 hash, encode, defaults, and scalar field vectors', () => {
       for (let i = 0; i < H2C_KILLIC_G1.length; i++) {
         const t = H2C_KILLIC_G1[i];
         const p = bls.G1.hashToCurve(t.msg, {
@@ -1430,7 +1430,7 @@ describe('bls12-381 deterministic', () => {
     const G1 = G1Point.BASE;
     const G2 = G2Point.BASE;
 
-    should('zkcrypto vectors', () => {
+    it('zkcrypto vectors', () => {
       // github.com/zkcrypto/pairing
       const p1 = pairing(G1, G2);
       eql(
@@ -1451,7 +1451,7 @@ describe('bls12-381 deterministic', () => {
         ])
       );
     });
-    should('finalExponentiate is correct', () => {
+    it('finalExponentiate is correct', () => {
       const p1 = Fp12.fromBigTwelve([
         690392658038414015999440694435086329841032295415825549843130960252222448232974816207293269712691075396080336239827n,
         1673244384695948045466836192250093912021245353707563547917201356526057153141766171738038843400145227470982267854187n,
@@ -1484,13 +1484,13 @@ describe('bls12-381 deterministic', () => {
         ])
       );
     });
-    should('finalExponentiate(ONE) is ONE (Karabina g2=g3=0 special case)', () => {
+    it('finalExponentiate(ONE) is ONE (Karabina g2=g3=0 special case)', () => {
       // Identity is the only GΦ₁₂ element where Karabina decompression is degenerate; it flows
       // through the compressed exp-by-x path inside finalExponentiate and must not throw or
       // produce a wrong value.
       eql(Fp12.finalExponentiate(Fp12.ONE), Fp12.ONE);
     });
-    should('frobeniusMap is x^(p^i): ground truth at i=1, composition above', () => {
+    it('frobeniusMap is x^(p^i): ground truth at i=1, composition above', () => {
       // Pins the hardcoded Fp2 conjugation, the Fp6/Fp12 power%6 / power%12 shortcuts, and the
       // coefficient tables to the mathematical definition φ(x) = x^p, for generic
       // (non-cyclotomic) field elements.
@@ -1520,7 +1520,7 @@ describe('bls12-381 deterministic', () => {
       eql(Fp2.eql(Fp2.frobeniusMap(x2, 1), Fp2.pow(x2, p)), true, 'Fp2 φ(x) == x^p');
       eql(Fp2.eql(Fp2.frobeniusMap(Fp2.frobeniusMap(x2, 1), 1), x2), true, 'Fp2 φ^2 == id');
     });
-    should('pairingBatch of canceling pairs is ONE', () => {
+    it('pairingBatch of canceling pairs is ONE', () => {
       // e(P, Q) ⋅ e(−P, Q) = 1: the shared final exponentiation sees a degenerate Miller-loop
       // product, exercising the identity path of the compressed cyclotomic exponentiation.
       const res = bls.pairingBatch([
@@ -1532,7 +1532,7 @@ describe('bls12-381 deterministic', () => {
   });
 
   describe('killic', () => {
-    should('pairing small', () => {
+    it('pairing small', () => {
       const t = bls.pairing(G1Point.BASE, G2Point.BASE);
       eql(
         bytesToHex(Fp12.toBytes(t)),
@@ -1552,7 +1552,7 @@ describe('bls12-381 deterministic', () => {
         ])
       );
     });
-    should('pairing large', () => {
+    it('pairing large', () => {
       const pairingVectors = loadPairingVectors();
       let p1 = G1Point.BASE;
       let p2 = G2Point.BASE;
@@ -1572,7 +1572,7 @@ describe('bls12-381 deterministic', () => {
   });
 
   describe('zkcrypto', () => {
-    should(`G1 compressed`, () => {
+    it(`G1 compressed`, () => {
       const zkVectors = loadZkVectors();
       let p1 = G1Point.ZERO;
       for (let i = 0; i < zkVectors.G1_Compressed.length; i++) {
@@ -1589,7 +1589,7 @@ describe('bls12-381 deterministic', () => {
         }
       }
     });
-    should(`G1 uncompressed`, () => {
+    it(`G1 uncompressed`, () => {
       const zkVectors = loadZkVectors();
       let p1 = G1Point.ZERO;
       for (let i = 0; i < zkVectors.G1_Uncompressed.length; i++) {
@@ -1606,7 +1606,7 @@ describe('bls12-381 deterministic', () => {
         }
       }
     });
-    should(`G2 compressed`, () => {
+    it(`G2 compressed`, () => {
       const zkVectors = loadZkVectors();
       let p1 = G2Point.ZERO;
       for (let i = 0; i < zkVectors.G2_Compressed.length; i++) {
@@ -1625,7 +1625,7 @@ describe('bls12-381 deterministic', () => {
       }
     });
 
-    should(`G2 uncompressed`, () => {
+    it(`G2 uncompressed`, () => {
       const zkVectors = loadZkVectors();
       let p1 = G2Point.ZERO;
       for (let i = 0; i < zkVectors.G2_Uncompressed.length; i++) {
@@ -1642,7 +1642,7 @@ describe('bls12-381 deterministic', () => {
         }
       }
     });
-    should(`G1 encoding edge cases`, () => {
+    it(`G1 encoding edge cases`, () => {
       const Fp = bls12_381.fields.Fp;
       const S_BIT_POS = Fp.BITS; // C_bit, compression bit for serialization flag
       const I_BIT_POS = Fp.BITS + 1; // I_bit, point-at-infinity bit for serialization flag
@@ -1673,7 +1673,7 @@ describe('bls12-381 deterministic', () => {
       infinityCompressed[0] |= 0b0100_0000;
       throws(() => G1Point.fromBytes(compressedBit), 'infinity compressed');
     });
-    should(`G2 encoding edge cases`, () => {
+    it(`G2 encoding edge cases`, () => {
       const Fp = bls12_381.fields.Fp;
       const S_BIT_POS = Fp.BITS; // C_bit, compression bit for serialization flag
       const I_BIT_POS = Fp.BITS + 1; // I_bit, point-at-infinity bit for serialization flag
@@ -1713,7 +1713,7 @@ describe('bls12-381 deterministic', () => {
   });
   describe('EIP2537', () => {
     const toEthHex = (n) => n.toString(16).padStart(128, '0');
-    should('G1/G2 mapToCurve vectors and zero point', () => {
+    it('G1/G2 mapToCurve vectors and zero point', () => {
       const eip2537 = loadEip2537();
       for (const v of eip2537.G1) {
         const { x, y } = bls12_381.G1.mapToCurve(utils.hexToNumber(v.Input)).toAffine();
@@ -1737,7 +1737,7 @@ describe('bls12-381 deterministic', () => {
 });
 
 describe('BLS flag edge cases', () => {
-  should('reject non-canonical field limbs in point and signature encodings', () => {
+  it('reject non-canonical field limbs in point and signature encodings', () => {
     const { Fp } = bls12_381.fields;
     const p = Fp.ORDER;
     const L = Fp.BYTES;
@@ -1768,7 +1768,7 @@ describe('BLS flag edge cases', () => {
     }
   });
 
-  should('reject non-flag high bits in uncompressed coordinate limbs', () => {
+  it('reject non-flag high bits in uncompressed coordinate limbs', () => {
     const L = bls12_381.fields.Fp.BYTES;
     const g1 = bls12_381.G1.Point.BASE.toBytes(false);
     g1[L] |= 0x20;
@@ -1781,7 +1781,7 @@ describe('BLS flag edge cases', () => {
     }
   });
 
-  should('reject uncompressed points that decode to infinity without the infinity flag', () => {
+  it('reject uncompressed points that decode to infinity without the infinity flag', () => {
     const { Fp } = bls12_381.fields;
     const p = Fp.ORDER;
     const L = Fp.BYTES;
@@ -1796,7 +1796,7 @@ describe('BLS flag edge cases', () => {
     throws(() => bls12_381.G2.Point.fromBytes(g2UncompressedP));
   });
 
-  should('reject noncanonical sort/infinity flag combinations', () => {
+  it('reject noncanonical sort/infinity flag combinations', () => {
     const g1CompressedInfinitySort = Uint8Array.from([0xe0, ...new Uint8Array(47)]);
     const g1UncompressedInfinitySort = Uint8Array.from([0x60, ...new Uint8Array(95)]);
     const uncompressedBaseSort = Uint8Array.from(bls12_381.G1.Point.BASE.toBytes(false));
@@ -1815,7 +1815,7 @@ describe('BLS flag edge cases', () => {
     throws(() => bls12_381.longSignatures.Signature.fromBytes(longUncompressedInfinity));
   });
 
-  should('reject compressed infinity encodings with non-zero payloads', () => {
+  it('reject compressed infinity encodings with non-zero payloads', () => {
     const short = new Uint8Array(48);
     const long = new Uint8Array(96);
     short[0] = 0xc0;
@@ -1829,7 +1829,7 @@ describe('BLS flag edge cases', () => {
     throws(() => bls12_381.longSignatures.Signature.fromBytes(long), /signature|point|compressed/);
   });
 
-  should('reject infinity payloads that only become zero after field reduction', () => {
+  it('reject infinity payloads that only become zero after field reduction', () => {
     const { Fp } = bls12_381.fields;
     const p = Fp.ORDER;
     const L = Fp.BYTES;
@@ -1856,17 +1856,17 @@ describe('BLS flag edge cases', () => {
     throws(() => bls12_381.G2.Point.fromBytes(g2Uncompressed), /point|uncompressed/);
   });
 
-  should('reject uncompressed all-zero point payloads without infinity flag', () => {
+  it('reject uncompressed all-zero point payloads without infinity flag', () => {
     throws(() => bls12_381.G1.Point.fromBytes(new Uint8Array(96)), /point/);
     throws(() => bls12_381.G2.Point.fromBytes(new Uint8Array(192)), /point/);
   });
 
-  should('G2 BASE is not small-order while ZERO is', () => {
+  it('G2 BASE is not small-order while ZERO is', () => {
     eql(bls12_381.G2.Point.BASE.isSmallOrder(), false);
     eql(bls12_381.G2.Point.ZERO.isSmallOrder(), true);
   });
 });
 
-should.runWhen(import.meta.url);
+it.runWhen(import.meta.url);
 
 // TODO: merge Fp tests with group tests in basic

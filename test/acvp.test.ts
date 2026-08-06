@@ -1,7 +1,7 @@
 import { sha1 } from '@noble/hashes/legacy.js';
 import { sha224, sha256, sha384, sha512, sha512_224, sha512_256 } from '@noble/hashes/sha2.js';
 import { sha3_224, sha3_256, sha3_384, sha3_512 } from '@noble/hashes/sha3.js';
-import { describe, should } from '@paulmillr/jsbt/test.js';
+import { describe, it } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql } from 'node:assert';
 import { ecdsa } from '../src/abstract/weierstrass.ts';
 import { ed25519, ed25519ctx, ed25519ph } from '../src/ed25519.ts';
@@ -69,7 +69,7 @@ const HASHES = {
 };
 
 describe('ACVP', () => {
-  should('ECDSA KeyGen/KeyVer/SigGen/SigVer', () => {
+  it('ECDSA KeyGen/KeyVer/SigGen/SigVer', () => {
     for (const { info, tests } of [
       ...loadACVP('ECDSA-KeyGen-1.0'),
       ...loadACVP('ECDSA-KeyGen-FIPS186-5'),
@@ -162,7 +162,7 @@ describe('ACVP', () => {
     }
   });
 
-  should('EDDSA KeyGen/KeyVer/SigGen/SigVer', () => {
+  it('EDDSA KeyGen/KeyVer/SigGen/SigVer', () => {
     for (const { info, tests } of loadACVP('EDDSA-KeyGen-1.0')) {
       const curve = ED_CURVES[info.ip.curve].basic;
       if (!curve) continue;
@@ -214,4 +214,4 @@ describe('ACVP', () => {
   });
 });
 
-should.runWhen(import.meta.url);
+it.runWhen(import.meta.url);

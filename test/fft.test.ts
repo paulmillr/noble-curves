@@ -1,5 +1,5 @@
+import { describe, it } from '@paulmillr/jsbt/test.js';
 import * as fc from 'fast-check';
-import { describe, should } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql, throws } from 'node:assert';
 import * as fft from '../src/abstract/fft.ts';
 import { Field } from '../src/abstract/modular.ts';
@@ -12,7 +12,7 @@ const indices = (a, b) => a.map((i) => b.indexOf(i));
 
 describe('FFT', () => {
   describe('Utils', () => {
-    should('integer helpers', () => {
+    it('integer helpers', () => {
       // this basically checks if integer is in form of '1 << X'
       eql(fft.isPowerOfTwo(0), false, 'isPowerOfTwo(0)');
       eql(fft.isPowerOfTwo(1), true, 'isPowerOfTwo(1)');
@@ -70,7 +70,7 @@ describe('FFT', () => {
       throws(() => fft.log2(2 ** 32), 'log2 rejects u32 overflow');
     });
     describe('bitReversalPermutation', () => {
-      should('basic and kzg table', () => {
+      it('basic and kzg table', () => {
         eql(fft.bitReversalPermutation([0]), [0], 'single element');
         // identity for two elements
         eql(fft.bitReversalPermutation([0, 1]), [0, 1], 'two elements');
@@ -117,7 +117,7 @@ describe('FFT', () => {
     });
   });
   describe('rootsOfUnity', () => {
-    should('table structure: inverse, stride, omega primitivity', () => {
+    it('table structure: inverse, stride, omega primitivity', () => {
       // pins the cached-table derivations: inverse(b) == elementwise field inversion,
       // roots(b-1) == even-index stride of roots(b)
       const checkTables = (F, gen, bits) => {
@@ -145,7 +145,7 @@ describe('FFT', () => {
       checkTables(bls12_381.fields.Fr, 7n, 5);
       checkTables(bn254.fields.Fr, 7n, 5);
     });
-    should('cache and fixed vectors', () => {
+    it('cache and fixed vectors', () => {
       let roots = fft.rootsOfUnity(Field(17n));
       const before = roots.inverse(2);
       roots.clear();
@@ -213,12 +213,12 @@ describe('FFT', () => {
       );
     });
   });
-  should('poly extend truncates shorter target length', () => {
+  it('poly extend truncates shorter target length', () => {
     const F = Field(17n);
     const P = fft.poly(F, fft.rootsOfUnity(F));
     eql(P.extend([1n, 2n, 3n], 2), [1n, 2n]);
   });
-  should('Basic FFT', () => {
+  it('Basic FFT', () => {
     const Fr = bls12_381.fields.Fr;
 
     const roots = fft.rootsOfUnity(Fr, 7n);
@@ -252,7 +252,7 @@ describe('FFT', () => {
       input
     );
   });
-  should('size-1 FFT is identity', () => {
+  it('size-1 FFT is identity', () => {
     const F = Field(17n);
     const roots = fft.rootsOfUnity(F, 3n);
     const fftF = fft.FFT(roots, F);
@@ -261,7 +261,7 @@ describe('FFT', () => {
     eql(fftF.inverse([5n]), [5n]);
     throws(() => fftF.inverse([]), /FFT: Polynomial size should be power of two/);
   });
-  should('FFTCore rejects mismatched root tables', () => {
+  it('FFTCore rejects mismatched root tables', () => {
     const F = Field(17n);
     const roots = fft.rootsOfUnity(F, 3n).roots(2);
     throws(
@@ -269,7 +269,7 @@ describe('FFT', () => {
       /wrong roots length: expected 8, got 4/
     );
   });
-  should('FFTCore validates skipStages', () => {
+  it('FFTCore validates skipStages', () => {
     const F = Field(17n);
     const roots = fft.rootsOfUnity(F, 3n).roots(2);
     throws(() => fft.FFTCore(F, { N: 4, roots, dit: true, skipStages: -1 }), /wrong u32/);
@@ -292,7 +292,7 @@ describe('FFT', () => {
         }
       return res;
     };
-    should('full negacyclic convolution, same-table inverse (ML-DSA shape)', () => {
+    it('full negacyclic convolution, same-table inverse (ML-DSA shape)', () => {
       // x^128 + 1 over Z_3329: psi = 17 is a primitive 2N-th root of unity.
       // Forward: DIF loop + DIT butterflies reading roots[grp]; output is evaluations
       // a(psi^(2*brp(k)+1)) in bit-reversed order. Inverse: DIT loop reading roots[N-grp];
@@ -332,7 +332,7 @@ describe('FFT', () => {
         'pointwise mul == mul mod x^N+1'
       );
     });
-    should('ML-KEM shape: skipStages=1 roundtrip and MultiplyNTTs', () => {
+    it('ML-KEM shape: skipStages=1 roundtrip and MultiplyNTTs', () => {
       // FIPS 203: N=256, zeta=17 has order only 256 (no 512th root exists), so the NTT stops
       // one stage early (skipStages=1) and multiplication happens on 128 degree-1 residues.
       // The table is zeta^BitRev7(i) over ALL 256 indices: BitRev7 discards the top bit, so
@@ -371,13 +371,13 @@ describe('FFT', () => {
       );
     });
   });
-  should('poly.eval rejects mismatched basis vector lengths', () => {
+  it('poly.eval rejects mismatched basis vector lengths', () => {
     const F = Field(17n);
     const P = fft.poly(F, fft.rootsOfUnity(F, 3n));
     throws(() => P.eval([1n, 2n, 3n], [1n, 2n]), /poly: mismatched lengths 3 vs 2/);
     throws(() => P.eval([1n, 2n, 3n], [1n, 2n, 3n, 4n]), /poly: mismatched lengths 3 vs 4/);
   });
-  should('poly.lagrange handles the size-1 identity case and explicit weights', () => {
+  it('poly.lagrange handles the size-1 identity case and explicit weights', () => {
     const F = Field(17n);
     const P = fft.poly(F, fft.rootsOfUnity(F, 3n));
     const coeffs = [42n];
@@ -402,7 +402,7 @@ describe('FFT', () => {
     eql(got, expected);
     eql(weights, weights0);
   });
-  should('poly.lagrange uses explicit weights for its fast path', () => {
+  it('poly.lagrange uses explicit weights for its fast path', () => {
     const F = Field(17n);
     const P = fft.poly(F, fft.rootsOfUnity(F, 3n));
     const weights = [2n, 3n, 5n, 8n];
@@ -410,13 +410,13 @@ describe('FFT', () => {
     eql(P.lagrange.basis(1n, 4, false, weights as never), [0n, 0n, 0n, 0n]);
     eql(P.lagrange.basis(2n, 4, false, weights as never), [1n, 0n, 0n, 0n]);
   });
-  should('poly.lagrange rejects non-power-of-two lengths', () => {
+  it('poly.lagrange rejects non-power-of-two lengths', () => {
     const F = Field(17n);
     const P = fft.poly(F, fft.rootsOfUnity(F, 3n));
     throws(() => P.lagrange.basis(5n, 3), /power of two/i);
     throws(() => P.lagrange.eval([1n, 2n, 3n], 5n), /power of two/i);
   });
-  should('poly.shift preserves empty polynomial shape', () => {
+  it('poly.shift preserves empty polynomial shape', () => {
     const F = Field(17n);
     const P = fft.poly(F, fft.rootsOfUnity(F, 3n));
     eql(P.shift([], 2n), []);
@@ -438,7 +438,7 @@ describe('FFT', () => {
     const Pf = fft.poly(Fr, roots, undefined, fftFr);
 
     describe(`Polynomimal/${name}`, () => {
-      should('degree/arithmetic/eval', () => {
+      it('degree/arithmetic/eval', () => {
         const l = (msg) => `${name}: ${msg}`;
         eql(P.degree([]), -1, l('degree []'));
         eql(P.degree([0n]), -1, l('degree zero'));
@@ -476,7 +476,7 @@ describe('FFT', () => {
         );
       });
       for (const p of [P, Pf]) {
-        should('mul/convolve small cases', () => {
+        it('mul/convolve small cases', () => {
           const l = (msg) => `${name}: ${p === P ? 'poly' : 'poly+fft'}: ${msg}`;
           const a = [1n, 2n, 3n, 4n];
           eql(p.mul(a, 0n), [0n, 0n, 0n, 0n], l('a * 0 = 0'));
@@ -499,7 +499,7 @@ describe('FFT', () => {
         });
       }
       describe('monomial', () => {
-        should('eval/basis properties', () => {
+        it('eval/basis properties', () => {
           const l = (msg) => `${name}: monomial ${msg}`;
           eql(P.monomial.eval([3n, 2n, 1n], 5n), 38n, l('eval')); // 3 + 2x + x²
           eql(P.monomial.basis(2n, 0), [], l('basis zero'));
@@ -517,7 +517,7 @@ describe('FFT', () => {
           );
         });
       });
-      should('shift/vanishing/dot properties', () => {
+      it('shift/vanishing/dot properties', () => {
         const l = (msg) => `${name}: ${msg}`;
         // shift(p, c) is argument scaling: eval(shift(p, c), x) == eval(p, c*x)
         fc.assert(
@@ -542,7 +542,7 @@ describe('FFT', () => {
     });
     // Basic sanity checks
     describe(`FFT/${name}`, () => {
-      should('random and algebra properties', () => {
+      it('random and algebra properties', () => {
         const l = (msg) => `${name}: ${msg}`;
         fc.assert(
           fc.property(FR_BIGINT_POLY, (poly) => {
@@ -631,7 +631,7 @@ describe('FFT', () => {
           })
         );
       });
-      should('DFT semantics and lagrange interpolation', () => {
+      it('DFT semantics and lagrange interpolation', () => {
         const l = (msg) => `${name}: ${msg}`;
         const om = roots.roots(3);
         // direct() is the evaluation map: direct(a)[k] == a(omega^k)
@@ -662,4 +662,4 @@ describe('FFT', () => {
   }
 });
 
-should.runWhen(import.meta.url);
+it.runWhen(import.meta.url);
