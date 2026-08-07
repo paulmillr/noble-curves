@@ -98,7 +98,6 @@ import { FFT, poly } from '@noble/curves/abstract/fft.js';
   - [Custom ECDSA instance](#custom-ecdsa-instance)
 - [Security](#security)
 - [Speed](#speed)
-- [Contributing & testing](#contributing--testing)
 - [Upgrading](#upgrading)
 
 ### ECDSA, EdDSA, Schnorr signatures
@@ -130,11 +129,14 @@ const secret2 = hexToBytes('46c930bc7bb4db7f55da20798697421b98c4175a52c630294d75
 const pub2 = secp256k1.getPublicKey(secret2);
 ```
 
+Messages are always hashed first. Hashing can be disabled using `prehash: false`.
+
 ECDSA signatures use deterministic k, conforming to [RFC 6979](https://www.rfc-editor.org/rfc/rfc6979).
 EdDSA conforms to [RFC 8032](https://www.rfc-editor.org/rfc/rfc8032).
 Schnorr (secp256k1-only) conforms to [BIP 340](https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki).
 
-Messages are always hashed first.
+MuSig2 signature scheme and BIP324 ElligatorSwift mapping for secp256k1
+are available [in a separate package](https://github.com/paulmillr/scure-btc-signer).
 
 #### ristretto255, decaf448
 
@@ -486,10 +488,6 @@ Supported ciphersuites are `p256_FROST`, `ed25519_FROST`, `ed448_FROST`, `ristre
 `secp256k1_FROST`, and `schnorr_FROST` (Taproot-compatible secp256k1).
 Signing has two rounds: selected signers commit first, then produce signature shares.
 
-> [!WARNING]
-> The FROST code is new and has not been audited yet.
-> It passes the imported `frost-rs` vectors/examples and local regression tests.
-
 ```js
 import { p256_FROST } from '@noble/curves/nist.js';
 
@@ -601,8 +599,7 @@ const roots = fft.rootsOfUnity(Fr, 7n);
 const fftFr = fft.FFT(roots, Fr);
 ```
 
-Experimental implementation of NTT / FFT (Fast Fourier Transform) over finite fields.
-API may change at any time. The code has not been audited. Feature requests are welcome.
+NTT / FFT (Fast Fourier Transform) over finite fields.
 
 ### utils: byte shuffling, conversion
 
@@ -891,7 +888,7 @@ NIST prohibits classical cryptography (RSA, DSA, ECDSA, ECDH) [after 2035](https
 ## Speed
 
 ```sh
-npm run bench
+npm run benchmark
 ```
 
 noble-curves spends 10+ ms to generate 20MB+ of base point precomputes.
@@ -1009,138 +1006,81 @@ Supported node.js versions:
 - v2 (2025-08): v20.19+ (ESM-only)
 - v1 (2023-04): v14.21+ (ESM & CJS)
 
-### Changelog of curves v1 to curves v2
+### v1 to v2
 
 v2 massively simplifies internals, improves security, reduces bundle size and lays path for the future.
 We tried to keep v2 as much backwards-compatible as possible.
 
-To simplify upgrading, upgrade first to curves 1.9.x. It would show deprecations in vscode-like text editor.
-Fix them first.
+**Upgrade path:** upgrade to curves v1.9.x first. Fix the deprecation warnings, then switch to v2.
+
+Modules:
 
 - The package is now ESM-only. ESM can finally be loaded from common.js on node v20.19+
-- `.js` extension must be used for all modules
-    - Old: `@noble/curves/ed25519`
-    - New: `@noble/curves/ed25519.js`
-    - This simplifies working in browsers natively without transpilers
+- `.js` extension is now required: `@noble/curves/ed25519` => `@noble/curves/ed25519.js`.
+  This enables native browser usage, without transpilers
+- `p256`, `p384`, `p521` were moved into `nist`; `jubjub` was moved into `misc`
+- `pasta` and `bn254_weierstrass` (NOT pairing-based bn254) curves were removed
 
 New features:
 
-- webcrypto: create friendly noble-like wrapper over built-in WebCrypto
-- oprf: implement RFC 9497 OPRFs (oblivious pseudorandom functions)
-    - We support p256, p384, p521, ristretto255 and decaf448
-- weierstrass, edwards: add `isValidSecretKey`, `isValidPublicKey`
-- misc: add Brainpool curves: brainpoolP256r1, brainpoolP384r1, brainpoolP512r1
+- webcrypto: friendly noble-like wrapper over built-in WebCrypto
+- oprf: RFC 9497 OPRFs (oblivious pseudorandom functions)
+  for p256, p384, p521, ristretto255 and decaf448
+- weierstrass, edwards: new `isValidSecretKey`, `isValidPublicKey` methods
+- misc: Brainpool curves brainpoolP256r1, brainpoolP384r1, brainpoolP512r1
+- Massively improved, more descriptive error messages
 
-Changes:
+Breaking changes:
 
-- Most methods now expect Uint8Array, string hex inputs are prohibited
-    - The change simplifies reasoning, improves security and reduces malleability
-    - `Point.fromHex` now expects string-only hex inputs, use `Point.fromBytes` for Uint8Array
-- Many methods were renamed, upgrade to curves v1.9 first to highlight deprecated old names
-- Breaking changes of ECDSA (secp256k1, p256, p384...):
-    - To bring back old behavior, pass `{ prehash: false, lowS: false }` to sign / verify
-    - sign, verify: Switch to **prehashed messages**. Instead of
-      messageHash, the methods now expect unhashed message.
-      To bring back old behavior, use option `{prehash: false}`
-    - sign, verify: Switch to **lowS signatures** by default.
-      This change doesn't affect secp256k1, which has been using lowS since beginning.
-      To bring back old behavior, use option `{lowS: false}`
-    - sign, verify: Switch to **Uint8Array signatures** (format: 'compact') by default.
+- Most methods now only accept Uint8Array; string hex inputs are prohibited.
+  This simplifies reasoning, improves security and reduces malleability.
+  `Point.fromHex` is now string-only: use `Point.fromBytes` for Uint8Array
+- ECDSA (secp256k1, p256, p384...) sign & verify:
+    - **Prehashed messages**: methods now expect the unhashed message
+      instead of messageHash. Old behavior: `{prehash: false}`
+    - **lowS signatures** by default. secp256k1 is unaffected: it has used
+      lowS since the beginning. Old behavior: `{lowS: false}`
+    - **Uint8Array signatures** (format: 'compact') by default
     - verify: **der format must be explicitly specified** in `{format: 'der'}`.
       This reduces malleability
-    - verify: **prohibit Signature-instance** signature. User must now always do
-      `signature.toBytes()`
-- Breaking changes of BLS signatures (bls12-381, bn254):
-    - Move getPublicKey, sign, verify, signShortSignature etc into two new namespaces:
-      bls.longSignatures (G1 pubkeys, G2 sigs) and bls.shortSignatures (G1 sigs, G2 pubkeys).
+    - verify: **Signature instances are prohibited**: call `signature.toBytes()` first
+- BLS signatures (bls12-381, bn254):
+    - getPublicKey, sign, verify, signShortSignature etc were moved into two new namespaces:
+      `longSignatures` (G1 pubkeys, G2 sigs) and `shortSignatures` (G1 sigs, G2 pubkeys)
     - verifyBatch now expects array of inputs `{message: ..., publicKey: ...}[]`
-- Curve changes:
-    - Massively simplify curve creation, split it into point creation & sig generator creation
-    - New methods are `weierstrass() + ecdsa()` / `edwards() + eddsa()`
-    - weierstrass / edwards expect simplified curve params (Fp became p)
-    - ecdsa / eddsa expect Point class and hash
-    - Remove unnecessary Fn argument in `pippenger`
-- modular changes:
+- Custom curves:
+    - Curve creation was massively simplified and split into point creation &
+      sig generator creation: `weierstrass() + ecdsa()` / `edwards() + eddsa()`.
+      weierstrass / edwards expect simplified curve params (Fp became p);
+      ecdsa / eddsa expect Point class and hash
+    - pippenger: removed unnecessary Fn argument
     - Field#fromBytes() now validates elements to be in 0..order-1 range
-- Massively improve error messages, make them more descriptive
 
-Renamings:
+Renamings (curves v1.9 highlights old names as deprecated):
 
-- Module changes
-    - `p256`, `p384`, `p521` modules have been moved into `nist`
-    - `jubjub` module has been moved into `misc`
-- Point changes
+- Points
     - ExtendedPoint, ProjectivePoint => Point
-    - Point coordinates (projective / extended) from px/ex, py/ey, pz/ez, et => X, Y, Z, T
-    - Point.normalizeZ, Point.msm => separate methods in `abstract/curve.js` submodule
-    - Point.fromPrivateKey() got removed, use `Point.BASE.multiply()` and `Point.Fn.fromBytes(secretKey)`
+    - Point coordinates px/ex, py/ey, pz/ez, et => X, Y, Z, T
     - toRawBytes, fromRawBytes => toBytes, fromBytes
-    - RistrettoPoint => ristretto255.Point, DecafPoiont => decaf448.Point
-- Signature (ECDSA) changes
+    - Point.normalizeZ, Point.msm => separate methods in `abstract/curve.js` submodule
+    - Point.fromPrivateKey(key) => `Point.BASE.multiply(Point.Fn.fromBytes(key))`
+    - `CURVE` property with all kinds of random stuff => Point.CURVE(),
+      which only provides curve parameters
+    - RistrettoPoint => ristretto255.Point, DecafPoint => decaf448.Point
+- ECDSA Signatures
     - toCompactRawBytes, toDERRawBytes => toBytes('compact'), toBytes('der')
     - toCompactHex, toDERHex => toHex('compact'), toHex('der')
-    - fromCompact, fromDER => fromBytes(format), fromHex(format)
-- utils changes
+    - fromCompact, fromDER => fromBytes(bytes, format), fromHex(hex, format)
+- utils
     - randomPrivateKey => randomSecretKey
+    - normPrivateKeyToScalar => Point.Fn.fromBytes
     - utils.precompute, Point#_setWindowSize => Point#precompute
-    - edwardsToMontgomery => utils.toMontgomery
-    - edwardsToMontgomeryPriv => utils.toMontgomerySecret
-- Rename all curve-specific hash-to-curve methods to `*curve*_hasher`.
+    - edwardsToMontgomery, edwardsToMontgomeryPriv => utils.toMontgomery, utils.toMontgomerySecret
+- Curve-specific hash-to-curve methods => `*curve*_hasher`.
   Example: `secp256k1.hashToCurve` => `secp256k1_hasher.hashToCurve()`
 - Massive type renamings and improvements
 
-Removed features:
-
-- Point#multiplyAndAddUnsafe, Point#hasEvenY
-- `CURVE` property with all kinds of random stuff. Point.CURVE() now replaces it, but only provides
-  curve parameters
-- Remove `pasta`, `bn254_weierstrass` (NOT pairing-based bn254) curves
-- utils.normPrivateKeyToScalar - use `Point.Fn.fromBytes`
-- Field.MASK
-
-### secp256k1 v1, ed25519 v1, bls12-381 v1 to curves v1
-
-Previously, the library was split into single-feature packages
-[noble-secp256k1](https://github.com/paulmillr/noble-secp256k1),
-[noble-ed25519](https://github.com/paulmillr/noble-ed25519) and
-[noble-bls12-381](https://github.com/paulmillr/noble-bls12-381).
-
-Curves continue their original work. The single-feature packages changed their
-direction towards providing minimal 5kb implementations of cryptography,
-which means they have less features. Separate bls package had been deprecated.
-
-secp256k1:
-
-- `getPublicKey`: defaults to compressed sigs (use second argument to adjust)
-- `sign`: renamed options `canonical` => `lowS`; `der` => `format: 'der'`
-- `verify`: renamed option `strict` => `lowS`
-- `getSharedSecret`: defaults to compressed sigs (use third argument to adjust)
-- `recoverPublicKey(msg, sig, rec)` was changed to `sig.recoverPublicKey(msg)`
-- `Point` (2d xy) has been changed to `ProjectivePoint` (3d xyz)
-
-ed25519:
-
-- `Signature` was removed in favor of raw bytes
-- `getSharedSecret` was moved to `x25519` module
-
-bls12-381:
-
-- Renamed PointG1 -> G1.Point, PointG2 -> G2.Point
-- Renamed PointG2.fromSignature -> Signature.decode, PointG2.toSignature -> Signature.encode
-
-## Contributing & testing
-
-- `npm install && npm run build && npm test` will build the code and run tests.
-- `npm run lint` / `npm run format` will run linter / fix linter issues.
-- `npm run bench` will run benchmarks
-- `npm run bundle` will build single file
-
-See [paulmillr.com/noble](https://paulmillr.com/noble/)
-for useful resources, articles, documentation and demos
-related to the library.
-
-MuSig2 signature scheme and BIP324 ElligatorSwift mapping for secp256k1
-are available [in a separate package](https://github.com/paulmillr/scure-btc-signer).
+Removed features: Point#multiplyAndAddUnsafe, Point#hasEvenY, Field.MASK
 
 ## License
 
