@@ -125,7 +125,7 @@ describe('Endomorphism', () => {
         // splitScalar: k2*lambda + k1== s
         const curveEndo = weierstrassN(params, { endo: { beta, basises: basis } });
         const FC_BIGINT = fc.bigInt(1n, Fn.ORDER - 1n);
-        // Test exhaustively, since this is very important!
+        // Use a large randomized sample because scalar splitting is security-critical.
         fc.assert(
           fc.property(FC_BIGINT, (num) => {
             testScalar(Fn, num, basis, lambda);

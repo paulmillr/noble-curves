@@ -237,7 +237,6 @@ describe('FFT', () => {
 
     eql(fftFr.direct(input), exp);
     eql(fftFr.direct(fft.bitReversalPermutation(input), true), exp);
-    // Fails, why? scaling?
     eql(fft.bitReversalPermutation(fftFr.direct(input, false, true)), exp);
     eql(
       fft.bitReversalPermutation(fftFr.direct(fft.bitReversalPermutation(input), true, true)),

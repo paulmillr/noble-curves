@@ -8,6 +8,8 @@ import { abytes, bytesToNumberLE, concatBytes, equalBytes, numberToBytesLE } fro
 
 /*
 Half-broken implementation of Hedged EdDSA / XEdDSA.
+This experimental implementation is imported by test/index.ts on purpose so its fixed vector and
+round-trip coverage remain part of CI even though it is not a supported public primitive.
 Differences from EDDSA:
 - uses curve25519 keys instead of ed25519
 - additional random added to nonce on signing

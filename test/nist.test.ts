@@ -3,7 +3,7 @@ import { sha3_224, sha3_256, sha3_384, sha3_512, shake128, shake256 } from '@nob
 import { describe, it } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql, throws } from 'node:assert';
 import { DER } from '../src/abstract/der.ts';
-import { ecdsa } from '../src/abstract/weierstrass.ts';
+import { ecdsa, weierstrass } from '../src/abstract/weierstrass.ts';
 import { brainpoolP256r1, brainpoolP384r1, brainpoolP512r1 } from '../src/misc.ts';
 import { p256, p384, p521 } from '../src/nist.ts';
 import { secp256k1 } from '../src/secp256k1.ts';
@@ -45,6 +45,32 @@ const NIST = {
   secp256k1,
 };
 
+const WYCHEPROOF_CURVE_PARAMS = json(PREFIX + 'ec_prime_order_curves_test.json').testGroups[0]
+  .tests;
+const WYCHEPROOF_CURVES = new WeakMap();
+function getWycheproofCurve(name, hash = sha256) {
+  let byName = WYCHEPROOF_CURVES.get(hash);
+  if (!byName) WYCHEPROOF_CURVES.set(hash, (byName = new Map()));
+  const cached = byName.get(name);
+  if (cached) return cached;
+  const v = WYCHEPROOF_CURVE_PARAMS.find((v) => v.name === name);
+  if (!v) throw new Error('missing Wycheproof curve parameters: ' + name);
+  const curve = ecdsa(
+    weierstrass({
+      p: BigInt(`0x${v.p}`),
+      a: BigInt(`0x${v.a}`),
+      b: BigInt(`0x${v.b}`),
+      n: BigInt(`0x${v.n}`),
+      h: BigInt(v.h),
+      Gx: BigInt(`0x${v.gx}`),
+      Gy: BigInt(`0x${v.gy}`),
+    }),
+    hash
+  );
+  byName.set(name, curve);
+  return curve;
+}
+
 it('fields', () => {
   const vectors = {
     secp192r1: 0xfffffffffffffffffffffffffffffffeffffffffffffffffn,
@@ -63,7 +89,14 @@ it('fields', () => {
 // and dirty parser: take X last bytes of ASN.1 encoded sequence.
 // If that doesn't work, we ignore such vector.
 function verifyECDHVector(test, curve) {
-  if (test.flags.includes('InvalidAsn')) return; // Ignore invalid ASN
+  // noble-curves accepts SEC1 points, not SubjectPublicKeyInfo. These cases only test the wrapper's
+  // ASN.1/OID validation and are counted explicitly by each caller.
+  if (
+    test.flags.includes('InvalidAsn') ||
+    test.flags.includes('UnnamedCurve') ||
+    test.flags.includes('WrongCurve')
+  )
+    return false;
   const { public: pkW, private: skW, shared } = test;
   const pk = test.flags.includes('CompressedPoint')
     ? pkW.subarray(-curve.lengths.publicKey)
@@ -74,24 +107,26 @@ function verifyECDHVector(test, curve) {
   // fixture detail and does not exercise the P-521 65-byte parse-acceptance path.
   const sk = numberToBytesBE(bytesToNumberBE(skW), curve.Point.Fn.BYTES);
   if (test.result === 'valid' || test.result === 'acceptable') {
-    eql(curve.getSharedSecret(sk, pk).slice(1), shared, 'valid');
+    const expected = numberToBytesBE(bytesToNumberBE(shared), curve.Point.Fp.BYTES);
+    eql(curve.getSharedSecret(sk, pk).slice(1), expected, 'valid');
   } else if (test.result === 'invalid') {
-    // These are SPKI decodeding errors (wrong curve oid/order inside pubkey)
-    if (test.flags.includes('UnnamedCurve') || test.flags.includes('WrongCurve')) return;
     throws(() => curve.getSharedSecret(sk, pk));
   } else throw new Error('unknown test result');
+  return true;
 }
 
 describe('wycheproof ECDH', () => {
-  for (const curveName of ['secp224r1', 'secp256r1', 'secp384r1', 'secp521r1', 'secp256k1']) {
+  const vecdh = deepJson('ecdh');
+  for (const { curve: curveName } of vecdh.testGroups) {
     it(curveName, () => {
-      const vecdh = deepJson('ecdh');
       const group = vecdh.testGroups.find((group) => group.curve === curveName);
       if (!group) throw new Error('missing ECDH vector: ' + curveName);
-      const curve = NIST[group.curve];
+      const curve = getWycheproofCurve(group.curve);
+      let spkiOnly = 0;
       for (const test of group.tests) {
-        verifyECDHVector(test, curve);
+        if (!verifyECDHVector(test, curve)) spkiOnly++;
       }
+      eql(spkiOnly, 14, `${curveName}: explicit SPKI-only vectors`);
     });
   }
 
@@ -99,11 +134,11 @@ describe('wycheproof ECDH', () => {
   const WYCHEPROOF_ECDH = {
     p224: {
       curve: p224,
-      tests: ['ecdh_secp224r1'],
+      tests: ['ecdh_secp224r1', 'ecdh_secp224r1_ecpoint'],
     },
     p256: {
       curve: p256,
-      tests: ['ecdh_secp256r1'],
+      tests: ['ecdh_secp256r1', 'ecdh_secp256r1_ecpoint'],
     },
     secp256k1: {
       curve: secp256k1,
@@ -111,17 +146,31 @@ describe('wycheproof ECDH', () => {
     },
     p384: {
       curve: p384,
-      tests: ['ecdh_secp384r1'],
+      tests: ['ecdh_secp384r1', 'ecdh_secp384r1_ecpoint'],
     },
     p521: {
       curve: p521,
-      tests: ['ecdh_secp521r1'],
+      tests: ['ecdh_secp521r1', 'ecdh_secp521r1_ecpoint'],
     },
 
     // brainpool
     brainpoolP256r1: { curve: brainpoolP256r1, tests: ['ecdh_brainpoolP256r1'] },
     brainpoolP384r1: { curve: brainpoolP384r1, tests: ['ecdh_brainpoolP384r1'] },
     brainpoolP512r1: { curve: brainpoolP512r1, tests: ['ecdh_brainpoolP512r1'] },
+  };
+  const EXPECTED_SPKI_ONLY = {
+    ecdh_secp224r1: 252,
+    ecdh_secp224r1_ecpoint: 0,
+    ecdh_secp256r1: 259,
+    ecdh_secp256r1_ecpoint: 6,
+    ecdh_secp256k1: 256,
+    ecdh_secp384r1: 252,
+    ecdh_secp384r1_ecpoint: 0,
+    ecdh_secp521r1: 260,
+    ecdh_secp521r1_ecpoint: 10,
+    ecdh_brainpoolP256r1: 262,
+    ecdh_brainpoolP384r1: 270,
+    ecdh_brainpoolP512r1: 258,
   };
 
   for (const name in WYCHEPROOF_ECDH) {
@@ -130,12 +179,14 @@ describe('wycheproof ECDH', () => {
       const file = tests[i];
       it(`additional ${name}`, () => {
         const curveTests = deepJson(file);
+        let spkiOnly = 0;
         for (let j = 0; j < curveTests.testGroups.length; j++) {
           const group = curveTests.testGroups[j];
           for (const test of group.tests) {
-            verifyECDHVector(test, curve);
+            if (!verifyECDHVector(test, curve)) spkiOnly++;
           }
         }
+        eql(spkiOnly, EXPECTED_SPKI_ONLY[file], `${file}: explicit SPKI-only vectors`);
       });
     }
   }
@@ -232,6 +283,10 @@ const WYCHEPROOF_ECDSA = {
   p384: {
     curve: p384,
     hashes: {
+      sha256: {
+        hash: sha256,
+        tests: ['ecdsa_secp384r1_sha256'],
+      },
       sha384: {
         hash: sha384,
         tests: ['ecdsa_secp384r1_sha384'],
@@ -332,21 +387,21 @@ function runWycheproof(name, CURVE, group, index) {
 describe('wycheproof ECDSA', () => {
   it('generic', () => {
     const vecdsa = deepJson('ecdsa');
+    const hashes = {
+      'SHA-224': sha224,
+      'SHA-256': sha256,
+      'SHA-384': sha384,
+      'SHA-512': sha512,
+    };
     for (const group of vecdsa.testGroups) {
-      // Tested in secp256k1.test.js
-      let CURVE = NIST[group.key.curve];
-      if (!CURVE) continue;
+      const hash = hashes[group.sha];
+      if (!hash) throw new Error('unsupported Wycheproof hash: ' + group.sha);
+      const CURVE = getWycheproofCurve(group.key.curve, hash);
       const hasLowS = group.key.curve === 'secp256k1';
-      if (group.key.curve === 'secp224r1' && group.sha !== 'SHA-224') {
-        if (group.sha === 'SHA-256') CURVE = ecdsa(CURVE.Point, sha256);
-      }
       const pubKey = CURVE.Point.fromBytes(group.key.uncompressed);
       eql(pubKey.x, bytesToNumberBE(group.key.wx));
       eql(pubKey.y, bytesToNumberBE(group.key.wy));
       for (const test of group.tests) {
-        if (['Hash weaker than DL-group'].includes(test.comment)) {
-          continue;
-        }
         // These old Wycheproof vectors which still accept missing zero, new one is not.
         if (test.flags.includes('MissingZero') && test.result === 'acceptable')
           test.result = 'invalid';
@@ -401,7 +456,6 @@ describe('RFC6979', () => {
       const rfc6979 = json('./vectors/rfc6979.json');
       const v = rfc6979.find((v) => v.curve === name);
       if (!v) throw new Error('missing RFC6979 vector: ' + name);
-      const hasLowS = v.curve === 'secp256k1';
       const curve = NIST[v.curve];
       eql(curve.Point.Fn.ORDER, hexToBigint(v.q));
       // RFC 6979 publishes `x` as an integer. Convert it to the curve's fixed-width scalar bytes so
@@ -413,7 +467,7 @@ describe('RFC6979', () => {
       eql(pubPoint.y, hexToBigint(v.Uy));
       for (const c of v.cases) {
         const h = asciiToBytes(c.message);
-        const opts = { lowS: hasLowS, format: 'der' };
+        const opts = { lowS: false, format: 'der' };
         const sig = curve.sign(h, priv, opts);
         const sigObj = curve.Signature.fromBytes(sig, 'der');
         eql(sigObj.r, hexToBigint(c.r), 'R');
@@ -425,7 +479,7 @@ describe('RFC6979', () => {
           'verify(2)'
         );
         // default format
-        eql(curve.verify(sigObj.toBytes(), h, pubKey, { lowS: hasLowS }), true, 'verify(3)');
+        eql(curve.verify(sigObj.toBytes(), h, pubKey, { lowS: false }), true, 'verify(3)');
         // overwrite to use default
         eql(
           curve.verify(sigObj.toBytes(), h, pubKey, Object.assign({}, opts, { format: undefined })),

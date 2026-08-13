@@ -7,6 +7,7 @@ import {
   interleavedMSMUnsafe as _interleavedMSMUnsafe,
 } from '../src/abstract/curve.ts';
 import { bls12_381 } from '../src/bls12-381.ts';
+import { bn254 } from '../src/bn254.ts';
 import { edwards as _edwards } from '../src/abstract/edwards.ts';
 import { weierstrass as _weierstrass } from '../src/abstract/weierstrass.ts';
 import { ed25519, ed25519ctx, ed25519ph, ristretto255 } from '../src/ed25519.ts';
@@ -43,9 +44,8 @@ export const CURVES = {
   brainpoolP512r1,
   bls12_381_G1: bls12_381.G1,
   bls12_381_G2: bls12_381.G2,
-  // Requires fromHex/toHex
-  // bn254_G1: bn254.G1,
-  // bn254_G2: bn254.G2,
+  bn254_G1: bn254.G1,
+  bn254_G2: bn254.G2,
   ristretto: { ...ed25519, Point: ristretto255.Point },
   decaf: { ...ed448, Point: decaf448.Point },
 };

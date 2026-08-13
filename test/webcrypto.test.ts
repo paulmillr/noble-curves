@@ -103,10 +103,10 @@ describe('webcrypto', () => {
               formatPub,
             });
             const nobleShared = noble.getSharedSecret(rawPrivWeb, noble.getPublicKey(randomNoble));
-            deepStrictEqual(
-              c === 'x25519' || c === 'x448' ? nobleShared : nobleShared.slice(1),
-              webShared
-            );
+            // Montgomery APIs already return raw u; Weierstrass APIs return SEC1 0x04 || x || y.
+            const rawNobleShared =
+              c === 'x25519' || c === 'x448' ? nobleShared : nobleShared.slice(1);
+            deepStrictEqual(rawNobleShared, webShared);
           }
         }
       });

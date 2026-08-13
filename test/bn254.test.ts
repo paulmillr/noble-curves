@@ -569,7 +569,6 @@ describe('bn254', () => {
       );
     });
     it('Sparse multiplication', () => {
-      // Sparse
       const f12m = Fp12.fromBigTwelve([
         14244494172137254969594643025187612313596583059399776446481360252038625225561n,
         5215150185941911353875535033815039681144663555998205467685043428415199457598n,
@@ -584,6 +583,12 @@ describe('bn254', () => {
         14233000115032918798785952246007985270659932100988995610419881744204174857289n,
         4824342970688691964976119141257507032105805643608313922359860622298332170887n,
       ]);
+      const b0 = f12m.c1.c0;
+      const b1 = f12m.c1.c1;
+      const sparse1 = Fp6.create({ c0: Fp2.ZERO, c1: b1, c2: Fp2.ZERO });
+      const sparse01 = Fp6.create({ c0: b0, c1: b1, c2: Fp2.ZERO });
+      eql(Fp6.mul1(f12m.c0, b1), Fp6.mul(f12m.c0, sparse1), 'Fp6.mul1');
+      eql(Fp6.mul01(f12m.c0, b0, b1), Fp6.mul(f12m.c0, sparse01), 'Fp6.mul01');
     });
   });
 
@@ -689,8 +694,15 @@ describe('bn254', () => {
     // - https://github.com/zcash-hackworks/bn
     // - https://github.com/arkworks-rs/curves/blob/master/bn254/src/lib.rs
     const crossTests = jsonGZ(CROSS_PATH_GZ);
+    let otherCurveGroups = 0;
     for (const [name, vectors] of Object.entries(crossTests)) {
-      if (['ark_bls12-381', 'ark_bls12-377'].includes(name)) continue;
+      if (['ark_bls12-381', 'ark_bls12-377'].includes(name)) {
+        // This file tests bn254. BLS12-381 is exercised by bls12-381.test.ts; BLS12-377 has no
+        // implementation here. Pin both bundled groups so additions cannot silently disappear.
+        eql(vectors.length, 1001, `${name} vector count`);
+        otherCurveGroups++;
+        continue;
+      }
       const { Fp, Fp2, Fp12 } = bn254.fields;
       for (const t of vectors) {
         // TODO: projective stuff is somewhat broken on export?
@@ -707,6 +719,7 @@ describe('bn254', () => {
         eql(p, fp12, name);
       }
     }
+    eql(otherCurveGroups, 2, 'explicit non-bn254 vector groups');
   });
 
   describe('ETH', () => {

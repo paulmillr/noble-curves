@@ -225,6 +225,7 @@ describe('X25519 RFC7748 ECDH', () => {
   it('wycheproof', () => {
     const x25519vectors = json('./vectors/wycheproof/x25519_test.json');
     const group = deepHexToBytes(x25519vectors.testGroups[0]);
+    let strictRejects = 0;
     group.tests.forEach((v, i) => {
       const comment = `(${i}, ${v.result}) ${v.comment}`;
       if (v.result === 'valid' || v.result === 'acceptable') {
@@ -232,8 +233,10 @@ describe('X25519 RFC7748 ECDH', () => {
           const shared = x25519.scalarMult(v.private, v.public);
           eql(shared, v.shared, comment);
         } catch (e) {
-          // We are more strict
-          if (e.message.includes('invalid private or public key received')) return;
+          if (e.message.includes('invalid private or public key received')) {
+            strictRejects++;
+            return;
+          }
           throw e;
         }
       } else if (v.result === 'invalid') {
@@ -246,6 +249,7 @@ describe('X25519 RFC7748 ECDH', () => {
         eql(failed, true, comment);
       } else throw new Error('unknown test result');
     });
+    eql(strictRejects, 31, 'explicit stricter-than-Wycheproof rejections');
   });
 });
 

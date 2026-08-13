@@ -1,6 +1,6 @@
 import { sha1 } from '@noble/hashes/legacy.js';
 import { sha224, sha256, sha384, sha512, sha512_224, sha512_256 } from '@noble/hashes/sha2.js';
-import { sha3_224, sha3_256, sha3_384, sha3_512 } from '@noble/hashes/sha3.js';
+import { sha3_224, sha3_256, sha3_384, sha3_512, shake128, shake256 } from '@noble/hashes/sha3.js';
 import { describe, it } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql } from 'node:assert';
 import { ecdsa } from '../src/abstract/weierstrass.ts';
@@ -8,6 +8,7 @@ import { ed25519, ed25519ctx, ed25519ph } from '../src/ed25519.ts';
 import { ed448, ed448ph } from '../src/ed448.ts';
 import { p256, p384, p521 } from '../src/nist.ts';
 import { bytesToNumberBE } from '../src/utils.ts';
+import { p192, p224 } from './_more-curves.helpers.ts';
 import { deepHexToBytes, jsonGZ } from './utils.ts';
 
 const loadACVP = (name, gzip = true, bytes = true) => {
@@ -39,12 +40,34 @@ const loadACVP = (name, gzip = true, bytes = true) => {
 };
 
 const CURVES = {
-  //'P-224': p224,
+  'P-192': p192,
+  'P-224': p224,
   'P-256': p256,
   'P-384': p384,
   'P-521': p521,
   'ED-25519': ed25519,
   'ED-448': ed448,
+};
+
+const UNSUPPORTED_BINARY_CURVES = new Set([
+  'K-163',
+  'K-233',
+  'K-283',
+  'K-409',
+  'K-571',
+  'B-163',
+  'B-233',
+  'B-283',
+  'B-409',
+  'B-571',
+]);
+
+const wrapShake = (shake, dkLen) => {
+  const hash = (msg) => shake(msg, { dkLen });
+  hash.outputLen = dkLen;
+  hash.blockLen = shake.blockLen;
+  hash.create = () => shake.create({ dkLen });
+  return hash;
 };
 
 const ED_CURVES = {
@@ -64,18 +87,30 @@ const HASHES = {
   'SHA3-256': sha3_256,
   'SHA3-384': sha3_384,
   'SHA3-512': sha3_512,
-  // 'SHAKE-128': shake128_32,
-  // 'SHAKE-256': shake256_64,
+  'SHAKE-128': wrapShake(shake128, 32),
+  'SHAKE-256': wrapShake(shake256, 64),
+};
+
+const getHash = (name) => {
+  const hash = HASHES[name];
+  if (!hash) throw new Error('unsupported ACVP hash: ' + name);
+  return hash;
 };
 
 describe('ACVP', () => {
-  it('ECDSA KeyGen/KeyVer/SigGen/SigVer', () => {
+  it('ECDSA vectors for supported prime-field curves', () => {
+    let unsupportedBinaryVectors = 0;
+    let randomizedHashingVectors = 0;
     for (const { info, tests } of [
       ...loadACVP('ECDSA-KeyGen-1.0'),
       ...loadACVP('ECDSA-KeyGen-FIPS186-5'),
     ]) {
       const curve = CURVES[info.ip.curve];
-      if (!curve) continue;
+      if (!curve) {
+        eql(UNSUPPORTED_BINARY_CURVES.has(info.ip.curve), true, 'known binary curve');
+        unsupportedBinaryVectors += tests.length;
+        continue;
+      }
       for (const t of tests) {
         const pub = curve.getPublicKey(t.ip.d);
         const { x, y } = curve.Point.fromBytes(pub).toAffine();
@@ -89,7 +124,11 @@ describe('ACVP', () => {
       ...loadACVP('ECDSA-KeyVer-FIPS186-5'),
     ]) {
       const curve = CURVES[info.ip.curve];
-      if (!curve) continue;
+      if (!curve) {
+        eql(UNSUPPORTED_BINARY_CURVES.has(info.ip.curve), true, 'known binary curve');
+        unsupportedBinaryVectors += tests.length;
+        continue;
+      }
       for (const t of tests) {
         const x = bytesToNumberBE(t.ip.qx);
         const y = bytesToNumberBE(t.ip.qy);
@@ -107,12 +146,20 @@ describe('ACVP', () => {
 
     for (const { info, tests } of loadACVP('DetECDSA-SigGen-FIPS186-5')) {
       const curve = CURVES[info.ip.curve];
-      if (!curve) continue;
-      const hash = HASHES[info.ip.hashAlg];
+      if (!curve) {
+        eql(UNSUPPORTED_BINARY_CURVES.has(info.ip.curve), true, 'known binary curve');
+        unsupportedBinaryVectors += tests.length;
+        continue;
+      }
+      const hash = getHash(info.ip.hashAlg);
       const curveWithHash = ecdsa(curve.Point, hash);
       const { d: sk } = info.ip;
       for (const t of tests) {
-        if (t.ip.randomValue) continue; // message randomization
+        if (t.ip.randomValue) {
+          // SP 800-106 randomizes at bit granularity; noble-hashes intentionally accepts bytes.
+          randomizedHashingVectors++;
+          continue;
+        }
         const { message } = t.ip;
         const x = bytesToNumberBE(info.ip.qx);
         const y = bytesToNumberBE(info.ip.qy);
@@ -131,17 +178,57 @@ describe('ACVP', () => {
       }
     }
 
+    // Random-nonce SigGen vectors cannot reproduce r/s through the deterministic signing API, but
+    // their expected signatures must verify and their projected public keys must match.
+    for (const suite of ['ECDSA-SigGen-1.0', 'ECDSA-SigGen-FIPS186-5']) {
+      for (const { info, tests } of loadACVP(suite)) {
+        const curve = CURVES[info.ip.curve];
+        if (!curve) {
+          eql(UNSUPPORTED_BINARY_CURVES.has(info.ip.curve), true, 'known binary curve');
+          unsupportedBinaryVectors += tests.length;
+          continue;
+        }
+        const curveWithHash = ecdsa(curve.Point, getHash(info.ip.hashAlg));
+        const { d: sk } = info.ip;
+        const x = bytesToNumberBE(info.ip.qx);
+        const y = bytesToNumberBE(info.ip.qy);
+        const pk = curve.Point.fromAffine({ x, y }).toBytes();
+        eql(pk, curve.getPublicKey(sk), `${suite} public key`);
+        for (const t of tests) {
+          if (t.ip.randomValue) {
+            randomizedHashingVectors++;
+            continue;
+          }
+          const sig = new curve.Signature(
+            bytesToNumberBE(t.ip.r),
+            bytesToNumberBE(t.ip.s)
+          ).toBytes();
+          eql(
+            curveWithHash.verify(sig, t.ip.message, pk, { lowS: false }),
+            true,
+            `${suite} verify`
+          );
+        }
+      }
+    }
+
     for (const { info, tests } of [
       ...loadACVP('ECDSA-SigVer-1.0'),
       ...loadACVP('ECDSA-SigVer-FIPS186-5'),
     ]) {
       const curve = CURVES[info.ip.curve];
-      if (!curve) continue;
-      if (info.ip.hashAlg.startsWith('SHAKE-')) continue;
-      const hash = HASHES[info.ip.hashAlg];
+      if (!curve) {
+        eql(UNSUPPORTED_BINARY_CURVES.has(info.ip.curve), true, 'known binary curve');
+        unsupportedBinaryVectors += tests.length;
+        continue;
+      }
+      const hash = getHash(info.ip.hashAlg);
       const curveWithHash = ecdsa(curve.Point, hash);
       for (const t of tests) {
-        if (t.ip.randomValue) continue; // message randomization
+        if (t.ip.randomValue) {
+          randomizedHashingVectors++;
+          continue;
+        }
         const opts = { lowS: false };
         const msg = t.ip.message;
         const x = bytesToNumberBE(t.ip.qx);
@@ -160,6 +247,8 @@ describe('ACVP', () => {
         eql(passed, t.ip.testPassed, 'ECDSA-SigVer');
       }
     }
+    eql(unsupportedBinaryVectors, 6970, 'explicit unsupported binary-curve vectors');
+    eql(randomizedHashingVectors, 1705, 'explicit SP 800-106 bit-oriented vectors');
   });
 
   it('EDDSA KeyGen/KeyVer/SigGen/SigVer', () => {

@@ -157,6 +157,27 @@ describe('ed448', () => {
       { numRuns: 5 }
     );
   });
+  it('1,000 deterministic sign/verify and wrong-message cases', () => {
+    for (let i = 0; i < 1_000; i++) {
+      const privateKey = new Uint8Array(57);
+      privateKey[0] = i;
+      privateKey[1] = i >>> 8;
+      privateKey[2] = i >>> 16;
+      privateKey[3] = i >>> 24;
+      for (let j = 4; j < privateKey.length; j++) privateKey[j] = (i * 131 + j * 17) & 0xff;
+      const message = new Uint8Array(i % 256);
+      for (let j = 0; j < message.length; j++) message[j] = (i * 13 + j * 29) & 0xff;
+
+      const publicKey = ed.getPublicKey(privateKey);
+      const signature = ed.sign(message, privateKey);
+      eql(ed.verify(signature, message, publicKey), true, `valid signature ${i}`);
+      eql(
+        ed.verify(signature, concatBytes(message, Uint8Array.of(0)), publicKey),
+        false,
+        `wrong message ${i}`
+      );
+    }
+  });
   const privKey = bytes57('a665a45920422f9d417e4867ef');
   const msg = bytes('874f9960c5d2b7a9b5fad383e1ba44719ebb743a');
   const wrongMsg = bytes('589d8c7f1da0a24bc07b7381ad48b1cfc211af1c');
@@ -411,9 +432,6 @@ describe('ed448', () => {
           'aa3b4749d55b9daf1e5b00288826c467274ce3ebbdd5c17b975e09d4af6c67cf10d087202db88286e2b79fceea3ec353ef54faa26e219f38',
         iters: 1000,
       },
-      // This commented code must be kept for future tests. It takes too long to calculate, but could still be useful
-      // TODO: split into separate ed448-slow-large.test.ts
-      // { scalar: '077f453681caca3693198420bbe515cae0002472519b3e67661a7e89cab94695c8f4bcd66e61b9b9c946da8d524de3d69bd9d9d66b997e37', iters: 1000000 },
     ];
     it('RFC7748, shared-key, wycheproof, and base-point vectors', () => {
       for (let i = 0; i < rfc7748Mul.length; i++) {
@@ -445,6 +463,7 @@ describe('ed448', () => {
 
       const x448vectors = json('./vectors/wycheproof/x448_test.json');
       const group = x448vectors.testGroups[0];
+      let strictRejects = 0;
       group.tests.forEach((v, i) => {
         const index = `(${i}, ${v.result}) ${v.comment}`;
         if (v.result === 'valid' || v.result === 'acceptable') {
@@ -452,8 +471,10 @@ describe('ed448', () => {
             const shared = hex(x448.scalarMult(bytes(v.private), bytes(v.public)));
             eql(shared, v.shared, index);
           } catch (e) {
-            // We are more strict
-            if (e.message.includes('invalid private or public key received')) return;
+            if (e.message.includes('invalid private or public key received')) {
+              strictRejects++;
+              return;
+            }
             throw e;
           }
         } else if (v.result === 'invalid') {
@@ -466,6 +487,7 @@ describe('ed448', () => {
           eql(failed, true, index);
         } else throw new Error('unknown test result');
       });
+      eql(strictRejects, 11, 'explicit stricter-than-Wycheproof rejections');
 
       const { x, y } = Point.BASE;
       const { Fp } = ed448.Point;

@@ -806,10 +806,8 @@ describe('FROST (RFC 9591)', () => {
           );
         }, /round2 replay did not produce a new recipient share/);
       });
-      let i = 0;
-
       for (let signIndex = 0; signIndex < signCount; signIndex++) {
-        it(`sign ${i++}`, () => {
+        it(`sign ${signIndex}`, () => {
           const t = loadSign(signIndex);
           const signers = { min: +t.config.MIN_PARTICIPANTS, max: +t.config.MAX_PARTICIPANTS };
           const msg = hexToBytes(t.inputs.message);
@@ -897,11 +895,10 @@ describe('FROST (RFC 9591)', () => {
           }
         });
       }
-      i = 0;
       for (let dkgIndex = 0; dkgIndex < dkgCount; dkgIndex++) {
         // DKG is Distributed Key Generation (not related to Trusted Dealer Key Generation)
         // Awesome naming!
-        it(`dkg ${i++}`, () => {
+        it(`dkg ${dkgIndex}`, () => {
           const t = loadDkg(dkgIndex);
           const getInput = (id: number): DkgInput => {
             const input = t.inputs[String(id)];
@@ -928,6 +925,7 @@ describe('FROST (RFC 9591)', () => {
           const round1Secret: Record<number, DKG_Secret> = {};
           const round2Recv: Record<number, DKG_Round2[]> = {};
           const id2id: Record<string, number> = {};
+          let round3Participants = 0;
           for (const k in t.inputs) {
             const v = t.inputs[k];
             if (typeof v === 'string' || !v.identifier) continue;
@@ -994,6 +992,7 @@ describe('FROST (RFC 9591)', () => {
                 other.map((i) => round1[i]),
                 round2Recv[id]
               );
+              round3Participants++;
               eql(round3.public.commitments[0], hexToBytes(t.inputs.verifying_key));
               for (const k in round3.public.verifyingShares) {
                 const v = round3.public.verifyingShares[k];
@@ -1001,6 +1000,7 @@ describe('FROST (RFC 9591)', () => {
               }
             }
           }
+          eql(round3Participants, ids.length, 'round3 covers every DKG participant');
         });
       }
     });

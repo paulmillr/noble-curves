@@ -233,22 +233,20 @@ describe('ed25519', () => {
         'ZIP-215 default options'
       );
 
-      if (ed.utils.isValidPublicKey) {
-        const unreduced = numberToBytesLE(ed.Point.CURVE().p + 1n, 32);
-        eql(
-          {
-            omitted: ed.utils.isValidPublicKey(unreduced),
-            undef: ed.utils.isValidPublicKey(unreduced, undefined),
-            zip215: ed.utils.isValidPublicKey(unreduced, true),
-            strict: ed.utils.isValidPublicKey(unreduced, false),
-          },
-          { omitted: true, undef: true, zip215: true, strict: false }
-        );
-      }
-      if (ed.utils.isValidSecretKey) {
-        const seed = new Uint8Array(ed.Point.Fp.BYTES);
-        eql(ed.utils.isValidSecretKey(seed), true, 'isValidSecretKey helper width');
-      }
+      strictEqual(typeof ed.utils.isValidPublicKey, 'function', 'isValidPublicKey helper exists');
+      const unreduced = numberToBytesLE(ed.Point.CURVE().p + 1n, 32);
+      eql(
+        {
+          omitted: ed.utils.isValidPublicKey(unreduced),
+          undef: ed.utils.isValidPublicKey(unreduced, undefined),
+          zip215: ed.utils.isValidPublicKey(unreduced, true),
+          strict: ed.utils.isValidPublicKey(unreduced, false),
+        },
+        { omitted: true, undef: true, zip215: true, strict: false }
+      );
+      strictEqual(typeof ed.utils.isValidSecretKey, 'function', 'isValidSecretKey helper exists');
+      const seed = new Uint8Array(ed.Point.Fp.BYTES);
+      eql(ed.utils.isValidSecretKey(seed), true, 'isValidSecretKey helper width');
       const publicKey4 = bytes('17ffad8068dc0de9935d36636f3ad1b5de6de3413b12388e453b05f2a4c1d3db');
       const msg4 = bytes('090807');
       const signature4 = bytes(

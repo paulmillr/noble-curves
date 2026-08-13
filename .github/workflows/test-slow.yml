@@ -1,0 +1,11 @@
+name: Run scheduled tests
+on:
+  schedule:
+    - cron: '0 17 * * 1,4' # 17:00 bi-weekly (mon, thu)
+  workflow_dispatch:
+jobs:
+  slow:
+    name: Slow large input tests
+    uses: paulmillr/jsbt/.github/workflows/test-custom.yml@5320e209ca8cc9b1b0b569675e164bdd2a139d71
+    with:
+      npm-task: test:slow

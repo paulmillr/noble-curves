@@ -5,13 +5,15 @@ import { mulAddUnsafe, ScalarMultiplier } from '../src/abstract/curve.ts';
 import { hash_to_field } from '../src/abstract/hash-to-curve.ts';
 import { bls12_381 as bls, bls12_381 } from '../src/bls12-381.ts';
 import { asciiToBytes, bytesToHex, concatBytes, hexToBytes } from '../src/utils.ts';
-import { json, txt } from './utils.ts';
+import { json, jsonGZ, txt } from './utils.ts';
 
 import * as utils from '../src/utils.ts';
 
 const loadEip2537 = () => json('./vectors/bls12-381/eip2537.json');
 const loadZkVectors = () => json('./vectors/bls12-381/zkcrypto/converted.json');
 const loadPairingVectors = () => json('./vectors/bls12-381/go_pairing_vectors/pairing.json');
+const loadArkworksPairingVectors = () =>
+  jsonGZ('./vectors/bn254/cross1000.json.gz')['ark_bls12-381'];
 const loadG1Vectors = () =>
   txt('vectors/bls12-381/bls12-381-g1-test-vectors.txt').map((v) => {
     return [hexToBytes(v[0]), hexToBytes(v[1]), v[2]];
@@ -155,7 +157,7 @@ const BLS_H2C_VEC_ENCODE_G2 = [
 ];
 
 // @ts-ignore
-const NUM_RUNS = Number(globalThis.process?.env?.RUNS_COUNT || 10); // reduce to 1 to shorten test time
+const NUM_RUNS = 10;
 fc.configureGlobal({ numRuns: NUM_RUNS });
 
 const G1Point = bls.G1.Point;
@@ -772,73 +774,11 @@ describe('bls12-381 encoding', () => {
     eql(g1_.y, y);
   });
 
-  it('G1.fromBytes', () => {
-    // Test Zero
-    const g1 = G1Point.fromBytes(B_192_40_BYTES);
-
-    eql(g1.x, G1Point.ZERO.x);
-    eql(g1.y, G1Point.ZERO.y);
-    // Test Non-Zero
-    const x = Fp.create(
-      BigInt(
-        '0x17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb'
-      )
-    );
-    const y = Fp.create(
-      BigInt(
-        '0x08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
-      )
-    );
-
-    const g1_ = G1Point.fromBytes(
-      hexToBytes(
-        '17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
-      )
-    );
-
-    eql(g1_.x, x);
-    eql(g1_.y, y);
-  });
-
   it('G2.fromBytes', () => {
     // Test Zero
     const g2 = G2Point.fromBytes(B_384_40_BYTES);
     eql(g2.x, G2Point.ZERO.x, 'zero(x)');
     eql(g2.y, G2Point.ZERO.y, 'zero(y)');
-    // Test Non-Zero
-    const x = Fp2.fromBigTuple([
-      BigInt(
-        '0x024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb8'
-      ),
-      BigInt(
-        '0x13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e'
-      ),
-    ]);
-    const y = Fp2.fromBigTuple([
-      BigInt(
-        '0x0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801'
-      ),
-      BigInt(
-        '0x0606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79be'
-      ),
-    ]);
-
-    const g2_ = G2Point.fromBytes(
-      hexToBytes(
-        '13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb80606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79be0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801'
-      )
-    );
-
-    eql(g2_.x, x);
-    eql(g2_.y, y);
-  });
-
-  it('G2.fromBytes', () => {
-    // Test Zero
-    const g2 = G2Point.fromBytes(B_384_40_BYTES);
-
-    eql(g2.x, G2Point.ZERO.x);
-    eql(g2.y, G2Point.ZERO.y);
     // Test Non-Zero
     const x = Fp2.fromBigTuple([
       BigInt(
@@ -888,58 +828,9 @@ describe('bls12-381 encoding', () => {
     );
   });
 
-  it('G1.toHex2', () => {
-    // Test Zero
-    eql(G1Point.ZERO.toHex(false), B_192_40);
-    // Test Non-Zero
-    const x = Fp.create(
-      BigInt(
-        '0x17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb'
-      )
-    );
-    const y = Fp.create(
-      BigInt(
-        '0x08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
-      )
-    );
-    const g1 = G1Point.fromAffine({ x, y });
-    eql(
-      g1.toHex(false),
-      '17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1'
-    );
-  });
-
   it('G2.toHex', () => {
     // Test Zero
     eql(G2Point.ZERO.toHex(false), B_384_40);
-    // Test Non-Zero
-    const x = Fp2.fromBigTuple([
-      BigInt(
-        '0x024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb8'
-      ),
-      BigInt(
-        '0x13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e'
-      ),
-    ]);
-    const y = Fp2.fromBigTuple([
-      BigInt(
-        '0x0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801'
-      ),
-      BigInt(
-        '0x0606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79be'
-      ),
-    ]);
-    const g2 = G2Point.fromAffine({ x, y });
-    eql(
-      g2.toHex(false),
-      '13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb80606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79be0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801'
-    );
-  });
-
-  it('G2.toHex2', () => {
-    // Test Zero
-    eql(G2Point.ZERO.toHex(false), B_384_40);
-
     // Test Non-Zero
     const x = Fp2.fromBigTuple([
       BigInt(
@@ -1054,36 +945,18 @@ describe('bls12-381 verify', () => {
         eql(blsl.Signature.toHex(blsl.Signature.fromBytes(sigb)), bytesToHex(sigb), 'h round');
       }
 
-      for (let i = 0; i < NUM_RUNS; i++) {
-        const [priv, msgs] = G2_VECTORS[i];
+      for (let i = 0; i < G2_VECTORS.length; i++) {
+        const [priv, msgs, expected] = G2_VECTORS[i];
         const msg = blsl.hash(msgs);
-        const sig = blsl.sign(msg, priv);
+        const sig = hexToBytes(expected);
         const pub = blsl.getPublicKey(priv);
-        const res = blsl.verify(sig, msg, pub);
-        eql(res, true, `${priv}-${msg}`);
-        const resHex = blsl.verify(sig, msg, pub);
-        eql(resHex, true, `${priv}-${msg}-hex`);
-      }
-      for (let i = 0; i < NUM_RUNS; i++) {
-        const [priv, msgs] = G2_VECTORS[i];
-        const invMsgs = G2_VECTORS[i + 1][1];
-        const msg = blsl.hash(msgs);
-        const invMsg = blsl.hash(invMsgs);
-        const sig = blsl.sign(msg, priv);
-        const pub = blsl.getPublicKey(priv);
-        const res = blsl.verify(sig, invMsg, pub);
-        eql(res, false);
-      }
-      for (let i = 0; i < NUM_RUNS; i++) {
-        const [priv, msgs] = G2_VECTORS[i];
-        const msg = blsl.hash(msgs);
-        const sig = blsl.sign(msg, priv);
-        const invPriv = hexToBytes(bytesToHex(G2_VECTORS[i + 1][1]).padStart(64, '0'));
-        const invPub = blsl.getPublicKey(invPriv);
-        const res = blsl.verify(sig, msg, invPub);
-        eql(res, false);
-        const resHex = blsl.verify(blsl.Signature.toBytes(sig), msg, invPub);
-        eql(resHex, false);
+        eql(blsl.verify(sig, msg, pub), true, `valid vector ${i}`);
+        eql(
+          blsl.verify(sig, blsl.hash(concatBytes(msgs, Uint8Array.of(0))), pub),
+          false,
+          `wrong message ${i}`
+        );
+        eql(blsl.verify(sig, msg, pub.add(G1Point.BASE)), false, `wrong public key ${i}`);
       }
     });
     it('rejects uncompressed signature bytes in raw-byte APIs', () => {
@@ -1117,38 +990,18 @@ describe('bls12-381 verify', () => {
         eql(blss.Signature.toBytes(blss.Signature.fromBytes(sigb)), sigb);
         eql(blss.Signature.toHex(blss.Signature.fromBytes(sigb)), bytesToHex(sigb));
       }
-      for (let i = 0; i < NUM_RUNS; i++) {
-        const [priv, msg] = G1_VECTORS[i];
+      for (let i = 0; i < G1_VECTORS.length; i++) {
+        const [priv, msg, expected] = G1_VECTORS[i];
         const hmsg = blss.hash(msg);
-        const sig = blss.sign(hmsg, priv);
+        const sig = hexToBytes(expected);
         const pub = blss.getPublicKey(priv);
-        const res = blss.verify(sig, hmsg, pub);
-        eql(res, true, `${priv}-${msg}`);
-        const resHex = blss.verify(sig, hmsg, pub);
-        eql(resHex, true, `${priv}-${msg}`);
-      }
-      for (let i = 0; i < NUM_RUNS; i++) {
-        const [priv, msgs] = G1_VECTORS[i];
-        const invMsgs = G1_VECTORS[i + 1][1];
-        const msg = blss.hash(msgs);
-        const invMsg = blss.hash(invMsgs);
-        const sig = blss.sign(msg, priv);
-        const pub = blss.getPublicKey(priv);
-        const res = blss.verify(sig, invMsg, pub);
-        eql(res, false);
-        const resHex = blss.verify(sig, invMsg, pub);
-        eql(resHex, false);
-      }
-      for (let i = 0; i < NUM_RUNS; i++) {
-        const [priv, msgs] = G1_VECTORS[i];
-        const msg = blss.hash(msgs);
-        const sig = blss.sign(msg, priv);
-        const invPriv = hexToBytes(bytesToHex(G1_VECTORS[i + 1][1]).padStart(64, '0'));
-        const invPub = blss.getPublicKey(invPriv);
-        const res = blss.verify(sig, msg, invPub);
-        eql(res, false);
-        const resHex = blss.verify(sig, msg, invPub);
-        eql(resHex, false);
+        eql(blss.verify(sig, hmsg, pub), true, `valid vector ${i}`);
+        eql(
+          blss.verify(sig, blss.hash(concatBytes(msg, Uint8Array.of(0))), pub),
+          false,
+          `wrong message ${i}`
+        );
+        eql(blss.verify(sig, hmsg, pub.add(G2Point.BASE)), false, `wrong public key ${i}`);
       }
     });
     it('rejects uncompressed signature bytes in raw-byte APIs', () => {
@@ -1300,10 +1153,6 @@ describe('bls12-381 verify', () => {
           const signatures = privateKeys.map((privateKey) => blsl.sign(message, privateKey));
           const aggregatedSignature = blsl.aggregateSignatures(signatures);
           const aggregatedPublicKey = blsl.aggregatePublicKeys(publicKey);
-          // TODO
-          // Error: Property failed after 9 tests
-          // { seed: 515274642, path: "8:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0", endOnFailure: true }
-          // Counterexample: ["0000000000000000000000000000000000000000000000000000000000000000",[4n,52435875175126190479447740508185965837690552500527637822603658699938581184445n,43n,75n,52435875175126190479447740508185965837690552500527637822603658699938581184459n]]
           eql(blsl.verify(aggregatedSignature, message, aggregatedPublicKey), true);
           eql(
             blsl.verify(blsl.Signature.toBytes(aggregatedSignature), message, aggregatedPublicKey),
@@ -1450,6 +1299,24 @@ describe('bls12-381 deterministic', () => {
           0x0f41e58663bf08cf068672cbd01a7ec73baca4d72ca93544deff686bfd6df543d48eaa24afe47e1efde449383b676631n,
         ])
       );
+    });
+    it('arkworks cross-implementation vectors', () => {
+      const vectors = loadArkworksPairingVectors();
+      eql(vectors.length, 1001, 'vector count');
+      const { Fp, Fp2, Fp12 } = bls.fields;
+      for (let i = 0; i < vectors.length; i++) {
+        const vector = vectors[i];
+        const g1 = G1Point.fromAffine({
+          x: Fp.create(BigInt(vector.g1.x[0])),
+          y: Fp.create(BigInt(vector.g1.y[0])),
+        });
+        const g2 = G2Point.fromAffine({
+          x: Fp2.fromBigTuple(vector.g2.x.map(BigInt)),
+          y: Fp2.fromBigTuple(vector.g2.y.map(BigInt)),
+        });
+        const expected = Fp12.fromBigTwelve(vector.pairing.map(BigInt));
+        eql(Fp12.eql(pairing(g1, g2, true), expected), true, `vector ${i}`);
+      }
     });
     it('finalExponentiate is correct', () => {
       const p1 = Fp12.fromBigTwelve([
@@ -1668,10 +1535,10 @@ describe('bls12-381 deterministic', () => {
       throws(() => G1Point.fromBytes(uncompressedBit), 'uncompressed bit');
       const infinityUncompressed = baseU.slice();
       infinityUncompressed[0] |= 0b0100_0000;
-      throws(() => G1Point.fromBytes(compressedBit), 'infinity uncompressed');
+      throws(() => G1Point.fromBytes(infinityUncompressed), 'infinity uncompressed');
       const infinityCompressed = baseC.slice();
       infinityCompressed[0] |= 0b0100_0000;
-      throws(() => G1Point.fromBytes(compressedBit), 'infinity compressed');
+      throws(() => G1Point.fromBytes(infinityCompressed), 'infinity compressed');
     });
     it(`G2 encoding edge cases`, () => {
       const Fp = bls12_381.fields.Fp;
@@ -1699,16 +1566,16 @@ describe('bls12-381 deterministic', () => {
       throws(() => G2Point.fromBytes(uncompressedBit), 'uncompressed bit');
       const infinityUncompressed = baseU.slice();
       infinityUncompressed[0] |= 0b0100_0000;
-      throws(() => G2Point.fromBytes(compressedBit), 'infinity uncompressed');
+      throws(() => G2Point.fromBytes(infinityUncompressed), 'infinity uncompressed');
       const infinityCompressed = baseC.slice();
       infinityCompressed[0] |= 0b0100_0000;
-      throws(() => G2Point.fromBytes(compressedBit), 'infinity compressed');
+      throws(() => G2Point.fromBytes(infinityCompressed), 'infinity compressed');
       infinityCompressed[0] = 0b00100000;
-      throws(() => G2Point.fromBytes(compressedBit), '(!compressed && !infinity && sort)');
+      throws(() => G2Point.fromBytes(infinityCompressed), '(!compressed && !infinity && sort)');
       infinityCompressed[0] = 0b01100000;
-      throws(() => G2Point.fromBytes(compressedBit), '(!compressed && infinity && sort)');
+      throws(() => G2Point.fromBytes(infinityCompressed), '(!compressed && infinity && sort)');
       infinityCompressed[0] = 0b11100000;
-      throws(() => G2Point.fromBytes(compressedBit), '(sort && infinity && compressed)');
+      throws(() => G2Point.fromBytes(infinityCompressed), '(sort && infinity && compressed)');
     });
   });
   describe('EIP2537', () => {

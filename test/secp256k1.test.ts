@@ -119,12 +119,10 @@ describe('secp256k1 static vectors', () => {
 
       for (const vector of VECTORS_points.invalid.pointMultiply) {
         let { P, d } = vector;
-        if (bytesToNumberBE(d) < CURVE_N) {
-          throws(() => {
-            const p = Point.fromBytes(P);
-            p.multiply(bytesToNumberBE(d)).toBytes(true);
-          });
-        }
+        throws(() => {
+          const p = Point.fromBytes(P);
+          p.multiply(bytesToNumberBE(d)).toBytes(true);
+        });
       }
       for (const num of [0n, 0, -1n, -1, 1.1]) {
         throws(() => Point.BASE.multiply(num));
@@ -274,8 +272,7 @@ describe('secp256k1 static vectors', () => {
     const VECTORS_ecdh = loadEcdhVectors();
     const VECTORS_privates = loadPrivateVectors();
     const VECTORS_ecdsa = loadEcdsaVectors();
-    // TODO: Once der is there, run all tests.
-    for (const vector of VECTORS_ecdh.testGroups[0].tests.slice(0, 230)) {
+    for (const vector of VECTORS_ecdh.testGroups[0].tests) {
       const priv = vector.private;
       const pub = derToPub(vector.public);
       if (vector.result === 'invalid' || priv.length !== 32) {
@@ -287,7 +284,7 @@ describe('secp256k1 static vectors', () => {
         eql(res.slice(1), vector.shared);
       }
     }
-    for (const vector of VECTORS_ecdh.testGroups[0].tests.slice(0, 100)) {
+    for (const vector of VECTORS_ecdh.testGroups[0].tests) {
       if (vector.result === 'valid') {
         let priv = vector.private;
         priv = priv.length === 33 ? priv.slice(1) : priv;
@@ -664,7 +661,6 @@ describe('verify()', () => {
 });
 
 describe('secp256k1 schnorr.sign()', () => {
-  if (!schnorr) return;
   // index,secret key,public key,aux_rand,message,signature,verification result,comment
   it('BIP340 vectors', () => {
     const VECTORS_bip340 = txt('vectors/secp256k1/schnorr.csv', ',').slice(1, -1);
@@ -716,7 +712,7 @@ describe('secp256k1 schnorr.sign()', () => {
 
 describe('secp256k1 regressions', () => {
   describe('helpers', () => {
-    it('curve params, BIP340 lift_x, and nonce extraction', () => {
+    it('curve params and BIP340 lift_x', () => {
       const curve = secp.Point.CURVE() as { p: bigint };
       const prev = secp.Point.CURVE().p;
       let changed = false;
@@ -734,17 +730,19 @@ describe('secp256k1 regressions', () => {
       const p = secp.__TEST.lift_x(x);
       eql(p.x, x, 'BIP340 lift_x x-coordinate');
       eql((p.y & 1n) === 0n, true, 'BIP340 lift_x even y');
-
-      if (isNobleCurves) return;
-      const rand = numberToBytesBE(CURVE_N + 1n, 32);
-      const { rx, k } = secp.__TEST.extractK(rand);
-      eql(k, 1n, 'BIP340 nonce extraction k');
-      eql(
-        bytesToHex(rx),
-        bytesToHex(secp.Point.BASE.toBytes(true).slice(1)),
-        'BIP340 nonce extraction rx'
-      );
     });
+
+    if (!isNobleCurves)
+      it('nonce extraction', () => {
+        const rand = numberToBytesBE(CURVE_N + 1n, 32);
+        const { rx, k } = secp.__TEST.extractK(rand);
+        eql(k, 1n, 'BIP340 nonce extraction k');
+        eql(
+          bytesToHex(rx),
+          bytesToHex(secp.Point.BASE.toBytes(true).slice(1)),
+          'BIP340 nonce extraction rx'
+        );
+      });
   });
 
   describe('typed arrays', () => {

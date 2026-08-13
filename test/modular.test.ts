@@ -147,7 +147,6 @@ for (const c in FIELDS) {
         );
         fc.assert(
           fc.property(FC_BIGINT, FC_BIGINT, (num1, num2) => {
-            // TODO: num1 === num2 is FALSE for Fp2
             const a = create(num1);
             const b = create(num2);
             eql(Fp.eql(a, b), num1 === num2, l('eql(a, b) follows source equality'));

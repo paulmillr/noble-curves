@@ -16,11 +16,10 @@ import { json } from './utils.ts';
 
 describe('edge cases', () => {
   it('bigInt private keys', () => {
-    // Doesn't support bigints anymore
+    // Private-key APIs accept byte strings, not bigints.
     throws(() => ed25519.sign(Uint8Array.of(), 123n));
     throws(() => ed25519.getPublicKey(123n));
     throws(() => x25519.getPublicKey(123n));
-    // Weierstrass still supports
     throws(() => secp256k1.getPublicKey(123n));
     throws(() => secp256k1.sign(Uint8Array.of(), 123n));
   });
@@ -45,7 +44,7 @@ describe('edge cases', () => {
 });
 
 describe('createCurve', () => {
-  describe('handles wycheproof vectors', () => {
+  describe('constructs curves from Wycheproof parameters', () => {
     const vectorNames = [
       'secp224r1',
       'secp256r1',
@@ -90,6 +89,13 @@ describe('createCurve', () => {
             Gy: BigInt(`0x${v.gy}`),
           }),
           sha256
+        );
+        const n = CURVE.Point.Fn.ORDER;
+        eql(
+          CURVE.Point.BASE.multiply(n - 1n)
+            .add(CURVE.Point.BASE)
+            .is0(),
+          true
         );
       });
     }

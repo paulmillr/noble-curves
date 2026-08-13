@@ -26,6 +26,7 @@
     "check": "jsbt-check",
     "format": "prettier --write 'src/**/*.{js,ts}' 'test/*.{js,ts}'",
     "test": "node --no-warnings test/index.ts",
+    "test:slow": "node test/slow-curves.test.ts",
     "test:deno": "deno --allow-env --allow-read test/index.ts",
     "test:bun": "bun test/index.ts"
   },

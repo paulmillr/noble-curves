@@ -72,7 +72,7 @@ describe('basic curve tests', () => {
     const FC_BIGINT = fc.bigInt(1n + 1n, CURVE_ORDER - 1n);
     const p = C.Point;
     const o = getOtherCurve(name).Point;
-    if (!p) continue;
+    if (!p) throw new Error(`missing Point implementation: ${name}`);
 
     const G = [p.ZERO, p.BASE];
     for (let i = 2n; i < 10n; i++) G.push(G[1].multiply(i));
@@ -262,7 +262,6 @@ describe('basic curve tests', () => {
       });
 
       describe('multiscalar multiplication', () => {
-        if (typeof pippenger !== 'function' || typeof interleavedMSMUnsafe !== 'function') return;
         it('basic, random, and precomputed MSM', () => {
           const msm = (points, scalars) => pippenger(p, points, scalars);
           equal(msm([p.BASE], [0n]), p.ZERO, '0*G');
@@ -378,15 +377,16 @@ describe('basic curve tests', () => {
 
     describe(name, () => {
       // Generic complex things (getPublicKey/sign/verify/getSharedSecret)
-      it('.getPublicKey() type check', () => {
-        for (let [item, repr_] of getTypeTests()) {
-          throws(() => C.getPublicKey(item), repr_);
-        }
-        throws(() => C.getPublicKey('key'), "'key'");
-        throws(() => C.getPublicKey({}));
-        throws(() => C.getPublicKey(Uint8Array.of()));
-        throws(() => C.getPublicKey(Array(32).fill(1)));
-      });
+      if (C.getPublicKey)
+        it('.getPublicKey() type check', () => {
+          for (let [item, repr_] of getTypeTests()) {
+            throws(() => C.getPublicKey(item), repr_);
+          }
+          throws(() => C.getPublicKey('key'), "'key'");
+          throws(() => C.getPublicKey({}));
+          throws(() => C.getPublicKey(Uint8Array.of()));
+          throws(() => C.getPublicKey(Array(32).fill(1)));
+        });
 
       if (C.verify) {
         it('.verify() accepts valid signatures', () => {
