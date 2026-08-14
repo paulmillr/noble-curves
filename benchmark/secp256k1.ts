@@ -1,9 +1,9 @@
-import mark from '@paulmillr/jsbt/benchmark.js';
+import mark, { section } from '@paulmillr/jsbt/benchmark.js';
 import { schnorr, secp256k1 } from '../src/secp256k1.ts';
 import { generateData } from './_shared.ts';
 
 (async () => {
-  console.log('# secp256k1');
+  section('secp256k1');
   await mark('init', () => secp256k1.Point.BASE.precompute(6, false));
   const d = generateData(secp256k1);
   await mark('getPublicKey', () => secp256k1.getPublicKey(d.priv));

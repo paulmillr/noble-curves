@@ -1,7 +1,7 @@
 import { sha256, sha512 } from '@noble/hashes/sha2.js';
 import { shake256 } from '@noble/hashes/sha3.js';
 import { randomBytes } from '@noble/hashes/utils.js';
-import mark from '@paulmillr/jsbt/benchmark.js';
+import mark, { section } from '@paulmillr/jsbt/benchmark.js';
 import { hash_to_field } from '../src/abstract/hash-to-curve.ts';
 import * as md from '../src/abstract/modular.ts';
 import { ed25519, ristretto255, ristretto255_hasher } from '../src/ed25519.ts';
@@ -15,13 +15,13 @@ const RistrettoPoint = ristretto255.Point;
 const DecafPoint = decaf448.Point;
 
 (async () => {
-  console.log('# utils');
+  section('utils');
   const hex32 = '0123456789abcdef'.repeat(4);
   const hex256 = hex32.repeat(8);
   await mark('hexToBytes 32b', () => hexToBytes(hex32));
   await mark('hexToBytes 256b', () => hexToBytes(hex256));
 
-  console.log('# modular over secp256k1 P field');
+  section('modular over secp256k1 P field');
   const secpFp = secp256k1.Point.Fp;
   const Fp25519 = Field(2n ** 255n - 19n);
   const Fp383 = Field(
@@ -46,7 +46,7 @@ const DecafPoint = decaf448.Point;
   await mark('sqrt p = 9 mod 16', () => Fp383.sqrt(NUM3));
   await mark('sqrt tonneli-shanks', () => FpStark.sqrt(NUM2));
 
-  console.log('# hashing to fields');
+  section('hashing to fields');
   const N = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n;
   const rand = randomBytes(40);
   // - p, the characteristic of F
@@ -56,7 +56,7 @@ const DecafPoint = decaf448.Point;
     hash_to_field(rand, 1, { DST: 'secp256k1', hash: sha256, expand: 'xmd', p: N, m: 1, k: 128 })
   );
 
-  console.log('# ristretto255');
+  section('ristretto255');
   const priv = ristretto255_hasher.hashToScalar(sha512(ed25519.utils.randomSecretKey()));
   const pub = RistrettoPoint.BASE.multiply(priv);
   const encoded = pub.toBytes();
@@ -70,7 +70,7 @@ const DecafPoint = decaf448.Point;
     ristretto255_hasher.hashToCurve(msg, { DST: 'ristretto255_XMD:SHA-512_R255MAP_RO_' })
   );
 
-  console.log('# decaf448');
+  section('decaf448');
   const dpriv = decaf448_hasher.hashToScalar(
     shake256(ed448.utils.randomSecretKey(), { dkLen: 112 })
   );

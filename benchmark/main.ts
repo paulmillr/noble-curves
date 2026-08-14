@@ -31,9 +31,8 @@ import { generateData } from './_shared.ts';
     };
   }
 
-  await compare('curve signature operations', {}, curves, {
-    libraryDimensions: ['curve', 'algorithm'],
-    dimensions: ['algorithm'],
-    iterations: 1000,
+  await compare('curve signature operations', curves, {
+    levels: ['curve', 'algorithm'],
+    order: ['algorithm'],
   });
 })();

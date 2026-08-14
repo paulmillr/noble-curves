@@ -33,9 +33,8 @@ import { generateData } from './_shared.ts';
     };
   }
 
-  await compare('curve point operations', {}, curves, {
-    libraryDimensions: ['curve', 'algorithm'],
-    dimensions: ['algorithm'],
-    iterations: 1000,
+  await compare('curve point operations', curves, {
+    levels: ['curve', 'algorithm'],
+    order: ['algorithm'],
   });
 })();

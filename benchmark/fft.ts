@@ -1,9 +1,9 @@
-import mark from '@paulmillr/jsbt/benchmark.js';
+import mark, { section } from '@paulmillr/jsbt/benchmark.js';
 import * as fft from '../src/abstract/fft.ts';
 import { bls12_381 } from '../src/bls12-381.ts';
 
 (async () => {
-  console.log('# fft');
+  section('fft');
   const curve = bls12_381;
 
   const Fr = curve.fields.Fr;

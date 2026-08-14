@@ -1,4 +1,4 @@
-import compare_ from '@paulmillr/jsbt/benchmark-compare.js';
+import compare from '@paulmillr/jsbt/benchmark-compare.js';
 import { pippenger } from '../src/abstract/curve.ts';
 import { bls12_381 } from '../src/bls12-381.ts';
 
@@ -11,9 +11,6 @@ import { bls12_381 } from '../src/bls12-381.ts';
   const ones = BigInt(`0b${'1'.repeat(bits)}`);
   function msm(p, s) {
     return pippenger(bls12_381.G1.Point, p, s);
-  }
-  function compare(title, iterations, libs) {
-    return compare_(title, {}, libs, { iterations });
   }
   function sum(points, scalars) {
     let res = g1.ZERO;
@@ -40,7 +37,6 @@ import { bls12_381 } from '../src/bls12-381.ts';
   check('single point', single);
   await compare(
     'single point',
-    5000,
     Object.fromEntries(Object.entries(single).map(([k, v]) => [k, v.got]))
   );
   // Multi-point MSM variants.
@@ -69,7 +65,6 @@ import { bls12_381 } from '../src/bls12-381.ts';
   check('multi point', multi);
   await compare(
     'multi point',
-    500,
     Object.fromEntries(Object.entries(multi).map(([k, v]) => [k, v.got]))
   );
   // Scalar multiplication edge cases.
@@ -94,7 +89,6 @@ import { bls12_381 } from '../src/bls12-381.ts';
   check('basic multiply', mul);
   await compare(
     'basic multiply',
-    5000,
     Object.fromEntries(Object.entries(mul).map(([k, v]) => [k, v.got]))
   );
 })();

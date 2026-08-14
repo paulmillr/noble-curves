@@ -25,14 +25,9 @@ import { generateData } from './_shared.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-function header(name) {
-  console.log();
-  section(name);
-}
-
 (async () => {
   section('secp256k1');
-  await bench('init', () => secp256k1.Point.BASE.precompute(6, false), { mode: 'runOnce' });
+  await bench('init', 'once', () => secp256k1.Point.BASE.precompute(6, false));
   const d = generateData(secp256k1);
   await bench('getPublicKey', () => secp256k1.getPublicKey(d.priv));
   await bench('sign', () => secp256k1.sign(d.msg, d.priv));
@@ -48,15 +43,15 @@ function header(name) {
   await bench('schnorr.verify', () => schnorr.verify(ssig, d.msg, spub));
 
   for (const [name, curve] of Object.entries({ ed25519, ed448, p256, p384, p521 })) {
-    header(name);
-    await bench('init', () => curve.Point.BASE.precompute(6, false), { mode: 'runOnce' });
+    section(name);
+    await bench('init', 'once', () => curve.Point.BASE.precompute(6, false));
     const dc = generateData(curve);
     await bench('getPublicKey', () => curve.getPublicKey(dc.priv));
     await bench('sign', () => curve.sign(dc.msg, dc.priv));
     await bench('verify', () => curve.verify(dc.sig, dc.msg, dc.pub));
   }
 
-  header('ristretto255');
+  section('ristretto255');
   const RistrettoPoint = ristretto255.Point;
   const rpriv = ristretto255_hasher.hashToScalar(randomBytes(64));
   const rpub = RistrettoPoint.BASE.multiply(rpriv);
@@ -66,7 +61,7 @@ function header(name) {
   await bench('encode', () => rpub.toBytes());
   await bench('decode', () => RistrettoPoint.fromBytes(rbytes));
 
-  header('decaf448');
+  section('decaf448');
   const DecafPoint = decaf448.Point;
   const dpriv = decaf448_hasher.hashToScalar(randomBytes(112));
   const dpub = DecafPoint.BASE.multiply(dpriv);
@@ -76,14 +71,14 @@ function header(name) {
   await bench('encode', () => dpub.toBytes());
   await bench('decode', () => DecafPoint.fromBytes(dbytes));
 
-  header('ECDH');
+  section('ECDH');
   for (const [name, curve] of Object.entries({ x25519, x448, secp256k1, p256, p384, p521 })) {
     const priv = curve.utils.randomSecretKey();
     const pub = curve.getPublicKey(curve.utils.randomSecretKey());
     await bench(name, () => curve.getSharedSecret(priv, pub));
   }
 
-  header('hash-to-curve');
+  section('hash-to-curve');
   const rand40 = randomBytes(40);
   const msg = randomBytes(32);
   const hashers = {
@@ -115,7 +110,7 @@ function header(name) {
     decaf448_hasher.hashToCurve(msg, { DST: 'decaf448_XOF:SHAKE256_D448MAP_RO_' })
   );
 
-  header('modular over secp256k1 P field');
+  section('modular over secp256k1 P field');
   const secpFp = secp256k1.Point.Fp;
   const FpStark = Field(
     BigInt('0x800000000000011000000000000000000000000000000000000000000000001')
@@ -128,22 +123,18 @@ function header(name) {
   await bench('sqrt p = 3 mod 4', () => secpFp.sqrt(NUM1));
   await bench('sqrt tonneli-shanks', () => FpStark.sqrt(NUM2));
 
-  header('bls12-381');
+  section('bls12-381');
   const blsl = bls.longSignatures;
   let p1, p2;
-  await bench(
-    'init',
-    () => {
-      p1 = bls.G1.Point.BASE.multiply(
-        0x28b90deaf189015d3a325908c5e0e4bf00f84f7e639b056ff82d7e70b6eede4cn
-      );
-      p2 = bls.G2.Point.BASE.multiply(
-        0x28b90deaf189015d3a325908c5e0e4bf00f84f7e639b056ff82d7e70b6eede4dn
-      );
-      bls.pairing(p1, p2);
-    },
-    { mode: 'runOnce' }
-  );
+  await bench('init', 'once', () => {
+    p1 = bls.G1.Point.BASE.multiply(
+      0x28b90deaf189015d3a325908c5e0e4bf00f84f7e639b056ff82d7e70b6eede4cn
+    );
+    p2 = bls.G2.Point.BASE.multiply(
+      0x28b90deaf189015d3a325908c5e0e4bf00f84f7e639b056ff82d7e70b6eede4dn
+    );
+    bls.pairing(p1, p2);
+  });
   const bpriv = hexToBytes('28b90deaf189015d3a325908c5e0e4bf00f84f7e639b056ff82d7e70b6eede4c');
   const bmsg = blsl.hash(Uint8Array.of(0x09));
   const bpub = blsl.getPublicKey(bpriv);
@@ -159,9 +150,9 @@ function header(name) {
   const pointsG2 = msmScalars.slice(0, 10).map((s) => bls.G2.Point.BASE.multiply(s));
   const pairs10 = msmPoints.slice(0, 10).map((g1, i) => ({ g1, g2: pointsG2[i] }));
   await bench('pairing10', () => bls.pairingBatch(pairs10));
-  await bench(`MSM ${msmAmount} scalars x points`, () => pippenger(bls.G1.Point, msmPoints, msmScalars), {
-    mode: 'runOnce',
-  });
+  await bench(`MSM ${msmAmount} scalars x points`, 'once', () =>
+    pippenger(bls.G1.Point, msmPoints, msmScalars)
+  );
 
   const G2_VECTORS = readFileSync(
     `${__dirname}/../test/vectors/bls12-381/bls12-381-g2-test-vectors.txt`,

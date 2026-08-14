@@ -8,7 +8,3 @@ export function generateData(curve) {
   const point = Point.fromBytes(pub);
   return { priv, pub, msg, sig, point, Point, isWeierstrass };
 }
-
-export function title(str) {
-  console.log(`\x1b[36m# ${str}\x1b[0m`);
-}
