@@ -50,10 +50,7 @@ const TYPE_SPKI = 'spki';
 const TYPE_PKCS = 'pkcs8';
 /** Key serialization formats supported by the WebCrypto wrappers. */
 export type WebCryptoFormat =
-  | typeof TYPE_RAW
-  | typeof TYPE_JWK
-  | typeof TYPE_SPKI
-  | typeof TYPE_PKCS;
+  typeof TYPE_RAW | typeof TYPE_JWK | typeof TYPE_SPKI | typeof TYPE_PKCS;
 /** WebCrypto keys can be in raw, jwk, pkcs8/spki formats. Raw is internal and fragile. */
 export type WebCryptoOpts = {
   /** Preferred secret-key serialization format. */

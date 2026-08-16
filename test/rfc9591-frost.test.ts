@@ -822,8 +822,8 @@ describe('FROST (RFC 9591)', () => {
             ])
           );
           const ids = Object.keys(deal.secretShares);
-          for (const id of ids)
-            eql(bytesToHex(deal.public.commitments[0]), t.inputs.verifying_key_key);
+          eql(ids.length, signers.max, 'participant count');
+          eql(bytesToHex(deal.public.commitments[0]), t.inputs.verifying_key_key);
           // We can combine shards back to key
           eql(
             bytesToHex(
@@ -880,19 +880,14 @@ describe('FROST (RFC 9591)', () => {
             eql(bytesToHex(sigShare), o.sig_share);
             sigShares[id] = sigShare;
           }
-          // Now, each participant (or coodrinator) can verify signature shares using public key
-          for (const id of ids) {
-            for (const sid in sigShares) {
-              eql(frost.verifyShare(deal.public, commitmentList, msg, sid, sigShares[sid]), true);
-            }
+          // Verification is caller-independent: check each distinct signature share once.
+          for (const sid in sigShares) {
+            eql(frost.verifyShare(deal.public, commitmentList, msg, sid, sigShares[sid]), true);
           }
-          // Final: all participants (or coordinator) merge signature shares into single group signature
-          for (const id of ids) {
-            const groupSig = frost.aggregate(deal.public, commitmentList, msg, sigShares);
-            eql(bytesToHex(groupSig), t.final_output.sig);
-            // Verify group signature
-            eql(frost.verify(groupSig, msg, deal.public.commitments[0]), true);
-          }
+          // Aggregation is also coordinator-independent: merge and verify the group signature once.
+          const groupSig = frost.aggregate(deal.public, commitmentList, msg, sigShares);
+          eql(bytesToHex(groupSig), t.final_output.sig);
+          eql(frost.verify(groupSig, msg, deal.public.commitments[0]), true);
         });
       }
       for (let dkgIndex = 0; dkgIndex < dkgCount; dkgIndex++) {

@@ -36,7 +36,7 @@ function makeRng(initialSeed: bigint) {
   };
   const randomBytes = (length: number) => {
     const out = new Uint8Array(length);
-    for (let i = 0; i < length; ) {
+    for (let i = 0; i < length;) {
       let word = rnd64();
       for (let j = 0; j < 8 && i < length; j++, i++) {
         out[i] = Number(word & 0xffn);

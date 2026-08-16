@@ -668,9 +668,10 @@ export function edwards(
  * const point = ristretto255.Point.BASE.multiply(2n);
  * ```
  */
-export abstract class PrimeEdwardsPoint<T extends PrimeEdwardsPoint<T>>
-  implements CurvePoint<bigint, T>
-{
+export abstract class PrimeEdwardsPoint<T extends PrimeEdwardsPoint<T>> implements CurvePoint<
+  bigint,
+  T
+> {
   static BASE: PrimeEdwardsPoint<any>;
   static ZERO: PrimeEdwardsPoint<any>;
   static Fp: IField<bigint>;

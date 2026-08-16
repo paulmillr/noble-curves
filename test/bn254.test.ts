@@ -5,6 +5,8 @@ import { bn254 } from '../src/bn254.ts';
 import { bytesToNumberBE } from '../src/utils.ts';
 import { jsonGZ } from './utils.ts';
 const CROSS_PATH_GZ = './vectors/bn254/cross1000.json.gz'; // bundler hint: readFileSync('./test/bn254/cross1000.json.gz')
+let crossTestsCache;
+const loadCrossTests = () => (crossTestsCache ??= jsonGZ(CROSS_PATH_GZ));
 const loadEthDump = async () => (await import('./vectors/bn254/eth-dump.js')).default;
 const loadSeda = async () => (await import('./vectors/bn254/seda.js')).default;
 
@@ -688,39 +690,40 @@ describe('bn254', () => {
       ])
     );
   });
-  it('Cross-tests', () => {
+  it('Cross-tests vector groups', () => {
     // verify that we work exactly same as:
     // - https://github.com/paritytech/bn (old version)
     // - https://github.com/zcash-hackworks/bn
     // - https://github.com/arkworks-rs/curves/blob/master/bn254/src/lib.rs
-    const crossTests = jsonGZ(CROSS_PATH_GZ);
-    let otherCurveGroups = 0;
-    for (const [name, vectors] of Object.entries(crossTests)) {
-      if (['ark_bls12-381', 'ark_bls12-377'].includes(name)) {
-        // This file tests bn254. BLS12-381 is exercised by bls12-381.test.ts; BLS12-377 has no
-        // implementation here. Pin both bundled groups so additions cannot silently disappear.
-        eql(vectors.length, 1001, `${name} vector count`);
-        otherCurveGroups++;
-        continue;
-      }
-      const { Fp, Fp2, Fp12 } = bn254.fields;
-      for (const t of vectors) {
-        // TODO: projective stuff is somewhat broken on export?
-        const g1 = bn254.G1.Point.fromAffine({
-          x: Fp.create(BigInt(t.g1.x[0])),
-          y: Fp.create(BigInt(t.g1.y[0])),
-        });
-        const g2 = bn254.G2.Point.fromAffine({
-          x: Fp2.fromBigTuple(t.g2.x.map(BigInt)),
-          y: Fp2.fromBigTuple(t.g2.y.map(BigInt)),
-        });
-        const fp12 = Fp12.fromBigTwelve(t.pairing.map(BigInt));
-        const p = bn254.pairing(g1, g2, true);
-        eql(p, fp12, name);
-      }
+    const crossTests = loadCrossTests();
+    for (const name of ['ark_bn254', 'ark_bls12-381', 'zcash_bn', 'ark_bls12-377', 'parity_bn']) {
+      eql(crossTests[name].length, 1001, `${name} vector count`);
     }
-    eql(otherCurveGroups, 2, 'explicit non-bn254 vector groups');
   });
+  for (const name of ['ark_bn254', 'zcash_bn', 'parity_bn']) {
+    for (let start = 0; start < 1001; start += 100) {
+      const end = Math.min(start + 100, 1001);
+      it(`Cross-tests/${name} [${start}-${end - 1}]`, () => {
+        const vectors = loadCrossTests()[name];
+        eql(vectors.length, 1001, `${name} vector count`);
+        const { Fp, Fp2, Fp12 } = bn254.fields;
+        for (const t of vectors.slice(start, end)) {
+          // TODO: projective stuff is somewhat broken on export?
+          const g1 = bn254.G1.Point.fromAffine({
+            x: Fp.create(BigInt(t.g1.x[0])),
+            y: Fp.create(BigInt(t.g1.y[0])),
+          });
+          const g2 = bn254.G2.Point.fromAffine({
+            x: Fp2.fromBigTuple(t.g2.x.map(BigInt)),
+            y: Fp2.fromBigTuple(t.g2.y.map(BigInt)),
+          });
+          const fp12 = Fp12.fromBigTwelve(t.pairing.map(BigInt));
+          const p = bn254.pairing(g1, g2, true);
+          eql(p, fp12, name);
+        }
+      });
+    }
+  }
 
   describe('ETH', () => {
     /*
