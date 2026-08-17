@@ -123,6 +123,13 @@ describe('utils', () => {
       eql(copy, src);
       copy[0] = 9;
       eql(src, Uint8Array.of(1, 2, 3));
+      if (typeof Buffer !== 'undefined') {
+        const buffer = Buffer.from([4, 5, 6]);
+        const bufferCopy = copyBytes(buffer);
+        buffer[0] = 9;
+        eql(bufferCopy, Uint8Array.of(4, 5, 6));
+        eql(Buffer.isBuffer(bufferCopy), false, 'returns an owned Uint8Array, not a Buffer view');
+      }
       throws(() => copyBytes([1, 2] as any), new TypeError('expected Uint8Array, got type=object'));
       throws(
         () => copyBytes(new Uint16Array([1, 2]) as any),

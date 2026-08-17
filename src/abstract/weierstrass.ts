@@ -1584,6 +1584,9 @@ export function ecdsa(
     try {
       const sig = Signature.fromBytes(signature, format);
       const P = Point.fromBytes(publicKey);
+      // SEC 1 verification keys must not be the identity, even when the generic point decoder
+      // permits infinity for another protocol (for example, a pairing curve).
+      if (P.is0()) return false;
       if (lowS && sig.hasHighS()) return false;
       const { r, s } = sig;
       const h = bits2int_modN(message); // mod n, not mod p
@@ -1616,11 +1619,23 @@ export function ecdsa(
     return Signature.fromBytes(signature, 'recovered').recoverPublicKey(message).toBytes();
   }
 
+  // Keep the ECDSA-facing helper consistent with ECDSA verification-key requirements.
+  const ecdsaUtils = Object.freeze({
+    ...utils,
+    isValidPublicKey(publicKey: TArg<Uint8Array>, isCompressed?: boolean): boolean {
+      try {
+        if (!utils.isValidPublicKey(publicKey, isCompressed)) return false;
+        return !Point.fromBytes(publicKey).is0();
+      } catch {
+        return false;
+      }
+    },
+  });
   return Object.freeze({
     keygen,
     getPublicKey,
     getSharedSecret,
-    utils,
+    utils: ecdsaUtils,
     lengths,
     Point,
     sign,

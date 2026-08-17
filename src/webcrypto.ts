@@ -41,7 +41,7 @@ There seems no reasonable way to check for availability, other than actually cal
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { abytes, validateObject, type TArg, type TRet } from './utils.ts';
+import { abytes, copyBytes, isBytes, validateObject, type TArg, type TRet } from './utils.ts';
 
 /** Raw type */
 const TYPE_RAW = 'raw';
@@ -279,8 +279,10 @@ function createSigner(
       opts: TArg<WebCryptoOpts> = {}
     ): Promise<TRet<Uint8Array>> {
       validateObject(opts, {}, { formatSec: 'string', formatPub: 'string' }, 'opts');
+      // Snapshot before the first await so a writable alias cannot replace the message.
+      const message = copyBytes(abytes(msgHash, undefined, 'message'));
       const key = await keys.priv.import(secretKey, opts.formatSec ?? dfsec);
-      const sig = await getSubtle().sign(algo, key, msgHash);
+      const sig = await getSubtle().sign(algo, key, message);
       return new Uint8Array(sig) as TRet<Uint8Array>;
     },
     async verify(
@@ -290,8 +292,11 @@ function createSigner(
       opts: TArg<WebCryptoOpts> = {}
     ): Promise<boolean> {
       validateObject(opts, {}, { formatSec: 'string', formatPub: 'string' }, 'opts');
+      // Snapshot both deferred byte inputs before awaiting key import.
+      const signatureBytes = copyBytes(abytes(signature, undefined, 'signature'));
+      const message = copyBytes(abytes(msgHash, undefined, 'message'));
       const key = await keys.pub.import(publicKey, opts.formatPub ?? dfpub);
-      return await getSubtle().verify(algo, key, signature, msgHash);
+      return await getSubtle().verify(algo, key, signatureBytes, message);
     },
   };
 }
@@ -310,13 +315,16 @@ function createECDH(
       opts: TArg<WebCryptoOpts> = {}
     ): Promise<TRet<Uint8Array>> {
       validateObject(opts, {}, { formatSec: 'string', formatPub: 'string' }, 'opts');
-      // if (_isCompressed !== true) throw new Error('WebCrypto only supports compressed keys');
+      // Byte-encoded peers need the same invocation-time snapshot; JWK inputs pass through.
+      const peer: TArg<Key> = isBytes(publicKeyB)
+        ? copyBytes(abytes(publicKeyB, undefined, 'publicKey'))
+        : (publicKeyB as TArg<Key>);
       const secKey = await keys.priv.import(
         secretKeyA,
         opts.formatSec === undefined ? dfsec : opts.formatSec
       );
       const pubKey = await keys.pub.import(
-        publicKeyB,
+        peer,
         opts.formatPub === undefined ? dfpub : opts.formatPub
       );
       const shared = await getSubtle().deriveBits(

@@ -37,6 +37,7 @@ import {
   asciiToBytes,
   bytesToNumberBE,
   concatBytes,
+  copyBytes,
   type TArg,
   type TRet,
 } from './utils.ts';
@@ -193,7 +194,8 @@ function schnorrSign(
   auxRand: TArg<Uint8Array> = randomBytes(32)
 ): TRet<Uint8Array> {
   const { Fn, BASE } = Pointk1;
-  const m = abytes(message, undefined, 'message');
+  // Snapshot once: nonce, challenge, and self-verification must use one transcript.
+  const m = copyBytes(abytes(message, undefined, 'message'));
   const { bytes: px, scalar: d } = schnorrGetExtPubKey(secretKey); // checks for isWithinCurveOrder
   const a = abytes(auxRand, 32, 'auxRand'); // Auxiliary random data a: a 32-byte array
   // Let t be the byte-wise xor of bytes(d) and hash/aux(a).

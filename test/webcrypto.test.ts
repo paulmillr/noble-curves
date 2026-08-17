@@ -1,5 +1,5 @@
 import { describe, it } from '@paulmillr/jsbt/test.js';
-import { deepStrictEqual, rejects, throws } from 'node:assert';
+import { deepStrictEqual, notDeepStrictEqual, rejects, throws } from 'node:assert';
 import { ed25519, x25519 } from '../src/ed25519.ts';
 import { ed448, x448 } from '../src/ed448.ts';
 import { p256, p384, p521 } from '../src/nist.ts';
@@ -137,6 +137,40 @@ describe('webcrypto', () => {
     });
     deepStrictEqual(shared.length, 32);
     deepStrictEqual(await webcrypto.p256.utils.convertSecretKey(ecdhJwk, 'jwk', 'raw'), secretKey);
+  });
+
+  it('snapshots deferred byte inputs at invocation time, including Buffers', async () => {
+    const web = webcrypto.p256;
+    deepStrictEqual(await web.isSupported(), true);
+    const copy = (bytes: Uint8Array): Uint8Array =>
+      typeof Buffer === 'undefined' ? Uint8Array.from(bytes) : Buffer.from(bytes);
+    const keypair = await web.keygen();
+    const stateA = new Uint8Array(32).fill(0x41);
+    const stateB = new Uint8Array(32).fill(0x42);
+
+    const message = copy(stateA);
+    const pendingSign = web.sign(message, keypair.secretKey);
+    message.set(stateB);
+    const signature = await pendingSign;
+    deepStrictEqual(await web.verify(signature, stateA, keypair.publicKey), true);
+    deepStrictEqual(await web.verify(signature, stateB, keypair.publicKey), false);
+
+    const verifyMessage = copy(stateA);
+    const verifySignature = copy(await web.sign(stateA, keypair.secretKey));
+    const pendingVerify = web.verify(verifySignature, verifyMessage, keypair.publicKey);
+    verifyMessage.set(stateB);
+    verifySignature.fill(0);
+    deepStrictEqual(await pendingVerify, true);
+
+    const alice = await web.keygen();
+    const bob = await web.keygen();
+    const mallory = await web.keygen();
+    const peer = copy(bob.publicKey);
+    const pendingSecret = web.getSharedSecret(alice.secretKey, peer);
+    peer.set(mallory.publicKey);
+    const shared = await pendingSecret;
+    deepStrictEqual(shared, await web.getSharedSecret(alice.secretKey, bob.publicKey));
+    notDeepStrictEqual(shared, await web.getSharedSecret(alice.secretKey, mallory.publicKey));
   });
 
   it('raw private-key and local hex validation', async () => {

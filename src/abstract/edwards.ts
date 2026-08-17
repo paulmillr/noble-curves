@@ -912,7 +912,8 @@ export function eddsa(
     options: TArg<{ context?: Uint8Array }> = {}
   ): TRet<Uint8Array> {
     validateObject(options as any, {}, {}, 'options');
-    msg = abytes(msg, undefined, 'message');
+    // Snapshot once: nonce and challenge must use the same invocation-time message bytes.
+    msg = copyBytes(abytes(msg, undefined, 'message'));
     if (prehash) msg = prehash(msg); // for ed25519ph etc.
     const { prefix, scalar, pointBytes } = getExtendedPublicKey(secretKey);
     const r = hashDomainToScalar(options.context, prefix, msg); // r = dom2(F, C) || prefix || PH(M)
