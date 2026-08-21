@@ -879,7 +879,7 @@ function createBlsSig<P, S>(
       return hashToSigCurve(messageBytes, opts);
     },
     Signature: Object.freeze({ ...sigCoder }),
-  }) /*satisfies Signer */;
+  }); /*satisfies Signer */
 }
 
 type BlsSignatureCoders = Partial<{

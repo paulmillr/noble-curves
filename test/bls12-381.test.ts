@@ -9,19 +9,39 @@ import { json, jsonGZ, txt } from './utils.ts';
 
 import * as utils from '../src/utils.ts';
 
-const loadEip2537 = () => json('./vectors/bls12-381/eip2537.json');
-const loadZkVectors = () => json('./vectors/bls12-381/zkcrypto/converted.json');
-const loadPairingVectors = () => json('./vectors/bls12-381/go_pairing_vectors/pairing.json');
-const loadArkworksPairingVectors = () =>
-  jsonGZ('./vectors/bn254/cross1000.json.gz')['ark_bls12-381'];
-const loadG1Vectors = () =>
+const cached = <T>(load: () => T) => {
+  let value: T | undefined;
+  return () => (value ??= load());
+};
+const itChunks = (
+  title: string,
+  total: number,
+  size: number,
+  test: (start: number, end: number) => void
+) => {
+  for (let start = 0; start < total; start += size) {
+    const end = Math.min(start + size, total);
+    it(`${title} [${start}-${end - 1}]`, () => test(start, end));
+  }
+};
+const loadEip2537 = cached(() => json('./vectors/bls12-381/eip2537.json'));
+const loadZkVectors = cached(() => json('./vectors/bls12-381/zkcrypto/converted.json'));
+const loadPairingVectors = cached(() =>
+  json('./vectors/bls12-381/go_pairing_vectors/pairing.json')
+);
+const loadArkworksPairingVectors = cached(
+  () => jsonGZ('./vectors/bn254/cross1000.json.gz')['ark_bls12-381']
+);
+const loadG1Vectors = cached(() =>
   txt('vectors/bls12-381/bls12-381-g1-test-vectors.txt').map((v) => {
     return [hexToBytes(v[0]), hexToBytes(v[1]), v[2]];
-  });
-const loadG2Vectors = () =>
+  })
+);
+const loadG2Vectors = cached(() =>
   txt('vectors/bls12-381/bls12-381-g2-test-vectors.txt').map((v) => {
     return [hexToBytes(v[0]), hexToBytes(v[1]), v[2]];
-  });
+  })
+);
 // Vectors come from
 // https://github.com/zkcrypto/bls12-381/blob/e501265cd36849a4981fe55e10dc87c38ee2213d/src/hash_to_curve/map_scalar.rs#L20
 const loadScalarVectors = () => txt('vectors/bls12-381/bls12-381-scalar-test-vectors.txt');
@@ -932,9 +952,10 @@ describe('bls12-381 encoding', () => {
 
 describe('bls12-381 verify', () => {
   describe('longSignatures', () => {
-    it('sign, verify, and negative cases', () => {
+    itChunks('sign, verify, and negative cases', 559, 40, (start, end) => {
       const G2_VECTORS = loadG2Vectors();
-      for (let vector of G2_VECTORS) {
+      eql(G2_VECTORS.length, 559, 'vector count');
+      for (const vector of G2_VECTORS.slice(start, end)) {
         const [priv, msgs, expected] = vector;
         const msg = blsl.hash(msgs);
         const sig = blsl.sign(msg, priv);
@@ -945,7 +966,7 @@ describe('bls12-381 verify', () => {
         eql(blsl.Signature.toHex(blsl.Signature.fromBytes(sigb)), bytesToHex(sigb), 'h round');
       }
 
-      for (let i = 0; i < G2_VECTORS.length; i++) {
+      for (let i = start; i < end; i++) {
         const [priv, msgs, expected] = G2_VECTORS[i];
         const msg = blsl.hash(msgs);
         const sig = hexToBytes(expected);
@@ -1300,11 +1321,11 @@ describe('bls12-381 deterministic', () => {
         ])
       );
     });
-    it('arkworks cross-implementation vectors', () => {
+    itChunks('arkworks cross-implementation vectors', 1001, 100, (start, end) => {
       const vectors = loadArkworksPairingVectors();
       eql(vectors.length, 1001, 'vector count');
       const { Fp, Fp2, Fp12 } = bls.fields;
-      for (let i = 0; i < vectors.length; i++) {
+      for (let i = start; i < end; i++) {
         const vector = vectors[i];
         const g1 = G1Point.fromAffine({
           x: Fp.create(BigInt(vector.g1.x[0])),
@@ -1419,11 +1440,12 @@ describe('bls12-381 deterministic', () => {
         ])
       );
     });
-    it('pairing large', () => {
+    itChunks('pairing large', 1000, 100, (start, end) => {
       const pairingVectors = loadPairingVectors();
-      let p1 = G1Point.BASE;
-      let p2 = G2Point.BASE;
-      for (let v of pairingVectors) {
+      eql(pairingVectors.length, 1000, 'vector count');
+      let p1 = G1Point.BASE.multiply(BigInt(start + 1));
+      let p2 = G2Point.BASE.multiply(BigInt(start + 1));
+      for (const v of pairingVectors.slice(start, end)) {
         eql(
           bytesToHex(Fp12.toBytes(bls.pairing(p1, p2))),
           // Reverse order
@@ -1473,10 +1495,11 @@ describe('bls12-381 deterministic', () => {
         }
       }
     });
-    it(`G2 compressed`, () => {
+    itChunks('G2 compressed', 1000, 100, (start, end) => {
       const zkVectors = loadZkVectors();
-      let p1 = G2Point.ZERO;
-      for (let i = 0; i < zkVectors.G2_Compressed.length; i++) {
+      eql(zkVectors.G2_Compressed.length, 1000, 'vector count');
+      let p1 = start ? G2Point.BASE.multiply(BigInt(start)) : G2Point.ZERO;
+      for (let i = start; i < end; i++) {
         const t = zkVectors.G2_Compressed[i];
         const P = G2Point.fromHex(t);
         eql(P.toHex(true), t);
@@ -1492,10 +1515,11 @@ describe('bls12-381 deterministic', () => {
       }
     });
 
-    it(`G2 uncompressed`, () => {
+    itChunks('G2 uncompressed', 1000, 100, (start, end) => {
       const zkVectors = loadZkVectors();
-      let p1 = G2Point.ZERO;
-      for (let i = 0; i < zkVectors.G2_Uncompressed.length; i++) {
+      eql(zkVectors.G2_Uncompressed.length, 1000, 'vector count');
+      let p1 = start ? G2Point.BASE.multiply(BigInt(start)) : G2Point.ZERO;
+      for (let i = start; i < end; i++) {
         const t = zkVectors.G2_Uncompressed[i];
         const P = G2Point.fromHex(t);
         eql(P.toHex(false), t);

@@ -450,7 +450,7 @@ export class PoseidonSponge {
     if (!Array.isArray(input)) throw new Error('invalid input: expected array');
     for (const i of input)
       if (typeof i !== 'bigint' || !this.Fp.isValid(i)) throw new Error('invalid input: ' + i);
-    for (let i = 0; i < input.length; ) {
+    for (let i = 0; i < input.length;) {
       if (!this.isAbsorbing || this.pos === this.rate) {
         this.process();
         this.pos = 0;

@@ -682,6 +682,19 @@ describe('secp256k1 schnorr.sign()', () => {
     }
   });
 
+  it('copies Buffer messages without calling Buffer.slice()', () => {
+    if (typeof Buffer === 'undefined') return;
+    const message = Buffer.alloc(32, 7);
+    Object.defineProperty(message, 'slice', {
+      value: () => {
+        throw new Error('Buffer.slice creates an alias');
+      },
+    });
+    const { secretKey, publicKey } = schnorr.keygen();
+    const signature = schnorr.sign(message, secretKey, new Uint8Array(32));
+    eql(schnorr.verify(signature, Uint8Array.from(message), publicKey), true);
+  });
+
   it('taggedHash accepts tags that collide with Object prototype names', () => {
     const msg = Uint8Array.of(1, 2, 3);
     for (const tag of ['__proto__', 'constructor', 'toString']) {

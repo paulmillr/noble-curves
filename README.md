@@ -635,16 +635,16 @@ const curves = [
 for (const curve of curves) {
   const { Point } = curve;
   const { BASE, ZERO, Fp, Fn } = Point;
-  const info = Point.CURVE?.();
   const p = BASE.multiply(2n);
 
-  // Initialization
-  if (info?.type === 'weierstrass') {
-    // projective (homogeneous) coordinates: (X, Y, Z) ∋ (x=X/Z, y=Y/Z)
-    const p_ = new Point(BASE.X, BASE.Y, BASE.Z);
-  } else if (info?.type === 'edwards') {
-    // extended coordinates: (X, Y, Z, T) ∋ (x=X/Z, y=Y/Z)
+  // Initialization. Edwards points carry a T coordinate, weierstrass ones do not,
+  // so the coordinate system is detected from the point itself.
+  if (BASE.T !== undefined) {
+    // edwards extended coordinates: (X, Y, Z, T) ∋ (x=X/Z, y=Y/Z)
     const p_ = new Point(BASE.X, BASE.Y, BASE.Z, BASE.T);
+  } else {
+    // weierstrass projective (homogeneous) coordinates: (X, Y, Z) ∋ (x=X/Z, y=Y/Z)
+    const p_ = new Point(BASE.X, BASE.Y, BASE.Z);
   }
 
   // Math

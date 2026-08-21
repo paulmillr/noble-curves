@@ -1,6 +1,8 @@
+import { sha512 } from '@noble/hashes/sha2.js';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import { describe, it } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql } from 'node:assert';
+import { eddsa } from '../src/abstract/edwards.ts';
 import { ed25519, ed25519ctx, ed25519ph, x25519 } from '../src/ed25519.ts';
 import { ed448, x448 } from '../src/ed448.ts';
 import { numberToBytesLE } from '../src/utils.ts';
@@ -77,6 +79,35 @@ describe('RFC8032', () => {
       eql(v.fn.sign(v.message, v.secretKey, { context }), v.signature, `${i}: sign`);
       eql(v.fn.verify(v.signature, v.message, v.publicKey, { context }), true, `${i}: verify`);
     }
+  });
+  it('sign snapshots Buffer messages before nonce and challenge hashing', () => {
+    if (typeof Buffer === 'undefined') return;
+    const stateA = Buffer.alloc(32, 0x41);
+    const stateB = Buffer.alloc(32, 0x42);
+    const message = Buffer.from(stateA);
+    let calls = 0;
+    const racingHash = (data: Uint8Array) => {
+      calls++;
+      // Hash order is secret expansion, nonce, challenge. Mutate after the nonce input was built.
+      if (calls === 2) message.set(stateB);
+      return sha512(data);
+    };
+    Object.assign(racingHash, { outputLen: sha512.outputLen, blockLen: sha512.blockLen });
+    const adjustScalarBytes = (bytes: Uint8Array) => {
+      bytes[0] &= 248;
+      bytes[31] &= 127;
+      bytes[31] |= 64;
+      return bytes;
+    };
+    const isolated = eddsa(ed25519.Point, racingHash as typeof sha512, {
+      adjustScalarBytes,
+      zip215: true,
+    });
+    const secretKey = ed25519.utils.randomSecretKey();
+    const publicKey = ed25519.getPublicKey(secretKey);
+    const signature = isolated.sign(message, secretKey);
+    eql(ed25519.verify(signature, stateA, publicKey), true, 'bound to invocation-time state');
+    eql(ed25519.verify(signature, stateB, publicKey), false, 'not bound to mutated state');
   });
 });
 
