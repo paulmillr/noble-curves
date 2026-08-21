@@ -15,7 +15,13 @@ import type {
 } from '../src/abstract/frost.ts';
 import { createFROST } from '../src/abstract/frost.ts';
 import * as mod from '../src/abstract/modular.ts';
-import { ed25519, ed25519_FROST, ristretto255, ristretto255_FROST } from '../src/ed25519.ts';
+import {
+  ED25519_TORSION_SUBGROUP,
+  ed25519,
+  ed25519_FROST,
+  ristretto255,
+  ristretto255_FROST,
+} from '../src/ed25519.ts';
 import { ed448, ed448_FROST } from '../src/ed448.ts';
 import { p256, p256_FROST } from '../src/nist.ts';
 import {
@@ -188,6 +194,119 @@ it('createFROST rejects opts without a usable Point constructor', () => {
   );
 });
 
+it('DKG binds round3 to an owned authenticated round1 transcript', () => {
+  const frost = p256_FROST;
+  const signers = { min: 2, max: 2 };
+  const victim = frost.DKG.round1(frost.Identifier.fromNumber(1), signers);
+  const attacker = frost.DKG.round1(frost.Identifier.fromNumber(2), signers);
+  const genuine = structuredClone(attacker.public);
+  const callerBytes = (bytes: Uint8Array): Uint8Array =>
+    typeof Buffer === 'undefined' ? Uint8Array.from(bytes) : Buffer.from(bytes);
+  const supplied = {
+    ...attacker.public,
+    commitment: attacker.public.commitment.map(callerBytes),
+    proofOfKnowledge: callerBytes(attacker.public.proofOfKnowledge),
+  };
+  frost.DKG.round2(victim.secret, [supplied]);
+  const attackerRound2 = frost.DKG.round2(attacker.secret, [victim.public]);
+  const shareForVictim = attackerRound2[victim.public.identifier];
+
+  // Mutating Buffer-backed caller data after round2 must not rewrite the cached transcript.
+  for (const commitment of supplied.commitment) commitment.fill(0);
+  supplied.proofOfKnowledge.fill(0);
+
+  // Round3 may inspect its compatibility argument once, but finalization must consume the cache.
+  let commitmentReads = 0;
+  const oneReadPackage = {
+    identifier: genuine.identifier,
+    get commitment() {
+      commitmentReads++;
+      if (commitmentReads > 1) throw new Error('round3 reused caller-owned transcript');
+      return genuine.commitment.map((c) => c.slice());
+    },
+    proofOfKnowledge: genuine.proofOfKnowledge.slice(),
+  } as DKG_Round1;
+  const installed = frost.DKG.round3(victim.secret, [oneReadPackage], [shareForVictim]);
+  eql(installed.public.signers, signers);
+  eql(commitmentReads, 1);
+  eql(victim.secret.round1Cache, undefined);
+  eql(victim.secret.round2Cache, undefined);
+  eql(victim.secret.coefficients, undefined);
+});
+
+it('DKG round3 rejects an algebraically valid replacement commitment transcript', () => {
+  const frost = p256_FROST;
+  const Fn = frost.utils.Fn;
+  const signers = { min: 2, max: 2 };
+  const victim = frost.DKG.round1(frost.Identifier.fromNumber(1), signers);
+  const attacker = frost.DKG.round1(frost.Identifier.fromNumber(2), signers);
+  frost.DKG.round2(victim.secret, [attacker.public]);
+  const attackerRound2 = frost.DKG.round2(attacker.secret, [victim.public]);
+  const shareForVictim = attackerRound2[victim.public.identifier];
+  const oldShare = Fn.fromBytes(shareForVictim.signingShare);
+  const victimConstant = p256.Point.fromBytes(victim.public.commitment[0]);
+  const replacementConstant = p256.Point.BASE.multiply(0x123456789abcdefn).subtract(victimConstant);
+  const replacementLinear = p256.Point.BASE.multiply(oldShare)
+    .subtract(replacementConstant)
+    .multiply(Fn.inv(1n));
+  const replacement = {
+    ...attacker.public,
+    commitment: [replacementConstant.toBytes(true), replacementLinear.toBytes(true)],
+  };
+  throws(
+    () => frost.DKG.round3(victim.secret, [replacement], [shareForVictim]),
+    /round1 packages do not match authenticated transcript/
+  );
+  // A failed finalization does not consume the local secret state; the genuine transcript retries.
+  const installed = frost.DKG.round3(
+    victim.secret,
+    [structuredClone(attacker.public)],
+    [shareForVictim]
+  );
+  eql(installed.public.signers, signers);
+});
+
+it('DKG round2 retry rejects a rogue round1 package with a stale proof of knowledge', () => {
+  // Regression test for the round2 retry rogue-key attack reported against 2.3.0: a peer
+  // who behaves honestly during the first round2() call aborts the victim's round3() with
+  // an invalid share, then substitutes a commitment B0 = t*G - A0 on the retry. He cannot
+  // prove knowledge of B0's discrete log, so he replays his stale proof. The retry must
+  // reject the substitution instead of silently returning the cached packages.
+  const frost = p256_FROST;
+  const Fn = frost.utils.Fn;
+  const signers = { min: 2, max: 2 };
+  const victim = frost.DKG.round1(frost.Identifier.fromNumber(1), signers);
+  const attacker = frost.DKG.round1(frost.Identifier.fromNumber(2), signers);
+  const first = frost.DKG.round2(victim.secret, [structuredClone(attacker.public)]);
+  // Abort the victim's round3() with a share that fails validateSecretShare.
+  const badShare = {
+    identifier: attacker.public.identifier,
+    signingShare: Fn.toBytes(Fn.create(0x51ce5ed1n)),
+  };
+  throws(
+    () => frost.DKG.round3(victim.secret, [structuredClone(attacker.public)], [badShare]),
+    /invalid secret share/
+  );
+  // Rogue replacement: the merged group key lands on t*G, the sent share stays
+  // VSS-consistent at the victim's identifier, but the proof of knowledge is stale.
+  const t = Fn.create(0x1337c0d3n);
+  const s = Fn.create(0x515151n);
+  const A0 = p256.Point.fromBytes(victim.public.commitment[0]);
+  const B0 = p256.Point.BASE.multiply(t).subtract(A0);
+  const B1 = p256.Point.BASE.multiply(s).subtract(B0);
+  const rogue = {
+    identifier: attacker.public.identifier,
+    commitment: [B0.toBytes(true), B1.toBytes(true)],
+    proofOfKnowledge: structuredClone(attacker.public.proofOfKnowledge),
+  };
+  throws(
+    () => frost.DKG.round2(victim.secret, [rogue]),
+    /round1 packages do not match authenticated transcript/
+  );
+  // The genuine transcript still retries cleanly after the rejected substitution.
+  eql(frost.DKG.round2(victim.secret, [structuredClone(attacker.public)]), first);
+});
+
 describe('createFROST', () => {
   const create = () => {
     const frost = createFROST({ name: 'TRACE', Point: ed25519.Point, hash: sha512, H2: '' });
@@ -201,6 +320,36 @@ describe('createFROST', () => {
   it('createFROST.parsePoint still accepts canonical ed25519 public keys on the verify path', () => {
     const { frost, msg, sig, publicKey } = create();
     eql(frost.verify(sig, msg, publicKey), true);
+  });
+  it('verify enforces mandatory point checks even with optional hooks', () => {
+    const { frost, msg } = create();
+    const forged = concatBytes(ed25519.Point.BASE.toBytes(), ed25519.Point.Fn.toBytes(1n));
+    for (const encoded of ED25519_TORSION_SUBGROUP) {
+      throws(() => frost.verify(forged, msg, hexToBytes(encoded)));
+    }
+    const permissive = createFROST({
+      name: 'TRACE',
+      Point: ed25519.Point,
+      hash: sha512,
+      H2: '',
+      validatePoint: () => {},
+    });
+    throws(() => permissive.verify(forged, msg, new Uint8Array(32)), /prime-order subgroup/);
+
+    const customParser = createFROST({
+      name: 'TRACE',
+      Point: ed25519.Point,
+      hash: sha512,
+      H2: '',
+      parsePublicKey: (bytes) => ed25519.Point.fromBytes(bytes),
+      validatePoint: (point) => {
+        if (point.equals(ed25519.Point.BASE)) throw new Error('suite point policy');
+      },
+    });
+    throws(
+      () => customParser.verify(new Uint8Array(), msg, ed25519.Point.BASE.toBytes()),
+      /suite point policy/
+    );
   });
   it('aggregate passes unadjusted public package to verifyShare attribution', () => {
     const adjusted = new WeakSet<object>();
@@ -787,24 +936,13 @@ describe('FROST (RFC 9591)', () => {
         const bob = frost.DKG.round1(frost.Identifier.fromNumber(2), signers);
         const carol = frost.DKG.round1(frost.Identifier.fromNumber(3), signers);
         const bobId = bob.public.identifier;
-        const carolId = carol.public.identifier;
         const first = frost.DKG.round2(alice.secret, [bob.public]);
-        throws(() => {
-          const replay = frost.DKG.round2(alice.secret, [carol.public]);
-          const carolShare = replay[carolId];
-          if (!carolShare) throw new Error('round2 replay did not produce a new recipient share');
-          const recovered = frost.combineSecret(
-            [
-              { identifier: bobId, signingShare: first[bobId].signingShare },
-              { identifier: carolId, signingShare: carolShare.signingShare },
-            ],
-            signers
-          );
-          eql(
-            bytesToHex(recovered),
-            bytesToHex(frost.utils.Fn.toBytes(alice.secret.coefficients![0]))
-          );
-        }, /round2 replay did not produce a new recipient share/);
+        eql(frost.DKG.round2(alice.secret, [structuredClone(bob.public)]), first);
+        throws(
+          () => frost.DKG.round2(alice.secret, [carol.public]),
+          /round1 packages do not match authenticated transcript/
+        );
+        eql(Object.keys(first), [bobId]);
       });
       for (let signIndex = 0; signIndex < signCount; signIndex++) {
         it(`sign ${signIndex}`, () => {
@@ -822,8 +960,8 @@ describe('FROST (RFC 9591)', () => {
             ])
           );
           const ids = Object.keys(deal.secretShares);
-          for (const id of ids)
-            eql(bytesToHex(deal.public.commitments[0]), t.inputs.verifying_key_key);
+          eql(ids.length, signers.max, 'participant count');
+          eql(bytesToHex(deal.public.commitments[0]), t.inputs.verifying_key_key);
           // We can combine shards back to key
           eql(
             bytesToHex(
@@ -880,19 +1018,14 @@ describe('FROST (RFC 9591)', () => {
             eql(bytesToHex(sigShare), o.sig_share);
             sigShares[id] = sigShare;
           }
-          // Now, each participant (or coodrinator) can verify signature shares using public key
-          for (const id of ids) {
-            for (const sid in sigShares) {
-              eql(frost.verifyShare(deal.public, commitmentList, msg, sid, sigShares[sid]), true);
-            }
+          // Verification is caller-independent: check each distinct signature share once.
+          for (const sid in sigShares) {
+            eql(frost.verifyShare(deal.public, commitmentList, msg, sid, sigShares[sid]), true);
           }
-          // Final: all participants (or coordinator) merge signature shares into single group signature
-          for (const id of ids) {
-            const groupSig = frost.aggregate(deal.public, commitmentList, msg, sigShares);
-            eql(bytesToHex(groupSig), t.final_output.sig);
-            // Verify group signature
-            eql(frost.verify(groupSig, msg, deal.public.commitments[0]), true);
-          }
+          // Aggregation is also coordinator-independent: merge and verify the group signature once.
+          const groupSig = frost.aggregate(deal.public, commitmentList, msg, sigShares);
+          eql(bytesToHex(groupSig), t.final_output.sig);
+          eql(frost.verify(groupSig, msg, deal.public.commitments[0]), true);
         });
       }
       for (let dkgIndex = 0; dkgIndex < dkgCount; dkgIndex++) {

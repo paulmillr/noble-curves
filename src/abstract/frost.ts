@@ -15,6 +15,8 @@ import {
   bytesToNumberBE,
   bytesToNumberLE,
   concatBytes,
+  copyBytes,
+  equalBytes,
   hexToBytes,
   randomBytes,
   validateObject,
@@ -82,6 +84,8 @@ export type DKG_Secret = {
   // Keep the local polynomial until round3 succeeds so late DKG failures can be retried.
   /** Cached round2 packages from the first successful round2 call. */
   round2Cache?: Record<Identifier, DKG_Round2>;
+  /** Canonical authenticated round1 transcript from the first successful round2 call. */
+  round1Cache?: DKG_Round1[];
   /** Current DKG state-machine step. */
   step?: 1 | 2 | 3;
 };
@@ -194,13 +198,13 @@ export type FrostOpts<P extends FROSTPoint<P>> = {
   /** Optional scalar-field override. */
   readonly Fn?: IField<bigint>;
   /**
-   * Optional suite hook that tightens canonical decoding with subgroup / identity checks.
+   * Optional suite hook that adds checks after mandatory identity and subgroup validation.
    * @param p - Point to validate.
    */
   readonly validatePoint?: (p: P) => void;
   /**
-   * Optional public-key parser. Implementations MUST preserve the same subgroup / identity policy
-   * as `validatePoint`, because this bypasses generic canonical decoding in `parsePoint()`.
+   * Optional public-key parser. Its result is still subjected to the mandatory checks and
+   * `validatePoint`; this hook only replaces byte decoding.
    * @param bytes - Encoded public key.
    * @returns Parsed public point.
    */
@@ -365,8 +369,8 @@ export type FROST = {
      * @param round1 - Public round1 broadcasts from all participants.
      * @param round2 - Round2 messages received from others.
      * @returns Final secret/public key information for the participant.
-     * Callers MUST pass the same verified remote `round1` package set that was already
-     * accepted in `round2()`, rather than re-fetching or rebuilding it from the network.
+     * `round1` must byte-compare equal to the remote packages authenticated in `round2()`.
+     * Finalization consumes the stored authenticated transcript, not caller-owned arrays.
      */
     round3: (
       secret: TArg<DKG_Secret>,
@@ -636,14 +640,14 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
     return Fn.isLE ? bytesToNumberLE(t) : bytesToNumberBE(t);
   };
   const serializePoint = (p: P) => p.toBytes();
-  const parsePoint = (bytes: TArg<Uint8Array>) => {
-    // RFC 9591 Section 3.1 requires DeserializeElement validation. Suite-specific validatePoint
-    // hooks tighten this further for ciphersuites in Section 6. Bare createFROST(...) only gets
-    // canonical point decoding unless the caller installs those extra subgroup / identity checks.
-    const p = Point.fromBytes(bytes);
+  const validatePublicPoint = (p: P): P => {
+    // RFC 9591 Section 3.1 DeserializeElement rejects identity and non-prime-order elements.
+    if (p.is0()) throw new Error('invalid point: identity');
+    if (!p.isTorsionFree()) throw new Error('bad point: not in prime-order subgroup');
     if (opts.validatePoint) opts.validatePoint(p);
     return p;
   };
+  const parsePoint = (bytes: TArg<Uint8Array>) => validatePublicPoint(Point.fromBytes(bytes));
   // RFC 9591 Sections 4.1/5.1 model each participant's round-one output as two public commitments.
   const nonceCommitments = (identifier: Identifier, nonces: TArg<Nonces>): TRet<NonceCommitments> =>
     ({
@@ -666,6 +670,35 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
     // Keep string-keyed maps stable by accepting only the canonical serialized form.
     if (serializeIdentifier(n) !== id) throw new Error('expected canonical identifier hex');
     return n;
+  };
+  const copyRound1Package = (p: TArg<DKG_Round1>): TRet<DKG_Round1> =>
+    ({
+      identifier: serializeIdentifier(parseIdentifier(p.identifier)),
+      commitment: p.commitment.map((c) => copyBytes(c)),
+      proofOfKnowledge: copyBytes(p.proofOfKnowledge),
+    }) as TRet<DKG_Round1>;
+  const canonicalRound1Packages = (packages: TArg<DKG_Round1[]>): TRet<DKG_Round1[]> => {
+    const snapshot = packages.map(copyRound1Package);
+    snapshot.sort((a, b) => {
+      const ai = parseIdentifier(a.identifier);
+      const bi = parseIdentifier(b.identifier);
+      return ai < bi ? -1 : ai > bi ? 1 : 0;
+    });
+    return snapshot as TRet<DKG_Round1[]>;
+  };
+  const equalRound1Transcripts = (a: TArg<DKG_Round1[]>, b: TArg<DKG_Round1[]>): boolean => {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      const p = a[i];
+      const q = b[i];
+      if (p.identifier !== q.identifier || p.commitment.length !== q.commitment.length)
+        return false;
+      for (let j = 0; j < p.commitment.length; j++) {
+        if (!equalBytes(p.commitment[j], q.commitment[j])) return false;
+      }
+      if (!equalBytes(p.proofOfKnowledge, q.proofOfKnowledge)) return false;
+    }
+    return true;
   };
 
   const Signature = {
@@ -951,7 +984,7 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
         validateObject(
           secret as any,
           { identifier: 'bigint', commitment: 'object', signers: 'object' },
-          { coefficients: 'object', round2Cache: 'object', step: 'number' },
+          { coefficients: 'object', round1Cache: 'object', round2Cache: 'object', step: 'number' },
           'secret'
         );
         validateSigners(secret.signers, 'secret.signers');
@@ -960,10 +993,18 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
           throw new Error('wrong number of round1 packages');
         if (!secret.coefficients || secret.step === 3)
           throw new Error('round3 package used in round2');
-        if (secret.round2Cache !== undefined)
+        // Snapshot before validation, then authenticate and cache this exact owned transcript.
+        const authenticatedRound1 = canonicalRound1Packages(others);
+        if (secret.round2Cache !== undefined) {
+          if (
+            secret.round1Cache === undefined ||
+            !equalRound1Transcripts(secret.round1Cache, authenticatedRound1)
+          )
+            throw new Error('round1 packages do not match authenticated transcript');
           return secret.round2Cache as TRet<Record<string, DKG_Round2>>;
+        }
         const res: Record<Identifier, DKG_Round2> = {};
-        for (const p of others) {
+        for (const p of authenticatedRound1) {
           if (p.commitment.length !== secret.signers.min)
             throw new Error('wrong number of commitments');
           const id = parseIdentifier(p.identifier);
@@ -978,6 +1019,7 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
             signingShare: signingShare as TRet<Bytes>,
           };
         }
+        secret.round1Cache = authenticatedRound1;
         secret.round2Cache = res;
         secret.step = 2;
         return res as TRet<Record<string, DKG_Round2>>;
@@ -990,21 +1032,25 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
         validateObject(
           secret as any,
           { identifier: 'bigint', commitment: 'object', signers: 'object' },
-          { coefficients: 'object', round2Cache: 'object', step: 'number' },
+          { coefficients: 'object', round1Cache: 'object', round2Cache: 'object', step: 'number' },
           'secret'
         );
         validateSigners(secret.signers, 'secret.signers');
         aarray(round1, 'round1');
         aarray(round2, 'round2');
-        // DKG is outside RFC 9591's signing flow; callers are expected to reuse the same
-        // remote round1 packages already accepted in round2, like frost-rs documents.
         if (round1.length !== secret.signers.max - 1)
           throw new Error('wrong length of round1 packages');
-        if (!secret.coefficients || secret.step !== 2)
+        if (!secret.coefficients || secret.step !== 2 || !secret.round1Cache)
           throw new Error('round2 package used in round3');
-        if (round2.length !== round1.length) throw new Error('wrong length of round2 packages');
+        const suppliedRound1 = canonicalRound1Packages(round1);
+        const authenticatedRound1 = secret.round1Cache;
+        if (!equalRound1Transcripts(authenticatedRound1, suppliedRound1))
+          throw new Error('round1 packages do not match authenticated transcript');
+        if (round2.length !== authenticatedRound1.length)
+          throw new Error('wrong length of round2 packages');
         const merged: Record<Identifier, TArg<DKG_Round1> & { signingShare?: TArg<Bytes> }> = {};
-        for (const r1 of round1) {
+        // Use the authenticated owned transcript after comparison; never re-read caller input.
+        for (const r1 of authenticatedRound1) {
           if (!r1.identifier || !r1.commitment) throw new Error('wrong round1 share');
           merged[r1.identifier] = { ...r1 };
         }
@@ -1014,7 +1060,7 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
             throw new Error('round1 share for ' + r2.identifier + ' is missing');
           merged[r2.identifier].signingShare = r2.signingShare;
         }
-        if (Object.keys(merged).length !== round1.length)
+        if (Object.keys(merged).length !== authenticatedRound1.length)
           throw new Error('mismatch identifiers between rounds');
         let signingShare = Fn.ZERO;
         if (secret.commitment.length !== secret.signers.min)
@@ -1068,6 +1114,7 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
         for (let i = 0; i < secret.coefficients.length; i++)
           secret.coefficients[i] -= secret.coefficients[i];
         delete secret.coefficients;
+        delete secret.round1Cache;
         delete secret.round2Cache;
         secret.step = 3;
         return res;
@@ -1076,7 +1123,7 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
         validateObject(
           secret as any,
           { identifier: 'bigint', commitment: 'object', signers: 'object' },
-          { coefficients: 'object', round2Cache: 'object', step: 'number' },
+          { coefficients: 'object', round1Cache: 'object', round2Cache: 'object', step: 'number' },
           'secret'
         );
         // Instead of replacing secret bigint with another (zero?), we subtract it from itself
@@ -1088,6 +1135,7 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
             secret.coefficients[i] -= secret.coefficients[i];
         }
         // for (const c of secret.commitment) c.fill(0);
+        delete secret.round1Cache;
         delete secret.round2Cache;
         secret.step = 3;
       },
@@ -1359,7 +1407,9 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
       return Signature.encode(R, z);
     },
     verify(sig: TArg<Signature>, msg: TArg<Uint8Array>, publicKey: TArg<Uint8Array>) {
-      const PK = opts.parsePublicKey ? opts.parsePublicKey(publicKey) : parsePoint(publicKey);
+      const PK = opts.parsePublicKey
+        ? validatePublicPoint(opts.parsePublicKey(publicKey))
+        : parsePoint(publicKey);
       const { R, z } = Signature.decode(sig);
       return Basic.verify(msg, R, z, PK);
     },
