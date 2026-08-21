@@ -6,7 +6,7 @@ import { eddsa } from '../src/abstract/edwards.ts';
 import { ed25519, ed25519ctx, ed25519ph, x25519 } from '../src/ed25519.ts';
 import { ed448, x448 } from '../src/ed448.ts';
 import { numberToBytesLE } from '../src/utils.ts';
-import { deepHexToBytes, json } from './utils.ts';
+import { deepHexToBytes, jsonGZ } from './utils.ts';
 
 const VECTORS_RFC8032 = deepHexToBytes([
   {
@@ -254,7 +254,7 @@ describe('X25519 RFC7748 ECDH', () => {
   });
 
   it('wycheproof', () => {
-    const x25519vectors = json('./vectors/wycheproof/x25519_test.json');
+    const x25519vectors = jsonGZ('./vectors/acvp-vectors/wycheproof/testvectors_v1/x25519_test.json.gz');
     const group = deepHexToBytes(x25519vectors.testGroups[0]);
     let strictRejects = 0;
     group.tests.forEach((v, i) => {

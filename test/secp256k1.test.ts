@@ -2,7 +2,7 @@ import { bytesToHex, hexToBytes, isBytes } from '@noble/hashes/utils.js';
 import { describe, it } from '@paulmillr/jsbt/test.js';
 import * as fc from 'fast-check';
 import { deepStrictEqual as eql, rejects, throws } from 'node:assert';
-import { deepHexToBytes, getTypeTestsNonUi8a, json, txt } from './utils.ts';
+import { deepHexToBytes, getTypeTestsNonUi8a, json, jsonGZ, txt } from './utils.ts';
 // prettier-ignore
 import {
     bytesToNumberBE,
@@ -15,7 +15,8 @@ import {
 } from './secp256k1.helpers.ts';
 
 const loadEcdsaVectors = () => deepHexToBytes(json('./vectors/secp256k1/ecdsa.json'));
-const loadEcdhVectors = () => deepHexToBytes(json('./vectors/wycheproof/ecdh_secp256k1_test.json'));
+const loadEcdhVectors = () =>
+  deepHexToBytes(jsonGZ('./vectors/acvp-vectors/wycheproof/testvectors_v1/ecdh_secp256k1_test.json.gz'));
 const loadPrivateVectors = () => {
   const vectors = json('./vectors/secp256k1/privates.json');
   return deepHexToBytes({
@@ -28,7 +29,7 @@ const loadPrivateVectors = () => {
 };
 const loadPointVectors = () => deepHexToBytes(json('./vectors/secp256k1/points.json'));
 const loadWycheproofVectors = () =>
-  deepHexToBytes(json('./vectors/wycheproof/ecdsa_secp256k1_sha256_test.json'));
+  deepHexToBytes(jsonGZ('./vectors/acvp-vectors/wycheproof/testvectors_v1/ecdsa_secp256k1_sha256_test.json.gz'));
 
 export function pfrom(hex) {
   return Point.fromHex(hex);

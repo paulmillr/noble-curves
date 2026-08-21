@@ -32,7 +32,7 @@ import {
   __TEST as secpTEST,
 } from '../src/secp256k1.ts';
 import { bytesToNumberBE, concatBytes, numberToBytesBE, numberToBytesLE } from '../src/utils.ts';
-import { json } from './utils.ts';
+import { jsonGZ } from './utils.ts';
 
 type ScalarField = {
   fromBytes: (bytes: Uint8Array) => bigint;
@@ -121,7 +121,7 @@ type Actor = {
   round3?: Key;
 };
 
-const getJson = <T>(path: string): T => json(path) as T;
+const getJson = <T>(path: string): T => jsonGZ(path) as T;
 const getPointBytes = <P extends PointLike<P>>(Point: PointCtor<P>) => ({
   base: bytesToHex(Point.BASE.toBytes()),
   doubleBase: bytesToHex(Point.BASE.add(Point.BASE).toBytes()),
@@ -133,19 +133,19 @@ const getVectorsSingle = <P extends PointLike<P>>(
   proofPrefix = bytesToHex(Point.BASE.toBytes())
 ): Suite => {
   const signPaths = [
-    `vectors/rfc9591-frost/${name}-vectors.json`,
-    `vectors/rfc9591-frost/${name}-vectors-big-identifier.json`,
+    `vectors/acvp-vectors/rfc/9591-frost/${name}-vectors.json.gz`,
+    `vectors/acvp-vectors/rfc/9591-frost/${name}-vectors-big-identifier.json.gz`,
   ];
-  const dkgPaths = [`vectors/rfc9591-frost/${name}-vectors_dkg.json`];
+  const dkgPaths = [`vectors/acvp-vectors/rfc/9591-frost/${name}-vectors_dkg.json.gz`];
   return {
     frost,
     loadSign: (index: number) => getJson<SignVector>(signPaths[index]),
     signCount: signPaths.length,
     loadDkg: (index: number) => getJson<DkgVector>(dkgPaths[index]),
     dkgCount: dkgPaths.length,
-    loadSample: () => getJson<SampleVector>(`vectors/rfc9591-frost/${name}-samples.json`),
-    loadRepair: () => getJson<RepairVector>(`vectors/rfc9591-frost/${name}-repair-share.json`),
-    loadElement: () => getJson<ElementVector>(`vectors/rfc9591-frost/${name}-elements.json`),
+    loadSample: () => getJson<SampleVector>(`vectors/acvp-vectors/rfc/9591-frost/${name}-samples.json.gz`),
+    loadRepair: () => getJson<RepairVector>(`vectors/acvp-vectors/rfc/9591-frost/${name}-repair-share.json.gz`),
+    loadElement: () => getJson<ElementVector>(`vectors/acvp-vectors/rfc/9591-frost/${name}-elements.json.gz`),
     ...getPointBytes(Point),
     proofPrefix,
   };

@@ -7,7 +7,7 @@ import { ristretto255, ristretto255_oprf } from '../src/ed25519.ts';
 import { decaf448, decaf448_oprf } from '../src/ed448.ts';
 import { p256_oprf, p384_oprf, p521_oprf } from '../src/nist.ts';
 import { asciiToBytes, numberToBytesBE, numberToBytesLE } from '../src/utils.ts';
-import { deepHexToBytes, json } from './utils.ts';
+import { deepHexToBytes, jsonGZ } from './utils.ts';
 
 const BufferRNG = (lst) => {
   return (len) => {
@@ -316,8 +316,8 @@ describe('RFC-9497 (OPRF)', () => {
   for (const suite of Object.keys(SUITES)) {
     it(suite, () => {
       if (!SUITES[suite]) throw new Error('missing');
-      // Generated using rfc9497-oprf-parser.js.
-      const vectors = deepHexToBytes(json('./vectors/rfc9497-oprf.json'));
+      // Parsed from RFC 9497 Appendix A by the vectors repo (scripts/rfc/rfc9497.js).
+      const vectors = deepHexToBytes(jsonGZ('./vectors/acvp-vectors/rfc/9497-oprf/vectors.json.gz'));
       const { modes } = vectors.find((v) => v.suite === suite);
       const prf = SUITES[suite];
       const Fn = prf.__tests.Fn;

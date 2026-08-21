@@ -16,10 +16,15 @@ import {
   numberToBytesBE,
 } from '../src/utils.ts';
 import { p192, p224, secp192r1, secp224r1 } from './_more-curves.helpers.ts';
-import { deepHexToBytes, json } from './utils.ts';
+import { deepHexToBytes, json, jsonGZ } from './utils.ts';
 
-const PREFIX = './vectors/wycheproof/';
-const deepJson = (name) => deepHexToBytes(json(PREFIX + name + '_test.json'));
+const PREFIX = './vectors/acvp-vectors/wycheproof/testvectors_v1/';
+const deepJson = (name) => deepHexToBytes(jsonGZ(PREFIX + name + '_test.json.gz'));
+// The combined multi-curve ecdh/ecdsa files only exist in Wycheproof's deleted
+// legacy testvectors/ directory; the v1 per-curve split dropped FRP256v1,
+// secp224k1 ECDH and the brainpool *t1 twists, so local copies are kept.
+const LEGACY_PREFIX = './vectors/wycheproof/';
+const deepJsonLegacy = (name) => deepHexToBytes(json(LEGACY_PREFIX + name + '_test.json'));
 
 // TODO: maybe add to noble-hashes?
 const wrapShake = (shake, dkLen) => {
@@ -45,7 +50,7 @@ const NIST = {
   secp256k1,
 };
 
-const WYCHEPROOF_CURVE_PARAMS = json(PREFIX + 'ec_prime_order_curves_test.json').testGroups[0]
+const WYCHEPROOF_CURVE_PARAMS = jsonGZ(PREFIX + 'ec_prime_order_curves_test.json.gz').testGroups[0]
   .tests;
 const WYCHEPROOF_CURVES = new WeakMap();
 function getWycheproofCurve(name, hash = sha256) {
@@ -116,7 +121,7 @@ function verifyECDHVector(test, curve) {
 }
 
 describe('wycheproof ECDH', () => {
-  const vecdh = deepJson('ecdh');
+  const vecdh = deepJsonLegacy('ecdh');
   for (const { curve: curveName } of vecdh.testGroups) {
     it(curveName, () => {
       const group = vecdh.testGroups.find((group) => group.curve === curveName);
@@ -386,7 +391,7 @@ function runWycheproof(name, CURVE, group, index) {
 
 describe('wycheproof ECDSA', () => {
   it('generic', () => {
-    const vecdsa = deepJson('ecdsa');
+    const vecdsa = deepJsonLegacy('ecdsa');
     const hashes = {
       'SHA-224': sha224,
       'SHA-256': sha256,
@@ -453,10 +458,12 @@ const hexToBigint = (hex) => BigInt(`0x${hex}`);
 describe('RFC6979', () => {
   for (const name of ['P192', 'P224', 'P256', 'P384', 'P521']) {
     it(name, () => {
-      const rfc6979 = json('./vectors/rfc6979.json');
-      const v = rfc6979.find((v) => v.curve === name);
+      const rfc6979 = jsonGZ('./vectors/acvp-vectors/rfc/6979-deterministic-ecdsa/vectors.json.gz');
+      const v = rfc6979.find((v) => v.curve === `NIST ${name[0]}-${name.slice(1)}`);
       if (!v) throw new Error('missing RFC6979 vector: ' + name);
-      const curve = NIST[v.curve];
+      const curve = NIST[name];
+      // Each curve signs with its default hash; the RFC lists all five hashes.
+      const hash = { P192: 'SHA-256', P224: 'SHA-224', P256: 'SHA-256', P384: 'SHA-384', P521: 'SHA-512' }[name];
       eql(curve.Point.Fn.ORDER, hexToBigint(v.q));
       // RFC 6979 publishes `x` as an integer. Convert it to the curve's fixed-width scalar bytes so
       // shortened P-521 integer fixtures stay integer fixtures instead of testing 65-byte parsing.
@@ -465,7 +472,7 @@ describe('RFC6979', () => {
       const pubPoint = curve.Point.fromBytes(pubKey);
       eql(pubPoint.x, hexToBigint(v.Ux));
       eql(pubPoint.y, hexToBigint(v.Uy));
-      for (const c of v.cases) {
+      for (const c of v.cases.filter((c) => c.hash === hash)) {
         const h = asciiToBytes(c.message);
         const opts = { lowS: false, format: 'der' };
         const sig = curve.sign(h, priv, opts);

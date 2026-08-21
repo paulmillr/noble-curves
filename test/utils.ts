@@ -2,16 +2,16 @@ import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import { readFileSync } from 'node:fs';
 import { dirname, join as joinPath } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { gunzipSync } from 'node:zlib';
 const _dirname = dirname(fileURLToPath(import.meta.url));
 
 function readUtf8(path) {
   return readFileSync(joinPath(_dirname, path), { encoding: 'utf-8' });
 }
 
+import { jsonGZ as readJsonGZ } from './vectors/acvp-vectors/utils.js';
+
 export function jsonGZ(path) {
-  const unz = gunzipSync(readFileSync(joinPath(_dirname, path)));
-  return JSON.parse(unz.toString('utf8'));
+  return readJsonGZ(joinPath(_dirname, path));
 }
 
 export function json(path) {

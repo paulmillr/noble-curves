@@ -12,7 +12,7 @@ import { bn254 } from '../src/bn254.ts';
 import { ed25519, x25519 } from '../src/ed25519.ts';
 import { p256 } from '../src/nist.ts';
 import { secp256k1 } from '../src/secp256k1.ts';
-import { json } from './utils.ts';
+import { jsonGZ } from './utils.ts';
 
 describe('edge cases', () => {
   it('bigInt private keys', () => {
@@ -75,7 +75,7 @@ describe('createCurve', () => {
     ];
     for (const name of vectorNames) {
       it(name, () => {
-        const wyche_curves = json('./vectors/wycheproof/ec_prime_order_curves_test.json');
+        const wyche_curves = jsonGZ('./vectors/acvp-vectors/wycheproof/testvectors_v1/ec_prime_order_curves_test.json.gz');
         const v = wyche_curves.testGroups[0].tests.find((v) => v.name === name);
         if (!v) throw new Error('missing curve vector: ' + name);
         const CURVE = ecdsa(
