@@ -10,7 +10,7 @@ import * as fc from 'fast-check';
 import { deepStrictEqual as eql, throws } from 'node:assert';
 import { E448, ed448, ed448ph, x448 } from '../src/ed448.ts';
 import { asciiToBytes, bytesToNumberLE, numberToBytesLE } from '../src/utils.ts';
-import { json } from './utils.ts';
+import { json, jsonGZ } from './utils.ts';
 
 const addPToEncoding = (Point: typeof ed448.Point, bytes: Uint8Array): Uint8Array => {
   const out = bytes.slice();
@@ -100,12 +100,13 @@ describe('ed448', () => {
       eql(scheme.verify(sig, msg, badPublicKey), false);
     }
 
-    const VECTORS_rfc8032_ed448 = json('./vectors/rfc8032-ed448.json');
+    const VECTORS_rfc8032_ed448 = jsonGZ('./vectors/acvp-vectors/rfc/8032-eddsa/ed448.json.gz');
     for (let i = 0; i < VECTORS_rfc8032_ed448.length; i++) {
       const v = VECTORS_rfc8032_ed448[i];
+      const opts = v.context ? { context: bytes(v.context) } : {};
       eql(hex(ed.getPublicKey(bytes(v.secretKey))), v.publicKey);
-      eql(hex(ed.sign(bytes(v.message), bytes(v.secretKey))), v.signature);
-      eql(ed.verify(bytes(v.signature), bytes(v.message), bytes(v.publicKey)), true);
+      eql(hex(ed.sign(bytes(v.message), bytes(v.secretKey), opts)), v.signature);
+      eql(ed.verify(bytes(v.signature), bytes(v.message), bytes(v.publicKey), opts), true);
     }
   });
 
@@ -283,7 +284,7 @@ describe('ed448', () => {
 
   describe('wycheproof', () => {
     it('ED448 vectors', () => {
-      const ed448vectors = json('./vectors/wycheproof/ed448_test.json');
+      const ed448vectors = jsonGZ('./vectors/acvp-vectors/wycheproof/testvectors_v1/ed448_test.json.gz');
       for (let g = 0; g < ed448vectors.testGroups.length; g++) {
         const group = ed448vectors.testGroups[g];
         const key = group.publicKey;
@@ -461,7 +462,7 @@ describe('ed448', () => {
       eql(hex(x448.scalarMult(bytes(alicePrivate), bytes(bobPublic))), shared);
       eql(hex(x448.scalarMult(bytes(bobPrivate), bytes(alicePublic))), shared);
 
-      const x448vectors = json('./vectors/wycheproof/x448_test.json');
+      const x448vectors = jsonGZ('./vectors/acvp-vectors/wycheproof/testvectors_v1/x448_test.json.gz');
       const group = x448vectors.testGroups[0];
       let strictRejects = 0;
       group.tests.forEach((v, i) => {

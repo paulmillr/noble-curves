@@ -13,7 +13,7 @@ import { deepHexToBytes, jsonGZ } from './utils.ts';
 
 const loadACVP = (name, gzip = true, bytes = true) => {
   const json = (fname) =>
-    jsonGZ(`vectors/acvp-vectors/gen-val/json-files/${name}/${fname}.json${gzip ? '.gz' : ''}`);
+    jsonGZ(`vectors/acvp-vectors/acvp/${name}/${fname}.json${gzip ? '.gz' : ''}`);
   const prompt = json('prompt');
   const expectedResult = json('expectedResults');
   const internalProjection = json('internalProjection');

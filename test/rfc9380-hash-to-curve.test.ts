@@ -1,7 +1,7 @@
 import { bytesToHex } from '@noble/hashes/utils.js';
 import { describe, it } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql, throws } from 'node:assert';
-import { json } from './utils.ts';
+import { jsonGZ } from './utils.ts';
 // Generic tests for all curves in package
 import { sha256, sha512 } from '@noble/hashes/sha2.js';
 import { shake128, shake256 } from '@noble/hashes/sha3.js';
@@ -22,8 +22,8 @@ import { decaf448_hasher, ed448_hasher } from '../src/ed448.ts';
 import * as nist from '../src/nist.ts';
 import { secp256k1_hasher } from '../src/secp256k1.ts';
 import { asciiToBytes } from '../src/utils.ts';
-const PREFIX = './vectors/rfc9380-hash-to-curve/';
-const vector = (name) => json(PREFIX + name + '.json');
+const PREFIX = './vectors/acvp-vectors/rfc/9380-hash-to-curve/';
+const vector = (name) => jsonGZ(PREFIX + name + '.json.gz');
 
 function testExpandXMD(hash, name) {
   it(name, () => {

@@ -9,7 +9,7 @@ import { describe, it } from '@paulmillr/jsbt/test.js';
 import * as fc from 'fast-check';
 import { deepStrictEqual as eql, strictEqual, throws } from 'node:assert';
 import { ed25519 as ed, ED25519_TORSION_SUBGROUP, numberToBytesLE } from './ed25519.helpers.ts';
-import { getTypeTestsNonUi8a, json, txt } from './utils.ts';
+import { getTypeTestsNonUi8a, json, jsonGZ, txt } from './utils.ts';
 
 // Any changes to the file will need to be aware of the fact
 // the file is shared between noble-curves and noble-ed25519.
@@ -66,13 +66,13 @@ describe('ed25519', () => {
       }
 
       // https://tools.ietf.org/html/rfc8032#section-7
-      const VECTORS_rfc8032_ed25519 = json('./vectors/rfc8032-ed25519.json');
+      const VECTORS_rfc8032_ed25519 = jsonGZ('./vectors/acvp-vectors/rfc/8032-eddsa/ed25519.json.gz');
       for (const vec of VECTORS_rfc8032_ed25519) {
-        const { priv, msg, pub, sig } = vec;
-        const pubG = ed.getPublicKey(bytes(priv));
-        const sigG = ed.sign(bytes(msg), bytes(priv));
-        eql(hex(pubG), pub);
-        eql(hex(sigG), sig);
+        const { secretKey, message, publicKey, signature } = vec;
+        const pubG = ed.getPublicKey(bytes(secretKey));
+        const sigG = ed.sign(bytes(message), bytes(secretKey));
+        eql(hex(pubG), publicKey);
+        eql(hex(sigG), signature);
       }
     });
   });
@@ -444,19 +444,23 @@ describe('ed25519', () => {
   });
 
   it('wycheproof/ED25519', () => {
-    const ed25519vectors = json('./vectors/wycheproof/ed25519_test.json');
+    const ed25519vectors = jsonGZ('./vectors/acvp-vectors/wycheproof/testvectors_v1/ed25519_test.json.gz');
     for (let g = 0; g < ed25519vectors.testGroups.length; g++) {
       const group = ed25519vectors.testGroups[g];
       const key = group.publicKey;
       for (let i = 0; i < group.tests.length; i++) {
         const v = group.tests[i];
         const comment = `(${g}/${i}, ${v.result}): ${v.comment}`;
+        // Wycheproof targets strict RFC 8032 verification; tcId 151 (x=0 with
+        // sign bit set) is correctly accepted under the default ZIP-215 rules,
+        // which are covered separately by the zip215.json vectors.
+        const opts = { zip215: false };
         if (v.result === 'valid' || v.result === 'acceptable') {
-          eql(ed.verify(bytes(v.sig), bytes(v.msg), bytes(key.pk)), true, comment);
+          eql(ed.verify(bytes(v.sig), bytes(v.msg), bytes(key.pk), opts), true, comment);
         } else if (v.result === 'invalid') {
           let failed = false;
           try {
-            failed = !ed.verify(bytes(v.sig), bytes(v.msg), bytes(key.pk));
+            failed = !ed.verify(bytes(v.sig), bytes(v.msg), bytes(key.pk), opts);
           } catch (error) {
             failed = true;
           }
