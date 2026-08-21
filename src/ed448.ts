@@ -431,9 +431,10 @@ export const ed448_FROST: TRet<FROST> = /* @__PURE__ */ (() =>
   createFROST({
     name: 'FROST-ED448-SHAKE256-v1',
     Point: ed448_Point,
+    // createFROST() already rejects the identity and non-prime-order elements per RFC 9591
+    // Section 3.1; this hook only adds the on-curve check.
     validatePoint: (p) => {
       p.assertValidity();
-      if (!p.isTorsionFree()) throw new Error('bad point: not torsion-free');
     },
     // Group:  edwards448 [RFC8032], where Ne = 57 and Ns = 57.
     // Fn is 57 bytes, Fp is 57 bytes too

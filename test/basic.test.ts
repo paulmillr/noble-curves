@@ -399,11 +399,20 @@ describe('createCurve', () => {
   });
 
   it('small constructor edge cases', () => {
-    const Point = weierstrass(
-      { p: 5n, n: 257n, h: 1n, a: 0n, b: 1n, Gx: 0n, Gy: 1n },
-      { allowInfinityPoint: true }
-    );
+    const small = { p: 5n, n: 257n, h: 1n, a: 0n, b: 1n, Gx: 0n, Gy: 1n };
+
+    const Point = weierstrass(small, { allowInfinityPoint: true });
+    // Only the canonical (0, 1, 0) representative of infinity is accepted.
     throws(() => new Point(1n, 1n, 0n).assertValidity(), /ZERO|infinity|point/i);
+    eql(Point.ZERO.toBytes(), Uint8Array.of(0));
+    eql(Point.ZERO.toBytes(false), Uint8Array.of(0));
+    eql(Point.fromBytes(Uint8Array.of(0)).is0(), true);
+
+    // Without the opt-in, infinity has no byte encoding at all, which is what keeps
+    // fromBytes() usable as a strict key boundary.
+    const strict = weierstrass(small);
+    throws(() => strict.ZERO.toBytes(), /ZERO/);
+    throws(() => strict.fromBytes(Uint8Array.of(0)), /bad point/);
 
     const torsionPoint = weierstrass(
       { p: 5n, n: 65535n, h: 2n, a: 0n, b: 1n, Gx: 0n, Gy: 1n },

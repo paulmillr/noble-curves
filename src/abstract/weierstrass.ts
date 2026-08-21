@@ -330,7 +330,13 @@ export type WeierstrassExtraOpts<T> = Partial<{
   Fp: IField<T>;
   /** Optional scalar-field override. */
   Fn: IField<bigint>;
-  /** Whether the point constructor accepts infinity points. */
+  /**
+   * Whether the point at infinity is a public value of this point type. When unset, infinity
+   * fails `assertValidity()` and has no byte encoding at all: encoding throws and `0x00` does
+   * not decode, which keeps `Point.fromBytes()` usable as a strict key boundary because
+   * infinity cannot be expressed in bytes. When set, infinity validates and uses the SEC 1
+   * v2.0 §2.3.3 / §2.3.4 single-octet `0x00` form, unless `fromBytes` / `toBytes` override it.
+   */
   allowInfinityPoint: boolean;
   /** Optional GLV endomorphism data. */
   endo: EndomorphismOpts;
@@ -537,9 +543,13 @@ export function weierstrass<T>(
     point: WeierstrassPoint<T>,
     isCompressed: boolean
   ): TRet<Uint8Array> {
-    // SEC 1 v2.0 §2.3.3 encodes infinity as the single octet 0x00. Only curves
-    // that opt into infinity as a public point value should expose that byte form.
-    if (allowInfinityPoint && point.is0()) return Uint8Array.of(0) as TRet<Uint8Array>;
+    // Handle infinity before toAffine(), which maps ZERO to (0, 0) silently: without this the
+    // encoder would emit an all-zero byte string that decodes back as a different point. Only
+    // curves that opt into infinity as a public point value get the SEC 1 byte form.
+    if (point.is0()) {
+      if (!allowInfinityPoint) throw new Error('bad point: ZERO');
+      return Uint8Array.of(0) as TRet<Uint8Array>; // SEC 1 v2.0 §2.3.3
+    }
     const { x, y } = point.toAffine();
     const bx = Fp.toBytes(x);
     abool(isCompressed, 'isCompressed');
@@ -557,12 +567,12 @@ export function weierstrass<T>(
     const length = bytes.length;
     const head = bytes[0];
     const tail = bytes.subarray(1);
+    // SEC 1 v2.0 §2.3.4 decodes 0x00 as infinity, but §3.2.2 rejects infinity as a public key.
+    // Leaving 0x00 undecodable by default makes that rejection structural rather than a check:
+    // callers reuse this parser as the strict key boundary, and infinity is simply not
+    // expressible. Curves where infinity is a real wire value opt into the codec instead.
+    // secp256k1 crosstests show OpenSSL raw point codecs accept 0x00 too.
     if (allowInfinityPoint && length === 1 && head === 0x00) return { x: Fp.ZERO, y: Fp.ZERO };
-    // SEC 1 v2.0 §2.3.4 decodes 0x00 as infinity, but §3.2.2 public-key validation
-    // rejects infinity. We therefore keep 0x00 rejected by default because callers
-    // reuse this parser as the strict public-key boundary, and only admit it when
-    // the curve explicitly opts into infinity as a public point value. secp256k1
-    // crosstests show OpenSSL raw point codecs accept 0x00 too.
     // No actual validation is done here: use .assertValidity()
     if (length === comp && (head === 0x02 || head === 0x03)) {
       const x = Fp.fromBytes(tail);
@@ -987,8 +997,8 @@ export function weierstrass<T>(
 
     toBytes(isCompressed = true): TRet<Uint8Array> {
       abool(isCompressed, 'isCompressed');
-      // Same policy as pointFromBytes(): keep ZERO out of the default byte surface because
-      // callers use these encodings as public keys, where SEC 1 validation rejects infinity.
+      // assertValidity() covers on-curve and subgroup membership. The encoder below repeats the
+      // infinity check rather than relying on this call, so it stays correct for any caller.
       this.assertValidity();
       return encodePoint(Point, this, isCompressed);
     }
@@ -1132,7 +1142,9 @@ export function ecdh(
       const l = publicKey.length;
       if (isCompressed === true && l !== comp) return false;
       if (isCompressed === false && l !== publicKeyUncompressed) return false;
-      return !!Point.fromBytes(publicKey);
+      // SEC 1 §3.2.2: the identity is never a valid public key, even on curves whose codec
+      // can decode it.
+      return !Point.fromBytes(publicKey).is0();
     } catch (error) {
       return false;
     }
@@ -1192,6 +1204,7 @@ export function ecdh(
     if (isProbPub(publicKeyB) === false) throw new Error('second arg must be public key');
     const s = Fn.fromBytes(secretKeyA);
     const b = Point.fromBytes(publicKeyB); // checks for being on-curve
+    if (b.is0()) throw new Error('invalid public key: point at infinity');
     return b.multiply(s).toBytes(isCompressed);
   }
 
@@ -1584,6 +1597,9 @@ export function ecdsa(
     try {
       const sig = Signature.fromBytes(signature, format);
       const P = Point.fromBytes(publicKey);
+      // SEC 1 verification keys must not be the identity, even when the generic point decoder
+      // permits infinity for another protocol (for example, a pairing curve).
+      if (P.is0()) return false;
       if (lowS && sig.hasHighS()) return false;
       const { r, s } = sig;
       const h = bits2int_modN(message); // mod n, not mod p
@@ -1616,6 +1632,7 @@ export function ecdsa(
     return Signature.fromBytes(signature, 'recovered').recoverPublicKey(message).toBytes();
   }
 
+  // utils.isValidPublicKey() already rejects the identity, so ECDSA needs no shadow copy.
   return Object.freeze({
     keygen,
     getPublicKey,

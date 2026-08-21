@@ -14,6 +14,7 @@ import { describe, it } from '@paulmillr/jsbt/test.js';
 import { deepStrictEqual as eql, throws } from 'node:assert';
 import { randomBytes } from 'node:crypto';
 import { ecdh, ecdsa, weierstrass } from '../src/abstract/weierstrass.ts';
+import { bn254 } from '../src/bn254.ts';
 import { brainpoolP256r1, brainpoolP384r1, brainpoolP512r1 } from '../src/misc.ts';
 import { p256, p384, p521 } from '../src/nist.ts';
 import { secp256k1 } from '../src/secp256k1.ts';
@@ -237,6 +238,18 @@ it('recovered-signature support is not rejected for a valid h=2 curve just becau
   })();
   eql(compact, [1, 1]);
   eql(recovered, [0, 1, 1]);
+});
+
+it('ECDSA rejects identity public keys even when the point decoder permits infinity', () => {
+  const curve = ecdsa(bn254.G1.Point, sha256);
+  const message = Uint8Array.of(1);
+  const r = curve.Point.Fn.create(curve.Point.BASE.toAffine().x);
+  const forged = new curve.Signature(r, 1n).toBytes('compact');
+  eql(
+    curve.verify(forged, message, Uint8Array.of(0), { prehash: false, format: 'compact' }),
+    false
+  );
+  eql(curve.utils.isValidPublicKey(Uint8Array.of(0)), false);
 });
 
 it('ECDSA option-bag APIs reject primitive opts values', () => {
