@@ -266,6 +266,47 @@ it('DKG round3 rejects an algebraically valid replacement commitment transcript'
   eql(installed.public.signers, signers);
 });
 
+it('DKG round2 retry rejects a rogue round1 package with a stale proof of knowledge', () => {
+  // Regression test for the round2 retry rogue-key attack reported against 2.3.0: a peer
+  // who behaves honestly during the first round2() call aborts the victim's round3() with
+  // an invalid share, then substitutes a commitment B0 = t*G - A0 on the retry. He cannot
+  // prove knowledge of B0's discrete log, so he replays his stale proof. The retry must
+  // reject the substitution instead of silently returning the cached packages.
+  const frost = p256_FROST;
+  const Fn = frost.utils.Fn;
+  const signers = { min: 2, max: 2 };
+  const victim = frost.DKG.round1(frost.Identifier.fromNumber(1), signers);
+  const attacker = frost.DKG.round1(frost.Identifier.fromNumber(2), signers);
+  const first = frost.DKG.round2(victim.secret, [structuredClone(attacker.public)]);
+  // Abort the victim's round3() with a share that fails validateSecretShare.
+  const badShare = {
+    identifier: attacker.public.identifier,
+    signingShare: Fn.toBytes(Fn.create(0x51ce5ed1n)),
+  };
+  throws(
+    () => frost.DKG.round3(victim.secret, [structuredClone(attacker.public)], [badShare]),
+    /invalid secret share/
+  );
+  // Rogue replacement: the merged group key lands on t*G, the sent share stays
+  // VSS-consistent at the victim's identifier, but the proof of knowledge is stale.
+  const t = Fn.create(0x1337c0d3n);
+  const s = Fn.create(0x515151n);
+  const A0 = p256.Point.fromBytes(victim.public.commitment[0]);
+  const B0 = p256.Point.BASE.multiply(t).subtract(A0);
+  const B1 = p256.Point.BASE.multiply(s).subtract(B0);
+  const rogue = {
+    identifier: attacker.public.identifier,
+    commitment: [B0.toBytes(true), B1.toBytes(true)],
+    proofOfKnowledge: structuredClone(attacker.public.proofOfKnowledge),
+  };
+  throws(
+    () => frost.DKG.round2(victim.secret, [rogue]),
+    /round1 packages do not match authenticated transcript/
+  );
+  // The genuine transcript still retries cleanly after the rejected substitution.
+  eql(frost.DKG.round2(victim.secret, [structuredClone(attacker.public)]), first);
+});
+
 describe('createFROST', () => {
   const create = () => {
     const frost = createFROST({ name: 'TRACE', Point: ed25519.Point, hash: sha512, H2: '' });
