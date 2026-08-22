@@ -12,7 +12,7 @@
     "@noble/hashes": "2.3.0"
   },
   "devDependencies": {
-    "@paulmillr/jsbt": "0.7.0",
+    "@paulmillr/jsbt": "0.7.1",
     "bismar": "0.1.8",
     "@types/node": "26.2.0",
     "fast-check": "4.2.0",
