@@ -82,9 +82,10 @@ export type IDER = {
   /**
    * Parse a DER signature into `{ r, s }`.
    * @param bytes - DER signature bytes.
+   * @param maxScalarBytes - Optional maximum encoded byte length of each INTEGER.
    * @returns Parsed signature components.
    */
-  toSig(bytes: TArg<Uint8Array>): { r: bigint; s: bigint };
+  toSig(bytes: TArg<Uint8Array>, maxScalarBytes?: number): { r: bigint; s: bigint };
   /**
    * Encode `{ r, s }` as a DER signature.
    * @param sig - Signature components.
@@ -170,15 +171,25 @@ const _DER: IDER = {
       return bytesToNumberBE(data);
     },
   },
-  toSig(bytes: TArg<Uint8Array>): { r: bigint; s: bigint } {
+  toSig(bytes: TArg<Uint8Array>, maxScalarBytes?: number): { r: bigint; s: bigint } {
     // parse DER signature
     const { Err: E, _int: int, _tlv: tlv } = _DER;
+    if (maxScalarBytes !== undefined) {
+      asafenumber(maxScalarBytes, 'maxScalarBytes');
+      if (maxScalarBytes < 1) throw new E('invalid signature: maxScalarBytes must be positive');
+    }
     const data = abytes(bytes, undefined, 'signature');
     const { v: seqBytes, l: seqLeftBytes } = tlv.decode(0x30, data);
     if (seqLeftBytes.length) throw new E('invalid signature: left bytes after parsing');
     const { v: rBytes, l: rLeftBytes } = tlv.decode(0x02, seqBytes);
     const { v: sBytes, l: sLeftBytes } = tlv.decode(0x02, rLeftBytes);
     if (sLeftBytes.length) throw new E('invalid signature: left bytes after parsing');
+    // Enforce curve-provided bounds before bytes-to-hex-to-BigInt conversion can amplify memory.
+    if (
+      maxScalarBytes !== undefined &&
+      (rBytes.length > maxScalarBytes || sBytes.length > maxScalarBytes)
+    )
+      throw new E('invalid signature: integer too large');
     return { r: int.decode(rBytes), s: int.decode(sBytes) };
   },
   hexFromSig(sig: { r: bigint; s: bigint }): string {
