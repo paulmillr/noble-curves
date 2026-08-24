@@ -592,14 +592,32 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
       adjustSecret: 'function',
       adjustPublic: 'function',
       adjustGroupCommitmentShare: 'function',
+      adjustTx: 'object',
       adjustDKG: 'function',
     }
   );
   // Cheap constructor-surface sanity check only: this verifies the generic static hooks/fields that
   // FROST consumes, but it does not certify point semantics like BASE/ZERO correctness.
   validatePointCons(opts.Point);
-  const { Point } = opts;
+  const {
+    Point,
+    validatePoint,
+    parsePublicKey,
+    adjustScalar,
+    adjustPoint: adjustPointHook,
+    challenge,
+    adjustNonces,
+    adjustSecret,
+    adjustPublic,
+    adjustGroupCommitmentShare,
+    adjustDKG,
+  } = opts;
   const Fn = opts.Fn === undefined ? Point.Fn : opts.Fn;
+  const adjustTx =
+    opts.adjustTx === undefined
+      ? undefined
+      : { encode: opts.adjustTx.encode, decode: opts.adjustTx.decode };
+  if (adjustTx) validateObject(adjustTx, { encode: 'function', decode: 'function' });
   // Hashes
   const hashBytes = opts.hash;
   const hashToScalar =
@@ -646,7 +664,7 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
     p.assertValidity();
     if (p.is0()) throw new Error('invalid point: identity');
     if (!p.isTorsionFree()) throw new Error('bad point: not in prime-order subgroup');
-    if (opts.validatePoint) opts.validatePoint(p);
+    if (validatePoint) validatePoint(p);
     return p;
   };
   const parsePoint = (bytes: TArg<Uint8Array>) => validatePublicPoint(Point.fromBytes(bytes));
@@ -657,7 +675,7 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
       hiding: serializePoint(Point.BASE.multiply(Fn.fromBytes(nonces.hiding))),
       binding: serializePoint(Point.BASE.multiply(Fn.fromBytes(nonces.binding))),
     }) as TRet<NonceCommitments>;
-  const adjustPoint = opts.adjustPoint === undefined ? (n: P) => n : opts.adjustPoint;
+  const adjustPoint = adjustPointHook === undefined ? (n: P) => n : adjustPointHook;
   // We use hex to make it easier to use inside objects
   const validateIdentifier = (n: bigint) => {
     // Identifiers are canonical non-zero scalars. Custom / derived identifiers are allowed, so this
@@ -708,11 +726,11 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
     // SerializeElement(R) || SerializeScalar(z).
     encode: (R: P, z: bigint): TRet<Signature> => {
       let res: Uint8Array = concatBytes(serializePoint(R), Fn.toBytes(z));
-      if (opts.adjustTx) res = opts.adjustTx.encode(res);
+      if (adjustTx) res = adjustTx.encode(res);
       return res as TRet<Signature>;
     },
     decode: (sig: TArg<Uint8Array>) => {
-      if (opts.adjustTx) sig = opts.adjustTx.decode(sig);
+      if (adjustTx) sig = adjustTx.decode(sig);
       // We don't know size of point, but we know size of scalar
       const Rbytes = sig.subarray(0, -Fn.BYTES);
       const R = parsePoint(Rbytes);
@@ -726,7 +744,7 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
   // Generates pair of (scalar, point)
   const genPointScalarPair = (rng: RNG = randomBytes) => {
     let n = randomScalar(rng);
-    if (opts.adjustScalar) n = opts.adjustScalar(n);
+    if (adjustScalar) n = adjustScalar(n);
     let p = Point.BASE.multiply(n);
     return { scalar: n, point: p };
   };
@@ -832,7 +850,7 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
   };
   const Basic = {
     challenge: (R: P, PK: P, msg: TArg<Uint8Array>) => {
-      if (opts.challenge) return opts.challenge(R, PK, msg);
+      if (challenge) return challenge(R, PK, msg);
       return H2(concatBytes(serializePoint(R), serializePoint(PK), msg));
     },
     sign(msg: TArg<Uint8Array>, sk: bigint, rng: RNG = randomBytes): [P, bigint] {
@@ -843,8 +861,8 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
       return [R, z];
     },
     verify(msg: TArg<Uint8Array>, R: P, z: bigint, PK: P): boolean {
-      if (opts.adjustPoint) PK = opts.adjustPoint(PK);
-      if (opts.adjustPoint) R = opts.adjustPoint(R);
+      if (adjustPointHook) PK = adjustPointHook(PK);
+      if (adjustPointHook) R = adjustPointHook(R);
       // Signature, message and public key are all public: variable-time is safe on this path.
       const c = this.challenge(R, PK, msg);
       const zB = Point.BASE.multiplyUnsafe(z); // z*G
@@ -1112,7 +1130,7 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
             signingShare: Fn.toBytes(signingShare) as TRet<Bytes>,
           },
         };
-        if (opts.adjustDKG) res = opts.adjustDKG(res);
+        if (adjustDKG) res = adjustDKG(res);
         for (let i = 0; i < secret.coefficients.length; i++)
           secret.coefficients[i] -= secret.coefficients[i];
         delete secret.coefficients;
@@ -1274,8 +1292,8 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
         bytesToHex(commitment.binding) !== bytesToHex(expectedCommitment.binding)
       )
         throw new Error('incorrect signer commitment');
-      if (opts.adjustSecret) secret = opts.adjustSecret(secret, pub);
-      if (opts.adjustPublic) pub = opts.adjustPublic(pub);
+      if (adjustSecret) secret = adjustSecret(secret, pub);
+      if (adjustPublic) pub = adjustPublic(pub);
       const SK = Fn.fromBytes(secret.signingShare);
       const { lambda, challenge, bindingFactor, groupCommitment } = prepareShare(
         pub.commitments[0],
@@ -1283,9 +1301,9 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
         msg,
         secret.identifier
       );
-      const N = opts.adjustNonces ? opts.adjustNonces(groupCommitment, nonces) : nonces;
-      const hidingNonce = opts.adjustNonces ? Fn.fromBytes(N.hiding) : hidingNonce0;
-      const bindingNonce = opts.adjustNonces ? Fn.fromBytes(N.binding) : bindingNonce0;
+      const N = adjustNonces ? adjustNonces(groupCommitment, nonces) : nonces;
+      const hidingNonce = adjustNonces ? Fn.fromBytes(N.hiding) : hidingNonce0;
+      const bindingNonce = adjustNonces ? Fn.fromBytes(N.binding) : bindingNonce0;
       const t = Fn.mul(Fn.mul(lambda, SK), challenge); // challenge * lambda * SK
       const t2 = Fn.mul(bindingNonce, bindingFactor); // bindingNonce * bindingFactor
       const r = Fn.toBytes(Fn.add(Fn.add(hidingNonce, t2), t)); // t + t2 + hidingNonce
@@ -1320,7 +1338,7 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
       abytes(msg, undefined, 'msg');
       parseIdentifier(identifier);
       abytes(sigShare, Fn.BYTES, 'sigShare');
-      if (opts.adjustPublic) pub = opts.adjustPublic(pub);
+      if (adjustPublic) pub = adjustPublic(pub);
       const comm = commitmentList.find((i) => i.identifier === identifier);
       if (!comm) throw new Error('cannot find identifier commitment');
       const PK = parsePoint(pub.verifyingShares[identifier]);
@@ -1337,8 +1355,8 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
       let commShare = hidingNonceCommitment.add(
         bindingNonceCommitment.multiplyUnsafe(bindingFactor)
       );
-      if (opts.adjustGroupCommitmentShare)
-        commShare = opts.adjustGroupCommitmentShare(groupCommitment, commShare);
+      if (adjustGroupCommitmentShare)
+        commShare = adjustGroupCommitmentShare(groupCommitment, commShare);
       const l = Point.BASE.multiplyUnsafe(Fn.fromBytes(sigShare)); // sigShare*G
       // commShare + PK * (challenge * lambda)
       const r = commShare.add(PK.multiplyUnsafe(Fn.mul(challenge, lambda)));
@@ -1368,7 +1386,7 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
       validateObject(sigShares as any, {}, {}, 'sigShares');
       // verifyShare() applies adjustPublic too, so keep the original package for attribution.
       const rawPub = pub;
-      if (opts.adjustPublic) pub = opts.adjustPublic(pub);
+      if (adjustPublic) pub = adjustPublic(pub);
       try {
         validateCommitmentsNum(pub.signers, commitmentList.length);
       } catch {
@@ -1404,13 +1422,13 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
     sign(msg: TArg<Uint8Array>, secretKey: TArg<Uint8Array>): TRet<Uint8Array> {
       let sk = Fn.fromBytes(secretKey);
       // Taproot single-key signing needs the same scalar normalization as threshold keys.
-      if (opts.adjustScalar) sk = opts.adjustScalar(sk);
+      if (adjustScalar) sk = adjustScalar(sk);
       const [R, z] = Basic.sign(msg, sk);
       return Signature.encode(R, z);
     },
     verify(sig: TArg<Signature>, msg: TArg<Uint8Array>, publicKey: TArg<Uint8Array>) {
-      const PK = opts.parsePublicKey
-        ? validatePublicPoint(opts.parsePublicKey(publicKey))
+      const PK = parsePublicKey
+        ? validatePublicPoint(parsePublicKey(publicKey))
         : parsePoint(publicKey);
       const { R, z } = Signature.decode(sig);
       return Basic.verify(msg, R, z, PK);

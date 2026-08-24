@@ -738,7 +738,9 @@ function createBlsSig<P, S>(
       toHex: notImplemented,
     };
   }
-  const sigCoder = SignatureCoder;
+  // Internal decoding must use the same owned callback snapshot exposed on `.Signature`.
+  // Retaining the caller's coder object would allow verification policy to change later.
+  const sigCoder = Object.freeze({ ...SignatureCoder });
   type PubPoint = WeierstrassPoint<P>;
   type SigPoint = WeierstrassPoint<S>;
   function normPub(point: PubPoint | BLSInput): PubPoint {

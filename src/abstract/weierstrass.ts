@@ -521,15 +521,28 @@ export function weierstrass<T>(
     }
   );
 
-  // Snapshot constructor-time flags whose later mutation would otherwise change
-  // validity semantics of an already-built point type.
-  const { endo, allowInfinityPoint } = extraOpts;
+  // Snapshot every hook and take an owned copy of nested GLV configuration. Later mutations of
+  // the caller's options must not change arithmetic, subgroup, or codec policy.
+  const {
+    endo: endoOpts,
+    allowInfinityPoint,
+    clearCofactor,
+    isTorsionFree,
+    fromBytes,
+    toBytes,
+  } = extraOpts;
   const randomBytes = extraOpts.randomBytes === undefined ? wcRandomBytes : extraOpts.randomBytes;
-  if (endo) {
-    if (!Fp.is0(CURVE.a) || typeof endo.beta !== 'bigint' || !Array.isArray(endo.basises)) {
+  if (endoOpts) {
+    if (!Fp.is0(CURVE.a) || typeof endoOpts.beta !== 'bigint' || !Array.isArray(endoOpts.basises)) {
       throw new Error('invalid endo: expected "beta": bigint and "basises": array');
     }
   }
+  const endo = endoOpts
+    ? {
+        beta: endoOpts.beta,
+        basises: endoOpts.basises!.map((basis) => [...basis]) as EndoBasis,
+      }
+    : undefined;
 
   const lengths = getWLengths(Fp as TArg<IField<T>>, Fn);
 
@@ -604,8 +617,8 @@ export function weierstrass<T>(
     }
   }
 
-  const encodePoint = extraOpts.toBytes === undefined ? pointToBytes : extraOpts.toBytes;
-  const decodePoint = extraOpts.fromBytes === undefined ? pointFromBytes : extraOpts.fromBytes;
+  const encodePoint = toBytes === undefined ? pointToBytes : toBytes;
+  const decodePoint = fromBytes === undefined ? pointFromBytes : fromBytes;
   // Hoisted from double() / add(): curve params never change after construction.
   // Koblitz curves (a=0, e.g. secp256k1) skip the three a-multiplications per operation;
   // the selection depends only on public curve constants.
@@ -639,7 +652,10 @@ export function weierstrass<T>(
   /** Asserts coordinate is valid: 0 <= n < Fp.ORDER. */
   function acoord(title: string, n: T, banZero = false) {
     if (!Fp.isValid(n) || (banZero && Fp.is0(n))) throw new Error(`bad point coordinate ${title}`);
-    return n;
+    // Extension-field elements are objects. Keep point coordinates detached from caller-owned
+    // objects so their mutation cannot invalidate cached on-curve / subgroup checks. Primitive
+    // field elements (bigints in shipped prime fields) are already immutable values.
+    return typeof n === 'object' && n !== null ? Fp.create(n) : n;
   }
 
   function aprjpoint(other: unknown): asserts other is Point {
@@ -752,8 +768,7 @@ export function weierstrass<T>(
         // In BLS, ZERO can be serialized, so we allow it.
         // Keep the accepted infinity encoding canonical: projective-equivalent (X, Y, 0) points
         // like (1, 1, 0) compare equal to ZERO, but only (0, 1, 0) should pass this guard.
-        if (extraOpts.allowInfinityPoint && Fp.is0(p.X) && Fp.eql(p.Y, Fp.ONE) && Fp.is0(p.Z))
-          return;
+        if (allowInfinityPoint && Fp.is0(p.X) && Fp.eql(p.Y, Fp.ONE) && Fp.is0(p.Z)) return;
         throw new Error('bad point: ZERO');
       }
       if (validityCache.has(p)) return;
@@ -973,7 +988,6 @@ export function weierstrass<T>(
      * Always torsion-free for cofactor=1 curves.
      */
     isTorsionFree(): boolean {
-      const { isTorsionFree } = extraOpts;
       if (cofactor === _1n) return true;
       if (isTorsionFree) return isTorsionFree(Point, this);
       // unsafe() will use the uncached wNAF path internally, since CURVE_ORDER >= Fn.ORDER
@@ -981,7 +995,6 @@ export function weierstrass<T>(
     }
 
     clearCofactor(): Point {
-      const { clearCofactor } = extraOpts;
       if (cofactor === _1n) return this; // Fast-path
       if (clearCofactor) return clearCofactor(Point, this) as Point;
       // Default fallback assumes the cofactor fits the usual subgroup-scalar
@@ -1358,7 +1371,11 @@ export function ecdsa(
       validateSigLength(bytes, format);
       let recid: number | undefined;
       if (format === 'der') {
-        const { r, s } = DER.toSig(abytes(bytes));
+        // Valid scalar INTEGERs use at most Fn.BYTES plus one DER sign-padding byte. Keep the
+        // total bound conservative so malformed inputs are rejected before parsing any INTEGER.
+        if (bytes.length > 2 * Fn.BYTES + 16)
+          throw new DER.Err('invalid signature: DER signature too long');
+        const { r, s } = DER.toSig(abytes(bytes), Fn.BYTES + 1);
         return new Signature(r, s);
       }
       if (format === 'recovered') {
