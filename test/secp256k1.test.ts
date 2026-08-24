@@ -696,6 +696,24 @@ describe('secp256k1 schnorr.sign()', () => {
     eql(schnorr.verify(signature, Uint8Array.from(message), publicKey), true);
   });
 
+  it('snapshots the message before nonce and challenge hashing', () => {
+    const approved = new Uint8Array(32).fill(0x41);
+    const replacement = new Uint8Array(32).fill(0x42);
+    const message = approved.slice();
+    let lengthReads = 0;
+    // concatBytes reads a message length after copying it into the nonce transcript. Simulate a
+    // concurrent producer changing the caller-owned view at exactly that stage.
+    Object.defineProperty(message, 'length', {
+      get() {
+        if (++lengthReads === 2) message.set(replacement);
+        return message.byteLength;
+      },
+    });
+    const secretKey = new Uint8Array(32).fill(7);
+    const auxRand = new Uint8Array(32).fill(9);
+    eql(schnorr.sign(message, secretKey, auxRand), schnorr.sign(approved, secretKey, auxRand));
+  });
+
   it('taggedHash accepts tags that collide with Object prototype names', () => {
     const msg = Uint8Array.of(1, 2, 3);
     for (const tag of ['__proto__', 'constructor', 'toString']) {

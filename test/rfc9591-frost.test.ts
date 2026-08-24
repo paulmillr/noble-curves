@@ -350,6 +350,20 @@ describe('createFROST', () => {
       () => customParser.verify(new Uint8Array(), msg, ed25519.Point.BASE.toBytes()),
       /suite point policy/
     );
+
+    const offCurve = p256.Point.fromAffine({ x: 1n, y: 1n });
+    eql(offCurve.is0(), false);
+    eql(offCurve.isTorsionFree(), true); // cofactor-one shortcut is not an on-curve check
+    const offCurveParser = createFROST({
+      name: 'TRACE-P256',
+      Point: p256.Point,
+      hash: sha512,
+      parsePublicKey: () => offCurve,
+    });
+    throws(
+      () => offCurveParser.verify(new Uint8Array(), msg, new Uint8Array()),
+      /equation left != right/
+    );
   });
   it('aggregate passes unadjusted public package to verifyShare attribution', () => {
     const adjusted = new WeakSet<object>();

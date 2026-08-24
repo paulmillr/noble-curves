@@ -641,7 +641,9 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
   };
   const serializePoint = (p: P) => p.toBytes();
   const validatePublicPoint = (p: P): P => {
-    // RFC 9591 Section 3.1 DeserializeElement rejects identity and non-prime-order elements.
+    // RFC 9591 Section 3.1 DeserializeElement rejects off-curve, identity, and non-prime-order
+    // elements. This remains mandatory when parsePublicKey replaces the normal byte decoder.
+    p.assertValidity();
     if (p.is0()) throw new Error('invalid point: identity');
     if (!p.isTorsionFree()) throw new Error('bad point: not in prime-order subgroup');
     if (opts.validatePoint) opts.validatePoint(p);
