@@ -416,17 +416,57 @@ describe('createCurve', () => {
     throws(() => strict.ZERO.toBytes(), /ZERO/);
     throws(() => strict.fromBytes(Uint8Array.of(0)), /bad point/);
 
+    // Constructor-time infinity policy must not change when the caller mutates its options bag.
+    const mutableOpts: { allowInfinityPoint?: boolean } = {};
+    const stableStrict = weierstrass(small, mutableOpts);
+    mutableOpts.allowInfinityPoint = true;
+    throws(() => stableStrict.ZERO.assertValidity(), /ZERO/);
+
+    const subgroupOpts = {
+      isTorsionFree: () => false,
+      clearCofactor: (_Point: any, point: any) => point,
+    };
+    const stableSubgroup = weierstrass(
+      { p: 5n, n: 65535n, h: 2n, a: 0n, b: 1n, Gx: 0n, Gy: 1n },
+      subgroupOpts
+    );
+    eql(stableSubgroup.BASE.isTorsionFree(), false, 'initial subgroup hook');
+    eql(stableSubgroup.BASE.clearCofactor().equals(stableSubgroup.BASE), true);
+    subgroupOpts.isTorsionFree = () => true;
+    subgroupOpts.clearCofactor = (Point: any) => Point.ZERO;
+    eql(stableSubgroup.BASE.isTorsionFree(), false, 'subgroup hook snapshot');
+    eql(
+      stableSubgroup.BASE.clearCofactor().equals(stableSubgroup.BASE),
+      true,
+      'cofactor hook snapshot'
+    );
+
     const torsionPoint = weierstrass(
       { p: 5n, n: 65535n, h: 2n, a: 0n, b: 1n, Gx: 0n, Gy: 1n },
       { endo: { beta: 1n, basises: [[1n, 0n, 0n, 1n]] } }
     );
     eql(typeof torsionPoint.BASE.isTorsionFree(), 'boolean', 'torsion fallback');
 
+    const endoOpts: any = {
+      beta: 1n,
+      basises: [
+        [1n, -1n],
+        [128n, 129n],
+      ],
+    };
     const endoPoint = weierstrass(
       { p: 5n, n: 257n, h: 1n, a: 0n, b: 1n, Gx: 0n, Gy: 1n },
-      { endo: { beta: 1n, basises: [[1n, 0n, 0n, 1n]] } }
+      { endo: endoOpts }
     );
     eql(endoPoint.BASE.toAffine(), { x: 0n, y: 1n }, 'small endo base');
+    const freshEndoBase = endoPoint.fromAffine(endoPoint.BASE.toAffine());
+    eql(freshEndoBase.multiplyUnsafe(2n).equals(freshEndoBase.double()), true);
+    endoOpts.basises[0][0] = 0n;
+    eql(
+      freshEndoBase.multiplyUnsafe(2n).equals(freshEndoBase.double()),
+      true,
+      'endomorphism basis snapshot'
+    );
   });
 });
 

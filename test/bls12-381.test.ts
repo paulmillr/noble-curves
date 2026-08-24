@@ -2,6 +2,7 @@ import { describe, it } from '@paulmillr/jsbt/test.js';
 import * as fc from 'fast-check';
 import { deepStrictEqual as eql, throws } from 'node:assert';
 import { mulAddUnsafe, ScalarMultiplier } from '../src/abstract/curve.ts';
+import { bls as createBls } from '../src/abstract/bls.ts';
 import { hash_to_field } from '../src/abstract/hash-to-curve.ts';
 import { bls12_381 as bls, bls12_381 } from '../src/bls12-381.ts';
 import { asciiToBytes, bytesToHex, concatBytes, hexToBytes } from '../src/utils.ts';
@@ -951,6 +952,31 @@ describe('bls12-381 encoding', () => {
 });
 
 describe('bls12-381 verify', () => {
+  it('snapshots mutable signature coder callbacks', () => {
+    const longCoder = { ...blsl.Signature };
+    const shortCoder = { ...blss.Signature };
+    const rebuilt = createBls(
+      bls.fields,
+      bls.G1.Point,
+      bls.G2.Point,
+      bls.params,
+      {
+        hasherOpts: bls.G2.defaults,
+        hasherOptsG1: bls.G1.defaults,
+        hasherOptsG2: bls.G2.defaults,
+      },
+      { LongSignature: longCoder, ShortSignature: shortCoder }
+    );
+    const secretKey = new Uint8Array(32);
+    secretKey[31] = 1;
+    const signature = blsl.sign(blsl.hash(Uint8Array.of(1)), secretKey);
+    const encoded = blsl.Signature.toBytes(signature);
+    longCoder.fromBytes = () => {
+      throw new Error('mutated signature decoder used');
+    };
+    eql(rebuilt.longSignatures.aggregateSignatures([encoded]).equals(signature), true);
+  });
+
   describe('longSignatures', () => {
     itChunks('sign, verify, and negative cases', 559, 40, (start, end) => {
       const G2_VECTORS = loadG2Vectors();

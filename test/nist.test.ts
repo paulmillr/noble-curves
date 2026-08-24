@@ -553,6 +553,32 @@ it('properly add leading zero to DER', () => {
   eql(DER.toSig(hexToBytes(DER.hexFromSig(zero))), zero);
 });
 
+it('bounds DER signatures before oversized INTEGER conversion', () => {
+  const Fn = secp256k1.Point.Fn;
+  const integer = (length: number): string => {
+    const bytes = new Uint8Array(length);
+    bytes[0] = 1; // canonical positive INTEGER without sign padding
+    return DER._tlv.encode(0x02, bytesToHex(bytes));
+  };
+  const signature = (rLength: number, sLength = 1): Uint8Array =>
+    hexToBytes(DER._tlv.encode(0x30, integer(rLength) + integer(sLength)));
+
+  // The largest valid scalars need the one extra DER sign-padding byte and remain supported.
+  const valid = new secp256k1.Signature(Fn.ORDER - 1n, Fn.ORDER - 1n).toBytes('der');
+  eql(secp256k1.Signature.fromBytes(valid, 'der').toBytes('der'), valid);
+
+  const oversizedInteger = signature(Fn.BYTES + 2);
+  throws(() => secp256k1.Signature.fromBytes(oversizedInteger, 'der'), /integer too large/);
+
+  const oversizedSignature = signature(2 * Fn.BYTES + 16);
+  throws(() => secp256k1.Signature.fromBytes(oversizedSignature, 'der'), /DER signature too long/);
+
+  const message = new Uint8Array([1, 2, 3]);
+  const publicKey = secp256k1.Point.BASE.toBytes();
+  eql(secp256k1.verify(oversizedInteger, message, publicKey, { format: 'der' }), false);
+  eql(secp256k1.verify(oversizedSignature, message, publicKey, { format: 'der' }), false);
+});
+
 it('have proper GLV endomorphism logic in secp256k1', () => {
   const endoVectors = json('./vectors/secp256k1/endomorphism.json');
   const Point = secp256k1.Point;

@@ -173,6 +173,44 @@ describe('webcrypto', () => {
     notDeepStrictEqual(shared, await web.getSharedSecret(alice.secretKey, mallory.publicKey));
   });
 
+  it('snapshots deferred ECDH JWK peers and format options at invocation time', async () => {
+    const web = webcrypto.p256;
+    deepStrictEqual(await web.isSupported(), true);
+    const alice = await web.keygen();
+    const bob = await web.keygen();
+    const mallory = await web.keygen();
+    const expected = await web.getSharedSecret(alice.secretKey, bob.publicKey);
+
+    const bobJwk: any = await web.getPublicKey(bob.secretKey, {
+      formatSec: 'pkcs8',
+      formatPub: 'jwk',
+    });
+    const malloryJwk: any = await web.getPublicKey(mallory.secretKey, {
+      formatSec: 'pkcs8',
+      formatPub: 'jwk',
+    });
+    // Exported JWKs currently reuse an internal usage array; isolate the mutable test fixtures.
+    bobJwk.key_ops = bobJwk.key_ops.slice();
+    malloryJwk.key_ops = malloryJwk.key_ops.slice();
+    const pendingPeer = web.getSharedSecret(alice.secretKey, bobJwk, {
+      formatSec: 'pkcs8',
+      formatPub: 'jwk',
+    });
+    Object.assign(bobJwk, malloryJwk);
+    bobJwk.key_ops.push('verify');
+    deepStrictEqual(await pendingPeer, expected);
+
+    const freshBobJwk: any = await web.getPublicKey(bob.secretKey, {
+      formatSec: 'pkcs8',
+      formatPub: 'jwk',
+    });
+    const formats: any = { formatSec: 'pkcs8', formatPub: 'jwk' };
+    const pendingFormats = web.getSharedSecret(alice.secretKey, freshBobJwk, formats);
+    formats.formatSec = 'raw';
+    formats.formatPub = 'raw';
+    deepStrictEqual(await pendingFormats, expected);
+  });
+
   it('raw private-key and local hex validation', async () => {
     await rejects(
       () => webcrypto.p256.utils.convertSecretKey(new Uint8Array(31), 'raw', 'pkcs8'),

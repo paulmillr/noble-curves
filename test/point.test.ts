@@ -66,6 +66,29 @@ describe('basic curve tests', () => {
     throws(() => edwards({ ...toy257, a: 3n, d: 5n }), /must be a square/, 'non-square a rejected');
   });
 
+  it('G2 points snapshot caller-owned extension coordinates', () => {
+    for (const name of ['bls12_381_G2', 'bn254_G2'] as const) {
+      const Point = CURVES[name].Point;
+      const X = { ...Point.BASE.X };
+      const Y = { ...Point.BASE.Y };
+      const Z = { ...Point.BASE.Z };
+      const point = new Point(X, Y, Z);
+      point.assertValidity(); // Populate the validity cache before mutating the source objects.
+      const bytes = point.toBytes();
+      const expected = { X: { ...point.X }, Y: { ...point.Y }, Z: { ...point.Z } };
+
+      X.c0 = X.c0 === 0n ? 1n : 0n;
+      Y.c1 = Y.c1 === 0n ? 1n : 0n;
+      Z.c0 = Z.c0 === 0n ? 1n : 0n;
+
+      point.assertValidity();
+      eql({ X: point.X, Y: point.Y, Z: point.Z }, expected, `${name}: coordinates unchanged`);
+      eql(point.toBytes(), bytes, `${name}: serialization unchanged`);
+      eql(Point.fromBytes(bytes).equals(point), true, `${name}: serialized point remains valid`);
+      eql(point.X === X || point.Y === Y || point.Z === Z, false, `${name}: inputs detached`);
+    }
+  });
+
   for (const name in CURVES) {
     const C = CURVES[name];
     const CURVE_ORDER = C.Point.Fn?.ORDER ?? C.Point.CURVE().n;

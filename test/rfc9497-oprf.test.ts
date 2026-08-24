@@ -5,7 +5,7 @@ import * as mod from '../src/abstract/modular.ts';
 import { createOPRF } from '../src/abstract/oprf.ts';
 import { ristretto255, ristretto255_oprf } from '../src/ed25519.ts';
 import { decaf448, decaf448_oprf } from '../src/ed448.ts';
-import { p256_oprf, p384_oprf, p521_oprf } from '../src/nist.ts';
+import { p256, p256_hasher, p256_oprf, p384_oprf, p521_oprf } from '../src/nist.ts';
 import { asciiToBytes, numberToBytesBE, numberToBytesLE } from '../src/utils.ts';
 import { deepHexToBytes, jsonGZ } from './utils.ts';
 
@@ -178,6 +178,31 @@ describe('RFC-9497 (OPRF)', () => {
       })
     );
   });
+  it('createOPRF snapshots hash-to-group and hash-to-scalar callbacks', () => {
+    const opts = {
+      name: 'P256-SHA256',
+      Point: p256.Point,
+      hash: sha256,
+      hashToGroup: p256_hasher.hashToCurve,
+      hashToScalar: p256_hasher.hashToScalar,
+    };
+    const suite = createOPRF(opts);
+    const seed = new Uint8Array(32).fill(7);
+    const info = Uint8Array.of(1, 2);
+    const input = Uint8Array.of(3, 4);
+    const secretKey = p256.Point.Fn.toBytes(1n);
+    const keys = suite.oprf.deriveKeyPair(seed, info);
+    const output = suite.oprf.evaluate(secretKey, input);
+
+    opts.hashToGroup = () => {
+      throw new Error('mutated hashToGroup used');
+    };
+    opts.hashToScalar = () => {
+      throw new Error('mutated hashToScalar used');
+    };
+    eql(suite.oprf.deriveKeyPair(seed, info), keys, 'scalar callback remains unchanged');
+    eql(suite.oprf.evaluate(secretKey, input), output, 'group callback remains unchanged');
+  });
 
   describe('Examples', () => {
     for (const [name, suite] of Object.entries(SUITES)) {
@@ -186,6 +211,13 @@ describe('RFC-9497 (OPRF)', () => {
   });
 
   describe('contracts', () => {
+    it('POPRF secret inversion matches field inversion', () => {
+      for (const suite of Object.values(SUITES)) {
+        const { Fn, invertSecret } = suite.__tests;
+        for (const value of [1n, 2n, 3n, Fn.ORDER - 1n]) eql(invertSecret(value), Fn.inv(value));
+      }
+    });
+
     it('deriveKeyPair, element, length, and closure edge cases', () => {
       for (const suite of Object.values(SUITES)) {
         throws(() => suite.oprf.deriveKeyPair(new Uint8Array(31), new Uint8Array()));
@@ -317,7 +349,9 @@ describe('RFC-9497 (OPRF)', () => {
     it(suite, () => {
       if (!SUITES[suite]) throw new Error('missing');
       // Parsed from RFC 9497 Appendix A by the vectors repo (scripts/rfc/rfc9497.js).
-      const vectors = deepHexToBytes(jsonGZ('./vectors/acvp-vectors/rfc/9497-oprf/vectors.json.gz'));
+      const vectors = deepHexToBytes(
+        jsonGZ('./vectors/acvp-vectors/rfc/9497-oprf/vectors.json.gz')
+      );
       const { modes } = vectors.find((v) => v.suite === suite);
       const prf = SUITES[suite];
       const Fn = prf.__tests.Fn;

@@ -324,6 +324,34 @@ describe('createFROST', () => {
     const { frost, msg, sig, publicKey } = create();
     eql(frost.verify(sig, msg, publicKey), true);
   });
+  it('snapshots callbacks and nested transaction hooks', () => {
+    const adjustTx = {
+      encode: (tx: Uint8Array) => tx,
+      decode: (tx: Uint8Array) => tx,
+    };
+    const opts: any = {
+      name: 'TRACE',
+      Point: ed25519.Point,
+      hash: sha512,
+      H2: '',
+      adjustTx,
+    };
+    const frost = createFROST(opts);
+    const r = 7n;
+    const forged = concatBytes(
+      ed25519.Point.BASE.multiply(r).toBytes(),
+      ed25519.Point.Fn.toBytes(r)
+    );
+    const msg = Uint8Array.of(1, 2, 3);
+    const publicKey = ed25519.Point.BASE.toBytes();
+    eql(frost.verify(forged, msg, publicKey), false, 'forgery rejected before mutation');
+
+    opts.challenge = () => 0n;
+    adjustTx.decode = () => {
+      throw new Error('mutated decoder used');
+    };
+    eql(frost.verify(forged, msg, publicKey), false, 'factory policy remains unchanged');
+  });
   it('verify enforces mandatory point checks even with optional hooks', () => {
     const { frost, msg } = create();
     const forged = concatBytes(ed25519.Point.BASE.toBytes(), ed25519.Point.Fn.toBytes(1n));
