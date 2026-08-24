@@ -254,7 +254,9 @@ describe('X25519 RFC7748 ECDH', () => {
   });
 
   it('wycheproof', () => {
-    const x25519vectors = jsonGZ('./vectors/acvp-vectors/wycheproof/testvectors_v1/x25519_test.json.gz');
+    const x25519vectors = jsonGZ(
+      './vectors/acvp-vectors/wycheproof/testvectors_v1/x25519_test.json.gz'
+    );
     const group = deepHexToBytes(x25519vectors.testGroups[0]);
     let strictRejects = 0;
     group.tests.forEach((v, i) => {

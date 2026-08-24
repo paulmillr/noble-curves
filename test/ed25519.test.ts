@@ -66,7 +66,9 @@ describe('ed25519', () => {
       }
 
       // https://tools.ietf.org/html/rfc8032#section-7
-      const VECTORS_rfc8032_ed25519 = jsonGZ('./vectors/acvp-vectors/rfc/8032-eddsa/ed25519.json.gz');
+      const VECTORS_rfc8032_ed25519 = jsonGZ(
+        './vectors/acvp-vectors/rfc/8032-eddsa/ed25519.json.gz'
+      );
       for (const vec of VECTORS_rfc8032_ed25519) {
         const { secretKey, message, publicKey, signature } = vec;
         const pubG = ed.getPublicKey(bytes(secretKey));
@@ -444,7 +446,9 @@ describe('ed25519', () => {
   });
 
   it('wycheproof/ED25519', () => {
-    const ed25519vectors = jsonGZ('./vectors/acvp-vectors/wycheproof/testvectors_v1/ed25519_test.json.gz');
+    const ed25519vectors = jsonGZ(
+      './vectors/acvp-vectors/wycheproof/testvectors_v1/ed25519_test.json.gz'
+    );
     for (let g = 0; g < ed25519vectors.testGroups.length; g++) {
       const group = ed25519vectors.testGroups[g];
       const key = group.publicKey;

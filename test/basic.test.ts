@@ -75,7 +75,9 @@ describe('createCurve', () => {
     ];
     for (const name of vectorNames) {
       it(name, () => {
-        const wyche_curves = jsonGZ('./vectors/acvp-vectors/wycheproof/testvectors_v1/ec_prime_order_curves_test.json.gz');
+        const wyche_curves = jsonGZ(
+          './vectors/acvp-vectors/wycheproof/testvectors_v1/ec_prime_order_curves_test.json.gz'
+        );
         const v = wyche_curves.testGroups[0].tests.find((v) => v.name === name);
         if (!v) throw new Error('missing curve vector: ' + name);
         const CURVE = ecdsa(

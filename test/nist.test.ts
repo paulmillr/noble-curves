@@ -463,7 +463,13 @@ describe('RFC6979', () => {
       if (!v) throw new Error('missing RFC6979 vector: ' + name);
       const curve = NIST[name];
       // Each curve signs with its default hash; the RFC lists all five hashes.
-      const hash = { P192: 'SHA-256', P224: 'SHA-224', P256: 'SHA-256', P384: 'SHA-384', P521: 'SHA-512' }[name];
+      const hash = {
+        P192: 'SHA-256',
+        P224: 'SHA-224',
+        P256: 'SHA-256',
+        P384: 'SHA-384',
+        P521: 'SHA-512',
+      }[name];
       eql(curve.Point.Fn.ORDER, hexToBigint(v.q));
       // RFC 6979 publishes `x` as an integer. Convert it to the curve's fixed-width scalar bytes so
       // shortened P-521 integer fixtures stay integer fixtures instead of testing 65-byte parsing.

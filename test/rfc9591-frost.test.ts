@@ -143,9 +143,12 @@ const getVectorsSingle = <P extends PointLike<P>>(
     signCount: signPaths.length,
     loadDkg: (index: number) => getJson<DkgVector>(dkgPaths[index]),
     dkgCount: dkgPaths.length,
-    loadSample: () => getJson<SampleVector>(`vectors/acvp-vectors/rfc/9591-frost/${name}-samples.json.gz`),
-    loadRepair: () => getJson<RepairVector>(`vectors/acvp-vectors/rfc/9591-frost/${name}-repair-share.json.gz`),
-    loadElement: () => getJson<ElementVector>(`vectors/acvp-vectors/rfc/9591-frost/${name}-elements.json.gz`),
+    loadSample: () =>
+      getJson<SampleVector>(`vectors/acvp-vectors/rfc/9591-frost/${name}-samples.json.gz`),
+    loadRepair: () =>
+      getJson<RepairVector>(`vectors/acvp-vectors/rfc/9591-frost/${name}-repair-share.json.gz`),
+    loadElement: () =>
+      getJson<ElementVector>(`vectors/acvp-vectors/rfc/9591-frost/${name}-elements.json.gz`),
     ...getPointBytes(Point),
     proofPrefix,
   };

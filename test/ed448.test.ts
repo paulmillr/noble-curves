@@ -284,7 +284,9 @@ describe('ed448', () => {
 
   describe('wycheproof', () => {
     it('ED448 vectors', () => {
-      const ed448vectors = jsonGZ('./vectors/acvp-vectors/wycheproof/testvectors_v1/ed448_test.json.gz');
+      const ed448vectors = jsonGZ(
+        './vectors/acvp-vectors/wycheproof/testvectors_v1/ed448_test.json.gz'
+      );
       for (let g = 0; g < ed448vectors.testGroups.length; g++) {
         const group = ed448vectors.testGroups[g];
         const key = group.publicKey;
@@ -462,7 +464,9 @@ describe('ed448', () => {
       eql(hex(x448.scalarMult(bytes(alicePrivate), bytes(bobPublic))), shared);
       eql(hex(x448.scalarMult(bytes(bobPrivate), bytes(alicePublic))), shared);
 
-      const x448vectors = jsonGZ('./vectors/acvp-vectors/wycheproof/testvectors_v1/x448_test.json.gz');
+      const x448vectors = jsonGZ(
+        './vectors/acvp-vectors/wycheproof/testvectors_v1/x448_test.json.gz'
+      );
       const group = x448vectors.testGroups[0];
       let strictRejects = 0;
       group.tests.forEach((v, i) => {

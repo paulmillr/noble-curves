@@ -16,7 +16,9 @@ import {
 
 const loadEcdsaVectors = () => deepHexToBytes(json('./vectors/secp256k1/ecdsa.json'));
 const loadEcdhVectors = () =>
-  deepHexToBytes(jsonGZ('./vectors/acvp-vectors/wycheproof/testvectors_v1/ecdh_secp256k1_test.json.gz'));
+  deepHexToBytes(
+    jsonGZ('./vectors/acvp-vectors/wycheproof/testvectors_v1/ecdh_secp256k1_test.json.gz')
+  );
 const loadPrivateVectors = () => {
   const vectors = json('./vectors/secp256k1/privates.json');
   return deepHexToBytes({
@@ -29,7 +31,9 @@ const loadPrivateVectors = () => {
 };
 const loadPointVectors = () => deepHexToBytes(json('./vectors/secp256k1/points.json'));
 const loadWycheproofVectors = () =>
-  deepHexToBytes(jsonGZ('./vectors/acvp-vectors/wycheproof/testvectors_v1/ecdsa_secp256k1_sha256_test.json.gz'));
+  deepHexToBytes(
+    jsonGZ('./vectors/acvp-vectors/wycheproof/testvectors_v1/ecdsa_secp256k1_sha256_test.json.gz')
+  );
 
 export function pfrom(hex) {
   return Point.fromHex(hex);
