@@ -101,6 +101,17 @@ type JsonWebKey = {
   [key: string]: unknown;
 };
 type Key = JsonWebKey | Uint8Array;
+
+function copyJwk(key: JsonWebKey): JsonWebKey {
+  const copy = { ...key };
+  // Standard JWKs only nest `key_ops`, but copy every top-level array so extensions cannot retain
+  // a writable alias across an async boundary either.
+  for (const [name, value] of Object.entries(copy)) {
+    if (Array.isArray(value)) copy[name] = value.slice();
+  }
+  return copy;
+}
+
 type CryptoKey = Awaited<ReturnType<typeof crypto.subtle.importKey>>;
 type KeyUsage = 'deriveBits' | 'deriveKey' | 'sign' | 'verify';
 type Algo = string | { name: string; namedCurve: string };
@@ -315,18 +326,15 @@ function createECDH(
       opts: TArg<WebCryptoOpts> = {}
     ): Promise<TRet<Uint8Array>> {
       validateObject(opts, {}, { formatSec: 'string', formatPub: 'string' }, 'opts');
-      // Byte-encoded peers need the same invocation-time snapshot; JWK inputs pass through.
+      // Snapshot every deferred input before importing the local key: that import awaits before the
+      // peer and public-key format are consumed.
+      const formatSec = opts.formatSec === undefined ? dfsec : opts.formatSec;
+      const formatPub = opts.formatPub === undefined ? dfpub : opts.formatPub;
       const peer: TArg<Key> = isBytes(publicKeyB)
         ? copyBytes(abytes(publicKeyB, undefined, 'publicKey'))
-        : (publicKeyB as TArg<Key>);
-      const secKey = await keys.priv.import(
-        secretKeyA,
-        opts.formatSec === undefined ? dfsec : opts.formatSec
-      );
-      const pubKey = await keys.pub.import(
-        peer,
-        opts.formatPub === undefined ? dfpub : opts.formatPub
-      );
+        : copyJwk(publicKeyB as JsonWebKey);
+      const secKey = await keys.priv.import(secretKeyA, formatSec);
+      const pubKey = await keys.pub.import(peer, formatPub);
       const shared = await getSubtle().deriveBits(
         { name: typeof algo === 'string' ? algo : algo.name, public: pubKey },
         secKey,
