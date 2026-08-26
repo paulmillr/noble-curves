@@ -789,7 +789,7 @@ The library has been audited:
   - The audit has been funded by [Ryan Shea](https://www.shea.io)
 
 It is tested against property-based, cross-library and Wycheproof vectors,
-and is being fuzzed in [the separate repo](https://github.com/paulmillr/integration-tests).
+and is being fuzzed in github ci.
 
 If you see anything unusual: investigate and report.
 
