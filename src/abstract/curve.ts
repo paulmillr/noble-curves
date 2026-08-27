@@ -16,7 +16,6 @@ import {
   isBytes,
   isPosBig,
   validateObject,
-  type Signer,
   type TArg,
   type TRet,
 } from '../utils.ts';
@@ -1054,7 +1053,10 @@ export function createCurveFields<T>(
   return { CURVE, Fp, Fn } as TRet<FpFn<T> & { CURVE: ValidCurveParams<T> }>;
 }
 
-type KeygenFn = (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8Array };
+type KeygenFn = (
+  seed?: Uint8Array,
+  isCompressed?: boolean
+) => { secretKey: Uint8Array; publicKey: Uint8Array };
 /**
  * @param randomSecretKey - Secret-key generator.
  * @param getPublicKey - Public-key derivation helper.
@@ -1067,14 +1069,20 @@ type KeygenFn = (seed?: Uint8Array) => { secretKey: Uint8Array; publicKey: Uint8
  * import { p256 } from '@noble/curves/nist.js';
  * const keygen = createKeygen(p256.utils.randomSecretKey, p256.getPublicKey);
  * const pair = keygen();
+ * const uncompressed = keygen(undefined, false).publicKey;
  * ```
  */
 export function createKeygen(
   randomSecretKey: Function,
-  getPublicKey: TArg<Signer['getPublicKey']>
+  // `isCompressed` is only meaningful for curves whose getPublicKey supports it
+  // (e.g. weierstrass/ECDSA); other curves' getPublicKey simply ignore the extra arg.
+  getPublicKey: TArg<(secretKey: Uint8Array, isCompressed?: boolean) => Uint8Array>
 ): TRet<KeygenFn> {
-  return function keygen(seed?: TArg<Uint8Array>) {
+  return function keygen(seed?: TArg<Uint8Array>, isCompressed?: boolean) {
     const secretKey = randomSecretKey(seed) as TRet<Uint8Array>;
-    return { secretKey, publicKey: getPublicKey(secretKey) as TRet<Uint8Array> };
+    return {
+      secretKey,
+      publicKey: getPublicKey(secretKey, isCompressed) as TRet<Uint8Array>,
+    };
   };
 }

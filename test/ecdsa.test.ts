@@ -152,6 +152,29 @@ describe('ECDSA', () => {
   });
 });
 
+describe('keygen isCompressed', () => {
+  for (const name in ECDSA) {
+    const C = ECDSA[name];
+    it(name, () => {
+      // Default (and explicit true) keygen() output must match getPublicKey()'s own default.
+      const { secretKey, publicKey } = C.keygen();
+      eql(publicKey, C.getPublicKey(secretKey));
+      eql(publicKey, C.getPublicKey(secretKey, true));
+      eql(publicKey.length, C.lengths.publicKey);
+
+      // isCompressed=false must produce the uncompressed public key for the same secretKey.
+      const seed = new Uint8Array(C.lengths.seed ?? C.lengths.secretKey).fill(9);
+      const compressed = C.keygen(seed, true);
+      const uncompressed = C.keygen(seed, false);
+      eql(compressed.secretKey, uncompressed.secretKey, 'same seed -> same secretKey');
+      eql(compressed.publicKey, C.getPublicKey(compressed.secretKey, true));
+      eql(compressed.publicKey.length, C.lengths.publicKey);
+      eql(uncompressed.publicKey, C.getPublicKey(compressed.secretKey, false));
+      eql(uncompressed.publicKey.length, C.lengths.publicKeyUncompressed);
+    });
+  }
+});
+
 describe('weierstrass ECDH', () => {
   const makeDh = () =>
     ecdh(weierstrass({ p: 17n, n: 257n, h: 1n, a: 2n, b: 2n, Gx: 5n, Gy: 1n }), {

@@ -386,9 +386,13 @@ export interface ECDH {
   /**
    * Generate a secret/public key pair.
    * @param seed - Optional seed material.
+   * @param isCompressed - Whether publicKey is compressed SEC1 bytes. Defaults to true.
    * @returns Secret/public key pair.
    */
-  keygen: (seed?: TArg<Uint8Array>) => { secretKey: TRet<Uint8Array>; publicKey: TRet<Uint8Array> };
+  keygen: (
+    seed?: TArg<Uint8Array>,
+    isCompressed?: boolean
+  ) => { secretKey: TRet<Uint8Array>; publicKey: TRet<Uint8Array> };
   /**
    * Derive the public key from a secret key.
    * @param secretKey - Secret key bytes.
