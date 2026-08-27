@@ -1,7 +1,0 @@
-{
-  "files.exclude": {
-    "*.{js,d.ts,js.map,d.ts.map}": true,
-    "{audit,coverage,abstract,esm}": true,
-    "{LICENSE,SECURITY.md,.gitignore,.prettierrc.json,package-lock.json}": true
-  }
-}
