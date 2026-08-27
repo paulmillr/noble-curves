@@ -1,4 +1,6 @@
+import { randomBytes } from '@noble/hashes/utils.js';
 import compare from '@paulmillr/jsbt/benchmark-compare.js';
+import { bls12_381 } from '../src/bls12-381.ts';
 import { ed25519, ed25519_hasher } from '../src/ed25519.ts';
 import { ed448, ed448_hasher } from '../src/ed448.ts';
 import { p256, p256_hasher, p384, p384_hasher, p521, p521_hasher } from '../src/nist.ts';
@@ -30,6 +32,25 @@ import { generateData } from './_shared.ts';
       Point_add: () => d.point.add(d.point),
       Point_mul: () => d.point.multiply(scalar),
       Point_mulUns: () => d.point.multiplyUnsafe(scalar),
+    };
+  }
+
+  for (const [name, group] of [
+    ['bls12_381 G1', bls12_381.G1],
+    ['bls12_381 G2', bls12_381.G2],
+  ] as const) {
+    const Point = group.Point;
+    Point.BASE.precompute(6, false);
+    const point = Point.BASE.multiply(scalar);
+    const pubHex = point.toHex(true);
+    const msg = randomBytes(32);
+
+    curves[name] = {
+      fromHex: () => Point.fromHex(pubHex),
+      hashToCurve: () => group.hashToCurve(msg),
+      Point_add: () => point.add(point),
+      Point_mul: () => point.multiply(scalar),
+      Point_mulUns: () => point.multiplyUnsafe(scalar),
     };
   }
 

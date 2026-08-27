@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pippenger } from '../src/abstract/curve.ts';
+import * as fft from '../src/abstract/fft.ts';
 import { bls12_381 as bls } from '../src/bls12-381.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -17,9 +18,8 @@ const G2_VECTORS = readFileSync(
 
 (async () => {
   section('bls12-381');
-  let p1, p2, sig, sig_s;
+  let p1, p2;
   const blsl = bls.longSignatures;
-  const blss = bls.shortSignatures;
   await bench('init', 'once', () => {
     p1 =
       bls.G1.Point.BASE.multiply(
@@ -31,32 +31,16 @@ const G2_VECTORS = readFileSync(
       );
     bls.pairing(p1, p2);
   });
-  const priv = hexToBytes('28b90deaf189015d3a325908c5e0e4bf00f84f7e639b056ff82d7e70b6eede4c');
-  sig = blsl.sign(blsl.hash(Uint8Array.of(0x09)), priv);
-  sig_s = blss.sign(blss.hash(Uint8Array.of(0x09)), priv);
   const pubs = G2_VECTORS.map((v) => blsl.getPublicKey(hexToBytes(v[0])));
   const sigs = G2_VECTORS.map((v) => hexToBytes(v[2]));
-  const pub = blsl.getPublicKey(priv);
-  const pub_s = blss.getPublicKey(priv);
   const pub512 = pubs.slice(0, 512);
   const pub32 = pub512.slice(0, 32);
   const pub128 = pub512.slice(0, 128);
-  const pub2048 = pub512.concat(pub512, pub512, pub512);
   const sig512 = sigs.slice(0, 512);
   const sig32 = sig512.slice(0, 32);
   const sig128 = sig512.slice(0, 128);
   const sig2048 = sig512.concat(sig512, sig512, sig512);
   await bench('pairing', () => bls.pairing(p1, p2));
-
-  section('longSignatures');
-  await bench('getPublicKey', () => blsl.getPublicKey(priv));
-  await bench('sign', () => blsl.sign(blsl.hash(Uint8Array.of(0x09)), priv));
-  await bench('verify', () => blsl.verify(sig, blsl.hash(Uint8Array.of(0x09)), pub));
-
-  section('shortSignatures');
-  await bench('getPublicKey', () => blss.getPublicKey(priv));
-  await bench('sign', () => blss.sign(blss.hash(Uint8Array.of(0x09)), priv));
-  await bench('verify', () => blss.verify(sig_s, blss.hash(Uint8Array.of(0x09)), pub_s));
 
   const _pow1 = 2n ** 235n;
   const _pow2 = 2n ** 241n;
@@ -104,4 +88,22 @@ const G2_VECTORS = readFileSync(
     for (let i = 0; i < pairingBatch; i++) res.push({ g1: pointsG1[i], g2: pointsG2[i] });
     bls.pairingBatch(res);
   });
+
+  section('fft');
+  const Fr = bls.fields.Fr;
+  const G1 = bls.G1.Point;
+  const pFR = [1n, 2n, 3n, 4n, 5n, 6n, 7n, 8n];
+  const pG1 = pFR.map((i) => G1.BASE.multiplyUnsafe(i));
+
+  const roots = fft.rootsOfUnity(Fr, 7n);
+  const fftFr = fft.FFT(roots, Fr);
+  const fftG1 = fft.FFT(roots, {
+    add: (a, b) => a.add(b),
+    sub: (a, b) => a.subtract(b),
+    mul: (a, scalar) => a.multiplyUnsafe(scalar),
+    inv: Fr.inv,
+  });
+
+  await bench('fftFr', () => fftFr.direct(pFR));
+  await bench('fftG1', () => fftG1.direct(pG1));
 })();
