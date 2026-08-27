@@ -568,9 +568,9 @@ cofactor `h` and coordinates `Gx`, `Gy` of generator point.
 
 The library has been audited:
 
-- at version 2.2.0, in Apr 2026, by ourselves (self-audited)
+- at version 2.3.0, in Aug 2026, by [Trail of Bits](https://www.trailofbits.com), in collaboration with OpenAI
+  - It was done during "Patch the Planet" initiative
   - Scope: everything
-  - [Changes since audit](https://github.com/paulmillr/noble-curves/compare/2.2.0..main)
 - at version 1.6.0, in Sep 2024, independently, by [Cure53](https://cure53.de)
   - PDFs: [website](https://cure53.de/audit-report_noble-crypto-libs.pdf), [in-repo](./audit/2024-09-cure53-audit-nbl4.pdf)
   - [Changes since audit](https://github.com/paulmillr/noble-curves/compare/1.6.0..main)
@@ -590,6 +590,8 @@ The library has been audited:
   - Scope: abstract modules `curve`, `hash-to-curve`, `modular`, `poseidon`, `utils`, `weierstrass` and
     top-level modules `_shortw_utils` and `secp256k1`
   - The audit has been funded by [Ryan Shea](https://www.shea.io)
+
+We've started regular AI-assisted self-audits in Apr 2026.
 
 It is tested against property-based, cross-library and Wycheproof vectors,
 and is being fuzzed in github ci.
