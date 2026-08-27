@@ -1,15 +1,15 @@
 name: Fuzz
 on:
   schedule:
-    - cron: '0 19 * * *'
+    - cron: '0 4 * * *'
   workflow_dispatch:
 jobs:
   slow:
     name: Slow large input tests
-    uses: paulmillr/jsbt/.github/workflows/test-custom.yml@78e04b481416536e0d4369a3c9f718be306491f8
+    uses: paulmillr/jsbt/.github/workflows/test-custom.yml@c138efca67d90dce86a7cc22c01d6b66d193ea7a
     with:
       npm-task: test:slow
   fuzz:
-    uses: paulmillr/cryptofuzz/.github/workflows/noble-commit-fuzz.yml@3cf64538a2a5dd52591e1daef511ec098a140174
+    uses: paulmillr/cryptofuzz/.github/workflows/noble-commit-fuzz.yml@a977f8bf03f1f9e68d512eb5b6ab09376a493a6f
     with:
       ref: ${{ github.sha }}
