@@ -351,8 +351,11 @@ describe('bls12-381 Point', () => {
             const p2 = new PointG1(Fp.create(x2), Fp.create(y2), Fp.create(z2));
             equal(p1, p1);
             equal(p2, p2);
-            eql(p1.equals(p2), false);
-            eql(p2.equals(p1), false);
+            // distinct (x:y:z) triples can still be the same projective point, e.g. (a:a:a) == (b:b:b)
+            const P = Fp.ORDER;
+            const same = (x1 * z2 - x2 * z1) % P === 0n && (y1 * z2 - y2 * z1) % P === 0n;
+            eql(p1.equals(p2), same);
+            eql(p2.equals(p1), same);
           }
         )
       );
@@ -504,8 +507,17 @@ describe('bls12-381 Point', () => {
             );
             eql(p1.equals(p1), true);
             eql(p2.equals(p2), true);
-            eql(p1.equals(p2), false);
-            eql(p2.equals(p1), false);
+            // distinct (x:y:z) triples can still be the same projective point, e.g. (a:a:a) == (b:b:b)
+            const P = Fp.ORDER;
+            const m = (v: bigint) => ((v % P) + P) % P;
+            const mulc = ([a, b]: bigint[], [c, d]: bigint[]) => [
+              m(a * c - b * d),
+              m(a * d + b * c),
+            ];
+            const eq2 = (u: bigint[], v: bigint[]) => u[0] === v[0] && u[1] === v[1];
+            const same = eq2(mulc(x1, z2), mulc(x2, z1)) && eq2(mulc(y1, z2), mulc(y2, z1));
+            eql(p1.equals(p2), same);
+            eql(p2.equals(p1), same);
           }
         )
       );
