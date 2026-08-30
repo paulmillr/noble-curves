@@ -12,12 +12,11 @@
     "@noble/hashes": "2.4.0"
   },
   "devDependencies": {
-    "@paulmillr/jsbt": "0.7.1",
-    "bismar": "0.1.8",
+    "@paulmillr/jsbt": "0.7.2",
+    "bismar": "0.1.9",
     "@types/node": "26.2.0",
-    "fast-check": "4.2.0",
     "prettier": "3.9.6",
-    "typescript": "6.0.3"
+    "typescript": "7.0.2"
   },
   "scripts": {
     "benchmark": "node benchmark/main.ts",

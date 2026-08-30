@@ -1,6 +1,6 @@
 import { bytesToHex, hexToBytes, isBytes } from '@noble/hashes/utils.js';
 import { describe, it } from '@paulmillr/jsbt/test.js';
-import * as fc from 'fast-check';
+import * as fc from '@paulmillr/jsbt/random.js';
 import { deepStrictEqual as eql, rejects, throws } from 'node:assert';
 import { deepHexToBytes, getTypeTestsNonUi8a, json, jsonGZ, txt } from './utils.ts';
 // prettier-ignore

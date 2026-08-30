@@ -6,10 +6,10 @@ on:
 jobs:
   slow:
     name: Slow large input tests
-    uses: paulmillr/jsbt/.github/workflows/test-custom.yml@c138efca67d90dce86a7cc22c01d6b66d193ea7a
+    uses: paulmillr/jsbt/.github/workflows/test-custom.yml@84f47b72e990ae11999fbe06c3efa449e943de60
     with:
       npm-task: test:slow
   fuzz:
-    uses: paulmillr/cryptofuzz/.github/workflows/noble-commit-fuzz.yml@a977f8bf03f1f9e68d512eb5b6ab09376a493a6f
+    uses: paulmillr/cryptofuzz/.github/workflows/noble-commit-fuzz.yml@c4c2c6054b3545f7d6bb0f8608371a6a6f3c93fb
     with:
       ref: ${{ github.sha }}

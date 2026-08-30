@@ -6,7 +6,7 @@ import {
   randomBytes,
 } from '@noble/hashes/utils.js';
 import { describe, it } from '@paulmillr/jsbt/test.js';
-import * as fc from 'fast-check';
+import * as fc from '@paulmillr/jsbt/random.js';
 import { deepStrictEqual as eql, strictEqual, throws } from 'node:assert';
 import { ed25519 as ed, ED25519_TORSION_SUBGROUP, numberToBytesLE } from './ed25519.helpers.ts';
 import { getTypeTestsNonUi8a, json, jsonGZ, txt } from './utils.ts';

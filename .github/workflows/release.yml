@@ -4,8 +4,8 @@ on:
     types: [created]
 jobs:
   release-js:
-    name: jsbt v0.7.1
-    uses: paulmillr/jsbt/.github/workflows/release.yml@c138efca67d90dce86a7cc22c01d6b66d193ea7a
+    name: jsbt v0.7.2
+    uses: paulmillr/jsbt/.github/workflows/release.yml@84f47b72e990ae11999fbe06c3efa449e943de60
     permissions:
       contents: read
       id-token: write
