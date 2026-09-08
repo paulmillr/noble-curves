@@ -524,10 +524,14 @@ function frostTweakPublic(
   const commitments = PKPackage.commitments.map((c, i) =>
     (i === 0 ? Pointk1.fromBytes(c).add(tp) : Pointk1.fromBytes(c)).toBytes()
   );
-  const verifyingShares: Record<string, Uint8Array> = {};
-  for (const k in PKPackage.verifyingShares) {
-    verifyingShares[k] = Pointk1.fromBytes(PKPackage.verifyingShares[k]).add(tp).toBytes();
-  }
+  // Only transform explicit participant entries. Inherited enumerable properties are not shares,
+  // and Object.fromEntries defines `__proto__` as data instead of invoking its legacy setter.
+  const verifyingShares: Record<string, Uint8Array> = Object.fromEntries(
+    Object.entries(PKPackage.verifyingShares).map(([k, share]) => [
+      k,
+      Pointk1.fromBytes(share).add(tp).toBytes(),
+    ])
+  );
   return {
     signers: { min: PKPackage.signers.min, max: PKPackage.signers.max },
     commitments,

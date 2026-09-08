@@ -310,6 +310,56 @@ it('DKG round2 retry rejects a rogue round1 package with a stale proof of knowle
   eql(frost.DKG.round2(victim.secret, [structuredClone(attacker.public)]), first);
 });
 
+it('DKG round3 rejects object-prototype identifiers without mutating built-ins', () => {
+  const frost = ed25519_FROST;
+  const signers = { min: 2, max: 2 };
+  const prototypeDescriptor = Object.getOwnPropertyDescriptor(Object.prototype, 'signingShare');
+  const constructorDescriptor = Object.getOwnPropertyDescriptor(Object, 'signingShare');
+  const restore = (target: object, descriptor?: PropertyDescriptor) => {
+    if (descriptor === undefined) delete (target as { signingShare?: unknown }).signingShare;
+    else Object.defineProperty(target, 'signingShare', descriptor);
+  };
+  try {
+    for (const identifier of ['__proto__', 'constructor', 'prototype']) {
+      const victim = frost.DKG.round1(frost.Identifier.fromNumber(1), signers);
+      const peer = frost.DKG.round1(frost.Identifier.fromNumber(2), signers);
+      frost.DKG.round2(victim.secret, [peer.public]);
+      const peerRound2 = frost.DKG.round2(peer.secret, [victim.public]);
+      const genuine = peerRound2[victim.public.identifier];
+      throws(() => frost.DKG.round3(victim.secret, [peer.public], [{ ...genuine, identifier }]));
+      eql(Object.hasOwn(Object.prototype, 'signingShare'), false, identifier);
+      eql(Object.hasOwn(Object, 'signingShare'), false, identifier);
+
+      // A rejected package leaves the local session retryable with the genuine package.
+      const installed = frost.DKG.round3(victim.secret, [peer.public], [genuine]);
+      eql(installed.secret.identifier, victim.public.identifier);
+    }
+  } finally {
+    restore(Object.prototype, prototypeDescriptor);
+    restore(Object, constructorDescriptor);
+  }
+});
+
+it('Taproot FROST tweaking ignores inherited verifying-share entries', () => {
+  const inherited = '__noble_frost_inherited_share__';
+  const descriptor = Object.getOwnPropertyDescriptor(Object.prototype, inherited);
+  Object.defineProperty(Object.prototype, inherited, {
+    configurable: true,
+    enumerable: true,
+    value: secp256k1.Point.BASE.toBytes(),
+  });
+  try {
+    // Scalar 1 produces the even-Y base point, keeping frostPubToEvenY on its aliasing path.
+    const secret = schnorr_FROST.utils.Fn.toBytes(1n);
+    const deal = schnorr_FROST.trustedDealer({ min: 2, max: 2 }, undefined, secret);
+    const tweaked = secpTEST.frostTweakPublic(deal.public, new Uint8Array(0));
+    eql(Object.hasOwn(tweaked.verifyingShares, inherited), false);
+  } finally {
+    if (descriptor === undefined) delete (Object.prototype as Record<string, unknown>)[inherited];
+    else Object.defineProperty(Object.prototype, inherited, descriptor);
+  }
+});
+
 describe('createFROST', () => {
   const create = () => {
     const frost = createFROST({ name: 'TRACE', Point: ed25519.Point, hash: sha512, H2: '' });
@@ -518,6 +568,34 @@ const fullSign = (frost: FROST, msg: Uint8Array) => {
   const sig = frost.aggregate(publicKey, commitmentList, msg, sigShares);
   return { sig, groupPk: publicKey.commitments[0] };
 };
+
+it('FROST rejects inherited participant entries in public and signature-share maps', () => {
+  const frost = ed25519_FROST;
+  const { publicKey, secretShares, ids, msg, secretNonces, commitmentList } = createSession(frost);
+  const shares = ids.map((id) =>
+    frost.signShare(secretShares[id], publicKey, secretNonces[id], commitmentList, msg)
+  );
+
+  const inheritedVerifyingShares = Object.create({
+    [ids[0]]: publicKey.verifyingShares[ids[0]],
+  });
+  inheritedVerifyingShares[ids[1]] = publicKey.verifyingShares[ids[1]];
+  throws(() =>
+    frost.verifyShare(
+      { ...publicKey, verifyingShares: inheritedVerifyingShares },
+      commitmentList,
+      msg,
+      ids[0],
+      shares[0]
+    )
+  );
+
+  // Keep the own-key count equal to the participant count so the ownership check is decisive.
+  const inheritedSigShares = Object.create({ [ids[0]]: shares[0] });
+  inheritedSigShares[ids[1]] = shares[1];
+  inheritedSigShares.extra = shares[0];
+  throws(() => frost.aggregate(publicKey, commitmentList, msg, inheritedSigShares));
+});
 
 it('aggregated signatures verify under plain single-signer verifiers', () => {
   const msg = new Uint8Array([1, 2, 3, 4, 5]);
