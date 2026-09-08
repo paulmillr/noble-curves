@@ -920,9 +920,9 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
     const encodedCommitmentHash = H5(concatBytes(...Cbytes));
     const rhoPrefix = concatBytes(serializePoint(GPK), H4(msg), encodedCommitmentHash);
     // Compute binding factors
-    const bindingFactors: Record<Identifier, bigint> = {};
+    const bindingFactors = new Map<Identifier, bigint>();
     for (const [i, id] of CL) {
-      bindingFactors[i] = H1(concatBytes(rhoPrefix, Fn.toBytes(id)));
+      bindingFactors.set(i, H1(concatBytes(rhoPrefix, Fn.toBytes(id))));
     }
     // Hiding commitments all carry scalar 1, so add them directly and keep only the
     // binding commitments in the MSM: same result, half the MSM size.
@@ -933,7 +933,7 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
       if (Point.ZERO.equals(hC) || Point.ZERO.equals(bC)) throw new Error('infinity commitment');
       hidingSum = hidingSum.add(hC);
       points.push(bC);
-      scalars.push(bindingFactors[i]);
+      scalars.push(bindingFactors.get(i)!);
     }
     const groupCommitment = hidingSum.add(msm(points, scalars)); //  GC += hC + bC*bindingFactor
     const identifiers = CL.map((i) => i[1]);
@@ -953,7 +953,7 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
       commitmentList,
       msg
     );
-    const bindingFactor = bindingFactors[identifier];
+    const bindingFactor = bindingFactors.get(identifier)!;
     const lambda = deriveInterpolatingValue(identifiers, id);
     const challenge = Basic.challenge(groupCommitment, GPK, msg);
     return { lambda, challenge, bindingFactor, groupCommitment };
@@ -1032,7 +1032,7 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
 
           ProofOfKnowledge.validate(id, p.commitment, p.proofOfKnowledge);
           for (const c of p.commitment) parsePoint(c);
-          if (res[p.identifier]) throw new Error('Duplicate id=' + id);
+          if (Object.hasOwn(res, p.identifier)) throw new Error('Duplicate id=' + id);
           const signingShare = Fn.toBytes(polynomialEvaluate(id, secret.coefficients));
           res[p.identifier] = {
             identifier: serializeIdentifier(secret.identifier),
@@ -1068,19 +1068,22 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
           throw new Error('round1 packages do not match authenticated transcript');
         if (round2.length !== authenticatedRound1.length)
           throw new Error('wrong length of round2 packages');
-        const merged: Record<Identifier, TArg<DKG_Round1> & { signingShare?: TArg<Bytes> }> = {};
+        const merged = new Map<Identifier, TArg<DKG_Round1> & { signingShare?: TArg<Bytes> }>();
         // Use the authenticated owned transcript after comparison; never re-read caller input.
         for (const r1 of authenticatedRound1) {
           if (!r1.identifier || !r1.commitment) throw new Error('wrong round1 share');
-          merged[r1.identifier] = { ...r1 };
+          merged.set(r1.identifier, { ...r1 });
         }
         for (const r2 of round2) {
           if (!r2.identifier || !r2.signingShare) throw new Error('wrong round2 share');
-          if (!merged[r2.identifier])
-            throw new Error('round1 share for ' + r2.identifier + ' is missing');
-          merged[r2.identifier].signingShare = r2.signingShare;
+          // Parse before any identifier-keyed lookup. Besides binding round2 to the canonical wire
+          // format, this prevents special object keys such as `__proto__` from reaching map logic.
+          const id = serializeIdentifier(parseIdentifier(r2.identifier));
+          const r1 = merged.get(id);
+          if (!r1) throw new Error('round1 share for ' + id + ' is missing');
+          r1.signingShare = r2.signingShare;
         }
-        if (Object.keys(merged).length !== authenticatedRound1.length)
+        if (merged.size !== authenticatedRound1.length)
           throw new Error('mismatch identifiers between rounds');
         let signingShare = Fn.ZERO;
         if (secret.commitment.length !== secret.signers.min)
@@ -1089,11 +1092,10 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
         const localShare = polynomialEvaluate(secret.identifier, secret.coefficients);
         validateSecretShare(secret.identifier, localCommitment, localShare);
         const localCommitmentBytes = localCommitment.map(serializePoint);
-        const commitments: Record<Identifier, TArg<Commitment[]>> = {
-          [serializeIdentifier(secret.identifier)]: localCommitmentBytes,
-        };
-        for (const k in merged) {
-          const v = merged[k];
+        const commitments = new Map<Identifier, TArg<Commitment[]>>([
+          [serializeIdentifier(secret.identifier), localCommitmentBytes],
+        ]);
+        for (const [k, v] of merged) {
           if (!v.signingShare || !v.commitment) throw new Error('mismatch identifiers');
           const id = parseIdentifier(k); // from
           const signingSharePart = Fn.fromBytes(v.signingShare);
@@ -1101,21 +1103,23 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
           validateSecretShare(secret.identifier, commitment, signingSharePart);
           signingShare = Fn.add(signingShare, signingSharePart);
           const idSer = serializeIdentifier(id);
-          if (commitments[idSer]) throw new Error('duplicated id=' + idSer);
-          commitments[idSer] = v.commitment;
+          if (commitments.has(idSer)) throw new Error('duplicated id=' + idSer);
+          commitments.set(idSer, v.commitment);
         }
         signingShare = Fn.add(signingShare, localShare);
         const mergedCommitment = new Array(secret.signers.min).fill(Point.ZERO);
-        for (const k in commitments) {
-          const v = commitments[k];
+        for (const v of commitments.values()) {
           if (v.length !== secret.signers.min) throw new Error('wrong commitments length');
           for (let i = 0; i < v.length; i++)
             mergedCommitment[i] = mergedCommitment[i].add(parsePoint(v[i]));
         }
         const mergedCommitmentBytes = mergedCommitment.map(serializePoint) as TRet<Commitment[]>;
-        const verifyingShares: Record<Identifier, Uint8Array> = {};
-        for (const k in commitments)
-          verifyingShares[k] = serializePoint(evalutateVSS(parseIdentifier(k), mergedCommitment));
+        const verifyingShares: Record<Identifier, Uint8Array> = Object.fromEntries(
+          Array.from(commitments.keys(), (k) => [
+            k,
+            serializePoint(evalutateVSS(parseIdentifier(k), mergedCommitment)),
+          ])
+        );
         // This is enough to sign stuff
         let res: TRet<Key> = {
           public: {
@@ -1178,18 +1182,18 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
         if (identifiers.length !== signers.max)
           throw new Error('identifiers should be array of ' + signers.max);
       }
-      const identifierNums: Record<Identifier, bigint> = {};
+      const identifierNums = new Map<Identifier, bigint>();
       for (const id of identifiers) {
         const idNum = parseIdentifier(id);
-        if (id in identifierNums) throw new Error('duplicated id=' + id);
-        identifierNums[id] = idNum;
+        if (identifierNums.has(id)) throw new Error('duplicated id=' + id);
+        identifierNums.set(id, idNum);
       }
       const sp = generateSecretPolynomial(signers, secret, undefined, rng);
       const commitmentBytes = sp.commitment.map(serializePoint);
       const secretShares: Record<Identifier, FrostSecret> = {};
       const verifyingShares: Record<Identifier, Uint8Array> = {};
       for (const id of identifiers) {
-        const signingShare = polynomialEvaluate(identifierNums[id], sp.coefficients);
+        const signingShare = polynomialEvaluate(identifierNums.get(id)!, sp.coefficients);
         verifyingShares[id] = serializePoint(Point.BASE.multiply(signingShare));
         secretShares[id] = {
           identifier: id,
@@ -1341,6 +1345,8 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
       if (adjustPublic) pub = adjustPublic(pub);
       const comm = commitmentList.find((i) => i.identifier === identifier);
       if (!comm) throw new Error('cannot find identifier commitment');
+      if (!Object.hasOwn(pub.verifyingShares, identifier))
+        throw new Error('cannot find identifier verifying share');
       const PK = parsePoint(pub.verifyingShares[identifier]);
       const hidingNonceCommitment = parsePoint(comm.hiding);
       const bindingNonceCommitment = parsePoint(comm.binding);
@@ -1401,7 +1407,7 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
       }
       if (ids.length !== Object.keys(sigShares).length) throw new AggErr('aggregation failed', []);
       for (const id of ids) {
-        if (!(id in sigShares) || !(id in pub.verifyingShares))
+        if (!Object.hasOwn(sigShares, id) || !Object.hasOwn(pub.verifyingShares, id))
           throw new AggErr('aggregation failed', []);
       }
       const GPK = parsePoint(pub.commitments[0]);
@@ -1440,13 +1446,13 @@ export function createFROST<P extends FROSTPoint<P>>(opts: FrostOpts<P>): TRet<F
       if (shares.length < signers.min || shares.length > signers.max)
         throw new Error('wrong secret shares array');
       const points = [];
-      const seen: Record<Identifier, boolean> = {};
+      const seen = new Set<Identifier>();
       // Interpolate over the full provided share set and reject duplicate identifiers.
       for (const s of shares) {
         const idNum = parseIdentifier(s.identifier);
         const id = serializeIdentifier(idNum);
-        if (seen[id]) throw new Error('duplicated id=' + id);
-        seen[id] = true;
+        if (seen.has(id)) throw new Error('duplicated id=' + id);
+        seen.add(id);
         points.push([idNum, Fn.fromBytes(s.signingShare)]);
       }
       const xCoords = points.map(([x]) => x);
