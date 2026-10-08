@@ -664,7 +664,9 @@ export const decaf448_hasher: H2CHasherBase<typeof _DecafPoint> = /* @__PURE__ *
   hashToCurve(msg: TArg<Uint8Array>, options?: TArg<H2CDSTOpts>): _DecafPoint {
     // Preserve explicit empty/invalid DST overrides so expand_message_xof() can reject them.
     const DST = options?.DST === undefined ? 'decaf448_XOF:SHAKE256_D448MAP_RO_' : options.DST;
-    return decaf448_hasher.deriveToCurve!(expand_message_xof(msg, DST, 112, 224, shake256));
+    return decaf448_hasher.deriveToCurve!(
+      expand_message_xof(msg, DST, 112, 224, shake256, options?.allowEmptyDST)
+    );
   },
   /**
    * Warning: has big modulo bias of 2^-64.
@@ -674,7 +676,7 @@ export const decaf448_hasher: H2CHasherBase<typeof _DecafPoint> = /* @__PURE__ *
   hashToScalar(msg: TArg<Uint8Array>, options?: TArg<H2CDSTOpts>): bigint {
     const DST = options?.DST === undefined ? _DST_scalar : options.DST;
     // Can't use `Fn448.fromBytes()`. 64-byte input => 56-byte field element
-    const xof = expand_message_xof(msg, DST, 64, 256, shake256);
+    const xof = expand_message_xof(msg, DST, 64, 256, shake256, options?.allowEmptyDST);
     return Fn448.create(bytesToNumberLE(xof));
   },
   /**
