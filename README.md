@@ -290,6 +290,8 @@ import { secp256k1_hasher } from '@noble/curves/secp256k1.js';
 const msg = Uint8Array.from([0xca, 0xfe, 0x01, 0x23]);
 const point = secp256k1_hasher.hashToCurve(msg);
 const pointDst = secp256k1_hasher.hashToCurve(msg, { DST: 'hello noble' });
+// RFC 9380 forbids empty DST. Opt in for compatibility with blst:
+const pointEmptyDst = secp256k1_hasher.hashToCurve(msg, { DST: '', allowEmptyDST: true });
 const pointNu = secp256k1_hasher.encodeToCurve(msg);
 const scalar = secp256k1_hasher.hashToScalar(msg);
 

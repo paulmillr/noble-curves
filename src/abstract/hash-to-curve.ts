@@ -8,6 +8,7 @@
 import type { CHash, TArg, TRet } from '../utils.ts';
 import {
   aarray,
+  abool,
   abytes,
   asafenumber,
   asciiToBytes,
@@ -33,6 +34,7 @@ type H2CDefaults = {
   m: number;
   k: number;
   encodeDST?: AsciiOrBytes;
+  allowEmptyDST?: boolean;
 };
 
 /**
@@ -56,6 +58,8 @@ export type H2COpts = {
   m: number;
   /** Target security level in bits. */
   k: number;
+  /** Accept an empty DST, which RFC 9380 forbids. For compatibility with blst. */
+  allowEmptyDST?: boolean;
 };
 /** Hash-only subset of RFC 9380 options used by per-call overrides. */
 export type H2CHashOpts = {
@@ -79,6 +83,8 @@ export type MapToCurve<T> = (scalar: bigint[]) => AffinePoint<T>;
 export type H2CDSTOpts = {
   /** Domain-separation tag override. */
   DST: AsciiOrBytes;
+  /** Accept an empty DST, which RFC 9380 forbids. For compatibility with blst. */
+  allowEmptyDST?: boolean;
 };
 /** Base hash-to-curve helpers shared by `hashToCurve` and `encodeToCurve`. */
 export type H2CHasherBase<PC extends PC_ANY> = {
@@ -157,12 +163,12 @@ function strxor(a: TArg<Uint8Array>, b: TArg<Uint8Array>): TRet<Uint8Array> {
 
 // User can always use utf8 if they want, by passing Uint8Array.
 // If string is passed, we treat it as ASCII: other formats are likely a mistake.
-function normDST(DST: TArg<AsciiOrBytes>): TRet<Uint8Array> {
+function normDST(DST: TArg<AsciiOrBytes>, allowEmptyDST: boolean): TRet<Uint8Array> {
   if (!isBytes(DST) && typeof DST !== 'string')
     throw new Error('DST must be Uint8Array or ascii string');
   const dst = typeof DST === 'string' ? asciiToBytes(DST) : DST;
   // RFC 9380 §3.1 requirement 2: tags "MUST have nonzero length".
-  if (dst.length === 0) throw new Error('DST must be non-empty');
+  if (dst.length === 0 && !allowEmptyDST) throw new Error('DST must be non-empty');
   return dst as TRet<Uint8Array>;
 }
 
@@ -175,6 +181,7 @@ function normDST(DST: TArg<AsciiOrBytes>): TRet<Uint8Array> {
  *   oversize-hashes DST when needed.
  * @param lenInBytes - Output length.
  * @param H - Hash function.
+ * @param allowEmptyDST - Accept an empty DST, which RFC 9380 forbids. For compatibility with blst.
  * @returns Uniform byte string.
  * @throws If the message, DST, hash, or output length is invalid. {@link Error}
  * @example
@@ -190,14 +197,16 @@ export function expand_message_xmd(
   msg: TArg<Uint8Array>,
   DST: TArg<AsciiOrBytes>,
   lenInBytes: number,
-  H: TArg<CHash>
+  H: TArg<CHash>,
+  allowEmptyDST: boolean = false
 ): TRet<Uint8Array> {
   abytes(msg);
   asafenumber(lenInBytes);
+  abool(allowEmptyDST, 'allowEmptyDST');
   if (typeof H !== 'function') throw new Error('expand_message_xmd: expected hash function');
   asafenumber(H.outputLen, 'hash.outputLen');
   asafenumber(H.blockLen, 'hash.blockLen');
-  DST = normDST(DST);
+  DST = normDST(DST, allowEmptyDST);
   // https://www.rfc-editor.org/rfc/rfc9380#section-5.3.3
   if (DST.length > 255) DST = H(concatBytes(asciiToBytes('H2C-OVERSIZE-DST-'), DST));
   const { outputLen: b_in_bytes, blockLen: r_in_bytes } = H;
@@ -232,6 +241,7 @@ export function expand_message_xmd(
  * @param lenInBytes - Output length.
  * @param k - Target security level.
  * @param H - XOF hash function.
+ * @param allowEmptyDST - Accept an empty DST, which RFC 9380 forbids. For compatibility with blst.
  * @returns Uniform byte string.
  * @throws If the message, DST, XOF, or output length is invalid. {@link Error}
  * @example
@@ -254,15 +264,17 @@ export function expand_message_xof(
   DST: TArg<AsciiOrBytes>,
   lenInBytes: number,
   k: number,
-  H: TArg<CHash>
+  H: TArg<CHash>,
+  allowEmptyDST: boolean = false
 ): TRet<Uint8Array> {
   abytes(msg);
   asafenumber(lenInBytes);
   asafenumber(k, 'k');
+  abool(allowEmptyDST, 'allowEmptyDST');
   if (k < 0) throw new Error('expand_message_xof: invalid k');
   if (typeof H !== 'function') throw new Error('expand_message_xof: expected XOF function');
   if (typeof H.create !== 'function') throw new Error('expand_message_xof: expected XOF create');
-  DST = normDST(DST);
+  DST = normDST(DST, allowEmptyDST);
   if (lenInBytes < 0 || lenInBytes > 65535)
     throw new Error('expand_message_xof: invalid lenInBytes');
   // https://www.rfc-editor.org/rfc/rfc9380#section-5.3.3
@@ -314,13 +326,17 @@ export function hash_to_field(
   count: number,
   options: TArg<H2COpts>
 ): bigint[][] {
-  validateObject(options, {
-    p: 'bigint',
-    m: 'number',
-    k: 'number',
-    hash: 'function',
-  });
-  const { p, k, m, hash, expand, DST } = options;
+  validateObject(
+    options,
+    {
+      p: 'bigint',
+      m: 'number',
+      k: 'number',
+      hash: 'function',
+    },
+    { allowEmptyDST: 'boolean' }
+  );
+  const { p, k, m, hash, expand, DST, allowEmptyDST } = options;
   asafenumber(hash.outputLen, 'valid hash');
   abytes(msg);
   asafenumber(count);
@@ -338,9 +354,9 @@ export function hash_to_field(
   const len_in_bytes = count * m * L;
   let prb; // pseudo_random_bytes
   if (expand === 'xmd') {
-    prb = expand_message_xmd(msg, DST, len_in_bytes, hash);
+    prb = expand_message_xmd(msg, DST, len_in_bytes, hash, allowEmptyDST);
   } else if (expand === 'xof') {
-    prb = expand_message_xof(msg, DST, len_in_bytes, k, hash);
+    prb = expand_message_xof(msg, DST, len_in_bytes, k, hash, allowEmptyDST);
   } else if (expand === '_internal_pass') {
     // for internal tests only: msg is used as the uniform bytes directly. Short msg is allowed
     // on purpose (subarray() slices are short): zkcrypto map_scalar vectors feed empty okm.
@@ -444,7 +460,7 @@ export function createHasher<PC extends PC_ANY>(
   defaults: TArg<H2COpts & { encodeDST?: AsciiOrBytes }>
 ): H2CHasher<PC> {
   if (typeof mapToCurve !== 'function') throw new Error('mapToCurve() must be defined');
-  validateObject(defaults);
+  validateObject(defaults, {}, { allowEmptyDST: 'boolean' });
   // `Point` is intentionally not shape-validated eagerly here: point constructors vary across
   // curve families, so this helper only checks the hooks it can validate cheaply. Misconfigured
   // suites fail later when hashing first touches Point.fromAffine / Point.ZERO / clearCofactor().
@@ -464,8 +480,15 @@ export function createHasher<PC extends PC_ANY>(
   // Per-call options are H2CDSTOpts: only DST may be overridden. Copying just that key keeps
   // off-type option objects from silently replacing suite parameters (p/m/k/hash/expand) at
   // runtime — same pinning hashToScalar always did for p/m.
-  const dstOverride = (options?: TArg<H2CDSTOpts>) =>
-    options && options.DST !== undefined ? { DST: options.DST } : undefined;
+  // allowEmptyDST is copied the same way.
+  const dstOverride = (options?: TArg<H2CDSTOpts>) => {
+    if (!options) return undefined;
+    const { DST, allowEmptyDST } = options;
+    return {
+      ...(DST !== undefined && { DST }),
+      ...(allowEmptyDST !== undefined && { allowEmptyDST }),
+    };
+  };
   function map(num: bigint[]): PC_P<PC> {
     return Point.fromAffine(mapToCurve(num)) as PC_P<PC>;
   }

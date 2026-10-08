@@ -133,6 +133,57 @@ describe('RFC9380 hash-to-curve', () => {
     );
   });
 
+  it('allowEmptyDST opts out of the non-empty DST check', () => {
+    const msg = Uint8Array.of(0x8e);
+    const opts = { DST: new Uint8Array(0), allowEmptyDST: true };
+    // blst hashes an empty DST; vectors from Plutus conformance tests bls12_381_G{1,2}_hashToGroup
+    eql(
+      bls12_381.G1.hashToCurve(msg, opts).toHex(),
+      '9019067bf1fa5b2a7a40fb31a70c66f25a3de7e3ef42f8365c9b7963dc01e15a2e086df6d1a181b1d12811a520440909'
+    );
+    eql(
+      bls12_381.G2.hashToCurve(msg, opts).toHex(),
+      '8785334bbccf9f7a1bc656fcbcaf9901521cc09a076ff69d40e467082b605d668219747dfec37c798c97b2c7f28ec90117c4ccfc54ef3cc3c0038951c4969a3c0b3fb842a78103586657428ab38d719c9d3314de566cd95540aaccf7afd48821'
+    );
+    eql(
+      bls12_381.G1.hashToCurve(msg, { DST: '', allowEmptyDST: true }),
+      bls12_381.G1.hashToCurve(msg, opts)
+    );
+    eql(expand_message_xmd(msg, new Uint8Array(0), 32, sha256, true).length, 32);
+    eql(expand_message_xof(msg, new Uint8Array(0), 32, 128, shake128, true).length, 32);
+    // Wrappers outside createHasher must forward the flag too
+    for (const hasher of [
+      nist.p256_hasher,
+      secp256k1_hasher,
+      ed25519_hasher,
+      ed448_hasher,
+      ristretto255_hasher,
+      decaf448_hasher,
+    ]) {
+      hasher.hashToCurve(msg, opts);
+      hasher.hashToScalar(msg, opts);
+      if ('encodeToCurve' in hasher) hasher.encodeToCurve(msg, opts);
+    }
+    bls12_381.G1.encodeToCurve(msg, opts);
+    // Suite defaults are validated when the hasher is built, not on first use
+    throws(() =>
+      createHasher(nist.p256.Point, () => nist.p256.Point.BASE.toAffine(), {
+        DST: 'DST',
+        p: nist.p256.Point.Fp.ORDER,
+        m: 1,
+        k: 128,
+        expand: 'xmd',
+        hash: sha256,
+        allowEmptyDST: 'yes' as any,
+      })
+    );
+    throws(() => bls12_381.G1.hashToCurve(msg, { DST: new Uint8Array(0), allowEmptyDST: false }));
+    throws(() => expand_message_xmd(msg, new Uint8Array(0), 32, sha256, 1 as any));
+    throws(() =>
+      bls12_381.G1.hashToCurve(msg, { DST: new Uint8Array(0), allowEmptyDST: 1 as any })
+    );
+  });
+
   it('createHasher default snapshots and option validation', () => {
     const msg = Uint8Array.of(7, 8, 9);
     const dst = Uint8Array.of(1, 2, 3);

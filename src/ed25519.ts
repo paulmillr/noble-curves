@@ -634,7 +634,7 @@ export const ristretto255_hasher: H2CHasherBase<typeof _RistrettoPoint> =
       // == 'hash_to_ristretto255'
       // Preserve explicit empty/invalid DST overrides so expand_message_xmd() can reject them.
       const DST = options?.DST === undefined ? 'ristretto255_XMD:SHA-512_R255MAP_RO_' : options.DST;
-      const xmd = expand_message_xmd(msg, DST, 64, sha512);
+      const xmd = expand_message_xmd(msg, DST, 64, sha512, options?.allowEmptyDST);
       // NOTE: RFC 9380 incorrectly calls this function `ristretto255_map`.
       // In RFC 9496, `map` was the per-point function inside the construction.
       // That also led to confusion that `ristretto255_map` is `mapToCurve`.
@@ -643,7 +643,7 @@ export const ristretto255_hasher: H2CHasherBase<typeof _RistrettoPoint> =
     },
     hashToScalar(msg: TArg<Uint8Array>, options?: TArg<H2CDSTOpts>) {
       const DST = options?.DST === undefined ? _DST_scalar : options.DST;
-      const xmd = expand_message_xmd(msg, DST, 64, sha512);
+      const xmd = expand_message_xmd(msg, DST, 64, sha512, options?.allowEmptyDST);
       return Fn.create(bytesToNumberLE(xmd));
     },
     /**
